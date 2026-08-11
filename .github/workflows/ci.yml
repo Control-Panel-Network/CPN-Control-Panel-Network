@@ -14,12 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Obtener el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Instalar Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      - name: Preparar recursos para el análisis
+        run: |
+          mkdir -p installer-ui/dist
+          cp installer-ui/index.html installer-ui/dist/index.html
 
       - name: Comprobar formato
         run: cargo fmt --check
@@ -41,10 +46,10 @@ jobs:
         working-directory: installer-ui
     steps:
       - name: Obtener el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Instalar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -61,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Obtener el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Comprobar sintaxis Bash
         run: bash -n scripts/build-rpm.sh tests/docker-matrix.sh
