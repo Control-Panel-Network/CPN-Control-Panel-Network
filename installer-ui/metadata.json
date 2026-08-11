@@ -1,0 +1,6 @@
+{
+  "name": "Configuración de Servidor",
+  "description": "Instalador y selector de servidor web con pantallas interactivas de progreso y configuración.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,9 @@
+/target/
+/installer-ui/node_modules/
+/installer-ui/dist/
+*.rpm
+*.zip
+.DS_Store
+.idea/
+.vscode/
+*.log
