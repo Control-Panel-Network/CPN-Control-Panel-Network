@@ -15,7 +15,7 @@ npm ci
 npm run bundle
 
 cd "$project_dir"
-cargo build --locked --release
+cargo build --release
 
 mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"

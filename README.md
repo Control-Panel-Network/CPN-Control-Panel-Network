@@ -25,6 +25,7 @@ Las recetas, la seguridad y la compatibilidad aún deben revisarse antes de cons
 ## Estructura
 
 - `installer-ui/`: interfaz React y Vite.
+- `Panel/`: panel de control React y Next.js basado en las pantallas de Stitch.
 - `src/`: servidor Actix Web, WebSocket, detección del entorno y recetas de instalación.
 - `packaging/`: especificación RPM.
 - `scripts/build-rpm.sh`: creación del binario y del RPM en AlmaLinux 9.
@@ -35,14 +36,20 @@ Las recetas, la seguridad y la compatibilidad aún deben revisarse antes de cons
 ```bash
 # Rust
 cargo fmt --check
-cargo check --locked
-cargo test --locked
-cargo clippy --locked -- -D warnings
+cargo check
+cargo test
+cargo clippy -- -D warnings
 
 # React, sin generar un build de producción
 cd installer-ui
 npm ci
 npm run lint
+
+# Panel Next.js
+cd ../Panel
+npm ci
+npm run lint
+npm run typecheck
 ```
 
 La acción de integración continua ejecuta estas comprobaciones para cada cambio enviado y cada pull request.

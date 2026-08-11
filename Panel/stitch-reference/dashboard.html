@@ -1,0 +1,254 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Websites - NT&amp;DBN Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#d9dadc",
+                        "on-tertiary-fixed-variant": "#004882",
+                        "inverse-primary": "#aac7ff",
+                        "primary-container": "#0066cc",
+                        "on-tertiary-container": "#dde9ff",
+                        "on-primary-fixed-variant": "#00458e",
+                        "tertiary-fixed": "#d3e3ff",
+                        "tertiary": "#005292",
+                        "background": "#f9f9fb",
+                        "on-secondary-container": "#636264",
+                        "secondary-fixed": "#e4e2e4",
+                        "on-tertiary-fixed": "#001c39",
+                        "surface-container-lowest": "#ffffff",
+                        "hairline": "#e0e0e0",
+                        "surface-variant": "#e2e2e4",
+                        "surface-container-high": "#e8e8ea",
+                        "on-primary-fixed": "#001b3e",
+                        "on-error-container": "#93000a",
+                        "on-surface": "#1a1c1d",
+                        "primary": "#004e9f",
+                        "focus-ring": "#0071e3",
+                        "tertiary-container": "#006abb",
+                        "primary-fixed": "#d7e3ff",
+                        "error": "#ba1a1a",
+                        "inverse-on-surface": "#f0f0f2",
+                        "on-secondary-fixed": "#1b1b1d",
+                        "secondary-container": "#e2dfe1",
+                        "on-primary-container": "#dfe8ff",
+                        "on-background": "#1a1c1d",
+                        "surface": "#f9f9fb",
+                        "global-nav": "#000000",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f3f3f5",
+                        "inverse-surface": "#2f3132",
+                        "muted-text": "#7a7a7a",
+                        "surface-dark-2": "#2a2a2c",
+                        "on-secondary-fixed-variant": "#474649",
+                        "tertiary-fixed-dim": "#a3c9ff",
+                        "surface-container-highest": "#e2e2e4",
+                        "surface-pearl": "#fafafc",
+                        "surface-dark-3": "#252527",
+                        "on-surface-variant": "#414753",
+                        "surface-tint": "#005cba",
+                        "outline": "#727784",
+                        "primary-fixed-dim": "#aac7ff",
+                        "secondary-fixed-dim": "#c8c6c8",
+                        "surface-container": "#eeeef0",
+                        "on-primary": "#ffffff",
+                        "canvas-white": "#ffffff",
+                        "surface-dark-1": "#272729",
+                        "secondary": "#5f5e60",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-dark-link": "#2997ff",
+                        "outline-variant": "#c1c6d5",
+                        "surface-bright": "#f9f9fb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "section": "80px",
+                        "nav-height": "44px",
+                        "sub-nav-height": "52px",
+                        "sm": "12px",
+                        "xl": "32px",
+                        "md": "17px",
+                        "xxs": "4px",
+                        "lg": "24px",
+                        "xxl": "48px",
+                        "xs": "8px"
+                    },
+                    "fontFamily": {
+                        "hero-display-mobile": ["Inter"],
+                        "display-md": ["Inter"],
+                        "body": ["Inter"],
+                        "lead": ["Inter"],
+                        "nav-link": ["Inter"],
+                        "button-large": ["Inter"],
+                        "hero-display": ["Inter"],
+                        "tagline": ["Inter"],
+                        "fine-print": ["Inter"],
+                        "lead-airy": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-strong": ["Inter"],
+                        "caption": ["Inter"]
+                    },
+                    "fontSize": {
+                        "hero-display-mobile": ["32px", { "lineHeight": "1.1", "letterSpacing": "-0.15px", "fontWeight": "600" }],
+                        "display-md": ["34px", { "lineHeight": "1.47", "letterSpacing": "-0.37px", "fontWeight": "600" }],
+                        "body": ["17px", { "lineHeight": "1.47", "letterSpacing": "-0.37px", "fontWeight": "400" }],
+                        "lead": ["28px", { "lineHeight": "1.14", "letterSpacing": "0.19px", "fontWeight": "400" }],
+                        "nav-link": ["12px", { "lineHeight": "1.0", "letterSpacing": "-0.12px", "fontWeight": "400" }],
+                        "button-large": ["18px", { "lineHeight": "1.0", "letterSpacing": "0px", "fontWeight": "300" }],
+                        "hero-display": ["56px", { "lineHeight": "1.07", "letterSpacing": "-0.28px", "fontWeight": "600" }],
+                        "tagline": ["21px", { "lineHeight": "1.19", "letterSpacing": "0.23px", "fontWeight": "600" }],
+                        "fine-print": ["12px", { "lineHeight": "1.0", "letterSpacing": "-0.12px", "fontWeight": "400" }],
+                        "lead-airy": ["24px", { "lineHeight": "1.5", "letterSpacing": "0px", "fontWeight": "300" }],
+                        "display-lg": ["40px", { "lineHeight": "1.1", "letterSpacing": "0px", "fontWeight": "600" }],
+                        "body-strong": ["17px", { "lineHeight": "1.24", "letterSpacing": "-0.37px", "fontWeight": "600" }],
+                        "caption": ["14px", { "lineHeight": "1.43", "letterSpacing": "-0.22px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen flex">
+<!-- Sidebar -->
+<aside class="w-64 bg-surface-pearl border-r border-hairline flex flex-col justify-between flex-shrink-0 h-screen sticky top-0">
+<div class="py-lg px-md flex flex-col gap-xl">
+<div class="flex items-center gap-sm px-2">
+<span class="material-symbols-outlined text-on-surface" style="font-variation-settings: 'FILL' 1;">widgets</span>
+<span class="text-body-strong font-body-strong text-on-surface">NT&amp;DBN Panel</span>
+</div><div class="flex items-center gap-md px-2 py-2 bg-surface-container-low rounded-lg">
+  <div class="flex-shrink-0 w-10 h-10 bg-primary/10 rounded flex items-center justify-center">
+    <span class="material-symbols-outlined text-primary">desktop_windows</span>
+  </div>
+  <div class="flex flex-col">
+    <div class="text-caption font-body-strong text-primary">IP: 84.247.184.182</div>
+    <div class="text-fine-print font-fine-print text-muted-text">Uptime: 49D, 23H, 9M</div>
+  </div>
+</div>
+<nav class="flex flex-col gap-xs">
+<a class="flex items-center gap-sm px-3 py-2 rounded-lg text-body font-body text-on-surface hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-muted-text">dashboard</span>
+Dashboard
+</a>
+<a class="flex items-center gap-sm px-3 py-2 rounded-lg text-body-strong font-body-strong text-primary bg-primary/10 transition-colors" href="#">
+<span class="material-symbols-outlined text-primary">language</span>
+Websites
+</a>
+<a class="flex items-center gap-sm px-3 py-2 rounded-lg text-body font-body text-on-surface hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-muted-text">mail</span>
+Email
+</a>
+<a class="flex items-center gap-sm px-3 py-2 rounded-lg text-body font-body text-on-surface hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-muted-text">database</span>
+Databases
+</a>
+<a class="flex items-center gap-sm px-3 py-2 rounded-lg text-body font-body text-on-surface hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined text-muted-text">backup</span>
+Backups
+</a>
+</nav>
+</div>
+<div class="py-lg px-md border-t border-hairline flex flex-col gap-sm">
+
+<div class="flex items-center gap-sm px-2 mt-sm">
+<button aria-label="notifications" class="text-muted-text hover:text-on-surface transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button aria-label="settings" class="text-muted-text hover:text-on-surface transition-colors"><span class="material-symbols-outlined">settings</span></button>
+<button class="text-muted-text text-body font-body hover:text-on-surface transition-colors ml-auto">Logout</button>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-grow flex flex-col min-w-0">
+<!-- Hero Section -->
+<section class="bg-canvas-white py-section px-lg border-b border-hairline flex-shrink-0">
+<div class="max-w-7xl mx-auto w-full">
+<h1 class="text-display-md font-display-md text-on-surface mb-xs">Websites</h1>
+<p class="text-lead font-lead text-muted-text">Manage and monitor your digital ecosystem.</p>
+</div>
+</section>
+<!-- Utility Grid Section -->
+<section class="bg-surface flex-grow py-xl px-lg">
+<div class="max-w-7xl mx-auto w-full flex flex-col gap-lg">
+<!-- Controls Row -->
+<div class="flex flex-col md:flex-row justify-between items-center gap-md">
+<div class="relative w-full md:w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted-text">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 text-body font-body placeholder:text-muted-text focus:ring-2 focus:ring-focus-ring outline-none" placeholder="Search websites..." type="text">
+</div>
+<button class="bg-primary-container text-canvas-white px-6 py-2 rounded-full text-body-strong font-body-strong hover:bg-primary transition-colors scale-95 duration-200 whitespace-nowrap w-full md:w-auto">Create Website</button>
+</div>
+<!-- Alert Box -->
+<div class="bg-surface-pearl border border-hairline rounded-lg p-lg flex items-start gap-md">
+<span class="material-symbols-outlined text-secondary">info</span>
+<div>
+<h4 class="text-body-strong font-body-strong text-on-surface mb-xxs">Convert top-level site to subdomain</h4>
+<p class="text-body font-body text-secondary">If a hostname was created as its own website by mistake, use Convert to subdomain on that row or open Full Settings for the site.</p>
+</div>
+</div>
+<!-- Website List / Card -->
+<div class="bg-canvas-white border border-hairline rounded-lg p-lg flex flex-col gap-xl">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-md border-b border-hairline pb-lg">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-muted-text">expand_more</span>
+<h3 class="text-tagline font-tagline text-on-surface">discord-bot-network.com</h3>
+<span class="text-[10px] font-bold tracking-wider text-[#008a00] uppercase bg-[#008a00]/10 px-2 py-1 rounded">Secure</span>
+</div>
+<div class="flex items-center gap-sm flex-wrap">
+<button class="bg-primary-container text-canvas-white px-4 py-1.5 rounded-full text-caption font-body-strong hover:bg-primary transition-colors scale-95 duration-200">Manage</button>
+<button class="bg-surface-pearl border border-hairline text-on-surface px-4 py-1.5 rounded-full text-caption font-body hover:bg-surface-container-low transition-colors flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">sync</span> Recreate DNS</button>
+<button class="bg-surface-pearl border border-hairline text-on-surface px-4 py-1.5 rounded-full text-caption font-body hover:bg-surface-container-low transition-colors">Filemanager</button>
+<button class="bg-surface-pearl border border-hairline text-on-surface px-4 py-1.5 rounded-full text-caption font-body hover:bg-surface-container-low transition-colors flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">edit</span> Modify</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+<div>
+<div class="text-fine-print font-fine-print text-muted-text uppercase tracking-wider mb-xs">State</div>
+<div class="text-body font-body text-on-surface">Active</div>
+</div>
+<div>
+<div class="text-fine-print font-fine-print text-muted-text uppercase tracking-wider mb-xs">IP Address</div>
+<div class="text-body font-body text-on-surface">84.247.184.182</div>
+</div>
+<div>
+<div class="text-fine-print font-fine-print text-muted-text uppercase tracking-wider mb-xs">PHP Version</div>
+<div class="text-body font-body text-on-surface">PHP 7.4.33</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer -->
+<footer class="w-full px-lg py-xl border-t border-hairline bg-background flex-shrink-0 mt-auto">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-md">
+<div class="text-fine-print font-body-strong text-on-surface">
+                © 2024 NT&amp;DBN Panel. All rights reserved.
+            </div>
+<div class="flex flex-wrap gap-xl">
+<a class="text-muted-text text-fine-print font-fine-print hover:text-primary underline" href="#">Documentation</a>
+<a class="text-muted-text text-fine-print font-fine-print hover:text-primary underline" href="#">Support</a>
+<a class="text-muted-text text-fine-print font-fine-print hover:text-primary underline" href="#">API Status</a>
+<a class="text-muted-text text-fine-print font-fine-print hover:text-primary underline" href="#">Privacy Policy</a>
+</div>
+</div>
+</footer>
+</main>
+
+
+</body></html>
