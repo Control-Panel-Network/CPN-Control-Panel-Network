@@ -125,6 +125,10 @@ async fn validate_domain(
     if let Err(response) = require_auth(&state, &request) {
         return response;
     }
+    if state.status.read().await.stage != SetupStage::Domain {
+        return HttpResponse::Conflict()
+            .json(serde_json::json!({"error":"Primero instala el servidor web y el webmail"}));
+    }
     let validation = domain::validate_domain(&input.domain).await;
     if validation.valid {
         let mut current = state.status.write().await;
@@ -161,9 +165,9 @@ async fn configure_dns(
             .json(serde_json::json!({"error":"Primero valida el dominio"}));
     }
     current.dns_provider = Some(DnsProvider::Local);
-    current.stage = SetupStage::Server;
+    current.stage = SetupStage::Complete;
     current.phase = InstallerPhase::Ready;
-    current.message = "DNS local seleccionado. Elige el servidor web".into();
+    current.message = "DNS local configurado. La instalación está completa".into();
     let snapshot = current.clone();
     let _ = state.events.send(InstallerEvent::Progress {
         status: snapshot.clone(),
@@ -243,7 +247,7 @@ async fn cloudflare_callback(
             let mut current = state.status.write().await;
             current.dns_provider = Some(DnsProvider::Cloudflare);
             current.cloudflare_connected = true;
-            current.stage = SetupStage::Server;
+            current.stage = SetupStage::Complete;
             current.phase = InstallerPhase::Ready;
             current.message = "Cloudflare fue autorizado y verificado".into();
             current.error = None;
@@ -417,6 +421,7 @@ async fn main() -> std::io::Result<()> {
     let state = Arc::new(AppState {
         status: RwLock::new(InstallerStatus {
             phase: InstallerPhase::Ready,
+            stage: SetupStage::Server,
             message: "El sistema está listo para continuar".into(),
             environment: Some(environment.clone()),
             ..InstallerStatus::default()

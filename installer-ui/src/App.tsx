@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { flushSync } from 'react-dom';
 import { configureDns, connectInstallerEvents, getStatus, startCloudflareOAuth, startMailInstall, startServerInstall, validateDomain } from './api';
 import { CompleteScreen } from './components/CompleteScreen';
 import { CompareModal } from './components/CompareModal';
@@ -12,15 +13,17 @@ import { ServerSelectionScreen } from './components/ServerSelectionScreen';
 import type { InstallerEvent, InstallerStatus, MailSystem, ScreenType, ServerEngine } from './types';
 
 const INITIAL_STATUS: InstallerStatus = {
-  phase: 'preparing', stage: 'domain', progress: 0, message: 'Estamos preparando todo...', domain: null,
+  phase: 'preparing', stage: 'server', progress: 0, message: 'Estamos preparando todo...', domain: null,
   domain_is_cloudflare: false, dns_provider: null, cloudflare_connected: false,
   selected_server: null, installed_server: null, selected_mail: null, installed_mail: null,
   environment: null, error: null,
+  failed_phase: null,
 };
 
 const screenFor = (status: InstallerStatus): ScreenType => {
+  if (status.phase === 'preparing') return 'preparing';
   if (['downloading', 'installing', 'testing', 'failed_rolled_back', 'failed_partial', 'cancelled'].includes(status.phase)) return 'installing';
-  if (status.stage === 'domain') return status.phase === 'preparing' ? 'preparing' : 'domain';
+  if (status.stage === 'domain') return 'domain';
   if (status.stage === 'dns') return 'dns';
   if (status.stage === 'server') return 'selection';
   if (status.stage === 'mail') return 'mail';
@@ -64,24 +67,24 @@ export default function App() {
 
   const beginServerInstall = async () => {
     if (!selectedServer) return;
+    flushSync(() => setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, failed_phase: null, selected_server: selectedServer })));
     setScreen('installing');
-    setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, selected_server: selectedServer }));
     try { await startServerInstall(selectedServer); }
-    catch (error) { setStatus((current) => ({ ...current, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }
+    catch (error) { setStatus((current) => ({ ...current, failed_phase: current.phase, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }
   };
 
   const beginMailInstall = async () => {
     if (!selectedMail) return;
+    flushSync(() => setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, failed_phase: null, selected_mail: selectedMail })));
     setScreen('installing');
-    setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, selected_mail: selectedMail }));
     try { await startMailInstall(selectedMail); }
-    catch (error) { setStatus((current) => ({ ...current, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }
+    catch (error) { setStatus((current) => ({ ...current, failed_phase: current.phase, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }
   };
 
   return (
     <main className="min-h-screen bg-white text-[#1d1d1f]">
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: 'easeInOut' }} className="min-h-screen">
+        <motion.div key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: 'easeInOut' }} className="min-h-screen">
           {screen === 'preparing' && <PreparingScreen status={status} />}
           {screen === 'domain' && <DomainScreen onValidate={validateDomain} />}
           {screen === 'dns' && <DnsSelectionScreen cloudflareAvailable={status.domain_is_cloudflare} oauthError={status.error} onLocal={async () => acceptStatus(await configureDns('local'))} onCloudflare={async () => { const response = await startCloudflareOAuth(); window.location.assign(response.authorization_url); }} />}

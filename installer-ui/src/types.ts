@@ -1,6 +1,6 @@
 export type ScreenType = 'preparing' | 'domain' | 'dns' | 'selection' | 'installing' | 'mail' | 'complete';
 export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
-export type MailSystem = 'snappymail' | 'roundcube' | 'thunderbird';
+export type MailSystem = 'snappymail' | 'rainloop' | 'roundcube' | 'thunderbird';
 export type InstallerPhase = 'preparing' | 'ready' | 'downloading' | 'installing' | 'testing' | 'completed' | 'failed_rolled_back' | 'failed_partial' | 'cancelled';
 export type SetupStage = 'domain' | 'dns' | 'server' | 'mail' | 'complete';
 export type DnsProvider = 'local' | 'cloudflare';
@@ -29,6 +29,7 @@ export interface InstallerStatus {
   installed_mail: MailSystem | null;
   environment: EnvironmentInfo | null;
   error: string | null;
+  failed_phase: InstallerPhase | null;
 }
 
 export interface DomainValidation {

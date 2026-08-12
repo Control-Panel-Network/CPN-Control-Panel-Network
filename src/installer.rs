@@ -62,6 +62,7 @@ impl AppState {
         status.progress = progress;
         status.message = message.into();
         status.error = None;
+        status.failed_phase = None;
         let _ = self.events.send(InstallerEvent::Progress {
             status: status.clone(),
         });
@@ -736,6 +737,7 @@ async fn configure_webmail_service(
     let mut writable = vec!["/opt/cpn-webmail/runtime"];
     match mail {
         MailSystem::Snappymail => writable.push("/opt/cpn-webmail/snappymail/data"),
+        MailSystem::Rainloop => writable.push("/opt/cpn-webmail/rainloop/data"),
         MailSystem::Roundcube => writable.extend([
             "/opt/cpn-webmail/roundcube/temp",
             "/opt/cpn-webmail/roundcube/logs",
@@ -783,7 +785,7 @@ async fn configure_webmail_service(
         }
         ServerEngine::Openlitespeed => {
             let vhost = format!(
-                "docRoot {root}\nindex {{ useServer 0\n indexFiles index.php }}\nextprocessor cpnWebmailFpm {{ type fcgi\n address 127.0.0.1:9001\n maxConns 8\n initTimeout 60\n retryTimeout 0 }}\nscripthandler {{ add fcgi:cpnWebmailFpm php }}\ncontext / {{ type null\n location {root}\n allowBrowse 1 }}\n"
+                "docRoot {root}\n\nindex {{\n  useServer 0\n  indexFiles index.php\n}}\n\nextprocessor cpnWebmailFpm {{\n  type fcgi\n  address 127.0.0.1:9001\n  path /usr/sbin/php-fpm\n  autoStart 0\n  maxConns 8\n  initTimeout 60\n  retryTimeout 0\n}}\n\nscripthandler {{\n  add fcgi:cpnWebmailFpm php\n}}\n\ncontext / {{\n  type null\n  location {root}\n  allowBrowse 1\n}}\n"
             );
             std::fs::create_dir_all("/usr/local/lsws/conf/vhosts/cpn-webmail")
                 .map_err(|error| error.to_string())?;
@@ -791,10 +793,25 @@ async fn configure_webmail_service(
                 .map_err(|error| error.to_string())?;
             let path = "/usr/local/lsws/conf/httpd_config.conf";
             let mut config = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-            if !config.contains("# CPN_WEBMAIL_BEGIN") {
-                config.push_str("\n# CPN_WEBMAIL_BEGIN\nvirtualhost cpn-webmail { vhRoot /opt/cpn-webmail\n configFile /usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf\n enableScript 1\n restrained 1 }\nlistener CPN_WEBMAIL { address 127.0.0.1:8888\n secure 0\n map cpn-webmail * }\n");
-                std::fs::write(path, config).map_err(|error| error.to_string())?;
+            if let Some(index) = config.find("# CPN_WEBMAIL_BEGIN") {
+                config.truncate(index);
             }
+            config.push_str("# CPN_WEBMAIL_BEGIN\nvirtualhost cpn-webmail {\n  vhRoot /opt/cpn-webmail\n  configFile /usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf\n  allowSymbolLink 1\n  enableScript 1\n  restrained 1\n}\n\nlistener CPN_WEBMAIL {\n  address 127.0.0.1:8888\n  secure 0\n  map cpn-webmail *\n}\n");
+            std::fs::write(path, config).map_err(|error| error.to_string())?;
+            run_command(
+                state,
+                command(
+                    "sh",
+                    vec![
+                        "-c",
+                        "/usr/local/lsws/bin/openlitespeed -t > /tmp/cpn-webmail-ols-check 2>&1; test $? -eq 0; ! grep -q '\\[ERROR\\]' /tmp/cpn-webmail-ols-check",
+                    ],
+                    "Validando la configuración del webmail en OpenLiteSpeed",
+                    InstallerPhase::Testing,
+                    86,
+                ),
+            )
+            .await?;
         }
     }
     run_command(
@@ -846,6 +863,37 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
             )
             .await?;
             configure_webmail_service(state, "/opt/cpn-webmail/snappymail", mail).await?;
+        }
+        MailSystem::Rainloop => {
+            std::fs::create_dir_all("/opt/cpn-webmail/rainloop")
+                .map_err(|error| error.to_string())?;
+            let archive = download(
+                state,
+                "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip",
+                "782dcabacadab5d7176f7701dd23319a040b2cfbf974fac6df068600cf69c50a",
+                "RainLoop",
+                2,
+                36,
+            )
+            .await?;
+            install_php_runtime(state, "PHP para RainLoop").await?;
+            run_command(
+                state,
+                owned_command(
+                    "unzip",
+                    vec![
+                        "-q".into(),
+                        archive.to_string_lossy().into_owned(),
+                        "-d".into(),
+                        "/opt/cpn-webmail/rainloop".into(),
+                    ],
+                    "Extrayendo RainLoop",
+                    InstallerPhase::Installing,
+                    80,
+                ),
+            )
+            .await?;
+            configure_webmail_service(state, "/opt/cpn-webmail/rainloop", mail).await?;
         }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
@@ -986,26 +1034,23 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 ),
             )
             .await?;
+            let marker = match mail {
+                MailSystem::Snappymail => "SnappyMail",
+                MailSystem::Rainloop => "RainLoop",
+                MailSystem::Roundcube => "Roundcube",
+                MailSystem::Thunderbird => unreachable!(),
+            };
             run_command(
                 &state,
-                command(
-                    "curl",
+                owned_command(
+                    "sh",
                     vec![
-                        "--fail",
-                        "--silent",
-                        "--show-error",
-                        "--retry",
-                        "10",
-                        "--retry-connrefused",
-                        "--retry-delay",
-                        "1",
-                        "--max-time",
-                        "15",
-                        "--output",
-                        "/dev/null",
-                        "http://127.0.0.1:8888/",
+                        "-c".into(),
+                        format!(
+                            "curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 20 http://127.0.0.1:8888/ | grep -Fqi {marker}"
+                        ),
                     ],
-                    "Comprobando la respuesta HTTP del webmail",
+                    "Comprobando el contenido HTTP real del webmail",
                     InstallerPhase::Testing,
                     97,
                 ),
@@ -1035,13 +1080,14 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
                 && status.stage == SetupStage::Mail
             {
                 status.installed_mail = Some(mail);
-                status.stage = SetupStage::Complete;
+                status.stage = SetupStage::Domain;
             }
             let _ = state.events.send(InstallerEvent::Completed {
                 status: status.clone(),
             });
         }
         Err(error) => {
+            status.failed_phase = Some(status.phase);
             status.phase = InstallerPhase::FailedPartial;
             status.error = Some(error.clone());
             status.message =

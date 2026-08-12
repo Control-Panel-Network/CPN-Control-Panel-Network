@@ -12,6 +12,7 @@ pub enum ServerEngine {
 #[serde(rename_all = "lowercase")]
 pub enum MailSystem {
     Snappymail,
+    Rainloop,
     Roundcube,
     Thunderbird,
 }
@@ -51,6 +52,7 @@ impl MailSystem {
     pub fn label(self) -> &'static str {
         match self {
             Self::Snappymail => "SnappyMail",
+            Self::Rainloop => "RainLoop",
             Self::Roundcube => "Roundcube",
             Self::Thunderbird => "Thunderbird",
         }
@@ -93,13 +95,14 @@ pub struct InstallerStatus {
     pub installed_mail: Option<MailSystem>,
     pub environment: Option<EnvironmentInfo>,
     pub error: Option<String>,
+    pub failed_phase: Option<InstallerPhase>,
 }
 
 impl Default for InstallerStatus {
     fn default() -> Self {
         Self {
             phase: InstallerPhase::Preparing,
-            stage: SetupStage::Domain,
+            stage: SetupStage::Server,
             progress: 0,
             message: "Estamos preparando todo...".into(),
             domain: None,
@@ -112,6 +115,7 @@ impl Default for InstallerStatus {
             installed_mail: None,
             environment: None,
             error: None,
+            failed_phase: None,
         }
     }
 }

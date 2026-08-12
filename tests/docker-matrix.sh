@@ -59,10 +59,8 @@ run_case() {
   token="$(installer_token "$name")"
   test -n "$token"
   docker exec "$name" curl -fsS -c /tmp/cpn-cookie -L "http://127.0.0.1:8787/api/bootstrap?token=$token" >/dev/null
-  docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"domain":"example.com"}' http://127.0.0.1:8787/api/domain/validate >/dev/null
-  docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"provider":"local"}' http://127.0.0.1:8787/api/dns/configure >/dev/null
   if [[ "$kind" == "mail" ]]; then
-    docker exec "$name" curl -fsS -b /tmp/cpn-cookie -X POST -H 'Content-Type: application/json' -d '{"server":"nginx"}' http://127.0.0.1:8787/api/install/server >/dev/null
+    docker exec "$name" curl -fsS -b /tmp/cpn-cookie -X POST -H 'Content-Type: application/json' -d "{\"server\":\"${CPN_TEST_MAIL_SERVER:-nginx}\"}" http://127.0.0.1:8787/api/install/server >/dev/null
     wait_for_result "$name"
   fi
   docker exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
@@ -70,6 +68,10 @@ run_case() {
     -d "{\"$kind\":\"$component\"}" \
     "http://127.0.0.1:8787/api/install/$kind" >/dev/null
   wait_for_result "$name"
+  if [[ "$kind" == "mail" ]]; then
+    docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"domain":"example.com"}' http://127.0.0.1:8787/api/domain/validate >/dev/null
+    docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"provider":"local"}' http://127.0.0.1:8787/api/dns/configure >/dev/null
+  fi
 
   case "$component" in
     nginx)
@@ -99,6 +101,10 @@ run_case() {
       docker exec "$name" sqlite3 /opt/cpn-webmail/roundcube/db.sqlite "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='users';" | grep -qx 1
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi Roundcube"
       ;;
+    rainloop)
+      docker exec "$name" systemctl is-active --quiet php-fpm
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi RainLoop"
+      ;;
     thunderbird)
       docker exec "$name" rpm -q thunderbird
       docker exec "$name" thunderbird --version | grep -qi Thunderbird
@@ -113,5 +119,5 @@ if [[ "${CPN_TEST_SCOPE:-all}" != "mail" ]]; then
   for server in ${CPN_TEST_SERVERS:-nginx caddy}; do run_case server "$server"; done
 fi
 if [[ "${CPN_TEST_SCOPE:-all}" != "server" ]]; then
-  for mail in ${CPN_TEST_MAILS:-snappymail roundcube thunderbird}; do run_case mail "$mail"; done
+  for mail in ${CPN_TEST_MAILS:-snappymail rainloop roundcube thunderbird}; do run_case mail "$mail"; done
 fi
