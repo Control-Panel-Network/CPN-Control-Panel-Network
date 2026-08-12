@@ -4,11 +4,12 @@ import type { DnsProvider } from '../types';
 
 interface Props {
   cloudflareAvailable: boolean;
+  oauthError: string | null;
   onLocal: () => Promise<void>;
   onCloudflare: () => Promise<void>;
 }
 
-export function DnsSelectionScreen({ cloudflareAvailable, onLocal, onCloudflare }: Props) {
+export function DnsSelectionScreen({ cloudflareAvailable, oauthError, onLocal, onCloudflare }: Props) {
   const [selected, setSelected] = useState<DnsProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,7 +37,7 @@ export function DnsSelectionScreen({ cloudflareAvailable, onLocal, onCloudflare 
             </button>
           ))}
         </div>
-        {error && <p className="mt-4 text-sm text-[#b42318]">{error}</p>}
+        {(error || oauthError) && <p className="mt-4 text-sm text-[#b42318]">{error || oauthError}</p>}
         <button type="button" onClick={continueSetup} disabled={!selected || busy} className="primary-button mt-9">{busy ? 'Conectando…' : 'Continuar'} <ArrowRight size={18} /></button>
       </div>
     </section>

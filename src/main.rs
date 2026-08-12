@@ -199,6 +199,7 @@ async fn start_cloudflare(state: web::Data<Arc<AppState>>, request: HttpRequest)
     match oauth::start(&callback, domain.as_deref().unwrap_or_default()).await {
         Ok((pending, authorization_url)) => {
             *state.pending_oauth.write().await = Some(pending);
+            state.status.write().await.error = None;
             HttpResponse::Ok().json(serde_json::json!({"authorization_url":authorization_url}))
         }
         Err(error) => HttpResponse::BadGateway().json(serde_json::json!({"error":error})),
@@ -218,8 +219,25 @@ async fn cloudflare_callback(
     if !same_secret(&pending.session_id, &query.session) {
         return HttpResponse::BadRequest().body("La sesión OAuth no coincide");
     }
+    if let Some(error) = query.oauth_error.as_deref() {
+        let mut current = state.status.write().await;
+        current.phase = InstallerPhase::Ready;
+        current.error = Some(format!("Cloudflare rechazó la autorización: {error}"));
+        current.message =
+            "No se pudo autorizar Cloudflare. Revisa los permisos e inténtalo otra vez".into();
+        let _ = state.events.send(InstallerEvent::Error {
+            status: current.clone(),
+        });
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/"))
+            .finish();
+    }
+    let Some(claim) = query.claim.as_deref() else {
+        return HttpResponse::BadRequest()
+            .body("Cloudflare no devolvió las credenciales esperadas");
+    };
     let domain = state.status.read().await.domain.clone().unwrap_or_default();
-    match oauth::claim(&pending, &query.claim, &domain).await {
+    match oauth::claim(&pending, claim, &domain).await {
         Ok(authorization) => {
             *state.cloudflare.write().await = Some(authorization);
             let mut current = state.status.write().await;
@@ -228,6 +246,7 @@ async fn cloudflare_callback(
             current.stage = SetupStage::Server;
             current.phase = InstallerPhase::Ready;
             current.message = "Cloudflare fue autorizado y verificado".into();
+            current.error = None;
             let _ = state.events.send(InstallerEvent::Progress {
                 status: current.clone(),
             });

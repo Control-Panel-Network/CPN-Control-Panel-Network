@@ -84,7 +84,7 @@ export default function App() {
         <motion.div key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: 'easeInOut' }} className="min-h-screen">
           {screen === 'preparing' && <PreparingScreen status={status} />}
           {screen === 'domain' && <DomainScreen onValidate={validateDomain} />}
-          {screen === 'dns' && <DnsSelectionScreen cloudflareAvailable={status.domain_is_cloudflare} onLocal={async () => acceptStatus(await configureDns('local'))} onCloudflare={async () => { const response = await startCloudflareOAuth(); window.location.assign(response.authorization_url); }} />}
+          {screen === 'dns' && <DnsSelectionScreen cloudflareAvailable={status.domain_is_cloudflare} oauthError={status.error} onLocal={async () => acceptStatus(await configureDns('local'))} onCloudflare={async () => { const response = await startCloudflareOAuth(); window.location.assign(response.authorization_url); }} />}
           {screen === 'selection' && <ServerSelectionScreen selectedServer={selectedServer} onSelectServer={setSelectedServer} onContinue={beginServerInstall} onOpenCompare={() => setCompareOpen(true)} />}
           {screen === 'installing' && <InstallingScreen status={status} />}
           {screen === 'mail' && <MailSelectionScreen selectedMail={selectedMail} onSelectMail={setSelectedMail} onContinue={beginMailInstall} />}

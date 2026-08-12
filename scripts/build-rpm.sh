@@ -6,6 +6,10 @@ ui_dir="$project_dir/installer-ui"
 rpm_root="$project_dir/target/rpmbuild"
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$project_dir/Cargo.toml" | head -1)"
 test -n "$version"
+if [[ ! -f "$project_dir/Cargo.lock" ]]; then
+  echo "Falta Cargo.lock; el RPM solo puede construirse con dependencias bloqueadas." >&2
+  exit 1
+fi
 
 if [[ ! -f /etc/almalinux-release ]]; then
   echo "Este empaquetado debe ejecutarse dentro de AlmaLinux 9." >&2
@@ -17,7 +21,7 @@ npm ci
 npm run bundle
 
 cd "$project_dir"
-cargo build --release
+cargo build --release --locked
 
 mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"

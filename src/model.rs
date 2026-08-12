@@ -154,5 +154,36 @@ pub struct BootstrapQuery {
 #[derive(Debug, Deserialize)]
 pub struct CloudflareCallbackQuery {
     pub session: String,
-    pub claim: String,
+    pub claim: Option<String>,
+    pub oauth_error: Option<String>,
+}
+
+#[cfg(test)]
+mod callback_tests {
+    use super::CloudflareCallbackQuery;
+
+    #[test]
+    fn accepts_cloudflare_error_without_claim() {
+        let query: CloudflareCallbackQuery = serde_urlencoded::from_str(
+            "session=valid-session&oauth_error=The+requested+scope+is+invalid",
+        )
+        .expect("Cloudflare error callbacks must deserialize without a claim");
+
+        assert_eq!(query.session, "valid-session");
+        assert!(query.claim.is_none());
+        assert_eq!(
+            query.oauth_error.as_deref(),
+            Some("The requested scope is invalid")
+        );
+    }
+
+    #[test]
+    fn accepts_successful_cloudflare_claim() {
+        let query: CloudflareCallbackQuery =
+            serde_urlencoded::from_str("session=valid-session&claim=one-time-claim")
+                .expect("successful Cloudflare callbacks must deserialize");
+
+        assert_eq!(query.claim.as_deref(), Some("one-time-claim"));
+        assert!(query.oauth_error.is_none());
+    }
 }

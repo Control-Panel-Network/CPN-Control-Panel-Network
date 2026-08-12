@@ -1,5 +1,4 @@
 /target/
-Cargo.lock
 **/DESIGN.md
 **/stitch-reference/
 /installer-ui/node_modules/

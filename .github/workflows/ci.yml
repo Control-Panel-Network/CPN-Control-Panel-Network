@@ -38,13 +38,13 @@ jobs:
         run: cargo fmt --check
 
       - name: Comprobar compilación
-        run: cargo check
+        run: cargo check --locked
 
       - name: Ejecutar pruebas
-        run: cargo test
+        run: cargo test --locked
 
       - name: Ejecutar Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
 
       - name: Auditar dependencias Rust
         uses: rustsec/audit-check@v2
