@@ -10,7 +10,7 @@ function StepIcon({ state }: { state: 'pending' | 'active' | 'done' | 'error' })
 
 export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const phase = status.phase;
-  const failed = phase === 'failed';
+  const failed = phase === 'failed_rolled_back' || phase === 'failed_partial' || phase === 'cancelled';
   const downloading = phase === 'downloading';
   const installing = phase === 'installing';
   const testing = phase === 'testing';

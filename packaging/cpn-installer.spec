@@ -1,12 +1,12 @@
 Name:           cpn-installer
-Version:        0.1.0
+Version:        %{?cpn_version}%{!?cpn_version:0.1.0}
 Release:        1%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
 URL:            https://github.com/KraoESPfan1n/CPN-Control-Panel-Network
 Source0:        cpn-installer
 
-ExclusiveArch:  x86_64 aarch64
+ExclusiveArch:  x86_64
 Requires:       systemd
 Requires:       dnf
 Requires:       curl

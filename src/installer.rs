@@ -1,32 +1,62 @@
-use crate::model::{InstallerEvent, InstallerStatus, MailSystem, ServerEngine};
+use crate::{
+    model::{
+        InstallerEvent, InstallerPhase, InstallerStatus, MailSystem, ServerEngine, SetupStage,
+    },
+    oauth::{CloudflareAuthorization, PendingOAuth},
+};
 use rand::{Rng, distr::Alphanumeric};
-use std::{os::unix::fs::symlink, path::Path, process::Stdio};
+use sha2::{Digest, Sha256};
+use std::{
+    os::unix::fs::{OpenOptionsExt, symlink},
+    path::Path,
+    process::Stdio,
+    sync::atomic::AtomicBool,
+};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     process::Command,
     sync::{RwLock, broadcast},
 };
 
-fn verify_almalinux() -> Result<(), String> {
-    let release = std::fs::read_to_string("/etc/os-release")
-        .map_err(|_| "No se pudo identificar el sistema operativo".to_string())?;
+fn verify_release(release: &str) -> Result<(), String> {
     if !release
         .lines()
         .any(|line| line == "ID=almalinux" || line == "ID=\"almalinux\"")
     {
         return Err("Esta primera versión solo admite AlmaLinux".into());
     }
+    let version = release
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("VERSION_ID=")
+                .map(|value| value.trim_matches('"'))
+        })
+        .ok_or("No se pudo determinar la versión de AlmaLinux")?;
+    if version.split('.').next() != Some("9") {
+        return Err(format!(
+            "Esta versión requiere AlmaLinux 9; se detectó {version}"
+        ));
+    }
     Ok(())
+}
+
+pub fn verify_almalinux() -> Result<(), String> {
+    let release = std::fs::read_to_string("/etc/os-release")
+        .map_err(|_| "No se pudo identificar el sistema operativo".to_string())?;
+    verify_release(&release)
 }
 
 pub struct AppState {
     pub status: RwLock<InstallerStatus>,
     pub events: broadcast::Sender<InstallerEvent>,
     pub token: String,
+    pub bootstrap_used: AtomicBool,
+    pub pending_oauth: RwLock<Option<PendingOAuth>>,
+    pub cloudflare: RwLock<Option<CloudflareAuthorization>>,
 }
 
 impl AppState {
-    pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
+    pub async fn progress(&self, phase: InstallerPhase, progress: u8, message: impl Into<String>) {
         let mut status = self.status.write().await;
         status.phase = phase;
         status.progress = progress;
@@ -56,9 +86,9 @@ struct DnfProgress {
 
 struct CommandSpec {
     program: &'static str,
-    args: Vec<&'static str>,
+    args: Vec<String>,
     description: &'static str,
-    phase: &'static str,
+    phase: InstallerPhase,
     progress: u8,
     dnf: Option<DnfProgress>,
 }
@@ -84,7 +114,7 @@ async fn process_dnf_line(
         *transaction = true;
         state
             .progress(
-                "installing",
+                InstallerPhase::Installing,
                 tracking.install_start,
                 format!("Instalando {}", tracking.label),
             )
@@ -95,14 +125,14 @@ async fn process_dnf_line(
         let ratio = current as f32 / total as f32;
         let (phase, start, end, action) = if *transaction {
             (
-                "installing",
+                InstallerPhase::Installing,
                 tracking.install_start,
                 tracking.install_end,
                 "Instalando",
             )
         } else {
             (
-                "downloading",
+                InstallerPhase::Downloading,
                 tracking.download_start,
                 tracking.download_end,
                 "Descargando",
@@ -119,7 +149,7 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
     if let Some(tracking) = spec.dnf {
         state
             .progress(
-                "downloading",
+                InstallerPhase::Downloading,
                 tracking.download_start,
                 format!("Descargando {}", tracking.label),
             )
@@ -136,6 +166,7 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|error| format!("No se pudo ejecutar {}: {error}", spec.program))?;
     let stdout = child
@@ -178,7 +209,7 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
     if let Some(tracking) = spec.dnf {
         state
             .progress(
-                "installing",
+                InstallerPhase::Installing,
                 tracking.install_end,
                 format!("{} instalado", tracking.label),
             )
@@ -190,26 +221,42 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
 async fn download(
     state: &AppState,
     url: &'static str,
-    destination: &'static str,
+    expected_sha256: &'static str,
     label: &'static str,
     start: u8,
     end: u8,
-) -> Result<(), String> {
+) -> Result<tempfile::TempPath, String> {
     state
-        .progress("downloading", start, format!("Descargando {label}"))
+        .progress(
+            InstallerPhase::Downloading,
+            start,
+            format!("Descargando {label}"),
+        )
         .await;
+    let temporary = tempfile::Builder::new()
+        .prefix("cpn-download-")
+        .tempfile()
+        .map_err(|error| format!("No se pudo crear el archivo temporal: {error}"))?;
+    let destination = temporary.into_temp_path();
     let mut child = Command::new("curl")
         .args([
             "--fail",
             "--location",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
             "--progress-bar",
+            "--max-time",
+            "900",
             "--output",
-            destination,
-            url,
         ])
+        .arg(&destination)
+        .arg(url)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|error| format!("No se pudo descargar {label}: {error}"))?;
     let mut stderr = child
@@ -240,7 +287,7 @@ async fn download(
                 let progress = start + ((end - start) as f32 * (percent / 100.0)).round() as u8;
                 state
                     .progress(
-                        "downloading",
+                        InstallerPhase::Downloading,
                         progress.min(end),
                         format!("Descargando {label}"),
                     )
@@ -252,17 +299,46 @@ async fn download(
     if !exit.success() {
         return Err(format!("La descarga de {label} no pudo completarse"));
     }
+    let bytes = std::fs::read(&destination)
+        .map_err(|error| format!("No se pudo verificar {label}: {error}"))?;
+    let actual = format!("{:x}", Sha256::digest(bytes));
+    if actual != expected_sha256 {
+        return Err(format!(
+            "La integridad SHA-256 de {label} no coincide; el archivo no se utilizará"
+        ));
+    }
     state
-        .progress("downloading", end, format!("{label} descargado"))
+        .progress(
+            InstallerPhase::Downloading,
+            end,
+            format!("{label} descargado"),
+        )
         .await;
-    Ok(())
+    Ok(destination)
 }
 
 fn command(
     program: &'static str,
     args: Vec<&'static str>,
     description: &'static str,
-    phase: &'static str,
+    phase: InstallerPhase,
+    progress: u8,
+) -> CommandSpec {
+    CommandSpec {
+        program,
+        args: args.into_iter().map(str::to_owned).collect(),
+        description,
+        phase,
+        progress,
+        dnf: None,
+    }
+}
+
+fn owned_command(
+    program: &'static str,
+    args: Vec<String>,
+    description: &'static str,
+    phase: InstallerPhase,
     progress: u8,
 ) -> CommandSpec {
     CommandSpec {
@@ -278,9 +354,9 @@ fn command(
 fn dnf(args: Vec<&'static str>, description: &'static str, tracking: DnfProgress) -> CommandSpec {
     CommandSpec {
         program: "dnf",
-        args,
+        args: args.into_iter().map(str::to_owned).collect(),
         description,
-        phase: "downloading",
+        phase: InstallerPhase::Downloading,
         progress: tracking.download_start,
         dnf: Some(tracking),
     }
@@ -304,7 +380,7 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
                 "systemctl",
                 vec!["enable", "--now", "nginx"],
                 "Activando Nginx",
-                "installing",
+                InstallerPhase::Installing,
                 84,
             ),
         ],
@@ -324,30 +400,21 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
                 "systemctl",
                 vec!["enable", "--now", "caddy"],
                 "Activando Caddy",
-                "installing",
+                InstallerPhase::Installing,
                 84,
             ),
         ],
-        ServerEngine::Openlitespeed => vec![
-            command(
-                "bash",
-                vec!["-c", "curl -fsSL https://repo.litespeed.sh | bash"],
-                "Preparando el repositorio de OpenLiteSpeed",
-                "downloading",
-                2,
-            ),
-            dnf(
-                vec!["install", "-y", "openlitespeed"],
-                "Instalando OpenLiteSpeed",
-                DnfProgress {
-                    download_start: 5,
-                    download_end: 48,
-                    install_start: 50,
-                    install_end: 78,
-                    label: "OpenLiteSpeed",
-                },
-            ),
-        ],
+        ServerEngine::Openlitespeed => vec![dnf(
+            vec!["install", "-y", "openlitespeed", "procps-ng"],
+            "Instalando OpenLiteSpeed",
+            DnfProgress {
+                download_start: 5,
+                download_end: 48,
+                install_start: 50,
+                install_end: 78,
+                label: "OpenLiteSpeed",
+            },
+        )],
     }
 }
 
@@ -357,28 +424,101 @@ fn prepare_caddy_repository() -> Result<(), String> {
         .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
 }
 
-async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
-    const UNIT: &str = "[Unit]\nDescription=OpenLiteSpeed HTTP Server\nAfter=network.target\n\n[Service]\nType=forking\nExecStart=/usr/local/lsws/bin/lswsctrl start\nExecStop=/usr/local/lsws/bin/lswsctrl stop\nExecReload=/usr/local/lsws/bin/lswsctrl restart\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n";
-    std::fs::write("/etc/systemd/system/openlitespeed.service", UNIT)
-        .map_err(|error| format!("No se pudo crear el servicio de OpenLiteSpeed: {error}"))?;
-    run_command(
+async fn prepare_openlitespeed_repository(state: &AppState) -> Result<(), String> {
+    let script = download(
         state,
-        command(
-            "systemctl",
-            vec!["daemon-reload"],
-            "Registrando OpenLiteSpeed en systemd",
-            "installing",
-            80,
-        ),
+        "https://repo.litespeed.sh",
+        "45bb48ed6da20ba9970afe02ceca81f55a7418d97624062713a47b6f5f4f4895",
+        "repositorio firmado de OpenLiteSpeed",
+        1,
+        4,
     )
     .await?;
     run_command(
         state,
+        owned_command(
+            "bash",
+            vec![script.to_string_lossy().into_owned()],
+            "Configurando el repositorio verificado de OpenLiteSpeed",
+            InstallerPhase::Installing,
+            5,
+        ),
+    )
+    .await
+}
+
+async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
+    let root = Path::new("/var/www/cpn/html");
+    std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
+    std::fs::write(
+        root.join("index.html"),
+        "<!doctype html><meta charset=\"utf-8\"><title>CPN</title><h1>CPN está listo</h1>",
+    )
+    .map_err(|error| error.to_string())?;
+    std::fs::create_dir_all("/usr/local/lsws/conf/vhosts/cpn-default")
+        .map_err(|error| error.to_string())?;
+    let vhost = "docRoot /var/www/cpn/html\n\nindex {\n  useServer 0\n  indexFiles index.html\n}\n\ncontext / {\n  type static\n  location /var/www/cpn/html\n  allowBrowse 1\n}\n";
+    std::fs::write("/usr/local/lsws/conf/vhosts/cpn-default/vhconf.conf", vhost)
+        .map_err(|error| error.to_string())?;
+    let main_path = "/usr/local/lsws/conf/httpd_config.conf";
+    let mut main = std::fs::read_to_string(main_path).map_err(|error| error.to_string())?;
+    if !main.contains("# CPN_MANAGED_LISTENER") {
+        main.push_str("\n# CPN_MANAGED_LISTENER\nvirtualhost cpn-default {\n  vhRoot /var/www/cpn\n  configFile /usr/local/lsws/conf/vhosts/cpn-default/vhconf.conf\n  allowSymbolLink 0\n  enableScript 1\n  restrained 1\n}\n\nlistener CPN_HTTP {\n  address *:80\n  secure 0\n  map cpn-default *\n}\n");
+        std::fs::write(main_path, main).map_err(|error| error.to_string())?;
+    }
+    let admin_path = "/usr/local/lsws/admin/conf/admin_config.conf";
+    if let Ok(admin) = std::fs::read_to_string(admin_path) {
+        let restricted = admin.replace(
+            "address                 *:7080",
+            "address                 127.0.0.1:7080",
+        );
+        if restricted != admin {
+            std::fs::write(admin_path, restricted).map_err(|error| error.to_string())?;
+        }
+    }
+    run_command(
+        state,
         command(
+            "/usr/local/lsws/bin/openlitespeed",
+            vec!["-t"],
+            "Validando la configuración de OpenLiteSpeed",
+            InstallerPhase::Testing,
+            83,
+        ),
+    )
+    .await?;
+    let vendor_source = Path::new("/usr/local/lsws/admin/misc/lshttpd.service");
+    if !Path::new("/usr/lib/systemd/system/lsws.service").exists()
+        && !Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
+        && vendor_source.exists()
+    {
+        std::fs::copy(vendor_source, "/usr/lib/systemd/system/lshttpd.service").map_err(
+            |error| format!("No se pudo registrar el unit vendor de OpenLiteSpeed: {error}"),
+        )?;
+        run_command(
+            state,
+            command(
+                "systemctl",
+                vec!["daemon-reload"],
+                "Registrando el unit vendor de OpenLiteSpeed",
+                InstallerPhase::Installing,
+                83,
+            ),
+        )
+        .await?;
+    }
+    let vendor_unit = if Path::new("/usr/lib/systemd/system/lsws.service").exists() {
+        "lsws"
+    } else {
+        "lshttpd"
+    };
+    run_command(
+        state,
+        owned_command(
             "systemctl",
-            vec!["enable", "--now", "openlitespeed"],
+            vec!["enable".into(), "--now".into(), vendor_unit.into()],
             "Activando OpenLiteSpeed",
-            "installing",
+            InstallerPhase::Installing,
             84,
         ),
     )
@@ -389,14 +529,21 @@ fn server_service(server: ServerEngine) -> &'static str {
     match server {
         ServerEngine::Nginx => "nginx",
         ServerEngine::Caddy => "caddy",
-        ServerEngine::Openlitespeed => "openlitespeed",
+        ServerEngine::Openlitespeed => {
+            if Path::new("/usr/lib/systemd/system/lsws.service").exists() {
+                "lsws"
+            } else {
+                "lshttpd"
+            }
+        }
     }
 }
 
 fn server_url(server: ServerEngine) -> &'static str {
     match server {
-        ServerEngine::Openlitespeed => "http://127.0.0.1:8088/",
-        ServerEngine::Nginx | ServerEngine::Caddy => "http://127.0.0.1/",
+        ServerEngine::Openlitespeed | ServerEngine::Nginx | ServerEngine::Caddy => {
+            "http://127.0.0.1/"
+        }
     }
 }
 
@@ -406,6 +553,9 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
         if matches!(server, ServerEngine::Caddy) {
             prepare_caddy_repository()?;
         }
+        if matches!(server, ServerEngine::Openlitespeed) {
+            prepare_openlitespeed_repository(&state).await?;
+        }
         for item in server_recipes(server) {
             run_command(&state, item).await?;
         }
@@ -413,7 +563,11 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
             configure_openlitespeed(&state).await?;
         }
         state
-            .progress("testing", 90, "Comprobando que el servicio está activo")
+            .progress(
+                InstallerPhase::Testing,
+                90,
+                "Comprobando que el servicio está activo",
+            )
             .await;
         run_command(
             &state,
@@ -421,7 +575,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
                 "systemctl",
                 vec!["is-active", "--quiet", server_service(server)],
                 "Verificando el servicio con systemd",
-                "testing",
+                InstallerPhase::Testing,
                 92,
             ),
         )
@@ -441,11 +595,14 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
                     server_url(server),
                 ],
                 "Comprobando la respuesta HTTP local",
-                "testing",
+                InstallerPhase::Testing,
                 96,
             ),
         )
         .await?;
+        if let Some(environment) = state.status.read().await.environment.clone() {
+            crate::environment::open_web_services(&environment).await?;
+        }
         Ok::<_, String>(())
     }
     .await;
@@ -456,26 +613,49 @@ const PHP_PACKAGES: &[&str] = &[
     "install",
     "-y",
     "php-cli",
+    "php-fpm",
     "php-mbstring",
     "php-intl",
     "php-xml",
     "php-pdo",
+    "php-sqlite3",
     "php-process",
     "php-gd",
     "php-opcache",
     "php-pecl-zip",
     "unzip",
     "tar",
+    "sqlite",
 ];
 
 async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<(), String> {
     run_command(
         state,
+        dnf(
+            vec![
+                "install",
+                "-y",
+                "epel-release",
+                "https://rpms.remirepo.net/enterprise/remi-release-9.rpm",
+            ],
+            "Habilitando el repositorio firmado de PHP",
+            DnfProgress {
+                download_start: 36,
+                download_end: 38,
+                install_start: 38,
+                install_end: 39,
+                label: "repositorio PHP",
+            },
+        ),
+    )
+    .await?;
+    run_command(
+        state,
         command(
             "dnf",
-            vec!["module", "enable", "-y", "php:8.1"],
-            "Preparando PHP 8.1",
-            "downloading",
+            vec!["module", "enable", "-y", "php:remi-8.3"],
+            "Preparando PHP 8.3 con soporte de seguridad",
+            InstallerPhase::Downloading,
             38,
         ),
     )
@@ -505,11 +685,11 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
     symlink(target, current).map_err(|error| format!("No se pudo activar el webmail: {error}"))
 }
 
-async fn configure_webmail_service(state: &AppState, root: &'static str) -> Result<(), String> {
-    let _ = Command::new("systemctl")
-        .args(["stop", "cpn-webmail"])
-        .status()
-        .await;
+async fn configure_webmail_service(
+    state: &AppState,
+    root: &'static str,
+    mail: MailSystem,
+) -> Result<(), String> {
     let user_exists = Command::new("id")
         .args(["-u", "cpn-webmail"])
         .stdout(Stdio::null())
@@ -531,34 +711,99 @@ async fn configure_webmail_service(state: &AppState, root: &'static str) -> Resu
                     "cpn-webmail",
                 ],
                 "Creando el usuario aislado del webmail",
-                "installing",
+                InstallerPhase::Installing,
                 83,
             ),
         )
         .await?;
     }
     reset_current_link(Path::new(root))?;
-    const UNIT: &str = "[Unit]\nDescription=CPN Webmail\nAfter=network.target\n\n[Service]\nType=simple\nUser=cpn-webmail\nGroup=cpn-webmail\nWorkingDirectory=/opt/cpn-webmail/current\nExecStart=/usr/bin/php -S 127.0.0.1:8888 -t /opt/cpn-webmail/current\nRestart=on-failure\nPrivateTmp=true\nNoNewPrivileges=true\n\n[Install]\nWantedBy=multi-user.target\n";
-    std::fs::write("/etc/systemd/system/cpn-webmail.service", UNIT)
+    let pool = "[cpn-webmail]\nuser = cpn-webmail\ngroup = cpn-webmail\nlisten = 127.0.0.1:9001\npm = ondemand\npm.max_children = 8\npm.process_idle_timeout = 10s\nclear_env = yes\nphp_admin_value[open_basedir] = /opt/cpn-webmail:/tmp\nphp_admin_value[session.save_path] = /opt/cpn-webmail/runtime/sessions\nphp_admin_flag[expose_php] = off\n";
+    std::fs::create_dir_all("/opt/cpn-webmail/runtime/sessions")
         .map_err(|error| error.to_string())?;
+    std::fs::write("/etc/php-fpm.d/cpn-webmail.conf", pool).map_err(|error| error.to_string())?;
     run_command(
         state,
         command(
             "chown",
-            vec!["-R", "cpn-webmail:cpn-webmail", "/opt/cpn-webmail"],
-            "Ajustando permisos del webmail",
-            "installing",
+            vec!["-R", "root:root", "/opt/cpn-webmail"],
+            "Protegiendo el código del webmail",
+            InstallerPhase::Installing,
             84,
         ),
     )
     .await?;
+    let mut writable = vec!["/opt/cpn-webmail/runtime"];
+    match mail {
+        MailSystem::Snappymail => writable.push("/opt/cpn-webmail/snappymail/data"),
+        MailSystem::Roundcube => writable.extend([
+            "/opt/cpn-webmail/roundcube/temp",
+            "/opt/cpn-webmail/roundcube/logs",
+            "/opt/cpn-webmail/roundcube/db.sqlite",
+        ]),
+        MailSystem::Thunderbird => {}
+    }
+    run_command(
+        state,
+        owned_command(
+            "chown",
+            std::iter::once("-R".to_owned())
+                .chain(std::iter::once("cpn-webmail:cpn-webmail".to_owned()))
+                .chain(writable.into_iter().map(str::to_owned))
+                .collect(),
+            "Habilitando solo los directorios de runtime",
+            InstallerPhase::Installing,
+            85,
+        ),
+    )
+    .await?;
+
+    let server = state
+        .status
+        .read()
+        .await
+        .installed_server
+        .ok_or("No existe un servidor web instalado")?;
+    match server {
+        ServerEngine::Nginx => {
+            let config = format!(
+                "server {{\n  listen 8888;\n  server_name _;\n  root {root};\n  index index.php;\n  location / {{ try_files $uri $uri/ /index.php?$query_string; }}\n  location ~ \\.php$ {{ include fastcgi_params; fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name; fastcgi_pass 127.0.0.1:9001; }}\n}}\n"
+            );
+            std::fs::write("/etc/nginx/conf.d/cpn-webmail.conf", config)
+                .map_err(|error| error.to_string())?;
+        }
+        ServerEngine::Caddy => {
+            let path = "/etc/caddy/Caddyfile";
+            let mut config = std::fs::read_to_string(path).unwrap_or_default();
+            if let Some(index) = config.find("# CPN_WEBMAIL_BEGIN") {
+                config.truncate(index);
+            }
+            config.push_str(&format!("\n# CPN_WEBMAIL_BEGIN\n:8888 {{\n  root * {root}\n  php_fastcgi 127.0.0.1:9001\n  file_server\n}}\n"));
+            std::fs::write(path, config).map_err(|error| error.to_string())?;
+        }
+        ServerEngine::Openlitespeed => {
+            let vhost = format!(
+                "docRoot {root}\nindex {{ useServer 0\n indexFiles index.php }}\nextprocessor cpnWebmailFpm {{ type fcgi\n address 127.0.0.1:9001\n maxConns 8\n initTimeout 60\n retryTimeout 0 }}\nscripthandler {{ add fcgi:cpnWebmailFpm php }}\ncontext / {{ type null\n location {root}\n allowBrowse 1 }}\n"
+            );
+            std::fs::create_dir_all("/usr/local/lsws/conf/vhosts/cpn-webmail")
+                .map_err(|error| error.to_string())?;
+            std::fs::write("/usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf", vhost)
+                .map_err(|error| error.to_string())?;
+            let path = "/usr/local/lsws/conf/httpd_config.conf";
+            let mut config = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+            if !config.contains("# CPN_WEBMAIL_BEGIN") {
+                config.push_str("\n# CPN_WEBMAIL_BEGIN\nvirtualhost cpn-webmail { vhRoot /opt/cpn-webmail\n configFile /usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf\n enableScript 1\n restrained 1 }\nlistener CPN_WEBMAIL { address 127.0.0.1:8888\n secure 0\n map cpn-webmail * }\n");
+                std::fs::write(path, config).map_err(|error| error.to_string())?;
+            }
+        }
+    }
     run_command(
         state,
         command(
             "systemctl",
-            vec!["daemon-reload"],
-            "Registrando el servicio de correo",
-            "installing",
+            vec!["enable", "--now", "php-fpm"],
+            "Activando PHP-FPM",
+            InstallerPhase::Installing,
             86,
         ),
     )
@@ -567,9 +812,9 @@ async fn configure_webmail_service(state: &AppState, root: &'static str) -> Resu
         state,
         command(
             "systemctl",
-            vec!["enable", "--now", "cpn-webmail"],
-            "Activando el sistema de correo",
-            "installing",
+            vec!["restart", server_service(server)],
+            "Activando el webmail detrás del servidor elegido",
+            InstallerPhase::Installing,
             88,
         ),
     )
@@ -582,62 +827,44 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
         MailSystem::Snappymail => {
             std::fs::create_dir_all("/opt/cpn-webmail/snappymail")
                 .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz", "/tmp/snappymail.tar.gz", "SnappyMail", 2, 36).await?;
+            let archive = download(state, "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz", "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec", "SnappyMail", 2, 36).await?;
             install_php_runtime(state, "PHP para SnappyMail").await?;
             run_command(
                 state,
-                command(
+                owned_command(
                     "tar",
                     vec![
-                        "xzf",
-                        "/tmp/snappymail.tar.gz",
-                        "-C",
-                        "/opt/cpn-webmail/snappymail",
+                        "xzf".into(),
+                        archive.to_string_lossy().into_owned(),
+                        "-C".into(),
+                        "/opt/cpn-webmail/snappymail".into(),
                     ],
                     "Extrayendo SnappyMail",
-                    "installing",
+                    InstallerPhase::Installing,
                     80,
                 ),
             )
             .await?;
-            configure_webmail_service(state, "/opt/cpn-webmail/snappymail").await?;
-        }
-        MailSystem::Rainloop => {
-            std::fs::create_dir_all("/opt/cpn-webmail/rainloop")
-                .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip", "/tmp/rainloop.zip", "RainLoop", 2, 36).await?;
-            install_php_runtime(state, "PHP para RainLoop").await?;
-            run_command(
-                state,
-                command(
-                    "unzip",
-                    vec!["-o", "/tmp/rainloop.zip", "-d", "/opt/cpn-webmail/rainloop"],
-                    "Extrayendo RainLoop",
-                    "installing",
-                    80,
-                ),
-            )
-            .await?;
-            configure_webmail_service(state, "/opt/cpn-webmail/rainloop").await?;
+            configure_webmail_service(state, "/opt/cpn-webmail/snappymail", mail).await?;
         }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
                 .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/roundcube/roundcubemail/releases/download/1.7.3/roundcubemail-1.7.3-complete.tar.gz", "/tmp/roundcube.tar.gz", "Roundcube", 2, 36).await?;
+            let archive = download(state, "https://github.com/roundcube/roundcubemail/releases/download/1.7.1/roundcubemail-1.7.1-complete.tar.gz", "1e0382bcefd627ab0b6285d3181ddfba5b444fdcf6d49f33f5ea15fbf97864ef", "Roundcube", 2, 36).await?;
             install_php_runtime(state, "PHP para Roundcube").await?;
             run_command(
                 state,
-                command(
+                owned_command(
                     "tar",
                     vec![
-                        "xzf",
-                        "/tmp/roundcube.tar.gz",
-                        "-C",
-                        "/opt/cpn-webmail/roundcube",
-                        "--strip-components=1",
+                        "xzf".into(),
+                        archive.to_string_lossy().into_owned(),
+                        "-C".into(),
+                        "/opt/cpn-webmail/roundcube".into(),
+                        "--strip-components=1".into(),
                     ],
                     "Extrayendo Roundcube",
-                    "installing",
+                    InstallerPhase::Installing,
                     80,
                 ),
             )
@@ -648,11 +875,58 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
                 .map(char::from)
                 .collect();
             let config = format!(
-                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0646';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
+                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
             );
             std::fs::write("/opt/cpn-webmail/roundcube/config/config.inc.php", config)
                 .map_err(|error| error.to_string())?;
-            configure_webmail_service(state, "/opt/cpn-webmail/roundcube/public_html").await?;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .mode(0o600)
+                .open("/opt/cpn-webmail/roundcube/db.sqlite")
+                .map_err(|error| error.to_string())?;
+            run_command(
+                state,
+                command(
+                    "php",
+                    vec!["-r", "exit(extension_loaded('pdo_sqlite') ? 0 : 1);"],
+                    "Verificando PDO SQLite",
+                    InstallerPhase::Testing,
+                    81,
+                ),
+            )
+            .await?;
+            run_command(
+                state,
+                command(
+                    "sqlite3",
+                    vec![
+                        "/opt/cpn-webmail/roundcube/db.sqlite",
+                        ".read /opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql",
+                    ],
+                    "Inicializando la base de datos de Roundcube",
+                    InstallerPhase::Installing,
+                    82,
+                ),
+            )
+            .await?;
+            run_command(
+                state,
+                command(
+                    "sqlite3",
+                    vec![
+                        "/opt/cpn-webmail/roundcube/db.sqlite",
+                        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='users';",
+                    ],
+                    "Verificando el esquema de Roundcube",
+                    InstallerPhase::Testing,
+                    83,
+                ),
+            )
+            .await?;
+            configure_webmail_service(state, "/opt/cpn-webmail/roundcube/public_html", mail)
+                .await?;
         }
         MailSystem::Thunderbird => unreachable!(),
     }
@@ -679,7 +953,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             )
             .await?;
             state
-                .progress("testing", 92, "Comprobando Thunderbird")
+                .progress(InstallerPhase::Testing, 92, "Comprobando Thunderbird")
                 .await;
             run_command(
                 &state,
@@ -687,7 +961,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                     "thunderbird",
                     vec!["--version"],
                     "Verificando la versión instalada",
-                    "testing",
+                    InstallerPhase::Testing,
                     96,
                 ),
             )
@@ -695,15 +969,19 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
         } else {
             install_webmail(&state, mail).await?;
             state
-                .progress("testing", 92, format!("Comprobando {}", mail.label()))
+                .progress(
+                    InstallerPhase::Testing,
+                    92,
+                    format!("Comprobando {}", mail.label()),
+                )
                 .await;
             run_command(
                 &state,
                 command(
                     "systemctl",
-                    vec!["is-active", "--quiet", "cpn-webmail"],
-                    "Verificando el servicio de webmail",
-                    "testing",
+                    vec!["is-active", "--quiet", "php-fpm"],
+                    "Verificando PHP-FPM del cliente webmail",
+                    InstallerPhase::Testing,
                     94,
                 ),
             )
@@ -728,7 +1006,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                         "http://127.0.0.1:8888/",
                     ],
                     "Comprobando la respuesta HTTP del webmail",
-                    "testing",
+                    InstallerPhase::Testing,
                     97,
                 ),
             )
@@ -744,17 +1022,30 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
     let mut status = state.status.write().await;
     match result {
         Ok(()) => {
-            status.phase = "completed";
+            status.phase = InstallerPhase::Completed;
             status.progress = 100;
             status.message = format!("{label} se instaló y verificó correctamente");
+            if let Some(server) = status.selected_server
+                && status.stage == SetupStage::Server
+            {
+                status.installed_server = Some(server);
+                status.stage = SetupStage::Mail;
+            }
+            if let Some(mail) = status.selected_mail
+                && status.stage == SetupStage::Mail
+            {
+                status.installed_mail = Some(mail);
+                status.stage = SetupStage::Complete;
+            }
             let _ = state.events.send(InstallerEvent::Completed {
                 status: status.clone(),
             });
         }
         Err(error) => {
-            status.phase = "failed";
+            status.phase = InstallerPhase::FailedPartial;
             status.error = Some(error.clone());
-            status.message = "La instalación se detuvo de forma segura".into();
+            status.message =
+                "La instalación falló; el sistema puede conservar cambios parciales".into();
             state.log(error, "error");
             let _ = state.events.send(InstallerEvent::Error {
                 status: status.clone(),
@@ -765,12 +1056,20 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::fraction;
+    use super::{fraction, verify_release};
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {
         assert_eq!(fraction("(3/8): package.rpm"), Some((3, 8)));
         assert_eq!(fraction("Installing : package 5/7"), Some((5, 7)));
         assert_eq!(fraction("No package progress here"), None);
+    }
+
+    #[test]
+    fn accepts_only_almalinux_nine() {
+        assert!(verify_release("ID=almalinux\nVERSION_ID=\"9.8\"\n").is_ok());
+        assert!(verify_release("ID=almalinux\nVERSION_ID=\"8.10\"\n").is_err());
+        assert!(verify_release("ID=almalinux\nVERSION_ID=\"10.0\"\n").is_err());
+        assert!(verify_release("ID=rocky\nVERSION_ID=\"9.8\"\n").is_err());
     }
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ServerEngine {
     Openlitespeed,
@@ -8,20 +8,49 @@ pub enum ServerEngine {
     Caddy,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MailSystem {
     Snappymail,
-    Rainloop,
     Roundcube,
     Thunderbird,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallerPhase {
+    Preparing,
+    Ready,
+    Downloading,
+    Installing,
+    Testing,
+    Completed,
+    FailedRolledBack,
+    FailedPartial,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SetupStage {
+    Domain,
+    Dns,
+    Server,
+    Mail,
+    Complete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DnsProvider {
+    Local,
+    Cloudflare,
 }
 
 impl MailSystem {
     pub fn label(self) -> &'static str {
         match self {
             Self::Snappymail => "SnappyMail",
-            Self::Rainloop => "RainLoop",
             Self::Roundcube => "Roundcube",
             Self::Thunderbird => "Thunderbird",
         }
@@ -45,15 +74,23 @@ pub struct EnvironmentInfo {
     pub firewall: Option<String>,
     pub port: u16,
     pub addresses: Vec<String>,
+    pub remote_access: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InstallerStatus {
-    pub phase: &'static str,
+    pub phase: InstallerPhase,
+    pub stage: SetupStage,
     pub progress: u8,
     pub message: String,
+    pub domain: Option<String>,
+    pub domain_is_cloudflare: bool,
+    pub dns_provider: Option<DnsProvider>,
+    pub cloudflare_connected: bool,
     pub selected_server: Option<ServerEngine>,
+    pub installed_server: Option<ServerEngine>,
     pub selected_mail: Option<MailSystem>,
+    pub installed_mail: Option<MailSystem>,
     pub environment: Option<EnvironmentInfo>,
     pub error: Option<String>,
 }
@@ -61,11 +98,18 @@ pub struct InstallerStatus {
 impl Default for InstallerStatus {
     fn default() -> Self {
         Self {
-            phase: "preparing",
+            phase: InstallerPhase::Preparing,
+            stage: SetupStage::Domain,
             progress: 0,
             message: "Estamos preparando todo...".into(),
+            domain: None,
+            domain_is_cloudflare: false,
+            dns_provider: None,
+            cloudflare_connected: false,
             selected_server: None,
+            installed_server: None,
             selected_mail: None,
+            installed_mail: None,
             environment: None,
             error: None,
         }
@@ -93,6 +137,22 @@ pub struct MailInstallRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct TokenQuery {
+pub struct DomainRequest {
+    pub domain: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DnsRequest {
+    pub provider: DnsProvider,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BootstrapQuery {
     pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloudflareCallbackQuery {
+    pub session: String,
+    pub claim: String,
 }

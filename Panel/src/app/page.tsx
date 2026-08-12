@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { LockKeyhole, Mail, Server } from "lucide-react";
 
 export default function LoginPage() {
@@ -12,7 +11,7 @@ export default function LoginPage() {
         <h1 id="login-title">Sign in</h1>
         <p className="login-intro">Access your server workspace.</p>
 
-        <form className="login-form" action="/dashboard">
+        <form className="login-form" action="/api/auth/login" method="post">
           <label htmlFor="email">Email address</label>
           <div className="input-shell">
             <Mail size={19} aria-hidden="true" />
@@ -31,9 +30,6 @@ export default function LoginPage() {
           <button type="submit">Sign in</button>
         </form>
 
-        <Link className="demo-link" href="/dashboard">
-          View dashboard preview
-        </Link>
       </section>
 
       <footer>© 2026 NT&amp;DBN Panel. All rights reserved.</footer>

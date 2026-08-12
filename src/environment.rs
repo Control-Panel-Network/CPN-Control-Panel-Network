@@ -48,7 +48,7 @@ async fn active_service(name: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-pub async fn inspect(port: u16) -> EnvironmentInfo {
+pub async fn inspect(port: u16, remote_access: bool) -> EnvironmentInfo {
     let virtualization = output("systemd-detect-virt", &[]).await;
     let dmi = fs::read_to_string("/sys/class/dmi/id/product_name")
         .unwrap_or_default()
@@ -87,17 +87,53 @@ pub async fn inspect(port: u16) -> EnvironmentInfo {
         firewall,
         port,
         addresses: addresses().await,
+        remote_access,
     }
 }
 
-pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), String> {
+pub struct FirewallGuard {
+    firewall: Option<String>,
+    port: u16,
+    added: bool,
+}
+
+impl FirewallGuard {
+    pub async fn cleanup(self) {
+        if !self.added {
+            return;
+        }
+        let port = format!("{}/tcp", self.port);
+        match self.firewall.as_deref() {
+            Some("firewalld") => {
+                let _ = Command::new("firewall-cmd")
+                    .args(["--remove-port", &port])
+                    .status()
+                    .await;
+            }
+            Some("ufw") => {
+                let _ = Command::new("ufw")
+                    .args(["delete", "allow", &port])
+                    .status()
+                    .await;
+            }
+            _ => {}
+        }
+    }
+}
+
+pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<FirewallGuard, String> {
     let port = format!("{}/tcp", environment.port);
+    let mut added = false;
     match environment.firewall.as_deref() {
         Some("firewalld") => {
-            for args in [
-                vec!["--add-port", port.as_str()],
-                vec!["--permanent", "--add-port", port.as_str()],
-            ] {
+            let existed = Command::new("firewall-cmd")
+                .args(["--query-port", &port])
+                .status()
+                .await
+                .is_ok_and(|status| status.success());
+            if !existed {
+                added = true;
+                let args = vec!["--add-port", port.as_str()];
                 let status = Command::new("firewall-cmd")
                     .args(args)
                     .stdout(Stdio::null())
@@ -111,15 +147,66 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
             }
         }
         Some("ufw") => {
-            let status = Command::new("ufw")
-                .args(["allow", port.as_str()])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .await
-                .map_err(|error| error.to_string())?;
-            if !status.success() {
-                return Err("ufw no permitió abrir el puerto del instalador".into());
+            let listing = output("ufw", &["status"]).await.unwrap_or_default();
+            if !listing
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(port.as_str()))
+            {
+                added = true;
+                let status = Command::new("ufw")
+                    .args(["allow", port.as_str()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !status.success() {
+                    return Err("ufw no permitió abrir el puerto del instalador".into());
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(FirewallGuard {
+        firewall: environment.firewall.clone(),
+        port: environment.port,
+        added,
+    })
+}
+
+pub async fn open_web_services(environment: &EnvironmentInfo) -> Result<(), String> {
+    match environment.firewall.as_deref() {
+        Some("firewalld") => {
+            for service in ["http", "https"] {
+                for args in [
+                    vec!["--add-service", service],
+                    vec!["--permanent", "--add-service", service],
+                ] {
+                    let status = Command::new("firewall-cmd")
+                        .args(args)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    if !status.success() {
+                        return Err(format!("firewalld no permitió habilitar {service}"));
+                    }
+                }
+            }
+        }
+        Some("ufw") => {
+            for port in ["80/tcp", "443/tcp"] {
+                let status = Command::new("ufw")
+                    .args(["allow", port])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !status.success() {
+                    return Err(format!("ufw no permitió habilitar {port}"));
+                }
             }
         }
         _ => {}

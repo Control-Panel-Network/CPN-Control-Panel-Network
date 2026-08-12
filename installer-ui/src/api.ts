@@ -1,50 +1,32 @@
-import type { InstallerEvent, InstallerStatus, MailSystem, ServerEngine } from './types';
+import type { DnsProvider, DomainValidation, InstallerEvent, InstallerStatus, MailSystem, ServerEngine } from './types';
 
-const accessToken = new URLSearchParams(window.location.search).get('token') ?? '';
-const apiUrl = (path: string) => `${path}?token=${encodeURIComponent(accessToken)}`;
-
-export async function getStatus(): Promise<InstallerStatus> {
-  const response = await fetch(apiUrl('/api/status'));
-  if (!response.ok) throw new Error('No se pudo consultar el instalador');
-  return response.json();
-}
-
-export async function startMailInstall(mail: MailSystem): Promise<void> {
-  const response = await fetch(apiUrl('/api/install/mail'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mail }),
-  });
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { credentials: 'same-origin', ...init });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error ?? 'No se pudo iniciar la instalación del correo');
+    throw new Error(payload?.error ?? await response.text().catch(() => '') ?? 'La operación no pudo completarse');
   }
+  return response.status === 204 ? undefined as T : response.json();
 }
 
-export async function startServerInstall(server: ServerEngine): Promise<void> {
-  const response = await fetch(apiUrl('/api/install/server'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ server }),
-  });
+const jsonPost = (body?: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error ?? 'No se pudo iniciar la instalación');
-  }
-}
+export const getStatus = () => request<InstallerStatus>('/api/status');
+export const validateDomain = (domain: string) => request<DomainValidation>('/api/domain/validate', jsonPost({ domain }));
+export const configureDns = (provider: DnsProvider) => request<InstallerStatus>('/api/dns/configure', jsonPost({ provider }));
+export const startCloudflareOAuth = () => request<{ authorization_url: string }>('/api/dns/cloudflare/start', jsonPost());
+export const startMailInstall = (mail: MailSystem) => request<void>('/api/install/mail', jsonPost({ mail }));
+export const startServerInstall = (server: ServerEngine) => request<void>('/api/install/server', jsonPost({ server }));
 
 export function connectInstallerEvents(onEvent: (event: InstallerEvent) => void) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${window.location.host}${apiUrl('/api/events')}`);
-
+  const socket = new WebSocket(`${protocol}//${window.location.host}/api/events`);
   socket.addEventListener('message', (message) => {
-    try {
-      onEvent(JSON.parse(message.data) as InstallerEvent);
-    } catch {
-      // Ignore malformed frames and keep the connection alive.
-    }
+    try { onEvent(JSON.parse(message.data) as InstallerEvent); } catch { /* Ignore malformed frames. */ }
   });
-
   return socket;
 }

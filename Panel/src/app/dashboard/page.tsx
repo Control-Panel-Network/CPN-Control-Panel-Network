@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { PANEL_COOKIE, validSession } from "@/lib/panel-auth";
 import {
   Bell,
   Database,
@@ -58,7 +61,9 @@ const navigation = [
   { label: "Backups", icon: HardDrive },
 ];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const cookieStore = await cookies();
+  if (!validSession(cookieStore.get(PANEL_COOKIE)?.value)) redirect("/");
   return (
     <main className="panel-layout">
       <aside className="sidebar">
@@ -89,7 +94,7 @@ export default function DashboardPage() {
         <div className="sidebar-footer">
           <button aria-label="Notifications"><Bell size={19} /></button>
           <button aria-label="Settings"><Settings size={19} /></button>
-          <Link href="/" className="logout"><LogOut size={18} /> Log out</Link>
+          <form action="/api/auth/logout" method="post"><button type="submit" className="logout"><LogOut size={18} /> Log out</button></form>
         </div>
       </aside>
 

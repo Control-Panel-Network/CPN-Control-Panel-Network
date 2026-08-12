@@ -1,4 +1,4 @@
-import { ArrowRight, Mail, Mails } from 'lucide-react';
+import { ArrowRight, Mails } from 'lucide-react';
 import { siRoundcube, siThunderbird } from 'simple-icons';
 import type { MailSystem } from '../types';
 
@@ -6,7 +6,6 @@ interface Props { selectedMail: MailSystem | null; onSelectMail: (mail: MailSyst
 
 const options: Array<{ id: MailSystem; name: string; description: string }> = [
   { id: 'snappymail', name: 'SnappyMail', description: 'Webmail moderno, rápido y ligero con soporte IMAP, SMTP, Sieve y OpenPGP.' },
-  { id: 'rainloop', name: 'RainLoop', description: 'Webmail clásico y ligero. Se ofrece como opción heredada para instalaciones compatibles.' },
   { id: 'roundcube', name: 'Roundcube', description: 'Webmail completo y extensible con libreta de contactos, filtros y amplio ecosistema de plugins.' },
   { id: 'thunderbird', name: 'Thunderbird', description: 'Cliente de correo gráfico para escritorio. No expone un servicio web ni una dirección HTTP.' },
 ];
@@ -16,7 +15,7 @@ function MailIcon({ mail }: { mail: MailSystem }) {
     const icon = mail === 'roundcube' ? siRoundcube : siThunderbird;
     return <svg width="44" height="44" viewBox="0 0 24 24" role="img" aria-label={icon.title} style={{ color: `#${icon.hex}` }}><path fill="currentColor" d={icon.path} /></svg>;
   }
-  return mail === 'snappymail' ? <Mails size={44} strokeWidth={1.6} className="text-[#147a62]" /> : <Mail size={44} strokeWidth={1.6} className="text-[#6b7280]" />;
+  return <Mails size={44} strokeWidth={1.6} className="text-[#147a62]" />;
 }
 
 export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: Props) {

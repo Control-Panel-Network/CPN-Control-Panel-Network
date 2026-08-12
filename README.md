@@ -14,9 +14,10 @@ CPN es un instalador web para preparar componentes de un panel de servidores en 
 La primera fase implementa el flujo del instalador y continúa en desarrollo. Actualmente incluye:
 
 - Selección e instalación de OpenLiteSpeed, Caddy o Nginx.
-- Selección e instalación de SnappyMail, RainLoop, Roundcube o Thunderbird.
+- Selección de SnappyMail, Roundcube o Thunderbird. RainLoop se retiró por estar archivado y sin mantenimiento.
+- Validación real del dominio y elección entre DNS local o Cloudflare mediante OAuth.
 - Progreso real de descarga, instalación y comprobación enviado por WebSocket.
-- Detección de VPS y apertura del puerto `8787` en `firewalld` o `ufw` cuando están activos.
+- Acceso local por defecto; `--allow-remote` abre temporalmente `8787` y limpia la regla al finalizar.
 - Empaquetado RPM para AlmaLinux 9.
 - Pruebas de servicios en contenedores limpios de AlmaLinux 9.8.
 
@@ -40,16 +41,18 @@ cargo check
 cargo test
 cargo clippy -- -D warnings
 
-# React, sin generar un build de producción
+# React
 cd installer-ui
 npm ci
 npm run lint
+npm run build
 
 # Panel Next.js
 cd ../Panel
 npm ci
 npm run lint
 npm run typecheck
+npm run build
 ```
 
 La acción de integración continua ejecuta estas comprobaciones para cada cambio enviado y cada pull request.
@@ -61,10 +64,11 @@ En AlmaLinux 9:
 ```bash
 ./scripts/build-rpm.sh
 sudo dnf install ./target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
-sudo cpn-installer
+sudo cpn-installer                       # acceso local, recomendado con túnel SSH
+sudo cpn-installer --allow-remote        # acceso remoto explícito
 ```
 
-Al ejecutar `cpn-installer`, la consola indica inmediatamente la URL completa del instalador web, incluida la IP accesible y un token temporal. El servicio escucha en `0.0.0.0:8787`.
+Al ejecutar `cpn-installer`, la consola indica inmediatamente la URL completa. El enlace de arranque solo puede usarse una vez; después se sustituye por una cookie HttpOnly y la URL queda limpia. Por defecto escucha únicamente en `127.0.0.1:8787`.
 
 ## Pruebas funcionales en Docker
 
@@ -74,11 +78,13 @@ La matriz requiere Docker con soporte para contenedores privilegiados y systemd:
 ./tests/docker-matrix.sh
 ```
 
-Comprueba que Nginx y Caddy respondan por HTTP, y que SnappyMail, RainLoop, Roundcube y Thunderbird queden instalados y superen sus verificaciones específicas.
+Comprueba que Nginx, Caddy y OpenLiteSpeed respondan por HTTP, y que SnappyMail, Roundcube y Thunderbird superen verificaciones específicas.
+
+SnappyMail y Roundcube son clientes web, no un servidor de correo completo. Esta faceta no declara SMTP/IMAP operativo hasta que CPN incorpore y pruebe un backend de correo separado. Thunderbird es un cliente de escritorio y no publica una URL web.
 
 ## Seguridad
 
-No publiques el token temporal que aparece en la URL del instalador. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa.
+No publiques el enlace de arranque temporal. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa. Los artefactos externos soportados tienen versión y SHA-256 fijados y se descargan en temporales privados.
 
 ## Licencia
 

@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
 
 permissions:
   contents: read
@@ -21,10 +23,16 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Preparar recursos para el análisis
-        run: |
-          mkdir -p installer-ui/dist
-          cp installer-ui/index.html installer-ui/dist/index.html
+      - name: Instalar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Generar la interfaz que se embebe en Rust
+        working-directory: installer-ui
+        run: npm ci && npm run build
 
       - name: Comprobar formato
         run: cargo fmt --check
@@ -37,6 +45,11 @@ jobs:
 
       - name: Ejecutar Clippy
         run: cargo clippy -- -D warnings
+
+      - name: Auditar dependencias Rust
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   frontend:
     name: React
@@ -60,6 +73,12 @@ jobs:
 
       - name: Comprobar TypeScript
         run: npm run lint
+
+      - name: Construir bundle de producción
+        run: npm run build
+
+      - name: Auditar dependencias npm
+        run: npm audit --audit-level=high
 
   panel:
     name: Panel Next.js
@@ -87,6 +106,12 @@ jobs:
       - name: Comprobar TypeScript
         run: npm run typecheck
 
+      - name: Construir Panel de producción
+        run: npm run build
+
+      - name: Auditar dependencias npm
+        run: npm audit --audit-level=high
+
   scripts:
     name: Scripts
     runs-on: ubuntu-latest
@@ -96,3 +121,23 @@ jobs:
 
       - name: Comprobar sintaxis Bash
         run: bash -n scripts/build-rpm.sh tests/docker-matrix.sh
+
+  alma-smoke:
+    name: AlmaLinux smoke real
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Construir RPM en AlmaLinux 9
+        run: docker run --rm -v "$PWD:/src" -w /src almalinux:9 bash -lc 'dnf install -y nodejs npm cargo rust rpm-build gcc pkgconf-pkg-config openssl-devel && scripts/build-rpm.sh'
+      - name: Probar Nginx en contenedor limpio
+        env:
+          CPN_TEST_SCOPE: server
+          CPN_TEST_SERVERS: nginx
+        run: tests/docker-matrix.sh
+      - name: Conservar logs si falla
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: alma-smoke-logs
+          path: target/test-logs
