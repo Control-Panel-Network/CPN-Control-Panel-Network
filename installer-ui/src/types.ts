@@ -28,6 +28,9 @@ export interface InstallerStatus {
   selected_mail: MailSystem | null;
   installed_mail: MailSystem | null;
   environment: EnvironmentInfo | null;
+  panel_url: string | null;
+  panel_admin_email: string | null;
+  panel_admin_password: string | null;
   error: string | null;
   failed_phase: InstallerPhase | null;
 }

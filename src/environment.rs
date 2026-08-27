@@ -213,3 +213,43 @@ pub async fn open_web_services(environment: &EnvironmentInfo) -> Result<(), Stri
     }
     Ok(())
 }
+
+pub async fn open_persistent_port(
+    environment: &EnvironmentInfo,
+    port_number: u16,
+) -> Result<(), String> {
+    let port = format!("{port_number}/tcp");
+    match environment.firewall.as_deref() {
+        Some("firewalld") => {
+            for args in [
+                vec!["--add-port", port.as_str()],
+                vec!["--permanent", "--add-port", port.as_str()],
+            ] {
+                let status = Command::new("firewall-cmd")
+                    .args(args)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !status.success() {
+                    return Err(format!("firewalld no permitió habilitar {port}"));
+                }
+            }
+        }
+        Some("ufw") => {
+            let status = Command::new("ufw")
+                .args(["allow", port.as_str()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !status.success() {
+                return Err(format!("ufw no permitió habilitar {port}"));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}

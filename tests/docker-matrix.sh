@@ -70,7 +70,25 @@ run_case() {
   wait_for_result "$name"
   if [[ "$kind" == "mail" ]]; then
     docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"domain":"example.com"}' http://127.0.0.1:8787/api/domain/validate >/dev/null
-    docker exec "$name" curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{"provider":"local"}' http://127.0.0.1:8787/api/dns/configure >/dev/null
+    docker exec "$name" sh -lc "curl -fsS -b /tmp/cpn-cookie -H 'Content-Type: application/json' -X POST -d '{\"provider\":\"local\"}' http://127.0.0.1:8787/api/dns/configure > /tmp/cpn-complete.json"
+    docker exec "$name" systemctl is-active --quiet cpn-panel postfix dovecot
+    docker exec "$name" sh -lc '! systemctl list-unit-files | grep -q cpn-panel-agent'
+    docker exec "$name" curl -fsS http://127.0.0.1:8090/ | grep -q 'Sign in'
+    docker exec "$name" test "$(docker exec "$name" stat -c %a /etc/cpn/panel.env)" = 600
+    docker exec "$name" test "$(docker exec "$name" stat -c %a /etc/cpn/secret.key)" = 600
+    docker exec "$name" test "$(docker exec "$name" stat -c %a /var/lib/cpn/secrets/mail-master.enc)" = 600
+    local panel_email panel_password
+    panel_email="$(docker exec "$name" sed -n 's/.*"panel_admin_email":"\([^"]*\)".*/\1/p' /tmp/cpn-complete.json)"
+    panel_password="$(docker exec "$name" sed -n 's/.*"panel_admin_password":"\([^"]*\)".*/\1/p' /tmp/cpn-complete.json)"
+    test -n "$panel_email" && test -n "$panel_password"
+    docker exec "$name" curl -fsS -o /dev/null -c /tmp/panel-cookie \
+      --data-urlencode "email=$panel_email" --data-urlencode "password=$panel_password" \
+      http://127.0.0.1:8090/api/auth/login
+    docker exec "$name" sh -lc "curl -fsS -b /tmp/panel-cookie \
+      -H 'Origin: http://127.0.0.1:8090' -H 'Content-Type: application/json' \
+      -d '{\"local_part\":\"integration\",\"password\":\"CPN-Test-Password-2026\"}' \
+      http://127.0.0.1:8090/api/mailboxes > /tmp/cpn-mailbox.json"
+    docker exec "$name" doveadm auth test integration@example.com CPN-Test-Password-2026 >/dev/null
   fi
 
   case "$component" in
@@ -97,9 +115,15 @@ run_case() {
       ;;
     roundcube)
       docker exec "$name" systemctl is-active --quiet php-fpm
-      docker exec "$name" test "$(docker exec "$name" stat -c %a /opt/cpn-webmail/roundcube/db.sqlite)" = 600
-      docker exec "$name" sqlite3 /opt/cpn-webmail/roundcube/db.sqlite "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='users';" | grep -qx 1
+      docker exec "$name" test "$(docker exec "$name" stat -c %a /opt/cpn-webmail/runtime/roundcube.sqlite)" = 600
+      docker exec "$name" sqlite3 /opt/cpn-webmail/runtime/roundcube.sqlite "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='users';" | grep -qx 1
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi Roundcube"
+      docker exec "$name" sh -lc "curl -fsS -b /tmp/panel-cookie \
+        -H 'Origin: http://127.0.0.1:8090' -H 'Content-Type: application/json' \
+        -d '{\"address\":\"integration@example.com\"}' \
+        http://127.0.0.1:8090/api/mailboxes/open > /tmp/cpn-open.json"
+      docker exec "$name" grep -q '"automatic":true' /tmp/cpn-open.json
+      docker exec "$name" sh -lc 'url=$(sed -n '\''s/.*"url":"\([^"]*\)".*/\1/p'\'' /tmp/cpn-open.json); curl -fsSL -c /tmp/webmail-cookie -o /tmp/cpn-sso.html "$url"; grep -Eqi "logout|mailboxlist|task=mail" /tmp/cpn-sso.html'
       ;;
     rainloop)
       docker exec "$name" systemctl is-active --quiet php-fpm
@@ -110,6 +134,14 @@ run_case() {
       docker exec "$name" thunderbird --version | grep -qi Thunderbird
       ;;
   esac
+  if [[ "$kind" == "mail" ]]; then
+    docker exec "$name" curl -fsS -o /dev/null -b /tmp/panel-cookie \
+      -H 'Origin: http://127.0.0.1:8090' -H 'Content-Type: application/json' \
+      -X DELETE -d '{"address":"integration@example.com"}' \
+      http://127.0.0.1:8090/api/mailboxes
+    docker exec "$name" test ! -d /var/vmail/example.com/integration
+    docker exec "$name" sh -lc '! grep -q integration@example.com /etc/dovecot/cpn-users'
+  fi
   docker rm -f "$name" >/dev/null
   echo "[OK] $kind/$component"
 }

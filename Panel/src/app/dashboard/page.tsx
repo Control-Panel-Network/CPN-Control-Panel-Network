@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PANEL_COOKIE, validSession } from "@/lib/panel-auth";
+import { systemInfo } from "@/lib/system-manager";
 import {
   Bell,
   Database,
@@ -54,16 +55,29 @@ function ResourceGauge({ label, value, detail }: ResourceGaugeProps) {
 }
 
 const navigation = [
-  { label: "Dashboard", icon: Gauge, active: true },
-  { label: "Websites", icon: Globe2 },
-  { label: "Email", icon: Mail },
-  { label: "Databases", icon: Database },
-  { label: "Backups", icon: HardDrive },
+  { label: "Dashboard", icon: Gauge, active: true, href: "/dashboard" },
+  { label: "Websites", icon: Globe2, href: "#" },
+  { label: "Email", icon: Mail, href: "/email" },
+  { label: "Databases", icon: Database, href: "#" },
+  { label: "Backups", icon: HardDrive, href: "#" },
 ];
+
+type SystemInfo = {
+  domain: string;
+  server: string;
+  cpu: { percent: number; cores: number };
+  memory: { total_bytes: number; used_bytes: number };
+  disk: { total_bytes: number; used_bytes: number };
+  services: { web: boolean; postfix: boolean; dovecot: boolean };
+};
+
+function gib(bytes: number) { return `${(bytes / 1024 ** 3).toFixed(1)} GB`; }
+function percent(used: number, total: number) { return total ? Math.round((used / total) * 100) : 0; }
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   if (!validSession(cookieStore.get(PANEL_COOKIE)?.value)) redirect("/");
+  const system = await systemInfo() as SystemInfo;
   return (
     <main className="panel-layout">
       <aside className="sidebar">
@@ -76,17 +90,17 @@ export default async function DashboardPage() {
           <div className="server-summary">
             <Network size={20} aria-hidden="true" />
             <div>
-              <strong>84.247.184.182</strong>
-              <span>Online · 49d 23h</span>
+              <strong>{system.domain}</strong>
+              <span>Panel conectado</span>
             </div>
           </div>
 
           <nav aria-label="Primary navigation">
-            {navigation.map(({ label, icon: Icon, active }) => (
-              <a key={label} href="#" className={active ? "active" : undefined}>
+            {navigation.map(({ label, icon: Icon, active, href }) => (
+              <Link key={label} href={href} className={active ? "active" : undefined}>
                 <Icon size={20} strokeWidth={1.8} />
                 {label}
-              </a>
+              </Link>
             ))}
           </nav>
         </div>
@@ -119,9 +133,9 @@ export default async function DashboardPage() {
         </div>
 
         <div className="resource-grid">
-          <ResourceGauge label="CPU Usage" value={45} detail="4 cores" />
-          <ResourceGauge label="RAM Usage" value={72} detail="11.5 / 16 GB" />
-          <ResourceGauge label="Disk Usage" value={28} detail="140 / 500 GB" />
+          <ResourceGauge label="CPU Usage" value={system.cpu.percent} detail={`${system.cpu.cores} cores`} />
+          <ResourceGauge label="RAM Usage" value={percent(system.memory.used_bytes, system.memory.total_bytes)} detail={`${gib(system.memory.used_bytes)} / ${gib(system.memory.total_bytes)}`} />
+          <ResourceGauge label="Disk Usage" value={percent(system.disk.used_bytes, system.disk.total_bytes)} detail={`${gib(system.disk.used_bytes)} / ${gib(system.disk.total_bytes)}`} />
         </div>
 
         <div className="dashboard-lower-grid">
@@ -129,14 +143,14 @@ export default async function DashboardPage() {
             <div className="status-card-heading">
               <div>
                 <p className="eyebrow">SYSTEM HEALTH</p>
-                <h2>All services operational</h2>
+                <h2>{Object.values(system.services).every(Boolean) ? "All services operational" : "A service needs attention"}</h2>
               </div>
               <ShieldCheck size={27} aria-hidden="true" />
             </div>
             <ul>
-              <li><span>Nginx</span><strong>Running</strong></li>
-              <li><span>MariaDB</span><strong>Running</strong></li>
-              <li><span>Mail service</span><strong>Running</strong></li>
+              <li><span>{system.server}</span><strong>{system.services.web ? "Running" : "Stopped"}</strong></li>
+              <li><span>Postfix</span><strong>{system.services.postfix ? "Running" : "Stopped"}</strong></li>
+              <li><span>Dovecot</span><strong>{system.services.dovecot ? "Running" : "Stopped"}</strong></li>
             </ul>
           </article>
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSession, PANEL_COOKIE, validCredentials } from "@/lib/panel-auth";
+import { publicUrl } from "@/lib/route-auth";
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -18,10 +19,11 @@ export async function POST(request: Request) {
   try { valid = await validCredentials(email, password); } catch { /* Fail closed when unconfigured. */ }
   if (!valid) {
     attempts.set(client, { count: record && record.resetAt > now ? record.count + 1 : 1, resetAt: now + 15 * 60_000 });
-    return NextResponse.redirect(new URL("/?error=invalid", request.url), 303);
+    return NextResponse.redirect(publicUrl(request, "/?error=invalid"), 303);
   }
   attempts.delete(client);
-  const response = NextResponse.redirect(new URL("/dashboard", request.url), 303);
-  response.cookies.set(PANEL_COOKIE, createSession(email), { httpOnly: true, secure: true, sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 });
+  const response = NextResponse.redirect(publicUrl(request, "/dashboard"), 303);
+  const secure = request.headers.get("x-forwarded-proto") === "https" || new URL(request.url).protocol === "https:";
+  response.cookies.set(PANEL_COOKIE, createSession(email), { httpOnly: true, secure, sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 });
   return response;
 }

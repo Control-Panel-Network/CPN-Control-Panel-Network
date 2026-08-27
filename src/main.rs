@@ -3,6 +3,8 @@ mod environment;
 mod installer;
 mod model;
 mod oauth;
+mod panel;
+mod secrets;
 
 use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder,
@@ -165,9 +167,26 @@ async fn configure_dns(
             .json(serde_json::json!({"error":"Primero valida el dominio"}));
     }
     current.dns_provider = Some(DnsProvider::Local);
+    current.message = "Preparando el Panel permanente".into();
+    let snapshot = current.clone();
+    drop(current);
+    let installed = match panel::provision(&snapshot, None).await {
+        Ok(installed) => installed,
+        Err(error) => {
+            let mut current = state.status.write().await;
+            current.error = Some(error.clone());
+            current.message = "No se pudo activar el Panel permanente".into();
+            return HttpResponse::InternalServerError().json(serde_json::json!({"error":error}));
+        }
+    };
+    let mut current = state.status.write().await;
     current.stage = SetupStage::Complete;
-    current.phase = InstallerPhase::Ready;
-    current.message = "DNS local configurado. La instalación está completa".into();
+    current.phase = InstallerPhase::Completed;
+    current.progress = 100;
+    current.panel_url = Some(installed.url);
+    current.panel_admin_email = Some(installed.email);
+    current.panel_admin_password = Some(installed.password);
+    current.message = "DNS local configurado. El Panel ya está operativo".into();
     let snapshot = current.clone();
     let _ = state.events.send(InstallerEvent::Progress {
         status: snapshot.clone(),
@@ -243,13 +262,22 @@ async fn cloudflare_callback(
     let domain = state.status.read().await.domain.clone().unwrap_or_default();
     match oauth::claim(&pending, claim, &domain).await {
         Ok(authorization) => {
+            let snapshot = state.status.read().await.clone();
+            let installed = match panel::provision(&snapshot, Some(&authorization)).await {
+                Ok(installed) => installed,
+                Err(error) => return HttpResponse::InternalServerError().body(error),
+            };
             *state.cloudflare.write().await = Some(authorization);
             let mut current = state.status.write().await;
             current.dns_provider = Some(DnsProvider::Cloudflare);
             current.cloudflare_connected = true;
             current.stage = SetupStage::Complete;
-            current.phase = InstallerPhase::Ready;
-            current.message = "Cloudflare fue autorizado y verificado".into();
+            current.phase = InstallerPhase::Completed;
+            current.progress = 100;
+            current.panel_url = Some(installed.url);
+            current.panel_admin_email = Some(installed.email);
+            current.panel_admin_password = Some(installed.password);
+            current.message = "Cloudflare fue autorizado, cifrado y el Panel está operativo".into();
             current.error = None;
             let _ = state.events.send(InstallerEvent::Progress {
                 status: current.clone(),

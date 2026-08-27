@@ -8,8 +8,7 @@ pub struct PendingOAuth {
     pub claim_secret: String,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CloudflareAuthorization {
     pub access_token: String,
     pub refresh_token: Option<String>,

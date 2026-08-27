@@ -94,6 +94,9 @@ pub struct InstallerStatus {
     pub selected_mail: Option<MailSystem>,
     pub installed_mail: Option<MailSystem>,
     pub environment: Option<EnvironmentInfo>,
+    pub panel_url: Option<String>,
+    pub panel_admin_email: Option<String>,
+    pub panel_admin_password: Option<String>,
     pub error: Option<String>,
     pub failed_phase: Option<InstallerPhase>,
 }
@@ -114,6 +117,9 @@ impl Default for InstallerStatus {
             selected_mail: None,
             installed_mail: None,
             environment: None,
+            panel_url: None,
+            panel_admin_email: None,
+            panel_admin_password: None,
             error: None,
             failed_phase: None,
         }

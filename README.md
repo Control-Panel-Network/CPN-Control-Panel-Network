@@ -7,18 +7,22 @@
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPLv3-blue.svg)](LICENSE)
 
-CPN es un instalador web para preparar componentes de un panel de servidores en AlmaLinux 9. Un único proceso escrito en Rust abre la interfaz HTTP, comunica el progreso real mediante WebSockets e incorpora la aplicación React dentro del ejecutable final.
+CPN instala un panel de servidores en AlmaLinux 9. Rust se utiliza únicamente durante la instalación: abre la interfaz HTTP, comunica el progreso real mediante WebSockets y, al terminar, deja un Panel Next.js con su interfaz React ya compilada como servicio permanente.
 
 ## Estado del proyecto
 
 La primera fase implementa el flujo del instalador y continúa en desarrollo. Actualmente incluye:
 
 - Selección e instalación de OpenLiteSpeed, Caddy o Nginx.
-- Selección de SnappyMail, Roundcube o Thunderbird. RainLoop se retiró por estar archivado y sin mantenimiento.
+- Selección de SnappyMail, RainLoop, Roundcube o Thunderbird.
+- Backend real de correo con Postfix y Dovecot, y administración de buzones desde el Panel.
+- Acceso automático de un solo uso desde el Panel hacia Roundcube; los demás clientes abren su login normal.
 - Validación real del dominio y elección entre DNS local o Cloudflare mediante OAuth.
 - Progreso real de descarga, instalación y comprobación enviado por WebSocket.
 - Acceso local por defecto; `--allow-remote` abre temporalmente `8787` y limpia la regla al finalizar.
 - Empaquetado RPM para AlmaLinux 9.
+- Panel persistente en `8090` y webmail en `8888`, servidos mediante el motor web elegido; la API queda en Next.js y Rust no permanece residente.
+- Tokens OAuth de zona Cloudflare cifrados con ChaCha20-Poly1305 y archivos de clave `0600`.
 - Pruebas de servicios en contenedores limpios de AlmaLinux 9.8.
 
 Las recetas, la seguridad y la compatibilidad aún deben revisarse antes de considerar CPN apto para producción.
@@ -78,13 +82,13 @@ La matriz requiere Docker con soporte para contenedores privilegiados y systemd:
 ./tests/docker-matrix.sh
 ```
 
-Comprueba que Nginx, Caddy y OpenLiteSpeed respondan por HTTP, y que SnappyMail, Roundcube y Thunderbird superen verificaciones específicas.
+Comprueba que Nginx, Caddy y OpenLiteSpeed respondan por HTTP, y que SnappyMail, RainLoop, Roundcube y Thunderbird superen verificaciones específicas. Para correo también valida Postfix, Dovecot, login del Panel, creación/eliminación del buzón y SSO de Roundcube.
 
-SnappyMail y Roundcube son clientes web, no un servidor de correo completo. Esta faceta no declara SMTP/IMAP operativo hasta que CPN incorpore y pruebe un backend de correo separado. Thunderbird es un cliente de escritorio y no publica una URL web.
+SnappyMail, RainLoop y Roundcube son clientes web sobre el backend Postfix/Dovecot instalado por CPN. Thunderbird es un cliente de escritorio y no publica una URL web.
 
 ## Seguridad
 
-No publiques el enlace de arranque temporal. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa. Los artefactos externos soportados tienen versión y SHA-256 fijados y se descargan en temporales privados.
+No publiques el enlace de arranque temporal. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa. Los artefactos externos soportados tienen versión y SHA-256 fijados y se descargan en temporales privados. El secreto global del cliente OAuth de Cloudflare pertenece exclusivamente al puente central y nunca se incluye en el RPM; cada servidor conserva solo su autorización de zona cifrada.
 
 ## Licencia
 

@@ -3,17 +3,18 @@ use crate::{
         InstallerEvent, InstallerPhase, InstallerStatus, MailSystem, ServerEngine, SetupStage,
     },
     oauth::{CloudflareAuthorization, PendingOAuth},
+    panel, secrets,
 };
 use rand::{Rng, distr::Alphanumeric};
 use sha2::{Digest, Sha256};
 use std::{
-    os::unix::fs::{OpenOptionsExt, symlink},
+    os::unix::fs::{OpenOptionsExt, PermissionsExt, symlink},
     path::Path,
     process::Stdio,
     sync::atomic::AtomicBool,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
     sync::{RwLock, broadcast},
 };
@@ -641,10 +642,10 @@ async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<()
             ],
             "Habilitando el repositorio firmado de PHP",
             DnfProgress {
-                download_start: 36,
-                download_end: 38,
-                install_start: 38,
-                install_end: 39,
+                download_start: 51,
+                download_end: 53,
+                install_start: 53,
+                install_end: 54,
                 label: "repositorio PHP",
             },
         ),
@@ -657,7 +658,7 @@ async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<()
             vec!["module", "enable", "-y", "php:remi-8.3"],
             "Preparando PHP 8.3 con soporte de seguridad",
             InstallerPhase::Downloading,
-            38,
+            54,
         ),
     )
     .await?;
@@ -667,10 +668,10 @@ async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<()
             PHP_PACKAGES.to_vec(),
             "Instalando PHP y sus extensiones",
             DnfProgress {
-                download_start: 40,
-                download_end: 58,
-                install_start: 60,
-                install_end: 76,
+                download_start: 55,
+                download_end: 67,
+                install_start: 68,
+                install_end: 79,
                 label,
             },
         ),
@@ -718,8 +719,30 @@ async fn configure_webmail_service(
         )
         .await?;
     }
+    run_command(
+        state,
+        command(
+            "chown",
+            vec!["root:cpn-webmail", "/etc/cpn"],
+            "Protegiendo el directorio de integración del webmail",
+            InstallerPhase::Installing,
+            83,
+        ),
+    )
+    .await?;
+    run_command(
+        state,
+        command(
+            "chmod",
+            vec!["0750", "/etc/cpn"],
+            "Limitando el acceso al directorio de integración",
+            InstallerPhase::Installing,
+            83,
+        ),
+    )
+    .await?;
     reset_current_link(Path::new(root))?;
-    let pool = "[cpn-webmail]\nuser = cpn-webmail\ngroup = cpn-webmail\nlisten = 127.0.0.1:9001\npm = ondemand\npm.max_children = 8\npm.process_idle_timeout = 10s\nclear_env = yes\nphp_admin_value[open_basedir] = /opt/cpn-webmail:/tmp\nphp_admin_value[session.save_path] = /opt/cpn-webmail/runtime/sessions\nphp_admin_flag[expose_php] = off\n";
+    let pool = "[cpn-webmail]\nuser = cpn-webmail\ngroup = cpn-webmail\nlisten = 127.0.0.1:9001\npm = ondemand\npm.max_children = 8\npm.process_idle_timeout = 10s\nclear_env = yes\nphp_admin_value[open_basedir] = /opt/cpn-webmail:/etc/cpn/webmail-agent.token:/tmp\nphp_admin_value[session.save_path] = /opt/cpn-webmail/runtime/sessions\nphp_admin_flag[expose_php] = off\n";
     std::fs::create_dir_all("/opt/cpn-webmail/runtime/sessions")
         .map_err(|error| error.to_string())?;
     std::fs::write("/etc/php-fpm.d/cpn-webmail.conf", pool).map_err(|error| error.to_string())?;
@@ -741,7 +764,6 @@ async fn configure_webmail_service(
         MailSystem::Roundcube => writable.extend([
             "/opt/cpn-webmail/roundcube/temp",
             "/opt/cpn-webmail/roundcube/logs",
-            "/opt/cpn-webmail/roundcube/db.sqlite",
         ]),
         MailSystem::Thunderbird => {}
     }
@@ -796,7 +818,7 @@ async fn configure_webmail_service(
             if let Some(index) = config.find("# CPN_WEBMAIL_BEGIN") {
                 config.truncate(index);
             }
-            config.push_str("# CPN_WEBMAIL_BEGIN\nvirtualhost cpn-webmail {\n  vhRoot /opt/cpn-webmail\n  configFile /usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf\n  allowSymbolLink 1\n  enableScript 1\n  restrained 1\n}\n\nlistener CPN_WEBMAIL {\n  address 127.0.0.1:8888\n  secure 0\n  map cpn-webmail *\n}\n");
+            config.push_str("# CPN_WEBMAIL_BEGIN\nvirtualhost cpn-webmail {\n  vhRoot /opt/cpn-webmail\n  configFile /usr/local/lsws/conf/vhosts/cpn-webmail/vhconf.conf\n  allowSymbolLink 1\n  enableScript 1\n  restrained 1\n}\n\nlistener CPN_WEBMAIL {\n  address *:8888\n  secure 0\n  map cpn-webmail *\n}\n");
             std::fs::write(path, config).map_err(|error| error.to_string())?;
             run_command(
                 state,
@@ -840,11 +862,13 @@ async fn configure_webmail_service(
 
 async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), String> {
     std::fs::create_dir_all("/opt/cpn-webmail").map_err(|error| error.to_string())?;
+    std::fs::create_dir_all("/opt/cpn-webmail/runtime")
+        .map_err(|error| format!("No se pudo preparar el runtime del webmail: {error}"))?;
     match mail {
         MailSystem::Snappymail => {
             std::fs::create_dir_all("/opt/cpn-webmail/snappymail")
                 .map_err(|error| error.to_string())?;
-            let archive = download(state, "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz", "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec", "SnappyMail", 2, 36).await?;
+            let archive = download(state, "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz", "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec", "SnappyMail", 35, 50).await?;
             install_php_runtime(state, "PHP para SnappyMail").await?;
             run_command(
                 state,
@@ -872,8 +896,8 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
                 "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip",
                 "782dcabacadab5d7176f7701dd23319a040b2cfbf974fac6df068600cf69c50a",
                 "RainLoop",
-                2,
-                36,
+                35,
+                50,
             )
             .await?;
             install_php_runtime(state, "PHP para RainLoop").await?;
@@ -898,7 +922,7 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
                 .map_err(|error| error.to_string())?;
-            let archive = download(state, "https://github.com/roundcube/roundcubemail/releases/download/1.7.1/roundcubemail-1.7.1-complete.tar.gz", "1e0382bcefd627ab0b6285d3181ddfba5b444fdcf6d49f33f5ea15fbf97864ef", "Roundcube", 2, 36).await?;
+            let archive = download(state, "https://github.com/roundcube/roundcubemail/releases/download/1.7.1/roundcubemail-1.7.1-complete.tar.gz", "1e0382bcefd627ab0b6285d3181ddfba5b444fdcf6d49f33f5ea15fbf97864ef", "Roundcube", 35, 50).await?;
             install_php_runtime(state, "PHP para Roundcube").await?;
             run_command(
                 state,
@@ -923,16 +947,61 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
                 .map(char::from)
                 .collect();
             let config = format!(
-                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
+                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/runtime/roundcube.sqlite';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload', 'cpn_sso'];\n$config['skin'] = 'elastic';\n"
             );
             std::fs::write("/opt/cpn-webmail/roundcube/config/config.inc.php", config)
                 .map_err(|error| error.to_string())?;
+            std::fs::create_dir_all("/opt/cpn-webmail/roundcube/plugins/cpn_sso")
+                .map_err(|error| error.to_string())?;
+            let plugin = r#"<?php
+class cpn_sso extends rcube_plugin
+{
+    public $task = 'login';
+    public function init()
+    {
+        $this->add_hook('startup', [$this, 'startup']);
+        $this->add_hook('authenticate', [$this, 'authenticate']);
+    }
+    public function startup($args)
+    {
+        if (empty($_SESSION['user_id']) && !empty($_GET['_cpn_sso'])) $args['action'] = 'login';
+        return $args;
+    }
+    public function authenticate($args)
+    {
+        if (empty($_GET['_cpn_sso'])) return $args;
+        $code = preg_replace('/[^A-Za-z0-9_-]/', '', $_GET['_cpn_sso']);
+        $token = trim(@file_get_contents('/etc/cpn/webmail-agent.token'));
+        if (!$code || !$token) return $args;
+        $context = stream_context_create(['http' => [
+            'method' => 'POST',
+            'header' => "Authorization: Bearer {$token}\r\nContent-Length: 0\r\n",
+            'timeout' => 5,
+            'ignore_errors' => true,
+        ]]);
+        $body = @file_get_contents("http://127.0.0.1:8091/api/internal/webmail/redeem/{$code}", false, $context);
+        $login = json_decode($body ?: '', true);
+        if (empty($login['username']) || empty($login['password'])) return $args;
+        $args['user'] = $login['username'];
+        $args['pass'] = $login['password'];
+        $args['host'] = '127.0.0.1:143';
+        $args['cookiecheck'] = false;
+        $args['valid'] = true;
+        return $args;
+    }
+}
+"#;
+            std::fs::write(
+                "/opt/cpn-webmail/roundcube/plugins/cpn_sso/cpn_sso.php",
+                plugin,
+            )
+            .map_err(|error| error.to_string())?;
             std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
                 .truncate(true)
                 .mode(0o600)
-                .open("/opt/cpn-webmail/roundcube/db.sqlite")
+                .open("/opt/cpn-webmail/runtime/roundcube.sqlite")
                 .map_err(|error| error.to_string())?;
             run_command(
                 state,
@@ -950,7 +1019,7 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
                 command(
                     "sqlite3",
                     vec![
-                        "/opt/cpn-webmail/roundcube/db.sqlite",
+                        "/opt/cpn-webmail/runtime/roundcube.sqlite",
                         ".read /opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql",
                     ],
                     "Inicializando la base de datos de Roundcube",
@@ -964,7 +1033,7 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
                 command(
                     "sqlite3",
                     vec![
-                        "/opt/cpn-webmail/roundcube/db.sqlite",
+                        "/opt/cpn-webmail/runtime/roundcube.sqlite",
                         "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='users';",
                     ],
                     "Verificando el esquema de Roundcube",
@@ -981,9 +1050,226 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
     Ok(())
 }
 
+async fn install_mail_backend(state: &AppState) -> Result<(), String> {
+    run_command(
+        state,
+        dnf(
+            vec!["install", "-y", "postfix", "dovecot", "dovecot-pigeonhole"],
+            "Instalando el servidor de correo",
+            DnfProgress {
+                download_start: 2,
+                download_end: 14,
+                install_start: 15,
+                install_end: 25,
+                label: "Postfix y Dovecot",
+            },
+        ),
+    )
+    .await?;
+    let user_exists = Command::new("id")
+        .args(["-u", "vmail"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|status| status.success());
+    if !user_exists {
+        run_command(
+            state,
+            command(
+                "useradd",
+                vec![
+                    "--system",
+                    "--home-dir",
+                    "/var/vmail",
+                    "--create-home",
+                    "--shell",
+                    "/sbin/nologin",
+                    "vmail",
+                ],
+                "Creando el usuario aislado para buzones",
+                InstallerPhase::Installing,
+                26,
+            ),
+        )
+        .await?;
+    }
+    std::fs::create_dir_all("/var/vmail").map_err(|error| error.to_string())?;
+    std::fs::create_dir_all("/var/lib/cpn").map_err(|error| error.to_string())?;
+    for (path, contents, mode) in [
+        ("/etc/dovecot/cpn-users", "", 0o600),
+        ("/etc/postfix/cpn-domains", "", 0o600),
+        ("/etc/postfix/cpn-mailboxes", "", 0o600),
+        ("/var/lib/cpn/mailboxes.json", "[]\n", 0o600),
+    ] {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .mode(mode)
+            .open(path)
+            .map_err(|error| error.to_string())?;
+        if file.metadata().map_err(|error| error.to_string())?.len() == 0 {
+            use std::io::Write;
+            file.write_all(contents.as_bytes())
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    let key = secrets::load_or_create_key(Path::new(panel::KEY_PATH))?;
+    let master_path = Path::new("/var/lib/cpn/secrets/mail-master.enc");
+    let master_password: String = if master_path.exists() {
+        secrets::open(master_path, &key)?
+    } else {
+        let value: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(48)
+            .map(char::from)
+            .collect();
+        secrets::seal(master_path, &key, &value)?;
+        value
+    };
+    let mut child = Command::new("openssl")
+        .args(["passwd", "-6", "-stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    child
+        .stdin
+        .as_mut()
+        .ok_or("No se pudo proteger la clave maestra")?
+        .write_all(format!("{master_password}\n").as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(child.stdin.take());
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err("No se pudo proteger la clave maestra de acceso webmail".into());
+    }
+    let master_hash = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    std::fs::write(
+        "/etc/dovecot/cpn-master-users",
+        format!("cpn-master:{{SHA512-CRYPT}}{master_hash}\n"),
+    )
+    .map_err(|error| error.to_string())?;
+    std::fs::set_permissions(
+        "/etc/dovecot/cpn-master-users",
+        std::fs::Permissions::from_mode(0o640),
+    )
+    .map_err(|error| error.to_string())?;
+    std::fs::set_permissions(
+        "/etc/dovecot/cpn-users",
+        std::fs::Permissions::from_mode(0o640),
+    )
+    .map_err(|error| error.to_string())?;
+    run_command(
+        state,
+        command(
+            "chown",
+            vec![
+                "root:dovecot",
+                "/etc/dovecot/cpn-users",
+                "/etc/dovecot/cpn-master-users",
+            ],
+            "Protegiendo las credenciales de Dovecot",
+            InstallerPhase::Installing,
+            30,
+        ),
+    )
+    .await?;
+    let dovecot = "protocols = imap lmtp\nlisten = 127.0.0.1\ndisable_plaintext_auth = no\nauth_mechanisms = plain login\nauth_master_user_separator = *\nmail_home = /var/vmail/%d/%n\nmail_location = maildir:~/Maildir\nfirst_valid_uid = 1\n\npassdb {\n  driver = passwd-file\n  master = yes\n  pass = yes\n  args = scheme=SHA512-CRYPT /etc/dovecot/cpn-master-users\n}\npassdb {\n  driver = passwd-file\n  args = scheme=SHA512-CRYPT username_format=%u /etc/dovecot/cpn-users\n}\nuserdb {\n  driver = static\n  args = uid=vmail gid=vmail home=/var/vmail/%d/%n\n}\nservice lmtp {\n  unix_listener /var/spool/postfix/private/dovecot-lmtp {\n    mode = 0600\n    user = postfix\n    group = postfix\n  }\n}\nservice auth {\n  unix_listener /var/spool/postfix/private/auth {\n    mode = 0660\n    user = postfix\n    group = postfix\n  }\n}\nprotocol lmtp {\n  postmaster_address = postmaster@localhost\n}\n";
+    std::fs::write("/etc/dovecot/conf.d/99-cpn.conf", dovecot)
+        .map_err(|error| error.to_string())?;
+    for setting in [
+        "inet_interfaces = all",
+        "mydestination = localhost",
+        "virtual_mailbox_domains = hash:/etc/postfix/cpn-domains",
+        "virtual_mailbox_maps = hash:/etc/postfix/cpn-mailboxes",
+        "virtual_transport = lmtp:unix:private/dovecot-lmtp",
+        "smtpd_sasl_type = dovecot",
+        "smtpd_sasl_path = private/auth",
+        "smtpd_sasl_auth_enable = yes",
+        "smtpd_recipient_restrictions = permit_mynetworks,permit_sasl_authenticated,reject_unauth_destination",
+    ] {
+        run_command(
+            state,
+            owned_command(
+                "postconf",
+                vec!["-e".into(), setting.into()],
+                "Configurando el transporte de correo",
+                InstallerPhase::Installing,
+                28,
+            ),
+        )
+        .await?;
+    }
+    for map in ["/etc/postfix/cpn-domains", "/etc/postfix/cpn-mailboxes"] {
+        run_command(
+            state,
+            owned_command(
+                "postmap",
+                vec![map.into()],
+                "Preparando los mapas de buzones",
+                InstallerPhase::Installing,
+                29,
+            ),
+        )
+        .await?;
+    }
+    run_command(
+        state,
+        command(
+            "chown",
+            vec!["-R", "vmail:vmail", "/var/vmail"],
+            "Protegiendo el almacenamiento de buzones",
+            InstallerPhase::Installing,
+            30,
+        ),
+    )
+    .await?;
+    run_command(
+        state,
+        command(
+            "doveconf",
+            vec!["-n"],
+            "Validando Dovecot",
+            InstallerPhase::Testing,
+            31,
+        ),
+    )
+    .await?;
+    run_command(
+        state,
+        command(
+            "postfix",
+            vec!["check"],
+            "Validando Postfix",
+            InstallerPhase::Testing,
+            32,
+        ),
+    )
+    .await?;
+    run_command(
+        state,
+        command(
+            "systemctl",
+            vec!["enable", "--now", "postfix", "dovecot"],
+            "Activando el servidor de correo",
+            InstallerPhase::Installing,
+            34,
+        ),
+    )
+    .await
+}
+
 pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
     let result = async {
         verify_almalinux()?;
+        install_mail_backend(&state).await?;
         if matches!(mail, MailSystem::Thunderbird) {
             run_command(
                 &state,
@@ -991,7 +1277,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                     vec!["install", "-y", "thunderbird"],
                     "Instalando Thunderbird",
                     DnfProgress {
-                        download_start: 2,
+                        download_start: 35,
                         download_end: 58,
                         install_start: 60,
                         install_end: 88,

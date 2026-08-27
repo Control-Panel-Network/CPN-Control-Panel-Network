@@ -16,7 +16,7 @@ const INITIAL_STATUS: InstallerStatus = {
   phase: 'preparing', stage: 'server', progress: 0, message: 'Estamos preparando todo...', domain: null,
   domain_is_cloudflare: false, dns_provider: null, cloudflare_connected: false,
   selected_server: null, installed_server: null, selected_mail: null, installed_mail: null,
-  environment: null, error: null,
+  environment: null, panel_url: null, panel_admin_email: null, panel_admin_password: null, error: null,
   failed_phase: null,
 };
 
@@ -91,7 +91,7 @@ export default function App() {
           {screen === 'selection' && <ServerSelectionScreen selectedServer={selectedServer} onSelectServer={setSelectedServer} onContinue={beginServerInstall} onOpenCompare={() => setCompareOpen(true)} />}
           {screen === 'installing' && <InstallingScreen status={status} />}
           {screen === 'mail' && <MailSelectionScreen selectedMail={selectedMail} onSelectMail={setSelectedMail} onContinue={beginMailInstall} />}
-          {screen === 'complete' && <CompleteScreen server={status.installed_server} mail={status.installed_mail} />}
+          {screen === 'complete' && <CompleteScreen status={status} />}
         </motion.div>
       </AnimatePresence>
       <CompareModal isOpen={compareOpen} selectedServer={selectedServer} onClose={() => setCompareOpen(false)} onSelectServer={(server) => { setSelectedServer(server); setCompareOpen(false); }} />

@@ -1,0 +1,21 @@
+[Unit]
+Description=CPN Control Panel Network web interface
+After=network-online.target postfix.service dovecot.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/cpn/panel.env
+WorkingDirectory=/opt/cpn-panel/app
+ExecStart=/opt/cpn-panel/node/bin/node server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ReadWritePaths=/opt/cpn-panel/app/.next/cache /etc/cpn /etc/dovecot /etc/postfix /var/lib/cpn /var/vmail
+
+[Install]
+WantedBy=multi-user.target
