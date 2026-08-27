@@ -7,7 +7,7 @@ license = "GPL-3.0-only"
 repository = "https://github.com/KraoESPfan1n/CPN-Control-Panel-Network"
 
 [dependencies]
-actix-web = "4"
+actix-web = { version = "4", default-features = false, features = ["cookies", "macros"] }
 actix-ws = "0.3"
 base64 = "0.22"
 chacha20poly1305 = "0.10"
