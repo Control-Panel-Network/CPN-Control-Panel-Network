@@ -31,12 +31,12 @@ export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: 
         {options.map((option) => {
           const selected = selectedMail === option.id;
           return (
-            <article key={option.id} onClick={() => onSelectMail(option.id)} className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}>
+            <button key={option.id} type="button" onClick={() => onSelectMail(option.id)} className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer text-left ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`} aria-pressed={selected}>
               <div className="h-12 flex items-center mb-5"><MailIcon mail={option.id} /></div>
               <h2 className="text-[17px] font-semibold mb-1">{option.name}</h2>
               <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-7 flex-1">{option.description}</p>
-              <button type="button" onClick={(event) => { event.stopPropagation(); onSelectMail(option.id); }} className={`selection-button ${selected ? 'selection-button-active' : ''}`} aria-pressed={selected}>Seleccionar</button>
-            </article>
+              <span className={`selection-button ${selected ? 'selection-button-active' : ''}`}>Seleccionar</span>
+            </button>
           );
         })}
       </div>

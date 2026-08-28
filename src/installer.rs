@@ -376,32 +376,28 @@ fn dnf(args: Vec<&'static str>, description: &'static str, tracking: DnfProgress
 
 fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
     match server {
-        ServerEngine::Nginx => vec![
-            dnf(
-                vec!["install", "-y", "nginx"],
-                "Instalando Nginx",
-                DnfProgress {
-                    download_start: 2,
-                    download_end: 48,
-                    install_start: 50,
-                    install_end: 82,
-                    label: "Nginx",
-                },
-            ),
-        ],
-        ServerEngine::Caddy => vec![
-            dnf(
-                vec!["install", "-y", "caddy"],
-                "Instalando Caddy",
-                DnfProgress {
-                    download_start: 5,
-                    download_end: 48,
-                    install_start: 50,
-                    install_end: 82,
-                    label: "Caddy",
-                },
-            ),
-        ],
+        ServerEngine::Nginx => vec![dnf(
+            vec!["install", "-y", "nginx"],
+            "Instalando Nginx",
+            DnfProgress {
+                download_start: 2,
+                download_end: 48,
+                install_start: 50,
+                install_end: 82,
+                label: "Nginx",
+            },
+        )],
+        ServerEngine::Caddy => vec![dnf(
+            vec!["install", "-y", "caddy"],
+            "Instalando Caddy",
+            DnfProgress {
+                download_start: 5,
+                download_end: 48,
+                install_start: 50,
+                install_end: 82,
+                label: "Caddy",
+            },
+        )],
         ServerEngine::Openlitespeed => vec![dnf(
             vec!["install", "-y", "openlitespeed", "procps-ng"],
             "Instalando OpenLiteSpeed",
@@ -1570,8 +1566,16 @@ mod tests {
 
     #[test]
     fn validates_real_http_response_for_each_server() {
-        assert!(http_response_is_valid(ServerEngine::Nginx, 200, "CPN health"));
-        assert!(http_response_is_valid(ServerEngine::Caddy, 200, "CPN health"));
+        assert!(http_response_is_valid(
+            ServerEngine::Nginx,
+            200,
+            "CPN health"
+        ));
+        assert!(http_response_is_valid(
+            ServerEngine::Caddy,
+            200,
+            "CPN health"
+        ));
         assert!(http_response_is_valid(
             ServerEngine::Openlitespeed,
             200,

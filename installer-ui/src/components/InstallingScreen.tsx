@@ -8,6 +8,13 @@ function StepIcon({ state }: { state: 'pending' | 'active' | 'done' | 'error' })
   return <Circle size={24} className="text-[#a1a1a6]" />;
 }
 
+function stepText(active: boolean, done: boolean, error: boolean) {
+  if (active) return 'font-semibold text-[#1d1d1f]';
+  if (error) return 'font-normal text-[#c2413b]';
+  if (done) return 'font-normal text-[#1d1d1f]';
+  return 'font-normal text-[#7a7a7a]';
+}
+
 export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const phase = status.phase;
   const failed = phase === 'failed_rolled_back' || phase === 'failed_partial' || phase === 'cancelled';
@@ -19,13 +26,6 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const configuringDone = downloading || installing || testing || phase === 'completed' || (failed && failedPhase !== 'configuring');
   const downloadDone = installing || testing || phase === 'completed' || (failed && (failedPhase === 'installing' || failedPhase === 'testing'));
   const installDone = testing || phase === 'completed' || (failed && failedPhase === 'testing');
-  const stepText = (active: boolean, done: boolean, error: boolean) => {
-    if (active) return 'font-semibold text-[#1d1d1f]';
-    if (error) return 'font-normal text-[#c2413b]';
-    if (done) return 'font-normal text-[#1d1d1f]';
-    return 'font-normal text-[#7a7a7a]';
-  };
-
   return (
     <section className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-white">
       <div className="w-full max-w-md">

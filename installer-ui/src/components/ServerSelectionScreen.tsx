@@ -41,23 +41,18 @@ export function ServerSelectionScreen({ selectedServer, onSelectServer, onContin
         {servers.map((server) => {
           const selected = selectedServer === server.id;
           return (
-            <article
+            <button
               key={server.id}
+              type="button"
               onClick={() => onSelectServer(server.id)}
-              className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
+              className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer text-left transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
+              aria-pressed={selected}
             >
               <div className="mb-6 h-12 flex items-center"><ServerBrandIcon server={server.id} /></div>
               <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{server.name}</h2>
               <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-8 flex-1">{server.description}</p>
-              <button
-                type="button"
-                onClick={(event) => { event.stopPropagation(); onSelectServer(server.id); }}
-                className={`selection-button ${selected ? 'selection-button-active' : ''}`}
-                aria-pressed={selected}
-              >
-                Seleccionar
-              </button>
-            </article>
+              <span className={`selection-button ${selected ? 'selection-button-active' : ''}`}>Seleccionar</span>
+            </button>
           );
         })}
       </div>
