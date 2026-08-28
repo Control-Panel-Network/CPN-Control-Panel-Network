@@ -25,7 +25,7 @@ Please also read:
 
 ### Clone and setup
 
-1. Fork [KraoESPfan1n/CPN-Control-Panel-Network](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network) on GitHub if you do not have write access.
+1. Fork [Control-Panel-Network/CPN-Control-Panel-Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network) on GitHub if you do not have write access.
 2. Clone your fork (or the upstream repo if you are a collaborator):
 
 ```bash

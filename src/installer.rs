@@ -12,6 +12,7 @@ use std::{
     path::Path,
     process::Stdio,
     sync::atomic::AtomicBool,
+    time::Duration,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -608,6 +609,64 @@ fn server_url(server: ServerEngine) -> &'static str {
     }
 }
 
+fn http_response_is_valid(server: ServerEngine, status: u16, body: &str) -> bool {
+    (200..400).contains(&status)
+        && (!matches!(server, ServerEngine::Openlitespeed) || body.contains("CPN está listo"))
+}
+
+async fn wait_for_server_http(state: &AppState, server: ServerEngine) -> Result<(), String> {
+    const ATTEMPTS: u8 = 30;
+    let url = server_url(server);
+    state
+        .progress(
+            InstallerPhase::Testing,
+            96,
+            "Esperando la respuesta HTTP local real",
+        )
+        .await;
+    state.log(format!("› Comprobando {url}"), "info");
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|error| format!("No se pudo preparar la comprobación HTTP: {error}"))?;
+    let mut last_error = "el servicio todavía no acepta conexiones".to_string();
+    for attempt in 1..=ATTEMPTS {
+        match client.get(url).send().await {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                match response.text().await {
+                    Ok(body) if http_response_is_valid(server, status, &body) => {
+                        state.log(format!("HTTP {status} recibido desde {url}"), "info");
+                        return Ok(());
+                    }
+                    Ok(_) => {
+                        last_error = if matches!(server, ServerEngine::Openlitespeed) {
+                            format!("HTTP {status}, pero la página no pertenece a CPN")
+                        } else {
+                            format!("HTTP {status}")
+                        };
+                    }
+                    Err(error) => last_error = format!("no se pudo leer la respuesta: {error}"),
+                }
+            }
+            Err(error) => last_error = error.to_string(),
+        }
+        if attempt < ATTEMPTS {
+            if attempt == 1 || attempt % 5 == 0 {
+                state.log(
+                    format!("El puerto aún no está listo; intento {attempt}/{ATTEMPTS}"),
+                    "info",
+                );
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+    Err(format!(
+        "El servicio está activo, pero {url} no respondió correctamente después de {ATTEMPTS} intentos: {last_error}"
+    ))
+}
+
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
     let result = async {
         verify_almalinux()?;
@@ -648,26 +707,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
             ),
         )
         .await?;
-        run_command(
-            &state,
-            command(
-                "curl",
-                vec![
-                    "--fail",
-                    "--silent",
-                    "--show-error",
-                    "--max-time",
-                    "10",
-                    "--output",
-                    "/dev/null",
-                    server_url(server),
-                ],
-                "Comprobando la respuesta HTTP local",
-                InstallerPhase::Testing,
-                96,
-            ),
-        )
-        .await?;
+        wait_for_server_http(&state, server).await?;
         if let Some(environment) = state.status.read().await.environment.clone() {
             crate::environment::open_web_services(&environment).await?;
         }
@@ -1454,7 +1494,8 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{fraction, openlitespeed_config_is_valid, verify_release};
+    use super::{fraction, http_response_is_valid, openlitespeed_config_is_valid, verify_release};
+    use crate::model::ServerEngine;
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {
@@ -1486,5 +1527,22 @@ mod tests {
         assert!(verify_release("ID=almalinux\nVERSION_ID=\"8.10\"\n").is_err());
         assert!(verify_release("ID=almalinux\nVERSION_ID=\"10.0\"\n").is_err());
         assert!(verify_release("ID=rocky\nVERSION_ID=\"9.8\"\n").is_err());
+    }
+
+    #[test]
+    fn validates_real_http_response_for_each_server() {
+        assert!(http_response_is_valid(ServerEngine::Nginx, 200, "welcome"));
+        assert!(http_response_is_valid(ServerEngine::Caddy, 302, ""));
+        assert!(http_response_is_valid(
+            ServerEngine::Openlitespeed,
+            200,
+            "<h1>CPN está listo</h1>"
+        ));
+        assert!(!http_response_is_valid(
+            ServerEngine::Openlitespeed,
+            200,
+            "LiteSpeed default page"
+        ));
+        assert!(!http_response_is_valid(ServerEngine::Nginx, 503, ""));
     }
 }

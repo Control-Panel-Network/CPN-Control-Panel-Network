@@ -17,7 +17,7 @@ function MailIcon({ mail }: { mail: MailSystem }) {
     const icon = mail === 'roundcube' ? siRoundcube : siThunderbird;
     return <svg width="44" height="44" viewBox="0 0 24 24" role="img" aria-label={icon.title} style={{ color: `#${icon.hex}` }}><path fill="currentColor" d={icon.path} /></svg>;
   }
-  return <Mails size={44} strokeWidth={1.6} className="text-[#147a62]" />;
+  return <Mails size={44} strokeWidth={1.6} className="text-[#0071e3]" />;
 }
 
 export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: Props) {

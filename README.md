@@ -4,7 +4,7 @@
 > **Work in progress (not finished).** This version is experimental and is not ready for production servers.
 
 [![Status: in development](https://img.shields.io/badge/status-in%20development-f59e0b)](#project-status)
-[![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
+[![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 CPN installs a server panel on AlmaLinux 9. Rust is used only during installation: it serves the HTTP interface, streams real progress over WebSockets, and when finished leaves a prebuilt Next.js Panel with its React UI as a permanent service.

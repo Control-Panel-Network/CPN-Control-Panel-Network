@@ -6,27 +6,27 @@
   button, a { -webkit-tap-highlight-color: transparent; }
 }
 
-.eyebrow { color: #12715b; font-size: 12px; font-weight: 750; letter-spacing: .14em; }
+.eyebrow { color: #0066cc; font-size: 12px; font-weight: 750; letter-spacing: .14em; }
 .panel { background: rgba(255,255,255,.92); border: 1px solid #e5e8ec; border-radius: 24px; box-shadow: 0 24px 70px rgba(29,41,57,.08); }
-.spinner { width: 30px; height: 30px; border: 3px solid #d8e8e3; border-top-color: #16866b; border-radius: 50%; animation: spin .8s linear infinite; }
+.spinner { width: 30px; height: 30px; border: 3px solid #d9e9fb; border-top-color: #0071e3; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 999px; font-weight: 650; cursor: pointer; transition: .18s ease; }
-.primary-button { background: #147a62; color: white; box-shadow: 0 8px 20px rgba(20,122,98,.2); }
-.primary-button:hover { background: #0f6853; transform: translateY(-1px); }
+.primary-button { background: #0066cc; color: white; box-shadow: 0 8px 20px rgba(0,102,204,.2); }
+.primary-button:hover { background: #0059b3; transform: translateY(-1px); }
 .primary-button:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; transform: none; }
 .secondary-button { border: 1px solid #d0d5dd; background: white; color: #344054; }
-.progress-number { flex: 0 0 auto; min-width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; color: #126c57; background: #eaf6f2; border: 1px solid #cae7de; font-size: 15px; font-weight: 750; }
+.progress-number { flex: 0 0 auto; min-width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; color: #0059b3; background: #edf5ff; border: 1px solid #c7dff8; font-size: 15px; font-weight: 750; }
 .progress-track { height: 9px; border-radius: 999px; overflow: hidden; background: #e8ecef; }
-.progress-track span { height: 100%; display: block; background: linear-gradient(90deg, #179374, #31b18f); border-radius: inherit; transition: width .35s ease; }
+.progress-track span { height: 100%; display: block; background: linear-gradient(90deg, #0066cc, #2997ff); border-radius: inherit; transition: width .35s ease; }
 .step { display: flex; gap: 9px; align-items: center; color: #98a2b3; background: #f8fafb; border: 1px solid #edf0f2; border-radius: 12px; padding: 12px; font-size: 13px; font-weight: 600; }
-.step-active { color: #126c57; background: #edf8f4; border-color: #cae7de; }
-.terminal { border: 1px solid #24352f; border-radius: 15px; overflow: hidden; background: #101914; color: #bfddd2; }
-.terminal-head { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid #263a33; color: #dcece6; font-size: 12px; font-weight: 650; }
-.terminal-head span { margin-left: auto; color: #6ce0b4; font-size: 9px; letter-spacing: .1em; }
+.step-active { color: #0059b3; background: #edf5ff; border-color: #c7dff8; }
+.terminal { border: 1px solid #263b57; border-radius: 15px; overflow: hidden; background: #0c1524; color: #c9dcf5; }
+.terminal-head { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid #263b57; color: #e1ecfa; font-size: 12px; font-weight: 650; }
+.terminal-head span { margin-left: auto; color: #64b5ff; font-size: 9px; letter-spacing: .1em; }
 .terminal-body { height: 190px; overflow-y: auto; padding: 13px 15px; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .terminal-body p { margin: 0 0 3px; }
 .error-box { background: #fff1f0; border: 1px solid #f3c4bf; color: #a83b32; border-radius: 12px; padding: 12px 14px; font-size: 14px; }
-.success-icon { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; color: #147a62; background: #e8f6f2; border: 1px solid #c8e5dd; }
+.success-icon { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; color: #0066cc; background: #edf5ff; border: 1px solid #c7dff8; }
 .mail-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; color: #98a2b3; font-size: 13px; }
 .utility-card { transition: transform .2s ease, box-shadow .2s ease; }
 .utility-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16,24,40,.07); }

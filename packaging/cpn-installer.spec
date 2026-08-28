@@ -1,9 +1,9 @@
 Name:           cpn-installer
 Version:        %{?cpn_version}%{!?cpn_version:0.1.0}
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
-URL:            https://github.com/KraoESPfan1n/CPN-Control-Panel-Network
+URL:            https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
 Source0:        cpn-installer
 Source1:        cpn-panel.tar.gz
 Source2:        node-runtime.tar.xz
@@ -50,11 +50,17 @@ esac
 
 %post
 %systemd_post cpn-panel.service
-echo
-echo "CPN Installer se instaló correctamente."
-echo "Para iniciar el instalador web, ejecuta:"
-echo "  sudo cpn-installer"
-echo
+
+%posttrans
+if [ -t 1 ]; then
+    blue='\033[1;34m'
+    reset='\033[0m'
+else
+    blue=''
+    reset=''
+fi
+printf '\n%sCPN Installer se instaló correctamente.%s\n' "$blue" "$reset"
+printf '%sSIGUIENTE PASO: ejecuta sudo cpn-installer%s\n\n' "$blue" "$reset"
 
 %preun
 %systemd_preun cpn-panel.service
@@ -72,6 +78,9 @@ echo
 /opt/cpn-panel/node/*
 
 %changelog
+* Fri Aug 28 2026 CPN <dev@cpn.invalid> - 0.1.0-3
+- Destaca el siguiente paso y espera una respuesta HTTP real del servidor.
+
 * Fri Aug 28 2026 CPN <dev@cpn.invalid> - 0.1.0-2
 - Añade la fase Configurando y corrige la validación de OpenLiteSpeed con advertencias.
 

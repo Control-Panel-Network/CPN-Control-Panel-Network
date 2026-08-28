@@ -33,7 +33,7 @@ export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }
                 <h3 className="font-semibold mt-3">{option.name}</h3>
                 <p className="text-xs leading-5 text-[#5f5e60] mt-2">{option.description}</p>
                 <ul className="text-[13px] space-y-2 my-5 flex-1">
-                  {option.features.map((feature) => <li key={feature} className="flex gap-2"><Check size={16} className="text-emerald-600 shrink-0" />{feature}</li>)}
+                  {option.features.map((feature) => <li key={feature} className="flex gap-2"><Check size={16} className="text-[#0071e3] shrink-0" />{feature}</li>)}
                 </ul>
                 <button type="button" onClick={() => { onSelectServer(option.id); onClose(); }} className={`selection-button ${selected ? 'selection-button-active' : ''}`} aria-pressed={selected}>Seleccionar</button>
               </article>

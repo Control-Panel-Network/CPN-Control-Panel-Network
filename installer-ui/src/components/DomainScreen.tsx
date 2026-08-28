@@ -26,7 +26,7 @@ export function DomainScreen({ onValidate }: Props) {
         <label htmlFor="domain" className="sr-only">Dominio</label>
         <input id="domain" value={domain} onChange={(event) => { setDomain(event.target.value); setResult(null); }} placeholder="example.com" autoComplete="url" spellCheck={false} className="mt-10 w-full border-0 border-b border-[#d2d2d7] px-0 py-4 text-2xl outline-none focus:border-[#0071e3]" />
         {result && !result.valid && <p className="mt-4 text-sm text-[#b42318]" role="alert">{result.error}</p>}
-        {result?.valid && <p className="mt-4 flex items-center gap-2 text-sm text-[#18794e]"><CheckCircle2 size={17} /> {result.normalized} está correctamente delegado{result.cloudflare ? ' en Cloudflare' : ''}.</p>}
+        {result?.valid && <p className="mt-4 flex items-center gap-2 text-sm text-[#0066cc]"><CheckCircle2 size={17} /> {result.normalized} está correctamente delegado{result.cloudflare ? ' en Cloudflare' : ''}.</p>}
         <button type="submit" disabled={!domain.trim() || checking || result?.valid} className="primary-button mt-9">
           {checking ? <><LoaderCircle size={18} className="animate-spin" /> Comprobando</> : <>Comprobar dominio <ArrowRight size={18} /></>}
         </button>

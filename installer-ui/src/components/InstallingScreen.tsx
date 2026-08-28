@@ -19,6 +19,12 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const configuringDone = downloading || installing || testing || phase === 'completed' || (failed && failedPhase !== 'configuring');
   const downloadDone = installing || testing || phase === 'completed' || (failed && (failedPhase === 'installing' || failedPhase === 'testing'));
   const installDone = testing || phase === 'completed' || (failed && failedPhase === 'testing');
+  const stepText = (active: boolean, done: boolean, error: boolean) => {
+    if (active) return 'font-semibold text-[#1d1d1f]';
+    if (error) return 'font-normal text-[#c2413b]';
+    if (done) return 'font-normal text-[#1d1d1f]';
+    return 'font-normal text-[#7a7a7a]';
+  };
 
   return (
     <section className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-white">
@@ -28,26 +34,28 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         <div className="flex flex-col gap-8">
           <div className="flex items-center gap-[17px]">
             <StepIcon state={configuring ? 'active' : configuringDone ? 'done' : failed && failedPhase === 'configuring' ? 'error' : 'pending'} />
-            <span className={`text-[17px] ${configuring || configuringDone ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}>
+            <span className={`text-[17px] ${stepText(configuring, configuringDone, failed && failedPhase === 'configuring')}`}>
               {configuring ? `Configurando ${status.progress}%` : 'Configurando'}
             </span>
           </div>
 
           <div className="flex items-center gap-[17px]">
             <StepIcon state={downloading ? 'active' : downloadDone ? 'done' : failed && failedPhase === 'downloading' ? 'error' : 'pending'} />
-            <span className="text-[17px] font-semibold text-[#1a1c1d]">{downloading ? `Descargando ${status.progress}%` : 'Descargando'}</span>
+            <span className={`text-[17px] ${stepText(downloading, downloadDone, failed && failedPhase === 'downloading')}`}>
+              {downloading ? `Descargando ${status.progress}%` : 'Descargando'}
+            </span>
           </div>
 
           <div className="flex items-center gap-[17px]">
             <StepIcon state={installing ? 'active' : installDone ? 'done' : failed && failedPhase === 'installing' ? 'error' : 'pending'} />
-            <span className={`text-[17px] ${installing || installDone ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}>
+            <span className={`text-[17px] ${stepText(installing, installDone, failed && failedPhase === 'installing')}`}>
               {installing ? `Instalando ${status.progress}%` : 'Instalando'}
             </span>
           </div>
 
           <div className="flex items-center gap-[17px]">
             <StepIcon state={testing ? 'active' : phase === 'completed' ? 'done' : failed && failedPhase === 'testing' ? 'error' : 'pending'} />
-            <span className={`text-[17px] ${testing || phase === 'completed' ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}>Probando tests</span>
+            <span className={`text-[17px] ${stepText(testing, phase === 'completed', failed && failedPhase === 'testing')}`}>Probando tests</span>
           </div>
         </div>
 
