@@ -388,13 +388,6 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
                     label: "Nginx",
                 },
             ),
-            command(
-                "systemctl",
-                vec!["enable", "--now", "nginx"],
-                "Activando Nginx",
-                InstallerPhase::Installing,
-                84,
-            ),
         ],
         ServerEngine::Caddy => vec![
             dnf(
@@ -407,13 +400,6 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
                     install_end: 82,
                     label: "Caddy",
                 },
-            ),
-            command(
-                "systemctl",
-                vec!["enable", "--now", "caddy"],
-                "Activando Caddy",
-                InstallerPhase::Installing,
-                84,
             ),
         ],
         ServerEngine::Openlitespeed => vec![dnf(
@@ -603,15 +589,55 @@ fn server_service(server: ServerEngine) -> &'static str {
 
 fn server_url(server: ServerEngine) -> &'static str {
     match server {
-        ServerEngine::Openlitespeed | ServerEngine::Nginx | ServerEngine::Caddy => {
-            "http://127.0.0.1/"
-        }
+        ServerEngine::Nginx | ServerEngine::Caddy => "http://127.0.0.1/__cpn_health",
+        ServerEngine::Openlitespeed => "http://127.0.0.1/",
     }
 }
 
 fn http_response_is_valid(server: ServerEngine, status: u16, body: &str) -> bool {
-    (200..400).contains(&status)
-        && (!matches!(server, ServerEngine::Openlitespeed) || body.contains("CPN está listo"))
+    let marker = match server {
+        ServerEngine::Nginx | ServerEngine::Caddy => "CPN health",
+        ServerEngine::Openlitespeed => "CPN está listo",
+    };
+    (200..400).contains(&status) && body.contains(marker)
+}
+
+fn configure_server_http(server: ServerEngine) -> Result<(), String> {
+    match server {
+        ServerEngine::Nginx => std::fs::write(
+            "/etc/nginx/conf.d/cpn-health.conf",
+            r#"server {
+  listen 80;
+  server_name 127.0.0.1 localhost;
+
+  location = /__cpn_health {
+    default_type text/plain;
+    return 200 "CPN health\n";
+  }
+
+  location / {
+    default_type text/plain;
+    return 200 "CPN está listo\n";
+  }
+}
+"#,
+        )
+        .map_err(|error| format!("No se pudo configurar el endpoint HTTP de Nginx: {error}")),
+        ServerEngine::Caddy => std::fs::write(
+            "/etc/caddy/Caddyfile",
+            r#"{
+  auto_https off
+}
+
+:80 {
+  respond /__cpn_health "CPN health" 200
+  respond "CPN está listo" 200
+}
+"#,
+        )
+        .map_err(|error| format!("No se pudo configurar el endpoint HTTP de Caddy: {error}")),
+        ServerEngine::Openlitespeed => Ok(()),
+    }
 }
 
 async fn wait_for_server_http(state: &AppState, server: ServerEngine) -> Result<(), String> {
@@ -688,6 +714,19 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
         }
         if matches!(server, ServerEngine::Openlitespeed) {
             configure_openlitespeed(&state).await?;
+        } else {
+            configure_server_http(server)?;
+            run_command(
+                &state,
+                command(
+                    "systemctl",
+                    vec!["enable", "--now", server_service(server)],
+                    "Activando el servidor web con su configuración de CPN",
+                    InstallerPhase::Installing,
+                    84,
+                ),
+            )
+            .await?;
         }
         state
             .progress(
@@ -1531,8 +1570,8 @@ mod tests {
 
     #[test]
     fn validates_real_http_response_for_each_server() {
-        assert!(http_response_is_valid(ServerEngine::Nginx, 200, "welcome"));
-        assert!(http_response_is_valid(ServerEngine::Caddy, 302, ""));
+        assert!(http_response_is_valid(ServerEngine::Nginx, 200, "CPN health"));
+        assert!(http_response_is_valid(ServerEngine::Caddy, 200, "CPN health"));
         assert!(http_response_is_valid(
             ServerEngine::Openlitespeed,
             200,
@@ -1543,6 +1582,7 @@ mod tests {
             200,
             "LiteSpeed default page"
         ));
+        assert!(!http_response_is_valid(ServerEngine::Nginx, 200, "welcome"));
         assert!(!http_response_is_valid(ServerEngine::Nginx, 503, ""));
     }
 }
