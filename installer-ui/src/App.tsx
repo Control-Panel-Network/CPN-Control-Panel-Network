@@ -22,7 +22,7 @@ const INITIAL_STATUS: InstallerStatus = {
 
 const screenFor = (status: InstallerStatus): ScreenType => {
   if (status.phase === 'preparing') return 'preparing';
-  if (['downloading', 'installing', 'testing', 'failed_rolled_back', 'failed_partial', 'cancelled'].includes(status.phase)) return 'installing';
+  if (['configuring', 'downloading', 'installing', 'testing', 'failed_rolled_back', 'failed_partial', 'cancelled'].includes(status.phase)) return 'installing';
   if (status.stage === 'domain') return 'domain';
   if (status.stage === 'dns') return 'dns';
   if (status.stage === 'server') return 'selection';
@@ -67,7 +67,7 @@ export default function App() {
 
   const beginServerInstall = async () => {
     if (!selectedServer) return;
-    flushSync(() => setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, failed_phase: null, selected_server: selectedServer })));
+    flushSync(() => setStatus((current) => ({ ...current, phase: 'configuring', progress: 0, error: null, failed_phase: null, selected_server: selectedServer })));
     setScreen('installing');
     try { await startServerInstall(selectedServer); }
     catch (error) { setStatus((current) => ({ ...current, failed_phase: current.phase, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }
@@ -75,7 +75,7 @@ export default function App() {
 
   const beginMailInstall = async () => {
     if (!selectedMail) return;
-    flushSync(() => setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, failed_phase: null, selected_mail: selectedMail })));
+    flushSync(() => setStatus((current) => ({ ...current, phase: 'configuring', progress: 0, error: null, failed_phase: null, selected_mail: selectedMail })));
     setScreen('installing');
     try { await startMailInstall(selectedMail); }
     catch (error) { setStatus((current) => ({ ...current, failed_phase: current.phase, phase: 'failed_partial', error: error instanceof Error ? error.message : 'Error desconocido' })); }

@@ -1,7 +1,7 @@
 export type ScreenType = 'preparing' | 'domain' | 'dns' | 'selection' | 'installing' | 'mail' | 'complete';
 export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
 export type MailSystem = 'snappymail' | 'rainloop' | 'roundcube' | 'thunderbird';
-export type InstallerPhase = 'preparing' | 'ready' | 'downloading' | 'installing' | 'testing' | 'completed' | 'failed_rolled_back' | 'failed_partial' | 'cancelled';
+export type InstallerPhase = 'preparing' | 'ready' | 'configuring' | 'downloading' | 'installing' | 'testing' | 'completed' | 'failed_rolled_back' | 'failed_partial' | 'cancelled';
 export type SetupStage = 'domain' | 'dns' | 'server' | 'mail' | 'complete';
 export type DnsProvider = 'local' | 'cloudflare';
 

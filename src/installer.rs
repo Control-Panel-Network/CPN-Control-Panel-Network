@@ -220,20 +220,17 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
     Ok(())
 }
 
-async fn download(
+async fn download_for_phase(
     state: &AppState,
     url: &'static str,
     expected_sha256: &'static str,
     label: &'static str,
     start: u8,
     end: u8,
+    phase: InstallerPhase,
 ) -> Result<tempfile::TempPath, String> {
     state
-        .progress(
-            InstallerPhase::Downloading,
-            start,
-            format!("Descargando {label}"),
-        )
+        .progress(phase, start, format!("Descargando {label}"))
         .await;
     let temporary = tempfile::Builder::new()
         .prefix("cpn-download-")
@@ -288,11 +285,7 @@ async fn download(
             {
                 let progress = start + ((end - start) as f32 * (percent / 100.0)).round() as u8;
                 state
-                    .progress(
-                        InstallerPhase::Downloading,
-                        progress.min(end),
-                        format!("Descargando {label}"),
-                    )
+                    .progress(phase, progress.min(end), format!("Descargando {label}"))
                     .await;
             }
         }
@@ -310,13 +303,29 @@ async fn download(
         ));
     }
     state
-        .progress(
-            InstallerPhase::Downloading,
-            end,
-            format!("{label} descargado"),
-        )
+        .progress(phase, end, format!("{label} descargado"))
         .await;
     Ok(destination)
+}
+
+async fn download(
+    state: &AppState,
+    url: &'static str,
+    expected_sha256: &'static str,
+    label: &'static str,
+    start: u8,
+    end: u8,
+) -> Result<tempfile::TempPath, String> {
+    download_for_phase(
+        state,
+        url,
+        expected_sha256,
+        label,
+        start,
+        end,
+        InstallerPhase::Downloading,
+    )
+    .await
 }
 
 fn command(
@@ -420,20 +429,28 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
     }
 }
 
-fn prepare_caddy_repository() -> Result<(), String> {
+async fn prepare_caddy_repository(state: &AppState) -> Result<(), String> {
+    state
+        .progress(
+            InstallerPhase::Configuring,
+            5,
+            "Configurando el repositorio verificado de Caddy",
+        )
+        .await;
     const REPOSITORY: &str = "[copr:copr.fedorainfracloud.org:group_caddy:caddy]\nname=Caddy official COPR\nbaseurl=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/epel-9-$basearch/\ntype=rpm-md\nskip_if_unavailable=False\ngpgcheck=1\ngpgkey=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/pubkey.gpg\nrepo_gpgcheck=0\nenabled=1\n";
     std::fs::write("/etc/yum.repos.d/caddy.repo", REPOSITORY)
         .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
 }
 
 async fn prepare_openlitespeed_repository(state: &AppState) -> Result<(), String> {
-    let script = download(
+    let script = download_for_phase(
         state,
         "https://repo.litespeed.sh",
         "45bb48ed6da20ba9970afe02ceca81f55a7418d97624062713a47b6f5f4f4895",
         "repositorio firmado de OpenLiteSpeed",
         1,
         4,
+        InstallerPhase::Configuring,
     )
     .await?;
     run_command(
@@ -442,11 +459,63 @@ async fn prepare_openlitespeed_repository(state: &AppState) -> Result<(), String
             "bash",
             vec![script.to_string_lossy().into_owned()],
             "Configurando el repositorio verificado de OpenLiteSpeed",
-            InstallerPhase::Installing,
+            InstallerPhase::Configuring,
             5,
         ),
     )
     .await
+}
+
+fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
+    let diagnostics = output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    let fatal = diagnostics
+        .iter()
+        .any(|line| line.contains("[ERROR]") || line.contains("[FATAL]"));
+    !fatal
+        && (success
+            || (!diagnostics.is_empty() && diagnostics.iter().all(|line| line.contains("[WARN]"))))
+}
+
+async fn validate_openlitespeed_config(state: &AppState) -> Result<(), String> {
+    const DESCRIPTION: &str = "Validando la configuración de OpenLiteSpeed";
+    state
+        .progress(InstallerPhase::Testing, 83, DESCRIPTION)
+        .await;
+    state.log(format!("› {DESCRIPTION}"), "info");
+    let result = Command::new("/usr/local/lsws/bin/openlitespeed")
+        .arg("-t")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .map_err(|error| format!("No se pudo ejecutar la validación de OpenLiteSpeed: {error}"))?;
+    let output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    for line in output.lines().filter(|line| !line.trim().is_empty()) {
+        state.log(
+            line,
+            if line.contains("[ERROR]") || line.contains("[FATAL]") {
+                "error"
+            } else {
+                "info"
+            },
+        );
+    }
+    if openlitespeed_config_is_valid(result.status.success(), &output) {
+        return Ok(());
+    }
+    let detail = output
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("OpenLiteSpeed no entregó detalles");
+    Err(format!("{DESCRIPTION} falló: {}", detail.trim()))
 }
 
 async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
@@ -478,17 +547,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
             std::fs::write(admin_path, restricted).map_err(|error| error.to_string())?;
         }
     }
-    run_command(
-        state,
-        command(
-            "/usr/local/lsws/bin/openlitespeed",
-            vec!["-t"],
-            "Validando la configuración de OpenLiteSpeed",
-            InstallerPhase::Testing,
-            83,
-        ),
-    )
-    .await?;
+    validate_openlitespeed_config(state).await?;
     let vendor_source = Path::new("/usr/local/lsws/admin/misc/lshttpd.service");
     if !Path::new("/usr/lib/systemd/system/lsws.service").exists()
         && !Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
@@ -552,8 +611,15 @@ fn server_url(server: ServerEngine) -> &'static str {
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
     let result = async {
         verify_almalinux()?;
+        state
+            .progress(
+                InstallerPhase::Configuring,
+                0,
+                "Preparando la configuración del servidor",
+            )
+            .await;
         if matches!(server, ServerEngine::Caddy) {
-            prepare_caddy_repository()?;
+            prepare_caddy_repository(&state).await?;
         }
         if matches!(server, ServerEngine::Openlitespeed) {
             prepare_openlitespeed_repository(&state).await?;
@@ -1388,13 +1454,30 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{fraction, verify_release};
+    use super::{fraction, openlitespeed_config_is_valid, verify_release};
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {
         assert_eq!(fraction("(3/8): package.rpm"), Some((3, 8)));
         assert_eq!(fraction("Installing : package 5/7"), Some((5, 7)));
         assert_eq!(fraction("No package progress here"), None);
+    }
+
+    #[test]
+    fn accepts_openlitespeed_warning_exit_but_rejects_real_errors() {
+        assert!(openlitespeed_config_is_valid(
+            false,
+            "[WARN] License validation failed - module features disabled"
+        ));
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "[ERROR] listener CPN_HTTP has an invalid address"
+        ));
+        assert!(!openlitespeed_config_is_valid(false, "unexpected failure"));
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "[WARN] optional module disabled\ninvalid configuration"
+        ));
     }
 
     #[test]

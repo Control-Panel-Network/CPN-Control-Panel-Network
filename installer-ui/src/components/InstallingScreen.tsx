@@ -11,10 +11,12 @@ function StepIcon({ state }: { state: 'pending' | 'active' | 'done' | 'error' })
 export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const phase = status.phase;
   const failed = phase === 'failed_rolled_back' || phase === 'failed_partial' || phase === 'cancelled';
+  const configuring = phase === 'configuring';
   const downloading = phase === 'downloading';
   const installing = phase === 'installing';
   const testing = phase === 'testing';
   const failedPhase = status.failed_phase;
+  const configuringDone = downloading || installing || testing || phase === 'completed' || (failed && failedPhase !== 'configuring');
   const downloadDone = installing || testing || phase === 'completed' || (failed && (failedPhase === 'installing' || failedPhase === 'testing'));
   const installDone = testing || phase === 'completed' || (failed && failedPhase === 'testing');
 
@@ -24,6 +26,13 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         <h1 className="text-[34px] leading-[1.47] font-semibold text-[#1a1c1d] mb-12 text-left tracking-tighter">Instalando</h1>
 
         <div className="flex flex-col gap-8">
+          <div className="flex items-center gap-[17px]">
+            <StepIcon state={configuring ? 'active' : configuringDone ? 'done' : failed && failedPhase === 'configuring' ? 'error' : 'pending'} />
+            <span className={`text-[17px] ${configuring || configuringDone ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}>
+              {configuring ? `Configurando ${status.progress}%` : 'Configurando'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-[17px]">
             <StepIcon state={downloading ? 'active' : downloadDone ? 'done' : failed && failedPhase === 'downloading' ? 'error' : 'pending'} />
             <span className="text-[17px] font-semibold text-[#1a1c1d]">{downloading ? `Descargando ${status.progress}%` : 'Descargando'}</span>

@@ -310,7 +310,7 @@ async fn start_install(
         );
     }
     current.selected_server = Some(input.server);
-    current.phase = InstallerPhase::Downloading;
+    current.phase = InstallerPhase::Configuring;
     current.progress = 0;
     current.error = None;
     drop(current);
@@ -343,7 +343,7 @@ async fn start_mail_install(
         );
     }
     current.selected_mail = Some(input.mail);
-    current.phase = InstallerPhase::Downloading;
+    current.phase = InstallerPhase::Configuring;
     current.progress = 0;
     current.error = None;
     drop(current);

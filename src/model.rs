@@ -22,6 +22,7 @@ pub enum MailSystem {
 pub enum InstallerPhase {
     Preparing,
     Ready,
+    Configuring,
     Downloading,
     Installing,
     Testing,
