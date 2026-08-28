@@ -1,37 +1,37 @@
-# CPN — Control Panel Network
+# CPN - Control Panel Network
 
 > [!WARNING]
-> **Proyecto en desarrollo (no terminado).** Esta versión es experimental y no está lista para servidores de producción.
+> **Work in progress (not finished).** This version is experimental and is not ready for production servers.
 
-[![Estado: en desarrollo](https://img.shields.io/badge/estado-en%20desarrollo-f59e0b)](#estado-del-proyecto)
+[![Status: in development](https://img.shields.io/badge/status-in%20development-f59e0b)](#project-status)
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
-[![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPLv3-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN es un instalador web para preparar componentes de un panel de servidores en AlmaLinux 9. Un único proceso escrito en Rust abre la interfaz HTTP, comunica el progreso real mediante WebSockets e incorpora la aplicación React dentro del ejecutable final.
+CPN is a web installer for preparing server panel components on AlmaLinux 9. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
-## Estado del proyecto
+## Project status
 
-La primera fase implementa el flujo del instalador y continúa en desarrollo. Actualmente incluye:
+The first phase implements the installer flow and is still in development. It currently includes:
 
-- Selección e instalación de OpenLiteSpeed, Caddy o Nginx.
-- Selección e instalación de SnappyMail, RainLoop, Roundcube o Thunderbird.
-- Progreso real de descarga, instalación y comprobación enviado por WebSocket.
-- Detección de VPS y apertura del puerto `8787` en `firewalld` o `ufw` cuando están activos.
-- Empaquetado RPM para AlmaLinux 9.
-- Pruebas de servicios en contenedores limpios de AlmaLinux 9.8.
+- Selection and installation of OpenLiteSpeed, Caddy, or Nginx.
+- Selection and installation of SnappyMail, RainLoop, Roundcube, or Thunderbird.
+- Real download, install, and verification progress sent over WebSocket.
+- VPS detection and opening port `8787` in `firewalld` or `ufw` when those are active.
+- RPM packaging for AlmaLinux 9.
+- Service tests in clean AlmaLinux 9.8 containers.
 
-Las recetas, la seguridad y la compatibilidad aún deben revisarse antes de considerar CPN apto para producción.
+Recipes, security, and compatibility still need review before CPN can be considered production-ready.
 
-## Estructura
+## Structure
 
-- `installer-ui/`: interfaz React y Vite.
-- `Panel/`: panel de control React y Next.js basado en las pantallas de Stitch.
-- `src/`: servidor Actix Web, WebSocket, detección del entorno y recetas de instalación.
-- `packaging/`: especificación RPM.
-- `scripts/build-rpm.sh`: creación del binario y del RPM en AlmaLinux 9.
-- `tests/docker-matrix.sh`: matriz funcional de servidores web y clientes de correo.
+- `installer-ui/`: React and Vite interface.
+- `Panel/`: React and Next.js control panel based on Stitch screens.
+- `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
+- `packaging/`: RPM specification.
+- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9.
+- `tests/docker-matrix.sh`: functional matrix for web servers and mail clients.
 
-## Desarrollo y validación
+## Development and validation
 
 ```bash
 # Rust
@@ -40,7 +40,7 @@ cargo check
 cargo test
 cargo clippy -- -D warnings
 
-# React, sin generar un build de producción
+# React, without a production build
 cd installer-ui
 npm ci
 npm run lint
@@ -52,11 +52,11 @@ npm run lint
 npm run typecheck
 ```
 
-La acción de integración continua ejecuta estas comprobaciones para cada cambio enviado y cada pull request.
+The continuous integration workflow runs these checks on every push and pull request.
 
-## Empaquetado RPM
+## RPM packaging
 
-En AlmaLinux 9:
+On AlmaLinux 9:
 
 ```bash
 ./scripts/build-rpm.sh
@@ -64,24 +64,30 @@ sudo dnf install ./target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
 sudo cpn-installer
 ```
 
-Al ejecutar `cpn-installer`, la consola indica inmediatamente la URL completa del instalador web, incluida la IP accesible y un token temporal. El servicio escucha en `0.0.0.0:8787`.
+When you run `cpn-installer`, the console immediately prints the full installer web URL, including the reachable IP and a temporary token. The service listens on `0.0.0.0:8787`.
 
-## Pruebas funcionales en Docker
+## Functional tests in Docker
 
-La matriz requiere Docker con soporte para contenedores privilegiados y systemd:
+The matrix requires Docker with privileged containers and systemd support:
 
 ```bash
 ./tests/docker-matrix.sh
 ```
 
-Comprueba que Nginx y Caddy respondan por HTTP, y que SnappyMail, RainLoop, Roundcube y Thunderbird queden instalados y superen sus verificaciones específicas.
+It checks that Nginx and Caddy respond over HTTP, and that SnappyMail, RainLoop, Roundcube, and Thunderbird are installed and pass their specific checks.
 
-## Seguridad
+## Security
 
-No publiques el token temporal que aparece en la URL del instalador. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa.
+Do not publish the temporary token that appears in the installer URL. CPN makes system changes and should only be run on a dedicated test machine during this stage.
 
-## Licencia
+See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
 
 Copyright (C) 2026 CPN contributors.
 
-Este proyecto se distribuye bajo la [GNU General Public License versión 3](LICENSE) (`GPL-3.0-only`).
+This project is distributed under the [GNU General Public License version 3](LICENSE) (`GPL-3.0-only`).
