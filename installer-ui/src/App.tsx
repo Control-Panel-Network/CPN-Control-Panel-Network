@@ -55,16 +55,22 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     let socket: WebSocket | undefined;
+    let closeListener: (() => void) | undefined;
     const connect = () => {
       const activeSocket = connectInstallerEvents(handleEvent);
       socket = activeSocket;
-      const onClose = () => { if (!disposed) reconnectTimer.current = window.setTimeout(connect, 1500); };
-      activeSocket.addEventListener('close', onClose);
-      return () => activeSocket.removeEventListener('close', onClose);
+      closeListener = () => { if (!disposed) reconnectTimer.current = window.setTimeout(connect, 1500); };
+      activeSocket.addEventListener('close', closeListener);
     };
     getStatus().then((next) => { if (!disposed) acceptStatus(next); }).catch((error) => setStatus((current) => ({ ...current, phase: 'failed_partial', error: error.message })));
-    const disconnect = connect();
-    return () => { disposed = true; disconnect(); socket?.close(); window.clearTimeout(reconnectTimer.current); window.clearTimeout(completionTimer.current); };
+    connect();
+    return () => {
+      disposed = true;
+      if (socket && closeListener) socket.removeEventListener('close', closeListener);
+      socket?.close();
+      window.clearTimeout(reconnectTimer.current);
+      window.clearTimeout(completionTimer.current);
+    };
   }, [acceptStatus, handleEvent]);
 
   const beginServerInstall = async () => {
