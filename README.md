@@ -1,42 +1,42 @@
-# CPN — Control Panel Network
+# CPN - Control Panel Network
 
 > [!WARNING]
-> **Proyecto en desarrollo (no terminado).** Esta versión es experimental y no está lista para servidores de producción.
+> **Work in progress (not finished).** This version is experimental and is not ready for production servers.
 
-[![Estado: en desarrollo](https://img.shields.io/badge/estado-en%20desarrollo-f59e0b)](#estado-del-proyecto)
+[![Status: in development](https://img.shields.io/badge/status-in%20development-f59e0b)](#project-status)
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
-[![Licencia: GPL v3](https://img.shields.io/badge/licencia-GPLv3-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN instala un panel de servidores en AlmaLinux 9. Rust se utiliza únicamente durante la instalación: abre la interfaz HTTP, comunica el progreso real mediante WebSockets y, al terminar, deja un Panel Next.js con su interfaz React ya compilada como servicio permanente.
+CPN installs a server panel on AlmaLinux 9. Rust is used only during installation: it serves the HTTP interface, streams real progress over WebSockets, and when finished leaves a prebuilt Next.js Panel with its React UI as a permanent service.
 
-## Estado del proyecto
+## Project status
 
-La primera fase implementa el flujo del instalador y continúa en desarrollo. Actualmente incluye:
+The first phase implements the installer flow and is still in development. It currently includes:
 
-- Selección e instalación de OpenLiteSpeed, Caddy o Nginx.
-- Selección de SnappyMail, RainLoop, Roundcube o Thunderbird.
-- Backend real de correo con Postfix y Dovecot, y administración de buzones desde el Panel.
-- Acceso automático de un solo uso desde el Panel hacia Roundcube; los demás clientes abren su login normal.
-- Validación real del dominio y elección entre DNS local o Cloudflare mediante OAuth.
-- Progreso real de descarga, instalación y comprobación enviado por WebSocket.
-- Acceso local por defecto; `--allow-remote` abre temporalmente `8787` y limpia la regla al finalizar.
-- Empaquetado RPM para AlmaLinux 9.
-- Panel persistente en `8090` y webmail en `8888`, servidos mediante el motor web elegido; la API queda en Next.js y Rust no permanece residente.
-- Tokens OAuth de zona Cloudflare cifrados con ChaCha20-Poly1305 y archivos de clave `0600`.
-- Pruebas de servicios en contenedores limpios de AlmaLinux 9.8.
+- Selection and installation of OpenLiteSpeed, Caddy, or Nginx.
+- Selection of SnappyMail, RainLoop, Roundcube, or Thunderbird.
+- Real mail backend with Postfix and Dovecot, plus mailbox management from the Panel.
+- One-time automatic access from the Panel into Roundcube; other clients open their normal login.
+- Real domain validation and a choice between local DNS or Cloudflare via OAuth.
+- Real download, install, and verification progress sent over WebSocket.
+- Local access by default; `--allow-remote` temporarily opens `8787` and removes the rule when finished.
+- RPM packaging for AlmaLinux 9.
+- Persistent Panel on `8090` and webmail on `8888`, served by the chosen web engine; the API lives in Next.js and Rust does not stay resident.
+- Cloudflare zone OAuth tokens encrypted with ChaCha20-Poly1305 and key files mode `0600`.
+- Service tests in clean AlmaLinux 9.8 containers.
 
-Las recetas, la seguridad y la compatibilidad aún deben revisarse antes de considerar CPN apto para producción.
+Recipes, security, and compatibility still need review before CPN can be considered production-ready.
 
-## Estructura
+## Structure
 
-- `installer-ui/`: interfaz React y Vite.
-- `Panel/`: panel de control React y Next.js basado en las pantallas de Stitch.
-- `src/`: servidor Actix Web, WebSocket, detección del entorno y recetas de instalación.
-- `packaging/`: especificación RPM.
-- `scripts/build-rpm.sh`: creación del binario y del RPM en AlmaLinux 9.
-- `tests/docker-matrix.sh`: matriz funcional de servidores web y clientes de correo.
+- `installer-ui/`: React and Vite interface.
+- `Panel/`: React and Next.js control panel based on Stitch screens.
+- `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
+- `packaging/`: RPM specification.
+- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9.
+- `tests/docker-matrix.sh`: functional matrix for web servers and mail clients.
 
-## Desarrollo y validación
+## Development and validation
 
 ```bash
 # Rust
@@ -59,39 +59,45 @@ npm run typecheck
 npm run build
 ```
 
-La acción de integración continua ejecuta estas comprobaciones para cada cambio enviado y cada pull request.
+The continuous integration workflow runs these checks on every push and pull request.
 
-## Empaquetado RPM
+## RPM packaging
 
-En AlmaLinux 9:
+On AlmaLinux 9:
 
 ```bash
 ./scripts/build-rpm.sh
 sudo dnf install ./target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
-sudo cpn-installer                       # acceso local, recomendado con túnel SSH
-sudo cpn-installer --allow-remote        # acceso remoto explícito
+sudo cpn-installer                       # local access, recommended with an SSH tunnel
+sudo cpn-installer --allow-remote        # explicit remote access
 ```
 
-Al ejecutar `cpn-installer`, la consola indica inmediatamente la URL completa. El enlace de arranque solo puede usarse una vez; después se sustituye por una cookie HttpOnly y la URL queda limpia. Por defecto escucha únicamente en `127.0.0.1:8787`.
+When you run `cpn-installer`, the console immediately prints the full URL. The bootstrap link can be used only once; after that it is replaced by an HttpOnly cookie and the URL is cleaned. By default it listens only on `127.0.0.1:8787`.
 
-## Pruebas funcionales en Docker
+## Functional tests in Docker
 
-La matriz requiere Docker con soporte para contenedores privilegiados y systemd:
+The matrix requires Docker with privileged containers and systemd support:
 
 ```bash
 ./tests/docker-matrix.sh
 ```
 
-Comprueba que Nginx, Caddy y OpenLiteSpeed respondan por HTTP, y que SnappyMail, RainLoop, Roundcube y Thunderbird superen verificaciones específicas. Para correo también valida Postfix, Dovecot, login del Panel, creación/eliminación del buzón y SSO de Roundcube.
+It checks that Nginx, Caddy, and OpenLiteSpeed respond over HTTP, and that SnappyMail, RainLoop, Roundcube, and Thunderbird pass their specific checks. For mail it also validates Postfix, Dovecot, Panel login, mailbox create/delete, and Roundcube SSO.
 
-SnappyMail, RainLoop y Roundcube son clientes web sobre el backend Postfix/Dovecot instalado por CPN. Thunderbird es un cliente de escritorio y no publica una URL web.
+SnappyMail, RainLoop, and Roundcube are web clients on the Postfix/Dovecot backend installed by CPN. Thunderbird is a desktop client and does not publish a web URL.
 
-## Seguridad
+## Security
 
-No publiques el enlace de arranque temporal. CPN realiza cambios de sistema y debe ejecutarse únicamente en una máquina de pruebas dedicada durante esta etapa. Los artefactos externos soportados tienen versión y SHA-256 fijados y se descargan en temporales privados. El secreto global del cliente OAuth de Cloudflare pertenece exclusivamente al puente central y nunca se incluye en el RPM; cada servidor conserva solo su autorización de zona cifrada.
+Do not publish the temporary bootstrap link. CPN makes system changes and should only be run on a dedicated test machine during this stage. Supported external artifacts use pinned versions and SHA-256 hashes and are downloaded into private temporary paths. The global Cloudflare OAuth client secret belongs only to the central bridge and is never included in the RPM; each server keeps only its encrypted zone authorization.
 
-## Licencia
+See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
 
 Copyright (C) 2026 CPN contributors.
 
-Este proyecto se distribuye bajo la [GNU General Public License versión 3](LICENSE) (`GPL-3.0-only`).
+This project is distributed under the [GNU General Public License version 3](LICENSE) (`GPL-3.0-only`).
