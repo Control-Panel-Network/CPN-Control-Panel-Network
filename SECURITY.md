@@ -33,21 +33,22 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a web installer that prepares server components on AlmaLinux 9. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
+CPN is a web installer that prepares server components on AlmaLinux 9. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. By default the installer listens on `127.0.0.1:8787` and prints a one-time bootstrap URL. `--allow-remote` can temporarily expose port `8787`.
 
 ### Trust assumptions
 
 - The operator has root (or equivalent) on the machine where CPN runs.
 - CPN is intended for a dedicated test machine during this development stage.
-- Anyone who can reach the installer URL **and** hold a valid temporary token can drive install actions.
+- Anyone who can reach the installer URL **and** hold a valid one-time bootstrap link (or session cookie) can drive install actions.
+- Cloudflare zone OAuth tokens stored on the host are encrypted; the global OAuth client secret must never ship in the RPM.
 
 ### In scope
 
-- Leakage or hard-coding of the temporary installer token in logs, commits, docs, or public issues
-- Unauthenticated or weakly authenticated access to installer actions when a token is required
+- Leakage or hard-coding of the temporary bootstrap link or session material in logs, commits, docs, or public issues
+- Unauthenticated or weakly authenticated access to installer actions when a token or cookie is required
 - Unsafe handling of download URLs, package install steps, or scripts that could lead to unexpected remote code execution beyond the operator’s intent
-- Secrets or credentials committed to the repository
-- Misleading firewall or network exposure of port `8787` without clear operator control
+- Secrets or credentials committed to the repository, including Cloudflare OAuth client secrets
+- Misleading firewall or network exposure of port `8787` without clear operator control (including misuse of `--allow-remote`)
 
 ### Out of scope (typical)
 
@@ -57,7 +58,8 @@ CPN is a web installer that prepares server components on AlmaLinux 9. A single 
 
 ## Operator guidance
 
-- Do **not** publish the temporary token that appears in the installer URL.
+- Do **not** publish the temporary bootstrap link that appears in the installer URL.
+- Prefer local access (SSH tunnel) over `--allow-remote` unless you need explicit remote exposure.
 - Prefer a dedicated test VPS or VM while CPN is unfinished.
 - Close or restrict port `8787` when you are done with an install session.
 - Stop the installer process when finished so the temporary UI is no longer reachable.
