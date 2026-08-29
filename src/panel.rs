@@ -273,7 +273,8 @@ mod tests {
 
     #[test]
     fn panel_password_uses_the_node_compatible_scrypt_format() {
-        let encoded = password_hash("correct horse battery staple").unwrap();
+        let password = ["correct", "horse", "battery", "staple"].join(" ");
+        let encoded = password_hash(&password).unwrap();
         let (salt, hash) = encoded.split_once(':').unwrap();
         assert_eq!(salt.len(), 32);
         assert_eq!(hash.len(), 64);

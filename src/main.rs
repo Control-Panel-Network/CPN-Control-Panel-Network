@@ -48,13 +48,19 @@ fn authorized(state: &AppState, request: &HttpRequest) -> bool {
 }
 
 fn request_host(request: &HttpRequest) -> String {
-    request
-        .connection_info()
-        .host()
-        .split(':')
-        .next()
-        .unwrap_or("")
-        .to_owned()
+    let host = request.connection_info().host().split(':').next().unwrap_or("");
+    if host.len() > 253 || !host.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'[' | b']')) {
+        return String::new();
+    }
+    host.to_owned()
+}
+
+fn safe_error(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !matches!(character, '\r' | '\n' | '\0'))
+        .take(240)
+        .collect()
 }
 
 fn origin_is_same_host(request: &HttpRequest) -> bool {
@@ -87,6 +93,7 @@ fn require_auth(state: &AppState, request: &HttpRequest) -> Result<(), HttpRespo
 #[get("/api/bootstrap")]
 async fn bootstrap(
     state: web::Data<Arc<AppState>>,
+    request: HttpRequest,
     query: web::Query<BootstrapQuery>,
 ) -> impl Responder {
     if !same_secret(&query.token, &state.token)
@@ -102,6 +109,7 @@ async fn bootstrap(
         .path("/")
         .http_only(true)
         .same_site(SameSite::Strict)
+        .secure(request.connection_info().scheme() == "https")
         .max_age(actix_web::cookie::time::Duration::hours(8))
         .finish();
     HttpResponse::SeeOther()
@@ -214,10 +222,15 @@ async fn start_cloudflare(state: web::Data<Arc<AppState>>, request: HttpRequest)
         .headers()
         .get("x-forwarded-proto")
         .and_then(|v| v.to_str().ok())
+        .filter(|scheme| matches!(*scheme, "http" | "https"))
         .unwrap_or("http");
+    let host = request_host(&request);
+    if host.is_empty() {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error":"La dirección del instalador no es válida"}));
+    }
     let callback = format!(
-        "{scheme}://{}/api/dns/cloudflare/callback",
-        request.connection_info().host()
+        "{scheme}://{host}/api/dns/cloudflare/callback"
     );
     match oauth::start(&callback, domain.as_deref().unwrap_or_default()).await {
         Ok((pending, authorization_url)) => {
@@ -245,7 +258,7 @@ async fn cloudflare_callback(
     if let Some(error) = query.oauth_error.as_deref() {
         let mut current = state.status.write().await;
         current.phase = InstallerPhase::Ready;
-        current.error = Some(format!("Cloudflare rechazó la autorización: {error}"));
+        current.error = Some(format!("Cloudflare rechazó la autorización: {}", safe_error(error)));
         current.message =
             "No se pudo autorizar Cloudflare. Revisa los permisos e inténtalo otra vez".into();
         let _ = state.events.send(InstallerEvent::Error {

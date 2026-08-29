@@ -49,6 +49,16 @@ function validLocalPart(value: string) {
     && !value.includes("..") && /^[a-zA-Z0-9._-]+$/.test(value);
 }
 
+function mailboxDirectory(domain: string, localPart: string) {
+  if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)) {
+    throw new Error("El dominio configurado no es válido");
+  }
+  const root = path.resolve("/var/vmail", domain);
+  const directory = path.resolve(root, localPart);
+  if (path.dirname(directory) !== root) throw new Error("Ruta de buzón no válida");
+  return directory;
+}
+
 async function sha512Crypt(password: string) {
   return new Promise<string>((resolve, reject) => {
     const child = spawn("openssl", ["passwd", "-6", "-stdin"], { stdio: ["pipe", "pipe", "pipe"] });
@@ -90,7 +100,7 @@ export async function createMailbox(localValue: string, password: string) {
   items.push(mailbox);
   await privateWrite(MAILBOXES_PATH, `${JSON.stringify(items, null, 2)}\n`);
   await rebuildMailMaps(items, config.domain);
-  const directory = `/var/vmail/${config.domain}/${localPart}`;
+  const directory = mailboxDirectory(config.domain, localPart);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await execute("chown", ["-R", "vmail:vmail", directory]);
   await execute("doveadm", ["auth", "test", address, password]);
@@ -110,8 +120,7 @@ export async function deleteMailbox(addressValue: string) {
   await writeDovecotUsers(users ? `${users}\n` : "");
   await privateWrite(MAILBOXES_PATH, `${JSON.stringify(remaining, null, 2)}\n`);
   await rebuildMailMaps(remaining, config.domain);
-  const directory = path.resolve("/var/vmail", config.domain, localPart);
-  if (!directory.startsWith(`/var/vmail/${config.domain}/`)) throw new Error("Ruta de buzón no válida");
+  const directory = mailboxDirectory(config.domain, localPart);
   await rm(directory, { recursive: true, force: true });
 }
 
