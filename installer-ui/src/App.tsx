@@ -55,19 +55,21 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     let socket: WebSocket | undefined;
-    let closeListener: (() => void) | undefined;
     const connect = () => {
       const activeSocket = connectInstallerEvents(handleEvent);
       socket = activeSocket;
-      closeListener = () => { if (!disposed) reconnectTimer.current = window.setTimeout(connect, 1500); };
-      activeSocket.addEventListener('close', closeListener);
+      activeSocket.onclose = () => {
+        if (!disposed) reconnectTimer.current = window.setTimeout(connect, 1500);
+      };
     };
     getStatus().then((next) => { if (!disposed) acceptStatus(next); }).catch((error) => setStatus((current) => ({ ...current, phase: 'failed_partial', error: error.message })));
     connect();
     return () => {
       disposed = true;
-      if (socket && closeListener) socket.removeEventListener('close', closeListener);
-      socket?.close();
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
       window.clearTimeout(reconnectTimer.current);
       window.clearTimeout(completionTimer.current);
     };

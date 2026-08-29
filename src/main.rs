@@ -50,7 +50,11 @@ fn authorized(state: &AppState, request: &HttpRequest) -> bool {
 fn request_host(request: &HttpRequest) -> String {
     let connection_info = request.connection_info();
     let host = connection_info.host().split(':').next().unwrap_or("");
-    if host.len() > 253 || !host.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'[' | b']')) {
+    if host.len() > 253
+        || !host
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'[' | b']'))
+    {
         return String::new();
     }
     host.to_owned()
@@ -230,9 +234,7 @@ async fn start_cloudflare(state: web::Data<Arc<AppState>>, request: HttpRequest)
         return HttpResponse::BadRequest()
             .json(serde_json::json!({"error":"La dirección del instalador no es válida"}));
     }
-    let callback = format!(
-        "{scheme}://{host}/api/dns/cloudflare/callback"
-    );
+    let callback = format!("{scheme}://{host}/api/dns/cloudflare/callback");
     match oauth::start(&callback, domain.as_deref().unwrap_or_default()).await {
         Ok((pending, authorization_url)) => {
             *state.pending_oauth.write().await = Some(pending);
@@ -259,7 +261,10 @@ async fn cloudflare_callback(
     if let Some(error) = query.oauth_error.as_deref() {
         let mut current = state.status.write().await;
         current.phase = InstallerPhase::Ready;
-        current.error = Some(format!("Cloudflare rechazó la autorización: {}", safe_error(error)));
+        current.error = Some(format!(
+            "Cloudflare rechazó la autorización: {}",
+            safe_error(error)
+        ));
         current.message =
             "No se pudo autorizar Cloudflare. Revisa los permisos e inténtalo otra vez".into();
         let _ = state.events.send(InstallerEvent::Error {
