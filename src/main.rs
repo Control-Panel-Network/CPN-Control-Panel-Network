@@ -48,7 +48,8 @@ fn authorized(state: &AppState, request: &HttpRequest) -> bool {
 }
 
 fn request_host(request: &HttpRequest) -> String {
-    let host = request.connection_info().host().split(':').next().unwrap_or("");
+    let connection_info = request.connection_info();
+    let host = connection_info.host().split(':').next().unwrap_or("");
     if host.len() > 253 || !host.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'[' | b']')) {
         return String::new();
     }
