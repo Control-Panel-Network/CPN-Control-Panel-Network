@@ -465,7 +465,7 @@ fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
 async fn validate_openlitespeed_config(state: &AppState) -> Result<(), String> {
     const DESCRIPTION: &str = "Validando la configuración de OpenLiteSpeed";
     state
-        .progress(InstallerPhase::Testing, 83, DESCRIPTION)
+        .progress(InstallerPhase::Installing, 83, DESCRIPTION)
         .await;
     state.log(format!("› {DESCRIPTION}"), "info");
     let result = Command::new("/usr/local/lsws/bin/openlitespeed")
@@ -514,6 +514,17 @@ async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
     let vhost = "docRoot /var/www/cpn/html\n\nindex {\n  useServer 0\n  indexFiles index.html\n}\n\ncontext / {\n  type static\n  location /var/www/cpn/html\n  allowBrowse 1\n}\n";
     std::fs::write("/usr/local/lsws/conf/vhosts/cpn-default/vhconf.conf", vhost)
         .map_err(|error| error.to_string())?;
+    run_command(
+        state,
+        command(
+            "chown",
+            vec!["-R", "nobody:nobody", "/var/www/cpn"],
+            "Ajustando permisos para OpenLiteSpeed",
+            InstallerPhase::Installing,
+            83,
+        ),
+    )
+    .await?;
     let main_path = "/usr/local/lsws/conf/httpd_config.conf";
     let mut main = std::fs::read_to_string(main_path).map_err(|error| error.to_string())?;
     if !main.contains("# CPN_MANAGED_LISTENER") {
