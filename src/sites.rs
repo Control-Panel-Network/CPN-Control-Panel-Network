@@ -238,12 +238,10 @@ pub fn delete_site(domain_raw: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static LOCK: Mutex<()> = Mutex::new(());
+    use crate::account::DATA_DIR_TEST_LOCK;
 
     fn with_temp_data<T>(f: impl FnOnce() -> T) -> T {
-        let _guard = LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("cpn-sites-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

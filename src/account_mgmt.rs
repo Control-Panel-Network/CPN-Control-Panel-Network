@@ -230,14 +230,11 @@ pub fn delete_account(username_raw: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::default_password_policy;
-    use std::sync::Mutex;
-
-    static LOCK: Mutex<()> = Mutex::new(());
+    use crate::account::{default_password_policy, DATA_DIR_TEST_LOCK};
 
     #[test]
     fn create_reset_delete_account_roundtrip() {
-        let _guard = LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("cpn-account-cli-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

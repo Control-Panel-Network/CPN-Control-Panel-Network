@@ -319,6 +319,10 @@ pub fn setup_account(
     })
 }
 
+/// Serializes tests that mutate process-wide CPN_DATA_DIR.
+#[cfg(test)]
+pub static DATA_DIR_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
