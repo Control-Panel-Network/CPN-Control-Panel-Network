@@ -327,7 +327,10 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install(state.get_ref().clone(), request.server));
+    tokio::spawn(cpn_installer::installer::install(
+        state.get_ref().clone(),
+        request.server,
+    ));
     HttpResponse::Accepted().finish()
 }
 
@@ -463,7 +466,7 @@ async fn main() -> std::io::Result<()> {
     if let Err(error) = cpn_installer::environment::open_installer_port(&environment).await {
         eprintln!("Aviso: {error}");
     }
-    let mail_releases = cpn_installer::cpn_installer::mail_releases::load_mail_releases().await;
+    let mail_releases = cpn_installer::mail_releases::load_mail_releases().await;
     let (events, _) = broadcast::channel(256);
     let bootstrap_account = account_public_from_disk();
     let phase = if bootstrap_account.is_some() {
