@@ -15,6 +15,9 @@ source /etc/os-release
 major="${VERSION_ID%%.*}"
 if [[ "${ID:-}" != "almalinux" ]] || [[ "$major" != "9" && "$major" != "10" ]]; then
   echo "Este empaquetado debe ejecutarse dentro de AlmaLinux 9 o AlmaLinux 10 (detectado: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
+  echo "En hosts que no son AlmaLinux, construye el RPM con: ./scripts/docker-build-rpm.sh" >&2
+  echo "Luego ejecuta el instalador en contenedor con: ./scripts/docker-run.sh" >&2
+  echo "Documentación: to-do/DOCKER-INSTALL.md" >&2
   exit 1
 fi
 

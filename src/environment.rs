@@ -1,5 +1,5 @@
 use crate::model::EnvironmentInfo;
-use std::{fs, net::UdpSocket, process::Stdio};
+use std::{env, fs, net::UdpSocket, path::Path, process::Stdio};
 use tokio::process::Command;
 
 async fn output(program: &str, args: &[&str]) -> Option<String> {
@@ -48,6 +48,33 @@ async fn active_service(name: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
+fn container_marker_present() -> bool {
+    Path::new("/.dockerenv").exists()
+        || Path::new("/run/.containerenv").exists()
+        || env::var_os("container").is_some()
+}
+
+fn virt_is_container(kind: &str) -> bool {
+    matches!(
+        kind,
+        "docker" | "podman" | "lxc" | "containerd" | "crio" | "systemd-nspawn" | "wsl"
+    ) || kind.contains("container")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::virt_is_container;
+
+    #[test]
+    fn detects_common_container_virt_kinds() {
+        assert!(virt_is_container("docker"));
+        assert!(virt_is_container("podman"));
+        assert!(virt_is_container("container-other"));
+        assert!(!virt_is_container("kvm"));
+        assert!(!virt_is_container("none"));
+    }
+}
+
 pub async fn inspect(port: u16) -> EnvironmentInfo {
     let virtualization = output("systemd-detect-virt", &[]).await;
     let dmi = fs::read_to_string("/sys/class/dmi/id/product_name")
@@ -63,6 +90,8 @@ pub async fn inspect(port: u16) -> EnvironmentInfo {
         "amazon",
         "google",
     ];
+    let is_container =
+        container_marker_present() || virtualization.as_deref().is_some_and(virt_is_container);
     let is_vps = virtualization.as_deref().is_some_and(|kind| kind != "none")
         || cloud_markers.iter().any(|marker| dmi.contains(marker));
     let firewall = if active_service("firewalld").await {
@@ -83,6 +112,7 @@ pub async fn inspect(port: u16) -> EnvironmentInfo {
     };
     EnvironmentInfo {
         is_vps,
+        is_container,
         virtualization,
         firewall,
         port,

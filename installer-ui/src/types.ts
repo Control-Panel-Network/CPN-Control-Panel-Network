@@ -21,6 +21,7 @@ export type InstallerPhase =
 
 export interface EnvironmentInfo {
   is_vps: boolean;
+  is_container?: boolean;
   virtualization: string | null;
   firewall: string | null;
   port: number;

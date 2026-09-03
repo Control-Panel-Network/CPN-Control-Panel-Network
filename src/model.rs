@@ -41,6 +41,8 @@ impl ServerEngine {
 #[derive(Debug, Clone, Serialize)]
 pub struct EnvironmentInfo {
     pub is_vps: bool,
+    /// True when running inside Docker, Podman, or another container runtime.
+    pub is_container: bool,
     pub virtualization: Option<String>,
     pub firewall: Option<String>,
     pub port: u16,

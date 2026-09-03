@@ -1,0 +1,17 @@
+.git
+.github
+target/debug
+target/flycheck0
+**/node_modules
+Panel/node_modules
+installer-ui/node_modules
+installer-ui/dist
+**/*.md
+!README.md
+to-do
+*.rpm
+!cpn-installer.rpm
+.env
+config.php
+**/.DS_Store
+**/Thumbs.db

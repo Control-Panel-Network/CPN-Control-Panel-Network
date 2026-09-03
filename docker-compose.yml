@@ -1,0 +1,34 @@
+# CPN installer via Docker (privileged AlmaLinux + systemd).
+# Usage:
+#   ./scripts/docker-build-rpm.sh          # if you do not already have an RPM
+#   ./scripts/docker-run.sh                # preferred helper
+#   # or manually after placing cpn-installer.rpm in the repo root:
+#   docker compose build
+#   docker compose up -d
+#
+# Security: privileged mode is required for systemd and package installs.
+# Use only on dedicated lab/test hosts. Do not expose 8787 to the public internet.
+
+services:
+  cpn-installer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ALMA_VERSION: "${CPN_ALMA_VERSION:-9}"
+    image: "cpn-installer:el${CPN_ALMA_VERSION:-9}"
+    container_name: cpn-installer
+    hostname: cpn-installer
+    privileged: true
+    cgroupns_mode: host
+    environment:
+      container: docker
+    ports:
+      - "${CPN_PORT:-8787}:8787"
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    stop_signal: SIGRTMIN+3
+    restart: unless-stopped
