@@ -79,6 +79,23 @@ const es: LocaleMessages = {
   accountSaved: 'Cuenta guardada',
   passwordMismatch: 'Las contraseñas no coinciden',
   accountError: 'No se pudo guardar la cuenta',
+  smtpOptionalTitle: 'Correo saliente (opcional)',
+  smtpOptionalHint:
+    'Configura SMTP para enviar avisos de cuenta. Puedes terminar sin correo. Los secretos se guardan solo en este servidor.',
+  smtpEnableLabel: 'Configurar SMTP para correo saliente',
+  smtpHostLabel: 'Host SMTP',
+  smtpPortLabel: 'Puerto',
+  smtpTlsLabel: 'Cifrado',
+  smtpTlsStarttls: 'STARTTLS',
+  smtpTlsTls: 'TLS',
+  smtpTlsNone: 'Ninguno (solo laboratorio)',
+  smtpFromLabel: 'Dirección remitente',
+  smtpUserLabel: 'Usuario SMTP',
+  smtpPasswordLabel: 'Contraseña SMTP',
+  smtpSendUsernameLabel: 'Enviar el usuario al correo de recuperación durante la configuración',
+  smtpSendUsernameHint: 'Envía usuario y URL de acceso. La contraseña no se incluye salvo que lo actives abajo.',
+  smtpIncludePasswordLabel: 'Incluir también la contraseña en ese correo (no recomendado)',
+  smtpIncludePasswordHint: 'Actívalo solo si aceptas enviar la contraseña en texto claro por correo.',
 };
 
 export default es;

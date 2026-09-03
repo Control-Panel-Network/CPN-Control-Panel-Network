@@ -4,6 +4,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
 <script>
 (function () {
   var STORAGE_KEY = 'cpn-panel-locale';
+  var LAST_USER_KEY = 'cpn-panel-last-username';
   var COOKIE_KEY = 'cpn_locale';
   var LABELS = { en: 'English', es: 'Español', nb: 'Norsk' };
   var M = {
@@ -12,20 +13,17 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       title: 'Sign in',
       documentTitle: 'Sign in · CPN Panel',
       brand: 'CPN PANEL',
-      noteReady: 'Initial account is ready for {username}. Full Next.js panel auth will use these credentials when connected.',
-      noteMissing: 'No initial account yet. Finish the installer first.',
       username: 'Username',
       password: 'Password',
       forgot: 'Forgot password?',
       submit: 'Sign in',
-      postTitle: 'Login received via POST',
+      postTitle: 'Sign in received',
       postBody: 'Full panel authentication will connect in a later version.',
       postBack: 'Back to sign in',
       forgotTitle: 'Forgot password',
       forgotDocumentTitle: 'Forgot password · CPN Panel',
-      forgotIntro: 'Enter the username or recovery email for your panel account. If a matching account exists, a reset message will be sent when mail delivery is configured.',
-      forgotUsername: 'Username',
-      forgotEmailLabel: 'Recovery email',
+      forgotIntro: 'Enter your username or email. If a matching account exists, a reset message will be sent when mail delivery is configured.',
+      forgotAccount: 'Username/Email',
       forgotSubmit: 'Request reset',
       forgotSmtp: 'Password reset email is not connected yet. When SMTP is configured, matching requests will receive a reset link. Until then, ask a server operator to reset the account.',
       forgotBack: 'Back to sign in',
@@ -40,20 +38,17 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       title: 'Iniciar sesión',
       documentTitle: 'Inicio de sesión · CPN Panel',
       brand: 'CPN PANEL',
-      noteReady: 'Cuenta inicial lista para {username}. El panel Next.js completo usará estos datos cuando la autenticación esté conectada.',
-      noteMissing: 'Todavía no hay una cuenta inicial. Completa el instalador primero.',
       username: 'Usuario',
       password: 'Contraseña',
       forgot: '¿Olvidaste la contraseña?',
       submit: 'Entrar',
-      postTitle: 'Login recibido por POST',
+      postTitle: 'Inicio de sesión recibido',
       postBody: 'La autenticación completa del panel se conectará en una versión posterior.',
       postBack: 'Volver al inicio de sesión',
       forgotTitle: 'Contraseña olvidada',
       forgotDocumentTitle: 'Contraseña olvidada · CPN Panel',
-      forgotIntro: 'Introduce el usuario o el correo de recuperación de tu cuenta del panel. Si existe una cuenta coincidente, se enviará un mensaje de restablecimiento cuando el correo esté configurado.',
-      forgotUsername: 'Usuario',
-      forgotEmailLabel: 'Correo de recuperación',
+      forgotIntro: 'Introduce tu usuario o correo. Si existe una cuenta coincidente, se enviará un mensaje de restablecimiento cuando el correo esté configurado.',
+      forgotAccount: 'Usuario/Correo',
       forgotSubmit: 'Solicitar restablecimiento',
       forgotSmtp: 'El correo de restablecimiento aún no está conectado. Cuando SMTP esté configurado, las solicitudes coincidentes recibirán un enlace. Mientras tanto, pide a un operador del servidor que restablezca la cuenta.',
       forgotBack: 'Volver al inicio de sesión',
@@ -68,20 +63,17 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       title: 'Logg inn',
       documentTitle: 'Logg inn · CPN Panel',
       brand: 'CPN PANEL',
-      noteReady: 'Startkonto er klar for {username}. Full Next.js-panelautentisering vil bruke disse dataene når den er koblet til.',
-      noteMissing: 'Ingen startkonto ennå. Fullfør installasjonsveiviseren først.',
       username: 'Brukernavn',
       password: 'Passord',
       forgot: 'Glemt passordet?',
       submit: 'Logg inn',
-      postTitle: 'Innlogging mottatt via POST',
+      postTitle: 'Innlogging mottatt',
       postBody: 'Full panelautentisering kobles til i en senere versjon.',
       postBack: 'Tilbake til innlogging',
       forgotTitle: 'Glemt passord',
       forgotDocumentTitle: 'Glemt passord · CPN Panel',
-      forgotIntro: 'Skriv inn brukernavn eller gjenopprettings-e-post for panelkontoen. Hvis en konto matcher, sendes en tilbakestillingsmelding når e-post er konfigurert.',
-      forgotUsername: 'Brukernavn',
-      forgotEmailLabel: 'Gjenopprettings-e-post',
+      forgotIntro: 'Skriv inn brukernavn eller e-post. Hvis en konto matcher, sendes en tilbakestillingsmelding når e-post er konfigurert.',
+      forgotAccount: 'Brukernavn/E-post',
       forgotSubmit: 'Be om tilbakestilling',
       forgotSmtp: 'E-post for tilbakestilling av passord er ikke koblet til ennå. Når SMTP er konfigurert, får matchende forespørsler en lenke. Inntil da, be en serveroperatør om å tilbakestille kontoen.',
       forgotBack: 'Tilbake til innlogging',
@@ -124,16 +116,8 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     writeCookie(locale);
   }
 
-  function fill(template, vars) {
-    return String(template || '').replace(/\{(\w+)\}/g, function (_, key) {
-      return vars[key] != null ? vars[key] : '';
-    });
-  }
-
   function apply(locale) {
     var t = M[locale] || M.en;
-    var username = document.body.getAttribute('data-username') || 'admin';
-    var configured = document.body.getAttribute('data-configured') === '1';
     var page = document.body.getAttribute('data-page') || 'login';
     document.documentElement.lang = locale;
     var select = document.getElementById('cpn-lang');
@@ -163,8 +147,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
         return;
       }
       setText('i18n-forgot-intro', t.forgotIntro);
-      setText('i18n-forgot-username', t.forgotUsername);
-      setText('i18n-forgot-email-label', t.forgotEmailLabel);
+      setText('i18n-forgot-account', t.forgotAccount);
       setText('i18n-forgot-submit', t.forgotSubmit);
       setText('i18n-forgot-smtp', t.forgotSmtp);
       setText('i18n-forgot-back', t.forgotBack);
@@ -182,31 +165,37 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     document.title = t.documentTitle;
     setText('i18n-brand', t.brand);
     setText('i18n-title', t.title);
-    setHtml('i18n-note', configured
-      ? fill(t.noteReady, { username: '<strong>' + escapeHtml(username) + '</strong>' })
-      : t.noteMissing);
     setText('i18n-username', t.username);
     setText('i18n-password', t.password);
     setText('i18n-forgot', t.forgot);
     setText('i18n-submit', t.submit);
+    restoreLastUsername();
+  }
+
+  function restoreLastUsername() {
+    var input = document.getElementById('username');
+    if (!input) return;
+    try {
+      var last = window.localStorage.getItem(LAST_USER_KEY);
+      if (last) input.value = last;
+    } catch (e) {}
+  }
+
+  function bindLoginRemember() {
+    var form = document.querySelector('form[action*="/login"]');
+    var input = document.getElementById('username');
+    if (!form || !input) return;
+    form.addEventListener('submit', function () {
+      try {
+        var value = String(input.value || '').trim();
+        if (value) window.localStorage.setItem(LAST_USER_KEY, value);
+      } catch (e) {}
+    });
   }
 
   function setText(id, value) {
     var el = document.getElementById(id);
     if (el) el.textContent = value;
-  }
-
-  function setHtml(id, value) {
-    var el = document.getElementById(id);
-    if (el) el.innerHTML = value;
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function mountSelector() {
@@ -229,6 +218,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
 
   document.addEventListener('DOMContentLoaded', function () {
     mountSelector();
+    bindLoginRemember();
     var locale = readStored();
     persist(locale);
     apply(locale);

@@ -43,6 +43,16 @@ export async function setupAccount(payload: {
   recovery_email: string;
   password_policy: PasswordPolicy;
   language?: string;
+  smtp?: {
+    host: string;
+    port?: number;
+    tls_mode?: 'starttls' | 'tls' | 'none';
+    from_address: string;
+    username?: string;
+    password?: string;
+  };
+  send_username_email?: boolean;
+  include_password_in_email?: boolean;
 }): Promise<AccountSetupResponse> {
   const response = await fetch(apiUrl('/api/account/setup'), {
     method: 'POST',

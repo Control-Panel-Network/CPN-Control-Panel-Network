@@ -74,4 +74,6 @@ export interface AccountSetupResponse {
   account: AccountPublic;
   generated_password?: string | null;
   panel_login_url?: string | null;
+  setup_email_sent?: boolean;
+  setup_email_error?: string | null;
 }

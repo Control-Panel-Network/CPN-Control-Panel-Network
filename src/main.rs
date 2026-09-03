@@ -1,13 +1,17 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
-use cpn_installer::account::{account_public_from_disk, default_password_policy, setup_account};
-use cpn_installer::auth_pages::{
-    forgot_password_ack_html, forgot_password_html, installer_token_required_html,
-    login_post_ack_html, panel_login_html,
+use cpn_installer::account::{account_public_from_disk, default_password_policy};
+use cpn_installer::auth_api::{
+    account_setup, forgot_password_page, forgot_password_submit, login_page, login_submit,
+};
+use cpn_installer::auth_pages::installer_token_required_html;
+use cpn_installer::http_helpers::{
+    PORT, VERSION, authorized, enrich_status, install_finished, normalize_language,
+    panel_login_url_for, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::model::{
-    AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
-    MailInstallRequest, OptionalTokenQuery, TokenQuery,
+    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, MailInstallRequest,
+    OptionalTokenQuery, TokenQuery,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -16,74 +20,9 @@ use rust_embed::Embed;
 use std::{env, sync::Arc, time::Duration};
 use tokio::sync::broadcast;
 
-const PORT: u16 = 8787;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[derive(Embed)]
 #[folder = "installer-ui/dist"]
 struct UiAssets;
-
-fn authorized(state: &AppState, query: &TokenQuery) -> bool {
-    state.token.as_bytes() == query.token.as_bytes()
-}
-
-fn token_matches(state: &AppState, token: Option<&str>) -> bool {
-    match token {
-        Some(value) if !value.is_empty() => state.token.as_bytes() == value.as_bytes(),
-        _ => false,
-    }
-}
-
-fn install_finished(status: &InstallerStatus) -> bool {
-    status.phase == "completed"
-        || status
-            .account
-            .as_ref()
-            .map(|value| value.configured)
-            .unwrap_or(false)
-        || account_public_from_disk().is_some()
-}
-
-fn wants_html(request: &HttpRequest) -> bool {
-    request
-        .headers()
-        .get(actix_web::http::header::ACCEPT)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.contains("text/html"))
-        .unwrap_or(false)
-}
-
-fn normalize_language(raw: &str) -> Result<String, String> {
-    let value = raw.trim().to_lowercase();
-    match value.as_str() {
-        "en" | "en-us" | "en-gb" => Ok("en".into()),
-        "es" | "es-es" | "es-mx" => Ok("es".into()),
-        "nb" | "nb-no" | "no" | "nn" => Ok("nb".into()),
-        _ => Err("Idioma no soportado (usa en, es o nb)".into()),
-    }
-}
-
-fn panel_login_url_for(status: &InstallerStatus, token: &str) -> String {
-    if let Some(existing) = &status.panel_login_url {
-        return existing.clone();
-    }
-    let host = status
-        .environment
-        .as_ref()
-        .and_then(|env_info| env_info.addresses.first())
-        .cloned()
-        .unwrap_or_else(|| "127.0.0.1".into());
-    format!("http://{host}:{PORT}/login?token={token}")
-}
-
-fn enrich_status(mut status: InstallerStatus, token: &str) -> InstallerStatus {
-    status.version = VERSION.into();
-    if status.account.is_none() {
-        status.account = account_public_from_disk();
-    }
-    status.panel_login_url = Some(panel_login_url_for(&status, token));
-    status
-}
 
 fn status_response(request: &HttpRequest, payload: &InstallerStatus) -> HttpResponse {
     if wants_html(request) {
@@ -153,67 +92,6 @@ async fn status_page(
         .body(status_html_page(&payload))
 }
 
-#[get("/login")]
-async fn login_page(
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<OptionalTokenQuery>,
-) -> HttpResponse {
-    let status = state.status.read().await.clone();
-    let finished = install_finished(&status);
-    let valid_token = token_matches(&state, query.token.as_deref());
-    if !(finished || valid_token) {
-        return HttpResponse::Unauthorized()
-            .content_type("text/html; charset=utf-8")
-            .body(installer_token_required_html());
-    }
-    let payload = enrich_status(status, &state.token);
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(panel_login_html(&payload))
-}
-
-#[post("/login")]
-async fn login_submit(
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<OptionalTokenQuery>,
-) -> HttpResponse {
-    let status = state.status.read().await.clone();
-    let finished = install_finished(&status);
-    let valid_token = token_matches(&state, query.token.as_deref());
-    if !(finished || valid_token) {
-        return HttpResponse::Unauthorized()
-            .content_type("text/html; charset=utf-8")
-            .body(installer_token_required_html());
-    }
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(login_post_ack_html(query.token.as_deref()))
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct ForgotPasswordForm {
-    #[serde(default)]
-    username: String,
-    #[serde(default)]
-    email: String,
-}
-
-#[get("/forgot-password")]
-async fn forgot_password_page() -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(forgot_password_html())
-}
-
-#[post("/forgot-password")]
-async fn forgot_password_submit(form: web::Form<ForgotPasswordForm>) -> HttpResponse {
-    // Always return the same ack page: no account enumeration, SMTP still stubbed.
-    let _ = (form.username.trim(), form.email.trim());
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(forgot_password_ack_html())
-}
-
 #[post("/api/language")]
 async fn set_language(
     state: web::Data<Arc<AppState>>,
@@ -233,63 +111,6 @@ async fn set_language(
     current.language = language;
     let payload = enrich_status(current.clone(), &state.token);
     HttpResponse::Ok().json(payload)
-}
-
-#[post("/api/account/setup")]
-async fn account_setup(
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<TokenQuery>,
-    request: web::Json<AccountSetupRequest>,
-) -> HttpResponse {
-    if !authorized(&state, &query) {
-        return HttpResponse::Unauthorized().finish();
-    }
-    let mut current = state.status.write().await;
-    if ["downloading", "installing", "testing"].contains(&current.phase) {
-        return HttpResponse::Conflict()
-            .json(serde_json::json!({"error": "Hay una instalación en curso"}));
-    }
-    let language = request
-        .language
-        .as_deref()
-        .map(normalize_language)
-        .transpose();
-    let language = match language {
-        Ok(Some(value)) => value,
-        Ok(None) => current.language.clone(),
-        Err(error) => {
-            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
-        }
-    };
-    let policy = request
-        .password_policy
-        .clone()
-        .unwrap_or_else(|| current.password_policy.clone());
-    let result = setup_account(
-        request.username.as_deref().unwrap_or(""),
-        request.password.as_deref(),
-        request.generate_password,
-        &request.recovery_email,
-        policy.clone(),
-        &language,
-    );
-    match result {
-        Ok(setup) => {
-            current.account = Some(setup.public.clone());
-            current.password_policy = policy;
-            current.language = language;
-            current.phase = "completed";
-            current.message = "Cuenta inicial guardada".into();
-            let login_url = panel_login_url_for(&current, &state.token);
-            current.panel_login_url = Some(login_url.clone());
-            HttpResponse::Ok().json(serde_json::json!({
-                "account": setup.public,
-                "generated_password": setup.generated_password,
-                "panel_login_url": login_url,
-            }))
-        }
-        Err(error) => HttpResponse::BadRequest().json(serde_json::json!({"error": error})),
-    }
 }
 
 #[post("/api/install/server")]
@@ -504,6 +325,7 @@ async fn main() -> std::io::Result<()> {
         external_ports_configured: false,
         access_note: None,
         mail_releases,
+        smtp: Some(smtp_status_public()),
     };
     initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
     let state = Arc::new(AppState {

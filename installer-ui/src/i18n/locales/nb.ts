@@ -79,6 +79,23 @@ const nb: LocaleMessages = {
   accountSaved: 'Konto lagret',
   passwordMismatch: 'Passordene er ikke like',
   accountError: 'Kunne ikke lagre kontoen',
+  smtpOptionalTitle: 'Utgående e-post (valgfritt)',
+  smtpOptionalHint:
+    'Konfigurer SMTP for å sende kontovarsler. Du kan fullføre uten e-post. Hemmeligheter lagres bare på denne serveren.',
+  smtpEnableLabel: 'Konfigurer SMTP for utgående e-post',
+  smtpHostLabel: 'SMTP-vert',
+  smtpPortLabel: 'Port',
+  smtpTlsLabel: 'Kryptering',
+  smtpTlsStarttls: 'STARTTLS',
+  smtpTlsTls: 'TLS',
+  smtpTlsNone: 'Ingen (kun lab)',
+  smtpFromLabel: 'Fra-adresse',
+  smtpUserLabel: 'SMTP-brukernavn',
+  smtpPasswordLabel: 'SMTP-passord',
+  smtpSendUsernameLabel: 'Send brukernavnet til gjenopprettings-e-post under oppsett',
+  smtpSendUsernameHint: 'Sender brukernavn og innloggings-URL. Passord utelates med mindre du velger det under.',
+  smtpIncludePasswordLabel: 'Inkluder også passordet i den e-posten (anbefales ikke)',
+  smtpIncludePasswordHint: 'Aktiver bare hvis du godtar å sende passordet i klartekst via e-post.',
 };
 
 export default nb;

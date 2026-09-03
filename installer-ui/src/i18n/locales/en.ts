@@ -79,6 +79,23 @@ const en: LocaleMessages = {
   accountSaved: 'Account saved',
   passwordMismatch: 'Passwords do not match',
   accountError: 'Could not save the account',
+  smtpOptionalTitle: 'Outbound email (optional)',
+  smtpOptionalHint:
+    'Configure SMTP to send account notices. You can finish setup without mail. Secrets are stored only on this server.',
+  smtpEnableLabel: 'Configure SMTP for outbound mail',
+  smtpHostLabel: 'SMTP host',
+  smtpPortLabel: 'Port',
+  smtpTlsLabel: 'Encryption',
+  smtpTlsStarttls: 'STARTTLS',
+  smtpTlsTls: 'TLS',
+  smtpTlsNone: 'None (lab only)',
+  smtpFromLabel: 'From address',
+  smtpUserLabel: 'SMTP username',
+  smtpPasswordLabel: 'SMTP password',
+  smtpSendUsernameLabel: 'Email the username to the recovery address during setup',
+  smtpSendUsernameHint: 'Sends username and login URL. Password is omitted unless you opt in below.',
+  smtpIncludePasswordLabel: 'Also include the password in that email (not recommended)',
+  smtpIncludePasswordHint: 'Only enable if you accept sending the password in plaintext email.',
 };
 
 export default en;

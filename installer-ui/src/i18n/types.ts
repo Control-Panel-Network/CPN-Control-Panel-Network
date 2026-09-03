@@ -84,4 +84,20 @@ export interface LocaleMessages {
   accountSaved: string;
   passwordMismatch: string;
   accountError: string;
+  smtpOptionalTitle: string;
+  smtpOptionalHint: string;
+  smtpEnableLabel: string;
+  smtpHostLabel: string;
+  smtpPortLabel: string;
+  smtpTlsLabel: string;
+  smtpTlsStarttls: string;
+  smtpTlsTls: string;
+  smtpTlsNone: string;
+  smtpFromLabel: string;
+  smtpUserLabel: string;
+  smtpPasswordLabel: string;
+  smtpSendUsernameLabel: string;
+  smtpSendUsernameHint: string;
+  smtpIncludePasswordLabel: string;
+  smtpIncludePasswordHint: string;
 }
