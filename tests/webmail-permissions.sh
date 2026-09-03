@@ -20,18 +20,24 @@ if [[ -n "$bad" ]]; then
 fi
 
 if id cpn-webmail >/dev/null 2>&1; then
-  if su -s /bin/bash cpn-webmail -c "touch '$DOCROOT/.__cpn_perm_probe.php'" 2>/dev/null; then
+  # Prefer runuser/sudo so non-interactive lab runs never hang on su password prompts.
+  if command -v runuser >/dev/null 2>&1; then
+    if runuser -u cpn-webmail -- touch "$DOCROOT/.__cpn_perm_probe.php" 2>/dev/null; then
+      rm -f "$DOCROOT/.__cpn_perm_probe.php"
+      echo "cpn-webmail can write PHP into docroot" >&2
+      exit 1
+    fi
+  elif sudo -n -u cpn-webmail touch "$DOCROOT/.__cpn_perm_probe.php" 2>/dev/null; then
     rm -f "$DOCROOT/.__cpn_perm_probe.php"
     echo "cpn-webmail can write PHP into docroot" >&2
     exit 1
   fi
 fi
 
-if systemctl list-unit-files | grep -q '^cpn-webmail.service'; then
-  if systemctl cat cpn-webmail 2>/dev/null | grep -q 'php -S'; then
-    echo "legacy php -S unit still active" >&2
-    exit 1
-  fi
+if [[ -e /etc/systemd/system/cpn-webmail.service ]] \
+  && grep -q 'php -S' /etc/systemd/system/cpn-webmail.service 2>/dev/null; then
+  echo "legacy php -S unit still present" >&2
+  exit 1
 fi
 
 if ! systemctl is-active --quiet php-fpm; then
