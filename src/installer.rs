@@ -14,7 +14,10 @@ fn almalinux_major() -> Result<u32, String> {
         .lines()
         .any(|line| line == "ID=almalinux" || line == "ID=\"almalinux\"");
     if !is_almalinux {
-        return Err("Esta versión solo admite AlmaLinux 9 o AlmaLinux 10".into());
+        return Err("Esta versión solo admite AlmaLinux 9 o AlmaLinux 10 \
+             (bare metal, VM, o contenedor Docker/Podman privilegiado con systemd; \
+             ver to-do/DOCKER-INSTALL.md)"
+            .into());
     }
     let version = release
         .lines()
@@ -28,7 +31,8 @@ fn almalinux_major() -> Result<u32, String> {
         .ok_or_else(|| format!("VERSION_ID no válida: {version}"))?;
     if major != 9 && major != 10 {
         return Err(format!(
-            "AlmaLinux {major} aún no está soportado (se admite 9 y 10)"
+            "AlmaLinux {major} aún no está soportado (se admite 9 y 10, \
+             incluyendo contenedores basados en esas versiones)"
         ));
     }
     Ok(major)
@@ -525,11 +529,7 @@ async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<()
         .await?;
     } else {
         state
-            .progress(
-                "downloading",
-                38,
-                "Usando PHP de AppStream en AlmaLinux 10",
-            )
+            .progress("downloading", 38, "Usando PHP de AppStream en AlmaLinux 10")
             .await;
     }
     run_command(

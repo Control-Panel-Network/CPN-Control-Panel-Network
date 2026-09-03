@@ -9,6 +9,8 @@
 
 CPN is a web installer for preparing server panel components on AlmaLinux 9 and AlmaLinux 10. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
+You can install on a native AlmaLinux 9/10 host (RPM), or run the same AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+
 ## Project status
 
 The first phase implements the installer flow and is still in development. It currently includes:
@@ -16,8 +18,9 @@ The first phase implements the installer flow and is still in development. It cu
 - Selection and installation of OpenLiteSpeed, Caddy, or Nginx.
 - Selection and installation of SnappyMail, RainLoop, Roundcube, or Thunderbird.
 - Real download, install, and verification progress sent over WebSocket.
-- VPS detection and opening port `8787` in `firewalld` or `ufw` when those are active.
+- VPS and container detection; opening port `8787` in `firewalld` or `ufw` when those are active.
 - RPM packaging for AlmaLinux 9 and AlmaLinux 10.
+- Docker/Podman runtime images for AlmaLinux 9 and 10 (`Dockerfile`, `docker-compose.yml`, `scripts/docker-run.sh`).
 - Service tests in clean AlmaLinux containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE`).
 
 Recipes, security, and compatibility still need review before CPN can be considered production-ready.
@@ -27,9 +30,13 @@ Recipes, security, and compatibility still need review before CPN can be conside
 - `installer-ui/`: React and Vite interface.
 - `Panel/`: React and Next.js control panel based on Stitch screens.
 - `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
-- `packaging/`: RPM specification.
+- `packaging/`: RPM specification and systemd unit used by the Docker image.
 - `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9 or 10.
+- `scripts/docker-build-rpm.sh`: builds the RPM inside an AlmaLinux container (any host with Docker/Podman).
+- `scripts/docker-run.sh`: builds the runtime image and starts a privileged systemd container on port `8787`.
+- `Dockerfile` / `docker-compose.yml`: AlmaLinux 9/10 installer container (parameterized with `CPN_ALMA_VERSION`).
 - `tests/docker-matrix.sh`: functional matrix for web servers and mail clients.
+- `to-do/DOCKER-INSTALL.md`: Docker install guide, ports, volumes, and security notes.
 
 ## Development and validation
 
@@ -54,7 +61,7 @@ npm run typecheck
 
 The continuous integration workflow runs these checks on every push and pull request.
 
-## RPM packaging
+## RPM packaging (native AlmaLinux)
 
 On AlmaLinux 9 or AlmaLinux 10:
 
@@ -67,6 +74,37 @@ sudo cpn-installer
 The RPM release suffix follows the host distro (`.el9` or `.el10`).
 
 When you run `cpn-installer`, the console immediately prints the full installer web URL, including the reachable IP and a temporary token. The service listens on `0.0.0.0:8787`.
+
+## Docker / Podman install
+
+On any host with Docker or Podman (Linux preferred for systemd/cgroup support):
+
+```bash
+# AlmaLinux 9 (default): build RPM if needed, start privileged installer container
+./scripts/docker-run.sh
+
+# AlmaLinux 10
+CPN_ALMA_VERSION=10 ./scripts/docker-run.sh
+```
+
+Open the printed `http://127.0.0.1:8787/?token=...` URL.
+
+**Security:** the container runs privileged (systemd + `dnf` + `systemctl`). Use only on dedicated lab/test hosts. Do not expose port `8787` on untrusted networks.
+
+Build the RPM alone from a non-AlmaLinux host:
+
+```bash
+./scripts/docker-build-rpm.sh
+```
+
+Compose (after `cpn-installer.rpm` exists in the repo root):
+
+```bash
+export CPN_ALMA_VERSION=9
+docker compose build && docker compose up -d
+```
+
+Full details: [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
 
 ## Functional tests in Docker
 

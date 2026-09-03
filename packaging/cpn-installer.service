@@ -1,0 +1,17 @@
+[Unit]
+Description=CPN Control Panel Network web installer
+Documentation=https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cpn-installer
+Restart=on-failure
+RestartSec=3
+# Installer binds 0.0.0.0:8787 and prints a temporary token URL.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

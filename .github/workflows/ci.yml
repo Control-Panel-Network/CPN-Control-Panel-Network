@@ -96,5 +96,11 @@ jobs:
 
       # RPM functional matrix stays AlmaLinux 9 by default (tests/docker-matrix.sh).
       # AlmaLinux 10: CPN_TEST_IMAGE=almalinux:10 ./tests/docker-matrix.sh
+      # Docker install helpers: scripts/docker-run.sh, scripts/docker-build-rpm.sh
       - name: Comprobar sintaxis Bash
-        run: bash -n scripts/build-rpm.sh tests/docker-matrix.sh
+        run: >
+          bash -n
+          scripts/build-rpm.sh
+          scripts/docker-build-rpm.sh
+          scripts/docker-run.sh
+          tests/docker-matrix.sh
