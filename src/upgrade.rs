@@ -258,9 +258,8 @@ pub async fn run_maintenance(
             .as_ref()
             .map(|a| a.configured)
             .unwrap_or(false)
+            || status.server_ready
         {
-            "completed"
-        } else if status.server_ready {
             "completed"
         } else {
             "ready"
