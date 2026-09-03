@@ -71,10 +71,10 @@ pub fn resolve_listen_port(args: &[String]) -> Result<u16, String> {
         }
     }
 
-    if let Ok(raw) = env::var("CPN_LISTEN_PORT") {
-        if !raw.trim().is_empty() {
-            return parse_port_value(&raw, "CPN_LISTEN_PORT");
-        }
+    if let Ok(raw) = env::var("CPN_LISTEN_PORT")
+        && !raw.trim().is_empty()
+    {
+        return parse_port_value(&raw, "CPN_LISTEN_PORT");
     }
 
     if let Some(preferred) = load_preferred_listen_port() {
