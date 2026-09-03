@@ -7,11 +7,58 @@
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a Linux web installer for preparing server panel components on CyberPanel-aligned guests (AlmaLinux 8/9/10, Rocky Linux 8/9, Ubuntu 20.04/22.04/24.04, plus partial RHEL/CloudLinux/CentOS Stream). A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
+CPN is a Linux web installer for preparing server panel components on CyberPanel-aligned guest operating systems. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
-Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), or run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), or run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix) and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
 
-Windows Server, VirtualBox, and Hyper-V are **hosts** for those Linux guests, not native Windows panel installs.
+## Supported operating systems
+
+CPN installs on **Linux guests** only (CyberPanel-aligned targets). Status matches [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) and `src/os_support.rs`:
+
+| Status | Meaning |
+|---|---|
+| **Supported** | Detection and install recipes implemented for that family |
+| **Partial** | Allowlisted; recipes run via the family path; less lab evidence |
+| **Not yet** | Known CyberPanel/community target; installer refuses with a helpful message |
+| **Host only** | Hypervisor or Windows host for Linux guests; not a CPN install target |
+
+### Guest OS (where `cpn-installer` runs)
+
+| Guest OS | Status | Package path | Notes |
+|---|---|---|---|
+| AlmaLinux 10 | Supported | dnf | Lab-verified earlier |
+| AlmaLinux 9 | Supported | dnf | Lab-verified; default Docker matrix image |
+| AlmaLinux 8 | Partial | dnf | Detected; PHP module `php:8.0`; needs more lab proof |
+| Rocky Linux 9 | Supported | dnf | Same EL9 recipe family as Alma 9 |
+| Rocky Linux 8 | Partial | dnf | Same EL8 path; needs lab proof |
+| RHEL 9 | Partial | dnf | Allowlisted; subscription/repos are operator responsibility |
+| RHEL 8 | Partial | dnf | Allowlisted; needs lab proof |
+| CloudLinux 8 | Partial | dnf | Detected when `ID=cloudlinux` |
+| CentOS Stream 9 | Partial | dnf | Detected when `ID=centos` major 9 |
+| Ubuntu 24.04 | Supported | apt | Code path present; lab verification still needed |
+| Ubuntu 22.04 | Supported | apt | Code path present; lab verification still needed |
+| Ubuntu 20.04 | Partial | apt | Allowlisted; older PHP/repos; verify before production |
+| Debian | Not yet | apt (planned) | Clear error; best-effort community |
+| openEuler | Not yet | (planned) | Clear error; best-effort community |
+| Other RHEL derivatives | Not yet | dnf (planned) | Clear error when not in allowlist |
+
+Quick scan by status:
+
+- **Supported:** AlmaLinux 10, AlmaLinux 9, Rocky Linux 9, Ubuntu 24.04, Ubuntu 22.04
+- **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04
+- **Not yet:** Debian, openEuler, other RHEL derivatives outside the allowlist
+
+Do not treat "Supported" as lab-verified for every row. AlmaLinux 9/10 have lab verification; Ubuntu 22.04/24.04 and Rocky 9 are supported in code and still need full lab proof (see the matrix).
+
+### Host / hypervisor (not install targets)
+
+| Platform | Role |
+|---|---|
+| Windows Server | Host only (Hyper-V role for Linux guests); not a native panel install |
+| VirtualBox | Host only (lab VMs for Linux guests) |
+| Hyper-V | Host only (lab VMs for Linux guests) |
+
+WSL2 is not a supported guest target for systemd and firewall recipes.
 
 ## Project status
 
