@@ -131,7 +131,7 @@ pub fn list_sites() -> Result<Vec<SiteRecord>, String> {
         }
         sites.push(load_site_at(&path)?);
     }
-    sites.sort_by(|a, b| a.domain.cmp(&b.domain));
+    sites.sort_by_key(|a| a.domain.clone());
     Ok(sites)
 }
 
