@@ -123,6 +123,7 @@ async fn start_install(
     if !authorized(&state, &query) {
         return HttpResponse::Unauthorized().finish();
     }
+    #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
         return HttpResponse::BadRequest().json(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
@@ -165,6 +166,7 @@ async fn start_mail_install(
     if !authorized(&state, &query) {
         return HttpResponse::Unauthorized().finish();
     }
+    #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
         return HttpResponse::BadRequest().json(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
