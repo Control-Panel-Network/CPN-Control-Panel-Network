@@ -1,6 +1,6 @@
 //! Webmail download and activation helpers.
 use crate::install_recipes::command;
-use crate::installer::{AppState, run_command};
+use crate::installer::{AppState, install_php_runtime, run_command};
 use crate::model::MailSystem;
 use rand::{Rng, distr::Alphanumeric};
 use std::{os::unix::fs::symlink, path::Path, process::Stdio};
