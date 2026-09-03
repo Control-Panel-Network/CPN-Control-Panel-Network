@@ -20,6 +20,7 @@ jobs:
         # Pin to commit SHA (actions/unpinned-tag). Tag: stable.
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Preparar recursos para el análisis

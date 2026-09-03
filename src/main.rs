@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use installer::AppState;
 use model::{
     AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
-    MailInstallRequest, OptionalTokenQuery, TokenQuery,
+    MailInstallRequest, TokenQuery,
 };
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
@@ -28,12 +28,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 struct UiAssets;
 
 fn authorized(state: &AppState, query: &TokenQuery) -> bool {
-    let optional = OptionalTokenQuery {
-        token: Some(query.token.clone()),
-    };
-    optional
-        .into_token_query()
-        .is_some_and(|required| state.token.as_bytes() == required.token.as_bytes())
+    state.token.as_bytes() == query.token.as_bytes()
 }
 
 fn html_escape(value: &str) -> String {
@@ -425,6 +420,7 @@ async fn main() -> std::io::Result<()> {
         panel_login_url: None,
         version: VERSION.into(),
         server_ready: false,
+        mail_releases: Vec::new(),
     };
     initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
     let state = Arc::new(AppState {
