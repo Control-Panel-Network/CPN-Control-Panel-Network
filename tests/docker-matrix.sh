@@ -107,7 +107,7 @@ run_case() {
       docker exec "$name" bash /usr/share/cpn-installer/webmail-permissions.sh /opt/cpn-webmail/snappymail 2>/dev/null || \
         docker exec "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
       docker exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
-      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi SnappyMail"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     roundcube)
@@ -117,7 +117,7 @@ run_case() {
       docker exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
       docker exec "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
       docker exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
-      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi Roundcube"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     thunderbird)

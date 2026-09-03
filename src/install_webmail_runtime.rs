@@ -11,7 +11,7 @@ const STAGE: &str = "webmail_runtime";
 const FPM_POOL: &str = "/etc/php-fpm.d/cpn-webmail.conf";
 const NGINX_CONF: &str = "/etc/nginx/conf.d/cpn-webmail.conf";
 const CADDY_SNIPPET: &str = "/etc/caddy/Caddyfile.d/cpn-webmail.caddy";
-const WEBMAIL_URL: &str = "http://127.0.0.1:8888/";
+const WEBMAIL_URL: &str = "http://127.0.0.1:8080/";
 
 pub fn webmail_health_url() -> &'static str {
     WEBMAIL_URL
@@ -43,6 +43,16 @@ pub async fn configure_webmail_runtime(
             Some("removed transitional php -S unit".into()),
         )?;
     }
+
+    // Allow reverse-proxy listen port through SELinux when tools are present.
+    let _ = Command::new("bash")
+        .args([
+            "-c",
+            "command -v semanage >/dev/null 2>&1 && \
+             (semanage port -a -t http_port_t -p tcp 8080 || semanage port -m -t http_port_t -p tcp 8080 || true)",
+        ])
+        .status()
+        .await;
 
     match engine {
         ServerEngine::Nginx => configure_nginx_proxy(docroot)?,
@@ -229,7 +239,7 @@ fn configure_nginx_proxy(docroot: &str) -> Result<(), String> {
     let conf = format!(
         "# Managed by CPN (issue #6)\n\
          server {{\n\
-           listen 127.0.0.1:8888;\n\
+           listen 127.0.0.1:8080;\n\
            server_name localhost;\n\
            root {docroot};\n\
            index index.php index.html;\n\
@@ -254,7 +264,7 @@ fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
     std::fs::create_dir_all("/etc/caddy/Caddyfile.d").map_err(|error| error.to_string())?;
     let snippet = format!(
         "# Managed by CPN (issue #6)\n\
-         http://127.0.0.1:8888 {{\n\
+         http://127.0.0.1:8080 {{\n\
            root * {docroot}\n\
            php_fastcgi unix//run/php-fpm/cpn-webmail.sock\n\
            file_server\n\
@@ -319,7 +329,7 @@ END_rules\n\
     let mut conf = std::fs::read_to_string(httpd).unwrap_or_default();
     if !conf.contains("virtualHost CPNWebmail") {
         conf.push_str(
-            "\nvirtualHost CPNWebmail {\n  vhRoot                  /opt/cpn-webmail/\n  configFile              $SERVER_ROOT/conf/vhosts/CPNWebmail/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n\nlistener CPNWebmailHttp {\n  address                 127.0.0.1:8888\n  secure                  0\n  map                     CPNWebmail *\n}\n",
+            "\nvirtualHost CPNWebmail {\n  vhRoot                  /opt/cpn-webmail/\n  configFile              $SERVER_ROOT/conf/vhosts/CPNWebmail/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n\nlistener CPNWebmailHttp {\n  address                 127.0.0.1:8080\n  secure                  0\n  map                     CPNWebmail *\n}\n",
         );
         install_journal::write_file_tracked(STAGE, Path::new(httpd), &conf)?;
     }
@@ -367,8 +377,8 @@ mod tests {
     use super::webmail_health_url;
 
     #[test]
-    fn health_url_is_loopback_8888() {
-        assert_eq!(webmail_health_url(), "http://127.0.0.1:8888/");
+    fn health_url_is_loopback_8080() {
+        assert_eq!(webmail_health_url(), "http://127.0.0.1:8080/");
     }
 
     #[test]
