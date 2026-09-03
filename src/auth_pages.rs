@@ -1,4 +1,5 @@
 use crate::account::{account_public_from_disk, load_bootstrap};
+use crate::auth_i18n::PANEL_I18N_SCRIPT;
 use crate::model::InstallerStatus;
 
 fn html_escape(value: &str) -> String {
@@ -9,135 +10,232 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn normalize_panel_locale(raw: &str) -> &'static str {
+    let value = raw.trim().to_lowercase();
+    if value.starts_with("es") {
+        "es"
+    } else if value.starts_with("nb") || value == "no" || value.starts_with("nn") {
+        "nb"
+    } else {
+        "en"
+    }
+}
+
+fn resolve_initial_locale(status: &InstallerStatus) -> &'static str {
+    if let Some(boot) = load_bootstrap() {
+        return normalize_panel_locale(&boot.language);
+    }
+    normalize_panel_locale(&status.language)
+}
+
+fn shared_auth_styles() -> &'static str {
+    r#"
+    body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; }
+    main { min-height:100vh; display:grid; place-items:center; padding:48px 20px; }
+    .card { width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:18px; padding:28px; position:relative; }
+    h1 { margin:0 0 8px; font-size:1.7rem; }
+    p { color:#6e6e73; line-height:1.5; }
+    label { display:block; margin:14px 0 6px; font-weight:600; font-size:.92rem; }
+    input { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit; }
+    button { margin-top:18px; width:100%; border:0; border-radius:999px; padding:12px 16px; background:#0066cc; color:#fff; font-weight:700; cursor:pointer; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    a { color:#0066cc; text-decoration:none; font-size:.92rem; }
+    .hint { margin-top:14px; font-size:.9rem; }
+    .lang-host { position:absolute; top:16px; right:16px; }
+    .lang { display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin:0; font-weight:600; font-size:.8rem; color:#6e6e73; }
+    .lang select { min-width:120px; border:1px solid #d0d5dd; border-radius:8px; padding:6px 8px; font:inherit; background:#fff; color:#1d1d1f; }
+    .lang-label { font-size:.75rem; letter-spacing:.02em; }
+"#
+}
+
 pub fn panel_login_html(status: &InstallerStatus) -> String {
     let account = status.account.clone().or_else(account_public_from_disk);
     let username = account
         .as_ref()
         .map(|value| value.username.as_str())
         .unwrap_or("admin");
-    let email = account
+    let configured = account.as_ref().map(|value| value.configured).unwrap_or(false);
+    let initial_locale = resolve_initial_locale(status);
+    let token_q = status
+        .panel_login_url
         .as_ref()
-        .map(|value| value.recovery_email.as_str())
-        .unwrap_or("");
-    let configured = account
-        .as_ref()
-        .map(|value| value.configured)
-        .unwrap_or(false);
-    let note = if configured {
-        format!(
-            "Cuenta inicial lista para <strong>{}</strong>. El panel Next.js completo usará estos datos cuando la autenticación esté conectada.",
-            html_escape(username)
-        )
-    } else {
-        "Todavía no hay una cuenta inicial. Completa el instalador primero.".into()
-    };
+        .and_then(|url| url.split("token=").nth(1))
+        .map(|value| format!("?token={}", html_escape(value)))
+        .unwrap_or_default();
+
     format!(
         r#"<!DOCTYPE html>
-<html lang="es">
+<html lang="{locale}" data-initial-locale="{locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inicio de sesión · CPN Panel</title>
-  <style>
-    body {{ margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; }}
-    main {{ min-height:100vh; display:grid; place-items:center; padding:48px 20px; }}
-    .card {{ width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:18px; padding:28px; }}
-    h1 {{ margin:0 0 8px; font-size:1.7rem; }}
-    p {{ color:#6e6e73; line-height:1.5; }}
-    label {{ display:block; margin:14px 0 6px; font-weight:600; font-size:.92rem; }}
-    input {{ width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit; }}
-    button {{ margin-top:18px; width:100%; border:0; border-radius:999px; padding:12px 16px; background:#0066cc; color:#fff; font-weight:700; cursor:pointer; }}
-    .row {{ display:flex; justify-content:space-between; align-items:center; gap:12px; }}
-    a {{ color:#0066cc; text-decoration:none; font-size:.92rem; }}
-    .hint {{ margin-top:14px; font-size:.9rem; }}
-  </style>
+  <title>Sign in · CPN Panel</title>
+  <style>{styles}</style>
 </head>
-<body>
+<body data-page="login" data-username="{username}" data-configured="{configured}">
   <main>
     <section class="card">
-      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
-      <h1>Iniciar sesión</h1>
-      <p class="hint">{note}</p>
-      <form method="post" action="/login" autocomplete="on">
-        <label for="username">Usuario</label>
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1 id="i18n-title">Sign in</h1>
+      <p class="hint" id="i18n-note"></p>
+      <form method="post" action="/login{token_q}" autocomplete="on">
+        <label for="username" id="i18n-username">Username</label>
         <input id="username" name="username" value="{username}" required>
-        <label for="password">Contraseña</label>
+        <label for="password" id="i18n-password">Password</label>
         <input id="password" name="password" type="password" required>
         <div class="row">
           <span></span>
-          <a href="/forgot-password">¿Olvidaste la contraseña?</a>
+          <a id="i18n-forgot" href="/forgot-password">Forgot password?</a>
         </div>
-        <button type="submit">Entrar</button>
+        <button id="i18n-submit" type="submit">Sign in</button>
       </form>
-      <p class="hint">Este formulario usa POST. La autenticación completa del panel se conectará a <code>/var/lib/cpn/panel-bootstrap.json</code>.</p>
-      <p class="hint">Correo de recuperación configurado: <strong>{email}</strong></p>
     </section>
   </main>
+  {script}
 </body>
 </html>"#,
+        locale = initial_locale,
+        styles = shared_auth_styles(),
         username = html_escape(username),
-        email = html_escape(if email.is_empty() {
-            "(no configurado)"
-        } else {
-            email
-        }),
-        note = note,
+        configured = if configured { "1" } else { "0" },
+        token_q = token_q,
+        script = PANEL_I18N_SCRIPT,
+    )
+}
+
+pub fn login_post_ack_html(token: Option<&str>) -> String {
+    let back = match token {
+        Some(value) if !value.is_empty() => format!("/login?token={}", html_escape(value)),
+        _ => "/login".into(),
+    };
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en" data-initial-locale="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · CPN Panel</title>
+  <style>{styles}</style>
+</head>
+<body data-page="post" data-username="" data-configured="0">
+  <main>
+    <section class="card">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <h1 id="i18n-post-title">Login received via POST</h1>
+      <p id="i18n-post-body"></p>
+      <p><a id="i18n-post-back" href="{back}">Back to sign in</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        styles = shared_auth_styles(),
+        back = back,
+        script = PANEL_I18N_SCRIPT,
     )
 }
 
 pub fn forgot_password_html() -> String {
     let boot = load_bootstrap();
-    let email = boot
+    let initial_locale = boot
         .as_ref()
-        .map(|value| value.recovery_email.as_str())
-        .unwrap_or("");
-    let username = boot
-        .as_ref()
-        .map(|value| value.username.as_str())
-        .unwrap_or("admin");
-    let masked = if email.is_empty() {
-        "No hay correo de recuperación todavía.".to_string()
-    } else {
-        mask_email(email)
-    };
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
     format!(
         r#"<!DOCTYPE html>
-<html lang="es">
+<html lang="{locale}" data-initial-locale="{locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Contraseña olvidada · CPN Panel</title>
-  <style>
-    body {{ margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; }}
-    main {{ min-height:100vh; display:grid; place-items:center; padding:48px 20px; }}
-    .card {{ width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:18px; padding:28px; }}
-    h1 {{ margin:0 0 8px; font-size:1.7rem; }}
-    p {{ color:#6e6e73; line-height:1.5; }}
-    a {{ color:#0066cc; text-decoration:none; }}
-  </style>
+  <title>Forgot password · CPN Panel</title>
+  <style>{styles}</style>
 </head>
-<body>
+<body data-page="forgot" data-username="" data-configured="0">
   <main>
     <section class="card">
-      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
-      <h1>Contraseña olvidada</h1>
-      <p>Punto de entrada para restablecer la contraseña de la cuenta <strong>{username}</strong>.</p>
-      <p>Correo de recuperación registrado: <strong>{masked}</strong></p>
-      <p>El envío real de correo se conectará cuando el panel tenga SMTP configurado. Mientras tanto, un operador con acceso root puede restablecer la cuenta desde el servidor usando el bootstrap en <code>/var/lib/cpn/panel-bootstrap.json</code>.</p>
-      <p><a href="/login">Volver al inicio de sesión</a></p>
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1 id="i18n-title">Forgot password</h1>
+      <p class="hint" id="i18n-forgot-intro"></p>
+      <form method="post" action="/forgot-password" autocomplete="on">
+        <label for="username" id="i18n-forgot-username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username">
+        <label for="email" id="i18n-forgot-email-label">Recovery email</label>
+        <input id="email" name="email" type="email" autocomplete="email">
+        <button id="i18n-forgot-submit" type="submit">Request reset</button>
+      </form>
+      <p class="hint" id="i18n-forgot-smtp"></p>
+      <p><a id="i18n-forgot-back" href="/login">Back to sign in</a></p>
     </section>
   </main>
+  {script}
 </body>
 </html>"#,
-        username = html_escape(username),
-        masked = html_escape(&masked),
+        locale = initial_locale,
+        styles = shared_auth_styles(),
+        script = PANEL_I18N_SCRIPT,
     )
 }
 
-fn mask_email(email: &str) -> String {
-    let Some((local, domain)) = email.split_once('@') else {
-        return "***".into();
-    };
-    let visible = local.chars().next().unwrap_or('*');
-    format!("{visible}***@{domain}")
+pub fn forgot_password_ack_html() -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forgot password · CPN Panel</title>
+  <style>{styles}</style>
+</head>
+<body data-page="forgot-ack" data-username="" data-configured="0">
+  <main>
+    <section class="card">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1 id="i18n-title">Check your inbox</h1>
+      <p class="hint" id="i18n-forgot-ack"></p>
+      <p class="hint" id="i18n-forgot-smtp"></p>
+      <p><a id="i18n-forgot-back" href="/login">Back to sign in</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        locale = initial_locale,
+        styles = shared_auth_styles(),
+        script = PANEL_I18N_SCRIPT,
+    )
+}
+
+pub fn installer_token_required_html() -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en" data-initial-locale="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPN Installer</title>
+  <style>{styles}</style>
+</head>
+<body data-page="token" data-username="" data-configured="0">
+  <main>
+    <section class="card" style="width:min(100%,480px)">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <h1 id="i18n-auth-title">Open the installer URL with its token</h1>
+      <p id="i18n-auth-body">Installation is not finished yet. Use the full URL printed in the installer console, including the ?token=... query parameter.</p>
+      <p><a id="i18n-auth-login" href="/login">If installation already finished, open panel login.</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        styles = shared_auth_styles(),
+        script = PANEL_I18N_SCRIPT,
+    )
 }

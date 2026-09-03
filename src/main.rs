@@ -1,18 +1,23 @@
 mod account;
+mod auth_i18n;
 mod auth_pages;
 mod environment;
 mod installer;
+mod mail_releases;
 mod model;
 mod status_pages;
 
 use account::{account_public_from_disk, default_password_policy, setup_account};
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
-use auth_pages::{forgot_password_html, panel_login_html};
+use auth_pages::{
+    forgot_password_ack_html, forgot_password_html, installer_token_required_html,
+    login_post_ack_html, panel_login_html,
+};
 use futures_util::StreamExt;
 use installer::AppState;
 use model::{
     AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
-    MailInstallRequest, TokenQuery,
+    MailInstallRequest, OptionalTokenQuery, TokenQuery,
 };
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
@@ -31,12 +36,21 @@ fn authorized(state: &AppState, query: &TokenQuery) -> bool {
     state.token.as_bytes() == query.token.as_bytes()
 }
 
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+fn token_matches(state: &AppState, token: Option<&str>) -> bool {
+    match token {
+        Some(value) if !value.is_empty() => state.token.as_bytes() == value.as_bytes(),
+        _ => false,
+    }
+}
+
+fn install_finished(status: &InstallerStatus) -> bool {
+    status.phase == "completed"
+        || status
+            .account
+            .as_ref()
+            .map(|value| value.configured)
+            .unwrap_or(false)
+        || account_public_from_disk().is_some()
 }
 
 fn wants_html(request: &HttpRequest) -> bool {
@@ -90,6 +104,35 @@ fn status_response(request: &HttpRequest, payload: &InstallerStatus) -> HttpResp
     }
 }
 
+fn serve_index_html() -> HttpResponse {
+    match UiAssets::get("index.html") {
+        Some(asset) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(asset.data),
+        None => HttpResponse::ServiceUnavailable()
+            .body("La interfaz web aún no está incluida en este binario"),
+    }
+}
+
+#[get("/")]
+async fn root_page(
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<OptionalTokenQuery>,
+) -> HttpResponse {
+    let status = state.status.read().await.clone();
+    if install_finished(&status) {
+        return HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish();
+    }
+    if token_matches(&state, query.token.as_deref()) {
+        return serve_index_html();
+    }
+    HttpResponse::Unauthorized()
+        .content_type("text/html; charset=utf-8")
+        .body(installer_token_required_html())
+}
+
 #[get("/api/status")]
 async fn api_status(
     request: HttpRequest,
@@ -111,7 +154,7 @@ async fn status_page(
     if !authorized(&state, &query) {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
-            .body("<!DOCTYPE html><html lang=\"es\"><body><h1>Acceso denegado</h1><p>Token no válido.</p></body></html>");
+            .body("<!DOCTYPE html><html lang=\"en\"><body><h1>Access denied</h1><p>Invalid token.</p></body></html>");
     }
     let payload = enrich_status(state.status.read().await.clone(), &state.token);
     HttpResponse::Ok()
@@ -122,14 +165,17 @@ async fn status_page(
 #[get("/login")]
 async fn login_page(
     state: web::Data<Arc<AppState>>,
-    query: web::Query<TokenQuery>,
+    query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    let status = state.status.read().await.clone();
+    let finished = install_finished(&status);
+    let valid_token = token_matches(&state, query.token.as_deref());
+    if !(finished || valid_token) {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
-            .body("<!DOCTYPE html><html lang=\"es\"><body><h1>Acceso denegado</h1></body></html>");
+            .body(installer_token_required_html());
     }
-    let payload = enrich_status(state.status.read().await.clone(), &state.token);
+    let payload = enrich_status(status, &state.token);
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(panel_login_html(&payload))
@@ -138,18 +184,28 @@ async fn login_page(
 #[post("/login")]
 async fn login_submit(
     state: web::Data<Arc<AppState>>,
-    query: web::Query<TokenQuery>,
+    query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
-        return HttpResponse::Unauthorized().finish();
+    let status = state.status.read().await.clone();
+    let finished = install_finished(&status);
+    let valid_token = token_matches(&state, query.token.as_deref());
+    if !(finished || valid_token) {
+        return HttpResponse::Unauthorized()
+            .content_type("text/html; charset=utf-8")
+            .body(installer_token_required_html());
     }
-    // Placeholder until Panel auth is fully wired. Never echo credentials.
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(format!(
-            "<!DOCTYPE html><html lang=\"es\"><body style=\"font-family:system-ui;padding:40px\"><h1>Login recibido por POST</h1><p>La autenticación completa del panel se conectará en una versión posterior.</p><p><a href=\"/login?token={}\">Volver</a></p></body></html>",
-            html_escape(&query.token)
-        ))
+        .body(login_post_ack_html(query.token.as_deref()))
+}
+
+
+#[derive(Debug, serde::Deserialize)]
+struct ForgotPasswordForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    email: String,
 }
 
 #[get("/forgot-password")]
@@ -157,6 +213,15 @@ async fn forgot_password_page() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(forgot_password_html())
+}
+
+#[post("/forgot-password")]
+async fn forgot_password_submit(form: web::Form<ForgotPasswordForm>) -> HttpResponse {
+    // Always return the same ack page: no account enumeration, SMTP still stubbed.
+    let _ = (form.username.trim(), form.email.trim());
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(forgot_password_ack_html())
 }
 
 #[post("/api/language")]
@@ -354,12 +419,18 @@ async fn websocket(
 
 async fn static_asset(path: web::Path<String>) -> impl Responder {
     let requested = path.into_inner();
-    let name = if requested.is_empty() {
-        "index.html"
-    } else {
-        requested.as_str()
-    };
-    let asset = UiAssets::get(name).or_else(|| UiAssets::get("index.html"));
+    // Never treat empty path as the installer SPA here; `root_page` owns `/`.
+    if requested.is_empty() {
+        return HttpResponse::NotFound().finish();
+    }
+    let name = requested.as_str();
+    let asset = UiAssets::get(name).or_else(|| {
+        if name.contains('.') {
+            None
+        } else {
+            UiAssets::get("index.html")
+        }
+    });
     match asset {
         Some(asset) => {
             let content_type = match name.rsplit('.').next() {
@@ -379,8 +450,6 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
 }
 
 fn listen_hosts() -> Vec<String> {
-    // Flags kept for compatibility with docs and future lockdown.
-    // Default remains 0.0.0.0 for current VPS installer UX.
     let _allow_remote = env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
         || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1");
     let _ = _allow_remote;
@@ -404,23 +473,30 @@ async fn main() -> std::io::Result<()> {
     if let Err(error) = environment::open_installer_port(&environment).await {
         eprintln!("Aviso: {error}");
     }
+    let mail_releases = mail_releases::load_mail_releases().await;
     let (events, _) = broadcast::channel(256);
+    let bootstrap_account = account_public_from_disk();
+    let phase = if bootstrap_account.is_some() {
+        "completed"
+    } else {
+        "ready"
+    };
     let mut initial = InstallerStatus {
-        phase: "ready",
+        phase,
         progress: 0,
         message: "El sistema está listo para continuar".into(),
         selected_server: None,
         selected_mail: None,
         environment: Some(environment.clone()),
         error: None,
-        language: "es".into(),
-        account: account_public_from_disk(),
+        language: "en".into(),
+        account: bootstrap_account,
         password_policy: default_password_policy(),
         panel_login_path: "/login".into(),
         panel_login_url: None,
         version: VERSION.into(),
         server_ready: false,
-        mail_releases: Vec::new(),
+        mail_releases,
     };
     initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
     let state = Arc::new(AppState {
@@ -441,11 +517,13 @@ async fn main() -> std::io::Result<()> {
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(state.clone()))
+            .service(root_page)
             .service(api_status)
             .service(status_page)
             .service(login_page)
             .service(login_submit)
             .service(forgot_password_page)
+            .service(forgot_password_submit)
             .service(set_language)
             .service(account_setup)
             .service(start_install)
