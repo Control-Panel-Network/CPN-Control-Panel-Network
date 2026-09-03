@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LockKeyhole, Mail, Server } from "lucide-react";
+import { LockKeyhole, Server, UserRound } from "lucide-react";
 
 export default function LoginPage() {
   return (
@@ -12,26 +12,47 @@ export default function LoginPage() {
         <h1 id="login-title">Sign in</h1>
         <p className="login-intro">Access your server workspace.</p>
 
-        <form className="login-form" action="/dashboard">
-          <label htmlFor="email">Email address</label>
+        {/* method=post avoids putting credentials in the URL (issue #8). */}
+        <form className="login-form" method="post" action="/api/login">
+          <label htmlFor="username">Username</label>
           <div className="input-shell">
-            <Mail size={19} aria-hidden="true" />
-            <input id="email" name="email" type="email" placeholder="you@example.com" required />
+            <UserRound size={19} aria-hidden="true" />
+            <input
+              id="username"
+              name="username"
+              type="text"
+              placeholder="admin"
+              autoComplete="username"
+              required
+            />
           </div>
 
           <div className="password-row">
             <label htmlFor="password">Password</label>
-            <a href="#">Forgot password?</a>
+            <Link href="/forgot-password">Forgot password?</Link>
           </div>
           <div className="input-shell">
             <LockKeyhole size={19} aria-hidden="true" />
-            <input id="password" name="password" type="password" placeholder="Enter your password" required />
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              required
+            />
           </div>
 
           <button type="submit">Sign in</button>
         </form>
 
-        <Link className="demo-link" href="/dashboard">
+        <p className="login-intro" style={{ marginTop: 18 }}>
+          Full session auth is still in progress. This form always uses POST so
+          passwords never appear in the query string. Recovery email is stored
+          during install for the forgotten-password entry point.
+        </p>
+
+        <Link className="demo-link" href="/dashboard?preview=1">
           View dashboard preview
         </Link>
       </section>

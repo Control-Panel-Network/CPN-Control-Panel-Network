@@ -6,15 +6,43 @@ import { InstallingScreen } from './components/InstallingScreen';
 import { MailSelectionScreen } from './components/MailSelectionScreen';
 import { CompleteScreen } from './components/CompleteScreen';
 import { CompareModal } from './components/CompareModal';
-import { connectInstallerEvents, getStatus, startMailInstall, startServerInstall } from './api';
-import type { InstallerEvent, InstallerStatus, MailSystem, ScreenType, ServerEngine } from './types';
+import { AccountSetupScreen } from './components/AccountSetupScreen';
+import {
+  connectInstallerEvents,
+  getStatus,
+  resolvePanelLoginUrl,
+  setLanguage,
+  startMailInstall,
+  startServerInstall,
+} from './api';
+import { I18nProvider, normalizeLocale, useI18n } from './i18n';
+import type { InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ScreenType, ServerEngine } from './types';
 
-const INITIAL_STATUS: InstallerStatus = {
-  phase: 'preparing', progress: 0, message: 'Estamos preparando todo...',
-  selected_server: null, selected_mail: null, environment: null, error: null,
+const DEFAULT_POLICY: PasswordPolicy = {
+  min_length: 8,
+  require_special: true,
+  require_uppercase: true,
+  require_number: true,
 };
 
-export default function App() {
+const INITIAL_STATUS: InstallerStatus = {
+  phase: 'preparing',
+  progress: 0,
+  message: '',
+  selected_server: null,
+  selected_mail: null,
+  environment: null,
+  error: null,
+  language: 'es',
+  account: null,
+  password_policy: DEFAULT_POLICY,
+  panel_login_path: '/login',
+  panel_login_url: null,
+  server_ready: false,
+};
+
+function AppShell() {
+  const { t, locale, setLocale } = useI18n();
   const [screen, setScreen] = useState<ScreenType>('preparing');
   const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(null);
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
@@ -22,19 +50,64 @@ export default function App() {
   const [compareOpen, setCompareOpen] = useState(false);
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
+  const skipLanguagePush = useRef(true);
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+
+  const applyStatusScreen = useCallback((next: InstallerStatus, delayComplete = false) => {
+    setStatus(next);
+    setSelectedServer(next.selected_server);
+    setSelectedMail(next.selected_mail);
+    if (next.language) {
+      const normalized = normalizeLocale(next.language);
+      if (normalized !== localeRef.current) {
+        skipLanguagePush.current = true;
+        setLocale(normalized);
+      }
+    }
+
+    if (next.phase === 'ready') {
+      setScreen('selection');
+      return;
+    }
+    if (['downloading', 'installing', 'testing', 'failed'].includes(next.phase)) {
+      setScreen('installing');
+      return;
+    }
+    if (next.phase === 'completed' || next.phase === 'account') {
+      const go = () => {
+        if (!next.selected_mail) {
+          setScreen('mail');
+          return;
+        }
+        if (!next.account?.configured) {
+          setScreen('account');
+          return;
+        }
+        setScreen('complete');
+      };
+      if (delayComplete) {
+        window.clearTimeout(completionTimer.current);
+        completionTimer.current = window.setTimeout(go, 1200);
+      } else {
+        go();
+      }
+    }
+  }, [setLocale]);
 
   const handleEvent = useCallback((event: InstallerEvent) => {
-    if ('status' in event) setStatus(event.status);
-    if (event.type === 'progress' && ['downloading', 'installing', 'testing'].includes(event.status.phase)) {
-      setScreen('installing');
+    if (event.type === 'snapshot' || event.type === 'progress') {
+      applyStatusScreen(event.status, false);
+      return;
     }
     if (event.type === 'completed') {
-      window.clearTimeout(completionTimer.current);
-      completionTimer.current = window.setTimeout(() => {
-        setScreen(event.status.selected_mail ? 'complete' : 'mail');
-      }, 2000);
+      applyStatusScreen(event.status, true);
+      return;
     }
-  }, []);
+    if (event.type === 'error') {
+      applyStatusScreen(event.status, false);
+    }
+  }, [applyStatusScreen]);
 
   useEffect(() => {
     let disposed = false;
@@ -47,13 +120,12 @@ export default function App() {
     };
     getStatus().then((next) => {
       if (disposed) return;
-      setStatus(next);
-      setSelectedServer(next.selected_server);
-      setSelectedMail(next.selected_mail);
-      if (next.phase === 'ready') setScreen('selection');
-      if (['downloading', 'installing', 'testing', 'failed'].includes(next.phase)) setScreen('installing');
-      if (next.phase === 'completed') setScreen(next.selected_mail ? 'complete' : 'mail');
-    }).catch((error) => setStatus((current) => ({ ...current, phase: 'failed', error: error.message })));
+      applyStatusScreen(next, false);
+    }).catch(() => {
+      if (disposed) return;
+      setStatus((current) => ({ ...current, phase: 'failed', error: t.statusFetchError }));
+      setScreen('installing');
+    });
     connect();
     return () => {
       disposed = true;
@@ -61,36 +133,130 @@ export default function App() {
       window.clearTimeout(reconnectTimer.current);
       window.clearTimeout(completionTimer.current);
     };
-  }, [handleEvent]);
+    // Intentionally omit t.* to avoid remount loops when locale changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleEvent, applyStatusScreen]);
+
+  useEffect(() => {
+    if (skipLanguagePush.current) {
+      skipLanguagePush.current = false;
+      return;
+    }
+    void setLanguage(locale)
+      .then((next) => setStatus(next))
+      .catch(() => undefined);
+  }, [locale]);
 
   const beginServerInstall = async () => {
     if (!selectedServer) return;
     setScreen('installing');
-    setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, selected_server: selectedServer, selected_mail: null }));
-    try { await startServerInstall(selectedServer); }
-    catch (error) { setStatus((current) => ({ ...current, phase: 'failed', error: error instanceof Error ? error.message : 'Error desconocido' })); }
+    setStatus((current) => ({
+      ...current,
+      phase: 'downloading',
+      progress: 0,
+      error: null,
+      selected_server: selectedServer,
+      selected_mail: null,
+    }));
+    try {
+      await startServerInstall(selectedServer);
+    } catch (error) {
+      setStatus((current) => ({
+        ...current,
+        phase: 'failed',
+        error: error instanceof Error ? error.message : t.unknownError,
+      }));
+    }
   };
 
   const beginMailInstall = async () => {
     if (!selectedMail) return;
     setScreen('installing');
-    setStatus((current) => ({ ...current, phase: 'downloading', progress: 0, error: null, selected_mail: selectedMail }));
-    try { await startMailInstall(selectedMail); }
-    catch (error) { setStatus((current) => ({ ...current, phase: 'failed', error: error instanceof Error ? error.message : 'Error desconocido' })); }
+    setStatus((current) => ({
+      ...current,
+      phase: 'downloading',
+      progress: 0,
+      error: null,
+      selected_mail: selectedMail,
+    }));
+    try {
+      await startMailInstall(selectedMail);
+    } catch (error) {
+      setStatus((current) => ({
+        ...current,
+        phase: 'failed',
+        error: error instanceof Error ? error.message : t.unknownError,
+      }));
+    }
   };
+
+  const loginUrl = resolvePanelLoginUrl(status);
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: 'easeInOut' }} className="min-h-screen">
+        <motion.div
+          key={screen}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.45, ease: 'easeInOut' }}
+          className="min-h-screen"
+        >
           {screen === 'preparing' && <PreparingScreen status={status} />}
-          {screen === 'selection' && <ServerSelectionScreen selectedServer={selectedServer} onSelectServer={setSelectedServer} onContinue={beginServerInstall} onOpenCompare={() => setCompareOpen(true)} />}
+          {screen === 'selection' && (
+            <ServerSelectionScreen
+              selectedServer={selectedServer}
+              onSelectServer={setSelectedServer}
+              onContinue={beginServerInstall}
+              onOpenCompare={() => setCompareOpen(true)}
+            />
+          )}
           {screen === 'installing' && <InstallingScreen status={status} />}
-          {screen === 'mail' && <MailSelectionScreen selectedMail={selectedMail} onSelectMail={setSelectedMail} onContinue={beginMailInstall} />}
-          {screen === 'complete' && <CompleteScreen server={status.selected_server} mail={status.selected_mail} />}
+          {screen === 'mail' && (
+            <MailSelectionScreen
+              selectedMail={selectedMail}
+              onSelectMail={setSelectedMail}
+              onContinue={beginMailInstall}
+            />
+          )}
+          {screen === 'account' && (
+            <AccountSetupScreen
+              initialPolicy={status.password_policy ?? DEFAULT_POLICY}
+              language={locale}
+              onCompleted={(nextStatus) => {
+                if (nextStatus) setStatus(nextStatus);
+                setScreen('complete');
+              }}
+            />
+          )}
+          {screen === 'complete' && (
+            <CompleteScreen
+              server={status.selected_server}
+              mail={status.selected_mail}
+              message={status.message}
+              panelLoginUrl={loginUrl}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
-      <CompareModal isOpen={compareOpen} selectedServer={selectedServer} onClose={() => setCompareOpen(false)} onSelectServer={(server) => { setSelectedServer(server); setCompareOpen(false); }} />
+      <CompareModal
+        isOpen={compareOpen}
+        selectedServer={selectedServer}
+        onClose={() => setCompareOpen(false)}
+        onSelectServer={(server) => {
+          setSelectedServer(server);
+          setCompareOpen(false);
+        }}
+      />
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <AppShell />
+    </I18nProvider>
   );
 }

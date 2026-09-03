@@ -47,6 +47,21 @@ pub struct EnvironmentInfo {
     pub addresses: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordPolicy {
+    pub min_length: u8,
+    pub require_special: bool,
+    pub require_uppercase: bool,
+    pub require_number: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AccountPublic {
+    pub username: String,
+    pub recovery_email: String,
+    pub configured: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct InstallerStatus {
     pub phase: &'static str,
@@ -56,6 +71,14 @@ pub struct InstallerStatus {
     pub selected_mail: Option<MailSystem>,
     pub environment: Option<EnvironmentInfo>,
     pub error: Option<String>,
+    pub language: String,
+    pub account: Option<AccountPublic>,
+    pub password_policy: PasswordPolicy,
+    pub panel_login_path: String,
+    pub panel_login_url: Option<String>,
+    pub version: String,
+    /// True after the web server install finished successfully at least once.
+    pub server_ready: bool,
 }
 
 impl Default for InstallerStatus {
@@ -68,6 +91,18 @@ impl Default for InstallerStatus {
             selected_mail: None,
             environment: None,
             error: None,
+            language: "es".into(),
+            account: None,
+            password_policy: PasswordPolicy {
+                min_length: 8,
+                require_special: true,
+                require_uppercase: true,
+                require_number: true,
+            },
+            panel_login_path: "/login".into(),
+            panel_login_url: None,
+            version: env!("CARGO_PKG_VERSION").into(),
+            server_ready: false,
         }
     }
 }
@@ -93,6 +128,27 @@ pub struct MailInstallRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct AccountSetupRequest {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    #[serde(default)]
+    pub generate_password: bool,
+    pub recovery_email: String,
+    pub password_policy: Option<PasswordPolicy>,
+    pub language: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LanguageRequest {
+    pub language: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TokenQuery {
     pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OptionalTokenQuery {
+    pub token: Option<String>,
 }

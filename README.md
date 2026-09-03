@@ -7,7 +7,7 @@
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a web installer for preparing server panel components on AlmaLinux 9. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
+CPN is a web installer for preparing server panel components on AlmaLinux 9 and AlmaLinux 10. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
 ## Project status
 
@@ -17,8 +17,8 @@ The first phase implements the installer flow and is still in development. It cu
 - Selection and installation of SnappyMail, RainLoop, Roundcube, or Thunderbird.
 - Real download, install, and verification progress sent over WebSocket.
 - VPS detection and opening port `8787` in `firewalld` or `ufw` when those are active.
-- RPM packaging for AlmaLinux 9.
-- Service tests in clean AlmaLinux 9.8 containers.
+- RPM packaging for AlmaLinux 9 and AlmaLinux 10.
+- Service tests in clean AlmaLinux containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE`).
 
 Recipes, security, and compatibility still need review before CPN can be considered production-ready.
 
@@ -28,7 +28,7 @@ Recipes, security, and compatibility still need review before CPN can be conside
 - `Panel/`: React and Next.js control panel based on Stitch screens.
 - `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
 - `packaging/`: RPM specification.
-- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9.
+- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9 or 10.
 - `tests/docker-matrix.sh`: functional matrix for web servers and mail clients.
 
 ## Development and validation
@@ -56,13 +56,15 @@ The continuous integration workflow runs these checks on every push and pull req
 
 ## RPM packaging
 
-On AlmaLinux 9:
+On AlmaLinux 9 or AlmaLinux 10:
 
 ```bash
 ./scripts/build-rpm.sh
 sudo dnf install ./target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
 sudo cpn-installer
 ```
+
+The RPM release suffix follows the host distro (`.el9` or `.el10`).
 
 When you run `cpn-installer`, the console immediately prints the full installer web URL, including the reachable IP and a temporary token. The service listens on `0.0.0.0:8787`.
 

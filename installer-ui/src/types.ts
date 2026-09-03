@@ -1,4 +1,10 @@
-export type ScreenType = 'preparing' | 'selection' | 'installing' | 'mail' | 'complete';
+export type ScreenType =
+  | 'preparing'
+  | 'selection'
+  | 'installing'
+  | 'mail'
+  | 'account'
+  | 'complete';
 
 export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
 export type MailSystem = 'snappymail' | 'rainloop' | 'roundcube' | 'thunderbird';
@@ -10,7 +16,8 @@ export type InstallerPhase =
   | 'installing'
   | 'testing'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'account';
 
 export interface EnvironmentInfo {
   is_vps: boolean;
@@ -18,6 +25,19 @@ export interface EnvironmentInfo {
   firewall: string | null;
   port: number;
   addresses: string[];
+}
+
+export interface PasswordPolicy {
+  min_length: number;
+  require_special: boolean;
+  require_uppercase: boolean;
+  require_number: boolean;
+}
+
+export interface AccountPublic {
+  username: string;
+  recovery_email: string;
+  configured: boolean;
 }
 
 export interface InstallerStatus {
@@ -28,6 +48,13 @@ export interface InstallerStatus {
   selected_mail: MailSystem | null;
   environment: EnvironmentInfo | null;
   error: string | null;
+  language?: string;
+  account?: AccountPublic | null;
+  password_policy?: PasswordPolicy;
+  panel_login_path?: string;
+  panel_login_url?: string | null;
+  version?: string;
+  server_ready?: boolean;
 }
 
 export type InstallerEvent =
@@ -36,3 +63,9 @@ export type InstallerEvent =
   | { type: 'log'; line: string; level: 'info' | 'success' | 'error' }
   | { type: 'completed'; status: InstallerStatus }
   | { type: 'error'; status: InstallerStatus };
+
+export interface AccountSetupResponse {
+  account: AccountPublic;
+  generated_password?: string | null;
+  panel_login_url?: string | null;
+}

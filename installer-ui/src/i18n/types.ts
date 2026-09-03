@@ -1,0 +1,88 @@
+export type LocaleCode = 'en' | 'es' | 'nb';
+
+export const SUPPORTED_LOCALES: LocaleCode[] = ['es', 'en', 'nb'];
+
+export function normalizeLocale(raw: string | null | undefined): LocaleCode {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value.startsWith('en')) return 'en';
+  if (value.startsWith('nb') || value === 'no' || value.startsWith('nn')) return 'nb';
+  if (value.startsWith('es')) return 'es';
+  return 'es';
+}
+
+export interface LocaleMessages {
+  languageName: string;
+  languageLabel: string;
+  preparingEyebrow: string;
+  preparingTitle: string;
+  preparingAria: string;
+  initialMessage: string;
+  readyMessage: string;
+  unknownError: string;
+  statusFetchError: string;
+  startServerError: string;
+  startMailError: string;
+  selectServerTitle: string;
+  selectServerIntro: string;
+  selectLabel: string;
+  compareLink: string;
+  compareTitle: string;
+  compareIntro: string;
+  closeLabel: string;
+  continueLabel: string;
+  nothingInstallsYet: string;
+  serverOpenlitespeedDesc: string;
+  serverNginxDesc: string;
+  serverCaddyDesc: string;
+  compareOpenlitespeedDesc: string;
+  compareNginxDesc: string;
+  compareCaddyDesc: string;
+  compareOpenlitespeedFeatures: [string, string, string];
+  compareNginxFeatures: [string, string, string];
+  compareCaddyFeatures: [string, string, string];
+  selectMailTitle: string;
+  selectMailIntro: string;
+  installingTitle: string;
+  installingSubtitle: string;
+  phaseDownloading: string;
+  phaseInstalling: string;
+  phaseTesting: string;
+  phaseFailed: string;
+  completeEyebrow: string;
+  completeTitle: string;
+  completeSummaryBoth: string;
+  completeSummaryServer: string;
+  completeSummaryReady: string;
+  openPanelLogin: string;
+  technicalStatus: string;
+  backToInstaller: string;
+  openingPanelHint: string;
+  accountEyebrow: string;
+  accountTitle: string;
+  accountIntro: string;
+  usernameLabel: string;
+  usernameHint: string;
+  usernamePlaceholder: string;
+  passwordLabel: string;
+  passwordConfirmLabel: string;
+  passwordHint: string;
+  generatePassword: string;
+  useOwnPassword: string;
+  generatedPasswordNote: string;
+  copyPassword: string;
+  copied: string;
+  emailLabel: string;
+  emailHint: string;
+  emailPlaceholder: string;
+  policyTitle: string;
+  policyMinLength: string;
+  policyRequireSpecial: string;
+  policyRequireUpper: string;
+  policyRequireNumber: string;
+  saveAccount: string;
+  accountSaving: string;
+  accountSaved: string;
+  passwordMismatch: string;
+  accountError: string;
+  rainloopLegacyNote: string;
+}
