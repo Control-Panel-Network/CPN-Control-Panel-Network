@@ -2,8 +2,21 @@
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-rpm_path="${1:-$project_dir/target/rpmbuild/RPMS/x86_64/cpn-installer-0.1.0-1.el9.x86_64.rpm}"
-image="almalinux:9.8"
+rpm_path="${1:-}"
+# Default CI/lab image is AlmaLinux 9. For AlmaLinux 10: CPN_TEST_IMAGE=almalinux:10
+image="${CPN_TEST_IMAGE:-almalinux:9.8}"
+
+if [[ -z "$rpm_path" ]]; then
+  shopt -s nullglob
+  candidates=(
+    "$project_dir"/target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
+  )
+  if ((${#candidates[@]} == 0)); then
+    echo "No se encontró el RPM en target/rpmbuild/RPMS/x86_64/" >&2
+    exit 1
+  fi
+  rpm_path="${candidates[0]}"
+fi
 
 if [[ ! -f "$rpm_path" ]]; then
   echo "No se encontró el RPM: $rpm_path" >&2

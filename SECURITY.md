@@ -33,7 +33,7 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a web installer that prepares server components on AlmaLinux 9. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
+CPN is a web installer that prepares server components on AlmaLinux 9 and AlmaLinux 10. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
 
 ### Trust assumptions
 

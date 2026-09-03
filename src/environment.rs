@@ -94,20 +94,16 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
     let port = format!("{}/tcp", environment.port);
     match environment.firewall.as_deref() {
         Some("firewalld") => {
-            for args in [
-                vec!["--add-port", port.as_str()],
-                vec!["--permanent", "--add-port", port.as_str()],
-            ] {
-                let status = Command::new("firewall-cmd")
-                    .args(args)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .await
-                    .map_err(|error| error.to_string())?;
-                if !status.success() {
-                    return Err("firewalld no permitió abrir el puerto del instalador".into());
-                }
+            // Temporary runtime rule only (issue #1). Do not add --permanent.
+            let status = Command::new("firewall-cmd")
+                .args(["--add-port", port.as_str()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !status.success() {
+                return Err("firewalld no permitió abrir el puerto del instalador".into());
             }
         }
         Some("ufw") => {
@@ -120,6 +116,38 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
                 .map_err(|error| error.to_string())?;
             if !status.success() {
                 return Err("ufw no permitió abrir el puerto del instalador".into());
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub async fn close_installer_port(environment: &EnvironmentInfo) -> Result<(), String> {
+    let port = format!("{}/tcp", environment.port);
+    match environment.firewall.as_deref() {
+        Some("firewalld") => {
+            let status = Command::new("firewall-cmd")
+                .args(["--remove-port", port.as_str()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !status.success() {
+                return Err("firewalld no pudo cerrar el puerto del instalador".into());
+            }
+        }
+        Some("ufw") => {
+            let status = Command::new("ufw")
+                .args(["delete", "allow", port.as_str()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !status.success() {
+                return Err("ufw no pudo cerrar el puerto del instalador".into());
             }
         }
         _ => {}

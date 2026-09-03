@@ -1,6 +1,8 @@
 import { ArrowRight, CircleHelp } from 'lucide-react';
 import type { ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
+import { useI18n } from '../i18n';
+import { LanguageSelector } from '../i18n/LanguageSelector';
 
 interface Props {
   selectedServer: ServerEngine | null;
@@ -9,31 +11,28 @@ interface Props {
   onOpenCompare: () => void;
 }
 
-const servers: Array<{ id: ServerEngine; name: string; description: string }> = [
-  {
-    id: 'openlitespeed',
-    name: 'OpenLiteSpeed',
-    description: 'Alto rendimiento y bajo consumo de recursos. Ideal para WordPress y sitios con alto tráfico gracias a su caché integrado (LSCache).',
-  },
-  {
-    id: 'nginx',
-    name: 'Nginx',
-    description: 'El estándar de la industria. Robusto, extremadamente estable y perfecto para servir contenido estático y actuar como proxy inverso.',
-  },
-  {
-    id: 'caddy',
-    name: 'Caddy',
-    description: 'Servidor web moderno con HTTPS automático por defecto. Configuración minimalista y excelente seguridad lista para usar.',
-  },
-];
+export function ServerSelectionScreen({
+  selectedServer,
+  onSelectServer,
+  onContinue,
+  onOpenCompare,
+}: Props) {
+  const { t } = useI18n();
+  const servers: Array<{ id: ServerEngine; name: string; description: string }> = [
+    { id: 'openlitespeed', name: 'OpenLiteSpeed', description: t.serverOpenlitespeedDesc },
+    { id: 'nginx', name: 'Nginx', description: t.serverNginxDesc },
+    { id: 'caddy', name: 'Caddy', description: t.serverCaddyDesc },
+  ];
 
-export function ServerSelectionScreen({ selectedServer, onSelectServer, onContinue, onOpenCompare }: Props) {
   return (
     <div className="min-h-screen px-6 md:px-12 py-16 flex flex-col items-center justify-center max-w-6xl mx-auto w-full">
+      <div className="w-full flex justify-end mb-4"><LanguageSelector /></div>
       <div className="text-center mb-12 w-full">
-        <h1 className="text-[34px] leading-[1.47] font-semibold tracking-tight text-[#1a1c1d] mb-2">Selecciona tu servidor web</h1>
+        <h1 className="text-[34px] leading-[1.47] font-semibold tracking-tight text-[#1a1c1d] mb-2">
+          {t.selectServerTitle}
+        </h1>
         <p className="text-[17px] leading-[1.47] text-[#5f5e60] max-w-2xl mx-auto">
-          Elige el motor web que mejor se adapte a las necesidades de tu proyecto. Podrás cambiarlo más adelante desde el panel.
+          {t.selectServerIntro}
         </p>
       </div>
 
@@ -46,16 +45,21 @@ export function ServerSelectionScreen({ selectedServer, onSelectServer, onContin
               onClick={() => onSelectServer(server.id)}
               className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
             >
-              <div className="mb-6 h-12 flex items-center"><ServerBrandIcon server={server.id} /></div>
+              <div className="mb-6 h-12 flex items-center">
+                <ServerBrandIcon server={server.id} />
+              </div>
               <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{server.name}</h2>
               <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-8 flex-1">{server.description}</p>
               <button
                 type="button"
-                onClick={(event) => { event.stopPropagation(); onSelectServer(server.id); }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectServer(server.id);
+                }}
                 className={`selection-button ${selected ? 'selection-button-active' : ''}`}
                 aria-pressed={selected}
               >
-                Seleccionar
+                {t.selectLabel}
               </button>
             </article>
           );
@@ -63,14 +67,19 @@ export function ServerSelectionScreen({ selectedServer, onSelectServer, onContin
       </div>
 
       <button type="button" onClick={onOpenCompare} className="compare-link mt-8">
-        <CircleHelp size={17} /> ¿No estás seguro de cuál elegir? Compara características
+        <CircleHelp size={17} /> {t.compareLink}
       </button>
 
       <div className="mt-8 flex flex-col items-center gap-3">
-        <button type="button" onClick={onContinue} disabled={!selectedServer} className="primary-button min-w-52">
-          Continuar <ArrowRight size={18} />
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={!selectedServer}
+          className="primary-button min-w-52"
+        >
+          {t.continueLabel} <ArrowRight size={18} />
         </button>
-        <p className="text-sm text-[#667085]">Nada se instalará hasta que pulses Continuar.</p>
+        <p className="text-sm text-[#667085]">{t.nothingInstallsYet}</p>
       </div>
     </div>
   );

@@ -7,16 +7,35 @@ use tokio::{
     sync::{RwLock, broadcast},
 };
 
-fn verify_almalinux() -> Result<(), String> {
+fn almalinux_major() -> Result<u32, String> {
     let release = std::fs::read_to_string("/etc/os-release")
         .map_err(|_| "No se pudo identificar el sistema operativo".to_string())?;
-    if !release
+    let is_almalinux = release
         .lines()
-        .any(|line| line == "ID=almalinux" || line == "ID=\"almalinux\"")
-    {
-        return Err("Esta primera versión solo admite AlmaLinux".into());
+        .any(|line| line == "ID=almalinux" || line == "ID=\"almalinux\"");
+    if !is_almalinux {
+        return Err("Esta versión solo admite AlmaLinux 9 o AlmaLinux 10".into());
     }
-    Ok(())
+    let version = release
+        .lines()
+        .find_map(|line| line.strip_prefix("VERSION_ID="))
+        .map(|value| value.trim_matches('"'))
+        .ok_or_else(|| "No se pudo leer VERSION_ID en /etc/os-release".to_string())?;
+    let major = version
+        .split('.')
+        .next()
+        .and_then(|part| part.parse::<u32>().ok())
+        .ok_or_else(|| format!("VERSION_ID no válida: {version}"))?;
+    if major != 9 && major != 10 {
+        return Err(format!(
+            "AlmaLinux {major} aún no está soportado (se admite 9 y 10)"
+        ));
+    }
+    Ok(major)
+}
+
+fn verify_almalinux() -> Result<(), String> {
+    almalinux_major().map(|_| ())
 }
 
 pub struct AppState {
@@ -187,11 +206,28 @@ async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> 
     Ok(())
 }
 
+fn ephemeral_download_path(filename: &str) -> Result<String, String> {
+    let suffix: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(16)
+        .map(char::from)
+        .collect();
+    let dir = format!("/var/tmp/cpn-dl-{suffix}");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    }
+    Ok(format!("{dir}/{filename}"))
+}
+
 async fn download(
     state: &AppState,
-    url: &'static str,
-    destination: &'static str,
-    label: &'static str,
+    url: &str,
+    destination: &str,
+    label: &str,
     start: u8,
     end: u8,
 ) -> Result<(), String> {
@@ -352,8 +388,11 @@ fn server_recipes(server: ServerEngine) -> Vec<CommandSpec> {
 }
 
 fn prepare_caddy_repository() -> Result<(), String> {
-    const REPOSITORY: &str = "[copr:copr.fedorainfracloud.org:group_caddy:caddy]\nname=Caddy official COPR\nbaseurl=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/epel-9-$basearch/\ntype=rpm-md\nskip_if_unavailable=False\ngpgcheck=1\ngpgkey=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/pubkey.gpg\nrepo_gpgcheck=0\nenabled=1\n";
-    std::fs::write("/etc/yum.repos.d/caddy.repo", REPOSITORY)
+    let major = almalinux_major()?;
+    let repository = format!(
+        "[copr:copr.fedorainfracloud.org:group_caddy:caddy]\nname=Caddy official COPR\nbaseurl=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/epel-{major}-$basearch/\ntype=rpm-md\nskip_if_unavailable=False\ngpgcheck=1\ngpgkey=https://download.copr.fedorainfracloud.org/results/@caddy/caddy/pubkey.gpg\nrepo_gpgcheck=0\nenabled=1\n"
+    );
+    std::fs::write("/etc/yum.repos.d/caddy.repo", repository)
         .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
 }
 
@@ -449,7 +488,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
         Ok::<_, String>(())
     }
     .await;
-    finish(&state, result, server.label()).await;
+    finish(&state, result, server.label(), true).await;
 }
 
 const PHP_PACKAGES: &[&str] = &[
@@ -469,17 +508,30 @@ const PHP_PACKAGES: &[&str] = &[
 ];
 
 async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<(), String> {
-    run_command(
-        state,
-        command(
-            "dnf",
-            vec!["module", "enable", "-y", "php:8.1"],
-            "Preparando PHP 8.1",
-            "downloading",
-            38,
-        ),
-    )
-    .await?;
+    let major = almalinux_major()?;
+    // AlmaLinux 9 uses modular PHP streams. AlmaLinux 10 ships PHP from AppStream
+    // without requiring `dnf module enable php:8.1`.
+    if major == 9 {
+        run_command(
+            state,
+            command(
+                "dnf",
+                vec!["module", "enable", "-y", "php:8.1"],
+                "Preparando PHP 8.1",
+                "downloading",
+                38,
+            ),
+        )
+        .await?;
+    } else {
+        state
+            .progress(
+                "downloading",
+                38,
+                "Usando PHP de AppStream en AlmaLinux 10",
+            )
+            .await;
+    }
     run_command(
         state,
         dnf(
@@ -576,82 +628,139 @@ async fn configure_webmail_service(state: &AppState, root: &'static str) -> Resu
     .await
 }
 
+async fn extract_archive(
+    state: &AppState,
+    program: &str,
+    args: &[&str],
+    description: &str,
+    progress: u8,
+) -> Result<(), String> {
+    state
+        .progress("installing", progress, description.to_string())
+        .await;
+    let status = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map_err(|error| format!("{description}: {error}"))?;
+    if !status.success() {
+        return Err(format!("{description} falló"));
+    }
+    Ok(())
+}
+
 async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), String> {
     std::fs::create_dir_all("/opt/cpn-webmail").map_err(|error| error.to_string())?;
     match mail {
         MailSystem::Snappymail => {
             std::fs::create_dir_all("/opt/cpn-webmail/snappymail")
                 .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz", "/tmp/snappymail.tar.gz", "SnappyMail", 2, 36).await?;
-            install_php_runtime(state, "PHP para SnappyMail").await?;
-            run_command(
+            let archive = ephemeral_download_path("snappymail.tar.gz")?;
+            download(
                 state,
-                command(
-                    "tar",
-                    vec![
-                        "xzf",
-                        "/tmp/snappymail.tar.gz",
-                        "-C",
-                        "/opt/cpn-webmail/snappymail",
-                    ],
-                    "Extrayendo SnappyMail",
-                    "installing",
-                    80,
-                ),
+                "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz",
+                &archive,
+                "SnappyMail",
+                2,
+                36,
             )
             .await?;
+            install_php_runtime(state, "PHP para SnappyMail").await?;
+            extract_archive(
+                state,
+                "tar",
+                &["xzf", &archive, "-C", "/opt/cpn-webmail/snappymail"],
+                "Extrayendo SnappyMail",
+                80,
+            )
+            .await?;
+            let _ = std::fs::remove_file(&archive);
             configure_webmail_service(state, "/opt/cpn-webmail/snappymail").await?;
         }
         MailSystem::Rainloop => {
+            state.log(
+                "RainLoop legacy está marcado como opción heredada; prefer SnappyMail o Roundcube",
+                "info",
+            );
             std::fs::create_dir_all("/opt/cpn-webmail/rainloop")
                 .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip", "/tmp/rainloop.zip", "RainLoop", 2, 36).await?;
-            install_php_runtime(state, "PHP para RainLoop").await?;
-            run_command(
+            let archive = ephemeral_download_path("rainloop.zip")?;
+            download(
                 state,
-                command(
-                    "unzip",
-                    vec!["-o", "/tmp/rainloop.zip", "-d", "/opt/cpn-webmail/rainloop"],
-                    "Extrayendo RainLoop",
-                    "installing",
-                    80,
-                ),
+                "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip",
+                &archive,
+                "RainLoop",
+                2,
+                36,
             )
             .await?;
+            install_php_runtime(state, "PHP para RainLoop").await?;
+            extract_archive(
+                state,
+                "unzip",
+                &["-o", &archive, "-d", "/opt/cpn-webmail/rainloop"],
+                "Extrayendo RainLoop",
+                80,
+            )
+            .await?;
+            let _ = std::fs::remove_file(&archive);
             configure_webmail_service(state, "/opt/cpn-webmail/rainloop").await?;
         }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
                 .map_err(|error| error.to_string())?;
-            download(state, "https://github.com/roundcube/roundcubemail/releases/download/1.7.3/roundcubemail-1.7.3-complete.tar.gz", "/tmp/roundcube.tar.gz", "Roundcube", 2, 36).await?;
-            install_php_runtime(state, "PHP para Roundcube").await?;
-            run_command(
+            let archive = ephemeral_download_path("roundcube.tar.gz")?;
+            download(
                 state,
-                command(
-                    "tar",
-                    vec![
-                        "xzf",
-                        "/tmp/roundcube.tar.gz",
-                        "-C",
-                        "/opt/cpn-webmail/roundcube",
-                        "--strip-components=1",
-                    ],
-                    "Extrayendo Roundcube",
-                    "installing",
-                    80,
-                ),
+                "https://github.com/roundcube/roundcubemail/releases/download/1.7.3/roundcubemail-1.7.3-complete.tar.gz",
+                &archive,
+                "Roundcube",
+                2,
+                36,
             )
             .await?;
+            install_php_runtime(state, "PHP para Roundcube").await?;
+            extract_archive(
+                state,
+                "tar",
+                &[
+                    "xzf",
+                    &archive,
+                    "-C",
+                    "/opt/cpn-webmail/roundcube",
+                    "--strip-components=1",
+                ],
+                "Extrayendo Roundcube",
+                80,
+            )
+            .await?;
+            let _ = std::fs::remove_file(&archive);
             let key: String = rand::rng()
                 .sample_iter(&Alphanumeric)
                 .take(24)
                 .map(char::from)
                 .collect();
             let config = format!(
-                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0646';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
+                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0600';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
             );
             std::fs::write("/opt/cpn-webmail/roundcube/config/config.inc.php", config)
                 .map_err(|error| error.to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let db = Path::new("/opt/cpn-webmail/roundcube/db.sqlite");
+                if !db.exists() {
+                    let _ = std::fs::File::create(db);
+                }
+                let _ = std::fs::set_permissions(db, std::fs::Permissions::from_mode(0o600));
+                let _ = std::fs::set_permissions(
+                    "/opt/cpn-webmail/roundcube/config/config.inc.php",
+                    std::fs::Permissions::from_mode(0o640),
+                );
+            }
             configure_webmail_service(state, "/opt/cpn-webmail/roundcube/public_html").await?;
         }
         MailSystem::Thunderbird => unreachable!(),
@@ -737,13 +846,21 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
         Ok::<_, String>(())
     }
     .await;
-    finish(&state, result, mail.label()).await;
+    finish(&state, result, mail.label(), false).await;
 }
 
-async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
+async fn finish(
+    state: &AppState,
+    result: Result<(), String>,
+    label: &str,
+    mark_server_ready: bool,
+) {
     let mut status = state.status.write().await;
     match result {
         Ok(()) => {
+            if mark_server_ready {
+                status.server_ready = true;
+            }
             status.phase = "completed";
             status.progress = 100;
             status.message = format!("{label} se instaló y verificó correctamente");
@@ -765,12 +882,17 @@ async fn finish(state: &AppState, result: Result<(), String>, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::fraction;
+    use super::{almalinux_major, fraction};
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {
         assert_eq!(fraction("(3/8): package.rpm"), Some((3, 8)));
         assert_eq!(fraction("Installing : package 5/7"), Some((5, 7)));
         assert_eq!(fraction("No package progress here"), None);
+    }
+
+    #[test]
+    fn almalinux_major_is_callable() {
+        let _ = almalinux_major();
     }
 }

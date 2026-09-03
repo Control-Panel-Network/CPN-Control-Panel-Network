@@ -1,0 +1,4 @@
+*.sh text eol=lf
+*.spec text eol=lf
+scripts/** text eol=lf
+tests/** text eol=lf
