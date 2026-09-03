@@ -161,13 +161,15 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
 }
 
 fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
-    // TCP loopback avoids unix-socket ownership mismatches across nginx/caddy/ols.
+    // Unix socket under /run/php-fpm (SELinux-friendly). Mode 0666 lets nginx/caddy/ols connect.
     let pool = format!(
         "[cpn-webmail]\n\
          user = cpn-webmail\n\
          group = cpn-webmail\n\
-         listen = 127.0.0.1:9001\n\
-         listen.allowed_clients = 127.0.0.1\n\
+         listen = /run/php-fpm/cpn-webmail.sock\n\
+         listen.owner = root\n\
+         listen.group = root\n\
+         listen.mode = 0666\n\
          pm = ondemand\n\
          pm.max_children = 8\n\
          pm.process_idle_timeout = 10s\n\
@@ -177,6 +179,9 @@ fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
          php_admin_flag[allow_url_fopen] = off\n"
     );
     install_journal::write_file_tracked(STAGE, Path::new(FPM_POOL), &pool)?;
+    let _ = std::process::Command::new("restorecon")
+        .args(["-v", FPM_POOL])
+        .status();
     Ok(())
 }
 
@@ -234,7 +239,7 @@ fn configure_nginx_proxy(docroot: &str) -> Result<(), String> {
            location ~ \\.php$ {{\n\
              include fastcgi_params;\n\
              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
-             fastcgi_pass 127.0.0.1:9001;\n\
+             fastcgi_pass unix:/run/php-fpm/cpn-webmail.sock;\n\
            }}\n\
            location ~ /(\\.|config|temp|logs|data) {{\n\
              deny all;\n\
@@ -251,7 +256,7 @@ fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
         "# Managed by CPN (issue #6)\n\
          http://127.0.0.1:8888 {{\n\
            root * {docroot}\n\
-           php_fastcgi 127.0.0.1:9001\n\
+           php_fastcgi unix//run/php-fpm/cpn-webmail.sock\n\
            file_server\n\
          }}\n"
     );
@@ -286,7 +291,7 @@ fn configure_ols_proxy(docroot: &str) -> Result<(), String> {
          }}\n\
          extprocessor cpnphp {{\n\
            type                    fcgi\n\
-           address                 127.0.0.1:9001\n\
+           address                 uds://run/php-fpm/cpn-webmail.sock\n\
            maxConns                8\n\
            initTimeout             60\n\
            retryTimeout            0\n\
@@ -367,9 +372,9 @@ mod tests {
     }
 
     #[test]
-    fn pool_config_mentions_loopback_fpm() {
-        let sample = "listen = 127.0.0.1:9001";
-        assert!(sample.contains("127.0.0.1:9001"));
+    fn pool_config_uses_unix_socket() {
+        let sample = "listen = /run/php-fpm/cpn-webmail.sock";
+        assert!(sample.contains("cpn-webmail.sock"));
         assert!(!sample.contains("php -S"));
     }
 }
