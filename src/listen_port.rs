@@ -106,9 +106,7 @@ pub fn print_installer_help(version: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::account::DATA_DIR_TEST_LOCK;
 
     #[test]
     fn default_port_is_2087() {
@@ -129,11 +127,10 @@ mod tests {
 
     #[test]
     fn cli_port_overrides_env_and_default() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        // SAFETY: serialized by ENV_LOCK for this test module.
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        // SAFETY: serialized with other CPN_DATA_DIR / env tests via DATA_DIR_TEST_LOCK.
         unsafe {
             env::remove_var("CPN_LISTEN_PORT");
-            env::remove_var("CPN_DATA_DIR");
         }
         let args = vec!["cpn-installer".into(), "--port".into(), "9443".into()];
         assert_eq!(resolve_listen_port(&args).unwrap(), 9443);
@@ -141,23 +138,17 @@ mod tests {
 
     #[test]
     fn env_port_used_without_cli() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!("cpn-listen-port-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        // SAFETY: serialized by ENV_LOCK for this test module.
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        // SAFETY: serialized with other CPN_DATA_DIR / env tests via DATA_DIR_TEST_LOCK.
         unsafe {
-            env::set_var("CPN_DATA_DIR", &dir);
             env::set_var("CPN_LISTEN_PORT", "3333");
         }
         let args = vec!["cpn-installer".into()];
         let result = resolve_listen_port(&args);
-        // SAFETY: serialized by ENV_LOCK for this test module.
+        // SAFETY: serialized with other CPN_DATA_DIR / env tests via DATA_DIR_TEST_LOCK.
         unsafe {
             env::remove_var("CPN_LISTEN_PORT");
-            env::remove_var("CPN_DATA_DIR");
         }
-        let _ = fs::remove_dir_all(&dir);
         assert_eq!(result.unwrap(), 3333);
     }
 }
