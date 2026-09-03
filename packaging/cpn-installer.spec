@@ -12,7 +12,7 @@ Requires:       dnf
 Requires:       curl
 
 %description
-Instalador local con interfaz web para preparar CPN Server Panel en AlmaLinux 9 y AlmaLinux 10.
+Instalador local con interfaz web para preparar CPN Server Panel en invitados Linux alineados con CyberPanel (AlmaLinux/Rocky/RHEL y afines; ver to-do/OS-SUPPORT-MATRIX.md).
 
 %prep
 

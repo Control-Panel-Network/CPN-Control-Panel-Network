@@ -13,11 +13,17 @@ fi
 # shellcheck disable=SC1091
 source /etc/os-release
 major="${VERSION_ID%%.*}"
-if [[ "${ID:-}" != "almalinux" ]] || [[ "$major" != "9" && "$major" != "10" ]]; then
-  echo "Este empaquetado debe ejecutarse dentro de AlmaLinux 9 o AlmaLinux 10 (detectado: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
-  echo "En hosts que no son AlmaLinux, construye el RPM con: ./scripts/docker-build-rpm.sh" >&2
-  echo "Luego ejecuta el instalador en contenedor con: ./scripts/docker-run.sh" >&2
-  echo "Documentación: to-do/DOCKER-INSTALL.md" >&2
+# RHEL-family RPM build hosts (CyberPanel-aligned EL guests).
+allowed_ids=(almalinux rocky rhel centos cloudlinux)
+id_ok=0
+for candidate in "${allowed_ids[@]}"; do
+  if [[ "${ID:-}" == "$candidate" ]]; then id_ok=1; break; fi
+done
+if [[ "$id_ok" -ne 1 ]] || [[ "$major" != "8" && "$major" != "9" && "$major" != "10" ]]; then
+  echo "Este empaquetado RPM debe ejecutarse en AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10 (detectado: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
+  echo "En otros hosts, construye el RPM con: ./scripts/docker-build-rpm.sh" >&2
+  echo "En Ubuntu, prueba el helper experimental: ./scripts/build-deb.sh" >&2
+  echo "Matriz: to-do/OS-SUPPORT-MATRIX.md" >&2
   exit 1
 fi
 

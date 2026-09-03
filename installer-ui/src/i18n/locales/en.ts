@@ -14,7 +14,7 @@ const en: LocaleMessages = {
   startMailError: 'Could not start the mail installation',
   selectServerTitle: 'Choose your web server',
   selectServerIntro:
-    'Pick the web engine that best fits your project. You can change it later from the panel.',
+    'Pick the web engine that best fits your project. Supported Linux guests follow the CyberPanel matrix (AlmaLinux, Rocky, Ubuntu, and related EL targets). Windows Server and hypervisors host those guests; they are not native panel installs. You can change the engine later from the panel.',
   selectLabel: 'Select',
   compareLink: 'Not sure which one to pick? Compare features',
   compareTitle: 'Web server comparison',

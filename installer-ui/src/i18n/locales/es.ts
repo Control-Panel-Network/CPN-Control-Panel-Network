@@ -14,7 +14,7 @@ const es: LocaleMessages = {
   startMailError: 'No se pudo iniciar la instalación del correo',
   selectServerTitle: 'Selecciona tu servidor web',
   selectServerIntro:
-    'Elige el motor web que mejor se adapte a las necesidades de tu proyecto. Podrás cambiarlo más adelante desde el panel.',
+    'Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos siguen la matriz CyberPanel (AlmaLinux, Rocky, Ubuntu y EL relacionados). Windows Server e hipervisores alojan esos invitados; no son una instalación nativa del panel. Podrás cambiar el motor más adelante desde el panel.',
   selectLabel: 'Seleccionar',
   compareLink: '¿No estás seguro de cuál elegir? Compara características',
   compareTitle: 'Comparativa de servidores web',
