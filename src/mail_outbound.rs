@@ -13,6 +13,7 @@ pub struct OutboundMessage {
     pub body: String,
 }
 
+#[allow(dead_code)]
 pub fn smtp_is_ready() -> bool {
     load_smtp()
         .map(|settings| {
@@ -22,6 +23,7 @@ pub fn smtp_is_ready() -> bool {
 }
 
 /// Best-effort SMTP send. Returns Ok when the remote accepted the message.
+#[allow(dead_code)]
 pub fn send_mail(message: &OutboundMessage) -> Result<(), String> {
     let Some(settings) = load_smtp() else {
         return Err("SMTP is not configured".into());

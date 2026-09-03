@@ -91,16 +91,15 @@ pub async fn forgot_password_submit(
         }
     };
 
-    if let Some(boot) = load_bootstrap() {
-        if identifier_matches_account(&boot.username, &boot.recovery_email, &identifier) {
-            if let Some(settings) = crate::smtp_settings::load_smtp() {
-                let status = state.status.read().await.clone();
-                let login_url = panel_login_url_for(&status, &state.token);
-                let mut message = build_password_reset_notice(&login_url);
-                message.to = boot.recovery_email.clone();
-                let _ = send_mail_with_settings(&settings, &message);
-            }
-        }
+    if let Some(boot) = load_bootstrap()
+        && identifier_matches_account(&boot.username, &boot.recovery_email, &identifier)
+        && let Some(settings) = crate::smtp_settings::load_smtp()
+    {
+        let status = state.status.read().await.clone();
+        let login_url = panel_login_url_for(&status, &state.token);
+        let mut message = build_password_reset_notice(&login_url);
+        message.to = boot.recovery_email.clone();
+        let _ = send_mail_with_settings(&settings, &message);
     }
 
     HttpResponse::Ok()
