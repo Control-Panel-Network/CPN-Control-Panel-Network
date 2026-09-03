@@ -79,7 +79,6 @@ const nb: LocaleMessages = {
   accountSaved: 'Konto lagret',
   passwordMismatch: 'Passordene er ikke like',
   accountError: 'Kunne ikke lagre kontoen',
-  rainloopLegacyNote: 'Eldre alternativ. Foretrekk SnappyMail eller Roundcube for nye installasjoner.',
 };
 
 export default nb;

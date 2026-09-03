@@ -79,7 +79,6 @@ const es: LocaleMessages = {
   accountSaved: 'Cuenta guardada',
   passwordMismatch: 'Las contraseñas no coinciden',
   accountError: 'No se pudo guardar la cuenta',
-  rainloopLegacyNote: 'Opción heredada. Prefiere SnappyMail o Roundcube en instalaciones nuevas.',
 };
 
 export default es;

@@ -79,7 +79,6 @@ const en: LocaleMessages = {
   accountSaved: 'Account saved',
   passwordMismatch: 'Passwords do not match',
   accountError: 'Could not save the account',
-  rainloopLegacyNote: 'Legacy option. Prefer SnappyMail or Roundcube for new installs.',
 };
 
 export default en;

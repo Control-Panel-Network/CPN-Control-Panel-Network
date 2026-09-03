@@ -7,7 +7,7 @@ export type ScreenType =
   | 'complete';
 
 export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
-export type MailSystem = 'snappymail' | 'rainloop' | 'roundcube' | 'thunderbird';
+export type MailSystem = 'snappymail' | 'roundcube' | 'thunderbird';
 
 export type InstallerPhase =
   | 'preparing'
@@ -56,6 +56,7 @@ export interface InstallerStatus {
   panel_login_url?: string | null;
   version?: string;
   server_ready?: boolean;
+  mail_releases?: Array<{ id: string; label: string; version: string; released_on: string }>;
 }
 
 export type InstallerEvent =

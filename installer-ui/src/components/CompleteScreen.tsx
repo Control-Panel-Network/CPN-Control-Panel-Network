@@ -11,7 +11,6 @@ const SERVER_LABELS: Record<ServerEngine, string> = {
 
 const MAIL_LABELS: Record<MailSystem, string> = {
   snappymail: 'SnappyMail',
-  rainloop: 'RainLoop',
   roundcube: 'Roundcube',
   thunderbird: 'Thunderbird',
 };
