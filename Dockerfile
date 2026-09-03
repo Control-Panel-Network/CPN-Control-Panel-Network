@@ -36,6 +36,6 @@ RUN dnf -y install /tmp/cpn-installer.rpm \
 COPY packaging/cpn-installer.service /etc/systemd/system/cpn-installer.service
 RUN systemctl enable cpn-installer.service
 
-EXPOSE 8787
+EXPOSE 2087
 STOPSIGNAL SIGRTMIN+3
 CMD ["/usr/lib/systemd/systemd"]

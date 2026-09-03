@@ -33,7 +33,7 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a Linux web installer that prepares server components on CyberPanel-aligned guests (AlmaLinux 8-10, Rocky 8-9, Ubuntu 20.04/22.04/24.04, and related EL targets; see to-do/OS-SUPPORT-MATRIX.md). Packaging today centers on RPM (and experimental .deb). Privileged Docker/Podman Alma images remain supported. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. By default the installer listens on `127.0.0.1:8787` and prints a temporary access token in the console URL. Use SSH port forwarding for remote access, or pass `--allow-remote` / `CPN_ALLOW_REMOTE=1` to bind `0.0.0.0` (HTTP without TLS; operator opt-in only).
+CPN is a Linux web installer that prepares server components on CyberPanel-aligned guests (AlmaLinux 8-10, Rocky 8-9, Ubuntu 20.04/22.04/24.04, and related EL targets; see to-do/OS-SUPPORT-MATRIX.md). Packaging today centers on RPM (and experimental .deb). Privileged Docker/Podman Alma images remain supported. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. By default the installer listens on `127.0.0.1:2087` and prints a temporary access token in the console URL. Use SSH port forwarding for remote access, or pass `--allow-remote` / `CPN_ALLOW_REMOTE=1` to bind `0.0.0.0` (HTTP without TLS; operator opt-in only).
 
 ### Trust assumptions
 
@@ -47,7 +47,7 @@ CPN is a Linux web installer that prepares server components on CyberPanel-align
 - Unauthenticated or weakly authenticated access to installer actions when a token is required
 - Unsafe handling of download URLs, package install steps, or scripts that could lead to unexpected remote code execution beyond the operator’s intent
 - Secrets or credentials committed to the repository
-- Misleading firewall or network exposure of port `8787` without clear operator control
+- Misleading firewall or network exposure of port `2087` without clear operator control
 
 ### Out of scope (typical)
 
@@ -59,7 +59,7 @@ CPN is a Linux web installer that prepares server components on CyberPanel-align
 
 - Do **not** publish the temporary token that appears in the installer URL.
 - Prefer a dedicated test VPS or VM while CPN is unfinished.
-- Close or restrict port `8787` when you are done with an install session.
+- Close or restrict port `2087` when you are done with an install session.
 - Stop the installer process when finished so the temporary UI is no longer reachable.
 
 ## Incident response (lightweight checklist)

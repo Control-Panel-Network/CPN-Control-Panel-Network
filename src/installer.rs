@@ -18,6 +18,8 @@ pub struct AppState {
     pub status: RwLock<InstallerStatus>,
     pub events: broadcast::Sender<InstallerEvent>,
     pub token: String,
+    /// TCP port this process actually bound (may differ from a saved preference).
+    pub bind_port: u16,
 }
 
 impl AppState {

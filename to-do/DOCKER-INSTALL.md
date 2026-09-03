@@ -13,12 +13,12 @@ The installer still requires an AlmaLinux 9 or 10 userland. Docker does not remo
 - Docker or Podman
 - Privileged containers with systemd as PID 1
 - Host cgroup mount (`/sys/fs/cgroup`)
-- Port `8787` free on the host (override with `CPN_PORT`)
+- Port `2087` free on the host (override with `CPN_PORT`)
 
 ## Security warnings
 
 - The container must run **privileged**. That grants broad host access. Use only on dedicated lab or test machines.
-- Do not expose `8787` to the public internet. The installer prints a temporary token; treat it as a secret.
+- Do not expose `2087` to the public internet. The installer prints a temporary token; treat it as a secret.
 - Package installs (`dnf`) and service starts run inside the container guest, not on a locked-down unprivileged sandbox.
 
 ## Quick start from Docker Hub
@@ -35,7 +35,7 @@ docker pull master3395/cpn-installer:almalinux10
 
 # Run (privileged + systemd; same flags as scripts/docker-run.sh)
 docker run -d --privileged --cgroupns=host --name cpn-installer \
-  -p 8787:8787 \
+  -p 2087:2087 \
   --tmpfs /run --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   -e container=docker \
@@ -47,7 +47,7 @@ docker exec cpn-installer systemctl restart cpn-installer
 docker exec cpn-installer journalctl -u cpn-installer -n 50 --no-pager
 ```
 
-With Podman, replace `docker` with `podman`. Open `http://127.0.0.1:8787/` and check the journal for the `?token=` URL.
+With Podman, replace `docker` with `podman`. Open `http://127.0.0.1:2087/` and check the journal for the `?token=` URL.
 
 ## Quick start (build locally from this repo)
 
@@ -61,7 +61,7 @@ From the repository root on a machine with Docker or Podman:
 CPN_ALMA_VERSION=10 ./scripts/docker-run.sh
 
 # Custom host port
-CPN_PORT=8788 ./scripts/docker-run.sh
+CPN_PORT=2088 ./scripts/docker-run.sh
 ```
 
 If no RPM exists under `target/rpmbuild/RPMS/`, `docker-run.sh` calls `scripts/docker-build-rpm.sh` first (builds the RPM inside AlmaLinux).
@@ -88,7 +88,7 @@ docker build --build-arg ALMA_VERSION=9 -t cpn-installer:el9 .
 
 # 3) Run with systemd (same flags as tests/docker-matrix.sh)
 docker run -d --privileged --cgroupns=host --name cpn-installer \
-  -p 8787:8787 \
+  -p 2087:2087 \
   --tmpfs /run --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   -e container=docker \
@@ -117,7 +117,8 @@ Compose also uses `privileged: true` and mounts `/sys/fs/cgroup`. Prefer `script
 | Variable | Default | Purpose |
 |---|---|---|
 | `CPN_ALMA_VERSION` | `9` | AlmaLinux major (`9` or `10`) |
-| `CPN_PORT` | `8787` | Host port mapped to container `8787` |
+| `CPN_PORT` | `2087` | Host port mapped to container `2087` |
+| `CPN_LISTEN_PORT` | `2087` | Inside the guest/container: installer bind port (`cpn-installer --port`) |
 | `CPN_CONTAINER_NAME` | `cpn-installer` | Container name |
 | `CPN_CONTAINER_ENGINE` | auto (`docker` or `podman`) | Force engine |
 | `CPN_RPM_PATH` | auto-discover | Path to an existing RPM |

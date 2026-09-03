@@ -15,6 +15,14 @@ const en: LocaleMessages = {
   selectServerTitle: 'Choose your web server',
   selectServerIntro:
     'Pick the web engine that best fits your project. Supported Linux guests follow the CyberPanel matrix (AlmaLinux, Rocky, Ubuntu, and related EL targets). Windows Server and hypervisors host those guests; they are not native panel installs. You can change the engine later from the panel.',
+  listenPortLabel: 'Installer listen port',
+  listenPortHint:
+    'Default is 2087 (Cloudflare-friendly, same family as cPanel WHM HTTPS). Lab installs may use another free port such as 8787. Ports below 1024 usually need root.',
+  listenPortApply: 'Save port',
+  listenPortSaved: 'Listen port preference saved.',
+  listenPortRestartHint:
+    'Port saved. Restart the installer with --port {port} to apply. This session stays on the current port.',
+  listenPortInvalid: 'Enter a port between 1 and 65535.',
   selectLabel: 'Select',
   compareLink: 'Not sure which one to pick? Compare features',
   compareTitle: 'Web server comparison',

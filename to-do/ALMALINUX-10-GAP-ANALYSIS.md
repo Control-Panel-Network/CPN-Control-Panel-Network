@@ -1,11 +1,11 @@
-﻿# AlmaLinux 10 gap analysis (CPN)
+# AlmaLinux 10 gap analysis (CPN)
 
 Date: 03/09/2026
 
 ## Environment
 
 - Host: Windows + VirtualBox 7.2.8
-- Guests: `CPN-AlmaLinux-9` (SSH `2222`, UI `8787`) and `CPN-AlmaLinux-10` (SSH `2223`, UI `8788`)
+- Guests: `CPN-AlmaLinux-9` (SSH `2222`, UI `2087`) and `CPN-AlmaLinux-10` (SSH `2223`, UI `2088`)
 - Repo: `d:\OneDrive - v-man\Dokumenter\GitHub\CPN-Control-Panel-Network`
 - Lab credentials: `D:\OneDrive - v-man\Priv\VirtualBox VMs\CPN-lab-credentials.txt`
 
@@ -29,7 +29,7 @@ Date: 03/09/2026
 
 - Built: `cpn-installer-0.1.0-1.el10.x86_64.rpm`
 - Installed RPM and started `cpn-installer`
-- Host UI: `http://127.0.0.1:8788/?token=...`
+- Host UI: `http://127.0.0.1:2088/?token=...`
 - Nginx recipe `phase=completed`; `systemctl nginx` active; default page served
 - Browser: mail-selection screen after nginx completion
 
@@ -40,7 +40,7 @@ Date: 03/09/2026
 - Node 22 + rustup installed in guest
 - Built from patched sources: `cpn-installer-0.1.0-1.el9.x86_64.rpm`
 - Also produced el9 RPM via podman `almalinux:9.8` on the AL10 host as a cross-check
-- Host UI: `http://127.0.0.1:8787/?token=...`
+- Host UI: `http://127.0.0.1:2087/?token=...`
 - Nginx recipe `phase=completed`; nginx active; host API status completed
 - Browser: mail-selection screen after nginx completion
 

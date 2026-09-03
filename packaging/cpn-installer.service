@@ -6,10 +6,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Default listen port is 2087. Override with --port, Environment=CPN_LISTEN_PORT=, or
+# a preference saved from the installer UI under /var/lib/cpn/listen_port.
+# Bind is 127.0.0.1 unless --allow-remote / CPN_ALLOW_REMOTE=1.
 ExecStart=/usr/bin/cpn-installer
 Restart=on-failure
 RestartSec=3
-# Installer binds 0.0.0.0:8787 and prints a temporary token URL.
 StandardOutput=journal
 StandardError=journal
 

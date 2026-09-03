@@ -15,6 +15,14 @@ const nb: LocaleMessages = {
   selectServerTitle: 'Velg webserver',
   selectServerIntro:
     'Velg motoren som passer prosjektet ditt. StÃ¸ttede Linux-gjester fÃ¸lger CyberPanel-matrisen (AlmaLinux, Rocky, Ubuntu og relaterte EL-mÃ¥l). Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.',
+  listenPortLabel: 'Lytteport for installasjonsprogrammet',
+  listenPortHint:
+    'Standard er 2087 (Cloudflare-vennlig, samme familie som cPanel WHM HTTPS). Lab kan bruke en annen ledig port, for eksempel 8787. Porter under 1024 krever vanligvis root.',
+  listenPortApply: 'Lagre port',
+  listenPortSaved: 'Portpreferanse lagret.',
+  listenPortRestartHint:
+    'Port lagret. Start installasjonsprogrammet pÃ¥ nytt med --port {port} for Ã¥ bruke den. Denne Ã¸kten blir pÃ¥ gjeldende port.',
+  listenPortInvalid: 'Skriv inn en port mellom 1 og 65535.',
   selectLabel: 'Velg',
   compareLink: 'Usikker pÃ¥ valget? Sammenlign funksjoner',
   compareTitle: 'Sammenligning av webservere',

@@ -15,6 +15,14 @@ const es: LocaleMessages = {
   selectServerTitle: 'Selecciona tu servidor web',
   selectServerIntro:
     'Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos siguen la matriz CyberPanel (AlmaLinux, Rocky, Ubuntu y EL relacionados). Windows Server e hipervisores alojan esos invitados; no son una instalaciÃ³n nativa del panel. PodrÃ¡s cambiar el motor mÃ¡s adelante desde el panel.',
+  listenPortLabel: 'Puerto de escucha del instalador',
+  listenPortHint:
+    'El valor por defecto es 2087 (compatible con Cloudflare, misma familia que WHM HTTPS de cPanel). En laboratorio puedes usar otro puerto libre, por ejemplo 8787. Los puertos bajo 1024 suelen requerir root.',
+  listenPortApply: 'Guardar puerto',
+  listenPortSaved: 'Preferencia de puerto guardada.',
+  listenPortRestartHint:
+    'Puerto guardado. Reinicia el instalador con --port {port} para aplicarlo. Esta sesiÃ³n sigue en el puerto actual.',
+  listenPortInvalid: 'Introduce un puerto entre 1 y 65535.',
   selectLabel: 'Seleccionar',
   compareLink: 'Â¿No estÃ¡s seguro de cuÃ¡l elegir? Compara caracterÃ­sticas',
   compareTitle: 'Comparativa de servidores web',

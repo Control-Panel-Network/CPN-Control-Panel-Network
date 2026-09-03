@@ -57,16 +57,16 @@ Status meanings (match `src/os_support.rs`):
 
 Existing CPN lab VMs (examples):
 
-- `CPN-AlmaLinux-9`: host SSH `2222`, installer UI `8787`
-- `CPN-AlmaLinux-10`: host SSH `2223`, installer UI `8788`
+- `CPN-AlmaLinux-9`: host SSH `2222`, installer UI `2087` (guest listens on `2087`)
+- `CPN-AlmaLinux-10`: host SSH `2223`, installer UI `2088` (host forward to guest `2087`)
 
-Typical NAT port forwards: guest `22` → host `2222`/`2223`, guest `8787` → host `8787`/`8788`. Prefer SFTP/tarball into the guest if `vboxsf` or Guest Additions modules fail on some Alma kernels.
+Typical NAT port forwards: guest `22` → host `2222`/`2223`, guest `2087` → host `2087` (AL9) or host `2088` (AL10). Older labs that forwarded guest `8787` should update VirtualBox NAT rules to `2087` (or keep a temporary host `8787`→guest `2087` bridge while migrating). Prefer SFTP/tarball into the guest if `vboxsf` or Guest Additions modules fail on some Alma kernels.
 
 Credentials for local labs stay outside the repo (private path), never committed.
 
 ### Hyper-V (Windows host / Windows Server)
 
-CyberPanel maintains a Hyper-V lab under `cyberpanel/test/hyperv/` (AlmaLinux-oriented smoke helpers). CPN can reuse the same idea: Generation 2 VM, nested virtualization only if you nest further hypervisors, and external or NAT switch with forwarded `22` / `8787`.
+CyberPanel maintains a Hyper-V lab under `cyberpanel/test/hyperv/` (AlmaLinux-oriented smoke helpers). CPN can reuse the same idea: Generation 2 VM, nested virtualization only if you nest further hypervisors, and external or NAT switch with forwarded `22` / `2087`.
 
 CPN does not ship Hyper-V scripts in this PR. Optional follow-up: mirror a thin `to-do/hyperv/` helper modeled on CyberPanel’s `up.ps1`.
 

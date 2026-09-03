@@ -5,14 +5,17 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    PORT, VERSION, authorized, enrich_status, install_finished, normalize_language,
-    panel_login_url_for, smtp_status_public, token_matches, wants_html,
+    VERSION, authorized, enrich_status, install_finished, normalize_language, panel_login_url_for,
+    smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
+use cpn_installer::listen_port::{
+    resolve_listen_port, save_preferred_listen_port, validate_listen_port,
+};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
-    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, MailInstallRequest,
-    OptionalTokenQuery, TokenQuery,
+    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
+    MailInstallRequest, OptionalTokenQuery, TokenQuery,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -112,6 +115,52 @@ async fn set_language(
     current.language = language;
     let payload = enrich_status(current.clone(), &state.token);
     HttpResponse::Ok().json(payload)
+}
+
+#[post("/api/listen-port")]
+async fn set_listen_port(
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<ListenPortRequest>,
+) -> HttpResponse {
+    if !authorized(&state, &query) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let port = match validate_listen_port(request.port) {
+        Ok(value) => value,
+        Err(error) => {
+            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+        }
+    };
+    if let Err(error) = save_preferred_listen_port(port) {
+        return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+    }
+
+    let restart_required = port != state.bind_port;
+    let mut current = state.status.write().await;
+    if !restart_required {
+        current.listen_port = port;
+        if let Some(env_info) = current.environment.as_mut() {
+            env_info.port = port;
+        }
+        current.panel_login_url = None;
+    }
+    let payload = enrich_status(current.clone(), &state.token);
+    let note = if restart_required {
+        format!(
+            "Preferred listen port {port} saved. Restart with: cpn-installer --port {port} (current session stays on {})",
+            state.bind_port
+        )
+    } else {
+        format!("Listen port {port} confirmed for this session")
+    };
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": payload,
+        "listen_port": state.bind_port,
+        "preferred_listen_port": port,
+        "restart_required": restart_required,
+        "message": note,
+    }))
 }
 
 #[post("/api/install/server")]
@@ -289,6 +338,21 @@ async fn main() -> std::io::Result<()> {
         }
         return Ok(());
     }
+
+    let listen_port = match resolve_listen_port(&args) {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("cpn-installer: {error}");
+            std::process::exit(2);
+        }
+    };
+    if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
+        eprintln!(
+            "Aviso: el puerto {listen_port} es privilegiado (<1024). Suele requerir root, o elige un puerto >1024 (por defecto {}).",
+            cpn_installer::listen_port::DEFAULT_PORT
+        );
+    }
+
     println!("\nCPN Server Panel · Instalador {VERSION}");
     println!("Iniciando el instalador web...\n");
     let token: String = rand::rng()
@@ -296,7 +360,7 @@ async fn main() -> std::io::Result<()> {
         .take(28)
         .map(char::from)
         .collect();
-    let environment = cpn_installer::environment::inspect(PORT).await;
+    let environment = cpn_installer::environment::inspect(listen_port).await;
     let remote = allow_remote_listen();
     if remote {
         match cpn_installer::environment::open_installer_port(&environment).await {
@@ -333,6 +397,7 @@ async fn main() -> std::io::Result<()> {
         environment: Some(environment.clone()),
         error: None,
         language: "en".into(),
+        listen_port,
         account: bootstrap_account,
         password_policy: default_password_policy(),
         panel_login_path: "/login".into(),
@@ -352,24 +417,26 @@ async fn main() -> std::io::Result<()> {
         status: tokio::sync::RwLock::new(initial),
         events,
         token: token.clone(),
+        bind_port: listen_port,
     });
     println!("✓ El instalador web está listo para empezar:");
     if remote {
-        println!("  Modo --allow-remote: escucha en 0.0.0.0:{PORT} (HTTP sin TLS).");
+        println!("  Modo --allow-remote: escucha en 0.0.0.0:{listen_port} (HTTP sin TLS).");
         if environment.addresses.is_empty() {
-            println!("  http://127.0.0.1:{PORT}/?token={token}");
+            println!("  http://127.0.0.1:{listen_port}/?token={token}");
         } else {
             for address in &environment.addresses {
-                println!("  http://{address}:{PORT}/?token={token}");
+                println!("  http://{address}:{listen_port}/?token={token}");
             }
         }
     } else {
-        println!("  http://127.0.0.1:{PORT}/?token={token}");
+        println!("  http://127.0.0.1:{listen_port}/?token={token}");
         println!(
-            "  Acceso remoto recomendado vía túnel SSH, por ejemplo:\n  ssh -L {PORT}:127.0.0.1:{PORT} user@host"
+            "  Acceso remoto recomendado vía túnel SSH, por ejemplo:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
         );
         println!("  Para escuchar en todas las interfaces: --allow-remote o CPN_ALLOW_REMOTE=1");
     }
+    println!("  Puerto de escucha: {listen_port} (cambia con --port, CPN_LISTEN_PORT, o la UI)");
     println!("\nMantén esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
     let hosts = listen_hosts();
     let mut server = HttpServer::new(move || {
@@ -383,6 +450,7 @@ async fn main() -> std::io::Result<()> {
             .service(forgot_password_page)
             .service(forgot_password_submit)
             .service(set_language)
+            .service(set_listen_port)
             .service(account_setup)
             .service(start_install)
             .service(start_mail_install)
@@ -394,7 +462,7 @@ async fn main() -> std::io::Result<()> {
     })
     .keep_alive(Duration::from_secs(30));
     for host in hosts {
-        server = server.bind((host.as_str(), PORT))?;
+        server = server.bind((host.as_str(), listen_port))?;
     }
     let running = server.run();
     let result = running.await;

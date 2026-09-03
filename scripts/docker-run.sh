@@ -5,7 +5,7 @@ set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 alma_version="${CPN_ALMA_VERSION:-9}"
-port="${CPN_PORT:-8787}"
+port="${CPN_PORT:-2087}"
 name="${CPN_CONTAINER_NAME:-cpn-installer}"
 image_tag="cpn-installer:el${alma_version}"
 container_engine="${CPN_CONTAINER_ENGINE:-}"
@@ -98,7 +98,7 @@ echo "[cpn] Starting privileged systemd container ${name} on port ${port}..."
   --cgroupns=host \
   --name "$name" \
   --hostname "$name" \
-  -p "${port}:8787" \
+  -p "${port}:2087" \
   --tmpfs /run \
   --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
