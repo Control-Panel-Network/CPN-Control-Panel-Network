@@ -3,8 +3,8 @@ use crate::install_recipes::{
     php_module_enable_command, pkg_install, prepare_caddy_apt_command, prepare_caddy_repository,
     server_recipes,
 };
-use crate::model::{InstallerEvent, InstallerStatus, MailSystem, ServerEngine};
 use crate::install_webmail::install_webmail;
+use crate::model::{InstallerEvent, InstallerStatus, MailSystem, ServerEngine};
 use crate::os_support::require_installable_guest;
 use std::process::Stdio;
 use tokio::{
