@@ -268,7 +268,10 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
     finish(&state, result, server.label(), true).await;
 }
 
-async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<(), String> {
+pub(crate) async fn install_php_runtime(
+    state: &AppState,
+    label: &'static str,
+) -> Result<(), String> {
     let guest = require_installable_guest()?;
     if let Some(enable) = php_module_enable_command(&guest) {
         run_command(state, enable).await?;
