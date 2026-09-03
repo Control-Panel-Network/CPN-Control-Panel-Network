@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use installer::AppState;
 use model::{
     AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
-    MailInstallRequest, TokenQuery,
+    MailInstallRequest, OptionalTokenQuery, TokenQuery,
 };
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
@@ -28,7 +28,12 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 struct UiAssets;
 
 fn authorized(state: &AppState, query: &TokenQuery) -> bool {
-    state.token.as_bytes() == query.token.as_bytes()
+    let optional = OptionalTokenQuery {
+        token: Some(query.token.clone()),
+    };
+    optional
+        .into_token_query()
+        .is_some_and(|required| state.token.as_bytes() == required.token.as_bytes())
 }
 
 fn html_escape(value: &str) -> String {
@@ -379,16 +384,12 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
 }
 
 fn listen_hosts() -> Vec<String> {
-    let allow_remote = env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all");
-    if allow_remote {
-        vec!["0.0.0.0".into()]
-    } else if env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1") {
-        vec!["0.0.0.0".into()]
-    } else {
-        // Default remains 0.0.0.0 for current VPS installer UX, but operators can
-        // document SSH tunnels. Issue #1 full lockdown needs a coordinated release note.
-        vec!["0.0.0.0".into()]
-    }
+    // Flags kept for compatibility with docs and future lockdown.
+    // Default remains 0.0.0.0 for current VPS installer UX.
+    let _allow_remote = env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
+        || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1");
+    let _ = _allow_remote;
+    vec!["0.0.0.0".into()]
 }
 
 #[actix_web::main]

@@ -12,7 +12,6 @@ pub enum ServerEngine {
 #[serde(rename_all = "lowercase")]
 pub enum MailSystem {
     Snappymail,
-    Rainloop,
     Roundcube,
     Thunderbird,
 }
@@ -21,7 +20,6 @@ impl MailSystem {
     pub fn label(self) -> &'static str {
         match self {
             Self::Snappymail => "SnappyMail",
-            Self::Rainloop => "RainLoop",
             Self::Roundcube => "Roundcube",
             Self::Thunderbird => "Thunderbird",
         }
@@ -65,6 +63,15 @@ pub struct AccountPublic {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct MailReleaseInfo {
+    pub id: String,
+    pub label: String,
+    pub version: String,
+    /// ISO date `YYYY-MM-DD` for UI formatting.
+    pub released_on: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct InstallerStatus {
     pub phase: &'static str,
     pub progress: u8,
@@ -81,6 +88,7 @@ pub struct InstallerStatus {
     pub version: String,
     /// True after the web server install finished successfully at least once.
     pub server_ready: bool,
+    pub mail_releases: Vec<MailReleaseInfo>,
 }
 
 impl Default for InstallerStatus {
@@ -93,7 +101,7 @@ impl Default for InstallerStatus {
             selected_mail: None,
             environment: None,
             error: None,
-            language: "es".into(),
+            language: "en".into(),
             account: None,
             password_policy: PasswordPolicy {
                 min_length: 8,
@@ -105,6 +113,7 @@ impl Default for InstallerStatus {
             panel_login_url: None,
             version: env!("CARGO_PKG_VERSION").into(),
             server_ready: false,
+            mail_releases: Vec::new(),
         }
     }
 }
