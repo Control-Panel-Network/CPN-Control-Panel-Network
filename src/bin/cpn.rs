@@ -125,8 +125,16 @@ enum SiteCommands {
 }
 
 fn is_root() -> bool {
-    // SAFETY: geteuid is a pure query of the process credentials.
-    unsafe { libc::geteuid() == 0 }
+    #[cfg(unix)]
+    {
+        // SAFETY: geteuid is a pure query of the process credentials.
+        unsafe { libc::geteuid() == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        // Installer CLI targets Linux; non-Unix hosts are never treated as root.
+        false
+    }
 }
 
 fn require_root_for_mutation() -> Result<(), String> {

@@ -2,11 +2,7 @@
 //! Secrets live only under `/var/lib/cpn/` with mode 600.
 
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 const SMTP_DIR: &str = "/var/lib/cpn";
 const SMTP_FILE: &str = "/var/lib/cpn/smtp.json";
@@ -130,14 +126,23 @@ pub fn persist_smtp(settings: &SmtpSettings) -> Result<(), String> {
         .map_err(|error| format!("Could not serialize SMTP settings: {error}"))?;
     let path = smtp_path();
     let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true).mode(0o600);
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
     use std::io::Write;
     let mut file = options
         .open(&path)
         .map_err(|error| format!("Could not write {}: {error}", path.display()))?;
     file.write_all(json.as_bytes())
         .map_err(|error| format!("Could not save SMTP settings: {error}"))?;
-    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
     Ok(())
 }
 

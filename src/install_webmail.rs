@@ -4,13 +4,7 @@ use crate::installer::{AppState, install_php_runtime, run_command};
 use crate::model::MailSystem;
 use rand::{Rng, distr::Alphanumeric};
 use sha2::{Digest, Sha256};
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    os::unix::fs::{OpenOptionsExt, PermissionsExt, symlink},
-    path::Path,
-    process::Stdio,
-};
+use std::{fs::OpenOptions, io::Write, path::Path, process::Stdio};
 use tokio::{io::AsyncReadExt, process::Command};
 
 const SNAPPYMAIL_SHA256: &str = "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec";
@@ -25,12 +19,20 @@ fn ephemeral_download_path(filename: &str) -> Result<String, String> {
     let dir = format!("/var/tmp/cpn-dl-{suffix}");
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
-    let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    }
     let path = format!("{dir}/{filename}");
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options
         .open(&path)
         .map_err(|error| format!("No se pudo crear el archivo temporal de forma segura: {error}"))?
         .write_all(b"")
@@ -134,7 +136,16 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
     if current.symlink_metadata().is_ok() {
         std::fs::remove_file(current).map_err(|error| error.to_string())?;
     }
-    symlink(target, current).map_err(|error| format!("No se pudo activar el webmail: {error}"))
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        symlink(target, current).map_err(|error| format!("No se pudo activar el webmail: {error}"))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = target;
+        Err("Webmail symlink activation requires a Unix host".into())
+    }
 }
 
 async fn configure_webmail_service(state: &AppState, root: &'static str) -> Result<(), String> {
@@ -317,6 +328,7 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                 .map_err(|error| error.to_string())?;
             #[cfg(unix)]
             {
+                use std::os::unix::fs::PermissionsExt;
                 let db = Path::new("/opt/cpn-webmail/roundcube/db.sqlite");
                 if !db.exists() {
                     let _ = std::fs::File::create(db);
