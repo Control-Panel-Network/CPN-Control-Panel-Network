@@ -55,10 +55,10 @@ fn usernames_equal(a: &str, b: &str) -> bool {
 /// Locate bootstrap or extra account by username.
 pub fn find_account(username_raw: &str) -> Result<(PanelBootstrap, PathBuf), String> {
     let username = require_username(username_raw)?;
-    if let Some(boot) = load_bootstrap() {
-        if usernames_equal(&boot.username, &username) {
-            return Ok((boot, bootstrap_path()));
-        }
+    if let Some(boot) = load_bootstrap()
+        && usernames_equal(&boot.username, &username)
+    {
+        return Ok((boot, bootstrap_path()));
     }
     let path = extra_account_path(&username);
     if path.is_file() {
@@ -103,7 +103,7 @@ pub fn list_accounts() -> Result<Vec<AccountPublic>, String> {
             });
         }
     }
-    accounts.sort_by(|a, b| a.username.to_lowercase().cmp(&b.username.to_lowercase()));
+    accounts.sort_by_key(|a| a.username.to_lowercase());
     Ok(accounts)
 }
 
