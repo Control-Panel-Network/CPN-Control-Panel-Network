@@ -13,6 +13,7 @@ import {
   getStatus,
   resolvePanelLoginUrl,
   setLanguage,
+  setListenPort,
   startMailInstall,
   startMaintenance,
   startServerInstall,
@@ -249,6 +250,15 @@ function AppShell() {
     }
   };
 
+  const handleListenPortChange = async (port: number): Promise<string | null> => {
+    const result = await setListenPort(port);
+    setStatus(result.status);
+    if (result.restart_required) {
+      return t.listenPortRestartHint.replace('{port}', String(result.preferred_listen_port));
+    }
+    return result.message || t.listenPortSaved;
+  };
+
   const loginUrl = resolvePanelLoginUrl(status);
 
   return (
@@ -274,7 +284,9 @@ function AppShell() {
           {screen === 'selection' && (
             <ServerSelectionScreen
               selectedServer={selectedServer}
+              listenPort={status.listen_port ?? status.environment?.port ?? 2087}
               onSelectServer={setSelectedServer}
+              onListenPortChange={handleListenPortChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}
             />

@@ -100,6 +100,7 @@ export interface InstallerStatus {
   environment: EnvironmentInfo | null;
   error: string | null;
   language?: string;
+  listen_port?: number;
   account?: AccountPublic | null;
   password_policy?: PasswordPolicy;
   panel_login_path?: string;

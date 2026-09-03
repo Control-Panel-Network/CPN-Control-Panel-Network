@@ -7,7 +7,7 @@
 #   docker compose up -d
 #
 # Security: privileged mode is required for systemd and package installs.
-# Use only on dedicated lab/test hosts. Do not expose 8787 to the public internet.
+# Use only on dedicated lab/test hosts. Do not expose 2087 to the public internet.
 
 services:
   cpn-installer:
@@ -24,7 +24,7 @@ services:
     environment:
       container: docker
     ports:
-      - "${CPN_PORT:-8787}:8787"
+      - "${CPN_PORT:-2087}:2087"
     tmpfs:
       - /run
       - /run/lock

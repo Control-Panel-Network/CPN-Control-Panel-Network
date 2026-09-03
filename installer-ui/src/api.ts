@@ -33,6 +33,24 @@ export async function setLanguage(language: string): Promise<InstallerStatus> {
   return response.json();
 }
 
+export interface ListenPortResponse {
+  status: InstallerStatus;
+  listen_port: number;
+  preferred_listen_port: number;
+  restart_required: boolean;
+  message: string;
+}
+
+export async function setListenPort(port: number): Promise<ListenPortResponse> {
+  const response = await fetch(apiUrl('/api/listen-port'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ port }),
+  });
+  if (!response.ok) throw new Error(await readError(response, 'listen_port_failed'));
+  return response.json();
+}
+
 /** @deprecated alias kept for older call sites */
 export const setInstallerLanguage = setLanguage;
 

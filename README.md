@@ -20,7 +20,7 @@ The first phase implements the installer flow and is still in development. It cu
 - Selection and installation of OpenLiteSpeed, Caddy, or Nginx.
 - Selection and installation of SnappyMail, Roundcube, or Thunderbird.
 - Real download, install, and verification progress sent over WebSocket.
-- VPS and container detection; opening port `8787` in `firewalld` or `ufw` when those are active.
+- VPS and container detection; opening port `2087` in `firewalld` or `ufw` when those are active.
 - RPM packaging for RHEL-family guests (AlmaLinux/Rocky/RHEL 8-10); experimental Ubuntu `.deb` via `scripts/build-deb.sh`.
 - Docker/Podman runtime images for AlmaLinux 9 and 10 (`Dockerfile`, `docker-compose.yml`, `scripts/docker-run.sh`).
 - Service tests in clean AlmaLinux containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE`).
@@ -37,7 +37,7 @@ Recipes, security, and compatibility still need review before CPN can be conside
 - `scripts/build-deb.sh`: experimental `.deb` on Ubuntu 20.04/22.04/24.04.
 - `to-do/OS-SUPPORT-MATRIX.md`: guest OS matrix and hypervisor host notes.
 - `scripts/docker-build-rpm.sh`: builds the RPM inside an AlmaLinux container (any host with Docker/Podman).
-- `scripts/docker-run.sh`: builds the runtime image and starts a privileged systemd container on port `8787`.
+- `scripts/docker-run.sh`: builds the runtime image and starts a privileged systemd container on port `2087`.
 - `Dockerfile` / `docker-compose.yml`: AlmaLinux 9/10 installer container (parameterized with `CPN_ALMA_VERSION`).
 - `tests/docker-matrix.sh`: functional matrix for web servers and mail clients.
 - `to-do/DOCKER-INSTALL.md`: Docker install guide, ports, volumes, and security notes.
@@ -73,11 +73,15 @@ On AlmaLinux, Rocky Linux, RHEL, CentOS Stream, or CloudLinux (majors 8-10):
 ./scripts/build-rpm.sh
 sudo dnf install ./target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
 sudo cpn-installer
+# Optional: choose listen port (default 2087)
+sudo cpn-installer --port 2087
+# Lab example on a different port
+sudo cpn-installer --port 8787
 ```
 
 The RPM release suffix follows the host distro (`.el9` or `.el10`).
 
-When you run `cpn-installer`, the console immediately prints the full installer web URL, including the reachable IP and a temporary token. The service listens on `0.0.0.0:8787`.
+When you run `cpn-installer`, the console immediately prints the full installer web URL, including the reachable IP and a temporary token. By default the service listens on `127.0.0.1:2087` (override with `--port`, `CPN_LISTEN_PORT`, or the installer UI). Use `--allow-remote` to bind `0.0.0.0`.
 
 ## Docker / Podman install
 
@@ -91,9 +95,9 @@ On any host with Docker or Podman (Linux preferred for systemd/cgroup support):
 CPN_ALMA_VERSION=10 ./scripts/docker-run.sh
 ```
 
-Open the printed `http://127.0.0.1:8787/?token=...` URL.
+Open the printed `http://127.0.0.1:2087/?token=...` URL.
 
-**Security:** the container runs privileged (systemd + `dnf` + `systemctl`). Use only on dedicated lab/test hosts. Do not expose port `8787` on untrusted networks.
+**Security:** the container runs privileged (systemd + `dnf` + `systemctl`). Use only on dedicated lab/test hosts. Do not expose port `2087` on untrusted networks.
 
 Build the RPM alone from a non-AlmaLinux host:
 

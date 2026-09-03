@@ -15,9 +15,9 @@ Hash format: `sha256(salt_hex + "|" + utf8_password)` as lowercase hex. Panel sh
 
 Panel Next.js app is not fully wired yet. The installer hosts the interim login landing:
 
-- Primary (auto-opened from CompleteScreen): `http://<host>:8787/login?token=<installer-token>`
+- Primary (auto-opened from CompleteScreen): `http://<host>:2087/login?token=<installer-token>`
 - Also exposed as `panel_login_url` in `/api/status`
-- Secondary: `http://<host>:8787/status?token=<installer-token>` (technical status)
+- Secondary: `http://<host>:2087/status?token=<installer-token>` (technical status)
 - Forgot password landing: `/forgot-password`
 
 When Panel ships on its own listener or vhost, keep `/` as login and migrate consumers to that base URL while still reading `/var/lib/cpn/panel-bootstrap.json`.

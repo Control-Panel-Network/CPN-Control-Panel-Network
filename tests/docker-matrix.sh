@@ -47,7 +47,7 @@ wait_for_result() {
   local name="$1" token="$2"
   for _ in {1..240}; do
     local status
-    status="$(docker exec "$name" curl -fsS "http://127.0.0.1:8787/api/status?token=$token")"
+    status="$(docker exec "$name" curl -fsS "http://127.0.0.1:2087/api/status?token=$token")"
     if [[ "$status" == *'"phase":"completed"'* ]]; then return; fi
     if [[ "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
@@ -75,12 +75,12 @@ run_case() {
   if [[ "$kind" == "mail" ]]; then
     docker exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
       -d '{"server":"nginx"}' \
-      "http://127.0.0.1:8787/api/install/server?token=$token" >/dev/null
+      "http://127.0.0.1:2087/api/install/server?token=$token" >/dev/null
     wait_for_result "$name" "$token"
   fi
   docker exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
     -d "{\"$kind\":\"$component\"}" \
-    "http://127.0.0.1:8787/api/install/$kind?token=$token" >/dev/null
+    "http://127.0.0.1:2087/api/install/$kind?token=$token" >/dev/null
   wait_for_result "$name" "$token"
 
   case "$component" in

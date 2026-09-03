@@ -140,6 +140,8 @@ pub struct InstallerStatus {
     pub environment: Option<EnvironmentInfo>,
     pub error: Option<String>,
     pub language: String,
+    /// Active installer HTTP listen port (bind port for this process).
+    pub listen_port: u16,
     pub account: Option<AccountPublic>,
     pub password_policy: PasswordPolicy,
     pub panel_login_path: String,
@@ -168,6 +170,7 @@ impl Default for InstallerStatus {
             environment: None,
             error: None,
             language: "en".into(),
+            listen_port: crate::listen_port::DEFAULT_PORT,
             account: None,
             password_policy: PasswordPolicy {
                 min_length: 8,
@@ -232,6 +235,11 @@ pub struct AccountSetupRequest {
 #[derive(Debug, Deserialize)]
 pub struct LanguageRequest {
     pub language: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListenPortRequest {
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize)]

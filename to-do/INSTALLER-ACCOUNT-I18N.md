@@ -15,9 +15,9 @@ Date: 03/09/2026
 
 1. Rebuild and redeploy with `Priv\VirtualBox VMs\rebuild-fix-al9.sh` (or upload source + run that script on the guest).
 2. Read token from guest `/tmp/cpn-installer.log`.
-3. Open `http://127.0.0.1:8787/?token=TOKEN` (host port forward).
+3. Open `http://127.0.0.1:2087/?token=TOKEN` (host port forward).
 4. Switch language, install server + mail, create account, confirm auto-open of login.
-5. `curl -H 'Accept: application/json' "http://127.0.0.1:8787/api/status?token=TOKEN"` should include `language`, `account`, `panel_login_url`, `version`, `server_ready`.
+5. `curl -H 'Accept: application/json' "http://127.0.0.1:2087/api/status?token=TOKEN"` should include `language`, `account`, `panel_login_url`, `version`, `server_ready`.
 
 ## GitHub issue notes
 

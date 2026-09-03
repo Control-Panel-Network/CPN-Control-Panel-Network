@@ -6,7 +6,10 @@ use crate::model::{InstallerStatus, SmtpStatusPublic, TokenQuery};
 use crate::smtp_settings::{SmtpTlsMode, smtp_public_from_disk};
 use actix_web::HttpRequest;
 
-pub const PORT: u16 = 8787;
+pub use crate::listen_port::DEFAULT_PORT;
+
+/// Backward-compatible alias for the product default listen port (`2087`).
+pub const PORT: u16 = DEFAULT_PORT;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn authorized(state: &AppState, query: &TokenQuery) -> bool {
@@ -62,7 +65,8 @@ pub fn panel_login_url_for(status: &InstallerStatus, token: &str) -> String {
         .and_then(|env_info| env_info.addresses.first())
         .cloned()
         .unwrap_or_else(|| "127.0.0.1".into());
-    format!("http://{host}:{PORT}/login?token={token}")
+    let port = status.listen_port;
+    format!("http://{host}:{port}/login?token={token}")
 }
 
 pub fn smtp_status_public() -> SmtpStatusPublic {
@@ -83,9 +87,21 @@ pub fn smtp_status_public() -> SmtpStatusPublic {
 
 pub fn enrich_status(mut status: InstallerStatus, token: &str) -> InstallerStatus {
     status.version = VERSION.into();
+    if status.listen_port == 0 {
+        status.listen_port = status
+            .environment
+            .as_ref()
+            .map(|env_info| env_info.port)
+            .unwrap_or(DEFAULT_PORT);
+    }
+    if let Some(env_info) = status.environment.as_mut() {
+        env_info.port = status.listen_port;
+    }
     if status.account.is_none() {
         status.account = account_public_from_disk();
     }
+    // Rebuild so host/port stay aligned with the active listen port.
+    status.panel_login_url = None;
     status
         .panel_login_url
         .replace(panel_login_url_for(&status, token));

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ArrowRight, CircleHelp } from 'lucide-react';
 import type { ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
@@ -6,23 +7,56 @@ import { LanguageSelector } from '../i18n/LanguageSelector';
 
 interface Props {
   selectedServer: ServerEngine | null;
+  listenPort: number;
   onSelectServer: (server: ServerEngine) => void;
+  onListenPortChange: (port: number) => Promise<string | null>;
   onContinue: () => void;
   onOpenCompare: () => void;
 }
 
 export function ServerSelectionScreen({
   selectedServer,
+  listenPort,
   onSelectServer,
+  onListenPortChange,
   onContinue,
   onOpenCompare,
 }: Props) {
   const { t } = useI18n();
+  const [portDraft, setPortDraft] = useState(String(listenPort || 2087));
+  const [portBusy, setPortBusy] = useState(false);
+  const [portMessage, setPortMessage] = useState<string | null>(null);
+  const [portError, setPortError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPortDraft(String(listenPort || 2087));
+  }, [listenPort]);
+
   const servers: Array<{ id: ServerEngine; name: string; description: string }> = [
     { id: 'openlitespeed', name: 'OpenLiteSpeed', description: t.serverOpenlitespeedDesc },
     { id: 'nginx', name: 'Nginx', description: t.serverNginxDesc },
     { id: 'caddy', name: 'Caddy', description: t.serverCaddyDesc },
   ];
+
+  const applyPort = async () => {
+    const parsed = Number.parseInt(portDraft.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
+      setPortError(t.listenPortInvalid);
+      setPortMessage(null);
+      return;
+    }
+    setPortBusy(true);
+    setPortError(null);
+    try {
+      const message = await onListenPortChange(parsed);
+      setPortMessage(message ?? t.listenPortSaved);
+    } catch (error) {
+      setPortMessage(null);
+      setPortError(error instanceof Error ? error.message : t.listenPortInvalid);
+    } finally {
+      setPortBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-screen px-6 md:px-12 py-16 flex flex-col items-center justify-center max-w-6xl mx-auto w-full">
@@ -34,6 +68,35 @@ export function ServerSelectionScreen({
         <p className="text-[17px] leading-[1.47] text-[#5f5e60] max-w-2xl mx-auto">
           {t.selectServerIntro}
         </p>
+      </div>
+
+      <div className="w-full max-w-xl mb-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
+        <label className="block text-[15px] font-semibold text-[#1a1c1d]" htmlFor="cpn-listen-port">
+          {t.listenPortLabel}
+        </label>
+        <p className="text-[13px] leading-[1.45] text-[#5f5e60] mt-1 mb-3">{t.listenPortHint}</p>
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <input
+            id="cpn-listen-port"
+            type="number"
+            min={1}
+            max={65535}
+            inputMode="numeric"
+            value={portDraft}
+            onChange={(event) => setPortDraft(event.target.value)}
+            className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full sm:w-40 text-[15px]"
+          />
+          <button
+            type="button"
+            onClick={() => void applyPort()}
+            disabled={portBusy}
+            className="selection-button"
+          >
+            {t.listenPortApply}
+          </button>
+        </div>
+        {portMessage && <p className="text-sm text-[#067647] mt-3">{portMessage}</p>}
+        {portError && <p className="text-sm text-[#b42318] mt-3">{portError}</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">

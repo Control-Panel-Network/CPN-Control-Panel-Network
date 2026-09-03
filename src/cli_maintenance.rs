@@ -83,13 +83,18 @@ pub fn print_help() {
 
 Usage:
   cpn-installer                 Start the web installer UI
+  cpn-installer --port <PORT>   Listen port (default: 2087; also CPN_LISTEN_PORT)
   cpn-installer --version
   cpn-installer --version-check
   cpn-installer --upgrade [--to X.Y.Z]
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
+  cpn-installer --allow-remote  Bind 0.0.0.0 (HTTP without TLS; operator opt-in)
 
 Notes:
+  Default listen port is 2087 (Cloudflare-friendly, WHM HTTPS family). Lab installs may use another free port (for example 8787).
+  Ports 1-65535 are accepted; prefer >1024 unless running as root.
+  The installer UI can also save a preferred port under /var/lib/cpn/listen_port (restart to apply if different from the bound port).
   Repair overwrites core packaged files listed in /var/lib/cpn/install-manifest.json.
   Site data under /var/lib/cpn/ (accounts, bootstrap, SMTP secrets) is preserved unless --reset-data.
   Coordinate with `cpn version-check` when the operator CLI ships (see to-do/UPGRADE-REPAIR.md).
@@ -110,6 +115,7 @@ async fn make_state() -> Arc<AppState> {
         status: tokio::sync::RwLock::new(Default::default()),
         events,
         token: "cli".into(),
+        bind_port: crate::listen_port::DEFAULT_PORT,
     })
 }
 

@@ -24,6 +24,12 @@ export interface LocaleMessages {
   startMailError: string;
   selectServerTitle: string;
   selectServerIntro: string;
+  listenPortLabel: string;
+  listenPortHint: string;
+  listenPortApply: string;
+  listenPortSaved: string;
+  listenPortRestartHint: string;
+  listenPortInvalid: string;
   selectLabel: string;
   compareLink: string;
   compareTitle: string;
