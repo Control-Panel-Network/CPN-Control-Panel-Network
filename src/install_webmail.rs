@@ -258,7 +258,7 @@ pub(crate) async fn install_webmail(
             let init = Command::new("php")
                 .args([
                     "-r",
-                    "$db=new PDO('sqlite:/opt/cpn-webmail/roundcube/db.sqlite'); $sql=file_get_contents('/opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql'); $db->exec($sql); $n=$db->query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='users'\")->fetchColumn(); if(!$n){fwrite(STDERR,\"missing users table\\n\"); exit(1);}",
+                    "$db=new PDO('sqlite:/opt/cpn-webmail/roundcube/db.sqlite'); $n=$db->query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='users'\")->fetchColumn(); if(!$n){ $sql=file_get_contents('/opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql'); $db->exec($sql); $n=$db->query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='users'\")->fetchColumn(); } if(!$n){fwrite(STDERR,\"missing users table\\n\"); exit(1);}",
                 ])
                 .kill_on_drop(true)
                 .status()
