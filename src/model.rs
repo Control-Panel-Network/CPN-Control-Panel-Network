@@ -160,6 +160,7 @@ pub struct TokenQuery {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Reserved for endpoints that accept optional ?token=
 pub struct OptionalTokenQuery {
     pub token: Option<String>,
 }

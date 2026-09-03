@@ -680,35 +680,6 @@ async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), Strin
             let _ = std::fs::remove_file(&archive);
             configure_webmail_service(state, "/opt/cpn-webmail/snappymail").await?;
         }
-        MailSystem::Rainloop => {
-            state.log(
-                "RainLoop legacy está marcado como opción heredada; prefer SnappyMail o Roundcube",
-                "info",
-            );
-            std::fs::create_dir_all("/opt/cpn-webmail/rainloop")
-                .map_err(|error| error.to_string())?;
-            let archive = ephemeral_download_path("rainloop.zip")?;
-            download(
-                state,
-                "https://github.com/RainLoop/rainloop-webmail/releases/download/v1.17.0/rainloop-legacy-1.17.0.zip",
-                &archive,
-                "RainLoop",
-                2,
-                36,
-            )
-            .await?;
-            install_php_runtime(state, "PHP para RainLoop").await?;
-            extract_archive(
-                state,
-                "unzip",
-                &["-o", &archive, "-d", "/opt/cpn-webmail/rainloop"],
-                "Extrayendo RainLoop",
-                80,
-            )
-            .await?;
-            let _ = std::fs::remove_file(&archive);
-            configure_webmail_service(state, "/opt/cpn-webmail/rainloop").await?;
-        }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
                 .map_err(|error| error.to_string())?;
