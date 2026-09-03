@@ -20,7 +20,7 @@ Please also read:
 
 - Rust toolchain (stable) with `cargo`, `rustfmt`, and `clippy`
 - Node.js and npm (for `installer-ui` and `Panel`)
-- AlmaLinux 9 or a compatible environment for RPM builds and Docker matrix tests
+- A CyberPanel-aligned Linux guest (AlmaLinux 9/10 preferred) or Docker for RPM builds and matrix tests; see to-do/OS-SUPPORT-MATRIX.md
 - Git
 
 ### Clone and setup

@@ -33,7 +33,7 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a web installer that prepares server components on AlmaLinux 9 and AlmaLinux 10 (native RPM or privileged Docker/Podman). A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
+CPN is a Linux web installer that prepares server components on CyberPanel-aligned guests (AlmaLinux 8-10, Rocky 8-9, Ubuntu 20.04/22.04/24.04, and related EL targets; see to-do/OS-SUPPORT-MATRIX.md). Packaging today centers on RPM (and experimental .deb). Privileged Docker/Podman Alma images remain supported. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
 
 ### Trust assumptions
 

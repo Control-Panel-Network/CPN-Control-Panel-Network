@@ -1,8 +1,11 @@
 mod account;
 mod auth_pages;
 mod environment;
+mod install_recipes;
+mod install_webmail;
 mod installer;
 mod model;
+mod os_support;
 mod status_pages;
 
 use account::{account_public_from_disk, default_password_policy, setup_account};
