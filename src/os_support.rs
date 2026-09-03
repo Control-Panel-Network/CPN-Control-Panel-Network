@@ -71,10 +71,7 @@ impl GuestOs {
             return Err("Caddy COPR epel path only applies to RHEL-family guests".into());
         }
         if !(8..=10).contains(&self.major) {
-            return Err(format!(
-                "No Caddy COPR mapping for EL major {}",
-                self.major
-            ));
+            return Err(format!("No Caddy COPR mapping for EL major {}", self.major));
         }
         Ok(self.major)
     }

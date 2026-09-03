@@ -94,7 +94,6 @@ async fn download(
     Ok(())
 }
 
-
 fn reset_current_link(target: &Path) -> Result<(), String> {
     let current = Path::new("/opt/cpn-webmail/current");
     if current.symlink_metadata().is_ok() {
@@ -284,4 +283,3 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
     }
     Ok(())
 }
-

@@ -238,9 +238,11 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
 
 pub(crate) fn php_install_command(guest: &GuestOs, label: &'static str) -> CommandSpec {
     match guest.family {
-        PackageFamily::Apt => {
-            apt_install(PHP_PACKAGES_APT.to_vec(), "Instalando PHP y sus extensiones", 40)
-        }
+        PackageFamily::Apt => apt_install(
+            PHP_PACKAGES_APT.to_vec(),
+            "Instalando PHP y sus extensiones",
+            40,
+        ),
         PackageFamily::Dnf => {
             let mut args = vec!["install", "-y"];
             args.extend(PHP_PACKAGES_DNF.iter().copied());
