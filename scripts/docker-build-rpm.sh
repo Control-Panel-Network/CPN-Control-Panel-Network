@@ -48,8 +48,10 @@ fi
   "$image" \
   bash -lc '
     set -euo pipefail
-    dnf -y install \
-      curl ca-certificates gcc gcc-c++ make openssl-devel \
+    # AlmaLinux container images ship curl-minimal; requesting curl conflicts unless
+    # --allowerasing is used. Prefer keeping curl-minimal and installing the rest.
+    dnf -y install --allowerasing \
+      ca-certificates gcc gcc-c++ make openssl-devel \
       rpm-build rpmdevtools git which hostname
     dnf clean all
 
