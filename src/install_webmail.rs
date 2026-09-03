@@ -1,7 +1,7 @@
 //! Webmail download and activation helpers.
-use crate::install_recipes::command;
-use crate::installer::{AppState, install_php_runtime, run_command};
-use crate::model::MailSystem;
+use crate::install_webmail_runtime::configure_webmail_runtime;
+use crate::installer::{AppState, install_php_runtime};
+use crate::model::{MailSystem, ServerEngine};
 use rand::{Rng, distr::Alphanumeric};
 use sha2::{Digest, Sha256};
 use std::{fs::OpenOptions, io::Write, path::Path, process::Stdio};
@@ -131,99 +131,6 @@ async fn download(
     Ok(())
 }
 
-fn reset_current_link(target: &Path) -> Result<(), String> {
-    let current = Path::new("/opt/cpn-webmail/current");
-    if current.symlink_metadata().is_ok() {
-        std::fs::remove_file(current).map_err(|error| error.to_string())?;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::symlink;
-        symlink(target, current).map_err(|error| format!("No se pudo activar el webmail: {error}"))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = target;
-        Err("Webmail symlink activation requires a Unix host".into())
-    }
-}
-
-async fn configure_webmail_service(state: &AppState, root: &'static str) -> Result<(), String> {
-    let _ = Command::new("systemctl")
-        .args(["stop", "cpn-webmail"])
-        .status()
-        .await;
-    let user_exists = Command::new("id")
-        .args(["-u", "cpn-webmail"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|status| status.success());
-    if !user_exists {
-        run_command(
-            state,
-            command(
-                "useradd",
-                vec![
-                    "--system",
-                    "--home-dir",
-                    "/opt/cpn-webmail",
-                    "--shell",
-                    "/sbin/nologin",
-                    "cpn-webmail",
-                ],
-                "Creando el usuario aislado del webmail",
-                "installing",
-                83,
-            ),
-        )
-        .await?;
-    }
-    reset_current_link(Path::new(root))?;
-    // Transitional php -S frontend; code stays root-owned where possible (issue #6).
-    const UNIT: &str = "[Unit]\nDescription=CPN Webmail (transitional php built-in server)\nAfter=network.target\n\n[Service]\nType=simple\nUser=cpn-webmail\nGroup=cpn-webmail\nWorkingDirectory=/opt/cpn-webmail/current\nExecStart=/usr/bin/php -S 127.0.0.1:8888 -t /opt/cpn-webmail/current\nRestart=on-failure\nPrivateTmp=true\nNoNewPrivileges=true\nProtectHome=true\n\n[Install]\nWantedBy=multi-user.target\n";
-    std::fs::write("/etc/systemd/system/cpn-webmail.service", UNIT)
-        .map_err(|error| error.to_string())?;
-    let harden = format!(
-        "chown -R root:root /opt/cpn-webmail && \
-         mkdir -p {root}/data {root}/temp {root}/logs && \
-         chown -R cpn-webmail:cpn-webmail {root}/data {root}/temp {root}/logs && \
-         if [ -f /opt/cpn-webmail/roundcube/db.sqlite ]; then chown cpn-webmail:cpn-webmail /opt/cpn-webmail/roundcube/db.sqlite; chmod 0600 /opt/cpn-webmail/roundcube/db.sqlite; fi"
-    );
-    let status = Command::new("bash")
-        .args(["-c", &harden])
-        .kill_on_drop(true)
-        .status()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !status.success() {
-        return Err("No se pudieron ajustar permisos del webmail".into());
-    }
-    run_command(
-        state,
-        command(
-            "systemctl",
-            vec!["daemon-reload"],
-            "Registrando el servicio de correo",
-            "installing",
-            86,
-        ),
-    )
-    .await?;
-    run_command(
-        state,
-        command(
-            "systemctl",
-            vec!["enable", "--now", "cpn-webmail"],
-            "Activando el sistema de correo",
-            "installing",
-            88,
-        ),
-    )
-    .await
-}
-
 async fn extract_archive(
     state: &AppState,
     program: &str,
@@ -248,7 +155,11 @@ async fn extract_archive(
     Ok(())
 }
 
-pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Result<(), String> {
+pub(crate) async fn install_webmail(
+    state: &AppState,
+    mail: MailSystem,
+    engine: ServerEngine,
+) -> Result<(), String> {
     std::fs::create_dir_all("/opt/cpn-webmail").map_err(|error| error.to_string())?;
     match mail {
         MailSystem::Snappymail => {
@@ -275,7 +186,7 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
             )
             .await?;
             let _ = std::fs::remove_file(&archive);
-            configure_webmail_service(state, "/opt/cpn-webmail/snappymail").await?;
+            configure_webmail_runtime(state, "/opt/cpn-webmail/snappymail", engine).await?;
         }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
@@ -321,6 +232,7 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                 .take(24)
                 .map(char::from)
                 .collect();
+            // Hosts match provisioned Postfix submission (:587) and Dovecot IMAP (:143).
             let config = format!(
                 "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0600';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
             );
@@ -355,7 +267,8 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
             if !init.success() {
                 return Err("No se pudo inicializar el esquema SQLite de Roundcube".into());
             }
-            configure_webmail_service(state, "/opt/cpn-webmail/roundcube/public_html").await?;
+            configure_webmail_runtime(state, "/opt/cpn-webmail/roundcube/public_html", engine)
+                .await?;
         }
         MailSystem::Thunderbird => unreachable!(),
     }

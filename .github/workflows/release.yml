@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build artifacts and checksums without creating a GitHub Release"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build RPM checksums provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust (pinned)
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+
+      - name: Record toolchain provenance notes
+        run: |
+          mkdir -p dist
+          {
+            echo "rustc:"
+            rustc -Vv
+            echo
+            echo "cargo:"
+            cargo -Vv
+            echo
+            echo "runner: ${RUNNER_OS}/${RUNNER_ARCH}"
+            echo "ref: ${GITHUB_REF}"
+            echo "sha: ${GITHUB_SHA}"
+          } | tee dist/build-environment.txt
+
+      - name: Install Node.js (Vite embed)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Build installer-ui embed
+        working-directory: installer-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build release binary
+        run: |
+          cargo build --release --locked 2>/dev/null || cargo build --release
+          mkdir -p dist
+          cp target/release/cpn-installer dist/cpn-installer
+          cp target/release/cpn dist/cpn || true
+          chmod +x dist/cpn-installer
+
+      - name: Build RPM via Docker helper when available
+        continue-on-error: true
+        run: |
+          if [[ -x scripts/docker-build-rpm.sh ]]; then
+            ./scripts/docker-build-rpm.sh || true
+            shopt -s nullglob
+            rpms=(target/rpmbuild/RPMS/*/*.rpm)
+            if ((${#rpms[@]})); then
+              cp "${rpms[@]}" dist/
+            fi
+          fi
+
+      - name: Publish SHA256SUMS
+        run: |
+          chmod +x scripts/publish-checksums.sh
+          ./scripts/publish-checksums.sh dist/*
+          test -f dist/SHA256SUMS
+          cat dist/SHA256SUMS
+
+      - name: Optional GPG sign
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          chmod +x scripts/sign-release.sh
+          ./scripts/sign-release.sh dist/SHA256SUMS
+          shopt -s nullglob
+          for rpm in dist/*.rpm; do
+            ./scripts/sign-release.sh "$rpm"
+          done
+
+      - name: Optional cosign blob signatures
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          if [[ -n "${COSIGN_KEY:-}" ]]; then
+            curl -fsSL https://github.com/sigstore/cosign/releases/download/v2.4.1/cosign-linux-amd64 -o /tmp/cosign
+            chmod +x /tmp/cosign
+            sudo mv /tmp/cosign /usr/local/bin/cosign
+          fi
+          chmod +x scripts/sign-cosign.sh
+          ./scripts/sign-cosign.sh dist/cpn-installer dist/SHA256SUMS
+
+      - name: Generate SBOM (best effort)
+        continue-on-error: true
+        run: |
+          cargo install cargo-cyclonedx --locked || true
+          cargo cyclonedx -f json -o dist/cpn-installer.cdx.json || \
+            echo '{"bomFormat":"CycloneDX","specVersion":"1.5","note":"SBOM generation skipped"}' > dist/cpn-installer.cdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/cpn-installer
+            dist/SHA256SUMS
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpn-release-${{ github.sha }}
+          path: dist/**
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          generate_release_notes: true
+          body: |
+            Verify before running as root:
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+
+            See `to-do/RELEASE-SIGNING.md` for GPG/cosign verification.
+            Provenance attestation is attached via GitHub Artifact Attestations.

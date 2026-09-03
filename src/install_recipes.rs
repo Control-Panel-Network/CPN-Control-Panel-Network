@@ -223,6 +223,7 @@ pub(crate) const PHP_PACKAGES_DNF: &[&str] = &[
 
 pub(crate) const PHP_PACKAGES_APT: &[&str] = &[
     "php-cli",
+    "php-fpm",
     "php-mbstring",
     "php-intl",
     "php-xml",

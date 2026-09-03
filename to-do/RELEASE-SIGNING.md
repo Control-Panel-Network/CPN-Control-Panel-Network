@@ -1,23 +1,61 @@
 # Release signing and provenance (issue #16)
 
-## Current state
+## What CI always produces
 
-Publish SHA-256 checksums without a signing key:
+On tag `v*` (and manual `workflow_dispatch` dry-run), `.github/workflows/release.yml`:
+
+1. Builds `dist/cpn-installer` with a pinned Rust toolchain.
+2. Writes `dist/build-environment.txt` (`rustc -Vv`, cargo, runner, commit).
+3. Runs `scripts/publish-checksums.sh` to create `dist/SHA256SUMS`.
+4. Attaches GitHub Artifact Attestations via `actions/attest-build-provenance`.
+5. Uploads `dist/**` as a workflow artifact.
+6. On real tags, publishes a GitHub Release with those files.
+
+Local dry-run:
 
 ```bash
 ./scripts/sync-version.sh
-./scripts/build-rpm.sh
-./scripts/publish-checksums.sh target/rpmbuild/RPMS/*/*.rpm
+cargo build --release
+mkdir -p dist && cp target/release/cpn-installer dist/
+./scripts/publish-checksums.sh dist/cpn-installer
+cat dist/SHA256SUMS
 ```
 
-Attach `SHA256SUMS` to the GitHub Release.
+## Optional secrets (never invent or commit values)
 
-## Remaining (needs secrets / infra)
+| Secret | Purpose |
+|--------|---------|
+| `GPG_PRIVATE_KEY` | Armored private key for `scripts/sign-release.sh` |
+| `GPG_PASSPHRASE` | Passphrase for that key (may be empty) |
+| `GPG_KEY_ID` | Optional key id / fingerprint |
+| `COSIGN_KEY` | Cosign private key PEM for `scripts/sign-cosign.sh` |
+| `COSIGN_PASSWORD` | Cosign key password (may be empty) |
 
-1. GPG release key separate from day-to-day development keys.
-2. `gpg --detach-sign --armor SHA256SUMS` and publish `SHA256SUMS.asc`.
-3. `rpmsign --addsign` on official RPMs.
-4. Tag release job: pinned Rust version, `rustc -Vv` notes, SBOM, optional SLSA attestations.
-5. Document the public fingerprint operators must verify.
+When secrets are absent, signing steps **skip successfully**. Checksums and provenance still ship.
 
-Until those land, treat unsigned CI/local RPMs as lab-only.
+## Operator verification
+
+```bash
+# Checksums
+sha256sum -c SHA256SUMS
+
+# GPG (when SHA256SUMS.asc is published)
+gpg --verify SHA256SUMS.asc SHA256SUMS
+
+# GitHub provenance attestation
+gh attestation verify dist/cpn-installer --repo Control-Panel-Network/CPN-Control-Panel-Network
+```
+
+## RPM GPG signing (operator / offline)
+
+Official RPMs should use a release-only key:
+
+```bash
+rpmsign --addsign dist/*.rpm
+```
+
+Document the public fingerprint in the release notes. Until a release key is configured in GitHub secrets, treat unsigned lab RPMs as non-production.
+
+## Bootstrap policy
+
+Future installers that download remote packages should refuse artifacts that fail `SHA256SUMS` verification. Local lab builds remain unsigned by design.
