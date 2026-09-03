@@ -6,12 +6,26 @@ description = "Instalador web local para CPN Server Panel"
 license = "GPL-3.0-only"
 repository = "https://github.com/KraoESPfan1n/CPN-Control-Panel-Network"
 
+[lib]
+name = "cpn_installer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cpn-installer"
+path = "src/main.rs"
+
+[[bin]]
+name = "cpn"
+path = "src/bin/cpn.rs"
+
 [dependencies]
 actix-web = "4"
 actix-ws = "0.3"
+clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
 libc = "0.2"
 rand = "0.9"
+rpassword = "7"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
