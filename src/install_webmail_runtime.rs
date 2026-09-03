@@ -239,7 +239,7 @@ async fn harden_permissions(docroot: &str) -> Result<(), String> {
          if [ -d /opt/cpn-webmail/roundcube/config ]; then \
            chown -R root:cpn-webmail /opt/cpn-webmail/roundcube/config; \
            chmod 750 /opt/cpn-webmail/roundcube/config; \
-           find /opt/cpn-webmail/roundcube/config -type f -name '*.php' -exec chmod 640 {} +; \
+           find /opt/cpn-webmail/roundcube/config -type f -name '*.php' -exec chmod 640 {{}} +; \
          fi"
     );
     let status = Command::new("bash")
