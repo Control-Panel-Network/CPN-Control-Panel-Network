@@ -10,10 +10,7 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn panel_login_html(status: &InstallerStatus) -> String {
-    let account = status
-        .account
-        .clone()
-        .or_else(account_public_from_disk);
+    let account = status.account.clone().or_else(account_public_from_disk);
     let username = account
         .as_ref()
         .map(|value| value.username.as_str())
@@ -22,7 +19,10 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
         .as_ref()
         .map(|value| value.recovery_email.as_str())
         .unwrap_or("");
-    let configured = account.as_ref().map(|value| value.configured).unwrap_or(false);
+    let configured = account
+        .as_ref()
+        .map(|value| value.configured)
+        .unwrap_or(false);
     let note = if configured {
         format!(
             "Cuenta inicial lista para <strong>{}</strong>. El panel Next.js completo usará estos datos cuando la autenticación esté conectada.",
@@ -76,7 +76,11 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
 </body>
 </html>"#,
         username = html_escape(username),
-        email = html_escape(if email.is_empty() { "(no configurado)" } else { email }),
+        email = html_escape(if email.is_empty() {
+            "(no configurado)"
+        } else {
+            email
+        }),
         note = note,
     )
 }
