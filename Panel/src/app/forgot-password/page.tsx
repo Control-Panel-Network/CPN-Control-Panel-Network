@@ -8,24 +8,23 @@ export default function ForgotPasswordPage() {
         <div className="brand-mark" aria-hidden="true">
           <Server size={30} strokeWidth={1.8} />
         </div>
-        <p className="eyebrow">NT&amp;DBN PANEL</p>
+        <p className="eyebrow">CPN PANEL</p>
         <h1 id="forgot-title">Forgot password</h1>
         <p className="login-intro">
-          Enter the recovery email stored during installation. Mail delivery
-          will be wired when SMTP is configured. Operators with root access can
-          also reset the bootstrap account on the server.
+          Enter your username or email. If a matching account exists, a reset
+          message will be sent when mail delivery is configured.
         </p>
 
         <form className="login-form" method="post" action="/api/forgot-password">
-          <label htmlFor="email">Recovery email</label>
+          <label htmlFor="account">Username/Email</label>
           <div className="input-shell">
             <Mail size={19} aria-hidden="true" />
             <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
+              id="account"
+              name="account"
+              type="text"
+              placeholder="Admin or you@example.com"
+              autoComplete="username"
               required
             />
           </div>
@@ -37,7 +36,7 @@ export default function ForgotPasswordPage() {
         </Link>
       </section>
 
-      <footer>© 2026 NT&amp;DBN Panel. All rights reserved.</footer>
+      <footer>© 2026 CPN Panel. All rights reserved.</footer>
     </main>
   );
 }

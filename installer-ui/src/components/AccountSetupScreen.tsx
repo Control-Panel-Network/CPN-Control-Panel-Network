@@ -10,6 +10,8 @@ interface Props {
   onCompleted: (generatedPassword?: string | null) => void;
 }
 
+type TlsMode = 'starttls' | 'tls' | 'none';
+
 export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Props) {
   const { t, locale } = useI18n();
   const [username, setUsername] = useState('');
@@ -21,12 +23,22 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [smtpEnabled, setSmtpEnabled] = useState(false);
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState(587);
+  const [smtpTls, setSmtpTls] = useState<TlsMode>('starttls');
+  const [smtpFrom, setSmtpFrom] = useState('');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [sendUsernameEmail, setSendUsernameEmail] = useState(false);
+  const [includePasswordInEmail, setIncludePasswordInEmail] = useState(false);
 
   const canSubmit = useMemo(() => {
     if (!recoveryEmail.trim()) return false;
     if (!generate && !password) return false;
+    if (smtpEnabled && (!smtpHost.trim() || !smtpFrom.trim())) return false;
     return true;
-  }, [generate, password, recoveryEmail]);
+  }, [generate, password, recoveryEmail, smtpEnabled, smtpHost, smtpFrom]);
 
   const submit = async () => {
     if (generatedPreview) {
@@ -43,7 +55,22 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
         recovery_email: recoveryEmail.trim(),
         password_policy: policy,
         language: locale || language,
+        smtp: smtpEnabled
+          ? {
+              host: smtpHost.trim(),
+              port: smtpPort,
+              tls_mode: smtpTls,
+              from_address: smtpFrom.trim(),
+              username: smtpUser.trim() || undefined,
+              password: smtpPassword || undefined,
+            }
+          : undefined,
+        send_username_email: sendUsernameEmail,
+        include_password_in_email: includePasswordInEmail,
       });
+      if (result.setup_email_error && !result.setup_email_sent) {
+        setError(result.setup_email_error);
+      }
       if (result.generated_password) {
         setGeneratedPreview(result.generated_password);
         return;
@@ -128,6 +155,117 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
             />
             <span className="field-hint">{t.emailHint}</span>
           </label>
+
+          <fieldset className="border border-[#e5e8ec] rounded-2xl p-4 space-y-3">
+            <legend className="px-1 text-sm font-semibold">{t.smtpOptionalTitle}</legend>
+            <p className="text-sm text-[#5f5e60]">{t.smtpOptionalHint}</p>
+            <label className="flex items-center justify-between gap-4 py-1">
+              <span>{t.smtpEnableLabel}</span>
+              <input
+                type="checkbox"
+                checked={smtpEnabled}
+                onChange={(event) => {
+                  setSmtpEnabled(event.target.checked);
+                  if (!event.target.checked) {
+                    setSendUsernameEmail(false);
+                    setIncludePasswordInEmail(false);
+                  }
+                }}
+              />
+            </label>
+            {smtpEnabled && (
+              <>
+                <label className="block">
+                  <span className="text-sm font-semibold">{t.smtpHostLabel}</span>
+                  <input
+                    className="field-input mt-2"
+                    value={smtpHost}
+                    onChange={(event) => setSmtpHost(event.target.value)}
+                    placeholder="smtp.example.com"
+                    autoComplete="off"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-sm font-semibold">{t.smtpPortLabel}</span>
+                    <input
+                      className="field-input mt-2"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={smtpPort}
+                      onChange={(event) => setSmtpPort(Number(event.target.value) || 587)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-semibold">{t.smtpTlsLabel}</span>
+                    <select
+                      className="field-input mt-2"
+                      value={smtpTls}
+                      onChange={(event) => setSmtpTls(event.target.value as TlsMode)}
+                    >
+                      <option value="starttls">{t.smtpTlsStarttls}</option>
+                      <option value="tls">{t.smtpTlsTls}</option>
+                      <option value="none">{t.smtpTlsNone}</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-sm font-semibold">{t.smtpFromLabel}</span>
+                  <input
+                    className="field-input mt-2"
+                    type="email"
+                    value={smtpFrom}
+                    onChange={(event) => setSmtpFrom(event.target.value)}
+                    placeholder="noreply@example.com"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold">{t.smtpUserLabel}</span>
+                  <input
+                    className="field-input mt-2"
+                    value={smtpUser}
+                    onChange={(event) => setSmtpUser(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold">{t.smtpPasswordLabel}</span>
+                  <input
+                    className="field-input mt-2"
+                    type="password"
+                    value={smtpPassword}
+                    onChange={(event) => setSmtpPassword(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <label className="flex items-start justify-between gap-4 py-1">
+                  <span>
+                    <span className="block">{t.smtpSendUsernameLabel}</span>
+                    <span className="field-hint">{t.smtpSendUsernameHint}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={sendUsernameEmail}
+                    onChange={(event) => setSendUsernameEmail(event.target.checked)}
+                  />
+                </label>
+                <label className="flex items-start justify-between gap-4 py-1">
+                  <span>
+                    <span className="block">{t.smtpIncludePasswordLabel}</span>
+                    <span className="field-hint">{t.smtpIncludePasswordHint}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={includePasswordInEmail}
+                    disabled={!sendUsernameEmail}
+                    onChange={(event) => setIncludePasswordInEmail(event.target.checked)}
+                  />
+                </label>
+              </>
+            )}
+          </fieldset>
 
           <fieldset className="border border-[#e5e8ec] rounded-2xl p-4">
             <legend className="px-1 text-sm font-semibold">{t.policyTitle}</legend>

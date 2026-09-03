@@ -1,4 +1,4 @@
-use crate::account::{account_public_from_disk, load_bootstrap};
+use crate::account::load_bootstrap;
 use crate::auth_i18n::PANEL_I18N_SCRIPT;
 use crate::model::InstallerStatus;
 
@@ -49,15 +49,6 @@ fn shared_auth_styles() -> &'static str {
 }
 
 pub fn panel_login_html(status: &InstallerStatus) -> String {
-    let account = status.account.clone().or_else(account_public_from_disk);
-    let username = account
-        .as_ref()
-        .map(|value| value.username.as_str())
-        .unwrap_or("admin");
-    let configured = account
-        .as_ref()
-        .map(|value| value.configured)
-        .unwrap_or(false);
     let initial_locale = resolve_initial_locale(status);
     let token_q = status
         .panel_login_url
@@ -75,18 +66,17 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
   <title>Sign in · CPN Panel</title>
   <style>{styles}</style>
 </head>
-<body data-page="login" data-username="{username}" data-configured="{configured}">
+<body data-page="login">
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
       <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
       <h1 id="i18n-title">Sign in</h1>
-      <p class="hint" id="i18n-note"></p>
       <form method="post" action="/login{token_q}" autocomplete="on">
         <label for="username" id="i18n-username">Username</label>
-        <input id="username" name="username" value="{username}" required>
+        <input id="username" name="username" value="" autocomplete="username" required>
         <label for="password" id="i18n-password">Password</label>
-        <input id="password" name="password" type="password" required>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
         <div class="row">
           <span></span>
           <a id="i18n-forgot" href="/forgot-password">Forgot password?</a>
@@ -100,8 +90,6 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
 </html>"#,
         locale = initial_locale,
         styles = shared_auth_styles(),
-        username = html_escape(username),
-        configured = if configured { "1" } else { "0" },
         token_q = token_q,
         script = PANEL_I18N_SCRIPT,
     )
@@ -121,11 +109,11 @@ pub fn login_post_ack_html(token: Option<&str>) -> String {
   <title>Sign in · CPN Panel</title>
   <style>{styles}</style>
 </head>
-<body data-page="post" data-username="" data-configured="0">
+<body data-page="post">
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
-      <h1 id="i18n-post-title">Login received via POST</h1>
+      <h1 id="i18n-post-title">Sign in received</h1>
       <p id="i18n-post-body"></p>
       <p><a id="i18n-post-back" href="{back}">Back to sign in</a></p>
     </section>
@@ -154,7 +142,7 @@ pub fn forgot_password_html() -> String {
   <title>Forgot password · CPN Panel</title>
   <style>{styles}</style>
 </head>
-<body data-page="forgot" data-username="" data-configured="0">
+<body data-page="forgot">
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
@@ -162,10 +150,8 @@ pub fn forgot_password_html() -> String {
       <h1 id="i18n-title">Forgot password</h1>
       <p class="hint" id="i18n-forgot-intro"></p>
       <form method="post" action="/forgot-password" autocomplete="on">
-        <label for="username" id="i18n-forgot-username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username">
-        <label for="email" id="i18n-forgot-email-label">Recovery email</label>
-        <input id="email" name="email" type="email" autocomplete="email">
+        <label for="account" id="i18n-forgot-account">Username/Email</label>
+        <input id="account" name="account" type="text" autocomplete="username" required>
         <button id="i18n-forgot-submit" type="submit">Request reset</button>
       </form>
       <p class="hint" id="i18n-forgot-smtp"></p>
@@ -196,7 +182,7 @@ pub fn forgot_password_ack_html() -> String {
   <title>Forgot password · CPN Panel</title>
   <style>{styles}</style>
 </head>
-<body data-page="forgot-ack" data-username="" data-configured="0">
+<body data-page="forgot-ack">
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
@@ -226,7 +212,7 @@ pub fn installer_token_required_html() -> String {
   <title>CPN Installer</title>
   <style>{styles}</style>
 </head>
-<body data-page="token" data-username="" data-configured="0">
+<body data-page="token">
   <main>
     <section class="card" style="width:min(100%,480px)">
       <div id="cpn-lang-host" class="lang-host"></div>

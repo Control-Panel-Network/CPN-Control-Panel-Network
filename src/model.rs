@@ -62,6 +62,16 @@ pub struct AccountPublic {
     pub configured: bool,
 }
 
+/// Safe SMTP summary for `/api/status` (no passwords or SMTP usernames).
+#[derive(Debug, Clone, Serialize)]
+pub struct SmtpStatusPublic {
+    pub configured: bool,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub tls_mode: Option<String>,
+    pub from_address: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MailReleaseInfo {
     pub id: String,
@@ -89,6 +99,8 @@ pub struct InstallerStatus {
     /// True after the web server install finished successfully at least once.
     pub server_ready: bool,
     pub mail_releases: Vec<MailReleaseInfo>,
+    /// Outbound SMTP presence only; never includes passwords.
+    pub smtp: Option<SmtpStatusPublic>,
 }
 
 impl Default for InstallerStatus {
@@ -114,6 +126,7 @@ impl Default for InstallerStatus {
             version: env!("CARGO_PKG_VERSION").into(),
             server_ready: false,
             mail_releases: Vec::new(),
+            smtp: None,
         }
     }
 }
@@ -147,6 +160,14 @@ pub struct AccountSetupRequest {
     pub recovery_email: String,
     pub password_policy: Option<PasswordPolicy>,
     pub language: Option<String>,
+    /// Optional outbound SMTP settings saved under `/var/lib/cpn/smtp.json`.
+    pub smtp: Option<crate::smtp_settings::SmtpSetupInput>,
+    /// When true and SMTP is configured, email the username (and login URL) after setup.
+    #[serde(default)]
+    pub send_username_email: bool,
+    /// Opt-in only: include the plaintext password in the setup email.
+    #[serde(default)]
+    pub include_password_in_email: bool,
 }
 
 #[derive(Debug, Deserialize)]

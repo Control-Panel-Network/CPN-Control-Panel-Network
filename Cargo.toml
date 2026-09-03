@@ -23,6 +23,7 @@ actix-web = "4"
 actix-ws = "0.3"
 clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
 libc = "0.2"
 rand = "0.9"
 rpassword = "7"
