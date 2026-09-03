@@ -54,7 +54,10 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
         .as_ref()
         .map(|value| value.username.as_str())
         .unwrap_or("admin");
-    let configured = account.as_ref().map(|value| value.configured).unwrap_or(false);
+    let configured = account
+        .as_ref()
+        .map(|value| value.configured)
+        .unwrap_or(false);
     let initial_locale = resolve_initial_locale(status);
     let token_q = status
         .panel_login_url

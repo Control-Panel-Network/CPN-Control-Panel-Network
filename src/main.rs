@@ -199,7 +199,6 @@ async fn login_submit(
         .body(login_post_ack_html(query.token.as_deref()))
 }
 
-
 #[derive(Debug, serde::Deserialize)]
 struct ForgotPasswordForm {
     #[serde(default)]
