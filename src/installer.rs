@@ -529,7 +529,11 @@ async fn install_php_runtime(state: &AppState, label: &'static str) -> Result<()
         .await?;
     } else {
         state
-            .progress("downloading", 38, "Usando PHP de AppStream en AlmaLinux 10")
+            .progress(
+                "downloading",
+                38,
+                "Usando PHP de AppStream en AlmaLinux 10",
+            )
             .await;
     }
     run_command(
