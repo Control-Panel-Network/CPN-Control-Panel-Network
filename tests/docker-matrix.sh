@@ -100,20 +100,30 @@ run_case() {
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1/ 2>/dev/null | grep -qi 'CPN OpenLiteSpeed'"
       ;;
     snappymail)
-      docker exec "$name" systemctl is-active --quiet cpn-webmail
+      docker exec "$name" systemctl is-active --quiet php-fpm
+      docker exec "$name" test ! -e /etc/systemd/system/cpn-webmail.service || \
+        ! docker exec "$name" systemctl cat cpn-webmail 2>/dev/null | grep -q 'php -S'
       docker exec "$name" php -m | grep -qi mbstring
-      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi SnappyMail"
+      docker exec "$name" bash /usr/share/cpn-installer/webmail-permissions.sh /opt/cpn-webmail/snappymail 2>/dev/null || \
+        docker exec "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
+      docker exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     roundcube)
-      docker exec "$name" systemctl is-active --quiet cpn-webmail
+      docker exec "$name" systemctl is-active --quiet php-fpm
       docker exec "$name" test -s /opt/cpn-webmail/roundcube/db.sqlite
       docker exec "$name" php -r '$db=new PDO("sqlite:/opt/cpn-webmail/roundcube/db.sqlite"); $n=$db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"users\"")->fetchColumn(); if(!$n){exit(1);}'
       docker exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
-      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi Roundcube"
+      docker exec "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
+      docker exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     thunderbird)
       docker exec "$name" rpm -q thunderbird
       docker exec "$name" thunderbird --version | grep -qi Thunderbird
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":false'"
       ;;
   esac
   docker rm -f "$name" >/dev/null

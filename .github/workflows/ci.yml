@@ -122,4 +122,7 @@ jobs:
           scripts/docker-run.sh
           scripts/sync-version.sh
           scripts/publish-checksums.sh
+          scripts/sign-release.sh
+          scripts/sign-cosign.sh
           tests/docker-matrix.sh
+          tests/webmail-permissions.sh
