@@ -71,6 +71,34 @@ pub fn now_unix() -> u64 {
         .map(|value| value.as_secs())
         .unwrap_or(0)
 }
+#[cfg(test)]
+pub(crate) static DATA_DIR_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Run a closure with an isolated `CPN_DATA_DIR` (serialized across crate tests).
+#[cfg(test)]
+pub(crate) fn with_test_data_dir<T>(f: impl FnOnce() -> T) -> T {
+    let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "cpn-data-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0)
+    ));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    // SAFETY: exclusive lock held for the duration of f().
+    unsafe {
+        std::env::set_var("CPN_DATA_DIR", &dir);
+    }
+    let result = f();
+    unsafe {
+        std::env::remove_var("CPN_DATA_DIR");
+    }
+    let _ = fs::remove_dir_all(&dir);
+    result
+}
 
 fn has_control_chars(value: &str) -> bool {
     value.chars().any(|ch| ch.is_control())

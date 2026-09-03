@@ -230,47 +230,41 @@ pub fn delete_account(username_raw: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::{default_password_policy, DATA_DIR_TEST_LOCK};
+    use crate::account::{default_password_policy, with_test_data_dir};
 
     #[test]
     fn create_reset_delete_account_roundtrip() {
-        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!("cpn-account-cli-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        unsafe {
-            std::env::set_var("CPN_DATA_DIR", &dir);
-        }
-        let policy = default_password_policy();
-        let created = create_account(
-            "admin",
-            None,
-            true,
-            "admin@example.com",
-            policy.clone(),
-            "en",
-        )
-        .expect("create bootstrap");
-        assert!(bootstrap_path().is_file());
-        assert!(created.generated_password.is_some());
+        with_test_data_dir(|| {
+            let policy = default_password_policy();
+            let created = create_account(
+                "admin",
+                None,
+                true,
+                "admin@example.com",
+                policy.clone(),
+                "en",
+            )
+            .expect("create bootstrap");
+            assert!(
+                bootstrap_path().is_file(),
+                "bootstrap missing at {}",
+                bootstrap_path().display()
+            );
+            assert!(created.generated_password.is_some());
 
-        let second = create_account("ops", None, true, "ops@example.com", policy, "en")
-            .expect("create extra");
-        assert!(extra_account_path("ops").is_file());
-        assert_eq!(list_accounts().unwrap().len(), 2);
+            let second = create_account("ops", None, true, "ops@example.com", policy, "en")
+                .expect("create extra");
+            assert!(extra_account_path("ops").is_file());
+            assert_eq!(list_accounts().unwrap().len(), 2);
 
-        let reset = reset_account_password("ops", None, true).expect("reset");
-        assert!(reset.generated_password.is_some());
-        assert_ne!(reset.generated_password, second.generated_password);
+            let reset = reset_account_password("ops", None, true).expect("reset");
+            assert!(reset.generated_password.is_some());
+            assert_ne!(reset.generated_password, second.generated_password);
 
-        delete_account("ops").unwrap();
-        assert_eq!(list_accounts().unwrap().len(), 1);
-        delete_account("admin").unwrap();
-        assert!(list_accounts().unwrap().is_empty());
-
-        unsafe {
-            std::env::remove_var("CPN_DATA_DIR");
-        }
-        let _ = fs::remove_dir_all(&dir);
+            delete_account("ops").unwrap();
+            assert_eq!(list_accounts().unwrap().len(), 1);
+            delete_account("admin").unwrap();
+            assert!(list_accounts().unwrap().is_empty());
+        });
     }
 }
