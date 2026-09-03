@@ -3,9 +3,9 @@
 use std::{fs, path::PathBuf};
 
 use crate::account::{
-    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, default_password_policy,
-    generate_password, hash_password, load_bootstrap, new_password_salt, now_unix,
-    password_meets_policy, validate_policy, validate_recovery_email, write_account_file,
+    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, generate_password,
+    hash_password, load_bootstrap, new_password_salt, now_unix, password_meets_policy,
+    validate_policy, validate_recovery_email, write_account_file,
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 
@@ -230,6 +230,7 @@ pub fn delete_account(username_raw: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::default_password_policy;
     use std::sync::Mutex;
 
     static LOCK: Mutex<()> = Mutex::new(());

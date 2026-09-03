@@ -327,7 +327,7 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(installer::install(state.get_ref().clone(), request.server));
+    tokio::spawn(cpn_installer::installer::install(state.get_ref().clone(), request.server));
     HttpResponse::Accepted().finish()
 }
 
@@ -365,7 +365,7 @@ async fn start_mail_install(
     current.progress = 0;
     current.error = None;
     drop(current);
-    tokio::spawn(installer::install_mail(
+    tokio::spawn(cpn_installer::installer::install_mail(
         state.get_ref().clone(),
         request.mail,
     ));
@@ -459,8 +459,8 @@ async fn main() -> std::io::Result<()> {
         .take(28)
         .map(char::from)
         .collect();
-    let environment = environment::inspect(PORT).await;
-    if let Err(error) = environment::open_installer_port(&environment).await {
+    let environment = cpn_installer::environment::inspect(PORT).await;
+    if let Err(error) = cpn_installer::environment::open_installer_port(&environment).await {
         eprintln!("Aviso: {error}");
     }
     let mail_releases = cpn_installer::cpn_installer::mail_releases::load_mail_releases().await;
@@ -527,6 +527,6 @@ async fn main() -> std::io::Result<()> {
     }
     let running = server.run();
     let result = running.await;
-    let _ = environment::close_installer_port(&environment).await;
+    let _ = cpn_installer::environment::close_installer_port(&environment).await;
     result
 }
