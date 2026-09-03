@@ -16,7 +16,7 @@ You can install on a native AlmaLinux 9/10 host (RPM), or run the same AlmaLinux
 The first phase implements the installer flow and is still in development. It currently includes:
 
 - Selection and installation of OpenLiteSpeed, Caddy, or Nginx.
-- Selection and installation of SnappyMail, RainLoop, Roundcube, or Thunderbird.
+- Selection and installation of SnappyMail, Roundcube, or Thunderbird.
 - Real download, install, and verification progress sent over WebSocket.
 - VPS and container detection; opening port `8787` in `firewalld` or `ufw` when those are active.
 - RPM packaging for AlmaLinux 9 and AlmaLinux 10.
@@ -114,7 +114,7 @@ The matrix requires Docker with privileged containers and systemd support:
 ./tests/docker-matrix.sh
 ```
 
-It checks that Nginx and Caddy respond over HTTP, and that SnappyMail, RainLoop, Roundcube, and Thunderbird are installed and pass their specific checks.
+It checks that Nginx and Caddy respond over HTTP, and that SnappyMail, Roundcube, and Thunderbird are installed and pass their specific checks.
 
 ## Security
 
