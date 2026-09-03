@@ -40,7 +40,7 @@ fn serve_index_html() -> HttpResponse {
             .content_type("text/html; charset=utf-8")
             .body(asset.data),
         None => HttpResponse::ServiceUnavailable()
-            .body("La interfaz web a├║n no est├í incluida en este binario"),
+            .body("La interfaz web aún no está incluida en este binario"),
     }
 }
 
@@ -130,16 +130,16 @@ async fn start_install(
     let mut current = state.status.write().await;
     if ["downloading", "installing", "testing"].contains(&current.phase) {
         return HttpResponse::Conflict()
-            .json(serde_json::json!({"error": "Ya hay una instalaci├│n en curso"}));
+            .json(serde_json::json!({"error": "Ya hay una instalación en curso"}));
     }
     if current.server_ready && current.selected_mail.is_some() && current.phase == "completed" {
         return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "La instalaci├│n ya finaliz├│. Usa una operaci├│n de reinstalaci├│n expl├¡cita."
+            "error": "La instalación ya finalizó. Usa una operación de reinstalación explícita."
         }));
     }
     if !matches!(current.phase, "ready" | "completed" | "failed") {
         return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "Transici├│n no v├ílida para instalar el servidor"
+            "error": "Transición no válida para instalar el servidor"
         }));
     }
     current.selected_server = Some(request.server);
@@ -148,7 +148,10 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(installer::install(state.get_ref().clone(), request.server));
+    tokio::spawn(cpn_installer::installer::install(
+        state.get_ref().clone(),
+        request.server,
+    ));
     HttpResponse::Accepted().finish()
 }
 
@@ -169,7 +172,7 @@ async fn start_mail_install(
     let mut current = state.status.write().await;
     if ["downloading", "installing", "testing"].contains(&current.phase) {
         return HttpResponse::Conflict()
-            .json(serde_json::json!({"error": "Ya hay una instalaci├│n en curso"}));
+            .json(serde_json::json!({"error": "Ya hay una instalación en curso"}));
     }
     if !current.server_ready {
         return HttpResponse::Conflict().json(serde_json::json!({
@@ -178,7 +181,7 @@ async fn start_mail_install(
     }
     if !matches!(current.phase, "completed" | "failed") {
         return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "Transici├│n no v├ílida para instalar el correo"
+            "error": "Transición no válida para instalar el correo"
         }));
     }
     current.selected_mail = Some(request.mail);
@@ -186,7 +189,7 @@ async fn start_mail_install(
     current.progress = 0;
     current.error = None;
     drop(current);
-    tokio::spawn(installer::install_mail(
+    tokio::spawn(cpn_installer::installer::install_mail(
         state.get_ref().clone(),
         request.mail,
     ));
@@ -230,6 +233,7 @@ async fn websocket(
 
 async fn static_asset(path: web::Path<String>) -> impl Responder {
     let requested = path.into_inner();
+    // Never treat empty path as the installer SPA here; `root_page` owns `/`.
     if requested.is_empty() {
         return HttpResponse::NotFound().finish();
     }
@@ -255,7 +259,7 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
                 .body(asset.data)
         }
         None => HttpResponse::ServiceUnavailable()
-            .body("La interfaz web a├║n no est├í incluida en este binario"),
+            .body("La interfaz web aún no está incluida en este binario"),
     }
 }
 
@@ -272,7 +276,7 @@ async fn main() -> std::io::Result<()> {
         println!("cpn-installer {VERSION}");
         return Ok(());
     }
-    println!("\nCPN Server Panel ┬À Instalador {VERSION}");
+    println!("\nCPN Server Panel · Instalador {VERSION}");
     println!("Iniciando el instalador web...\n");
     let token: String = rand::rng()
         .sample_iter(&Alphanumeric)
@@ -294,7 +298,7 @@ async fn main() -> std::io::Result<()> {
     let mut initial = InstallerStatus {
         phase,
         progress: 0,
-        message: "El sistema est├í listo para continuar".into(),
+        message: "El sistema está listo para continuar".into(),
         selected_server: None,
         selected_mail: None,
         environment: Some(environment.clone()),
@@ -315,7 +319,7 @@ async fn main() -> std::io::Result<()> {
         events,
         token: token.clone(),
     });
-    println!("Ô£ô El instalador web est├í listo para empezar:");
+    println!("✓ El instalador web está listo para empezar:");
     if environment.addresses.is_empty() {
         println!("  http://127.0.0.1:{PORT}/?token={token}");
     } else {
@@ -323,7 +327,7 @@ async fn main() -> std::io::Result<()> {
             println!("  http://{address}:{PORT}/?token={token}");
         }
     }
-    println!("\nMant├®n esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
+    println!("\nMantén esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
     let hosts = listen_hosts();
     let mut server = HttpServer::new(move || {
         App::new()
