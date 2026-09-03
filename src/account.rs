@@ -3,13 +3,12 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    fs,
+    env, fs,
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-const BOOTSTRAP_DIR: &str = "/var/lib/cpn";
-const BOOTSTRAP_FILE: &str = "/var/lib/cpn/panel-bootstrap.json";
+const DEFAULT_DATA_DIR: &str = "/var/lib/cpn";
 const MAX_USERNAME_CHARS: usize = 128;
 const MAX_PASSWORD_CHARS: usize = 256;
 const MAX_EMAIL_CHARS: usize = 254;
@@ -41,8 +40,16 @@ pub fn default_password_policy() -> PasswordPolicy {
     }
 }
 
+/// Data root for panel bootstrap, extra accounts, and site records.
+/// Override with `CPN_DATA_DIR` (used by tests and non-standard installs).
+pub fn data_dir() -> PathBuf {
+    env::var_os("CPN_DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_DATA_DIR))
+}
+
 pub fn bootstrap_path() -> PathBuf {
-    PathBuf::from(BOOTSTRAP_FILE)
+    data_dir().join("panel-bootstrap.json")
 }
 
 pub fn load_bootstrap() -> Option<PanelBootstrap> {
@@ -58,7 +65,7 @@ pub fn account_public_from_disk() -> Option<AccountPublic> {
     })
 }
 
-fn now_unix() -> u64 {
+pub fn now_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_secs())
@@ -230,22 +237,40 @@ pub fn generate_password(policy: &PasswordPolicy) -> String {
     panic!("password generation failed to satisfy policy after retries");
 }
 
-pub fn persist_bootstrap(boot: &PanelBootstrap) -> Result<(), String> {
-    fs::create_dir_all(BOOTSTRAP_DIR)
-        .map_err(|error| format!("No se pudo crear {BOOTSTRAP_DIR}: {error}"))?;
+fn persist_json_file(path: &Path, boot: &PanelBootstrap) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!("No se pudo crear {}: {error}", parent.display())
+        })?;
+    }
     let json = serde_json::to_string_pretty(boot)
         .map_err(|error| format!("No se pudo serializar la cuenta inicial: {error}"))?;
-    let path = bootstrap_path();
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true).mode(0o600);
     use std::io::Write;
     let mut file = options
-        .open(&path)
+        .open(path)
         .map_err(|error| format!("No se pudo escribir {}: {error}", path.display()))?;
     file.write_all(json.as_bytes())
         .map_err(|error| format!("No se pudo guardar la cuenta inicial: {error}"))?;
-    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
     Ok(())
+}
+
+pub(crate) fn write_account_file(path: &Path, boot: &PanelBootstrap) -> Result<(), String> {
+    persist_json_file(path, boot)
+}
+
+pub(crate) fn accounts_dir() -> PathBuf {
+    data_dir().join("accounts")
+}
+
+pub(crate) fn new_password_salt() -> String {
+    random_salt_hex()
+}
+
+pub fn persist_bootstrap(boot: &PanelBootstrap) -> Result<(), String> {
+    persist_json_file(&bootstrap_path(), boot)
 }
 
 pub fn setup_account(

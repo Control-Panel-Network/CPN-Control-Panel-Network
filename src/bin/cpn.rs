@@ -1,0 +1,378 @@
+//! CPN operator CLI (`cpn`): account and site management over SSH.
+
+use std::io::{self, Read, Write};
+use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
+use cpn_installer::account::default_password_policy;
+use cpn_installer::account_mgmt::{
+    create_account, delete_account, list_accounts, reset_account_password,
+};
+use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "cpn",
+    version = VERSION,
+    about = "CPN Control Panel Network operator CLI",
+    long_about = "Manage CPN accounts and website records on this host.\n\
+Destructive account/site changes require root (or CPN_ALLOW_NONROOT=1 for labs).\n\
+Data directory: /var/lib/cpn (override with CPN_DATA_DIR)."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Print package version
+    Version,
+    /// List top-level command groups
+    List,
+    /// Panel / operator accounts
+    Account {
+        #[command(subcommand)]
+        command: AccountCommands,
+    },
+    /// Website records (JSON under /var/lib/cpn/sites)
+    Site {
+        #[command(subcommand)]
+        command: SiteCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum AccountCommands {
+    /// Create an account (first write goes to panel-bootstrap.json)
+    Create {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        email: String,
+        #[arg(long, default_value = "en")]
+        language: String,
+        /// Read password from stdin (no echo in argv; never logged)
+        #[arg(long)]
+        password_stdin: bool,
+        /// Generate a password that meets the default policy
+        #[arg(long)]
+        generate: bool,
+    },
+    /// Delete an account (confirmation required unless --yes)
+    Delete {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Reset / recover password
+    Passwd {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        password_stdin: bool,
+        #[arg(long)]
+        generate: bool,
+    },
+    /// List configured accounts (no secrets)
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+enum SiteCommands {
+    /// Create a website record (vhost wiring may be stubbed)
+    Create {
+        #[arg(long)]
+        domain: String,
+        #[arg(long, default_value = "admin")]
+        owner: String,
+        #[arg(long)]
+        docroot: Option<String>,
+        #[arg(long)]
+        engine: Option<String>,
+        #[arg(long)]
+        notes: Option<String>,
+    },
+    /// Modify an existing website record
+    Modify {
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        docroot: Option<String>,
+        #[arg(long)]
+        engine: Option<String>,
+        #[arg(long)]
+        notes: Option<String>,
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        enable: bool,
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        disable: bool,
+    },
+    /// Delete a website record (confirmation required unless --yes)
+    Delete {
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// List website records
+    List,
+}
+
+fn is_root() -> bool {
+    // SAFETY: geteuid is a pure query of the process credentials.
+    unsafe { libc::geteuid() == 0 }
+}
+
+fn require_root_for_mutation() -> Result<(), String> {
+    if is_root() {
+        return Ok(());
+    }
+    if std::env::var("CPN_ALLOW_NONROOT").ok().as_deref() == Some("1") {
+        return Ok(());
+    }
+    Err(
+        "This command requires root. Re-run with sudo, or set CPN_ALLOW_NONROOT=1 for a lab data dir."
+            .into(),
+    )
+}
+
+fn read_password(password_stdin: bool, generate: bool) -> Result<(Option<String>, bool), String> {
+    if generate && password_stdin {
+        return Err("Use either --generate or --password-stdin, not both".into());
+    }
+    if generate {
+        return Ok((None, true));
+    }
+    if password_stdin {
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|error| format!("Failed to read password from stdin: {error}"))?;
+        let password = buf.trim_end_matches(['\r', '\n']).to_string();
+        if password.is_empty() {
+            return Err("Password from stdin was empty".into());
+        }
+        return Ok((Some(password), false));
+    }
+    // Interactive: prompt without echoing argv; use stderr for the prompt.
+    eprint!("Password: ");
+    let _ = io::stderr().flush();
+    let password = rpassword::read_password()
+        .map_err(|error| format!("Failed to read password: {error}"))?;
+    if password.is_empty() {
+        return Err("Password was empty (use --generate to create one)".into());
+    }
+    Ok((Some(password), false))
+}
+
+fn confirm_delete(prompt: &str, yes: bool) -> Result<(), String> {
+    if yes {
+        return Ok(());
+    }
+    eprint!("{prompt} Type YES to confirm: ");
+    let _ = io::stderr().flush();
+    let mut line = String::new();
+    io::stdin()
+        .read_line(&mut line)
+        .map_err(|error| format!("Failed to read confirmation: {error}"))?;
+    if line.trim() == "YES" {
+        Ok(())
+    } else {
+        Err("Aborted (confirmation was not YES)".into())
+    }
+}
+
+fn print_generated(password: Option<String>) {
+    if let Some(value) = password {
+        // Printed once to stdout for the operator; never written to logs by this CLI.
+        println!("generated_password={value}");
+    }
+}
+
+fn run() -> Result<(), String> {
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::Version => {
+            println!("cpn {VERSION}");
+            Ok(())
+        }
+        Commands::List => {
+            println!("account  Manage panel / operator accounts");
+            println!("site     Manage website records under /var/lib/cpn/sites");
+            println!("version  Print CLI version");
+            println!("list     List command groups (this output)");
+            Ok(())
+        }
+        Commands::Account { command } => match command {
+            AccountCommands::List => {
+                let accounts = list_accounts()?;
+                if accounts.is_empty() {
+                    println!("(no accounts)");
+                    return Ok(());
+                }
+                for account in accounts {
+                    println!(
+                        "{}\t{}\tconfigured={}",
+                        account.username, account.recovery_email, account.configured
+                    );
+                }
+                Ok(())
+            }
+            AccountCommands::Create {
+                username,
+                email,
+                language,
+                password_stdin,
+                generate,
+            } => {
+                require_root_for_mutation()?;
+                let (password, generate) = read_password(password_stdin, generate)?;
+                let result = create_account(
+                    &username,
+                    password.as_deref(),
+                    generate,
+                    &email,
+                    default_password_policy(),
+                    &language,
+                )?;
+                println!(
+                    "created account {} <{}>",
+                    result.public.username, result.public.recovery_email
+                );
+                print_generated(result.generated_password);
+                Ok(())
+            }
+            AccountCommands::Passwd {
+                username,
+                password_stdin,
+                generate,
+            } => {
+                require_root_for_mutation()?;
+                let (password, generate) = read_password(password_stdin, generate)?;
+                let result = reset_account_password(&username, password.as_deref(), generate)?;
+                println!("password updated for {}", result.public.username);
+                print_generated(result.generated_password);
+                Ok(())
+            }
+            AccountCommands::Delete { username, yes } => {
+                require_root_for_mutation()?;
+                confirm_delete(
+                    &format!("Delete account `{username}`? This cannot be undone."),
+                    yes,
+                )?;
+                delete_account(&username)?;
+                println!("deleted account {username}");
+                Ok(())
+            }
+        },
+        Commands::Site { command } => match command {
+            SiteCommands::List => {
+                let sites = list_sites()?;
+                if sites.is_empty() {
+                    println!("(no sites)");
+                    return Ok(());
+                }
+                for site in sites {
+                    println!(
+                        "{}\towner={}\tenabled={}\tvhost_wired={}\tdocroot={}",
+                        site.domain, site.owner, site.enabled, site.vhost_wired, site.docroot
+                    );
+                }
+                Ok(())
+            }
+            SiteCommands::Create {
+                domain,
+                owner,
+                docroot,
+                engine,
+                notes,
+            } => {
+                require_root_for_mutation()?;
+                let site = create_site(
+                    &domain,
+                    &owner,
+                    docroot.as_deref(),
+                    engine.as_deref(),
+                    notes.as_deref(),
+                )?;
+                println!(
+                    "created site {} (vhost_wired={}; JSON under /var/lib/cpn/sites)",
+                    site.domain, site.vhost_wired
+                );
+                if !site.vhost_wired {
+                    eprintln!(
+                        "note: web server vhost files are not written yet; only the site record was saved"
+                    );
+                }
+                Ok(())
+            }
+            SiteCommands::Modify {
+                domain,
+                owner,
+                docroot,
+                engine,
+                notes,
+                enable,
+                disable,
+            } => {
+                require_root_for_mutation()?;
+                if enable && disable {
+                    return Err("Use either --enable or --disable, not both".into());
+                }
+                let enabled = if enable {
+                    Some(true)
+                } else if disable {
+                    Some(false)
+                } else {
+                    None
+                };
+                let site = modify_site(
+                    &domain,
+                    SiteModify {
+                        owner,
+                        docroot,
+                        enabled,
+                        engine,
+                        notes,
+                    },
+                )?;
+                println!(
+                    "updated site {} (vhost_wired={})",
+                    site.domain, site.vhost_wired
+                );
+                if !site.vhost_wired {
+                    eprintln!(
+                        "note: web server vhost files are not rewritten yet; only the site record was updated"
+                    );
+                }
+                Ok(())
+            }
+            SiteCommands::Delete { domain, yes } => {
+                require_root_for_mutation()?;
+                confirm_delete(
+                    &format!("Delete site `{domain}` record? This cannot be undone."),
+                    yes,
+                )?;
+                delete_site(&domain)?;
+                println!("deleted site {domain}");
+                Ok(())
+            }
+        },
+    }
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("error: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}

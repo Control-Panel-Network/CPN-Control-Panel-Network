@@ -1,30 +1,18 @@
-mod account;
-mod auth_i18n;
-mod auth_pages;
-mod environment;
-mod install_recipes;
-mod install_webmail;
-mod installer;
-mod mail_releases;
-mod model;
-mod os_support;
-mod status_pages;
-
-use account::{account_public_from_disk, default_password_policy, setup_account};
+use cpn_installer::account::{account_public_from_disk, default_password_policy, setup_account};
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
-use auth_pages::{
+use cpn_installer::auth_pages::{
     forgot_password_ack_html, forgot_password_html, installer_token_required_html,
     login_post_ack_html, panel_login_html,
 };
 use futures_util::StreamExt;
-use installer::AppState;
-use model::{
+use cpn_installer::installer::AppState;
+use cpn_installer::model::{
     AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
     MailInstallRequest, OptionalTokenQuery, TokenQuery,
 };
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
-use status_pages::status_html_page;
+use cpn_installer::status_pages::status_html_page;
 use std::{env, sync::Arc, time::Duration};
 use tokio::sync::broadcast;
 
@@ -475,7 +463,7 @@ async fn main() -> std::io::Result<()> {
     if let Err(error) = environment::open_installer_port(&environment).await {
         eprintln!("Aviso: {error}");
     }
-    let mail_releases = mail_releases::load_mail_releases().await;
+    let mail_releases = cpn_installer::cpn_installer::mail_releases::load_mail_releases().await;
     let (events, _) = broadcast::channel(256);
     let bootstrap_account = account_public_from_disk();
     let phase = if bootstrap_account.is_some() {
