@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs,
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 const BOOTSTRAP_DIR: &str = "/var/lib/cpn";
@@ -46,7 +46,7 @@ pub fn bootstrap_path() -> PathBuf {
 }
 
 pub fn load_bootstrap() -> Option<PanelBootstrap> {
-    let raw = fs::read_to_string(BOOTSTRAP_FILE).ok()?;
+    let raw = fs::read_to_string(bootstrap_path()).ok()?;
     serde_json::from_str(&raw).ok()
 }
 
@@ -235,16 +235,16 @@ pub fn persist_bootstrap(boot: &PanelBootstrap) -> Result<(), String> {
         .map_err(|error| format!("No se pudo crear {BOOTSTRAP_DIR}: {error}"))?;
     let json = serde_json::to_string_pretty(boot)
         .map_err(|error| format!("No se pudo serializar la cuenta inicial: {error}"))?;
-    let path = Path::new(BOOTSTRAP_FILE);
+    let path = bootstrap_path();
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true).mode(0o600);
     use std::io::Write;
     let mut file = options
-        .open(path)
-        .map_err(|error| format!("No se pudo escribir {BOOTSTRAP_FILE}: {error}"))?;
+        .open(&path)
+        .map_err(|error| format!("No se pudo escribir {}: {error}", path.display()))?;
     file.write_all(json.as_bytes())
         .map_err(|error| format!("No se pudo guardar la cuenta inicial: {error}"))?;
-    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     Ok(())
 }
 
