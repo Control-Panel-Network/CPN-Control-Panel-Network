@@ -52,11 +52,6 @@ impl GuestOs {
         self.family == PackageFamily::Apt
     }
 
-    /// EL modular PHP enable is only needed on major 8 and 9.
-    pub fn needs_php_module_enable(&self) -> bool {
-        self.uses_dnf() && (self.major == 8 || self.major == 9)
-    }
-
     pub fn php_module_stream(&self) -> Option<&'static str> {
         match (self.uses_dnf(), self.major) {
             (true, 8) => Some("php:8.0"),
@@ -115,7 +110,7 @@ fn classify(id: &str, major: u32, version_id: &str) -> (PackageFamily, SupportSt
     };
 
     match id {
-        "almalinux" if matches!(major, 8 | 9 | 10) => {
+        "almalinux" if (8..=10).contains(&major) => {
             let status = if major == 8 {
                 SupportStatus::Partial
             } else {
@@ -208,15 +203,17 @@ fn supported_list_message() -> &'static str {
 /// Refuse install with a clear message unless the guest is Supported or Partial.
 pub fn require_installable_guest() -> Result<GuestOs, String> {
     let guest = detect_guest_os()?;
+    if guest.is_installable() {
+        return Ok(guest);
+    }
     match guest.support {
-        SupportStatus::Supported | SupportStatus::Partial => Ok(guest),
         SupportStatus::NotYet => Err(format!(
             "{} está en la matriz CyberPanel como best-effort, pero CPN aún no tiene \
              recetas listas para este sistema. {}",
             guest.label,
             supported_list_message()
         )),
-        SupportStatus::Unsupported => Err(format!(
+        _ => Err(format!(
             "{} no está en la matriz de invitados de CPN. {}",
             guest.label,
             supported_list_message()
@@ -244,7 +241,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ten.major, 10);
-        assert!(!ten.needs_php_module_enable());
+        assert_eq!(ten.php_module_stream(), None);
         assert_eq!(ten.epel_major_for_caddy().unwrap(), 10);
     }
 
