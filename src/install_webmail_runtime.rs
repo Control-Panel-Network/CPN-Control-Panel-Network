@@ -71,6 +71,32 @@ pub async fn configure_webmail_runtime(
         ),
     )
     .await?;
+    // enable --now does not reload an already-running master; reload so the new pool socket appears.
+    let reload = Command::new("systemctl")
+        .args(["reload", "php-fpm"])
+        .status()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !reload.success() {
+        run_command(
+            state,
+            command(
+                "systemctl",
+                vec!["restart", "php-fpm"],
+                "Reiniciando PHP-FPM para cargar el pool webmail",
+                "installing",
+                85,
+            ),
+        )
+        .await?;
+    }
+    // Confirm the pool socket exists before the reverse proxy health check.
+    if !Path::new("/run/php-fpm/cpn-webmail.sock").exists() {
+        return Err(
+            "PHP-FPM pool cpn-webmail did not create /run/php-fpm/cpn-webmail.sock after reload"
+                .into(),
+        );
+    }
     install_journal::record(STAGE, JournalAction::EnabledService, "php-fpm", None, None)?;
 
     // Reload frontends after config write (idempotent).
@@ -211,9 +237,9 @@ async fn harden_permissions(docroot: &str) -> Result<(), String> {
            chmod 0600 /opt/cpn-webmail/roundcube/db.sqlite; \
          fi && \
          if [ -d /opt/cpn-webmail/roundcube/config ]; then \
-           chown root:cpn-webmail /opt/cpn-webmail/roundcube/config; \
+           chown -R root:cpn-webmail /opt/cpn-webmail/roundcube/config; \
            chmod 750 /opt/cpn-webmail/roundcube/config; \
-           chmod 640 /opt/cpn-webmail/roundcube/config/*.php 2>/dev/null || true; \
+           find /opt/cpn-webmail/roundcube/config -type f -name '*.php' -exec chmod 640 {} +; \
          fi"
     );
     let status = Command::new("bash")
