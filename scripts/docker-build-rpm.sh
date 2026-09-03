@@ -50,13 +50,20 @@ fi
     set -euo pipefail
     dnf -y install \
       curl ca-certificates gcc gcc-c++ make openssl-devel \
-      rpm-build rpmdevtools git which hostname \
-      && dnf clean all
+      rpm-build rpmdevtools git which hostname
+    dnf clean all
 
     # Node 22 (Vite 6 / React 19 in installer-ui).
     if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null | tr -d v | cut -d. -f1)" -lt 20 ]]; then
       curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
       dnf -y install nodejs
+      # NodeSource repos can leave the toolchain incomplete; reassert gcc.
+      dnf -y install gcc gcc-c++ make
+    fi
+
+    if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
+      echo "gcc/cc missing after package install" >&2
+      exit 1
     fi
 
     if ! command -v rustc >/dev/null 2>&1; then
