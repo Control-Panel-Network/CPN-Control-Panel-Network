@@ -238,15 +238,21 @@ pub(crate) const PHP_PACKAGES_APT: &[&str] = &[
 pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> {
     match guest.php_module_stream()? {
         "php:8.0" => Some(command(
-            "dnf",
-            vec!["module", "enable", "-y", "php:8.0"],
+            "bash",
+            vec![
+                "-c",
+                "dnf module enable -y php:8.0 || dnf module list --enabled php 2>/dev/null | grep -q php",
+            ],
             "Preparando PHP 8.0",
             "downloading",
             38,
         )),
         _ => Some(command(
-            "dnf",
-            vec!["module", "enable", "-y", "php:8.2"],
+            "bash",
+            vec![
+                "-c",
+                "dnf module enable -y php:8.2 || dnf module list --enabled php 2>/dev/null | grep -q 'php.*8\\.2\\|php:8.2'",
+            ],
             "Preparando PHP 8.2",
             "downloading",
             38,
