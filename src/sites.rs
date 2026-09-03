@@ -83,12 +83,8 @@ fn default_docroot(domain: &str) -> String {
 }
 
 fn persist_site(path: &Path, site: &SiteRecord) -> Result<(), String> {
-    fs::create_dir_all(sites_dir()).map_err(|error| {
-        format!(
-            "Could not create {}: {error}",
-            sites_dir().display()
-        )
-    })?;
+    fs::create_dir_all(sites_dir())
+        .map_err(|error| format!("Could not create {}: {error}", sites_dir().display()))?;
     let json = serde_json::to_string_pretty(site)
         .map_err(|error| format!("Could not serialize site record: {error}"))?;
     let mut options = fs::OpenOptions::new();
@@ -125,8 +121,8 @@ pub fn list_sites() -> Result<Vec<SiteRecord>, String> {
         return Ok(Vec::new());
     }
     let mut sites = Vec::new();
-    let entries = fs::read_dir(&dir)
-        .map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
+    let entries =
+        fs::read_dir(&dir).map_err(|error| format!("Could not read {}: {error}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|error| format!("Could not read site entry: {error}"))?;
         let path = entry.path();
@@ -248,10 +244,7 @@ mod tests {
 
     fn with_temp_data<T>(f: impl FnOnce() -> T) -> T {
         let _guard = LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!(
-            "cpn-sites-test-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cpn-sites-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         // SAFETY: tests hold LOCK; only this thread sets CPN_DATA_DIR.
@@ -276,14 +269,11 @@ mod tests {
     #[test]
     fn site_crud_roundtrip() {
         with_temp_data(|| {
-            let created = create_site("app.example.com", "admin", None, Some("nginx"), None)
-                .expect("create");
+            let created =
+                create_site("app.example.com", "admin", None, Some("nginx"), None).expect("create");
             assert_eq!(created.domain, "app.example.com");
             assert!(!created.vhost_wired);
-            assert_eq!(
-                created.docroot,
-                "/var/www/app.example.com/public_html"
-            );
+            assert_eq!(created.docroot, "/var/www/app.example.com/public_html");
 
             let listed = list_sites().unwrap();
             assert_eq!(listed.len(), 1);

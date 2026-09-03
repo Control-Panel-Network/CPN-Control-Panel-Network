@@ -239,9 +239,8 @@ pub fn generate_password(policy: &PasswordPolicy) -> String {
 
 fn persist_json_file(path: &Path, boot: &PanelBootstrap) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!("No se pudo crear {}: {error}", parent.display())
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("No se pudo crear {}: {error}", parent.display()))?;
     }
     let json = serde_json::to_string_pretty(boot)
         .map_err(|error| format!("No se pudo serializar la cuenta inicial: {error}"))?;

@@ -163,8 +163,8 @@ fn read_password(password_stdin: bool, generate: bool) -> Result<(Option<String>
     // Interactive: prompt without echoing argv; use stderr for the prompt.
     eprint!("Password: ");
     let _ = io::stderr().flush();
-    let password = rpassword::read_password()
-        .map_err(|error| format!("Failed to read password: {error}"))?;
+    let password =
+        rpassword::read_password().map_err(|error| format!("Failed to read password: {error}"))?;
     if password.is_empty() {
         return Err("Password was empty (use --generate to create one)".into());
     }

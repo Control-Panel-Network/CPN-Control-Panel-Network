@@ -1,18 +1,18 @@
-use cpn_installer::account::{account_public_from_disk, default_password_policy, setup_account};
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
+use cpn_installer::account::{account_public_from_disk, default_password_policy, setup_account};
 use cpn_installer::auth_pages::{
     forgot_password_ack_html, forgot_password_html, installer_token_required_html,
     login_post_ack_html, panel_login_html,
 };
-use futures_util::StreamExt;
 use cpn_installer::installer::AppState;
 use cpn_installer::model::{
     AccountSetupRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
     MailInstallRequest, OptionalTokenQuery, TokenQuery,
 };
+use cpn_installer::status_pages::status_html_page;
+use futures_util::StreamExt;
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
-use cpn_installer::status_pages::status_html_page;
 use std::{env, sync::Arc, time::Duration};
 use tokio::sync::broadcast;
 
