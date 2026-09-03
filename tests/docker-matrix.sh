@@ -72,6 +72,12 @@ run_case() {
   local token
   token="$(installer_token "$name")"
   test -n "$token"
+  if [[ "$kind" == "mail" ]]; then
+    docker exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
+      -d '{"server":"nginx"}' \
+      "http://127.0.0.1:8787/api/install/server?token=$token" >/dev/null
+    wait_for_result "$name" "$token"
+  fi
   docker exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
     -d "{\"$kind\":\"$component\"}" \
     "http://127.0.0.1:8787/api/install/$kind?token=$token" >/dev/null
@@ -88,6 +94,11 @@ run_case() {
       docker exec "$name" caddy validate --config /etc/caddy/Caddyfile
       docker exec "$name" sh -lc "curl -fsSI http://127.0.0.1/ 2>/dev/null | grep -qi '^Server: Caddy'"
       ;;
+    openlitespeed)
+      docker exec "$name" sh -lc 'systemctl is-active --quiet lsws || systemctl is-active --quiet lshttpd'
+      docker exec "$name" test ! -e /etc/systemd/system/openlitespeed.service
+      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1/ 2>/dev/null | grep -qi 'CPN OpenLiteSpeed'"
+      ;;
     snappymail)
       docker exec "$name" systemctl is-active --quiet cpn-webmail
       docker exec "$name" php -m | grep -qi mbstring
@@ -96,6 +107,8 @@ run_case() {
     roundcube)
       docker exec "$name" systemctl is-active --quiet cpn-webmail
       docker exec "$name" test -s /opt/cpn-webmail/roundcube/db.sqlite
+      docker exec "$name" php -r '$db=new PDO("sqlite:/opt/cpn-webmail/roundcube/db.sqlite"); $n=$db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"users\"")->fetchColumn(); if(!$n){exit(1);}'
+      docker exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi Roundcube"
       ;;
     thunderbird)
@@ -109,7 +122,7 @@ run_case() {
 
 docker pull "$image" >/dev/null
 if [[ "${CPN_TEST_SCOPE:-all}" != "mail" ]]; then
-  for server in ${CPN_TEST_SERVERS:-nginx caddy}; do run_case server "$server"; done
+  for server in ${CPN_TEST_SERVERS:-nginx caddy openlitespeed}; do run_case server "$server"; done
 fi
 if [[ "${CPN_TEST_SCOPE:-all}" != "server" ]]; then
   for mail in ${CPN_TEST_MAILS:-snappymail roundcube thunderbird}; do run_case mail "$mail"; done

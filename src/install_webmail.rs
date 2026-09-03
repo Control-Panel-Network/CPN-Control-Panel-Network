@@ -3,8 +3,18 @@ use crate::install_recipes::command;
 use crate::installer::{AppState, install_php_runtime, run_command};
 use crate::model::MailSystem;
 use rand::{Rng, distr::Alphanumeric};
-use std::{os::unix::fs::symlink, path::Path, process::Stdio};
+use sha2::{Digest, Sha256};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt, symlink},
+    path::Path,
+    process::Stdio,
+};
 use tokio::{io::AsyncReadExt, process::Command};
+
+const SNAPPYMAIL_SHA256: &str = "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec";
+const ROUNDCUBE_SHA256: &str = "443cde2ea03b840ce4701fe23c273f01e68702f176d282e60248236bbb5f5f85";
 
 fn ephemeral_download_path(filename: &str) -> Result<String, String> {
     let suffix: String = rand::rng()
@@ -15,12 +25,32 @@ fn ephemeral_download_path(filename: &str) -> Result<String, String> {
     let dir = format!("/var/tmp/cpn-dl-{suffix}");
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    let path = format!("{dir}/{filename}");
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(|error| format!("No se pudo crear el archivo temporal de forma segura: {error}"))?
+        .write_all(b"")
+        .map_err(|error| error.to_string())?;
+    Ok(path)
+}
+
+fn verify_sha256(path: &str, expected_hex: &str) -> Result<(), String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("No se pudo leer {path}: {error}"))?;
+    let digest = Sha256::digest(&bytes);
+    let actual = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    if !actual.eq_ignore_ascii_case(expected_hex) {
+        return Err(format!(
+            "Integridad fallida para {path}: sha256 esperado {expected_hex}, obtenido {actual}"
+        ));
     }
-    Ok(format!("{dir}/{filename}"))
+    Ok(())
 }
 
 async fn download(
@@ -38,11 +68,16 @@ async fn download(
         .args([
             "--fail",
             "--location",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
             "--progress-bar",
             "--output",
             destination,
             url,
         ])
+        .kill_on_drop(true)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -135,20 +170,25 @@ async fn configure_webmail_service(state: &AppState, root: &'static str) -> Resu
         .await?;
     }
     reset_current_link(Path::new(root))?;
-    const UNIT: &str = "[Unit]\nDescription=CPN Webmail\nAfter=network.target\n\n[Service]\nType=simple\nUser=cpn-webmail\nGroup=cpn-webmail\nWorkingDirectory=/opt/cpn-webmail/current\nExecStart=/usr/bin/php -S 127.0.0.1:8888 -t /opt/cpn-webmail/current\nRestart=on-failure\nPrivateTmp=true\nNoNewPrivileges=true\n\n[Install]\nWantedBy=multi-user.target\n";
+    // Transitional php -S frontend; code stays root-owned where possible (issue #6).
+    const UNIT: &str = "[Unit]\nDescription=CPN Webmail (transitional php built-in server)\nAfter=network.target\n\n[Service]\nType=simple\nUser=cpn-webmail\nGroup=cpn-webmail\nWorkingDirectory=/opt/cpn-webmail/current\nExecStart=/usr/bin/php -S 127.0.0.1:8888 -t /opt/cpn-webmail/current\nRestart=on-failure\nPrivateTmp=true\nNoNewPrivileges=true\nProtectHome=true\n\n[Install]\nWantedBy=multi-user.target\n";
     std::fs::write("/etc/systemd/system/cpn-webmail.service", UNIT)
         .map_err(|error| error.to_string())?;
-    run_command(
-        state,
-        command(
-            "chown",
-            vec!["-R", "cpn-webmail:cpn-webmail", "/opt/cpn-webmail"],
-            "Ajustando permisos del webmail",
-            "installing",
-            84,
-        ),
-    )
-    .await?;
+    let harden = format!(
+        "chown -R root:root /opt/cpn-webmail && \
+         mkdir -p {root}/data {root}/temp {root}/logs && \
+         chown -R cpn-webmail:cpn-webmail {root}/data {root}/temp {root}/logs && \
+         if [ -f /opt/cpn-webmail/roundcube/db.sqlite ]; then chown cpn-webmail:cpn-webmail /opt/cpn-webmail/roundcube/db.sqlite; chmod 0600 /opt/cpn-webmail/roundcube/db.sqlite; fi"
+    );
+    let status = Command::new("bash")
+        .args(["-c", &harden])
+        .kill_on_drop(true)
+        .status()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !status.success() {
+        return Err("No se pudieron ajustar permisos del webmail".into());
+    }
     run_command(
         state,
         command(
@@ -213,6 +253,7 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                 36,
             )
             .await?;
+            verify_sha256(&archive, SNAPPYMAIL_SHA256)?;
             install_php_runtime(state, "PHP para SnappyMail").await?;
             extract_archive(
                 state,
@@ -238,7 +279,17 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                 36,
             )
             .await?;
+            verify_sha256(&archive, ROUNDCUBE_SHA256)?;
             install_php_runtime(state, "PHP para Roundcube").await?;
+            let pdo = Command::new("bash")
+                .args(["-c", "php -m | grep -qi pdo_sqlite"])
+                .kill_on_drop(true)
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !pdo.success() {
+                return Err("Falta la extensión PHP pdo_sqlite requerida por Roundcube".into());
+            }
             extract_archive(
                 state,
                 "tar",
@@ -266,7 +317,6 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                 .map_err(|error| error.to_string())?;
             #[cfg(unix)]
             {
-                use std::os::unix::fs::PermissionsExt;
                 let db = Path::new("/opt/cpn-webmail/roundcube/db.sqlite");
                 if !db.exists() {
                     let _ = std::fs::File::create(db);
@@ -276,6 +326,22 @@ pub(crate) async fn install_webmail(state: &AppState, mail: MailSystem) -> Resul
                     "/opt/cpn-webmail/roundcube/config/config.inc.php",
                     std::fs::Permissions::from_mode(0o640),
                 );
+            }
+            let sql = "/opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql";
+            if !Path::new(sql).exists() {
+                return Err("No se encontró SQL/sqlite.initial.sql de Roundcube".into());
+            }
+            let init = Command::new("php")
+                .args([
+                    "-r",
+                    "$db=new PDO('sqlite:/opt/cpn-webmail/roundcube/db.sqlite'); $sql=file_get_contents('/opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql'); $db->exec($sql); $n=$db->query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='users'\")->fetchColumn(); if(!$n){fwrite(STDERR,\"missing users table\\n\"); exit(1);}",
+                ])
+                .kill_on_drop(true)
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !init.success() {
+                return Err("No se pudo inicializar el esquema SQLite de Roundcube".into());
             }
             configure_webmail_service(state, "/opt/cpn-webmail/roundcube/public_html").await?;
         }

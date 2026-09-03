@@ -23,10 +23,18 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Preparar recursos para el análisis
+      - name: Instalar Node.js (bundle real de Vite)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Construir installer-ui embebido
+        working-directory: installer-ui
         run: |
-          mkdir -p installer-ui/dist
-          cp installer-ui/index.html installer-ui/dist/index.html
+          npm ci
+          npm run build
 
       - name: Comprobar formato
         run: cargo fmt --check
@@ -39,6 +47,12 @@ jobs:
 
       - name: Ejecutar Clippy
         run: cargo clippy -- -D warnings
+
+      - name: Auditoría de dependencias Rust
+        continue-on-error: true
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo audit || true
 
   frontend:
     name: React
@@ -89,6 +103,9 @@ jobs:
       - name: Comprobar TypeScript
         run: npm run typecheck
 
+      - name: Build de producción Next.js
+        run: npm run build
+
   scripts:
     name: Scripts
     runs-on: ubuntu-latest
@@ -96,13 +113,13 @@ jobs:
       - name: Obtener el código
         uses: actions/checkout@v7
 
-      # RPM functional matrix stays AlmaLinux 9 by default (tests/docker-matrix.sh).
-      # AlmaLinux 10: CPN_TEST_IMAGE=almalinux:10 ./tests/docker-matrix.sh
-      # Docker install helpers: scripts/docker-run.sh, scripts/docker-build-rpm.sh
+      # Privileged docker-matrix is manual only (issue #7).
       - name: Comprobar sintaxis Bash
         run: >
           bash -n
           scripts/build-rpm.sh
           scripts/docker-build-rpm.sh
           scripts/docker-run.sh
+          scripts/sync-version.sh
+          scripts/publish-checksums.sh
           tests/docker-matrix.sh

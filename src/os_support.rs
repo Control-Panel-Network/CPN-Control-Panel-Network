@@ -54,8 +54,9 @@ impl GuestOs {
 
     pub fn php_module_stream(&self) -> Option<&'static str> {
         match (self.uses_dnf(), self.major) {
+            // PHP 8.1 is EOL (2025-12-31). Prefer 8.2 on EL9 (issue #4).
             (true, 8) => Some("php:8.0"),
-            (true, 9) => Some("php:8.1"),
+            (true, 9) => Some("php:8.2"),
             _ => None,
         }
     }
