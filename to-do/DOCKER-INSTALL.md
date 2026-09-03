@@ -21,7 +21,35 @@ The installer still requires an AlmaLinux 9 or 10 userland. Docker does not remo
 - Do not expose `8787` to the public internet. The installer prints a temporary token; treat it as a secret.
 - Package installs (`dnf`) and service starts run inside the container guest, not on a locked-down unprivileged sandbox.
 
-## Quick start (helper)
+## Quick start from Docker Hub
+
+Published images (built from the same `Dockerfile` after `scripts/build-rpm.sh` / `scripts/docker-build-rpm.sh`):
+
+- https://hub.docker.com/r/master3395/cpn-installer
+- Tags: `almalinux9`, `almalinux10`, and `latest` (tracks `almalinux10`)
+
+```bash
+# Pull AlmaLinux 9 or 10
+docker pull master3395/cpn-installer:almalinux9
+docker pull master3395/cpn-installer:almalinux10
+
+# Run (privileged + systemd; same flags as scripts/docker-run.sh)
+docker run -d --privileged --cgroupns=host --name cpn-installer \
+  -p 8787:8787 \
+  --tmpfs /run --tmpfs /run/lock \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -e container=docker \
+  --stop-signal SIGRTMIN+3 \
+  master3395/cpn-installer:almalinux9 \
+  /usr/lib/systemd/systemd
+
+docker exec cpn-installer systemctl restart cpn-installer
+docker exec cpn-installer journalctl -u cpn-installer -n 50 --no-pager
+```
+
+With Podman, replace `docker` with `podman`. Open `http://127.0.0.1:8787/` and check the journal for the `?token=` URL.
+
+## Quick start (build locally from this repo)
 
 From the repository root on a machine with Docker or Podman:
 

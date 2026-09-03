@@ -1,0 +1,140 @@
+name: Docker Hub publish
+
+# Builds the RPM with scripts/docker-build-rpm.sh, then the existing Dockerfile,
+# and pushes master3395/cpn-installer:{almalinux9,almalinux10,latest}.
+# latest tracks almalinux10.
+#
+# Required repository secrets (same names as master3395/cyberpanel):
+#   DOCKERHUB_USERNAME
+#   DOCKERHUB_TOKEN
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      os_tag:
+        description: OS tag (almalinux9, almalinux10, or all)
+        required: false
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-hub-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - alma: "9"
+            tag: almalinux9
+            latest: false
+          - alma: "10"
+            tag: almalinux10
+            latest: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Optionally filter matrix
+        id: want
+        env:
+          OS_TAG: ${{ github.event.inputs.os_tag }}
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          os_tag="${OS_TAG:-all}"
+          if [ "${EVENT}" = "release" ]; then
+            os_tag="all"
+          fi
+          if [ "${os_tag}" = "all" ] || [ "${os_tag}" = "${TAG}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.want.outputs.run == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Detect Docker Hub credentials
+        if: steps.want.outputs.run == 'true'
+        id: hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Missing DOCKERHUB_USERNAME / DOCKERHUB_TOKEN; will build only."
+          fi
+
+      - name: Log in to Docker Hub
+        if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build RPM (scripts/docker-build-rpm.sh)
+        if: steps.want.outputs.run == 'true'
+        env:
+          CPN_ALMA_VERSION: ${{ matrix.alma }}
+          CPN_CONTAINER_ENGINE: docker
+        run: |
+          set -euo pipefail
+          chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh
+          ./scripts/docker-build-rpm.sh
+          shopt -s nullglob
+          rpms=(target/rpmbuild/RPMS/*/cpn-installer-*.rpm)
+          test "${#rpms[@]}" -ge 1
+          cp -f "${rpms[0]}" ./cpn-installer.rpm
+          ls -lh ./cpn-installer.rpm
+
+      - name: Build runtime image (no Hub secrets)
+        if: steps.want.outputs.run == 'true' && steps.hub.outputs.available != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          push: false
+          tags: master3395/cpn-installer:${{ matrix.tag }}
+          build-args: |
+            ALMA_VERSION=${{ matrix.alma }}
+
+      - name: Build and push image
+        if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            master3395/cpn-installer:${{ matrix.tag }}
+            ${{ matrix.latest && 'master3395/cpn-installer:latest' || '' }}
+          build-args: |
+            ALMA_VERSION=${{ matrix.alma }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            cpn.almalinux.version=${{ matrix.alma }}
+
+      - name: Smoke check pushed image
+        if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          docker pull "master3395/cpn-installer:${{ matrix.tag }}"
+          docker run --rm --entrypoint /bin/bash \
+            "master3395/cpn-installer:${{ matrix.tag }}" \
+            -lc 'rpm -q cpn-installer && systemctl is-enabled cpn-installer.service'
