@@ -1,7 +1,7 @@
 use crate::install_recipes::{
     CommandSpec, DnfProgress, apt_update_command, command, php_install_command,
     php_module_enable_command, pkg_install, prepare_caddy_apt_command, prepare_caddy_repository,
-    server_recipes,
+    prepare_openlitespeed_repository, server_recipes,
 };
 use crate::install_webmail::install_webmail;
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem, ServerEngine};
@@ -109,6 +109,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     let mut child = Command::new(spec.program)
         .args(&spec.args)
         .env("LC_ALL", "C")
+        .kill_on_drop(true)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -125,31 +126,42 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     let mut out_lines = BufReader::new(stdout).lines();
     let mut err_lines = BufReader::new(stderr).lines();
     let (mut out_done, mut err_done, mut transaction) = (false, false, false);
-    while !out_done || !err_done {
-        tokio::select! {
-            line = out_lines.next_line(), if !out_done => match line {
-                Ok(Some(line)) => {
-                    if !line.trim().is_empty() { state.log(&line, "info"); }
-                    if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
-                }
-                Ok(None) | Err(_) => out_done = true,
-            },
-            line = err_lines.next_line(), if !err_done => match line {
-                Ok(Some(line)) => {
-                    if !line.trim().is_empty() { state.log(&line, "info"); }
-                    if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
-                }
-                Ok(None) | Err(_) => err_done = true,
-            },
+    let pump = async {
+        while !out_done || !err_done {
+            tokio::select! {
+                line = out_lines.next_line(), if !out_done => match line {
+                    Ok(Some(line)) => {
+                        if !line.trim().is_empty() { state.log(&line, "info"); }
+                        if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
+                    }
+                    Ok(None) | Err(_) => out_done = true,
+                },
+                line = err_lines.next_line(), if !err_done => match line {
+                    Ok(Some(line)) => {
+                        if !line.trim().is_empty() { state.log(&line, "info"); }
+                        if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
+                    }
+                    Ok(None) | Err(_) => err_done = true,
+                },
+            }
         }
-    }
-    let exit = child.wait().await.map_err(|error| error.to_string())?;
-    if !exit.success() {
-        return Err(format!(
-            "{} terminó con código {}",
-            spec.description,
-            exit.code().unwrap_or(-1)
-        ));
+        let exit = child.wait().await.map_err(|error| error.to_string())?;
+        if !exit.success() {
+            return Err(format!(
+                "{} terminó con código {}",
+                spec.description,
+                exit.code().unwrap_or(-1)
+            ));
+        }
+        Ok::<(), String>(())
+    };
+    match tokio::time::timeout(std::time::Duration::from_secs(1800), pump).await {
+        Ok(result) => result?,
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            return Err(format!("Tiempo de espera agotado en: {}", spec.description));
+        }
     }
     if let Some(tracking) = spec.dnf {
         state
@@ -163,46 +175,103 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     Ok(())
 }
 
-async fn configure_openlitespeed(state: &AppState) -> Result<(), String> {
-    const UNIT: &str = "[Unit]\nDescription=OpenLiteSpeed HTTP Server\nAfter=network.target\n\n[Service]\nType=forking\nExecStart=/usr/local/lsws/bin/lswsctrl start\nExecStop=/usr/local/lsws/bin/lswsctrl stop\nExecReload=/usr/local/lsws/bin/lswsctrl restart\nRemainAfterExit=yes\n\n[Install]\nWantedBy=multi-user.target\n";
-    std::fs::write("/etc/systemd/system/openlitespeed.service", UNIT)
-        .map_err(|error| format!("No se pudo crear el servicio de OpenLiteSpeed: {error}"))?;
+async fn detect_lsws_unit() -> Result<&'static str, String> {
+    for unit in ["lsws", "lshttpd"] {
+        let lib = format!("/usr/lib/systemd/system/{unit}.service");
+        let etc = format!("/etc/systemd/system/{unit}.service");
+        if std::path::Path::new(&lib).exists() || std::path::Path::new(&etc).exists() {
+            return Ok(unit);
+        }
+    }
+    Err("No se encontró la unidad systemd vendor de OpenLiteSpeed (lsws/lshttpd)".into())
+}
+
+async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, String> {
+    // Prefer vendor unit; remove any leftover CPN wrapper (issue #14).
+    let wrapper = std::path::Path::new("/etc/systemd/system/openlitespeed.service");
+    if wrapper.exists() {
+        let _ = std::fs::remove_file(wrapper);
+    }
+    std::fs::create_dir_all("/var/www/cpn/html")
+        .map_err(|error| format!("No se pudo crear el document root CPN: {error}"))?;
+    std::fs::write(
+        "/var/www/cpn/html/index.html",
+        "<!doctype html><html><head><title>CPN</title></head><body><h1>CPN OpenLiteSpeed</h1></body></html>\n",
+    )
+    .map_err(|error| error.to_string())?;
+    let vh_dir = "/usr/local/lsws/conf/vhosts/CPN";
+    std::fs::create_dir_all(vh_dir)
+        .map_err(|error| format!("No se pudo crear vhost CPN: {error}"))?;
+    std::fs::write(
+        format!("{vh_dir}/vhconf.conf"),
+        "docRoot                   $VH_ROOT/html/\nenableGzip                1\nindex  {\n  useServer               0\n  indexFiles              index.html, index.php\n}\n",
+    )
+    .map_err(|error| error.to_string())?;
+    let httpd = "/usr/local/lsws/conf/httpd_config.conf";
+    let mut conf = std::fs::read_to_string(httpd).unwrap_or_default();
+    if !conf.contains("virtualHost CPN") {
+        conf.push_str(
+            "\nvirtualHost CPN {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPN/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n\nlistener CPNHttp {\n  address                 *:80\n  secure                  0\n  map                     CPN *\n}\n",
+        );
+        std::fs::write(httpd, conf).map_err(|error| error.to_string())?;
+    }
+    let admin = "/usr/local/lsws/admin/conf/admin_config.conf";
+    if std::path::Path::new(admin).exists() {
+        let _ = Command::new("sed")
+            .args([
+                "-i",
+                "s#address[[:space:]]\\+\\*:7080#address                 127.0.0.1:7080#",
+                admin,
+            ])
+            .status()
+            .await;
+    }
+    let unit = detect_lsws_unit().await?;
     run_command(
         state,
         command(
             "systemctl",
             vec!["daemon-reload"],
-            "Registrando OpenLiteSpeed en systemd",
+            "Recargando systemd para OpenLiteSpeed",
             "installing",
             80,
         ),
     )
     .await?;
-    run_command(
-        state,
-        command(
+    let enable = match unit {
+        "lshttpd" => command(
             "systemctl",
-            vec!["enable", "--now", "openlitespeed"],
-            "Activando OpenLiteSpeed",
+            vec!["enable", "--now", "lshttpd"],
+            "Activando el servicio vendor lshttpd",
             "installing",
             84,
         ),
-    )
-    .await
+        _ => command(
+            "systemctl",
+            vec!["enable", "--now", "lsws"],
+            "Activando el servicio vendor lsws",
+            "installing",
+            84,
+        ),
+    };
+    run_command(state, enable).await?;
+    Ok(unit)
 }
 
 fn server_service(server: ServerEngine) -> &'static str {
     match server {
         ServerEngine::Nginx => "nginx",
         ServerEngine::Caddy => "caddy",
-        ServerEngine::Openlitespeed => "openlitespeed",
+        ServerEngine::Openlitespeed => "lsws",
     }
 }
 
 fn server_url(server: ServerEngine) -> &'static str {
     match server {
-        ServerEngine::Openlitespeed => "http://127.0.0.1:8088/",
-        ServerEngine::Nginx | ServerEngine::Caddy => "http://127.0.0.1/",
+        // Never use Example:8088 as success criteria (issue #15).
+        ServerEngine::Openlitespeed | ServerEngine::Nginx | ServerEngine::Caddy => {
+            "http://127.0.0.1/"
+        }
     }
 }
 
@@ -222,50 +291,124 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
                 run_command(&state, prepare_caddy_apt_command()).await?;
             }
         }
+        if matches!(server, ServerEngine::Openlitespeed) {
+            prepare_openlitespeed_repository(&guest)?;
+        }
         for item in server_recipes(&guest, server) {
             run_command(&state, item).await?;
         }
+        let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
-            configure_openlitespeed(&state).await?;
+            ols_unit = Some(configure_openlitespeed(&state).await?);
         }
         state
             .progress("testing", 90, "Comprobando que el servicio está activo")
             .await;
-        run_command(
-            &state,
-            command(
+        let service = ols_unit.unwrap_or_else(|| server_service(server));
+        let service_check = match service {
+            "lshttpd" => command(
+                "systemctl",
+                vec!["is-active", "--quiet", "lshttpd"],
+                "Verificando el servicio con systemd",
+                "testing",
+                92,
+            ),
+            "lsws" => command(
+                "systemctl",
+                vec!["is-active", "--quiet", "lsws"],
+                "Verificando el servicio con systemd",
+                "testing",
+                92,
+            ),
+            _ => command(
                 "systemctl",
                 vec!["is-active", "--quiet", server_service(server)],
                 "Verificando el servicio con systemd",
                 "testing",
                 92,
             ),
-        )
-        .await?;
-        run_command(
-            &state,
-            command(
-                "curl",
-                vec![
-                    "--fail",
-                    "--silent",
-                    "--show-error",
-                    "--max-time",
-                    "10",
-                    "--output",
-                    "/dev/null",
-                    server_url(server),
-                ],
-                "Comprobando la respuesta HTTP local",
-                "testing",
-                96,
-            ),
-        )
-        .await?;
+        };
+        run_command(&state, service_check).await?;
+        if matches!(server, ServerEngine::Openlitespeed) {
+            let status = Command::new("bash")
+                .args([
+                    "-c",
+                    "curl --fail --silent --show-error --max-time 10 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'",
+                ])
+                .kill_on_drop(true)
+                .status()
+                .await
+                .map_err(|error| error.to_string())?;
+            if !status.success() {
+                return Err("OpenLiteSpeed no sirvió el vhost CPN en :80".into());
+            }
+        } else {
+            run_command(
+                &state,
+                command(
+                    "curl",
+                    vec![
+                        "--fail",
+                        "--silent",
+                        "--show-error",
+                        "--max-time",
+                        "10",
+                        "--output",
+                        "/dev/null",
+                        server_url(server),
+                    ],
+                    "Comprobando la respuesta HTTP local",
+                    "testing",
+                    96,
+                ),
+            )
+            .await?;
+        }
+        // Open http/https when a host firewall is active (issue #21).
+        if let Some(environment) = state.status.read().await.environment.clone() {
+            open_service_ports(&environment).await?;
+        }
         Ok::<_, String>(())
     }
     .await;
-    finish(&state, result, server.label(), true).await;
+    finish(&state, result, server.label(), true, false).await;
+}
+
+async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Result<(), String> {
+    match environment.firewall.as_deref() {
+        Some("firewalld") => {
+            for service in ["http", "https"] {
+                let _ = Command::new("firewall-cmd")
+                    .args(["--add-service", service])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await;
+            }
+            let _ = std::fs::create_dir_all("/var/lib/cpn");
+            let _ = std::fs::write(
+                "/var/lib/cpn/firewall-journal.txt",
+                "firewalld http\nfirewalld https\n",
+            );
+        }
+        Some("ufw") => {
+            for port in ["80/tcp", "443/tcp"] {
+                let _ = Command::new("ufw")
+                    .args(["allow", port])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await;
+            }
+            let _ = std::fs::create_dir_all("/var/lib/cpn");
+            let _ = std::fs::write(
+                "/var/lib/cpn/firewall-journal.txt",
+                "ufw 80/tcp\nufw 443/tcp\n",
+            );
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 pub(crate) async fn install_php_runtime(
@@ -373,10 +516,26 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             )
             .await?;
         }
+            {
+                let mut status = state.status.write().await;
+                status.mail_client_ready = true;
+                status.mail_backend_ready = false;
+                if matches!(mail, MailSystem::Thunderbird) {
+                    status.access_note = Some(
+                        "Thunderbird is a desktop mail client. It does not provision IMAP/SMTP on this host."
+                            .into(),
+                    );
+                } else {
+                    status.access_note = Some(
+                        "Webmail client installed. IMAP/SMTP backend was not provisioned by CPN."
+                            .into(),
+                    );
+                }
+            }
         Ok::<_, String>(())
     }
     .await;
-    finish(&state, result, mail.label(), false).await;
+    finish(&state, result, mail.label(), false, true).await;
 }
 
 async fn finish(
@@ -384,16 +543,34 @@ async fn finish(
     result: Result<(), String>,
     label: &str,
     mark_server_ready: bool,
+    mail_flow: bool,
 ) {
     let mut status = state.status.write().await;
     match result {
         Ok(()) => {
             if mark_server_ready {
                 status.server_ready = true;
+                status.external_ports_configured = status
+                    .environment
+                    .as_ref()
+                    .and_then(|env| env.firewall.as_ref())
+                    .is_some();
+                if status.access_note.is_none() {
+                    status.access_note = Some(
+                        "Servicio verificado en loopback. Comprueba acceso externo desde otra máquina si el firewall estaba activo."
+                            .into(),
+                    );
+                }
             }
             status.phase = "completed";
             status.progress = 100;
-            status.message = format!("{label} se instaló y verificó correctamente");
+            if mail_flow && !status.mail_backend_ready {
+                status.message = format!(
+                    "{label} (mail client) installed. IMAP/SMTP backend was not provisioned by CPN."
+                );
+            } else {
+                status.message = format!("{label} se instaló y verificó correctamente");
+            }
             let _ = state.events.send(InstallerEvent::Completed {
                 status: status.clone(),
             });
@@ -401,7 +578,9 @@ async fn finish(
         Err(error) => {
             status.phase = "failed";
             status.error = Some(error.clone());
-            status.message = "La instalación se detuvo de forma segura".into();
+            status.message =
+                "La instalación falló; pueden quedar cambios parciales. Revisa /var/lib/cpn/."
+                    .into();
             state.log(error, "error");
             let _ = state.events.send(InstallerEvent::Error {
                 status: status.clone(),

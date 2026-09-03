@@ -88,6 +88,10 @@ pub struct InstallerStatus {
     pub version: String,
     /// True after the web server install finished successfully at least once.
     pub server_ready: bool,
+    pub mail_client_ready: bool,
+    pub mail_backend_ready: bool,
+    pub external_ports_configured: bool,
+    pub access_note: Option<String>,
     pub mail_releases: Vec<MailReleaseInfo>,
 }
 
@@ -113,6 +117,10 @@ impl Default for InstallerStatus {
             panel_login_url: None,
             version: env!("CARGO_PKG_VERSION").into(),
             server_ready: false,
+            mail_client_ready: false,
+            mail_backend_ready: false,
+            external_ports_configured: false,
+            access_note: None,
             mail_releases: Vec::new(),
         }
     }

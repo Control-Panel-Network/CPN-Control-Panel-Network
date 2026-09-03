@@ -442,11 +442,17 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
     }
 }
 
+fn allow_remote_listen() -> bool {
+    env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
+        || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
+}
+
 fn listen_hosts() -> Vec<String> {
-    let _allow_remote = env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
-        || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1");
-    let _ = _allow_remote;
-    vec!["0.0.0.0".into()]
+    if allow_remote_listen() {
+        vec!["0.0.0.0".into()]
+    } else {
+        vec!["127.0.0.1".into()]
+    }
 }
 
 #[actix_web::main]
@@ -463,8 +469,12 @@ async fn main() -> std::io::Result<()> {
         .map(char::from)
         .collect();
     let environment = cpn_installer::environment::inspect(PORT).await;
-    if let Err(error) = cpn_installer::environment::open_installer_port(&environment).await {
-        eprintln!("Aviso: {error}");
+    let remote = allow_remote_listen();
+    if remote {
+        match cpn_installer::environment::open_installer_port(&environment).await {
+            Ok(()) => {}
+            Err(error) => eprintln!("Aviso: {error}"),
+        }
     }
     let mail_releases = cpn_installer::mail_releases::load_mail_releases().await;
     let (events, _) = broadcast::channel(256);
@@ -489,6 +499,10 @@ async fn main() -> std::io::Result<()> {
         panel_login_url: None,
         version: VERSION.into(),
         server_ready: false,
+        mail_client_ready: false,
+        mail_backend_ready: false,
+        external_ports_configured: false,
+        access_note: None,
         mail_releases,
     };
     initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
@@ -498,12 +512,21 @@ async fn main() -> std::io::Result<()> {
         token: token.clone(),
     });
     println!("✓ El instalador web está listo para empezar:");
-    if environment.addresses.is_empty() {
-        println!("  http://127.0.0.1:{PORT}/?token={token}");
-    } else {
-        for address in &environment.addresses {
-            println!("  http://{address}:{PORT}/?token={token}");
+    if remote {
+        println!("  Modo --allow-remote: escucha en 0.0.0.0:{PORT} (HTTP sin TLS).");
+        if environment.addresses.is_empty() {
+            println!("  http://127.0.0.1:{PORT}/?token={token}");
+        } else {
+            for address in &environment.addresses {
+                println!("  http://{address}:{PORT}/?token={token}");
+            }
         }
+    } else {
+        println!("  http://127.0.0.1:{PORT}/?token={token}");
+        println!(
+            "  Acceso remoto recomendado vía túnel SSH, por ejemplo:\n  ssh -L {PORT}:127.0.0.1:{PORT} user@host"
+        );
+        println!("  Para escuchar en todas las interfaces: --allow-remote o CPN_ALLOW_REMOTE=1");
     }
     println!("\nMantén esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
     let hosts = listen_hosts();
@@ -530,6 +553,8 @@ async fn main() -> std::io::Result<()> {
     }
     let running = server.run();
     let result = running.await;
-    let _ = cpn_installer::environment::close_installer_port(&environment).await;
+    if remote {
+        let _ = cpn_installer::environment::close_installer_port(&environment).await;
+    }
     result
 }

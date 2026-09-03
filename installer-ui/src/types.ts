@@ -56,6 +56,10 @@ export interface InstallerStatus {
   panel_login_url?: string | null;
   version?: string;
   server_ready?: boolean;
+  mail_client_ready?: boolean;
+  mail_backend_ready?: boolean;
+  external_ports_configured?: boolean;
+  access_note?: string | null;
   mail_releases?: Array<{ id: string; label: string; version: string; released_on: string }>;
 }
 

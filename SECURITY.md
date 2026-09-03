@@ -33,7 +33,7 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a Linux web installer that prepares server components on CyberPanel-aligned guests (AlmaLinux 8-10, Rocky 8-9, Ubuntu 20.04/22.04/24.04, and related EL targets; see to-do/OS-SUPPORT-MATRIX.md). Packaging today centers on RPM (and experimental .deb). Privileged Docker/Podman Alma images remain supported. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. The installer listens on `0.0.0.0:8787` and prints a temporary access token in the console URL.
+CPN is a Linux web installer that prepares server components on CyberPanel-aligned guests (AlmaLinux 8-10, Rocky 8-9, Ubuntu 20.04/22.04/24.04, and related EL targets; see to-do/OS-SUPPORT-MATRIX.md). Packaging today centers on RPM (and experimental .deb). Privileged Docker/Podman Alma images remain supported. A single Rust process serves an HTTP UI, streams progress over WebSockets, and can install system packages and related services. By default the installer listens on `127.0.0.1:8787` and prints a temporary access token in the console URL. Use SSH port forwarding for remote access, or pass `--allow-remote` / `CPN_ALLOW_REMOTE=1` to bind `0.0.0.0` (HTTP without TLS; operator opt-in only).
 
 ### Trust assumptions
 

@@ -1,4 +1,5 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   Bell,
   Database,
@@ -58,16 +59,24 @@ const navigation = [
   { label: "Backups", icon: HardDrive },
 ];
 
-export default function DashboardPage() {
+type DashboardProps = {
+  searchParams?: Promise<{ preview?: string }> | { preview?: string };
+};
+
+export default async function DashboardPage({ searchParams }: DashboardProps) {
+  const params = await Promise.resolve(searchParams ?? {});
+  if (params.preview !== "1") {
+    redirect("/?notice=auth-required");
+  }
+
   return (
     <main className="panel-layout">
       <aside className="sidebar">
         <div>
-          <Link href="/dashboard" className="panel-brand">
+          <Link href="/dashboard?preview=1" className="panel-brand">
             <Server size={23} strokeWidth={1.9} />
             <span>NT&amp;DBN Panel</span>
           </Link>
-
           <div className="server-summary">
             <Network size={20} aria-hidden="true" />
             <div>
@@ -75,7 +84,6 @@ export default function DashboardPage() {
               <span>Online · 49d 23h</span>
             </div>
           </div>
-
           <nav aria-label="Primary navigation">
             {navigation.map(({ label, icon: Icon, active }) => (
               <a key={label} href="#" className={active ? "active" : undefined}>
@@ -85,26 +93,23 @@ export default function DashboardPage() {
             ))}
           </nav>
         </div>
-
         <div className="sidebar-footer">
           <button aria-label="Notifications"><Bell size={19} /></button>
           <button aria-label="Settings"><Settings size={19} /></button>
           <Link href="/" className="logout"><LogOut size={18} /> Log out</Link>
         </div>
       </aside>
-
       <section className="panel-main">
         <header className="mobile-header">
           <button aria-label="Open menu"><Menu size={22} /></button>
           <strong>NT&amp;DBN Panel</strong>
           <button aria-label="Notifications"><Bell size={21} /></button>
         </header>
-
         <div className="dashboard-heading">
           <div>
             <p className="eyebrow">SERVER OVERVIEW</p>
-            <h1>Dashboard</h1>
-            <p>Monitor your server and manage its services from one place.</p>
+            <h1>Dashboard preview</h1>
+            <p>Preview only. Real data requires a signed-in session (not yet connected).</p>
           </div>
           <label className="dashboard-search">
             <Search size={18} aria-hidden="true" />
@@ -112,13 +117,11 @@ export default function DashboardPage() {
             <input type="search" placeholder="Search services" />
           </label>
         </div>
-
         <div className="resource-grid">
           <ResourceGauge label="CPU Usage" value={45} detail="4 cores" />
           <ResourceGauge label="RAM Usage" value={72} detail="11.5 / 16 GB" />
           <ResourceGauge label="Disk Usage" value={28} detail="140 / 500 GB" />
         </div>
-
         <div className="dashboard-lower-grid">
           <article className="status-card">
             <div className="status-card-heading">
@@ -134,7 +137,6 @@ export default function DashboardPage() {
               <li><span>Mail service</span><strong>Running</strong></li>
             </ul>
           </article>
-
           <article className="activity-card">
             <p className="eyebrow">RECENT ACTIVITY</p>
             <h2>Latest changes</h2>

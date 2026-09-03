@@ -141,16 +141,31 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
                 84,
             ),
         ],
-        ServerEngine::Openlitespeed => vec![
-            command(
-                "bash",
-                vec!["-c", "curl -fsSL https://repo.litespeed.sh | bash"],
-                "Preparando el repositorio de OpenLiteSpeed",
-                "downloading",
-                2,
-            ),
-            ols,
-        ],
+        // Repo file is written by prepare_openlitespeed_repository (no curl|bash, issue #2).
+        ServerEngine::Openlitespeed => vec![ols],
+    }
+}
+
+/// Write LiteSpeed yum repo directly instead of `curl | bash` (issue #2).
+pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), String> {
+    match guest.family {
+        PackageFamily::Dnf => {
+            let major = guest.major;
+            let repository = format!(
+                "[litespeed]\n\
+                 name=LiteSpeed Tech Repository for EL{major}\n\
+                 baseurl=https://rpms.litespeedtech.com/centos/{major}/$basearch/\n\
+                 enabled=1\n\
+                 gpgcheck=1\n\
+                 gpgkey=https://rpms.litespeedtech.com/centos/RPM-GPG-KEY-litespeed\n"
+            );
+            std::fs::write("/etc/yum.repos.d/litespeed.repo", repository).map_err(|error| {
+                format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")
+            })
+        }
+        PackageFamily::Apt => Err(
+            "OpenLiteSpeed apt bootstrap is not implemented yet; use a RHEL-family guest".into(),
+        ),
     }
 }
 
@@ -192,6 +207,7 @@ pub(crate) fn prepare_caddy_apt_command() -> CommandSpec {
 
 pub(crate) const PHP_PACKAGES_DNF: &[&str] = &[
     "php-cli",
+    "php-fpm",
     "php-mbstring",
     "php-intl",
     "php-xml",
@@ -200,6 +216,7 @@ pub(crate) const PHP_PACKAGES_DNF: &[&str] = &[
     "php-gd",
     "php-opcache",
     "php-pecl-zip",
+    "php-sqlite3",
     "unzip",
     "tar",
 ];
@@ -228,8 +245,8 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
         )),
         _ => Some(command(
             "dnf",
-            vec!["module", "enable", "-y", "php:8.1"],
-            "Preparando PHP 8.1",
+            vec!["module", "enable", "-y", "php:8.2"],
+            "Preparando PHP 8.2",
             "downloading",
             38,
         )),
