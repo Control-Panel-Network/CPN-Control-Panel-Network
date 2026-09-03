@@ -236,12 +236,14 @@ pub(crate) const PHP_PACKAGES_APT: &[&str] = &[
 ];
 
 pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> {
+    // If PHP is already present (any enabled stream), do not fail trying to switch streams.
+    // Fresh hosts still enable the preferred stream when php is missing.
     match guest.php_module_stream()? {
         "php:8.0" => Some(command(
             "bash",
             vec![
                 "-c",
-                "dnf module enable -y php:8.0 || dnf module list --enabled php 2>/dev/null | grep -q php",
+                "php -v >/dev/null 2>&1 || dnf module enable -y php:8.0",
             ],
             "Preparando PHP 8.0",
             "downloading",
@@ -251,7 +253,7 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
             "bash",
             vec![
                 "-c",
-                "dnf module enable -y php:8.2 || dnf module list --enabled php 2>/dev/null | grep -q 'php.*8\\.2\\|php:8.2'",
+                "php -v >/dev/null 2>&1 || dnf module enable -y php:8.2",
             ],
             "Preparando PHP 8.2",
             "downloading",
