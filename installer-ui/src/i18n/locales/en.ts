@@ -56,7 +56,7 @@ const en: LocaleMessages = {
   accountIntro:
     'This account signs in to the panel. Leave the username empty to use admin. Full UTF-8 names and passwords are supported.',
   usernameLabel: 'Username',
-  usernameHint: 'Optional. Defaults to admin. Letters (including Å), numbers, and symbols are allowed.',
+  usernameHint: 'Optional. Defaults to admin. Letters (including Ã…), numbers, and symbols are allowed.',
   usernamePlaceholder: 'admin',
   passwordLabel: 'Password',
   passwordConfirmLabel: 'Confirm password',
@@ -96,6 +96,21 @@ const en: LocaleMessages = {
   smtpSendUsernameHint: 'Sends username and login URL. Password is omitted unless you opt in below.',
   smtpIncludePasswordLabel: 'Also include the password in that email (not recommended)',
   smtpIncludePasswordHint: 'Only enable if you accept sending the password in plaintext email.',
+  maintenanceEyebrow: 'EXISTING INSTALL',
+  maintenanceTitle: 'Upgrade, repair, or continue',
+  maintenanceIntro:
+    'CPN is already installed on this host. Choose how to proceed. Repair overwrites core package files only.',
+  maintenanceUpdateAvailable: 'Installed {installed}. Newer release available: {latest}.',
+  maintenanceUpToDate: 'Installed version {version}. No newer stable release detected.',
+  maintenanceChooseVersion: 'Release / tag',
+  maintenanceConfirmDowngrade: 'I understand this will downgrade to an older release.',
+  maintenanceOverwrite: 'Will overwrite (core)',
+  maintenancePreserve: 'Preserved by default',
+  maintenanceUpgradeLatest: 'Upgrade to latest',
+  maintenanceChooseVersionAction: 'Apply chosen version',
+  maintenanceRepair: 'Repair / overwrite core files',
+  maintenanceConfigOnly: 'Continue configuration only',
+  maintenanceBusy: 'Working... keep this window open.',
 };
 
 export default en;

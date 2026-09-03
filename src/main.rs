@@ -9,6 +9,7 @@ use cpn_installer::http_helpers::{
     panel_login_url_for, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
+use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, MailInstallRequest,
     OptionalTokenQuery, TokenQuery,
@@ -278,8 +279,12 @@ fn listen_hosts() -> Vec<String> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    if env::args().any(|arg| arg == "--version" || arg == "-V") {
-        println!("cpn-installer {VERSION}");
+    let args: Vec<String> = env::args().collect();
+    if let Some(mode) = cpn_installer::cli_maintenance::parse_cli(&args) {
+        let code = cpn_installer::cli_maintenance::run_cli(mode).await;
+        if code != 0 {
+            std::process::exit(code);
+        }
         return Ok(());
     }
     println!("\nCPN Server Panel · Instalador {VERSION}");
@@ -298,19 +303,31 @@ async fn main() -> std::io::Result<()> {
         }
     }
     let mail_releases = cpn_installer::mail_releases::load_mail_releases().await;
+    let maintenance = cpn_installer::maintenance_api::load_maintenance_info().await;
+    let existing = detect_existing_install(VERSION);
     let (events, _) = broadcast::channel(256);
     let bootstrap_account = account_public_from_disk();
-    let phase = if bootstrap_account.is_some() {
+    let phase = if maintenance.existing_install {
+        "maintenance"
+    } else if bootstrap_account.is_some() {
         "completed"
     } else {
         "ready"
     };
+    let message = if maintenance.existing_install {
+        format!(
+            "CPN {} is already installed. Choose upgrade, repair, or continue config.",
+            existing.package_version
+        )
+    } else {
+        "El sistema está listo para continuar".into()
+    };
     let mut initial = InstallerStatus {
         phase,
         progress: 0,
-        message: "El sistema está listo para continuar".into(),
-        selected_server: None,
-        selected_mail: None,
+        message,
+        selected_server: existing.selected_server,
+        selected_mail: existing.selected_mail,
         environment: Some(environment.clone()),
         error: None,
         language: "en".into(),
@@ -319,13 +336,14 @@ async fn main() -> std::io::Result<()> {
         panel_login_path: "/login".into(),
         panel_login_url: None,
         version: VERSION.into(),
-        server_ready: false,
+        server_ready: existing.selected_server.is_some() || existing.has_manifest,
         mail_client_ready: false,
         mail_backend_ready: false,
         external_ports_configured: false,
         access_note: None,
         mail_releases,
         smtp: Some(smtp_status_public()),
+        maintenance: Some(maintenance),
     };
     initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
     let state = Arc::new(AppState {
@@ -366,6 +384,9 @@ async fn main() -> std::io::Result<()> {
             .service(account_setup)
             .service(start_install)
             .service(start_mail_install)
+            .service(cpn_installer::maintenance_api::api_version_check)
+            .service(cpn_installer::maintenance_api::api_releases)
+            .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
             .route("/{path:.*}", web::get().to(static_asset))
     })

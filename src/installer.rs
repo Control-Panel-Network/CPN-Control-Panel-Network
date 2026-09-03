@@ -4,6 +4,7 @@ use crate::install_recipes::{
     prepare_openlitespeed_repository, server_recipes,
 };
 use crate::install_webmail::install_webmail;
+use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem, ServerEngine};
 use crate::os_support::require_installable_guest;
 use std::process::Stdio;
@@ -105,7 +106,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
             .progress(spec.phase, spec.progress, spec.description)
             .await;
     }
-    state.log(format!("› {}", spec.description), "info");
+    state.log(format!("â€º {}", spec.description), "info");
     let mut child = Command::new(spec.program)
         .args(&spec.args)
         .env("LC_ALL", "C")
@@ -302,7 +303,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
             ols_unit = Some(configure_openlitespeed(&state).await?);
         }
         state
-            .progress("testing", 90, "Comprobando que el servicio está activo")
+            .progress("testing", 90, "Comprobando que el servicio estÃ¡ activo")
             .await;
         let service = ols_unit.unwrap_or_else(|| server_service(server));
         let service_check = match service {
@@ -468,7 +469,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 command(
                     "thunderbird",
                     vec!["--version"],
-                    "Verificando la versión instalada",
+                    "Verificando la versiÃ³n instalada",
                     "testing",
                     96,
                 ),
@@ -570,6 +571,18 @@ async fn finish(
                 );
             } else {
                 status.message = format!("{label} se instaló y verificó correctamente");
+            }
+            if let Err(error) = manifest::record_install(
+                env!("CARGO_PKG_VERSION"),
+                &format!("v{}", env!("CARGO_PKG_VERSION")),
+                ManifestSource::Local,
+                status.selected_server,
+                status.selected_mail,
+            ) {
+                state.log(
+                    format!("Warning: could not write install manifest: {error}"),
+                    "error",
+                );
             }
             let _ = state.events.send(InstallerEvent::Completed {
                 status: status.clone(),
