@@ -7,9 +7,11 @@
 [![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a web installer for preparing server panel components on AlmaLinux 9 and AlmaLinux 10. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
+CPN is a Linux web installer for preparing server panel components on CyberPanel-aligned guests (AlmaLinux 8/9/10, Rocky Linux 8/9, Ubuntu 20.04/22.04/24.04, plus partial RHEL/CloudLinux/CentOS Stream). A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
-You can install on a native AlmaLinux 9/10 host (RPM), or run the same AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), or run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+
+Windows Server, VirtualBox, and Hyper-V are **hosts** for those Linux guests, not native Windows panel installs.
 
 ## Project status
 
@@ -19,7 +21,7 @@ The first phase implements the installer flow and is still in development. It cu
 - Selection and installation of SnappyMail, Roundcube, or Thunderbird.
 - Real download, install, and verification progress sent over WebSocket.
 - VPS and container detection; opening port `8787` in `firewalld` or `ufw` when those are active.
-- RPM packaging for AlmaLinux 9 and AlmaLinux 10.
+- RPM packaging for RHEL-family guests (AlmaLinux/Rocky/RHEL 8-10); experimental Ubuntu `.deb` via `scripts/build-deb.sh`.
 - Docker/Podman runtime images for AlmaLinux 9 and 10 (`Dockerfile`, `docker-compose.yml`, `scripts/docker-run.sh`).
 - Service tests in clean AlmaLinux containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE`).
 
@@ -31,7 +33,9 @@ Recipes, security, and compatibility still need review before CPN can be conside
 - `Panel/`: React and Next.js control panel based on Stitch screens.
 - `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
 - `packaging/`: RPM specification and systemd unit used by the Docker image.
-- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux 9 or 10.
+- `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10.
+- `scripts/build-deb.sh`: experimental `.deb` on Ubuntu 20.04/22.04/24.04.
+- `to-do/OS-SUPPORT-MATRIX.md`: guest OS matrix and hypervisor host notes.
 - `scripts/docker-build-rpm.sh`: builds the RPM inside an AlmaLinux container (any host with Docker/Podman).
 - `scripts/docker-run.sh`: builds the runtime image and starts a privileged systemd container on port `8787`.
 - `Dockerfile` / `docker-compose.yml`: AlmaLinux 9/10 installer container (parameterized with `CPN_ALMA_VERSION`).
@@ -61,9 +65,9 @@ npm run typecheck
 
 The continuous integration workflow runs these checks on every push and pull request.
 
-## RPM packaging (native AlmaLinux)
+## RPM packaging (RHEL-family)
 
-On AlmaLinux 9 or AlmaLinux 10:
+On AlmaLinux, Rocky Linux, RHEL, CentOS Stream, or CloudLinux (majors 8-10):
 
 ```bash
 ./scripts/build-rpm.sh

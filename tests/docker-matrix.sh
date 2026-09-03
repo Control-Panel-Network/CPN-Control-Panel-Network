@@ -3,7 +3,8 @@ set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 rpm_path="${1:-}"
-# Default CI/lab image is AlmaLinux 9. For AlmaLinux 10: CPN_TEST_IMAGE=almalinux:10
+# Default CI/lab image is AlmaLinux 9. Examples: CPN_TEST_IMAGE=almalinux:10 or rockylinux:9
+# Ubuntu apt matrix needs a .deb from scripts/build-deb.sh (not wired here yet). See to-do/OS-SUPPORT-MATRIX.md
 image="${CPN_TEST_IMAGE:-almalinux:9.8}"
 
 if [[ -z "$rpm_path" ]]; then

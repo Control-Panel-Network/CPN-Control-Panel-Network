@@ -14,7 +14,7 @@ const nb: LocaleMessages = {
   startMailError: 'Kunne ikke starte e-postinstallasjonen',
   selectServerTitle: 'Velg webserver',
   selectServerIntro:
-    'Velg motoren som passer prosjektet ditt. Du kan endre den senere fra panelet.',
+    'Velg motoren som passer prosjektet ditt. Støttede Linux-gjester følger CyberPanel-matrisen (AlmaLinux, Rocky, Ubuntu og relaterte EL-mål). Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.',
   selectLabel: 'Velg',
   compareLink: 'Usikker på valget? Sammenlign funksjoner',
   compareTitle: 'Sammenligning av webservere',
