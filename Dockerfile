@@ -13,8 +13,9 @@ LABEL cpn.almalinux.version="${ALMA_VERSION}"
 
 ENV container=docker
 
+# AlmaLinux base images ship curl-minimal; requesting curl without --allowerasing fails.
 RUN dnf -y update \
-  && dnf -y install systemd systemd-udev dnf-plugins-core curl which hostname \
+  && dnf -y install --allowerasing systemd systemd-udev dnf-plugins-core curl which hostname \
   && dnf clean all \
   && rm -f /lib/systemd/system/multi-user.target.wants/* \
   && rm -f /etc/systemd/system/*.wants/* \
