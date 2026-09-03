@@ -33,7 +33,7 @@ const INITIAL_STATUS: InstallerStatus = {
   selected_mail: null,
   environment: null,
   error: null,
-  language: 'es',
+  language: 'en',
   account: null,
   password_policy: DEFAULT_POLICY,
   panel_login_path: '/login',
@@ -58,7 +58,14 @@ function AppShell() {
     setStatus(next);
     setSelectedServer(next.selected_server);
     setSelectedMail(next.selected_mail);
-    if (next.language) {
+    // Prefer a stored user locale. Only adopt server language when none is stored yet.
+    let hasStoredPreference = false;
+    try {
+      hasStoredPreference = Boolean(window.localStorage.getItem('cpn-installer-locale'));
+    } catch {
+      hasStoredPreference = false;
+    }
+    if (next.language && !hasStoredPreference) {
       const normalized = normalizeLocale(next.language);
       if (normalized !== localeRef.current) {
         skipLanguagePush.current = true;

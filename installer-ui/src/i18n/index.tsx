@@ -21,9 +21,9 @@ const STORAGE_KEY = 'cpn-installer-locale';
 
 function readStoredLocale(): LocaleCode {
   try {
-    return normalizeLocale(window.sessionStorage.getItem(STORAGE_KEY));
+    return normalizeLocale(window.localStorage.getItem(STORAGE_KEY));
   } catch {
-    return 'es';
+    return 'en';
   }
 }
 
@@ -54,9 +54,9 @@ export function I18nProvider({
       const normalized = normalizeLocale(next);
       setLocaleState(normalized);
       try {
-        window.sessionStorage.setItem(STORAGE_KEY, normalized);
+        window.localStorage.setItem(STORAGE_KEY, normalized);
       } catch {
-        // Session storage may be unavailable in locked-down browsers.
+        // Local storage may be unavailable in locked-down browsers.
       }
       onLocaleChange?.(normalized);
     },

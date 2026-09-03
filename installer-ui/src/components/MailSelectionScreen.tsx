@@ -51,12 +51,6 @@ export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: 
       name: 'Thunderbird',
       description: 'Desktop client (no HTTP service).',
     },
-    {
-      id: 'rainloop',
-      name: 'RainLoop',
-      description: t.rainloopLegacyNote,
-      legacy: true,
-    },
   ];
 
   return (

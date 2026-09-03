@@ -93,11 +93,6 @@ run_case() {
       docker exec "$name" php -m | grep -qi mbstring
       docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi SnappyMail"
       ;;
-    rainloop)
-      docker exec "$name" systemctl is-active --quiet cpn-webmail
-      docker exec "$name" php -m | grep -qi mbstring
-      docker exec "$name" sh -lc "curl -fsS http://127.0.0.1:8888/ 2>/dev/null | grep -qi RainLoop"
-      ;;
     roundcube)
       docker exec "$name" systemctl is-active --quiet cpn-webmail
       docker exec "$name" test -s /opt/cpn-webmail/roundcube/db.sqlite
@@ -117,5 +112,5 @@ if [[ "${CPN_TEST_SCOPE:-all}" != "mail" ]]; then
   for server in ${CPN_TEST_SERVERS:-nginx caddy}; do run_case server "$server"; done
 fi
 if [[ "${CPN_TEST_SCOPE:-all}" != "server" ]]; then
-  for mail in ${CPN_TEST_MAILS:-snappymail rainloop roundcube thunderbird}; do run_case mail "$mail"; done
+  for mail in ${CPN_TEST_MAILS:-snappymail roundcube thunderbird}; do run_case mail "$mail"; done
 fi

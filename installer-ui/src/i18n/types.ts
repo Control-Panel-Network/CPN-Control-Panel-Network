@@ -84,5 +84,4 @@ export interface LocaleMessages {
   accountSaved: string;
   passwordMismatch: string;
   accountError: string;
-  rainloopLegacyNote: string;
 }
