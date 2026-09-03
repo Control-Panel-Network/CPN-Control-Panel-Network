@@ -1,3 +1,4 @@
+use crate::releases::CpnRelease;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -81,6 +82,54 @@ pub struct MailReleaseInfo {
     pub released_on: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MaintenanceAction {
+    Upgrade,
+    Downgrade,
+    Repair,
+    ConfigOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaintenanceRequest {
+    pub action: MaintenanceAction,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub confirm_downgrade: bool,
+    #[serde(default)]
+    pub reset_data: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MaintenancePlan {
+    pub action: MaintenanceAction,
+    pub target_version: String,
+    pub overwrite_paths: Vec<String>,
+    pub preserve_paths: Vec<String>,
+    pub reset_data: bool,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MaintenanceInfo {
+    pub existing_install: bool,
+    pub installed_version: String,
+    pub running_version: String,
+    pub latest_version: Option<String>,
+    pub latest_tag: Option<String>,
+    pub update_available: bool,
+    pub downgrade_possible: bool,
+    pub repo: String,
+    pub source: String,
+    pub releases: Vec<CpnRelease>,
+    pub has_manifest: bool,
+    pub has_bootstrap: bool,
+    pub plan: Option<MaintenancePlan>,
+    pub check_error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct InstallerStatus {
     pub phase: &'static str,
@@ -105,6 +154,7 @@ pub struct InstallerStatus {
     pub mail_releases: Vec<MailReleaseInfo>,
     /// Outbound SMTP presence only; never includes passwords.
     pub smtp: Option<SmtpStatusPublic>,
+    pub maintenance: Option<MaintenanceInfo>,
 }
 
 impl Default for InstallerStatus {
@@ -135,6 +185,7 @@ impl Default for InstallerStatus {
             access_note: None,
             mail_releases: Vec::new(),
             smtp: None,
+            maintenance: None,
         }
     }
 }

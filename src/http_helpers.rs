@@ -21,6 +21,9 @@ pub fn token_matches(state: &AppState, token: Option<&str>) -> bool {
 }
 
 pub fn install_finished(status: &InstallerStatus) -> bool {
+    if status.phase == "maintenance" {
+        return false;
+    }
     status.phase == "completed"
         || status
             .account

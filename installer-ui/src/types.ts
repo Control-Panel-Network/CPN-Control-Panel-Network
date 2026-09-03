@@ -1,5 +1,6 @@
 export type ScreenType =
   | 'preparing'
+  | 'maintenance'
   | 'selection'
   | 'installing'
   | 'mail'
@@ -11,6 +12,7 @@ export type MailSystem = 'snappymail' | 'roundcube' | 'thunderbird';
 
 export type InstallerPhase =
   | 'preparing'
+  | 'maintenance'
   | 'ready'
   | 'downloading'
   | 'installing'
@@ -18,6 +20,8 @@ export type InstallerPhase =
   | 'completed'
   | 'failed'
   | 'account';
+
+export type MaintenanceAction = 'upgrade' | 'downgrade' | 'repair' | 'config_only';
 
 export interface EnvironmentInfo {
   is_vps: boolean;
@@ -41,6 +45,52 @@ export interface AccountPublic {
   configured: boolean;
 }
 
+export interface ReleaseAsset {
+  name: string;
+  browser_download_url: string;
+  content_type: string;
+  size: number;
+}
+
+export interface CpnRelease {
+  tag_name: string;
+  version: string;
+  name: string;
+  published_at: string;
+  prerelease: boolean;
+  draft: boolean;
+  html_url: string;
+  assets: ReleaseAsset[];
+  rpm_asset?: ReleaseAsset | null;
+  binary_asset?: ReleaseAsset | null;
+}
+
+export interface MaintenancePlan {
+  action: MaintenanceAction;
+  target_version: string;
+  overwrite_paths: string[];
+  preserve_paths: string[];
+  reset_data: boolean;
+  summary: string;
+}
+
+export interface MaintenanceInfo {
+  existing_install: boolean;
+  installed_version: string;
+  running_version: string;
+  latest_version?: string | null;
+  latest_tag?: string | null;
+  update_available: boolean;
+  downgrade_possible: boolean;
+  repo: string;
+  source: string;
+  releases: CpnRelease[];
+  has_manifest: boolean;
+  has_bootstrap: boolean;
+  plan?: MaintenancePlan | null;
+  check_error?: string | null;
+}
+
 export interface InstallerStatus {
   phase: InstallerPhase;
   progress: number;
@@ -61,6 +111,7 @@ export interface InstallerStatus {
   external_ports_configured?: boolean;
   access_note?: string | null;
   mail_releases?: Array<{ id: string; label: string; version: string; released_on: string }>;
+  maintenance?: MaintenanceInfo | null;
 }
 
 export type InstallerEvent =

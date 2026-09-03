@@ -85,6 +85,22 @@ export async function startServerInstall(server: ServerEngine): Promise<void> {
   }
 }
 
+export async function startMaintenance(payload: {
+  action: import('./types').MaintenanceAction;
+  version?: string;
+  confirm_downgrade?: boolean;
+  reset_data?: boolean;
+}): Promise<void> {
+  const response = await fetch(apiUrl('/api/maintenance'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response, 'maintenance_failed'));
+  }
+}
+
 export function connectInstallerEvents(onEvent: (event: InstallerEvent) => void) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socket = new WebSocket(`${protocol}//${window.location.host}${apiUrl('/api/events')}`);

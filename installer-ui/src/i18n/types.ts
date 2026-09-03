@@ -100,4 +100,18 @@ export interface LocaleMessages {
   smtpSendUsernameHint: string;
   smtpIncludePasswordLabel: string;
   smtpIncludePasswordHint: string;
+  maintenanceEyebrow: string;
+  maintenanceTitle: string;
+  maintenanceIntro: string;
+  maintenanceUpdateAvailable: string;
+  maintenanceUpToDate: string;
+  maintenanceChooseVersion: string;
+  maintenanceConfirmDowngrade: string;
+  maintenanceOverwrite: string;
+  maintenancePreserve: string;
+  maintenanceUpgradeLatest: string;
+  maintenanceChooseVersionAction: string;
+  maintenanceRepair: string;
+  maintenanceConfigOnly: string;
+  maintenanceBusy: string;
 }

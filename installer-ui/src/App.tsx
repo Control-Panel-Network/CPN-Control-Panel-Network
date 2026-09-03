@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { PreparingScreen } from './components/PreparingScreen';
+import { MaintenanceScreen } from './components/MaintenanceScreen';
 import { ServerSelectionScreen } from './components/ServerSelectionScreen';
 import { InstallingScreen } from './components/InstallingScreen';
 import { MailSelectionScreen } from './components/MailSelectionScreen';
@@ -13,10 +14,19 @@ import {
   resolvePanelLoginUrl,
   setLanguage,
   startMailInstall,
+  startMaintenance,
   startServerInstall,
 } from './api';
 import { I18nProvider, normalizeLocale, useI18n } from './i18n';
-import type { InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ScreenType, ServerEngine } from './types';
+import type {
+  InstallerEvent,
+  InstallerStatus,
+  MailSystem,
+  MaintenanceAction,
+  PasswordPolicy,
+  ScreenType,
+  ServerEngine,
+} from './types';
 
 const DEFAULT_POLICY: PasswordPolicy = {
   min_length: 8,
@@ -48,6 +58,8 @@ function AppShell() {
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
   const skipLanguagePush = useRef(true);
@@ -73,6 +85,11 @@ function AppShell() {
       }
     }
 
+    if (next.phase === 'maintenance') {
+      setScreen('maintenance');
+      setMaintenanceBusy(false);
+      return;
+    }
     if (next.phase === 'ready') {
       setScreen('selection');
       return;
@@ -83,6 +100,10 @@ function AppShell() {
     }
     if (next.phase === 'completed' || next.phase === 'account') {
       const go = () => {
+        if (!next.selected_mail && !next.server_ready) {
+          setScreen('selection');
+          return;
+        }
         if (!next.selected_mail) {
           setScreen('mail');
           return;
@@ -112,6 +133,7 @@ function AppShell() {
       return;
     }
     if (event.type === 'error') {
+      setMaintenanceBusy(false);
       applyStatusScreen(event.status, false);
     }
   }, [applyStatusScreen]);
@@ -197,6 +219,36 @@ function AppShell() {
     }
   };
 
+  const beginMaintenance = async (
+    action: MaintenanceAction,
+    version?: string,
+    confirmDowngrade = false,
+  ) => {
+    setMaintenanceBusy(true);
+    setMaintenanceError(null);
+    if (action !== 'config_only') {
+      setScreen('installing');
+    }
+    try {
+      await startMaintenance({
+        action,
+        version,
+        confirm_downgrade: confirmDowngrade,
+        reset_data: false,
+      });
+    } catch (error) {
+      setMaintenanceBusy(false);
+      const message = error instanceof Error ? error.message : t.unknownError;
+      setMaintenanceError(message);
+      setStatus((current) => ({
+        ...current,
+        phase: action === 'config_only' ? 'maintenance' : 'failed',
+        error: message,
+      }));
+      if (action === 'config_only') setScreen('maintenance');
+    }
+  };
+
   const loginUrl = resolvePanelLoginUrl(status);
 
   return (
@@ -211,6 +263,14 @@ function AppShell() {
           className="min-h-screen"
         >
           {screen === 'preparing' && <PreparingScreen status={status} />}
+          {screen === 'maintenance' && status.maintenance && (
+            <MaintenanceScreen
+              info={status.maintenance}
+              busy={maintenanceBusy}
+              error={maintenanceError || status.error}
+              onAction={beginMaintenance}
+            />
+          )}
           {screen === 'selection' && (
             <ServerSelectionScreen
               selectedServer={selectedServer}
