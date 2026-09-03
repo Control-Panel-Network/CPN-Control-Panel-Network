@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(nine.major, 9);
         assert_eq!(nine.support, SupportStatus::Supported);
         assert_eq!(nine.family, PackageFamily::Dnf);
-        assert_eq!(nine.php_module_stream(), Some("php:8.1"));
+        assert_eq!(nine.php_module_stream(), Some("php:8.2"));
 
         let ten = detect_from_os_release(
             "ID=\"almalinux\"\nVERSION_ID=\"10.0\"\nPRETTY_NAME=\"AlmaLinux 10.0\"\n",
