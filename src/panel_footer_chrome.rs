@@ -61,21 +61,24 @@ pub fn sidebar_footer_styles() -> &'static str {
   line-height:16px; text-align:center; pointer-events:none;
 }
 .notify-badge[hidden] { display:none !important; }
+/* Fixed + body portal (JS) so sticky sidebar overflow cannot clip the panel. */
 .notify-popover {
-  position:absolute; left:0; bottom:calc(100% + 8px); z-index:80;
-  width:min(320px, calc(100vw - 48px)); max-height:min(360px, 50vh);
+  position:fixed; z-index:120;
+  width:340px; max-width:calc(100vw - 24px); max-height:min(360px, 50vh);
   display:flex; flex-direction:column; gap:0;
   background:var(--canvas); color:var(--ink); border:1px solid var(--hairline);
   border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,.14); overflow:hidden;
 }
 .notify-popover[hidden] { display:none !important; }
 .notify-popover header {
-  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:12px 14px; border-bottom:1px solid var(--hairline); font-size:14px; font-weight:600;
+  flex:0 0 auto;
 }
+.notify-popover header span { flex:1 1 auto; min-width:0; }
 .notify-popover header button {
-  border:0; background:transparent; color:var(--blue); font:inherit; font-size:12px;
-  font-weight:600; padding:4px 6px; cursor:pointer;
+  flex:0 0 auto; border:0; background:transparent; color:var(--blue); font:inherit;
+  font-size:12px; font-weight:600; padding:4px 6px; cursor:pointer; white-space:nowrap;
 }
 .notify-list {
   list-style:none; margin:0; padding:0; overflow-y:auto; flex:1 1 auto; min-height:0;
@@ -127,7 +130,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
             <div id="cpn-notify-panel" class="notify-popover" hidden role="dialog" aria-label="Notifications">
               <header>
                 <span>Notifications</span>
-                <button type="button" id="cpn-notify-mark-all">Mark all read</button>
+                <button type="button" id="cpn-notify-mark-all">Mark all as read</button>
               </header>
               <ul class="notify-list" id="cpn-notify-list"></ul>
               <p class="notify-empty" id="cpn-notify-empty">No notifications yet.</p>
@@ -155,10 +158,51 @@ pub fn notifications_popover_script() -> &'static str {
   var empty = document.getElementById("cpn-notify-empty");
   var badge = document.getElementById("cpn-notify-badge");
   var markAll = document.getElementById("cpn-notify-mark-all");
+  var wrap = btn ? btn.closest(".notify-wrap") : null;
   if (!btn || !panel || !list || !empty) return;
 
+  var POPOVER_WIDTH = 340;
+  var POPOVER_GAP = 8;
+  var VIEWPORT_PAD = 12;
+
+  function placePanel() {
+    var rect = btn.getBoundingClientRect();
+    var width = Math.min(POPOVER_WIDTH, window.innerWidth - VIEWPORT_PAD * 2);
+    var left = rect.left;
+    if (left + width > window.innerWidth - VIEWPORT_PAD) {
+      left = Math.max(VIEWPORT_PAD, window.innerWidth - width - VIEWPORT_PAD);
+    }
+    if (left < VIEWPORT_PAD) left = VIEWPORT_PAD;
+    var bottom = Math.max(VIEWPORT_PAD, window.innerHeight - rect.top + POPOVER_GAP);
+    panel.style.left = left + "px";
+    panel.style.bottom = bottom + "px";
+    panel.style.width = width + "px";
+    panel.style.right = "auto";
+    panel.style.top = "auto";
+    if (panel.parentElement !== document.body) {
+      document.body.appendChild(panel);
+    }
+  }
+
+  function restorePanel() {
+    if (wrap && panel.parentElement !== wrap) {
+      wrap.appendChild(panel);
+    }
+    panel.style.left = "";
+    panel.style.bottom = "";
+    panel.style.width = "";
+    panel.style.right = "";
+    panel.style.top = "";
+  }
+
   function setOpen(open) {
-    panel.hidden = !open;
+    if (open) {
+      placePanel();
+      panel.hidden = false;
+    } else {
+      panel.hidden = true;
+      restorePanel();
+    }
     btn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
@@ -226,14 +270,22 @@ pub fn notifications_popover_script() -> &'static str {
   });
 
   document.addEventListener("click", function (ev) {
-    if (!panel.hidden && !panel.contains(ev.target) && ev.target !== btn) {
-      setOpen(false);
-    }
+    if (panel.hidden) return;
+    var target = ev.target;
+    if (panel.contains(target) || btn.contains(target)) return;
+    setOpen(false);
   });
 
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && !panel.hidden) setOpen(false);
   });
+
+  window.addEventListener("resize", function () {
+    if (!panel.hidden) placePanel();
+  });
+  window.addEventListener("scroll", function () {
+    if (!panel.hidden) placePanel();
+  }, true);
 
   if (markAll) {
     markAll.addEventListener("click", function (ev) {
@@ -268,10 +320,28 @@ mod tests {
             assert!(html.contains("/account/users/profile"));
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
+            assert!(html.contains("Mark all as read"));
             assert!(!html.contains("Light mode"));
             assert!(!html.contains("Dark mode"));
             assert!(html.contains("notify-badge"));
             assert!(!html.contains("CyberPanel"));
         });
+    }
+
+    #[test]
+    fn notify_styles_use_fixed_popover() {
+        let css = sidebar_footer_styles();
+        assert!(css.contains("position:fixed"));
+        assert!(css.contains("z-index:120"));
+        assert!(css.contains("white-space:nowrap"));
+        assert!(css.contains("width:340px"));
+    }
+
+    #[test]
+    fn notify_script_portals_to_body() {
+        let js = notifications_popover_script();
+        assert!(js.contains("document.body.appendChild(panel)"));
+        assert!(js.contains("placePanel"));
+        assert!(js.contains("POPOVER_WIDTH = 340"));
     }
 }
