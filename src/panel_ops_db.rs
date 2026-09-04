@@ -12,17 +12,13 @@ pub struct DbListStatus {
 }
 
 fn mariadb_cli() -> Option<&'static str> {
-    for candidate in ["mariadb", "mysql"] {
-        if Command::new(candidate)
+    ["mariadb", "mysql"].into_iter().find(|&candidate| {
+        Command::new(candidate)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
-        {
-            return Some(candidate);
-        }
-    }
-    None
+    })
 }
 
 pub fn list_databases() -> DbListStatus {

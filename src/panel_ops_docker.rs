@@ -11,17 +11,13 @@ pub struct DockerStatus {
 }
 
 fn docker_bin() -> Option<&'static str> {
-    for candidate in ["docker", "podman"] {
-        if Command::new(candidate)
+    ["docker", "podman"].into_iter().find(|&candidate| {
+        Command::new(candidate)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
-        {
-            return Some(candidate);
-        }
-    }
-    None
+    })
 }
 
 pub fn docker_status() -> DockerStatus {

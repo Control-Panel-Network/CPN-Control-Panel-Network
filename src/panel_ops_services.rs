@@ -92,7 +92,7 @@ pub fn list_known_services() -> Vec<ServiceRow> {
 }
 
 pub fn control_service(unit: &str, action: &str) -> Result<String, String> {
-    if !KNOWN_UNITS.iter().any(|u| *u == unit) {
+    if !KNOWN_UNITS.contains(&unit) {
         return Err(format!("Unit `{unit}` is not in the CPN allowlist"));
     }
     let action = match action {
