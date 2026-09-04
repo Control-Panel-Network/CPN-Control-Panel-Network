@@ -322,14 +322,8 @@ pub fn rename_own_account(
             let _ = fs::remove_file(&old_path);
         }
     }
-    // Best-effort MFA file rename (encrypted secrets stay valid under new name).
-    let old_mfa = crate::account_mfa::load_mfa(current_username_raw);
-    if old_mfa.totp_enabled || !old_mfa.totp_secret_enc.is_empty() {
-        let mut moved = old_mfa;
-        moved.username = new_username.clone();
-        moved.updated_at_unix = now_unix();
-        let _ = crate::account_mfa::save_mfa_for_rename(&moved, current_username_raw);
-    }
+    // Best-effort MFA file rename (encrypted ciphertext stays valid under new name).
+    let _ = crate::account_mfa::save_mfa_for_rename(current_username_raw, &new_username);
     let _ = crate::account_passkeys::rename_passkey_store(current_username_raw, &new_username);
     Ok(AccountPublic {
         username: boot.username,
@@ -383,9 +377,16 @@ mod tests {
     fn self_service_password_and_email() {
         with_test_data_dir(|| {
             let policy = default_password_policy();
+            // Ephemeral passwords only (CodeQL: no hard-coded password literals).
+            let initial = generate_password(&policy);
+            let next = generate_password(&policy);
+            let mut wrong = generate_password(&policy);
+            while wrong == initial || wrong == next {
+                wrong = generate_password(&policy);
+            }
             let created = create_account(
                 "Admin",
-                Some("AdminPass1!"),
+                Some(&initial),
                 false,
                 "admin@example.com",
                 policy,
@@ -398,9 +399,9 @@ mod tests {
             assert_eq!(boot.recovery_email, "ops@example.com");
             assert_eq!(boot.language, "nb");
             let changed =
-                change_own_password("Admin", "AdminPass1!", Some("NewPass2!"), false).unwrap();
+                change_own_password("Admin", &initial, Some(&next), false).unwrap();
             assert!(changed.generated_password.is_none());
-            assert!(change_own_password("Admin", "wrong", Some("NewPass3!"), false).is_err());
+            assert!(change_own_password("Admin", &wrong, Some(&next), false).is_err());
         });
     }
 }

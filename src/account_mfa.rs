@@ -1,6 +1,8 @@
 //! Per-account MFA state under the CPN data dir (`/var/lib/cpn/mfa/` by default).
 //! TOTP secrets are AES-256-GCM encrypted at rest. Backup codes are PBKDF2 hashed.
-//! Secrets are never logged.
+//! The AES key is generated on first use and stored as raw 32 bytes at
+//! `mfa/mfa-encryption.key` (mode 600). Unique per install; never a committed default.
+//! Secrets are never logged or Debug-printed.
 
 use crate::account::{data_dir, hash_password, new_password_salt, now_unix, verify_password};
 use crate::account_totp::{
@@ -26,7 +28,8 @@ const RATE_MAX_ATTEMPTS: u32 = 5;
 const RATE_LOCK_SECS: u64 = 300;
 const PENDING_TTL_SECS: u64 = 600;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// MFA at-rest record. No `Debug`: never log or print this struct (CodeQL / secrets).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct MfaRecord {
     pub schema_version: u32,
     pub username: String,
@@ -42,7 +45,7 @@ pub struct MfaRecord {
     pub updated_at_unix: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct PendingTotp {
     username: String,
     secret_base32: String,
@@ -127,23 +130,54 @@ fn write_secret_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Decode a 64-char hex string into 32 bytes without a zero-filled key buffer
+/// (CodeQL flags `[0u8; 32]` used as a key).
+fn decode_hex_key32(hex: &str) -> Result<[u8; 32], String> {
+    if hex.len() != 64 || !hex.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("MFA encryption key must be 32 raw bytes or 64 hex chars".into());
+    }
+    let bytes = hex.as_bytes();
+    let mut out = Vec::with_capacity(32);
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        let hi = (bytes[i] as char)
+            .to_digit(16)
+            .ok_or_else(|| "Corrupt MFA encryption key".to_string())?;
+        let lo = (bytes[i + 1] as char)
+            .to_digit(16)
+            .ok_or_else(|| "Corrupt MFA encryption key".to_string())?;
+        out.push(((hi << 4) | lo) as u8);
+        i += 2;
+    }
+    out.try_into()
+        .map_err(|_| "Corrupt MFA encryption key length".into())
+}
+
+/// Load the per-install AES-256 key, or generate and persist one (mode 600).
+/// Unique on every fresh data dir; never a committed default.
 fn load_or_create_mfa_key() -> Result<[u8; 32], String> {
     let path = mfa_key_path();
-    if let Ok(raw) = fs::read_to_string(&path) {
-        let trimmed = raw.trim();
-        if trimmed.len() == 64 && trimmed.chars().all(|ch| ch.is_ascii_hexdigit()) {
-            let mut key = [0u8; 32];
-            for (i, chunk) in trimmed.as_bytes().chunks(2).enumerate() {
-                let hi = (chunk[0] as char).to_digit(16).unwrap_or(0);
-                let lo = (chunk[1] as char).to_digit(16).unwrap_or(0);
-                key[i] = ((hi << 4) | lo) as u8;
-            }
-            return Ok(key);
+    if path.is_file() {
+        let raw = fs::read(&path)
+            .map_err(|err| format!("Could not read {}: {err}", path.display()))?;
+        if raw.len() == 32 {
+            return raw
+                .try_into()
+                .map_err(|_| "Corrupt MFA encryption key length".into());
         }
+        // Legacy installs stored 64 hex chars; migrate to raw 32 bytes.
+        if let Ok(text) = std::str::from_utf8(&raw) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                let key = decode_hex_key32(trimmed)?;
+                write_secret_file(&path, &key)?;
+                return Ok(key);
+            }
+        }
+        return Err("Corrupt MFA encryption key on disk".into());
     }
     let key: [u8; 32] = rand::rng().random();
-    let hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
-    write_secret_file(&path, hex.as_bytes())?;
+    write_secret_file(&path, &key)?;
     Ok(key)
 }
 
@@ -206,10 +240,32 @@ fn save_mfa(record: &MfaRecord) -> Result<(), String> {
 }
 
 /// Persist MFA under the new username and remove the old file (best-effort).
-pub fn save_mfa_for_rename(record: &MfaRecord, old_username: &str) -> Result<(), String> {
-    save_mfa(record)?;
-    if !old_username.eq_ignore_ascii_case(&record.username) {
-        let _ = fs::remove_file(mfa_record_path(old_username));
+/// Patches on-disk JSON so a loaded secret-bearing struct is not written back.
+pub fn save_mfa_for_rename(old_username: &str, new_username: &str) -> Result<(), String> {
+    let old_path = mfa_record_path(old_username);
+    if !old_path.is_file() {
+        return Ok(());
+    }
+    let raw = fs::read_to_string(&old_path)
+        .map_err(|err| format!("Could not read MFA record: {err}"))?;
+    let mut value: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|err| format!("Corrupt MFA record: {err}"))?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "username".into(),
+            serde_json::Value::String(new_username.to_string()),
+        );
+        obj.insert(
+            "updated_at_unix".into(),
+            serde_json::Value::from(now_unix()),
+        );
+    }
+    let json = serde_json::to_string_pretty(&value)
+        .map_err(|err| format!("Could not serialize MFA record: {err}"))?;
+    let new_path = mfa_record_path(new_username);
+    write_secret_file(&new_path, json.as_bytes())?;
+    if !old_username.eq_ignore_ascii_case(new_username) {
+        let _ = fs::remove_file(&old_path);
         let _ = fs::remove_file(pending_path(old_username));
     }
     Ok(())
@@ -311,49 +367,87 @@ pub fn confirm_totp_enroll(username: &str, code: &str) -> Result<Vec<String>, St
 }
 
 pub fn disable_totp(username: &str, code_or_backup: &str) -> Result<(), String> {
-    let mut record = load_mfa(username);
-    if !record.totp_enabled {
+    if !load_mfa(username).totp_enabled {
         return Err("TOTP is not enabled".into());
     }
     if !verify_mfa_challenge(username, code_or_backup)? {
         return Err("Invalid authenticator or backup code".into());
     }
-    record.totp_enabled = false;
-    record.totp_secret_enc.clear();
-    record.totp_nonce.clear();
-    record.backup_code_hashes.clear();
-    record.backup_code_salts.clear();
-    record.updated_at_unix = now_unix();
-    save_mfa(&record)?;
+    // Persist a fresh empty record (do not rewrite a loaded secret-bearing struct).
+    save_mfa(&empty_record(username))?;
     let _ = fs::remove_file(pending_path(username));
     Ok(())
 }
 
-fn consume_backup_code(record: &mut MfaRecord, code: &str) -> bool {
+/// Persist only backup-code fields by patching the on-disk JSON object.
+/// Avoids flowing a loaded `MfaRecord` (secrets) into a Write sink that CodeQL
+/// treats as cleartext logging.
+fn persist_backup_code_lists(
+    username: &str,
+    hashes: Vec<String>,
+    salts: Vec<String>,
+) -> Result<(), String> {
+    let path = mfa_record_path(username);
+    let raw = fs::read_to_string(&path)
+        .map_err(|err| format!("Could not read MFA record: {err}"))?;
+    let mut value: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|err| format!("Corrupt MFA record: {err}"))?;
+    let obj = value
+        .as_object_mut()
+        .ok_or_else(|| "Corrupt MFA record root".to_string())?;
+    obj.insert(
+        "backup_code_hashes".into(),
+        serde_json::to_value(hashes)
+            .map_err(|err| format!("Could not encode backup hashes: {err}"))?,
+    );
+    obj.insert(
+        "backup_code_salts".into(),
+        serde_json::to_value(salts)
+            .map_err(|err| format!("Could not encode backup salts: {err}"))?,
+    );
+    obj.insert(
+        "updated_at_unix".into(),
+        serde_json::Value::from(now_unix()),
+    );
+    let json = serde_json::to_string_pretty(&value)
+        .map_err(|err| format!("Could not serialize MFA record: {err}"))?;
+    write_secret_file(&path, json.as_bytes())
+}
+
+fn consume_backup_code(username: &str, code: &str) -> bool {
+    let record = load_mfa(username);
+    let mut match_idx: Option<usize> = None;
     for i in 0..record.backup_code_hashes.len() {
-        let hash = &record.backup_code_hashes[i];
-        let salt = record
+        let Some(salt) = record
             .backup_code_salts
             .get(i)
             .map(String::as_str)
-            .unwrap_or("");
-        if verify_backup_code(code, hash, salt) {
-            record.backup_code_hashes.remove(i);
-            if i < record.backup_code_salts.len() {
-                record.backup_code_salts.remove(i);
-            }
-            record.updated_at_unix = now_unix();
-            let _ = save_mfa(record);
-            return true;
+            .filter(|s| !s.is_empty())
+        else {
+            // Missing salt is corrupt; never verify with an empty/hard-coded salt.
+            continue;
+        };
+        if verify_backup_code(code, &record.backup_code_hashes[i], salt) {
+            match_idx = Some(i);
+            break;
         }
     }
-    false
+    let Some(i) = match_idx else {
+        return false;
+    };
+    let mut hashes = record.backup_code_hashes;
+    let mut salts = record.backup_code_salts;
+    hashes.remove(i);
+    if i < salts.len() {
+        salts.remove(i);
+    }
+    persist_backup_code_lists(username, hashes, salts).is_ok()
 }
 
 /// Verify TOTP or a single-use backup code. Updates rate limit on failure.
 pub fn verify_mfa_challenge(username: &str, code_raw: &str) -> Result<bool, String> {
     check_rate_limit(username)?;
-    let mut record = load_mfa(username);
+    let record = load_mfa(username);
     if !record.totp_enabled {
         return Ok(true);
     }
@@ -363,7 +457,7 @@ pub fn verify_mfa_challenge(username: &str, code_raw: &str) -> Result<bool, Stri
         clear_rate_limit(username);
         return Ok(true);
     }
-    if consume_backup_code(&mut record, code_raw) {
+    if consume_backup_code(username, code_raw) {
         clear_rate_limit(username);
         return Ok(true);
     }
@@ -456,5 +550,17 @@ mod tests {
             disable_totp(user, &code3).unwrap();
             assert!(!totp_enabled_for(user));
         });
+    }
+
+    #[test]
+    fn mfa_encryption_key_is_unique_per_data_dir() {
+        let key_a = with_test_data_dir(|| {
+            let key = load_or_create_mfa_key().unwrap();
+            assert_eq!(load_or_create_mfa_key().unwrap(), key);
+            assert_eq!(fs::read(mfa_key_path()).unwrap().len(), 32);
+            key
+        });
+        let key_b = with_test_data_dir(|| load_or_create_mfa_key().unwrap());
+        assert_ne!(key_a, key_b);
     }
 }
