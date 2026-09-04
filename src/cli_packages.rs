@@ -1,9 +1,10 @@
 //! CLI helpers for `cpn package …`.
 
-use crate::package_quota::{QuotaResource, require_quota};
+use crate::package_quota::require_quota;
 use crate::packages::{
-    PackageInput, assign_package, create_package, delete_package, ensure_default_package,
-    format_limit_display, get_package, list_packages, package_for_account, update_package,
+    PackageInput, QuotaResource, assign_package, create_package, delete_package,
+    ensure_default_package, format_limit_display, get_package, list_packages, package_for_account,
+    update_package,
 };
 use clap::Subcommand;
 
