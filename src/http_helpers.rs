@@ -143,6 +143,13 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         || candidate.contains("localhost")
 }
 
+/// Prebuilt Set-Cookie HeaderValues (constructed at process start, never from request input).
+#[derive(Clone)]
+pub struct InstallSessionCookies {
+    pub http: actix_web::http::header::HeaderValue,
+    pub https: actix_web::http::header::HeaderValue,
+}
+
 /// Cookie for the server-generated install session (not the URL token).
 pub fn install_token_cookie_header(session_id: &str, secure: bool) -> Option<String> {
     let session_id = session_id.as_bytes();
@@ -161,6 +168,15 @@ pub fn install_token_cookie_header(session_id: &str, secure: bool) -> Option<Str
     Some(format!(
         "{INSTALL_TOKEN_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict{secure_flag}; Max-Age=86400"
     ))
+}
+
+pub fn build_install_session_cookies(session_id: &str) -> Option<InstallSessionCookies> {
+    let http = install_token_cookie_header(session_id, false)?;
+    let https = install_token_cookie_header(session_id, true)?;
+    Some(InstallSessionCookies {
+        http: actix_web::http::header::HeaderValue::try_from(http).ok()?,
+        https: actix_web::http::header::HeaderValue::try_from(https).ok()?,
+    })
 }
 
 pub fn install_finished(status: &InstallerStatus) -> bool {
@@ -206,9 +222,9 @@ pub fn panel_login_url_for(status: &InstallerStatus, token: &str) -> String {
         .cloned()
         .unwrap_or_else(|| "127.0.0.1".into());
     let port = status.listen_port;
-    // Prefer cookie exchange path; token query remains for first bootstrap only.
     let _ = token;
-    format!("http://{host}:{port}/login")
+    let base = crate::panel_network::public_base_url(port, Some(&host));
+    format!("{base}/login")
 }
 
 pub fn smtp_status_public() -> SmtpStatusPublic {
@@ -242,6 +258,15 @@ pub fn enrich_status(mut status: InstallerStatus, token: &str) -> InstallerStatu
     if status.account.is_none() {
         status.account = account_public_from_disk();
     }
+    let host_hint = status
+        .environment
+        .as_ref()
+        .and_then(|env_info| env_info.addresses.first())
+        .map(String::as_str);
+    let network = crate::panel_network::network_public(status.listen_port, host_hint);
+    status.panel_hostname = network.panel_hostname.clone();
+    status.port_migration = network.port_migration.clone();
+    status.public_base_url = Some(network.public_base_url);
     status.panel_login_url = None;
     status
         .panel_login_url

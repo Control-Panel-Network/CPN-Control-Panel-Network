@@ -84,6 +84,8 @@ pub fn print_help() {
 Usage:
   cpn-installer                 Start the web installer UI
   cpn-installer --port <PORT>   Listen port (default: 2087; also CPN_LISTEN_PORT)
+  cpn-installer --panel-hostname <HOST>  Persist subdomain for HTTPS login without a port
+  cpn-installer --old-port-policy <MODE>  redirect_1m | redirect_3m | deny (with --port)
   cpn-installer --version
   cpn-installer --version-check
   cpn-installer --upgrade [--to X.Y.Z]
@@ -94,7 +96,8 @@ Usage:
 Notes:
   Default listen port is 2087 (Cloudflare-friendly, WHM HTTPS family). Lab installs may use another free port (for example 8787).
   Ports 1-65535 are accepted; prefer >1024 unless running as root.
-  The installer UI can also save a preferred port under /var/lib/cpn/listen_port (restart to apply if different from the bound port).
+  Preferred port, optional panel hostname, and port migration live under /var/lib/cpn/ (mode 0600). See to-do/PANEL-PORT-SUBDOMAIN.md.
+  Operator CLI: cpn network show|set-port|set-hostname|clear-hostname|clear-migration
   Repair overwrites core packaged files listed in /var/lib/cpn/install-manifest.json.
   Site data under /var/lib/cpn/ (accounts, bootstrap, SMTP secrets) is preserved unless --reset-data.
   Coordinate with `cpn version-check` when the operator CLI ships (see to-do/UPGRADE-REPAIR.md).

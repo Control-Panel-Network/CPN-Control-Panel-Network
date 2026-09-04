@@ -73,4 +73,18 @@ ssh -p 2222 root@127.0.0.1 'cpn site create --domain demo.example.com --owner ad
 
 ## Extending later
 
-Add new top-level groups beside `account` and `site` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+Add new top-level groups beside `account`, `site`, and `network` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+
+## Network (listen port / hostname)
+
+See `to-do/PANEL-PORT-SUBDOMAIN.md`.
+
+```bash
+sudo cpn network show
+sudo cpn network set-port --port 9443 --old-port-policy redirect_1m
+sudo cpn network set-hostname --hostname panel.example.com
+sudo cpn network clear-hostname
+sudo cpn network clear-migration
+```
+
+Paths: `/var/lib/cpn/listen_port`, `panel_hostname`, `port_migration` (mode `0600`).

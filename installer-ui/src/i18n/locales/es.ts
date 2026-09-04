@@ -21,8 +21,19 @@ const es: LocaleMessages = {
   listenPortApply: 'Guardar puerto',
   listenPortSaved: 'Preferencia de puerto guardada.',
   listenPortRestartHint:
-    'Puerto guardado. Reinicia el instalador con --port {port} para aplicarlo. Esta sesiÃ³n sigue en el puerto actual.',
+    'Puerto guardado. Reinicia el instalador con --port {port} para aplicarlo. Esta sesión sigue en el puerto actual.',
   listenPortInvalid: 'Introduce un puerto entre 1 y 65535.',
+  oldPortPolicyLabel: '¿Qué debe ocurrir en el puerto anterior?',
+  oldPortPolicyHint:
+    'Elige cuánto tiempo (si aplica) el puerto anterior debe redirigir al nuevo después de reiniciar.',
+  oldPortPolicyRedirect1m: 'Mantener redirección del puerto anterior durante 1 mes',
+  oldPortPolicyRedirect3m: 'Mantener redirección del puerto anterior durante 3 meses',
+  oldPortPolicyDeny: 'Denegar el acceso en el puerto anterior (sin redirección)',
+  panelHostnameLabel: 'Hostname del panel (subdominio opcional)',
+  panelHostnameHint:
+    'Usa un nombre DNS como panel.example.com para iniciar sesión por HTTPS sin puerto en la URL. Debes apuntar el DNS a este servidor y terminar TLS en 443 con un proxy inverso hacia el puerto de CPN.',
+  panelHostnamePlaceholder: 'panel.example.com',
+  networkSave: 'Guardar red',
   selectLabel: 'Seleccionar',
   compareLink: 'Â¿No estÃ¡s seguro de cuÃ¡l elegir? Compara caracterÃ­sticas',
   compareTitle: 'Comparativa de servidores web',

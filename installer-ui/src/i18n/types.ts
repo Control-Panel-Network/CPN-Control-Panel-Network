@@ -30,6 +30,15 @@ export interface LocaleMessages {
   listenPortSaved: string;
   listenPortRestartHint: string;
   listenPortInvalid: string;
+  oldPortPolicyLabel: string;
+  oldPortPolicyHint: string;
+  oldPortPolicyRedirect1m: string;
+  oldPortPolicyRedirect3m: string;
+  oldPortPolicyDeny: string;
+  panelHostnameLabel: string;
+  panelHostnameHint: string;
+  panelHostnamePlaceholder: string;
+  networkSave: string;
   selectLabel: string;
   compareLink: string;
   compareTitle: string;

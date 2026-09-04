@@ -8,6 +8,7 @@ use cpn_installer::account::default_password_policy;
 use cpn_installer::account_mgmt::{
     create_account, delete_account, list_accounts, reset_account_password,
 };
+use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -41,6 +42,11 @@ enum Commands {
     Site {
         #[command(subcommand)]
         command: SiteCommands,
+    },
+    /// Listen port, panel hostname, and port migration
+    Network {
+        #[command(subcommand)]
+        command: NetworkCommands,
     },
 }
 
@@ -239,6 +245,7 @@ fn run() -> Result<(), String> {
         Commands::List => {
             println!("account  Manage panel / operator accounts");
             println!("site     Manage website records under /var/lib/cpn/sites");
+            println!("network  Manage listen port, hostname, and port migration");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
@@ -396,6 +403,7 @@ fn run() -> Result<(), String> {
                 Ok(())
             }
         },
+        Commands::Network { command } => run_network(command, require_root_for_mutation),
     }
 }
 

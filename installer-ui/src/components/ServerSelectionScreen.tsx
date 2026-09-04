@@ -5,11 +5,18 @@ import { ServerBrandIcon } from './ServerBrandIcon';
 import { useI18n } from '../i18n';
 import { LanguageSelector } from '../i18n/LanguageSelector';
 
+export type OldPortPolicy = 'redirect_1m' | 'redirect_3m' | 'deny';
+
 interface Props {
   selectedServer: ServerEngine | null;
   listenPort: number;
+  panelHostname?: string | null;
   onSelectServer: (server: ServerEngine) => void;
-  onListenPortChange: (port: number) => Promise<string | null>;
+  onNetworkChange: (input: {
+    port: number;
+    oldPortPolicy?: OldPortPolicy;
+    panelHostname?: string;
+  }) => Promise<string | null>;
   onContinue: () => void;
   onOpenCompare: () => void;
 }
@@ -17,13 +24,16 @@ interface Props {
 export function ServerSelectionScreen({
   selectedServer,
   listenPort,
+  panelHostname,
   onSelectServer,
-  onListenPortChange,
+  onNetworkChange,
   onContinue,
   onOpenCompare,
 }: Props) {
   const { t } = useI18n();
   const [portDraft, setPortDraft] = useState(String(listenPort || 2087));
+  const [hostnameDraft, setHostnameDraft] = useState(panelHostname || '');
+  const [oldPortPolicy, setOldPortPolicy] = useState<OldPortPolicy>('redirect_1m');
   const [portBusy, setPortBusy] = useState(false);
   const [portMessage, setPortMessage] = useState<string | null>(null);
   const [portError, setPortError] = useState<string | null>(null);
@@ -32,13 +42,21 @@ export function ServerSelectionScreen({
     setPortDraft(String(listenPort || 2087));
   }, [listenPort]);
 
+  useEffect(() => {
+    setHostnameDraft(panelHostname || '');
+  }, [panelHostname]);
+
   const servers: Array<{ id: ServerEngine; name: string; description: string }> = [
     { id: 'openlitespeed', name: 'OpenLiteSpeed', description: t.serverOpenlitespeedDesc },
     { id: 'nginx', name: 'Nginx', description: t.serverNginxDesc },
     { id: 'caddy', name: 'Caddy', description: t.serverCaddyDesc },
   ];
 
-  const applyPort = async () => {
+  const parsedPort = Number.parseInt(portDraft.trim(), 10);
+  const portChanging =
+    Number.isFinite(parsedPort) && parsedPort >= 1 && parsedPort <= 65535 && parsedPort !== listenPort;
+
+  const applyNetwork = async () => {
     const parsed = Number.parseInt(portDraft.trim(), 10);
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
       setPortError(t.listenPortInvalid);
@@ -48,7 +66,11 @@ export function ServerSelectionScreen({
     setPortBusy(true);
     setPortError(null);
     try {
-      const message = await onListenPortChange(parsed);
+      const message = await onNetworkChange({
+        port: parsed,
+        oldPortPolicy: parsed !== listenPort ? oldPortPolicy : undefined,
+        panelHostname: hostnameDraft.trim(),
+      });
       setPortMessage(message ?? t.listenPortSaved);
     } catch (error) {
       setPortMessage(null);
@@ -86,15 +108,68 @@ export function ServerSelectionScreen({
             onChange={(event) => setPortDraft(event.target.value)}
             className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full sm:w-40 text-[15px]"
           />
-          <button
-            type="button"
-            onClick={() => void applyPort()}
-            disabled={portBusy}
-            className="selection-button"
-          >
-            {t.listenPortApply}
-          </button>
         </div>
+
+        {portChanging && (
+          <fieldset className="mt-4">
+            <legend className="text-[14px] font-semibold text-[#1a1c1d]">{t.oldPortPolicyLabel}</legend>
+            <p className="text-[13px] text-[#5f5e60] mt-1 mb-2">{t.oldPortPolicyHint}</p>
+            <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
+              <input
+                type="radio"
+                name="old-port-policy"
+                checked={oldPortPolicy === 'redirect_1m'}
+                onChange={() => setOldPortPolicy('redirect_1m')}
+              />
+              <span>{t.oldPortPolicyRedirect1m}</span>
+            </label>
+            <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
+              <input
+                type="radio"
+                name="old-port-policy"
+                checked={oldPortPolicy === 'redirect_3m'}
+                onChange={() => setOldPortPolicy('redirect_3m')}
+              />
+              <span>{t.oldPortPolicyRedirect3m}</span>
+            </label>
+            <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d]">
+              <input
+                type="radio"
+                name="old-port-policy"
+                checked={oldPortPolicy === 'deny'}
+                onChange={() => setOldPortPolicy('deny')}
+              />
+              <span>{t.oldPortPolicyDeny}</span>
+            </label>
+          </fieldset>
+        )}
+
+        <label
+          className="block text-[15px] font-semibold text-[#1a1c1d] mt-5"
+          htmlFor="cpn-panel-hostname"
+        >
+          {t.panelHostnameLabel}
+        </label>
+        <p className="text-[13px] leading-[1.45] text-[#5f5e60] mt-1 mb-3">{t.panelHostnameHint}</p>
+        <input
+          id="cpn-panel-hostname"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          placeholder={t.panelHostnamePlaceholder}
+          value={hostnameDraft}
+          onChange={(event) => setHostnameDraft(event.target.value)}
+          className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full text-[15px]"
+        />
+
+        <button
+          type="button"
+          onClick={() => void applyNetwork()}
+          disabled={portBusy}
+          className="selection-button mt-4"
+        >
+          {t.networkSave}
+        </button>
         {portMessage && <p className="text-sm text-[#067647] mt-3">{portMessage}</p>}
         {portError && <p className="text-sm text-[#b42318] mt-3">{portError}</p>}
       </div>

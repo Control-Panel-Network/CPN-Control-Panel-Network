@@ -43,8 +43,25 @@ pub fn save_preferred_listen_port(port: u16) -> Result<(), String> {
             )
         })?;
     }
-    fs::write(&path, format!("{port}\n"))
+    let contents = format!("{port}\n");
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    use std::io::Write;
+    let mut file = options
+        .open(&path)
         .map_err(|error| format!("Could not save listen port preference: {error}"))?;
+    file.write_all(contents.as_bytes())
+        .map_err(|error| format!("Could not save listen port preference: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
     Ok(())
 }
 
@@ -90,16 +107,22 @@ pub fn print_installer_help(version: &str) {
     println!("Usage: cpn-installer [OPTIONS]");
     println!();
     println!("Options:");
-    println!("  --port <PORT>       Listen port (default: {DEFAULT_PORT})");
-    println!("                      Also: CPN_LISTEN_PORT, or /var/lib/cpn/listen_port");
-    println!("  --allow-remote      Bind 0.0.0.0 (HTTP without TLS; lab/operator opt-in)");
-    println!("  --listen-all        Alias of --allow-remote");
-    println!("  -h, --help          Show this help");
-    println!("  -V, --version       Show version");
+    println!("  --port <PORT>              Listen port (default: {DEFAULT_PORT})");
+    println!("                             Also: CPN_LISTEN_PORT, or /var/lib/cpn/listen_port");
+    println!("  --panel-hostname <HOST>    Persist panel subdomain (https://HOST without port)");
+    println!("  --old-port-policy <MODE>   When --port differs from the saved/bound port:");
+    println!("                             redirect_1m | redirect_3m | deny");
+    println!("  --allow-remote             Bind 0.0.0.0 (HTTP without TLS; lab/operator opt-in)");
+    println!("  --listen-all               Alias of --allow-remote");
+    println!("  -h, --help                 Show this help");
+    println!("  -V, --version              Show version");
     println!();
     println!("Ports 1-65535 are accepted. Prefer >1024 unless running as root.");
     println!(
         "Default {DEFAULT_PORT} matches the cPanel WHM HTTPS port family (Cloudflare-friendly)."
+    );
+    println!(
+        "Operator CLI: cpn network show|set-port|set-hostname (see to-do/PANEL-PORT-SUBDOMAIN.md)."
     );
 }
 
