@@ -12,7 +12,7 @@ use crate::panel_webauthn::{
     finish_authentication, finish_registration, start_authentication, start_registration,
     webauthn_for_request,
 };
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
 use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
