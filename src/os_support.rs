@@ -1,7 +1,8 @@
-//! Guest OS detection and CyberPanel-aligned allowlists for the Linux installer.
+//! Guest OS detection and allowlists for the CPN installer.
 //!
-//! CPN installs into a Linux guest. Windows Server, VirtualBox, and Hyper-V are
-//! host/hypervisor targets for those guests, not native panel install targets.
+//! Linux guests use dnf/apt recipes. Windows Server 2016+ is Phase A
+//! (installer UI + account bootstrap). Windows Server 2012/2012 R2 is not
+//! supported for modern Rust runtimes. Hypervisors remain host-only.
 
 use std::collections::HashMap;
 
@@ -10,6 +11,8 @@ use std::collections::HashMap;
 pub enum PackageFamily {
     Dnf,
     Apt,
+    /// Windows Server Phase A: no dnf/apt; panel UI and data dir only.
+    Windows,
 }
 
 /// How far CPN claims support for a detected guest.
@@ -17,11 +20,12 @@ pub enum PackageFamily {
 pub enum SupportStatus {
     /// Primary install path is implemented (dnf or apt recipes).
     Supported,
-    /// Detected and allowed; recipes share the family path but need more lab proof.
+    /// Detected and allowed; recipes share the family path but need more lab proof,
+    /// or Windows Phase A (UI + bootstrap without Linux package parity).
     Partial,
-    /// Community / third-party: clear "not yet" error (do not hard-fail as unknown).
+    /// Known target outside the installable allowlist (installer refuses helpfully).
     NotYet,
-    /// Outside the CyberPanel-aligned matrix.
+    /// Outside the CPN matrix.
     Unsupported,
 }
 
@@ -50,6 +54,10 @@ impl GuestOs {
 
     pub fn uses_apt(&self) -> bool {
         self.family == PackageFamily::Apt
+    }
+
+    pub fn is_windows(&self) -> bool {
+        self.family == PackageFamily::Windows
     }
 
     /// Debian/Ubuntu suite name for LiteSpeed apt sources (when applicable).
@@ -200,20 +208,129 @@ pub fn detect_from_os_release(contents: &str) -> Result<GuestOs, String> {
     })
 }
 
+/// Classify a Windows host from ProductName + CurrentBuild (unit-test friendly).
+///
+/// Build thresholds (approx): 2012=9200, 2012 R2=9600, 2016=14393, 2019=17763, 2022=20348.
+pub fn detect_from_windows_info(product_name: &str, current_build: u32) -> GuestOs {
+    let lower = product_name.to_lowercase();
+    let is_server = lower.contains("server");
+    let (label, major, version_id) = if !is_server {
+        (
+            format!("Windows (build {current_build})"),
+            current_build / 1000,
+            current_build.to_string(),
+        )
+    } else if current_build < 9200 {
+        (
+            format!("Windows Server (build {current_build})"),
+            0,
+            current_build.to_string(),
+        )
+    } else if current_build < 9600 {
+        ("Windows Server 2012".into(), 2012, "2012".into())
+    } else if current_build < 14393 {
+        ("Windows Server 2012 R2".into(), 2012, "2012 R2".into())
+    } else if current_build < 17763 {
+        ("Windows Server 2016".into(), 2016, "2016".into())
+    } else if current_build < 20348 {
+        ("Windows Server 2019".into(), 2019, "2019".into())
+    } else if current_build < 26000 {
+        ("Windows Server 2022".into(), 2022, "2022".into())
+    } else {
+        (
+            format!("Windows Server (build {current_build})"),
+            2025,
+            current_build.to_string(),
+        )
+    };
+
+    let support = if !is_server {
+        SupportStatus::Unsupported
+    } else if current_build < 14393 {
+        SupportStatus::NotYet
+    } else {
+        SupportStatus::Partial
+    };
+
+    GuestOs {
+        id: "windows".into(),
+        pretty_name: if product_name.trim().is_empty() {
+            label.clone()
+        } else {
+            product_name.trim().to_string()
+        },
+        major,
+        version_id,
+        family: PackageFamily::Windows,
+        support,
+        label,
+    }
+}
+
+#[cfg(windows)]
+fn read_windows_registry_value(value_name: &str) -> Option<String> {
+    use std::process::Command;
+    let output = Command::new("reg")
+        .args([
+            "query",
+            r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+            "/v",
+            value_name,
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    for line in text.lines() {
+        let line = line.trim();
+        if !line.contains(value_name) {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            return Some(parts[parts.len() - 1].to_string());
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn detect_windows_guest() -> Result<GuestOs, String> {
+    let product =
+        read_windows_registry_value("ProductName").unwrap_or_else(|| "Windows Server".to_string());
+    let build_raw = read_windows_registry_value("CurrentBuild")
+        .or_else(|| read_windows_registry_value("CurrentBuildNumber"))
+        .ok_or_else(|| "Could not read Windows CurrentBuild from registry".to_string())?;
+    let build: u32 = build_raw
+        .parse()
+        .map_err(|_| format!("Invalid Windows CurrentBuild value: {build_raw}"))?;
+    Ok(detect_from_windows_info(&product, build))
+}
+
 pub fn detect_guest_os() -> Result<GuestOs, String> {
-    let release = std::fs::read_to_string("/etc/os-release")
-        .map_err(|_| "No se pudo identificar el sistema operativo (/etc/os-release)".to_string())?;
-    detect_from_os_release(&release)
+    #[cfg(windows)]
+    {
+        detect_windows_guest()
+    }
+    #[cfg(not(windows))]
+    {
+        let release = std::fs::read_to_string("/etc/os-release").map_err(|_| {
+            "No se pudo identificar el sistema operativo (/etc/os-release)".to_string()
+        })?;
+        detect_from_os_release(&release)
+    }
 }
 
 fn supported_list_message() -> &'static str {
-    "Sistemas invitados admitidos (alineados con CyberPanel): \
-     Ubuntu 24.04/22.04/20.04; AlmaLinux 10/9/8; Rocky Linux 9/8; \
+    "Supported Linux guests: Ubuntu 24.04/22.04/20.04; AlmaLinux 10/9/8; Rocky Linux 9/8; \
      RHEL 9/8; CloudLinux 8; CentOS Stream 9; Debian 11/12/13 (partial); \
      openEuler 20-24 (partial). \
-     Best-effort (aún no / fuera de allowlist): otros derivados RHEL no listados. \
-     Hosts/hipervisores (no instalador nativo Windows): VirtualBox, Hyper-V, Windows Server. \
-     Ver to-do/OS-SUPPORT-MATRIX.md"
+     Windows Server 2016 and later: Phase A (installer UI + account bootstrap; partial). \
+     Windows Server 2012 / 2012 R2: not supported (modern Rust / MSVC toolchain). \
+     Hosts/hypervisors (not install targets): VirtualBox, Hyper-V. \
+     See to-do/OS-SUPPORT-MATRIX.md and to-do/WINDOWS-SERVER-INSTALL.md"
 }
 
 /// Refuse install with a clear message unless the guest is Supported or Partial.
@@ -224,22 +341,31 @@ pub fn require_installable_guest() -> Result<GuestOs, String> {
     }
     match guest.support {
         SupportStatus::NotYet => Err(format!(
-            "{} está en la matriz CyberPanel como best-effort, pero CPN aún no tiene \
-             recetas listas para este sistema. {}",
+            "{} is recognized but not yet an installable CPN target. {}",
             guest.label,
             supported_list_message()
         )),
         _ => Err(format!(
-            "{} no está en la matriz de invitados de CPN. {}",
+            "{} is not in the CPN guest matrix. {}",
             guest.label,
             supported_list_message()
         )),
     }
 }
 
+/// Clear message when Linux dnf/apt recipes are requested on Windows.
+pub fn windows_linux_recipe_blocked_message(feature: &str) -> String {
+    format!(
+        "{feature} uses Linux package recipes (dnf/apt) and is not available on Windows Server. \
+         Phase A supports the installer UI, Windows service, and account bootstrap under \
+         %ProgramData%\\CPN. IIS / reverse-proxy helpers are Phase B. \
+         See to-do/WINDOWS-SERVER-INSTALL.md"
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PackageFamily, SupportStatus, detect_from_os_release};
+    use super::{PackageFamily, SupportStatus, detect_from_os_release, detect_from_windows_info};
 
     #[test]
     fn detects_almalinux_9_and_10() {
@@ -314,5 +440,39 @@ mod tests {
     fn rejects_unknown_distro() {
         let weird = detect_from_os_release("ID=somethingos\nVERSION_ID=\"1.0\"\n").unwrap();
         assert_eq!(weird.support, SupportStatus::Unsupported);
+    }
+
+    #[test]
+    fn windows_2016_plus_is_partial_phase_a() {
+        let ws2016 = detect_from_windows_info("Windows Server 2016 Standard", 14393);
+        assert!(ws2016.is_windows());
+        assert!(ws2016.is_installable());
+        assert_eq!(ws2016.support, SupportStatus::Partial);
+        assert_eq!(ws2016.label, "Windows Server 2016");
+        assert!(!ws2016.uses_dnf());
+        assert!(!ws2016.uses_apt());
+
+        let ws2022 = detect_from_windows_info("Windows Server 2022 Datacenter", 20348);
+        assert_eq!(ws2022.support, SupportStatus::Partial);
+        assert_eq!(ws2022.label, "Windows Server 2022");
+    }
+
+    #[test]
+    fn windows_2012_is_not_yet() {
+        let ws2012 = detect_from_windows_info("Windows Server 2012 Standard", 9200);
+        assert_eq!(ws2012.support, SupportStatus::NotYet);
+        assert!(!ws2012.is_installable());
+        assert_eq!(ws2012.label, "Windows Server 2012");
+
+        let r2 = detect_from_windows_info("Windows Server 2012 R2 Standard", 9600);
+        assert_eq!(r2.support, SupportStatus::NotYet);
+        assert_eq!(r2.label, "Windows Server 2012 R2");
+    }
+
+    #[test]
+    fn windows_client_unsupported() {
+        let client = detect_from_windows_info("Windows 10 Pro", 19045);
+        assert_eq!(client.support, SupportStatus::Unsupported);
+        assert!(!client.is_installable());
     }
 }

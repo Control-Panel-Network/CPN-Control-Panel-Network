@@ -1,6 +1,7 @@
 //! Install manifest: installed version, core file list, and preserve paths.
 
 use crate::model::{MailSystem, ServerEngine};
+use crate::paths;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -8,10 +9,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const DATA_DIR: &str = "/var/lib/cpn";
-pub const BOOTSTRAP_FILE: &str = "/var/lib/cpn/panel-bootstrap.json";
-pub const INSTALLER_BIN: &str = "/usr/bin/cpn-installer";
-pub const CPN_CLI_BIN: &str = "/usr/bin/cpn";
+/// Default data dir string (platform-specific). Prefer [`data_dir()`] at runtime.
+pub fn default_data_dir_str() -> &'static str {
+    paths::platform_data_dir()
+}
+
+pub fn installer_bin() -> &'static str {
+    paths::installer_bin_path()
+}
+
+pub fn cli_bin() -> &'static str {
+    paths::cli_bin_path()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -68,9 +77,7 @@ fn now_unix() -> u64 {
 }
 
 pub fn data_dir() -> PathBuf {
-    std::env::var_os("CPN_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DATA_DIR))
+    paths::default_data_dir()
 }
 
 pub fn manifest_path() -> PathBuf {
@@ -92,38 +99,49 @@ pub fn default_preserve_paths() -> Vec<String> {
 }
 
 pub fn default_core_files() -> Vec<CoreFileEntry> {
-    vec![
+    let mut files = vec![
         CoreFileEntry {
-            path: INSTALLER_BIN.into(),
+            path: installer_bin().into(),
             kind: "binary".into(),
             optional: false,
         },
         CoreFileEntry {
-            path: CPN_CLI_BIN.into(),
+            path: cli_bin().into(),
             kind: "binary".into(),
             optional: true,
         },
-        CoreFileEntry {
-            path: "/usr/lib/systemd/system/cpn-installer.service".into(),
-            kind: "unit".into(),
+    ];
+    if cfg!(windows) {
+        files.push(CoreFileEntry {
+            path: r"C:\Program Files\CPN\cpn-installer.xml".into(),
+            kind: "service".into(),
             optional: true,
-        },
-        CoreFileEntry {
-            path: "/etc/systemd/system/cpn-installer.service".into(),
-            kind: "unit".into(),
-            optional: true,
-        },
-        CoreFileEntry {
-            path: "/etc/systemd/system/cpn-webmail.service".into(),
-            kind: "unit".into(),
-            optional: true,
-        },
-        CoreFileEntry {
-            path: "/etc/systemd/system/openlitespeed.service".into(),
-            kind: "unit".into(),
-            optional: true,
-        },
-    ]
+        });
+    } else {
+        files.extend([
+            CoreFileEntry {
+                path: "/usr/lib/systemd/system/cpn-installer.service".into(),
+                kind: "unit".into(),
+                optional: true,
+            },
+            CoreFileEntry {
+                path: "/etc/systemd/system/cpn-installer.service".into(),
+                kind: "unit".into(),
+                optional: true,
+            },
+            CoreFileEntry {
+                path: "/etc/systemd/system/cpn-webmail.service".into(),
+                kind: "unit".into(),
+                optional: true,
+            },
+            CoreFileEntry {
+                path: "/etc/systemd/system/openlitespeed.service".into(),
+                kind: "unit".into(),
+                optional: true,
+            },
+        ]);
+    }
+    files
 }
 
 pub fn load_manifest() -> Option<InstallManifest> {
@@ -207,9 +225,8 @@ fn rpm_installed_version() -> Option<String> {
 
 pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     let manifest = load_manifest();
-    let has_bootstrap =
-        Path::new(BOOTSTRAP_FILE).is_file() || data_dir().join("panel-bootstrap.json").is_file();
-    let binary = Path::new(INSTALLER_BIN).is_file();
+    let has_bootstrap = data_dir().join("panel-bootstrap.json").is_file();
+    let binary = Path::new(installer_bin()).is_file();
     let rpm_version = rpm_installed_version();
     let has_manifest = manifest.is_some();
     let detected = has_manifest || has_bootstrap || binary || rpm_version.is_some();

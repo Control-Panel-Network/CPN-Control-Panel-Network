@@ -9,6 +9,7 @@ use cpn_installer::account_mgmt::{
     create_account, delete_account, list_accounts, reset_account_password,
 };
 use cpn_installer::cli_network::{NetworkCommands, run_network};
+use cpn_installer::paths;
 use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -19,8 +20,8 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
     version = VERSION,
     about = "CPN Control Panel Network operator CLI",
     long_about = "Manage CPN accounts and website records on this host.\n\
-Destructive account/site changes require root (or CPN_ALLOW_NONROOT=1 for labs).\n\
-Data directory: /var/lib/cpn (override with CPN_DATA_DIR)."
+Destructive account/site changes require elevated privileges (or CPN_ALLOW_NONROOT=1 for labs).\n\
+Data directory defaults to the platform path (override with CPN_DATA_DIR)."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -38,7 +39,7 @@ enum Commands {
         #[command(subcommand)]
         command: AccountCommands,
     },
-    /// Website records (JSON under /var/lib/cpn/sites)
+    /// Website records (JSON under $CPN_DATA_DIR/sites)
     Site {
         #[command(subcommand)]
         command: SiteCommands,
@@ -244,7 +245,10 @@ fn run() -> Result<(), String> {
         }
         Commands::List => {
             println!("account  Manage panel / operator accounts");
-            println!("site     Manage website records under /var/lib/cpn/sites");
+            println!(
+                "site     Manage website records under {}/sites",
+                paths::platform_data_dir()
+            );
             println!("network  Manage listen port, hostname, and port migration");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
@@ -341,8 +345,10 @@ fn run() -> Result<(), String> {
                     notes.as_deref(),
                 )?;
                 println!(
-                    "created site {} (vhost_wired={}; JSON under /var/lib/cpn/sites)",
-                    site.domain, site.vhost_wired
+                    "created site {} (vhost_wired={}; JSON under {}/sites)",
+                    site.domain,
+                    site.vhost_wired,
+                    paths::platform_data_dir()
                 );
                 if !site.vhost_wired {
                     eprintln!(

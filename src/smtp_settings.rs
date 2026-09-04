@@ -1,11 +1,9 @@
 //! Outbound SMTP settings for panel setup and password reset.
-//! Secrets live only under `/var/lib/cpn/` with mode 600.
+//! Secrets live only under the CPN data directory with restricted permissions.
 
+use crate::paths;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-
-const SMTP_DIR: &str = "/var/lib/cpn";
-const SMTP_FILE: &str = "/var/lib/cpn/smtp.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -57,7 +55,7 @@ fn now_unix() -> u64 {
 }
 
 pub fn smtp_path() -> PathBuf {
-    PathBuf::from(SMTP_FILE)
+    paths::join_data("smtp.json")
 }
 
 pub fn load_smtp() -> Option<SmtpSettings> {
@@ -120,8 +118,9 @@ pub fn validate_smtp_input(input: &SmtpSetupInput) -> Result<SmtpSettings, Strin
 }
 
 pub fn persist_smtp(settings: &SmtpSettings) -> Result<(), String> {
-    fs::create_dir_all(SMTP_DIR)
-        .map_err(|error| format!("Could not create {SMTP_DIR}: {error}"))?;
+    let dir = paths::default_data_dir();
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
     let json = serde_json::to_string_pretty(settings)
         .map_err(|error| format!("Could not serialize SMTP settings: {error}"))?;
     let path = smtp_path();

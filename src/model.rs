@@ -240,7 +240,7 @@ pub struct AccountSetupRequest {
     pub recovery_email: String,
     pub password_policy: Option<PasswordPolicy>,
     pub language: Option<String>,
-    /// Optional outbound SMTP settings saved under `/var/lib/cpn/smtp.json`.
+    /// Optional outbound SMTP settings saved under the CPN data directory (`smtp.json`).
     pub smtp: Option<crate::smtp_settings::SmtpSetupInput>,
     /// When true and SMTP is configured, email the username (and login URL) after setup.
     #[serde(default)]

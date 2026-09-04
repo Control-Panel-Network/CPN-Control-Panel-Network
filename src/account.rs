@@ -1,13 +1,13 @@
 use crate::model::{AccountPublic, PasswordPolicy};
+use crate::paths;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
-const DEFAULT_DATA_DIR: &str = "/var/lib/cpn";
 const MAX_USERNAME_CHARS: usize = 128;
 const MAX_PASSWORD_CHARS: usize = 256;
 const MAX_EMAIL_CHARS: usize = 254;
@@ -42,9 +42,7 @@ pub fn default_password_policy() -> PasswordPolicy {
 /// Data root for panel bootstrap, extra accounts, and site records.
 /// Override with `CPN_DATA_DIR` (used by tests and non-standard installs).
 pub fn data_dir() -> PathBuf {
-    env::var_os("CPN_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_DATA_DIR))
+    paths::default_data_dir()
 }
 
 pub fn bootstrap_path() -> PathBuf {

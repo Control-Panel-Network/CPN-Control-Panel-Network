@@ -401,14 +401,19 @@ pub fn rollback_tracked_files() -> Result<RollbackReport, String> {
     })
 }
 
-pub fn failure_message(kind: FailureKind) -> &'static str {
+pub fn failure_message(kind: FailureKind) -> String {
+    let journal = crate::paths::join_data("install-journal.jsonl");
+    let backups = crate::paths::join_data("install-backups");
     match kind {
-        FailureKind::FailedRolledBack => {
-            "Installation failed; tracked file changes were rolled back. Review /var/lib/cpn/install-journal.jsonl."
-        }
-        FailureKind::FailedPartial => {
-            "Installation failed with partial changes remaining (packages/services may still be present). Review /var/lib/cpn/install-journal.jsonl and install-backups/."
-        }
+        FailureKind::FailedRolledBack => format!(
+            "Installation failed; tracked file changes were rolled back. Review {}.",
+            journal.display()
+        ),
+        FailureKind::FailedPartial => format!(
+            "Installation failed with partial changes remaining (packages/services may still be present). Review {} and {}.",
+            journal.display(),
+            backups.display()
+        ),
     }
 }
 

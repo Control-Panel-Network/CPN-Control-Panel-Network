@@ -77,6 +77,13 @@ pub(crate) fn pkg_install(
             dnf(args, description, tracking)
         }
         PackageFamily::Apt => apt_install(packages_apt, description, tracking.download_start),
+        PackageFamily::Windows => command(
+            "cmd",
+            vec!["/C", "echo Windows Phase A has no dnf/apt recipes"],
+            "Windows package install is not available",
+            "failed",
+            0,
+        ),
     }
 }
 
@@ -182,6 +189,9 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 },
             )
         }
+        PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
+            "OpenLiteSpeed repository setup",
+        )),
     }
 }
 
@@ -221,6 +231,9 @@ pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
                 .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
         }
         PackageFamily::Apt => Ok(()),
+        PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
+            "Caddy repository setup",
+        )),
     }
 }
 
@@ -321,6 +334,13 @@ pub(crate) fn php_install_command(guest: &GuestOs, label: &'static str) -> Comma
                 },
             )
         }
+        PackageFamily::Windows => command(
+            "cmd",
+            vec!["/C", "echo Windows Phase A has no PHP package recipes"],
+            "Windows PHP install is not available",
+            "failed",
+            0,
+        ),
     }
 }
 

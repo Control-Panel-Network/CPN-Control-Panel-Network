@@ -1,5 +1,6 @@
 //! Listen-port resolution for the CPN web installer (default 2087).
 
+use crate::paths;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -9,8 +10,7 @@ pub const DEFAULT_PORT: u16 = 2087;
 
 /// Preference file under the CPN data directory (override with `CPN_DATA_DIR`).
 fn preference_path() -> PathBuf {
-    let base = env::var("CPN_DATA_DIR").unwrap_or_else(|_| "/var/lib/cpn".into());
-    PathBuf::from(base).join("listen_port")
+    paths::join_data("listen_port")
 }
 
 /// Validate a TCP listen port (`1`..=`65535`). Prefer `>1024` when not root.
@@ -108,7 +108,10 @@ pub fn print_installer_help(version: &str) {
     println!();
     println!("Options:");
     println!("  --port <PORT>              Listen port (default: {DEFAULT_PORT})");
-    println!("                             Also: CPN_LISTEN_PORT, or /var/lib/cpn/listen_port");
+    println!(
+        "                             Also: CPN_LISTEN_PORT, or {}/listen_port",
+        paths::platform_data_dir()
+    );
     println!("  --panel-hostname <HOST>    Persist panel subdomain (https://HOST without port)");
     println!("  --old-port-policy <MODE>   When --port differs from the saved/bound port:");
     println!("                             redirect_1m | redirect_3m | deny");
