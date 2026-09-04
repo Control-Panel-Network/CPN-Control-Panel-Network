@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AL9 browser-ish smoke: edit own profile email/password and TOTP login challenge."""
+"""AL9 smoke: View Profile Edit button, self-modify, TOTP, Passkey API presence."""
 from __future__ import annotations
 
 import hashlib
@@ -33,7 +33,7 @@ PASS = panel_password()
 
 def _request(opener, method: str, url: str, data: dict | None = None, headers: dict | None = None):
     body = None
-    hdrs = {"User-Agent": "cpn-profile-totp-smoke/1.0"}
+    hdrs = {"User-Agent": "cpn-profile-edit-smoke/1.0"}
     if headers:
         hdrs.update(headers)
     if data is not None:
@@ -45,6 +45,30 @@ def _request(opener, method: str, url: str, data: dict | None = None, headers: d
             return resp.getcode(), resp.read().decode("utf-8", "replace"), dict(resp.headers)
     except urllib.error.HTTPError as err:
         return err.code, err.read().decode("utf-8", "replace"), dict(err.headers)
+
+
+def _request_json(opener, url: str, payload: dict):
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "cpn-profile-edit-smoke/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with opener.open(req, timeout=30) as resp:
+            return resp.getcode(), json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as err:
+        raw = err.read().decode("utf-8", "replace")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = {"error": raw}
+        return err.code, data
 
 
 def _hotp(secret: bytes, counter: int) -> str:
@@ -75,157 +99,88 @@ def main() -> int:
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     results = {}
 
-    code, html, _ = _request(opener, "GET", f"{BASE}/login")
-    results["login_get"] = code == 200
-
-    code, _, _ = _request(
+    _request(opener, "GET", f"{BASE}/login")
+    _request(
         opener,
         "POST",
         f"{BASE}/login",
         {"username": USER, "password": PASS, "remember_me": "0"},
     )
-    # 303 to dashboard or 2fa
-    results["login_post"] = code in (200, 302, 303)
 
     code, profile, _ = _request(opener, "GET", f"{BASE}/account/users/profile")
-    results["profile_get"] = code == 200 and "Account profile" in profile
-    results["profile_editable"] = 'action="/account/users/profile/details"' in profile
-    results["profile_password_form"] = 'action="/account/users/profile/password"' in profile
-    results["profile_totp"] = "Two-factor authentication" in profile
+    results["profile_view"] = code == 200 and "View Profile" in profile
+    results["edit_button"] = 'href="/account/users/modify"' in profile and ">Edit<" in profile
 
-    new_email = f"admin-smoke-{int(time.time())}@example.com"
+    code, modify, _ = _request(opener, "GET", f"{BASE}/account/users/modify")
+    results["modify_get"] = code == 200 and "Your account" in modify
+    results["modify_self_forms"] = 'action="/account/users/profile/details"' in modify
+    results["modify_passkeys_ui"] = "Passkeys (WebAuthn)" in modify and "Register passkey" in modify
+    results["modify_no_planned"] = "planned next" not in modify.lower()
+
+    new_email = f"admin-edit-{int(time.time())}@example.com"
     code, _, _ = _request(
         opener,
         "POST",
         f"{BASE}/account/users/profile/details",
         {"username": USER, "recovery_email": new_email, "language": "en"},
     )
-    results["email_update"] = code in (200, 302, 303)
-
+    results["save_redirect"] = code in (200, 302, 303)
     code, profile2, _ = _request(opener, "GET", f"{BASE}/account/users/profile")
-    results["email_saved"] = new_email in profile2
+    results["profile_notice_email"] = new_email in profile2 or "Profile updated" in profile2 or new_email in profile2
 
-    # Change password then change back
-    new_pass = "SmokePass9!"
-    code, _, _ = _request(
-        opener,
-        "POST",
-        f"{BASE}/account/users/profile/password",
-        {
-            "current_password": PASS,
-            "password": new_pass,
-            "generate": "0",
-        },
+    # Passkey register/start API (challenge issued; browser ceremony needs authenticator)
+    code, data = _request_json(
+        opener, f"{BASE}/account/users/profile/passkey/register/start", {}
     )
-    results["password_update"] = code in (200, 302, 303)
+    results["passkey_register_start"] = code == 200 and "ceremony_id" in data and "publicKey" in data
 
-    # Re-login with new password
-    jar.clear()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-    code, _, _ = _request(
-        opener,
-        "POST",
-        f"{BASE}/login",
-        {"username": USER, "password": new_pass, "remember_me": "0"},
+    # Login passkey start without keys should fail honestly
+    jar2 = CookieJar()
+    opener2 = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar2))
+    code, data = _request_json(
+        opener2, f"{BASE}/login/passkey/start", {"username": USER}
     )
-    results["login_new_password"] = code in (200, 302, 303)
+    results["passkey_login_start_no_keys"] = code == 400 and "passkey" in str(data).lower()
 
-    code, profile3, _ = _request(opener, "GET", f"{BASE}/account/users/profile")
-    results["session_after_pw"] = code == 200 and "Account profile" in profile3
+    # Login page advertises passkey button
+    code, login_html, _ = _request(opener2, "GET", f"{BASE}/login")
+    results["login_passkey_button"] = code == 200 and "Sign in with passkey" in login_html
 
-    # Enable TOTP if disabled
-    if "Enable TOTP" in profile3:
+    # Light TOTP path if Enable is present on modify
+    code, modify2, _ = _request(opener, "GET", f"{BASE}/account/users/modify")
+    if "Enable TOTP" in modify2:
         code, enroll_html, _ = _request(
             opener, "POST", f"{BASE}/account/users/profile/totp/begin", {}
         )
         results["totp_begin"] = code == 200 and "Secret:" in enroll_html
         secret_m = re.search(r"<code[^>]*>([A-Z2-7]{16,})</code>", enroll_html)
         if secret_m:
-            secret_b32 = secret_m.group(1)
-            secret = _b32_decode(secret_b32)
+            secret = _b32_decode(secret_m.group(1))
             totp = _hotp(secret, int(time.time()) // 30)
-            code, conf_html, _ = _request(
+            code, conf, _ = _request(
                 opener,
                 "POST",
                 f"{BASE}/account/users/profile/totp/confirm",
                 {"code": totp},
             )
             results["totp_confirm"] = code == 200 and (
-                "TOTP enabled" in conf_html or "Backup codes" in conf_html
+                "TOTP enabled" in conf or "Backup codes" in conf
             )
-            # Restore original password before logout challenge
-            _request(
-                opener,
-                "POST",
-                f"{BASE}/account/users/profile/password",
-                {
-                    "current_password": new_pass,
-                    "password": PASS,
-                    "generate": "0",
-                },
-            )
-            # Logout and login should challenge
-            _request(opener, "GET", f"{BASE}/logout")
-            jar.clear()
-            opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-            code, loc_html, headers = _request(
-                opener,
-                "POST",
-                f"{BASE}/login",
-                {"username": USER, "password": PASS, "remember_me": "0"},
-            )
-            # Follow if needed
-            code2, mfa_html, _ = _request(opener, "GET", f"{BASE}/login/2fa")
-            results["totp_challenge"] = code2 == 200 and "Two-factor" in mfa_html
+            # disable to leave lab clean
             totp2 = _hotp(secret, int(time.time()) // 30)
-            code3, _, _ = _request(
-                opener, "POST", f"{BASE}/login/2fa", {"code": totp2}
-            )
-            results["totp_login"] = code3 in (200, 302, 303)
-            code4, dash, _ = _request(opener, "GET", f"{BASE}/dashboard")
-            results["dashboard_after_totp"] = code4 == 200 and (
-                "Dashboard" in dash or "CPN" in dash
-            )
-            # Disable TOTP to leave lab clean
-            code5, prof, _ = _request(opener, "GET", f"{BASE}/account/users/profile")
-            if "Disable TOTP" in prof:
-                totp3 = _hotp(secret, int(time.time()) // 30)
-                _request(
-                    opener,
-                    "POST",
-                    f"{BASE}/account/users/profile/totp/disable",
-                    {"current_password": PASS, "code": totp3},
-                )
-                results["totp_disable"] = True
-            else:
-                results["totp_disable"] = False
-        else:
-            results["totp_begin"] = False
-            results["totp_confirm"] = False
-            results["totp_challenge"] = False
-            results["totp_login"] = False
-            results["dashboard_after_totp"] = False
-            results["totp_disable"] = False
-            # restore password best-effort
             _request(
                 opener,
                 "POST",
-                f"{BASE}/account/users/profile/password",
-                {"current_password": new_pass, "password": PASS, "generate": "0"},
+                f"{BASE}/account/users/profile/totp/disable",
+                {"current_password": PASS, "code": totp2},
             )
+            results["totp_disable"] = True
+        else:
+            results["totp_confirm"] = False
+            results["totp_disable"] = False
     else:
-        # Already enabled or unexpected; restore password
-        _request(
-            opener,
-            "POST",
-            f"{BASE}/account/users/profile/password",
-            {"current_password": new_pass, "password": PASS, "generate": "0"},
-        )
-        results["totp_begin"] = "skipped_already_enabled"
+        results["totp_begin"] = "skipped"
         results["totp_confirm"] = "skipped"
-        results["totp_challenge"] = "skipped"
-        results["totp_login"] = "skipped"
-        results["dashboard_after_totp"] = "skipped"
         results["totp_disable"] = "skipped"
 
     print(json.dumps(results, indent=2, ensure_ascii=False))

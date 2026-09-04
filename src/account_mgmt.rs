@@ -330,6 +330,7 @@ pub fn rename_own_account(
         moved.updated_at_unix = now_unix();
         let _ = crate::account_mfa::save_mfa_for_rename(&moved, current_username_raw);
     }
+    let _ = crate::account_passkeys::rename_passkey_store(current_username_raw, &new_username);
     Ok(AccountPublic {
         username: boot.username,
         recovery_email: boot.recovery_email,

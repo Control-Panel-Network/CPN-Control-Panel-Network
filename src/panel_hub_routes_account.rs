@@ -7,8 +7,8 @@ use crate::packages::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_account::{
     acl_create_page, acl_modify_page, api_access_page, grant_from_form_fields, users_create_page,
-    users_create_success_page, users_list_page, users_modify_page, users_password_success_page,
-    users_plans_hub_main, users_reseller_page,
+    users_create_success_page, users_list_page, users_password_success_page, users_plans_hub_main,
+    users_reseller_page,
 };
 use crate::panel_pages::panel_shell;
 use crate::site_acl::{add_grant, remove_grant_at};
@@ -177,29 +177,6 @@ pub async fn users_create_post(
         )),
         Err(error) => redirect_notice("/account/users/create", None, Some(&error)),
     }
-}
-
-#[get("/account/users/modify")]
-pub async fn users_modify_get(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
-    };
-    if let Err(error) = require_admin(&user) {
-        return redirect_notice("/account/users/list", None, Some(&error));
-    }
-    html_ok(panel_shell(
-        &user,
-        "users",
-        "Modify User",
-        &users_modify_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
 }
 
 #[post("/account/users/password")]

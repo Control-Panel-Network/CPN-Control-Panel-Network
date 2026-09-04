@@ -1,4 +1,4 @@
-//! Self-service profile routes (edit account, password, TOTP).
+//! Self-service profile routes and Modify User (self-edit + admin tools).
 
 use crate::account::verify_password;
 use crate::account_mfa::{
@@ -10,7 +10,7 @@ use crate::account_mgmt::{
 use crate::account_totp::otpauth_qr_svg;
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
-use crate::panel_hub_pages_profile::users_profile_page;
+use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
 use crate::panel_pages::panel_shell;
 use crate::panel_session::{create_session_token, session_cookie_header, session_secret};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -27,7 +27,7 @@ fn request_secure(http: &HttpRequest) -> bool {
     crate::panel_session::request_https_from_headers(http)
 }
 
-fn profile_html(
+fn modify_html(
     user: &str,
     notice: Option<&str>,
     error: Option<&str>,
@@ -39,8 +39,8 @@ fn profile_html(
     html_ok(panel_shell(
         user,
         "users",
-        "Account profile",
-        &users_profile_page(
+        "Modify User",
+        &users_modify_page(
             user,
             notice,
             error,
@@ -95,6 +95,31 @@ pub async fn users_profile_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    html_ok(panel_shell(
+        &user,
+        "users",
+        "View Profile",
+        &users_profile_page(
+            &user,
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+            None,
+            None,
+            None,
+            None,
+        ),
+    ))
+}
+
+#[get("/account/users/modify")]
+pub async fn users_modify_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
     let mut enroll_secret = None;
     let mut enroll_qr = None;
     if query.get("enroll").map(String::as_str) == Some("1")
@@ -106,7 +131,7 @@ pub async fn users_profile_route(
             enroll_qr = Some(svg);
         }
     }
-    profile_html(
+    modify_html(
         &user,
         query.get("notice").map(String::as_str),
         query.get("error").map(String::as_str),
@@ -132,13 +157,13 @@ pub async fn users_profile_details_post(
         Some(form.recovery_email.as_str()),
         Some(form.language.as_str()),
     ) {
-        return redirect_notice("/account/users/profile", None, Some(&error));
+        return redirect_notice("/account/users/modify", None, Some(&error));
     }
     let session_user = if rename_needed {
         match rename_own_account(&user, &form.username) {
             Ok(public) => public.username,
             Err(error) => {
-                return redirect_notice("/account/users/profile", None, Some(&error));
+                return redirect_notice("/account/users/modify", None, Some(&error));
             }
         }
     } else {
@@ -169,16 +194,22 @@ pub async fn users_profile_password_post(
         Some(form.password.as_str())
     };
     match change_own_password(&user, &form.current_password, password, generate) {
-        Ok(result) => profile_html(
-            &user,
-            Some("Password updated"),
-            None,
-            None,
-            None,
-            None,
-            result.generated_password.as_deref(),
-        ),
-        Err(error) => redirect_notice("/account/users/profile", None, Some(&error)),
+        Ok(result) => {
+            if result.generated_password.is_some() {
+                modify_html(
+                    &user,
+                    Some("Password updated"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    result.generated_password.as_deref(),
+                )
+            } else {
+                redirect_notice("/account/users/profile", Some("Password updated"), None)
+            }
+        }
+        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }
 
@@ -191,7 +222,7 @@ pub async fn users_profile_totp_begin(
         return login_redirect();
     };
     match begin_totp_enroll(&user) {
-        Ok((secret, _uri, svg)) => profile_html(
+        Ok((secret, _uri, svg)) => modify_html(
             &user,
             Some("Scan the QR and confirm with a code"),
             None,
@@ -200,7 +231,7 @@ pub async fn users_profile_totp_begin(
             None,
             None,
         ),
-        Err(error) => redirect_notice("/account/users/profile", None, Some(&error)),
+        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }
 
@@ -214,7 +245,7 @@ pub async fn users_profile_totp_confirm(
         return login_redirect();
     };
     match confirm_totp_enroll(&user, &form.code) {
-        Ok(codes) => profile_html(
+        Ok(codes) => modify_html(
             &user,
             Some("TOTP enabled. Store your backup codes."),
             None,
@@ -223,7 +254,7 @@ pub async fn users_profile_totp_confirm(
             Some(&codes),
             None,
         ),
-        Err(error) => redirect_notice("/account/users/profile?enroll=1", None, Some(&error)),
+        Err(error) => redirect_notice("/account/users/modify?enroll=1", None, Some(&error)),
     }
 }
 
@@ -237,7 +268,7 @@ pub async fn users_profile_totp_disable(
         return login_redirect();
     };
     let Ok((boot, _)) = find_account(&user) else {
-        return redirect_notice("/account/users/profile", None, Some("Account not found"));
+        return redirect_notice("/account/users/modify", None, Some("Account not found"));
     };
     if !verify_password(
         &form.current_password,
@@ -245,13 +276,13 @@ pub async fn users_profile_totp_disable(
         &boot.password_hash,
     ) {
         return redirect_notice(
-            "/account/users/profile",
+            "/account/users/modify",
             None,
             Some("Current password is incorrect"),
         );
     }
     match disable_totp(&user, &form.code) {
         Ok(()) => redirect_notice("/account/users/profile", Some("TOTP disabled"), None),
-        Err(error) => redirect_notice("/account/users/profile", None, Some(&error)),
+        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }

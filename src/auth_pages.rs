@@ -101,8 +101,12 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
         </div>
         <button id="i18n-submit" type="submit">Sign in</button>
       </form>
+      <p class="hint" style="margin-top:18px;text-align:center;">or</p>
+      <button type="button" onclick="cpnLoginPasskey()" style="margin-top:8px;width:100%;border:1px solid #d0d5dd;border-radius:999px;padding:12px 16px;background:#fff;color:#1d1d1f;font-weight:700;cursor:pointer;">Sign in with passkey</button>
+      <p id="cpn-passkey-login-status" class="hint" role="status"></p>
     </section>
   </main>
+  <script>{passkey_script}</script>
   {script}
 </body>
 </html>"#,
@@ -115,6 +119,7 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
         } else {
             ""
         },
+        passkey_script = crate::panel_webauthn::passkey_client_script(),
         script = PANEL_I18N_SCRIPT,
     )
 }
