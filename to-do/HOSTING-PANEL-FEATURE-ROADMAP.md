@@ -7,7 +7,7 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | Section | Items |
 |---|---|
 | **Hosting** | Dashboard, Websites, Email (hub), Databases & FTP (hub), Backups (hub), Apps, Plugins |
-| **Account** | Users & Plans (stub; Packages from #86 can coexist at `/packages` when merged) |
+| **Account** | Users & Plans (tile hub; Packages at `/packages`) |
 | **Administration** | Server (hub), Security (stub), Settings (Change Port) |
 
 ## Shipped this PR
@@ -41,12 +41,13 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | Backups | Google Drive, Remote Backups |
 | FTP | Create / Delete / Reset FTP Account |
 | Email | Pattern Forwarding, Email Limits, Change Password, Email Debugger, Mail Queue, SpamAssassin, Rspamd, MailScanner, Email Marketing, Plus-Addressing |
-| Account | Users & Plans stub |
+| Account | Users & Plans tile hub (list/create/modify users, Packages links, site ACL MVP) |
 | Administration | Security stub |
 
 ## Later (roadmap)
 
-- Packages ACL merge (#86) into Account nav
+- Reseller hierarchy and quotas under Reseller Center
+- Panel API access tokens
 - Default MariaDB + phpMyAdmin install defaults (#88) without conflicting routes
 - Postfix map generation from forwarding/catch-all JSON
 - Backup restore extract + systemd schedule runner

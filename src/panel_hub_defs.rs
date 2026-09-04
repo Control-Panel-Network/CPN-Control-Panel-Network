@@ -1,6 +1,98 @@
-﻿//! Hub tile catalogs for Server, Email, Databases & FTP, and Backups.
+﻿//! Hub tile catalogs for Server, Email, Databases & FTP, Backups, and Users & Plans.
 
 use crate::panel_hubs::HubTile;
+
+pub fn users_plans_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![
+        (
+            "Users",
+            vec![
+                HubTile {
+                    title: "View Profile",
+                    subtitle: "Your account details",
+                    href: "/account/users/profile",
+                    live: true,
+                },
+                HubTile {
+                    title: "List Users",
+                    subtitle: "All panel accounts",
+                    href: "/account/users/list",
+                    live: true,
+                },
+                HubTile {
+                    title: "Create User",
+                    subtitle: "Add a panel account",
+                    href: "/account/users/create",
+                    live: true,
+                },
+                HubTile {
+                    title: "Modify User",
+                    subtitle: "Reset password or remove",
+                    href: "/account/users/modify",
+                    live: true,
+                },
+                HubTile {
+                    title: "Reseller Center",
+                    subtitle: "Reseller settings",
+                    href: "/account/users/reseller",
+                    live: false,
+                },
+            ],
+        ),
+        (
+            "Hosting Plans",
+            vec![
+                HubTile {
+                    title: "Packages",
+                    subtitle: "View hosting plans",
+                    href: "/packages",
+                    live: true,
+                },
+                HubTile {
+                    title: "Create Package",
+                    subtitle: "Add a plan",
+                    href: "/packages/new",
+                    live: true,
+                },
+                HubTile {
+                    title: "Modify Package",
+                    subtitle: "Edit a plan",
+                    href: "/packages",
+                    live: true,
+                },
+            ],
+        ),
+        (
+            "Admin",
+            vec![
+                HubTile {
+                    title: "Create ACL",
+                    subtitle: "Site permission grants",
+                    href: "/account/acl/create",
+                    live: true,
+                },
+                HubTile {
+                    title: "Modify ACL",
+                    subtitle: "Edit site grants",
+                    href: "/account/acl/modify",
+                    live: true,
+                },
+                HubTile {
+                    title: "API Access",
+                    subtitle: "API tokens",
+                    href: "/account/api-access",
+                    live: false,
+                },
+                HubTile {
+                    title: "Plugins",
+                    subtitle: "Installed plugins",
+                    href: "/plugins",
+                    live: true,
+                },
+            ],
+        ),
+    ]
+}
 
 pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
     vec![

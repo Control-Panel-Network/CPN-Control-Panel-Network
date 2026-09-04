@@ -1,5 +1,6 @@
 //! Hub route facade (re-exports feature route modules).
 
+pub use crate::panel_hub_routes_account::*;
 pub use crate::panel_hub_routes_backups::*;
 pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_email::*;

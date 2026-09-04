@@ -1,4 +1,4 @@
-//! Hub HTML for Backups, Settings, Security, and Users stubs.
+//! Hub HTML for Backups, Settings, and Security stubs.
 
 use crate::panel_backups::{BackupsPageQuery, backups_create_main};
 use crate::panel_hub_defs::backups_hub_tiles;
@@ -205,19 +205,3 @@ pub fn security_stub_page() -> String {
         None,
     )
 }
-
-pub fn users_plans_stub_page() -> String {
-    feature_shell(
-        &[("Dashboard", Some("/dashboard")), ("Users & Plans", None)],
-        "Users & Plans",
-        "Accounts and hosting plans.",
-        &not_configured_body(
-            "Users & Plans is a stub until Packages (#86) and roles land.",
-            "If Packages is merged, use /packages for plan ACL.",
-        ),
-        None,
-        None,
-    )
-}
-
-// silence unused import when databases_status renamed elsewhere

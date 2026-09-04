@@ -1,11 +1,9 @@
-//! Server, Settings, Security, and Users hub routes.
+//! Server, Settings, and Security hub routes.
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
-use crate::panel_hub_pages_backups::{
-    security_stub_page, settings_stub_page, users_plans_stub_page,
-};
+use crate::panel_hub_pages_backups::{security_stub_page, settings_stub_page};
 use crate::panel_hub_pages_server::{
     docker_page, files_page, package_manager_page, php_configs_page, php_extensions_page,
     php_tuning_page, processes_page, run_service_control, server_hub_main, services_page,
@@ -397,18 +395,5 @@ pub async fn security_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -
         "security",
         "Security",
         &security_stub_page(),
-    ))
-}
-
-#[get("/account/users")]
-pub async fn users_plans_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
-    };
-    html_ok(panel_shell(
-        &user,
-        "users",
-        "Users & Plans",
-        &users_plans_stub_page(),
     ))
 }

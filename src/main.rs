@@ -19,6 +19,7 @@ use cpn_installer::model::{
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_hub_routes::{
+    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_route,
     backups_create_route, backups_destinations_route, backups_destinations_save,
     backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
     backups_schedule_save, databases_all_route, databases_create_get, databases_create_post,
@@ -33,7 +34,9 @@ use cpn_installer::panel_hub_routes::{
     server_docker_containers, server_docker_images, server_files_page, server_packages_page,
     server_page, server_php_configs, server_php_extensions, server_php_tuning,
     server_processes_page, server_services_control, server_services_page, settings_page,
-    settings_port_page, users_plans_page,
+    settings_port_page, users_create_get, users_create_post, users_delete_post, users_list_route,
+    users_modify_get, users_password_post, users_plans_page, users_profile_route,
+    users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -810,6 +813,19 @@ async fn main() -> std::io::Result<()> {
             .service(settings_port_page)
             .service(security_page)
             .service(users_plans_page)
+            .service(users_profile_route)
+            .service(users_list_route)
+            .service(users_create_get)
+            .service(users_create_post)
+            .service(users_modify_get)
+            .service(users_password_post)
+            .service(users_delete_post)
+            .service(users_reseller_route)
+            .service(api_access_route)
+            .service(acl_create_get)
+            .service(acl_create_post)
+            .service(acl_modify_get)
+            .service(acl_delete_post)
             .service(email_accounts_route)
             .service(email_create_route)
             .service(email_forwarding_route)
