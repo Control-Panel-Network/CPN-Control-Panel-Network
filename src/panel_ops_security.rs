@@ -219,15 +219,15 @@ pub fn apply_sshd_toggle(key: &str, value: &str) -> Result<String, String> {
 
     if which_exists("sshd") {
         let test = Command::new("sshd").args(["-t"]).output();
-        if let Ok(out) = test {
-            if !out.status.success() {
-                let _ = fs::write(&path, &raw);
-                let err = String::from_utf8_lossy(&out.stderr);
-                return Err(format!(
-                    "sshd -t failed; restored previous config: {}",
-                    err.trim()
-                ));
-            }
+        if let Ok(out) = test
+            && !out.status.success()
+        {
+            let _ = fs::write(&path, &raw);
+            let err = String::from_utf8_lossy(&out.stderr);
+            return Err(format!(
+                "sshd -t failed; restored previous config: {}",
+                err.trim()
+            ));
         }
     }
 
