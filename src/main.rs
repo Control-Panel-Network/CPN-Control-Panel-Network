@@ -325,12 +325,29 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install_with_database(
-        state.get_ref().clone(),
-        request.server,
-        request.database,
-        request.install_phpmyadmin,
-    ));
+    // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.
+    let install_state = state.get_ref().clone();
+    let server = request.server;
+    let database = request.database;
+    let install_phpmyadmin = request.install_phpmyadmin;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-server".into())
+        .spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_with_database(
+                install_state,
+                server,
+                database,
+                install_phpmyadmin,
+            ));
+        });
     HttpResponse::Accepted().finish()
 }
 
@@ -362,10 +379,21 @@ async fn start_mail_install(
     current.progress = 0;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install_mail(
-        state.get_ref().clone(),
-        request.mail,
-    ));
+    let install_state = state.get_ref().clone();
+    let mail = request.mail;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-mail".into())
+        .spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build mail install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_mail(install_state, mail));
+        });
     HttpResponse::Accepted().finish()
 }
 
@@ -788,10 +816,20 @@ async fn main() -> std::io::Result<()> {
     .keep_alive(Duration::from_secs(30))
     // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
     // work freezes /api/status for the whole smoke. Keep at least two workers.
-    .workers(std::cmp::max(2, std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2)));
+    .workers(std::cmp::max(
+        2,
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2),
+    ));
     for host in hosts {
         server = server.bind((host.as_str(), listen_port))?;
     }
+    println!(
+        "Listening on port {listen_port} (hosts: {})",
+        hosts.join(", ")
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
     let running = server.run();
     let handle = running.handle();
     tokio::spawn(async move {

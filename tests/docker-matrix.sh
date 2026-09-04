@@ -134,7 +134,10 @@ dump_installer_diag() {
   echo "[DIAG] listeners (ss/netstat//proc/net/tcp):" >&2
   "$engine" exec "$name" bash -lc '
     ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true
-    grep -E " 0517 | 0050 " /proc/net/tcp 2>/dev/null || true
+    echo "--- /proc/net/tcp (head) ---"
+    head -n 30 /proc/net/tcp 2>/dev/null || true
+    echo "--- curl verbose ---"
+    curl -v --max-time 3 "http://127.0.0.1:2087/api/status" 2>&1 | tail -n 20 || true
   ' >&2 || true
   echo "[DIAG] last /api/status (best effort):" >&2
   "$engine" exec "$name" bash -lc 'curl -sS --max-time 3 "http://127.0.0.1:2087/api/status" || true' >&2 || true
