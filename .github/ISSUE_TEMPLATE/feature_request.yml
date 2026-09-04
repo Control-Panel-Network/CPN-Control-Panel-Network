@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest an enhancement for CPN installer, panel, packaging, or docs.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the improvement you want for Control Panel Network (CPN). Keep the request specific and actionable.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: What problem does this solve, or what goal does it unlock?
+      placeholder: Operators need a clearer way to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you would like CPN to behave.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you tried or considered (optional).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installer
+        - Panel UI
+        - Websites / hosting
+        - Databases / mail / apps
+        - Packaging / Docker
+        - Documentation / DX
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
