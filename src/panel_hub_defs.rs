@@ -282,6 +282,49 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
     ]
 }
 
+pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![
+        (
+            "Settings",
+            vec![
+                HubTile {
+                    title: "Version Management",
+                    subtitle: "Update CPN",
+                    href: "/settings/version",
+                    live: true,
+                },
+                HubTile {
+                    title: "Design",
+                    subtitle: "Theme & custom CSS",
+                    href: "/settings/design",
+                    live: true,
+                },
+                HubTile {
+                    title: "Setup Wizard",
+                    subtitle: "Server onboarding",
+                    href: "/settings/setup",
+                    live: true,
+                },
+                HubTile {
+                    title: "Connect",
+                    subtitle: "Community & docs",
+                    href: "/settings/connect",
+                    live: true,
+                },
+            ],
+        ),
+        (
+            "Panel",
+            vec![HubTile {
+                title: "Change Port",
+                subtitle: "Panel listen port",
+                href: "/settings/port",
+                live: true,
+            }],
+        ),
+    ]
+}
+
 pub fn backups_hub_tiles() -> Vec<HubTile<'static>> {
     vec![
         HubTile {

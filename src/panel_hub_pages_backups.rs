@@ -180,14 +180,7 @@ pub fn save_backup_destinations(
     Ok("Destinations saved".into())
 }
 
+/// Deprecated name: Settings hub lives in `panel_hub_pages_settings`.
 pub fn settings_stub_page() -> String {
-    feature_shell(
-        &[("Dashboard", Some("/dashboard")), ("Settings", None)],
-        "Settings",
-        "Panel settings hub.",
-        r#"<p><a class="hub-tile" href="/settings/port"><strong>Change Port</strong><span>Panel listen port</span></a></p>
-        <p class="muted">More settings land as hubs grow.</p>"#,
-        None,
-        None,
-    )
+    crate::panel_hub_pages_settings::settings_hub_main()
 }
