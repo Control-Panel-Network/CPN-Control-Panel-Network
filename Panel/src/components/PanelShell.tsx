@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   AppWindow,
   Database,
@@ -26,6 +26,8 @@ import {
 type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
 
 const STORAGE_KEY = "cpn-sidebar-collapsed";
+const COLLAPSED_EVENT = "cpn-sidebar-collapsed-change";
+const NARROW_MQ = "(max-width: 1023.98px)";
 
 const hosting: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
@@ -93,6 +95,34 @@ function readCollapsedPreference(): boolean {
   }
 }
 
+function subscribeCollapsed(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(COLLAPSED_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(COLLAPSED_EVENT, onStoreChange);
+  };
+}
+
+function writeCollapsedPreference(next: boolean) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+  } catch {
+    /* ignore quota / private mode */
+  }
+  window.dispatchEvent(new Event(COLLAPSED_EVENT));
+}
+
+function subscribeNarrow(onStoreChange: () => void) {
+  const mq = window.matchMedia(NARROW_MQ);
+  mq.addEventListener("change", onStoreChange);
+  return () => mq.removeEventListener("change", onStoreChange);
+}
+
+function getNarrowSnapshot() {
+  return window.matchMedia(NARROW_MQ).matches;
+}
+
 export function PanelShell({
   username,
   active,
@@ -100,24 +130,18 @@ export function PanelShell({
   children,
 }: PanelShellProps) {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  const collapsed = useSyncExternalStore(
+    subscribeCollapsed,
+    readCollapsedPreference,
+    () => false,
+  );
+  const narrow = useSyncExternalStore(
+    subscribeNarrow,
+    getNarrowSnapshot,
+    () => false,
+  );
 
   useEffect(() => {
-    setCollapsed(readCollapsedPreference());
-    const mq = window.matchMedia("(max-width: 1023.98px)");
-    const syncNarrow = () => setNarrow(mq.matches);
-    syncNarrow();
-    mq.addEventListener("change", syncNarrow);
-    return () => mq.removeEventListener("change", syncNarrow);
-  }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
-    } catch {
-      /* ignore quota / private mode */
-    }
     document.body.classList.toggle("sidebar-collapsed", collapsed);
     return () => document.body.classList.remove("sidebar-collapsed");
   }, [collapsed]);
@@ -127,7 +151,7 @@ export function PanelShell({
       if (event.key === "Escape") setOpen(false);
     };
     const onResize = () => {
-      if (!window.matchMedia("(max-width: 1023.98px)").matches && !collapsed) {
+      if (!window.matchMedia(NARROW_MQ).matches && !collapsed) {
         setOpen(false);
       }
     };
@@ -145,6 +169,11 @@ export function PanelShell({
   }, [open]);
 
   const drawerMode = collapsed || narrow;
+
+  const toggleCollapsed = () => {
+    writeCollapsedPreference(!collapsed);
+    setOpen(false);
+  };
 
   return (
     <div className="panel-layout">
@@ -174,10 +203,7 @@ export function PanelShell({
               aria-pressed={collapsed}
               aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
               title={collapsed ? "Show sidebar" : "Hide sidebar"}
-              onClick={() => {
-                setCollapsed((value) => !value);
-                setOpen(false);
-              }}
+              onClick={toggleCollapsed}
             >
               {collapsed ? (
                 <PanelLeftOpen size={18} strokeWidth={1.9} />
