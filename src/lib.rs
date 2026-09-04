@@ -24,6 +24,7 @@ pub mod manifest;
 pub mod model;
 pub mod os_support;
 pub mod panel_network;
+pub mod paths;
 pub mod port_redirect;
 pub mod releases;
 pub mod sites;

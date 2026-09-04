@@ -1,4 +1,4 @@
-//! Website records under `$CPN_DATA_DIR/sites/` (default `/var/lib/cpn/sites/`).
+//! Website records under `$CPN_DATA_DIR/sites/` (platform default data directory).
 //!
 //! These are structured JSON records for the operator CLI. Full Nginx / Caddy /
 //! OpenLiteSpeed vhost wiring is applied later when panel recipes own that path.

@@ -2,7 +2,7 @@
 
 use crate::installer::AppState;
 use crate::manifest::{
-    self, INSTALLER_BIN, ManifestSource, core_paths_for_repair, detect_existing_install,
+    self, ManifestSource, core_paths_for_repair, detect_existing_install, installer_bin,
     preserve_paths_for_repair, record_install,
 };
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
@@ -138,7 +138,7 @@ async fn install_rpm(path: &str, force: bool) -> Result<(), String> {
 }
 
 async fn install_binary(path: &str) -> Result<(), String> {
-    let dest = INSTALLER_BIN;
+    let dest = installer_bin();
     std::fs::copy(path, dest).map_err(|error| format!("Could not replace {dest}: {error}"))?;
     #[cfg(unix)]
     {
@@ -316,9 +316,12 @@ pub async fn run_maintenance(
     )?;
 
     // Best-effort: ensure binary path exists after package ops.
-    if !Path::new(INSTALLER_BIN).exists() {
+    if !Path::new(installer_bin()).exists() {
         state.log(
-            format!("Warning: {INSTALLER_BIN} missing after package operation"),
+            format!(
+                "Warning: {} missing after package operation",
+                installer_bin()
+            ),
             "error",
         );
     }
@@ -326,7 +329,7 @@ pub async fn run_maintenance(
     state
         .progress("testing", 92, "Verifying installer binary")
         .await;
-    let version_ok = Command::new(INSTALLER_BIN)
+    let version_ok = Command::new(installer_bin())
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())

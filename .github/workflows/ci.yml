@@ -58,6 +58,64 @@ jobs:
           cargo install cargo-audit --locked
           cargo audit
 
+  rust-windows:
+    name: Rust (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+          components: clippy
+
+      - name: Install Node.js (Vite embed)
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Build installer-ui embed
+        working-directory: installer-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Cargo check (Windows MSVC)
+        run: cargo check --locked --target x86_64-pc-windows-msvc
+
+      - name: Cargo test (Windows MSVC)
+        run: cargo test --locked --target x86_64-pc-windows-msvc
+
+      - name: Cargo clippy (Windows MSVC)
+        run: cargo clippy --locked --target x86_64-pc-windows-msvc -- -D warnings
+
+      - name: Build release binaries
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Stage Windows zip contents
+        shell: pwsh
+        run: |
+          $stage = "dist/windows"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/cpn-installer.exe $stage/
+          Copy-Item target/x86_64-pc-windows-msvc/release/cpn.exe $stage/
+          Copy-Item packaging/windows/Install-Cpn.ps1 $stage/
+          Copy-Item packaging/windows/Uninstall-Cpn.ps1 $stage/
+          Compress-Archive -Path "$stage/*" -DestinationPath dist/cpn-windows-x86_64.zip -Force
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpn-windows-${{ github.sha }}
+          path: |
+            dist/cpn-windows-x86_64.zip
+            dist/windows/*
+
   frontend:
     name: React
     runs-on: ubuntu-latest

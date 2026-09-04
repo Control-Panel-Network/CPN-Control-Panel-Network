@@ -4,25 +4,25 @@ Date: 04/09/2026
 
 ## Why some rows stay Partial / Not yet
 
-PR #54 added CPN **detection** and **dnf/apt recipes** for the guest list below. That is not the same as full lab proof on every guest.
+Detection and dnf/apt recipes cover many Linux guests. That is not the same as full lab proof on every guest. Windows Server has a separate **Phase A** path (installer UI + bootstrap) without Linux package parity.
 
 Status meanings (match `src/os_support.rs`):
 
 - **supported**: detection + install recipes implemented **and** smoke evidence (lab VM and/or `tests/docker-matrix.sh`)
-- **partial**: allowlisted; recipes run via the family path; less or no smoke evidence yet, or an external blocker remains
-- **not yet**: known or planned community target outside the installable allowlist (installer refuses with a helpful message)
-- **host-only**: hypervisor or Windows host for Linux guests; not a CPN install target
+- **partial**: allowlisted; recipes run via the family path, or Windows Phase A (UI + service + account bootstrap); less smoke evidence, or an external blocker remains
+- **not yet**: known target outside the installable allowlist (installer refuses with a helpful message)
+- **host-only**: hypervisor for Linux guests; not a CPN install target by itself
 
 ## Product reality
 
-CPN is a **Linux** control-panel installer (Rust + RPM, with apt recipes for Ubuntu/Debian guests). It is **not** a native Windows Server panel.
+CPN is primarily a **Linux** control-panel installer (Rust + RPM/apt). Windows Server 2016+ can run **Phase A** (native installer UI and account data under `C:\ProgramData\CPN`). It does **not** get dnf/apt web/mail recipe parity.
 
 | Role | What CPN means by it |
 |---|---|
-| **Guest OS** | Where `cpn-installer` runs and installs packages (Alma, Rocky, Ubuntu, …) |
-| **Host / hypervisor** | Where those guests run (VirtualBox, Hyper-V, Windows Server as host). Documented for labs; no native Windows install path |
+| **Guest OS** | Where `cpn-installer` runs (Linux guests with recipes, or Windows Server Phase A) |
+| **Host / hypervisor** | Where those guests run (VirtualBox, Hyper-V). Documented for labs |
 
-## CPN guest OS targets
+## Guest targets
 
 | Guest OS | Status | Package path | Evidence / notes |
 |---|---|---|---|
@@ -41,19 +41,17 @@ CPN is a **Linux** control-panel installer (Rust + RPM, with apt recipes for Ubu
 | Debian 11/12/13 | **partial** | apt | Detection + Ubuntu-like apt path (nginx/Caddy/OLS/PHP); not full matrix yet |
 | openEuler 20-24 | **partial** | dnf | Detection + dnf family path; package names may diverge; no lab ISO here |
 | Other RHEL derivatives | **not yet** | dnf (planned) | Clear error when not in allowlist |
-| Windows Server (as guest install target) | **host-only** | n/a | Not a native panel install; may host Linux VMs |
+| Windows Server 2016+ | **partial** | Windows Phase A | Native `cpn-installer.exe`, service, `C:\ProgramData\CPN`; no dnf/apt. See `to-do/WINDOWS-SERVER-INSTALL.md` |
+| Windows Server 2012 / 2012 R2 | **not yet** | n/a | Modern Rust / MSVC does not support these hosts; use Hyper-V Linux guests |
 | VirtualBox / Hyper-V | **host-only** | n/a | Hypervisors for Linux guests |
 
-## Before vs after this push
+## Before vs after Windows Phase A
 
-| Area | Before (post PR #54) | After |
+| Area | Before | After |
 |---|---|---|
-| Alma/Rocky 8, CentOS Stream 9 | partial (detection only narrative) | still **partial** until nginx matrix smoke lands |
-| Debian | **not yet** (refused) | **partial** apt path (installable) |
-| openEuler | **not yet** | **partial** dnf path (installable) |
-| OpenLiteSpeed on apt | error / blocked | writes `lst_debian_repo.list` + vendor GPG files (no `curl\|bash`) |
-| Docker matrix | single Alma image | `CPN_TEST_IMAGES` multi-image; `.deb` path for Ubuntu/Debian |
-| CI | bash -n only for matrix | dedicated `os-matrix.yml` (Rocky 9 on main; extended on workflow_dispatch) |
+| Windows Server as install target | **host-only** | **partial** Phase A for 2016+; **not yet** for 2012/2012 R2 |
+| Data directory | `/var/lib/cpn` only | Platform path (`C:\ProgramData\CPN` on Windows) |
+| Packaging | RPM / deb | Also `packaging/windows/` zip + PowerShell |
 
 ## Host / hypervisor notes (labs)
 
@@ -68,12 +66,18 @@ Credentials for local labs stay outside the repo (private path), never committed
 
 ### Hyper-V / Windows Server
 
-Use Windows Server as the **hypervisor host** for Alma/Ubuntu guests. Do **not** expect `cpn-installer` to install a native Windows control panel. WSL2 is not a supported guest target for systemd + firewall recipes.
+Windows Server can:
+
+1. Act as **Hyper-V host** for Alma/Ubuntu guests (full Linux recipes), and/or
+2. Run **Phase A** natively on Server 2016+ (installer UI + bootstrap only)
+
+WSL2 is not a supported guest target for systemd + firewall recipes.
 
 ## Packaging and Docker matrix
 
 - `scripts/build-rpm.sh`: RHEL-family RPM build hosts (Alma/Rocky/RHEL/CentOS 8-10)
 - `scripts/build-deb.sh` / `scripts/docker-build-deb.sh`: Ubuntu/Debian `.deb` helper
+- `packaging/windows/Build-WindowsZip.ps1`: Windows zip (`cpn-installer.exe`, `cpn.exe`, install scripts)
 - `tests/docker-matrix.sh`: multi-image via `CPN_TEST_IMAGES` (default `almalinux:9.8`); uses docker or podman
 
 ```bash
@@ -94,6 +98,7 @@ CPN_TEST_IMAGE=ubuntu:22.04 CPN_TEST_SCOPE=server CPN_TEST_SERVERS=nginx \
 - **Nested podman on AL10**: `almalinux:8` / `rockylinux:9` nginx matrix did **not** complete in this pass (systemd guest bring-up flaky under nested containers). Do not treat that as a recipe failure.
 - **GitHub `os-matrix.yml`**: Rocky 9 nginx smoke on `main` pushes that touch OS paths; extended images via `workflow_dispatch` (not on untrusted PRs; issue #7).
 - **Ubuntu `.deb`**: `scripts/docker-build-deb.sh` added; full Ubuntu nginx smoke still pending extended matrix run.
+- **Windows**: CI builds `x86_64-pc-windows-msvc`; install scripts under `packaging/windows/`. Promote beyond Partial after lab smoke on Server 2019/2022.
 
 ## Still blocked from full **supported**
 
@@ -104,12 +109,17 @@ CPN_TEST_IMAGE=ubuntu:22.04 CPN_TEST_SCOPE=server CPN_TEST_SERVERS=nginx \
 | CloudLinux 8 | No CloudLinux ISO/entitlement in the lab; detection only |
 | Ubuntu 20.04 | Older LTS; keep Partial until dedicated smoke |
 | Debian / openEuler | Recipe path exists; full nginx/Caddy/OLS/mail matrix not finished |
+| Windows Server 2016+ | Phase A only; IIS helpers (Phase B) and mail (Phase C) not shipped |
+| Windows Server 2012 / 2012 R2 | Toolchain / runtime not supported |
 | Extra lab VMs | AL9/AL10 already use significant disk/RAM; create more guests only when needed |
 
 ## Code map
 
-- `src/os_support.rs`: detection, allowlist, support tiers, apt codenames
+- `src/os_support.rs`: detection, allowlist, support tiers, apt codenames, Windows builds
+- `src/paths.rs`: platform data directory defaults
 - `src/install_recipes.rs`: dnf/apt recipes, Caddy/OLS/PHP helpers
-- `src/install_server.rs`: orchestration for web server install
+- `src/install_server.rs`: orchestration for web server install (refuses Linux recipes on Windows)
+- `packaging/windows/`: zip + service install scripts
 - `tests/docker-matrix.sh`: functional matrix
 - `.github/workflows/os-matrix.yml`: privileged Rocky/extended smoke (not on untrusted PRs)
+- `to-do/WINDOWS-SERVER-INSTALL.md`: Windows operator guide

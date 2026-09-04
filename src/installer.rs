@@ -265,6 +265,11 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             ),
             "info",
         );
+        if guest.is_windows() {
+            return Err(crate::os_support::windows_linux_recipe_blocked_message(
+                "Mail / webmail install",
+            ));
+        }
         if matches!(mail, MailSystem::Thunderbird) {
             // Desktop client only: never claim IMAP/SMTP backend success (issue #9).
             run_command(
@@ -444,7 +449,7 @@ pub(crate) async fn finish(
                 });
             status.phase = "failed";
             status.error = Some(error.clone());
-            status.message = install_journal::failure_message(rollback.kind).into();
+            status.message = install_journal::failure_message(rollback.kind);
             status.access_note = Some(format!(
                 "failure_kind={:?}; restored={}; removed={}; skipped={}",
                 rollback.kind,

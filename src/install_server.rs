@@ -130,8 +130,9 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
                     journal.push_str(&format!("firewalld {service} failed\n"));
                 }
             }
-            let _ = std::fs::create_dir_all("/var/lib/cpn");
-            let _ = std::fs::write("/var/lib/cpn/firewall-journal.txt", journal);
+            let data = crate::paths::default_data_dir();
+            let _ = std::fs::create_dir_all(&data);
+            let _ = std::fs::write(data.join("firewall-journal.txt"), journal);
             if !ok {
                 return Err(
                     "firewalld did not open http/https; refusing to claim external access".into(),
@@ -158,8 +159,9 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
                     journal.push_str(&format!("ufw {port} failed\n"));
                 }
             }
-            let _ = std::fs::create_dir_all("/var/lib/cpn");
-            let _ = std::fs::write("/var/lib/cpn/firewall-journal.txt", journal);
+            let data = crate::paths::default_data_dir();
+            let _ = std::fs::create_dir_all(&data);
+            let _ = std::fs::write(data.join("firewall-journal.txt"), journal);
             if !ok {
                 return Err("ufw did not allow 80/443; refusing to claim external access".into());
             }
@@ -184,6 +186,11 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
             ),
             "info",
         );
+        if guest.is_windows() {
+            return Err(crate::os_support::windows_linux_recipe_blocked_message(
+                "Web server install (Nginx / Caddy / OpenLiteSpeed)",
+            ));
+        }
         if matches!(server, ServerEngine::Caddy) {
             prepare_caddy_repository(&guest)?;
             install_journal::record(

@@ -7,20 +7,20 @@
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a Linux web installer for preparing server panel components on supported guest operating systems (AlmaLinux, Rocky Linux, RHEL, Ubuntu, Debian, and related targets listed below). A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
+CPN is a web installer for preparing server panel components. The primary path is Linux guests (AlmaLinux, Rocky Linux, RHEL, Ubuntu, Debian, and related targets listed below). Windows Server 2016+ has a Phase A path (installer UI + account bootstrap) without Linux package parity. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
-Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), or run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix) and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd), or use the Windows zip + PowerShell installer on Server 2016+. See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix), [to-do/WINDOWS-SERVER-INSTALL.md](to-do/WINDOWS-SERVER-INSTALL.md), and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
 
 ## Supported operating systems
 
-CPN installs on **Linux guests** only. This section mirrors [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) (authoritative guest OS matrix) and `src/os_support.rs`.
+This section mirrors [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) (authoritative guest OS matrix) and `src/os_support.rs`.
 
 | Status | Meaning |
 |---|---|
 | **Supported** | Detection + install recipes implemented **and** smoke evidence (lab VM and/or `tests/docker-matrix.sh`) |
-| **Partial** | Allowlisted; recipes run via the family path; less or no smoke evidence yet, or an external blocker remains |
-| **Not yet** | Known or planned community target outside the installable allowlist; installer refuses with a helpful message |
-| **Host only** | Hypervisor or Windows host for Linux guests; not a CPN install target |
+| **Partial** | Allowlisted; Linux family recipes or Windows Phase A; less smoke evidence, or an external blocker remains |
+| **Not yet** | Known or planned target outside the installable allowlist; installer refuses with a helpful message |
+| **Host only** | Hypervisor for Linux guests; not an install target by itself |
 
 ### Guest OS (where `cpn-installer` runs)
 
@@ -40,23 +40,24 @@ CPN installs on **Linux guests** only. This section mirrors [`to-do/OS-SUPPORT-M
 | Ubuntu 20.04 | Partial | apt | Allowlisted (focal OLS suite exists); older PHP/repos; thinner evidence |
 | Debian 11/12/13 | Partial | apt | Detection + Ubuntu-like apt path (nginx/Caddy/OLS/PHP); not full matrix yet |
 | openEuler 20-24 | Partial | dnf | Detection + dnf family path; package names may diverge; no lab ISO here |
+| Windows Server 2016+ | Partial | Windows Phase A | Native installer UI + service + `C:\ProgramData\CPN`; no dnf/apt. See [WINDOWS-SERVER-INSTALL.md](to-do/WINDOWS-SERVER-INSTALL.md) |
+| Windows Server 2012 / 2012 R2 | Not yet | n/a | Modern Rust/MSVC does not support these hosts |
 | Other RHEL derivatives | Not yet | dnf (planned) | Clear error when not in allowlist |
 
 Quick scan by status:
 
 - **Supported:** AlmaLinux 10, AlmaLinux 9, Rocky Linux 9, Ubuntu 24.04, Ubuntu 22.04
-- **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04, Debian 11/12/13, openEuler 20-24
-- **Not yet:** other RHEL derivatives outside the allowlist
+- **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04, Debian 11/12/13, openEuler 20-24, Windows Server 2016+
+- **Not yet:** Windows Server 2012 / 2012 R2; other RHEL derivatives outside the allowlist
 
-Do not treat "Supported" as a full mail/server matrix for every row. See the matrix for lab notes and blockers.
+Do not treat "Supported" as a full mail/server matrix for every row. Windows Partial is Phase A only (no Linux recipe parity). See the matrix for lab notes and blockers.
 
-### Host / hypervisor (not install targets)
+### Host / hypervisor
 
 | Platform | Status | Role |
 |---|---|---|
-| Windows Server | Host only | Hyper-V role for Linux guests; not a native panel install |
 | VirtualBox | Host only | Lab VMs for Linux guests |
-| Hyper-V | Host only | Lab VMs for Linux guests |
+| Hyper-V | Host only | Lab VMs for Linux guests (Windows Server can also run Phase A natively) |
 
 WSL2 is not a supported guest target for systemd and firewall recipes.
 
@@ -69,6 +70,7 @@ The first phase implements the installer flow and is still in development. It cu
 - Real download, install, and verification progress sent over WebSocket.
 - VPS and container detection; opening port `2087` in `firewalld` or `ufw` when those are active.
 - RPM packaging for RHEL-family guests (AlmaLinux/Rocky/RHEL 8-10); experimental Ubuntu `.deb` via `scripts/build-deb.sh`.
+- Windows Server 2016+ Phase A: `packaging/windows/` zip + service install (`C:\ProgramData\CPN`, port `2087`).
 - Docker/Podman runtime images for AlmaLinux 9 and 10 (`Dockerfile`, `docker-compose.yml`, `scripts/docker-run.sh`).
 - Service tests in clean containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE` or `CPN_TEST_IMAGES`).
 - Privileged multi-OS nginx smoke: `.github/workflows/os-matrix.yml` (not on untrusted PRs; see issue #7).
@@ -80,10 +82,11 @@ Recipes, security, and compatibility still need review before CPN can be conside
 - `installer-ui/`: React and Vite interface.
 - `Panel/`: React and Next.js control panel based on Stitch screens.
 - `src/`: Actix Web server, WebSocket, environment detection, and install recipes.
-- `packaging/`: RPM specification and systemd unit used by the Docker image.
+- `packaging/`: RPM specification, systemd unit, and `packaging/windows/` PowerShell installers.
 - `scripts/build-rpm.sh`: builds the binary and RPM on AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10.
 - `scripts/build-deb.sh`: experimental `.deb` on Ubuntu 20.04/22.04/24.04.
 - `to-do/OS-SUPPORT-MATRIX.md`: guest OS matrix and hypervisor host notes.
+- `to-do/WINDOWS-SERVER-INSTALL.md`: Windows Server Phase A guide.
 - `scripts/docker-build-rpm.sh`: builds the RPM inside an AlmaLinux container (any host with Docker/Podman).
 - `scripts/docker-run.sh`: builds the runtime image and starts a privileged systemd container on port `2087`.
 - `Dockerfile` / `docker-compose.yml`: AlmaLinux 9/10 installer container (parameterized with `CPN_ALMA_VERSION`).
