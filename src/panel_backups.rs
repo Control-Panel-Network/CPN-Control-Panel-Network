@@ -120,7 +120,7 @@ pub struct BackupsPageQuery<'a> {
     pub domain: &'a str,
 }
 
-pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
+pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
     let sites = list_sites().unwrap_or_default();
     let scope = BackupScope::parse(q.scope).unwrap_or(BackupScope::Panel);
     let domain = q.domain.trim();
@@ -290,8 +290,8 @@ pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
         {rows}
       </article>"#,
         heading = section_heading(
-            "Backups",
-            "Choose scope and contents; archives live under /home.",
+            "Create Backup",
+            "Choose scope and contents; archives live under /home for the selected scope.",
         ),
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),

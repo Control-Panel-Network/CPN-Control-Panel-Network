@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -14,20 +14,32 @@ import {
   Network,
   Puzzle,
   Server,
+  Settings,
+  Shield,
+  Users,
   X,
 } from "lucide-react";
 
-const hostingNav = [
+type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
+
+const hosting: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
   { label: "Websites", href: "/websites", icon: Globe2, id: "websites" },
   { label: "Email", href: "/email", icon: Mail, id: "email" },
-  { label: "Databases", href: "/databases", icon: Database, id: "databases" },
-  { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
+  { label: "Databases & FTP", href: "/databases", icon: Database, id: "databases" },
   { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
+  { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
+  { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
 ];
 
-const pluginsNav = [
-  { label: "Installed / Store", href: "/plugins", icon: Puzzle, id: "plugins" },
+const account: NavItem[] = [
+  { label: "Users & Plans", href: "/account/users", icon: Users, id: "users" },
+];
+
+const administration: NavItem[] = [
+  { label: "Server", href: "/server", icon: Server, id: "server" },
+  { label: "Security", href: "/security", icon: Shield, id: "security" },
+  { label: "Settings", href: "/settings", icon: Settings, id: "settings" },
 ];
 
 type PanelShellProps = {
@@ -36,6 +48,35 @@ type PanelShellProps = {
   signedInLabel: string;
   children: React.ReactNode;
 };
+
+function NavGroup({
+  title,
+  items,
+  active,
+  onNavigate,
+}: {
+  title: string;
+  items: NavItem[];
+  active: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <>
+      <div className="nav-section">{title}</div>
+      {items.map(({ label, href, icon: Icon, id }) => (
+        <Link
+          key={id}
+          href={href}
+          className={id === active ? "active" : undefined}
+          onClick={onNavigate}
+        >
+          <Icon size={20} strokeWidth={1.8} />
+          {label}
+        </Link>
+      ))}
+    </>
+  );
+}
 
 export function PanelShell({
   username,
@@ -65,23 +106,6 @@ export function PanelShell({
     return () => document.body.classList.remove("nav-open");
   }, [open]);
 
-  const renderLink = ({
-    label,
-    href,
-    icon: Icon,
-    id,
-  }: (typeof hostingNav)[number]) => (
-    <Link
-      key={id}
-      href={href}
-      className={id === active ? "active" : undefined}
-      onClick={() => setOpen(false)}
-    >
-      <Icon size={20} strokeWidth={1.8} />
-      {label}
-    </Link>
-  );
-
   return (
     <div className="panel-layout">
       <button
@@ -110,10 +134,24 @@ export function PanelShell({
             </div>
           </div>
           <nav aria-label="Primary navigation">
-            <div className="nav-section">Hosting</div>
-            {hostingNav.map(renderLink)}
-            <div className="nav-section">Plugins</div>
-            {pluginsNav.map(renderLink)}
+            <NavGroup
+              title="Hosting"
+              items={hosting}
+              active={active}
+              onNavigate={() => setOpen(false)}
+            />
+            <NavGroup
+              title="Account"
+              items={account}
+              active={active}
+              onNavigate={() => setOpen(false)}
+            />
+            <NavGroup
+              title="Administration"
+              items={administration}
+              active={active}
+              onNavigate={() => setOpen(false)}
+            />
           </nav>
         </div>
         <div className="sidebar-footer">

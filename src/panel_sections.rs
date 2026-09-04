@@ -184,7 +184,7 @@ pub fn set_websites_docroot_pref(show: bool) -> Result<(), String> {
     Ok(())
 }
 
-pub fn email_main(
+pub fn email_accounts_main(
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
@@ -360,7 +360,7 @@ pub fn email_main(
     )
 }
 
-pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> String {
     let status = detect_database();
     let pma = crate::apps::detect_app(crate::apps::AppId::Phpmyadmin);
     let install_form = if status.service_label == "Not detected" && !status.listening_3306 {
@@ -390,8 +390,13 @@ pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
         <p class="muted">Default stack is MariaDB (not MySQL) plus phpMyAdmin. Hosts typically run MariaDB XOR MySQL.</p>
       </article>"#,
         heading = section_heading(
+<<<<<<< HEAD
             "Databases",
             "Honest detection of local MariaDB/MySQL and phpMyAdmin. No credentials are stored here.",
+=======
+            "MariaDB Manager",
+            "Honest detection of local MariaDB/MySQL. No credentials are stored here.",
+>>>>>>> 4287c4a (Add CPN hosting panel feature hubs for Server, Email, Databases, and Backups.)
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
