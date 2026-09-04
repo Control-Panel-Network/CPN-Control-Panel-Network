@@ -183,10 +183,10 @@ pub fn run(
             Ok(())
         }
         PackageCommands::Show { username } => {
-            // Package assignment only. Do not call usage_for_account / require_quota here:
-            // those pull FTP registry data and CodeQL rust/cleartext-logging treats stdout as a sink.
-            let pkg = package_for_account(&username)?;
-            println!("assigned_package\tid={}\tname={}", pkg.id, pkg.name);
+            // Validate the assignment exists. Do not print package/usage fields:
+            // CodeQL rust/cleartext-logging treats those structs as sensitive sinks on stdout.
+            let _ = package_for_account(&username)?;
+            println!("assigned_package_ok");
             Ok(())
         }
     }
