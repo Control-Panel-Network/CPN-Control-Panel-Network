@@ -93,17 +93,33 @@ jobs:
           test -f dist/SHA256SUMS
           cat dist/SHA256SUMS
 
-      - name: Optional GPG sign
+      - name: GPG sign (required for tag releases)
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          CPN_REQUIRE_GPG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
         run: |
           chmod +x scripts/sign-release.sh
+          if [[ "${CPN_REQUIRE_GPG}" == "1" && -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "Official tag release requires GPG_PRIVATE_KEY (issue #16)." >&2
+            exit 1
+          fi
           ./scripts/sign-release.sh dist/SHA256SUMS
           shopt -s nullglob
           for rpm in dist/*.rpm; do
             ./scripts/sign-release.sh "$rpm"
+            if [[ "${CPN_REQUIRE_GPG}" == "1" ]]; then
+              test -f "${rpm}.asc"
+              if command -v rpmsign >/dev/null 2>&1; then
+                echo "$GPG_PASSPHRASE" | rpmsign --addsign --define "_gpg_name ${GPG_KEY_ID}" "$rpm" || {
+                  echo "rpmsign failed; detached .asc is present but RPM package signature missing" >&2
+                  exit 1
+                }
+              else
+                echo "rpmsign not installed on runner; detached .asc published (install rpm-sign for embedded RPM sig)." >&2
+              fi
+            fi
           done
 
       - name: Optional cosign blob signatures

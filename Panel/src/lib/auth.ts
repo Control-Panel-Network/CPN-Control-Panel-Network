@@ -1,5 +1,5 @@
 import { createHmac, pbkdf2Sync, timingSafeEqual } from "crypto";
-import { promises as fs } from "fs";
+import { promises as fs, readFileSync } from "fs";
 import path from "path";
 
 export type PanelBootstrap = {
@@ -27,11 +27,40 @@ export function bootstrapPath(): string {
   );
 }
 
+function secretFilePath(): string {
+  return path.join(dataDir(), "panel-session.secret");
+}
+
+/**
+ * Resolve HMAC secret for panel sessions (issue #8).
+ * Never fall back to a public hardcoded secret in production.
+ */
 function sessionSecret(): string {
-  return (
-    process.env.CPN_PANEL_SESSION_SECRET ||
-    process.env.CPN_INSTALL_TOKEN ||
-    "cpn-panel-dev-session"
+  const fromEnv = (process.env.CPN_PANEL_SESSION_SECRET || "").trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  try {
+    const fromFile = readFileSync(secretFilePath(), "utf8").trim();
+    if (fromFile) {
+      return fromFile;
+    }
+  } catch {
+    // Missing file is handled below.
+  }
+  const fromInstaller = (process.env.CPN_INSTALL_TOKEN || "").trim();
+  if (fromInstaller) {
+    return fromInstaller;
+  }
+  if (
+    process.env.CPN_ALLOW_DEV_SESSION === "1" ||
+    process.env.NODE_ENV === "development" ||
+    process.env.NODE_ENV === "test"
+  ) {
+    return "cpn-panel-dev-session";
+  }
+  throw new Error(
+    "CPN panel session secret missing. Set CPN_PANEL_SESSION_SECRET or create /var/lib/cpn/panel-session.secret (issue #8).",
   );
 }
 

@@ -47,7 +47,10 @@ fn optional_site(
     subdomain: Option<String>,
 ) -> Result<Option<String>, String> {
     if domain.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
-        && subdomain.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+        && subdomain
+            .as_ref()
+            .map(|v| v.trim().is_empty())
+            .unwrap_or(true)
     {
         return Ok(None);
     }

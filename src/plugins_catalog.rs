@@ -164,7 +164,7 @@ fn extract_catalog_entries(tarball: &Path) -> Result<Vec<CatalogEntry>, String> 
         }
     }
     let _ = fs::remove_dir_all(&tmp);
-    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries.sort_by_key(|a| a.name.to_lowercase());
     Ok(entries)
 }
 

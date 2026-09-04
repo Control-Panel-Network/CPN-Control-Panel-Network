@@ -226,20 +226,11 @@ pub fn email_main(
     } else {
         rows.push_str(r#"<table class="data-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
         for acct in &accounts {
-            let valid = if acct.smtp_valid {
-                "Valid"
-            } else {
-                "Invalid"
-            };
+            let valid = if acct.smtp_valid { "Valid" } else { "Invalid" };
             let err = acct
                 .smtp_error
                 .as_ref()
-                .map(|e| {
-                    format!(
-                        r#" <span class="muted">({})</span>"#,
-                        html_escape(e)
-                    )
-                })
+                .map(|e| format!(r#" <span class="muted">({})</span>"#, html_escape(e)))
                 .unwrap_or_default();
             let mode = match acct.smtp_mode {
                 MailSmtpMode::External => "external",

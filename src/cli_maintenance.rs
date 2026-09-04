@@ -121,6 +121,7 @@ async fn make_state() -> Arc<AppState> {
         session_id: "clisessionid0000000000000001".into(),
         bind_port: crate::listen_port::DEFAULT_PORT,
         allow_remote: false,
+        cancel_requested: std::sync::atomic::AtomicBool::new(false),
     })
 }
 

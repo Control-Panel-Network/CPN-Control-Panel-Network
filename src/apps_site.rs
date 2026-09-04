@@ -103,7 +103,8 @@ fn site_apps_dir(domain: &str) -> Result<PathBuf, String> {
 
 fn write_note(path: &Path, body: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
     }
     fs::write(path, body).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
     #[cfg(unix)]
@@ -119,13 +120,14 @@ fn try_symlink(target: &Path, link: &Path) -> Result<(), String> {
         return Ok(());
     }
     if let Some(parent) = link.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
     }
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(target, link)
             .map_err(|e| format!("Could not link {}: {e}", link.display()))?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(unix))]
     {

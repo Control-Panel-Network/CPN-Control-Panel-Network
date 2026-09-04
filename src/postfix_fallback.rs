@@ -63,7 +63,9 @@ pub fn ensure_postfix_default(from_address: &str) -> Result<SmtpSettings, String
             }
             #[cfg(not(windows))]
             {
-                return Err(format!("Could not detect guest OS for Postfix fallback: {error}"));
+                return Err(format!(
+                    "Could not detect guest OS for Postfix fallback: {error}"
+                ));
             }
         }
         Ok(_) => {}

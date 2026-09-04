@@ -12,12 +12,15 @@ on:
         options:
           - rocky9
           - extended
+          - mail
         default: extended
   push:
     branches: [main]
     paths:
       - "src/os_support.rs"
       - "src/install_recipes.rs"
+      - "src/install_mail_backend.rs"
+      - "src/install_webmail.rs"
       - "tests/docker-matrix.sh"
       - "scripts/docker-build-rpm.sh"
       - "scripts/docker-build-deb.sh"
@@ -41,6 +44,39 @@ jobs:
           CPN_TEST_SCOPE=server \
           CPN_TEST_SERVERS=nginx \
           ./tests/docker-matrix.sh
+      - name: Upload matrix diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rocky9-matrix-logs
+          path: |
+            target/rpmbuild/RPMS/**/*.rpm
+            /tmp/cpn-matrix-*.log
+          if-no-files-found: ignore
+
+  mail-roundtrip:
+    name: Rocky 9 mail E2E (Roundcube)
+    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'mail' || inputs.scope == 'extended')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build RPM
+        run: ./scripts/docker-build-rpm.sh
+      - name: Roundcube + Postfix/Dovecot smoke
+        run: |
+          CPN_TEST_IMAGE=rockylinux:9 \
+          CPN_TEST_SCOPE=mail \
+          CPN_TEST_MAILS=roundcube \
+          ./tests/docker-matrix.sh
+      - name: Upload mail matrix diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mail-matrix-logs
+          path: |
+            target/rpmbuild/RPMS/**/*.rpm
+            /tmp/cpn-matrix-*.log
+          if-no-files-found: ignore
 
   extended:
     name: Extended guest smoke
@@ -78,3 +114,13 @@ jobs:
           CPN_TEST_SCOPE=server \
           CPN_TEST_SERVERS=nginx \
           ./tests/docker-matrix.sh
+      - name: Upload extended matrix diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix-${{ strategy.job-index }}-logs
+          path: |
+            target/rpmbuild/RPMS/**/*.rpm
+            target/deb/*.deb
+            /tmp/cpn-matrix-*.log
+          if-no-files-found: ignore

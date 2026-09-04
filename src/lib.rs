@@ -1,4 +1,4 @@
-﻿//! Shared library for cpn-installer and the cpn operator CLI.
+//! Shared library for cpn-installer and the cpn operator CLI.
 
 pub mod account;
 pub mod account_mgmt;
@@ -23,6 +23,7 @@ pub mod install_server;
 pub mod install_webmail;
 pub mod install_webmail_runtime;
 pub mod installer;
+pub mod installer_transitions;
 pub mod listen_port;
 pub mod mail_accounts;
 pub mod mail_outbound;
@@ -44,6 +45,7 @@ pub mod panel_routes;
 pub mod panel_sections;
 pub mod panel_session;
 pub mod paths;
+pub mod php_lifecycle;
 pub mod plugins;
 pub mod plugins_catalog;
 pub mod port_redirect;

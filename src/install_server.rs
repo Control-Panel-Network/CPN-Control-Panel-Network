@@ -115,6 +115,21 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
             let mut ok = true;
             let mut journal = String::new();
             for service in ["http", "https"] {
+                let already = Command::new("firewall-cmd")
+                    .args(["--query-service", service])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .kill_on_drop(true)
+                    .status()
+                    .await
+                    .map(|status| status.success())
+                    .unwrap_or(false);
+                if already {
+                    journal.push_str(&format!(
+                        "firewalld {service} already; created=false; owner=preexisting\n"
+                    ));
+                    continue;
+                }
                 let status = Command::new("firewall-cmd")
                     .args(["--add-service", service])
                     .stdout(Stdio::null())
@@ -124,10 +139,12 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
                     .await
                     .map_err(|error| format!("firewall-cmd failed: {error}"))?;
                 if status.success() {
-                    journal.push_str(&format!("firewalld {service} ok\n"));
+                    journal.push_str(&format!(
+                        "firewalld {service} ok; created=true; owner=cpn\n"
+                    ));
                 } else {
                     ok = false;
-                    journal.push_str(&format!("firewalld {service} failed\n"));
+                    journal.push_str(&format!("firewalld {service} failed; created=false\n"));
                 }
             }
             let data = crate::paths::default_data_dir();
@@ -153,10 +170,10 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
                     .await
                     .map_err(|error| format!("ufw failed: {error}"))?;
                 if status.success() {
-                    journal.push_str(&format!("ufw {port} ok\n"));
+                    journal.push_str(&format!("ufw {port} ok; created=true; owner=cpn\n"));
                 } else {
                     ok = false;
-                    journal.push_str(&format!("ufw {port} failed\n"));
+                    journal.push_str(&format!("ufw {port} failed; created=false\n"));
                 }
             }
             let data = crate::paths::default_data_dir();
@@ -169,6 +186,45 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
         }
         _ => Ok(false),
     }
+}
+
+/// Remove only firewall rules CPN recorded as created (issue #21).
+pub async fn cleanup_service_ports() -> Result<(), String> {
+    let path = crate::paths::default_data_dir().join("firewall-journal.txt");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    for line in raw.lines() {
+        if !line.contains("created=true") || !line.contains("owner=cpn") {
+            continue;
+        }
+        if line.starts_with("firewalld http") {
+            let _ = Command::new("firewall-cmd")
+                .args(["--remove-service", "http"])
+                .kill_on_drop(true)
+                .status()
+                .await;
+        } else if line.starts_with("firewalld https") {
+            let _ = Command::new("firewall-cmd")
+                .args(["--remove-service", "https"])
+                .kill_on_drop(true)
+                .status()
+                .await;
+        } else if line.starts_with("ufw 80/tcp") {
+            let _ = Command::new("ufw")
+                .args(["delete", "allow", "80/tcp"])
+                .kill_on_drop(true)
+                .status()
+                .await;
+        } else if line.starts_with("ufw 443/tcp") {
+            let _ = Command::new("ufw")
+                .args(["delete", "allow", "443/tcp"])
+                .kill_on_drop(true)
+                .status()
+                .await;
+        }
+    }
+    Ok(())
 }
 
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {

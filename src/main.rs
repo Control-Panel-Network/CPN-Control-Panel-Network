@@ -6,15 +6,17 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    VERSION, authorized_request, enrich_status, install_finished, normalize_language,
-    panel_account_ready, remote_origin_ok, smtp_status_public, token_matches, wants_html,
+    VERSION, authorized_request, enrich_status, install_finished, install_session_cookie_header,
+    normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
+    wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
+use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
-    MailInstallRequest, OptionalTokenQuery, TokenQuery,
+    MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -23,15 +25,19 @@ use cpn_installer::panel_network::{
 use cpn_installer::panel_routes::{
     apps_install, apps_page, apps_reinstall, apps_uninstall, backups_page, backups_run,
     databases_install_mariadb, databases_page, email_account_create, email_account_disable,
-    email_account_enable, email_page, plugins_disable, plugins_enable,
-    plugins_install, plugins_page, plugins_uninstall, websites_create, websites_delete,
-    websites_page, websites_prefs,
+    email_account_enable, email_page, plugins_disable, plugins_enable, plugins_install,
+    plugins_page, plugins_uninstall, websites_create, websites_delete, websites_page,
+    websites_prefs,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
 use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
-use std::{env, sync::Arc, time::Duration};
+use std::{
+    env,
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
 use tokio::sync::broadcast;
 
 #[derive(Embed)]
@@ -71,8 +77,8 @@ async fn root_page(
             .finish();
     }
     let from_query = query.token.as_deref();
-    // SPA keeps ?token= for API calls (installer-ui). Do not write Set-Cookie here:
-    // CodeQL treats dynamic Set-Cookie after query auth as log-injection / allocation.
+    // Query token is bootstrap-only. SPA exchanges it for HttpOnly cookie + Bearer storage
+    // and strips ?token= from the address bar (issue #1).
     if token_matches(&state, from_query) {
         return serve_index_html();
     }
@@ -94,6 +100,32 @@ async fn root_page(
     HttpResponse::Unauthorized()
         .content_type("text/html; charset=utf-8")
         .body(installer_token_required_html())
+}
+
+#[post("/api/session")]
+async fn bootstrap_session(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<SessionBootstrapRequest>,
+) -> HttpResponse {
+    // Token must arrive in JSON body (not query) so Set-Cookie is not tied to ?token= (CodeQL / #1).
+    if !token_matches(&state, Some(body.token.as_str())) {
+        return HttpResponse::Unauthorized().json(serde_json::json!({"error": "invalid token"}));
+    }
+    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+    }
+    let secure = http.connection_info().scheme() == "https";
+    HttpResponse::Ok()
+        .append_header((
+            actix_web::http::header::SET_COOKIE,
+            install_session_cookie_header(&state.session_id, secure),
+        ))
+        .append_header((
+            actix_web::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate",
+        ))
+        .json(serde_json::json!({"ok": true}))
 }
 
 #[get("/api/status")]
@@ -255,19 +287,8 @@ async fn start_install(
         );
     }
     let mut current = state.status.write().await;
-    if ["downloading", "installing", "testing"].contains(&current.phase) {
-        return HttpResponse::Conflict()
-            .json(serde_json::json!({"error": "Ya hay una instalación en curso"}));
-    }
-    if current.server_ready && !request.force_reinstall {
-        return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "El servidor web ya está instalado. Envía force_reinstall=true o usa repair/upgrade."
-        }));
-    }
-    if !matches!(current.phase, "ready" | "completed" | "failed") {
-        return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "Transición no válida para instalar el servidor"
-        }));
+    if let Err(denied) = can_start_server(&current, request.force_reinstall) {
+        return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
     current.selected_server = Some(request.server);
     if request.force_reinstall {
@@ -308,24 +329,8 @@ async fn start_mail_install(
         );
     }
     let mut current = state.status.write().await;
-    if ["downloading", "installing", "testing"].contains(&current.phase) {
-        return HttpResponse::Conflict()
-            .json(serde_json::json!({"error": "Ya hay una instalación en curso"}));
-    }
-    if !current.server_ready {
-        return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "Instala y verifica el servidor web antes del correo"
-        }));
-    }
-    if current.selected_mail.is_some() && current.phase == "completed" && !request.force_reinstall {
-        return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "El correo ya está instalado. Envía force_reinstall=true para cambiar de receta."
-        }));
-    }
-    if !matches!(current.phase, "completed" | "failed") {
-        return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "Transición no válida para instalar el correo"
-        }));
+    if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
+        return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
     current.selected_mail = Some(request.mail);
     current.phase = "downloading";
@@ -347,6 +352,9 @@ async fn websocket(
 ) -> actix_web::Result<HttpResponse> {
     if !authorized_request(&state, &query, &request) {
         return Ok(HttpResponse::Unauthorized().finish());
+    }
+    if !websocket_origin_ok(&request, state.allow_remote, state.bind_port) {
+        return Ok(HttpResponse::Forbidden().finish());
     }
     let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
     let mut events = state.events.subscribe();
@@ -584,6 +592,7 @@ async fn main() -> std::io::Result<()> {
         session_id,
         bind_port: listen_port,
         allow_remote: remote,
+        cancel_requested: AtomicBool::new(false),
     });
     println!("✓ El instalador web está listo para empezar:");
     if remote {
@@ -624,6 +633,7 @@ async fn main() -> std::io::Result<()> {
             cpn_installer::port_redirect::run_redirect_listeners(redirect_hosts, migration).await;
         });
     }
+    let cancel_state = state.clone();
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(state.clone()))
@@ -663,6 +673,7 @@ async fn main() -> std::io::Result<()> {
             .service(forgot_password_submit)
             .service(set_language)
             .service(set_listen_port)
+            .service(bootstrap_session)
             .service(account_setup)
             .service(start_install)
             .service(start_mail_install)
@@ -677,6 +688,30 @@ async fn main() -> std::io::Result<()> {
         server = server.bind((host.as_str(), listen_port))?;
     }
     let running = server.run();
+    let handle = running.handle();
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut sigterm = signal(SignalKind::terminate()).ok();
+            let mut sigint = signal(SignalKind::interrupt()).ok();
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = async {
+                    if let Some(ref mut s) = sigterm { s.recv().await; }
+                } => {}
+                _ = async {
+                    if let Some(ref mut s) = sigint { s.recv().await; }
+                } => {}
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+        cancel_state.request_cancel();
+        handle.stop(true).await;
+    });
     let result = running.await;
     if remote {
         let _ = cpn_installer::environment::close_installer_port(&environment).await;
