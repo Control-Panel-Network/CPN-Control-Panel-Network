@@ -37,6 +37,7 @@ button { font:inherit; cursor:pointer; }
 }
 .sidebar-header { flex:0 0 auto; }
 .panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
+/* Collapse / brand-row styles: panel_nav_chrome::sidebar_collapse_styles */
 .server-summary {
   display:flex; align-items:center; gap:12px; margin:0 0 12px; padding:14px;
   border-radius:18px; background:var(--canvas); border:1px solid var(--hairline); color:var(--blue);
@@ -209,56 +210,6 @@ code { font-size:.9em; }
 "#
 }
 
-fn panel_nav_script() -> &'static str {
-    r#"
-<script>
-(function () {
-  var body = document.body;
-  var toggle = document.getElementById('nav-toggle');
-  var backdrop = document.getElementById('nav-backdrop');
-  var sidebar = document.getElementById('panel-sidebar');
-  if (!toggle || !sidebar) return;
-
-  function setOpen(open) {
-    body.classList.toggle('nav-open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    sidebar.setAttribute('aria-hidden', open ? 'false' : String(window.matchMedia('(max-width: 1023.98px)').matches));
-    if (open) {
-      var first = sidebar.querySelector('a, button');
-      if (first) first.focus();
-    } else {
-      toggle.focus();
-    }
-  }
-
-  function syncDesktop() {
-    if (!window.matchMedia('(max-width: 1023.98px)').matches) {
-      body.classList.remove('nav-open');
-      toggle.setAttribute('aria-expanded', 'false');
-      sidebar.setAttribute('aria-hidden', 'false');
-    } else if (!body.classList.contains('nav-open')) {
-      sidebar.setAttribute('aria-hidden', 'true');
-    }
-  }
-
-  toggle.addEventListener('click', function () {
-    setOpen(!body.classList.contains('nav-open'));
-  });
-  if (backdrop) {
-    backdrop.addEventListener('click', function () { setOpen(false); });
-  }
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && body.classList.contains('nav-open')) {
-      setOpen(false);
-    }
-  });
-  window.addEventListener('resize', syncDesktop);
-  syncDesktop();
-})();
-</script>
-"#
-}
-
 fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> String {
     let mut class = String::new();
     if id == active {
@@ -349,9 +300,10 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}",
+        "{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
+        crate::panel_nav_chrome::sidebar_collapse_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
@@ -360,7 +312,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let toggle = crate::panel_theme_chrome::sidebar_theme_toggle(color_mode);
     let script = format!(
         "{}{}{}",
-        panel_nav_script(),
+        crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script()
     );

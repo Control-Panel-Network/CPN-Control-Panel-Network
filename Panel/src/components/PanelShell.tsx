@@ -13,6 +13,8 @@ import {
   Menu,
   Network,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Puzzle,
   Server,
   Settings,
@@ -22,6 +24,8 @@ import {
 } from "lucide-react";
 
 type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
+
+const STORAGE_KEY = "cpn-sidebar-collapsed";
 
 const hosting: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
@@ -80,6 +84,15 @@ function NavGroup({
   );
 }
 
+function readCollapsedPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function PanelShell({
   username,
   active,
@@ -87,13 +100,36 @@ export function PanelShell({
   children,
 }: PanelShellProps) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(readCollapsedPreference());
+    const mq = window.matchMedia("(max-width: 1023.98px)");
+    const syncNarrow = () => setNarrow(mq.matches);
+    syncNarrow();
+    mq.addEventListener("change", syncNarrow);
+    return () => mq.removeEventListener("change", syncNarrow);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+    } catch {
+      /* ignore quota / private mode */
+    }
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    return () => document.body.classList.remove("sidebar-collapsed");
+  }, [collapsed]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
     const onResize = () => {
-      if (window.matchMedia("(min-width: 1024px)").matches) setOpen(false);
+      if (!window.matchMedia("(max-width: 1023.98px)").matches && !collapsed) {
+        setOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
@@ -101,12 +137,14 @@ export function PanelShell({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [collapsed]);
 
   useEffect(() => {
     document.body.classList.toggle("nav-open", open);
     return () => document.body.classList.remove("nav-open");
   }, [open]);
+
+  const drawerMode = collapsed || narrow;
 
   return (
     <div className="panel-layout">
@@ -121,13 +159,33 @@ export function PanelShell({
         id="panel-sidebar"
         className="sidebar"
         aria-label="Panel navigation"
-        aria-hidden={undefined}
+        aria-hidden={drawerMode && !open ? true : undefined}
       >
         <div className="sidebar-header">
-          <Link href="/dashboard" className="panel-brand">
-            <Server size={23} strokeWidth={1.9} />
-            <span>CPN Panel</span>
-          </Link>
+          <div className="sidebar-brand-row">
+            <Link href="/dashboard" className="panel-brand">
+              <Server size={23} strokeWidth={1.9} />
+              <span>CPN Panel</span>
+            </Link>
+            <button
+              type="button"
+              className="icon-btn sidebar-collapse-btn"
+              aria-controls="panel-sidebar"
+              aria-pressed={collapsed}
+              aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
+              title={collapsed ? "Show sidebar" : "Hide sidebar"}
+              onClick={() => {
+                setCollapsed((value) => !value);
+                setOpen(false);
+              }}
+            >
+              {collapsed ? (
+                <PanelLeftOpen size={18} strokeWidth={1.9} />
+              ) : (
+                <PanelLeftClose size={18} strokeWidth={1.9} />
+              )}
+            </button>
+          </div>
           <div className="server-summary">
             <Network size={20} aria-hidden="true" />
             <div>
