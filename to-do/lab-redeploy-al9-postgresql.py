@@ -49,7 +49,10 @@ echo REDEPLOY_OK=yes
         line = stdout.readline()
         if not line:
             break
-        print(line, end="", flush=True)
+        try:
+            print(line, end="", flush=True)
+        except UnicodeEncodeError:
+            print(line.encode("ascii", "replace").decode("ascii"), end="", flush=True)
     err = stderr.read().decode("utf-8", "replace")
     if err.strip():
         print(err, flush=True)
