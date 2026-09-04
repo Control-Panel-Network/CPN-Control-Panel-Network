@@ -822,7 +822,7 @@ async fn main() -> std::io::Result<()> {
             .map(|n| n.get())
             .unwrap_or(2),
     ));
-    for host in hosts {
+    for host in &hosts {
         server = server.bind((host.as_str(), listen_port))?;
     }
     println!(
