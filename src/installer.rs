@@ -22,6 +22,8 @@ pub struct AppState {
     pub token: String,
     /// TCP port this process actually bound (may differ from a saved preference).
     pub bind_port: u16,
+    /// True when bound to 0.0.0.0 (--allow-remote).
+    pub allow_remote: bool,
 }
 
 impl AppState {
@@ -110,14 +112,29 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
             .progress(spec.phase, spec.progress, spec.description)
             .await;
     }
-    state.log(format!("ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº {}", spec.description), "info");
-    let mut child = Command::new(spec.program)
+    state.log(format!("> {}", spec.description), "info");
+    let mut command = Command::new(spec.program);
+    command
         .args(&spec.args)
         .env("LC_ALL", "C")
         .kill_on_drop(true)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        // New process group so timeout/kill can reap descendants (issue #18).
+        // SAFETY: runs in the child after fork, before exec.
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setpgid(0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+    let mut child = command
         .spawn()
         .map_err(|error| format!("No se pudo ejecutar {}: {error}", spec.program))?;
     let stdout = child
@@ -153,7 +170,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let exit = child.wait().await.map_err(|error| error.to_string())?;
         if !exit.success() {
             return Err(format!(
-                "{} terminÃƒÂ³ con cÃƒÂ³digo {}",
+                "{} terminó con código {}",
                 spec.description,
                 exit.code().unwrap_or(-1)
             ));
@@ -163,6 +180,17 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     match tokio::time::timeout(std::time::Duration::from_secs(1800), pump).await {
         Ok(result) => result?,
         Err(_) => {
+            #[cfg(unix)]
+            {
+                let pid = child.id();
+                if let Some(pid) = pid {
+                    let _ = Command::new("kill")
+                        .args(["-TERM", &format!("-{pid}")])
+                        .kill_on_drop(true)
+                        .status()
+                        .await;
+                }
+            }
             let _ = child.kill().await;
             let _ = child.wait().await;
             return Err(format!("Tiempo de espera agotado en: {}", spec.description));
@@ -200,11 +228,29 @@ pub(crate) async fn install_php_runtime(
     if guest.uses_apt() {
         run_command(state, apt_update_command()).await?;
     }
-    run_command(state, php_install_command(&guest, label)).await
+    run_command(state, php_install_command(&guest, label)).await?;
+    // Refuse EOL runtimes even if a host already had an old php package (issue #4).
+    let status = Command::new("bash")
+        .args([
+            "-c",
+            "php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);'",
+        ])
+        .kill_on_drop(true)
+        .status()
+        .await
+        .map_err(|error| format!("PHP version check failed: {error}"))?;
+    if !status.success() {
+        return Err(
+            "Installed PHP is older than 8.2 (EOL). Enable php:8.2 or Remi remi-8.2 and retry."
+                .into(),
+        );
+    }
+    Ok(())
 }
 
 pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
     let result = async {
+        let _run = install_journal::begin_install_run("mail")?;
         let report = install_journal::run_preflight(512)?;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
@@ -244,7 +290,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 command(
                     "thunderbird",
                     vec!["--version"],
-                    "Verificando la versiÃƒÂ³n instalada",
+                    "Verificando la versión instalada",
                     "testing",
                     96,
                 ),
@@ -271,6 +317,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 })?;
             provision_local_mail_backend(&state).await?;
             verify_imap_smtp_listeners().await?;
+            crate::install_mail_backend::verify_mail_roundtrip(&state).await?;
             install_webmail(&state, mail, engine).await?;
             state
                 .progress("testing", 92, format!("Comprobando {}", mail.label()))
@@ -341,14 +388,10 @@ pub(crate) async fn finish(
         Ok(()) => {
             if mark_server_ready {
                 status.server_ready = true;
-                status.external_ports_configured = status
-                    .environment
-                    .as_ref()
-                    .and_then(|env| env.firewall.as_ref())
-                    .is_some();
+                // external_ports_configured is set by open_service_ports success path.
                 if status.access_note.is_none() {
                     status.access_note = Some(
-                        "Servicio verificado en loopback. Comprueba acceso externo desde otra mÃƒÂ¡quina si el firewall estaba activo."
+                        "Servicio verificado en loopback. Comprueba acceso externo desde otra máquina si el firewall estaba activo."
                             .into(),
                     );
                 }
@@ -363,13 +406,13 @@ pub(crate) async fn finish(
                 status.message =
                     format!("{label} webmail + local IMAP/SMTP backend verified successfully");
             } else if mail_flow && !status.mail_backend_ready {
-                // Should not reach completed for webmail without backend; keep honest fallback.
                 status.message = format!(
                     "{label} installed without a verified IMAP/SMTP backend (unexpected state)."
                 );
             } else {
-                status.message = format!("{label} se instalÃƒÂ³ y verificÃƒÂ³ correctamente");
+                status.message = format!("{label} se instaló y verificó correctamente");
             }
+            install_journal::end_install_run();
             if let Err(error) = manifest::record_install(
                 env!("CARGO_PKG_VERSION"),
                 &format!("v{}", env!("CARGO_PKG_VERSION")),

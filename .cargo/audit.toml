@@ -1,0 +1,6 @@
+# Block CI on new advisories; ignore only when upstream cannot bump yet.
+[advisories]
+ignore = [
+  # actix-http 3.x pins h2 0.3; fix requires actix-http migrating to h2 0.4+.
+  "RUSTSEC-2026-0258",
+]

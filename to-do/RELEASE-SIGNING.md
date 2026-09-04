@@ -59,3 +59,12 @@ Document the public fingerprint in the release notes. Until a release key is con
 ## Bootstrap policy
 
 Future installers that download remote packages should refuse artifacts that fail `SHA256SUMS` verification. Local lab builds remain unsigned by design.
+
+## Hard requirements (issue #16)
+
+- `cargo build --release --locked` (no unlocked fallback)
+- RPM build must succeed (no `continue-on-error`)
+- Real CycloneDX SBOM (no placeholder JSON)
+- Provenance attestation covers binary, RPM, checksums, SBOM, and build-environment notes
+- GPG/cosign remain optional until release secrets exist; absence skips signing without inventing keys
+

@@ -66,64 +66,75 @@ async fn download(
     state
         .progress("downloading", start, format!("Descargando {label}"))
         .await;
-    let mut child = Command::new("curl")
-        .args([
-            "--fail",
-            "--location",
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "--progress-bar",
-            "--output",
-            destination,
-            url,
-        ])
-        .kill_on_drop(true)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("No se pudo descargar {label}: {error}"))?;
-    let mut stderr = child
-        .stderr
-        .take()
-        .ok_or("No se pudo leer el progreso de la descarga")?;
-    let mut buffer = [0_u8; 1024];
-    let mut pending = String::new();
-    loop {
-        let read = stderr
-            .read(&mut buffer)
-            .await
-            .map_err(|error| error.to_string())?;
-        if read == 0 {
-            break;
-        }
-        pending.push_str(&String::from_utf8_lossy(&buffer[..read]));
-        let parts = pending
-            .split(['\r', '\n'])
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        pending = parts.last().cloned().unwrap_or_default();
-        for part in parts.iter().take(parts.len().saturating_sub(1)) {
-            if let Some(percent) = part
-                .split_whitespace()
-                .find_map(|token| token.strip_suffix('%')?.parse::<f32>().ok())
-            {
-                let progress = start + ((end - start) as f32 * (percent / 100.0)).round() as u8;
-                state
-                    .progress(
-                        "downloading",
-                        progress.min(end),
-                        format!("Descargando {label}"),
-                    )
-                    .await;
+    let work = async {
+        let mut child = Command::new("curl")
+            .args([
+                "--fail",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=https",
+                "--max-time",
+                "600",
+                "--connect-timeout",
+                "30",
+                "--progress-bar",
+                "--output",
+                destination,
+                url,
+            ])
+            .kill_on_drop(true)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| format!("No se pudo descargar {label}: {error}"))?;
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or("No se pudo leer el progreso de la descarga")?;
+        let mut buffer = [0_u8; 1024];
+        let mut pending = String::new();
+        loop {
+            let read = stderr
+                .read(&mut buffer)
+                .await
+                .map_err(|error| error.to_string())?;
+            if read == 0 {
+                break;
+            }
+            pending.push_str(&String::from_utf8_lossy(&buffer[..read]));
+            let parts = pending
+                .split(['\r', '\n'])
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            pending = parts.last().cloned().unwrap_or_default();
+            for part in parts.iter().take(parts.len().saturating_sub(1)) {
+                if let Some(percent) = part
+                    .split_whitespace()
+                    .find_map(|token| token.strip_suffix('%')?.parse::<f32>().ok())
+                {
+                    let progress = start + ((end - start) as f32 * (percent / 100.0)).round() as u8;
+                    state
+                        .progress(
+                            "downloading",
+                            progress.min(end),
+                            format!("Descargando {label}"),
+                        )
+                        .await;
+                }
             }
         }
-    }
-    let exit = child.wait().await.map_err(|error| error.to_string())?;
-    if !exit.success() {
-        return Err(format!("La descarga de {label} no pudo completarse"));
+        let exit = child.wait().await.map_err(|error| error.to_string())?;
+        if !exit.success() {
+            return Err(format!("La descarga de {label} no pudo completarse"));
+        }
+        Ok::<(), String>(())
+    };
+    match tokio::time::timeout(std::time::Duration::from_secs(620), work).await {
+        Ok(result) => result?,
+        Err(_) => return Err(format!("Tiempo de espera agotado descargando {label}")),
     }
     state
         .progress("downloading", end, format!("{label} descargado"))

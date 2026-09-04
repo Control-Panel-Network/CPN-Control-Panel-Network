@@ -2,8 +2,8 @@
 
 use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::{
-    command, prepare_caddy_apt_command, prepare_caddy_repository, prepare_openlitespeed_repository,
-    server_recipes,
+    command, prepare_caddy_apt_command, prepare_caddy_repository,
+    prepare_openlitespeed_apt_command, prepare_openlitespeed_repository, server_recipes,
 };
 use crate::installer::{AppState, finish, run_command};
 use crate::model::ServerEngine;
@@ -109,45 +109,69 @@ fn server_url(server: ServerEngine) -> &'static str {
     }
 }
 
-async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Result<(), String> {
+async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Result<bool, String> {
     match environment.firewall.as_deref() {
         Some("firewalld") => {
+            let mut ok = true;
+            let mut journal = String::new();
             for service in ["http", "https"] {
-                let _ = Command::new("firewall-cmd")
+                let status = Command::new("firewall-cmd")
                     .args(["--add-service", service])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
+                    .kill_on_drop(true)
                     .status()
-                    .await;
+                    .await
+                    .map_err(|error| format!("firewall-cmd failed: {error}"))?;
+                if status.success() {
+                    journal.push_str(&format!("firewalld {service} ok\n"));
+                } else {
+                    ok = false;
+                    journal.push_str(&format!("firewalld {service} failed\n"));
+                }
             }
             let _ = std::fs::create_dir_all("/var/lib/cpn");
-            let _ = std::fs::write(
-                "/var/lib/cpn/firewall-journal.txt",
-                "firewalld http\nfirewalld https\n",
-            );
+            let _ = std::fs::write("/var/lib/cpn/firewall-journal.txt", journal);
+            if !ok {
+                return Err(
+                    "firewalld did not open http/https; refusing to claim external access".into(),
+                );
+            }
+            Ok(true)
         }
         Some("ufw") => {
+            let mut ok = true;
+            let mut journal = String::new();
             for port in ["80/tcp", "443/tcp"] {
-                let _ = Command::new("ufw")
+                let status = Command::new("ufw")
                     .args(["allow", port])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
+                    .kill_on_drop(true)
                     .status()
-                    .await;
+                    .await
+                    .map_err(|error| format!("ufw failed: {error}"))?;
+                if status.success() {
+                    journal.push_str(&format!("ufw {port} ok\n"));
+                } else {
+                    ok = false;
+                    journal.push_str(&format!("ufw {port} failed\n"));
+                }
             }
             let _ = std::fs::create_dir_all("/var/lib/cpn");
-            let _ = std::fs::write(
-                "/var/lib/cpn/firewall-journal.txt",
-                "ufw 80/tcp\nufw 443/tcp\n",
-            );
+            let _ = std::fs::write("/var/lib/cpn/firewall-journal.txt", journal);
+            if !ok {
+                return Err("ufw did not allow 80/443; refusing to claim external access".into());
+            }
+            Ok(true)
         }
-        _ => {}
+        _ => Ok(false),
     }
-    Ok(())
 }
 
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
     let result = async {
+        let _run = install_journal::begin_install_run("server")?;
         let report = install_journal::run_preflight(512)?;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
@@ -175,13 +199,21 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
         }
         if matches!(server, ServerEngine::Openlitespeed) {
             prepare_openlitespeed_repository(&guest)?;
+            let repo_path = if guest.uses_apt() {
+                "/etc/apt/sources.list.d/lst_debian_repo.list"
+            } else {
+                "/etc/yum.repos.d/litespeed.repo"
+            };
             install_journal::record(
                 "server",
                 JournalAction::WroteRepo,
-                "/etc/yum.repos.d/litespeed.repo",
+                repo_path,
                 None,
                 Some("litespeed repo".into()),
             )?;
+            if guest.uses_apt() {
+                run_command(&state, prepare_openlitespeed_apt_command()).await?;
+            }
         }
         for item in server_recipes(&guest, server) {
             run_command(&state, item).await?;
@@ -261,7 +293,19 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
             .await?;
         }
         if let Some(environment) = state.status.read().await.environment.clone() {
-            open_service_ports(&environment).await?;
+            let opened = open_service_ports(&environment).await?;
+            let mut status = state.status.write().await;
+            status.external_ports_configured = opened;
+            if opened {
+                status.access_note = Some(
+                    "Host firewall opened http/https successfully (firewall-journal.txt)."
+                        .into(),
+                );
+            } else {
+                status.access_note = Some(
+                    "No host firewall detected; service verified on loopback only.".into(),
+                );
+            }
         }
         Ok::<_, String>(())
     }

@@ -165,6 +165,89 @@ pub async fn verify_imap_smtp_listeners() -> Result<(), String> {
     Ok(())
 }
 
+/// Ephemeral local account: SMTP deliver + IMAP authenticate/read probe (issue #9).
+pub async fn verify_mail_roundtrip(state: &AppState) -> Result<(), String> {
+    state
+        .progress(
+            "testing",
+            88,
+            "Probing SMTP delivery and IMAP auth with ephemeral mailbox",
+        )
+        .await;
+    let user = "cpnmailprobe";
+    let pass = format!(
+        "CpnProbe!{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|v| v.as_secs() % 100_000)
+            .unwrap_or(1)
+    );
+    let marker = format!("CPN-MAIL-PROBE-{pass}");
+
+    let script = format!(
+        r#"set -euo pipefail
+id {user} >/dev/null 2>&1 || useradd -m -s /sbin/nologin {user}
+echo '{user}:{pass}' | chpasswd
+# Ensure maildir exists for Dovecot.
+mkdir -p /home/{user}/Maildir/{{new,cur,tmp}}
+chown -R {user}:{user} /home/{user}/Maildir
+printf 'From: cpn-probe@localhost\nTo: {user}@localhost\nSubject: {marker}\n\n{marker}\n' | sendmail -t || \
+  printf 'Subject: {marker}\n\n{marker}\n' | sendmail {user}
+# Wait briefly for local delivery.
+for i in $(seq 1 20); do
+  if doveadm search -u {user} mailbox INBOX SUBJECT "{marker}" 2>/dev/null | grep -q .; then
+    exit 0
+  fi
+  if ls /home/{user}/Maildir/new/* >/dev/null 2>&1; then
+    grep -q '{marker}' /home/{user}/Maildir/new/* && exit 0
+  fi
+  sleep 1
+done
+# Auth probe even if delivery is slow: doveadm auth test.
+doveadm auth test {user} '{pass}' >/dev/null
+# Prefer finding the message; if auth works and listeners are up, accept with auth proof.
+if doveadm search -u {user} mailbox INBOX SUBJECT "{marker}" 2>/dev/null | grep -q .; then
+  exit 0
+fi
+if ls /home/{user}/Maildir/new/* >/dev/null 2>&1 && grep -q '{marker}' /home/{user}/Maildir/new/*; then
+  exit 0
+fi
+echo 'mail roundtrip: auth ok but message not found in mailbox within timeout' >&2
+exit 1
+"#
+    );
+
+    let status = Command::new("bash")
+        .args(["-c", &script])
+        .kill_on_drop(true)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .status()
+        .await
+        .map_err(|error| format!("mail roundtrip probe failed to start: {error}"))?;
+    // Best-effort cleanup (do not fail install if delete fails).
+    let _ = Command::new("bash")
+        .args(["-c", &format!("userdel -r {user} >/dev/null 2>&1 || true")])
+        .kill_on_drop(true)
+        .status()
+        .await;
+    if !status.success() {
+        return Err(
+            "Mail E2E probe failed: could not authenticate IMAP and/or deliver a local SMTP message"
+                .into(),
+        );
+    }
+    install_journal::record(
+        STAGE,
+        JournalAction::Note,
+        "mail-roundtrip",
+        None,
+        Some("ephemeral SMTP+IMAP probe passed".into()),
+    )?;
+    Ok(())
+}
+
 async fn port_open(host: &str, port: u16) -> bool {
     let addr = format!("{host}:{port}");
     match tokio::time::timeout(

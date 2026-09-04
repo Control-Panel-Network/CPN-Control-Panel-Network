@@ -1,18 +1,15 @@
 //! HTTP endpoints for installer maintenance (upgrade / repair / downgrade).
 
+use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
 use crate::manifest::detect_existing_install;
 use crate::model::{MaintenanceAction, MaintenanceInfo, MaintenanceRequest, TokenQuery};
 use crate::releases;
 use crate::upgrade::{build_plan, spawn_maintenance};
-use actix_web::{HttpResponse, Responder, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use std::sync::Arc;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-fn authorized(state: &AppState, query: &TokenQuery) -> bool {
-    state.token.as_bytes() == query.token.as_bytes()
-}
 
 pub async fn load_maintenance_info() -> MaintenanceInfo {
     let existing = detect_existing_install(VERSION);
@@ -43,10 +40,11 @@ pub async fn load_maintenance_info() -> MaintenanceInfo {
 
 #[get("/api/version-check")]
 pub async fn api_version_check(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     let info = load_maintenance_info().await;
@@ -57,10 +55,11 @@ pub async fn api_version_check(
 
 #[get("/api/releases")]
 pub async fn api_releases(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     match releases::list_releases(20).await {
@@ -71,11 +70,12 @@ pub async fn api_releases(
 
 #[post("/api/maintenance")]
 pub async fn start_maintenance(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<MaintenanceRequest>,
 ) -> impl Responder {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     #[cfg(unix)]

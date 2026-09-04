@@ -47,13 +47,13 @@ export default function LoginPage() {
         </form>
 
         <p className="login-intro" style={{ marginTop: 18 }}>
-          Full session auth is still in progress. This form always uses POST so
-          passwords never appear in the query string. Recovery email is stored
-          during install for the forgotten-password entry point.
+          Sign-in uses POST and sets an HttpOnly session cookie against
+          panel-bootstrap.json (same hash scheme as the installer). Recovery
+          email is stored during install for the forgotten-password entry point.
         </p>
 
         <Link className="demo-link" href="/dashboard?preview=1">
-          View dashboard preview
+          View dashboard preview (no session)
         </Link>
       </section>
 

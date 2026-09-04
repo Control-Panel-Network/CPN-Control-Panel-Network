@@ -5,8 +5,9 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    VERSION, authorized, enrich_status, install_finished, normalize_language, panel_login_url_for,
-    smtp_status_public, token_matches, wants_html,
+    VERSION, authorized_request, enrich_status, install_finished, install_token_cookie_header,
+    normalize_language, panel_login_url_for, remote_origin_ok, smtp_status_public, token_matches,
+    wants_html,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::listen_port::{
@@ -50,6 +51,7 @@ fn serve_index_html() -> HttpResponse {
 
 #[get("/")]
 async fn root_page(
+    request: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
@@ -59,7 +61,27 @@ async fn root_page(
             .append_header(("Location", "/login"))
             .finish();
     }
-    if token_matches(&state, query.token.as_deref()) {
+    let from_query = query.token.as_deref();
+    if token_matches(&state, from_query) {
+        let mut response = serve_index_html();
+        if let Some(token) = from_query {
+            // Exchange query token for HttpOnly cookie so later API calls need not use ?token= (issue #1).
+            let _ = response.headers_mut().insert(
+                actix_web::http::header::SET_COOKIE,
+                actix_web::http::header::HeaderValue::try_from(install_token_cookie_header(
+                    token,
+                    request.connection_info().scheme() == "https",
+                ))
+                .unwrap_or_else(|_| actix_web::http::header::HeaderValue::from_static("")),
+            );
+        }
+        return response;
+    }
+    // Cookie / header may already authorize without putting the token in the URL.
+    let fake = TokenQuery {
+        token: String::new(),
+    };
+    if authorized_request(&state, &fake, &request) {
         return serve_index_html();
     }
     HttpResponse::Unauthorized()
@@ -73,7 +95,7 @@ async fn api_status(
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &request) {
         return HttpResponse::Unauthorized().finish();
     }
     let payload = enrich_status(state.status.read().await.clone(), &state.token);
@@ -82,10 +104,11 @@ async fn api_status(
 
 #[get("/status")]
 async fn status_page(
+    request: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &request) {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body("<!DOCTYPE html><html lang=\"en\"><body><h1>Access denied</h1><p>Invalid token.</p></body></html>");
@@ -98,12 +121,16 @@ async fn status_page(
 
 #[post("/api/language")]
 async fn set_language(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<LanguageRequest>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     let language = match normalize_language(&request.language) {
         Ok(value) => value,
@@ -119,12 +146,16 @@ async fn set_language(
 
 #[post("/api/listen-port")]
 async fn set_listen_port(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<ListenPortRequest>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     let port = match validate_listen_port(request.port) {
         Ok(value) => value,
@@ -165,12 +196,16 @@ async fn set_listen_port(
 
 #[post("/api/install/server")]
 async fn start_install(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<InstallRequest>,
 ) -> impl Responder {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
@@ -183,9 +218,9 @@ async fn start_install(
         return HttpResponse::Conflict()
             .json(serde_json::json!({"error": "Ya hay una instalación en curso"}));
     }
-    if current.server_ready && current.selected_mail.is_some() && current.phase == "completed" {
+    if current.server_ready && !request.force_reinstall {
         return HttpResponse::Conflict().json(serde_json::json!({
-            "error": "La instalación ya finalizó. Usa una operación de reinstalación explícita."
+            "error": "El servidor web ya está instalado. Envía force_reinstall=true o usa repair/upgrade."
         }));
     }
     if !matches!(current.phase, "ready" | "completed" | "failed") {
@@ -194,7 +229,13 @@ async fn start_install(
         }));
     }
     current.selected_server = Some(request.server);
-    current.selected_mail = None;
+    if request.force_reinstall {
+        current.selected_mail = None;
+        current.server_ready = false;
+        current.external_ports_configured = false;
+    } else {
+        current.selected_mail = None;
+    }
     current.phase = "downloading";
     current.progress = 1;
     current.error = None;
@@ -208,12 +249,16 @@ async fn start_install(
 
 #[post("/api/install/mail")]
 async fn start_mail_install(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<MailInstallRequest>,
 ) -> impl Responder {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
@@ -229,6 +274,11 @@ async fn start_mail_install(
     if !current.server_ready {
         return HttpResponse::Conflict().json(serde_json::json!({
             "error": "Instala y verifica el servidor web antes del correo"
+        }));
+    }
+    if current.selected_mail.is_some() && current.phase == "completed" && !request.force_reinstall {
+        return HttpResponse::Conflict().json(serde_json::json!({
+            "error": "El correo ya está instalado. Envía force_reinstall=true para cambiar de receta."
         }));
     }
     if !matches!(current.phase, "completed" | "failed") {
@@ -254,7 +304,7 @@ async fn websocket(
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> actix_web::Result<HttpResponse> {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &request) {
         return Ok(HttpResponse::Unauthorized().finish());
     }
     let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
@@ -346,6 +396,7 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(2);
         }
     };
+    #[cfg(unix)]
     if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
         eprintln!(
             "Aviso: el puerto {listen_port} es privilegiado (<1024). Suele requerir root, o elige un puerto >1024 (por defecto {}).",
@@ -418,17 +469,20 @@ async fn main() -> std::io::Result<()> {
         events,
         token: token.clone(),
         bind_port: listen_port,
+        allow_remote: remote,
     });
     println!("✓ El instalador web está listo para empezar:");
     if remote {
         println!("  Modo --allow-remote: escucha en 0.0.0.0:{listen_port} (HTTP sin TLS).");
-        if environment.addresses.is_empty() {
-            println!("  http://127.0.0.1:{listen_port}/?token={token}");
-        } else {
-            for address in &environment.addresses {
-                println!("  http://{address}:{listen_port}/?token={token}");
-            }
-        }
+        println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
+        println!(
+            "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
+        );
+        println!(
+            "  Token fingerprint (last 4): ...{}",
+            &token[token.len().saturating_sub(4)..]
+        );
+        println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
     } else {
         println!("  http://127.0.0.1:{listen_port}/?token={token}");
         println!(
