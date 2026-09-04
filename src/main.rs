@@ -23,9 +23,10 @@ use cpn_installer::panel_network::{
 use cpn_installer::panel_routes::{
     apps_install, apps_page, apps_reinstall, apps_uninstall, backups_page, backups_run,
     databases_install_mariadb, databases_page, email_account_create, email_account_disable,
-    email_account_enable, email_page, plugins_disable, plugins_enable,
-    plugins_install, plugins_page, plugins_uninstall, websites_create, websites_delete,
-    websites_page, websites_prefs,
+    email_account_enable, email_page, plugins_dashboard_page, plugins_disable, plugins_enable,
+    plugins_install, plugins_page, plugins_settings_page, plugins_settings_save, plugins_uninstall,
+    websites_create, websites_delete, websites_manage, websites_page, websites_prefs,
+    websites_resume, websites_suspend,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -634,8 +635,11 @@ async fn main() -> std::io::Result<()> {
             .service(login_submit)
             .service(dashboard_page)
             .service(websites_page)
+            .service(websites_manage)
             .service(websites_create)
             .service(websites_delete)
+            .service(websites_suspend)
+            .service(websites_resume)
             .service(websites_prefs)
             .service(email_page)
             .service(email_account_create)
@@ -650,6 +654,9 @@ async fn main() -> std::io::Result<()> {
             .service(backups_page)
             .service(backups_run)
             .service(plugins_page)
+            .service(plugins_settings_page)
+            .service(plugins_settings_save)
+            .service(plugins_dashboard_page)
             .service(plugins_install)
             .service(plugins_uninstall)
             .service(plugins_enable)

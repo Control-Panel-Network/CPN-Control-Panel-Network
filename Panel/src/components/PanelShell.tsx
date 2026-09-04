@@ -17,14 +17,17 @@ import {
   X,
 } from "lucide-react";
 
-const navigation = [
+const hostingNav = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
   { label: "Websites", href: "/websites", icon: Globe2, id: "websites" },
   { label: "Email", href: "/email", icon: Mail, id: "email" },
   { label: "Databases", href: "/databases", icon: Database, id: "databases" },
   { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
   { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
-  { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
+];
+
+const pluginsNav = [
+  { label: "Installed / Store", href: "/plugins", icon: Puzzle, id: "plugins" },
 ];
 
 type PanelShellProps = {
@@ -62,6 +65,23 @@ export function PanelShell({
     return () => document.body.classList.remove("nav-open");
   }, [open]);
 
+  const renderLink = ({
+    label,
+    href,
+    icon: Icon,
+    id,
+  }: (typeof hostingNav)[number]) => (
+    <Link
+      key={id}
+      href={href}
+      className={id === active ? "active" : undefined}
+      onClick={() => setOpen(false)}
+    >
+      <Icon size={20} strokeWidth={1.8} />
+      {label}
+    </Link>
+  );
+
   return (
     <div className="panel-layout">
       <button
@@ -90,17 +110,10 @@ export function PanelShell({
             </div>
           </div>
           <nav aria-label="Primary navigation">
-            {navigation.map(({ label, href, icon: Icon, id }) => (
-              <Link
-                key={id}
-                href={href}
-                className={id === active ? "active" : undefined}
-                onClick={() => setOpen(false)}
-              >
-                <Icon size={20} strokeWidth={1.8} />
-                {label}
-              </Link>
-            ))}
+            <div className="nav-section">Hosting</div>
+            {hostingNav.map(renderLink)}
+            <div className="nav-section">Plugins</div>
+            {pluginsNav.map(renderLink)}
           </nav>
         </div>
         <div className="sidebar-footer">

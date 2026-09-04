@@ -1,4 +1,4 @@
-﻿//! Shared library for cpn-installer and the cpn operator CLI.
+//! Shared library for cpn-installer and the cpn operator CLI.
 
 pub mod account;
 pub mod account_mgmt;
@@ -38,14 +38,17 @@ pub mod panel_backups;
 pub mod panel_mail_routes;
 pub mod panel_network;
 pub mod panel_pages;
+pub mod panel_plugin_settings;
 pub mod panel_plugins;
 pub mod panel_prefs;
 pub mod panel_routes;
 pub mod panel_sections;
 pub mod panel_session;
+pub mod panel_website_manage;
 pub mod paths;
 pub mod plugins;
 pub mod plugins_catalog;
+pub mod plugins_settings;
 pub mod port_redirect;
 pub mod postfix_fallback;
 pub mod releases;

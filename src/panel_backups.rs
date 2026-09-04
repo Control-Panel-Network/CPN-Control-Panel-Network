@@ -138,6 +138,14 @@ pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
                 BackupScope::Site => "/home/<domain>/backups/".into(),
                 BackupScope::Subdomain => "/home/<parent>/<sub.fqdn>/backups/".into(),
             });
+    let path_blurb = if path_display.contains('<') {
+        "<p>Choose a website or subdomain to see where archives are saved.</p>".to_string()
+    } else {
+        format!(
+            "<p>Saved in <code>{}</code>.</p>",
+            html_escape(&path_display)
+        )
+    };
     let legacy = legacy_panel_backups_dir();
     let migrate_note = if scope == BackupScope::Panel
         && legacy.is_dir()
@@ -255,7 +263,7 @@ pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
       {err}
       <article class="section-card">
         <h2>Selective backup</h2>
-        <p>Archives are stored under <code>{path}</code> for the selected scope. Panel: <code>/home/cpn-panel/backups/</code>. Site: <code>/home/&lt;domain&gt;/backups/</code>. Subdomain: <code>/home/&lt;parent&gt;/&lt;sub.fqdn&gt;/backups/</code>.</p>
+        {path_blurb}
         {migrate}
         <form method="get" action="/backups" class="stack-form" style="max-width:560px;">
           <fieldset style="border:1px solid #eeeef0;border-radius:12px;padding:12px 14px;">
@@ -278,7 +286,7 @@ pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
       </article>
       <article class="section-card" style="margin-top:22px;">
         <h2>Archives in this scope</h2>
-        <p class="muted">Listing <code>{path}</code></p>
+        <p class="muted">Archives for this scope.</p>
         {rows}
       </article>"#,
         heading = section_heading(
@@ -287,7 +295,7 @@ pub fn backups_main(q: BackupsPageQuery<'_>) -> String {
         ),
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
-        path = html_escape(&path_display),
+        path_blurb = path_blurb,
         migrate = migrate_note,
         sp = scope_panel,
         ss = scope_site,

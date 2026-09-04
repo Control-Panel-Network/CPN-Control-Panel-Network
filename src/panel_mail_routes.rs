@@ -123,10 +123,7 @@ pub async fn email_account_create(
         Ok(account) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                email_redirect(
-                    Some(&format!("Created mailbox {}", account.address)),
-                    None,
-                ),
+                email_redirect(Some(&format!("Created mailbox {}", account.address)), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()

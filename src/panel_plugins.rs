@@ -200,7 +200,7 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
             <td>v{ver}</td>
             <td>{active}</td>
             <td class="plugin-actions">
-              <a class="btn-secondary" href="/plugins?view=installed&amp;domain={domain_q}&amp;notice={settings}">Settings</a>
+              <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
               {toggle}
               <form method="post" action="/plugins/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {name}?');">
                 <input type="hidden" name="id" value="{id}">
@@ -217,7 +217,6 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
                 toggle = toggle,
                 domain = html_escape(domain),
                 domain_q = urlencoding_simple(domain),
-                settings = urlencoding_simple("Settings UI for this plugin is not wired yet."),
             ));
         }
         rows.push_str("</tbody></table></div>");
@@ -260,7 +259,7 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
           <p class="muted">{desc}</p>
           <p class="muted">Status: Installed · Active: {active}</p>
           <div class="plugin-actions">
-            <a class="btn-secondary" href="/plugins?view=installed&amp;domain={domain_q}&amp;notice={settings}">Settings</a>
+            <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
             {toggle}
             <form method="post" action="/plugins/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {name}?');">
               <input type="hidden" name="id" value="{id}">
@@ -269,6 +268,7 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
             </form>
           </div>
           <div class="plugin-links">
+            <a href="/plugins/dashboard?domain={domain_q}&amp;id={id}">Dashboard</a>
             <a href="/plugins?view=installed&amp;domain={domain_q}&amp;notice={help}">Help</a>
             <a href="/plugins?view=installed&amp;domain={domain_q}&amp;notice={about}">About</a>
           </div>
@@ -283,7 +283,6 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
             toggle = toggle,
             domain = html_escape(domain),
             domain_q = urlencoding_simple(domain),
-            settings = urlencoding_simple("Settings UI for this plugin is not wired yet."),
             help = urlencoding_simple(&format!("Help for {}: see plugin docs in the install folder.", m.name)),
             about = urlencoding_simple(&format!(
                 "{} v{} by {}. Installed under {}.",

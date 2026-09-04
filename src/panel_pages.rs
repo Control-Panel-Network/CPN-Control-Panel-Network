@@ -74,6 +74,11 @@ button { font:inherit; cursor:pointer; }
   border-radius:999px; color:#4b4b50; font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
+.sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
+.nav-section {
+  margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+}
 .sidebar-footer {
   display:flex; align-items:center; gap:6px; padding-top:18px; border-top:1px solid var(--hairline);
 }
@@ -246,33 +251,73 @@ fn panel_nav_script() -> &'static str {
 "#
 }
 
-fn nav_links(active: &str) -> String {
-    let items = [
+fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> String {
+    let mut class = String::new();
+    if id == active {
+        class.push_str("active");
+    }
+    if child {
+        if !class.is_empty() {
+            class.push(' ');
+        }
+        class.push_str("nav-child");
+    }
+    let class_attr = if class.is_empty() {
+        String::new()
+    } else {
+        format!(r#" class="{class}""#)
+    };
+    format!(r#"<a{class_attr} href="{href}">{label}</a>"#)
+}
+
+fn nav_links(active: &str, username: &str) -> String {
+    let hosting = [
         ("dashboard", "/dashboard", "Dashboard"),
         ("websites", "/websites", "Websites"),
         ("email", "/email", "Email"),
         ("databases", "/databases", "Databases"),
         ("apps", "/apps", "Apps"),
         ("backups", "/backups", "Backups"),
-        ("plugins", "/plugins", "Plugins"),
     ];
-    items
-        .iter()
-        .map(|(id, href, label)| {
-            let class = if *id == active {
-                " class=\"active\""
-            } else {
-                ""
-            };
-            format!(r#"<a{class} href="{href}">{label}</a>"#)
-        })
-        .collect::<Vec<_>>()
-        .join("\n          ")
+    let mut parts = Vec::new();
+    parts.push(r#"<div class="nav-section">Hosting</div>"#.to_string());
+    for (id, href, label) in hosting {
+        parts.push(nav_link(id, href, label, active, false));
+    }
+    parts.push(r#"<div class="nav-section">Plugins</div>"#.to_string());
+    parts.push(nav_link(
+        "plugins",
+        "/plugins",
+        "Installed / Store",
+        active,
+        false,
+    ));
+    let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
+    let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
+    domains.sort_unstable();
+    domains.dedup();
+    let need_domain_hint = domains.len() > 1;
+    for link in &plugin_links {
+        let label = if need_domain_hint {
+            format!("{} ({})", link.name, link.domain)
+        } else {
+            link.name.clone()
+        };
+        let id = format!("plugin-{}-{}", link.domain, link.id);
+        parts.push(nav_link(
+            &id,
+            &link.href,
+            &html_escape(&label),
+            active,
+            true,
+        ));
+    }
+    parts.join("\n          ")
 }
 
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
     let user = html_escape(username);
-    let nav = nav_links(active);
+    let nav = nav_links(active, username);
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">

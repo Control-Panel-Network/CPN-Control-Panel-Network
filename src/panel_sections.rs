@@ -44,10 +44,45 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
+fn site_action_buttons(site: &SiteRecord) -> String {
+    let domain = html_escape(&site.domain);
+    let suspend = if site.enabled {
+        format!(
+            r#"<form method="post" action="/websites/suspend" class="inline-form" onsubmit="return confirm('Suspend {domain}?');">
+              <input type="hidden" name="domain" value="{domain}">
+              <button type="submit" class="btn-warn" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#fffaeb;color:#b54708;font-weight:700;cursor:pointer;">Suspend</button>
+            </form>"#,
+            domain = domain,
+        )
+    } else {
+        format!(
+            r#"<form method="post" action="/websites/resume" class="inline-form">
+              <input type="hidden" name="domain" value="{domain}">
+              <button type="submit" class="btn-secondary" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Resume</button>
+            </form>"#,
+            domain = domain,
+        )
+    };
+    format!(
+        r#"<div class="site-actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">
+            <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
+            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}#settings">Settings</a>
+            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}#docroot">File manager</a>
+            {suspend}
+            <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
+              <input type="hidden" name="domain" value="{domain}">
+              <button type="submit" class="btn-danger" style="min-height:36px;padding:0 12px;font-size:13px;">Delete</button>
+            </form>
+          </div>"#,
+        domain = domain,
+        suspend = suspend,
+    )
+}
+
 fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
     if sites.is_empty() {
         return r#"<p class="empty-state">No sites yet. Create one below or use <code>cpn site create</code>.</p>
-        <p class="muted">Files live under <code>/home/&lt;domain&gt;/public_html</code>. Subdomains nest under the parent home (for example <code>/home/example.com/blog.example.com/public_html</code>).</p>"#
+        <p class="muted">New sites store files under the domain home (for example <code>/home/example.com/public_html</code>).</p>"#
             .into();
     }
     let docroot_th = if show_docroots {
@@ -57,10 +92,10 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
     };
     let mut rows = format!(
         r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th></th></tr></thead><tbody>"#
+      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th>Actions</th></tr></thead><tbody>"#
     );
     for site in sites {
-        let status = if site.enabled { "Enabled" } else { "Disabled" };
+        let status = if site.enabled { "Active" } else { "Suspended" };
         let wired = if site.vhost_wired {
             "vhost wired"
         } else {
@@ -68,7 +103,7 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
         };
         let docroot_td = if show_docroots {
             let legacy = if crate::sites::is_legacy_docroot(&site.docroot) {
-                r#"<div class="muted">Legacy path (still served from this location). New sites use /home/&lt;domain&gt;/public_html.</div>"#
+                r#"<div class="muted">Legacy path (still served from this location).</div>"#
             } else {
                 ""
             };
@@ -86,18 +121,13 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
           <td>{owner}</td>
           {docroot_td}
           <td>{status}</td>
-          <td>
-            <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
-              <input type="hidden" name="domain" value="{domain}">
-              <button type="submit" class="btn-danger">Delete</button>
-            </form>
-          </td>
+          <td>{actions}</td>
         </tr>"#,
             domain = html_escape(&site.domain),
             owner = html_escape(&site.owner),
             docroot_td = docroot_td,
             status = status,
-            wired = wired,
+            actions = site_action_buttons(site),
         ));
     }
     rows.push_str("</tbody></table></div>");
@@ -120,7 +150,7 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
       {err}
       <article class="section-card">
         <h2>Sites ({count})</h2>
-        <p class="muted">Website files live under <code>/home/&lt;domain&gt;/public_html</code> (subdomains nest under the parent home). Internal site records are for the panel only; operators work with the files under <code>/home/</code>. Vhost wiring is applied later by panel recipes.</p>
+        <p class="muted">Each site has a Manage page with overview, quick links, and suspend/delete. Document roots live under the domain home. Vhost wiring is applied later by panel recipes.</p>
         <form method="post" action="/websites/prefs" class="inline-form" style="margin:12px 0;">
           <input type="hidden" name="show_document_roots" value="{toggle_value}">
           <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
@@ -129,7 +159,7 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
       </article>
       <article class="section-card" style="margin-top:22px;">
         <h2>Add site</h2>
-        <p>Creates <code>/home/&lt;domain&gt;/public_html</code> (or nests a subdomain under the parent home). Subdomains require the parent domain site first. Optional custom docroot must be an absolute path.</p>
+        <p>Creates the site home and document root. Subdomains require the parent domain first. Optional custom docroot must be an absolute path.</p>
         <form method="post" action="/websites/create" class="stack-form">
           <label for="domain">Domain</label>
           <input id="domain" name="domain" type="text" required placeholder="example.com" autocomplete="off">
@@ -226,20 +256,11 @@ pub fn email_main(
     } else {
         rows.push_str(r#"<table class="data-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
         for acct in &accounts {
-            let valid = if acct.smtp_valid {
-                "Valid"
-            } else {
-                "Invalid"
-            };
+            let valid = if acct.smtp_valid { "Valid" } else { "Invalid" };
             let err = acct
                 .smtp_error
                 .as_ref()
-                .map(|e| {
-                    format!(
-                        r#" <span class="muted">({})</span>"#,
-                        html_escape(e)
-                    )
-                })
+                .map(|e| format!(r#" <span class="muted">({})</span>"#, html_escape(e)))
                 .unwrap_or_default();
             let mode = match acct.smtp_mode {
                 MailSmtpMode::External => "external",

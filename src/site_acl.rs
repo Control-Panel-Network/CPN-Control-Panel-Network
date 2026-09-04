@@ -95,8 +95,7 @@ pub fn can_manage_site(username: &str, domain_raw: &str, perm: SitePerm) -> Resu
         if !grant.domain.trim().is_empty() && names_equal(&grant.domain, &site.domain) {
             return Ok(true);
         }
-        if !grant.all_owned_by.trim().is_empty() && names_equal(&grant.all_owned_by, &site.owner)
-        {
+        if !grant.all_owned_by.trim().is_empty() && names_equal(&grant.all_owned_by, &site.owner) {
             return Ok(true);
         }
     }
@@ -134,7 +133,10 @@ pub fn sites_manageable_by(username: &str) -> Result<Vec<SiteRecord>, String> {
 }
 
 /// Resolve `--domain` / `--subdomain` / full FQDN into a registered site domain.
-pub fn resolve_target_domain(domain: Option<&str>, subdomain: Option<&str>) -> Result<String, String> {
+pub fn resolve_target_domain(
+    domain: Option<&str>,
+    subdomain: Option<&str>,
+) -> Result<String, String> {
     let domain = domain.map(str::trim).filter(|v| !v.is_empty());
     let subdomain = subdomain.map(str::trim).filter(|v| !v.is_empty());
     match (domain, subdomain) {
@@ -146,7 +148,11 @@ pub fn resolve_target_domain(domain: Option<&str>, subdomain: Option<&str>) -> R
             let fqdn = if sub.contains('.') {
                 sub.to_ascii_lowercase()
             } else {
-                format!("{}.{}", sub.to_ascii_lowercase(), parent.to_ascii_lowercase())
+                format!(
+                    "{}.{}",
+                    sub.to_ascii_lowercase(),
+                    parent.to_ascii_lowercase()
+                )
             };
             let site = load_site(&fqdn)?;
             Ok(site.domain)
@@ -168,7 +174,8 @@ mod tests {
     #[test]
     fn owner_can_manage_without_grants() {
         with_test_data_dir(|| {
-            let home = std::env::temp_dir().join(format!("cpn-acl-{}-{}", std::process::id(), now_unix()));
+            let home =
+                std::env::temp_dir().join(format!("cpn-acl-{}-{}", std::process::id(), now_unix()));
             let _ = fs::remove_dir_all(&home);
             fs::create_dir_all(&home).unwrap();
             unsafe {
