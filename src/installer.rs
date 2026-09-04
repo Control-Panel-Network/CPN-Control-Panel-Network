@@ -1,4 +1,4 @@
-﻿use crate::install_journal::{self, FailureKind};
+use crate::install_journal::{self, FailureKind};
 use crate::install_mail_backend::{provision_local_mail_backend, verify_imap_smtp_listeners};
 use crate::install_recipes::{
     CommandSpec, DnfProgress, apt_update_command, command, php_install_command,
@@ -9,9 +9,9 @@ use crate::install_webmail_runtime::webmail_health_url;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
-use std::process::Stdio;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+use std::process::Stdio;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
