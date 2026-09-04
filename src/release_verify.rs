@@ -28,7 +28,8 @@ pub fn verify_gpg_enabled() -> bool {
 }
 
 fn sha256_hex(path: &Path) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    let bytes = std::fs::read(path)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
     Ok(format!("{:x}", hasher.finalize()))
@@ -57,7 +58,9 @@ pub fn verify_sha256_file(artifact: &Path, sums_body: &str) -> Result<(), String
         .and_then(|value| value.to_str())
         .ok_or_else(|| "Artifact path has no file name".to_string())?;
     let expected = expected_hash_for(sums_body, name).ok_or_else(|| {
-        format!("SHA256SUMS has no entry for {name}; refuse install while CPN_VERIFY_RELEASE is enabled")
+        format!(
+            "SHA256SUMS has no entry for {name}; refuse install while CPN_VERIFY_RELEASE is enabled"
+        )
     })?;
     let actual = sha256_hex(artifact)?;
     if actual != expected {
@@ -68,7 +71,11 @@ pub fn verify_sha256_file(artifact: &Path, sums_body: &str) -> Result<(), String
     Ok(())
 }
 
-pub async fn verify_gpg_sums(sums_path: &Path, asc_path: &Path, keyring: Option<&Path>) -> Result<(), String> {
+pub async fn verify_gpg_sums(
+    sums_path: &Path,
+    asc_path: &Path,
+    keyring: Option<&Path>,
+) -> Result<(), String> {
     if !asc_path.is_file() {
         return Err(format!(
             "Missing {} while CPN_VERIFY_GPG=1",
@@ -90,22 +97,20 @@ pub async fn verify_gpg_sums(sums_path: &Path, asc_path: &Path, keyring: Option<
         let _ = std::fs::set_permissions(&gnupg_home, std::fs::Permissions::from_mode(0o700));
     }
 
-    if let Some(key) = keyring {
-        if key.is_file() {
-            let status = Command::new("gpg")
-                .env("GNUPGHOME", &gnupg_home)
-                .args(["--batch", "--import"])
-                .arg(key)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .status()
-                .await
-                .map_err(|error| format!("gpg import failed: {error}"))?;
-            if !status.success() {
-                let _ = std::fs::remove_dir_all(&gnupg_home);
-                return Err("gpg could not import CPN release public key".into());
-            }
+    if let Some(key) = keyring.filter(|path| path.is_file()) {
+        let status = Command::new("gpg")
+            .env("GNUPGHOME", &gnupg_home)
+            .args(["--batch", "--import"])
+            .arg(key)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .status()
+            .await
+            .map_err(|error| format!("gpg import failed: {error}"))?;
+        if !status.success() {
+            let _ = std::fs::remove_dir_all(&gnupg_home);
+            return Err("gpg could not import CPN release public key".into());
         }
     }
 
@@ -141,16 +146,15 @@ pub async fn maybe_check_rpm_sig(artifact: &Path) -> Result<(), String> {
     {
         return Ok(());
     }
-    if Command::new("rpm")
+    let rpm_available = Command::new("rpm")
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .await
         .map(|status| status.success())
-        .unwrap_or(false)
-        == false
-    {
+        .unwrap_or(false);
+    if !rpm_available {
         return Ok(());
     }
     let output = Command::new("rpm")

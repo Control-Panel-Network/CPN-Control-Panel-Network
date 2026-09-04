@@ -142,7 +142,10 @@ async fn verify_downloaded_artifact(
         .map_err(|error| format!("Could not read SHA256SUMS: {error}"))?;
     verify_sha256_file(Path::new(artifact_path), &sums_body)?;
     state.log(
-        format!("SHA-256 verified for {}", Path::new(artifact_path).display()),
+        format!(
+            "SHA-256 verified for {}",
+            Path::new(artifact_path).display()
+        ),
         "info",
     );
 
