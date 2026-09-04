@@ -1,13 +1,13 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
-    account_setup, forgot_password_page, forgot_password_submit, login_page, login_submit,
+    account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
+    forgot_password_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, enrich_status, install_finished, normalize_language,
-    panel_account_ready,
-    remote_origin_ok, smtp_status_public, token_matches, wants_html,
+    panel_account_ready, remote_origin_ok, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
@@ -625,6 +625,12 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(login_submit)
+            .service(dashboard_page)
+            .service(panel_alias)
+            .service(logout_get)
+            .service(logout_post)
+            .service(api_logout_get)
+            .service(api_logout_post)
             .service(forgot_password_page)
             .service(forgot_password_submit)
             .service(set_language)
