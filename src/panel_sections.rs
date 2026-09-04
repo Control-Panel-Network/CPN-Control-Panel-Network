@@ -390,13 +390,8 @@ pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> Strin
         <p class="muted">Default stack is MariaDB (not MySQL) plus phpMyAdmin. Hosts typically run MariaDB XOR MySQL.</p>
       </article>"#,
         heading = section_heading(
-<<<<<<< HEAD
-            "Databases",
-            "Honest detection of local MariaDB/MySQL and phpMyAdmin. No credentials are stored here.",
-=======
             "MariaDB Manager",
-            "Honest detection of local MariaDB/MySQL. No credentials are stored here.",
->>>>>>> 4287c4a (Add CPN hosting panel feature hubs for Server, Email, Databases, and Backups.)
+            "Honest detection of local MariaDB/MySQL and phpMyAdmin. No credentials are stored here.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
