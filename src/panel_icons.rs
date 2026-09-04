@@ -3,7 +3,7 @@
 
 use crate::panel_icons_svg;
 
-/// Accent tone class suffix (	one-{name}) for light/dark friendly icon chips.
+/// Accent tone class suffix (`tone-{name}`) for light/dark friendly icon chips.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IconTone {
     Blue,

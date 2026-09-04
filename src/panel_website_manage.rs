@@ -85,6 +85,11 @@ pub fn website_manage_main(
         )
     };
     let body = tab_body(site, tab);
+    let styles = format!(
+        "{}{}",
+        manage_styles(),
+        crate::panel_icons::icon_tone_styles()
+    );
     format!(
         r##"<style>{styles}</style>
       <div class="site-manage">
@@ -105,11 +110,7 @@ pub fn website_manage_main(
           {body}
         </article>
       </div>"##,
-        styles = format!(
-            "{}{}",
-            manage_styles(),
-            crate::panel_icons::icon_tone_styles()
-        ),
+        styles = styles,
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         banner = manage_banner(site, username),
