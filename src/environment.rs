@@ -97,20 +97,6 @@ fn virt_is_container(kind: &str) -> bool {
     ) || kind.contains("container")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::virt_is_container;
-
-    #[test]
-    fn detects_common_container_virt_kinds() {
-        assert!(virt_is_container("docker"));
-        assert!(virt_is_container("podman"));
-        assert!(virt_is_container("container-other"));
-        assert!(!virt_is_container("kvm"));
-        assert!(!virt_is_container("none"));
-    }
-}
-
 #[cfg(windows)]
 pub async fn inspect(port: u16) -> EnvironmentInfo {
     let mut addresses = addresses().await;
@@ -255,5 +241,19 @@ pub async fn close_installer_port(environment: &EnvironmentInfo) -> Result<(), S
             _ => {}
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::virt_is_container;
+
+    #[test]
+    fn detects_common_container_virt_kinds() {
+        assert!(virt_is_container("docker"));
+        assert!(virt_is_container("podman"));
+        assert!(virt_is_container("container-other"));
+        assert!(!virt_is_container("kvm"));
+        assert!(!virt_is_container("none"));
     }
 }

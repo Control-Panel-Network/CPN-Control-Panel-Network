@@ -84,7 +84,7 @@ mod tests {
     fn mail_allowed_after_server() {
         let mut status = base();
         status.server_ready = true;
-        status.phase = "completed".into();
+        status.phase = "completed";
         status.selected_server = Some(ServerEngine::Nginx);
         assert!(can_start_mail(&status, false).is_ok());
     }
@@ -93,7 +93,7 @@ mod tests {
     fn server_reinstall_requires_force() {
         let mut status = base();
         status.server_ready = true;
-        status.phase = "completed".into();
+        status.phase = "completed";
         assert!(can_start_server(&status, false).is_err());
         assert!(can_start_server(&status, true).is_ok());
     }
@@ -103,7 +103,7 @@ mod tests {
         let mut status = base();
         status.server_ready = true;
         status.selected_mail = Some(MailSystem::Roundcube);
-        status.phase = "completed".into();
+        status.phase = "completed";
         assert!(can_start_mail(&status, false).is_err());
         assert!(can_start_mail(&status, true).is_ok());
     }
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn busy_phases_conflict() {
         let mut status = base();
-        status.phase = "installing".into();
+        status.phase = "installing";
         assert!(can_start_server(&status, true).is_err());
         status.server_ready = true;
         assert!(can_start_mail(&status, true).is_err());

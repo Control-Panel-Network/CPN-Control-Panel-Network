@@ -301,9 +301,10 @@ mod tests {
     use actix_web::test::TestRequest;
 
     fn status_with_phase(phase: &'static str) -> InstallerStatus {
-        let mut status = InstallerStatus::default();
-        status.phase = phase;
-        status
+        InstallerStatus {
+            phase,
+            ..Default::default()
+        }
     }
 
     #[test]

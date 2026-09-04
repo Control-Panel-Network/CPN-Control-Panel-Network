@@ -3,13 +3,20 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_pages::panel_shell;
+use crate::panel_plugin_settings::{
+    plugin_dashboard_main, plugin_settings_main, settings_from_form,
+};
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
     databases_main, email_main, run_mariadb_install, set_websites_docroot_pref, websites_main,
 };
+use crate::panel_website_manage::website_manage_main;
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
+use crate::plugins_settings::{
+    declared_settings_fields, load_plugin_settings, save_plugin_settings,
+};
 use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
-use crate::sites::{create_site, delete_site};
+use crate::sites::{SiteModify, create_site, delete_site, modify_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -165,6 +172,120 @@ pub async fn websites_prefs(
                     } else {
                         "Document roots hidden"
                     })
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[get("/websites/manage")]
+pub async fn websites_manage(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    match require_manage_site(&user, domain, SitePerm::Enable) {
+        Ok(site) => html_ok(panel_shell(
+            &user,
+            "websites",
+            &format!("Manage {}", site.domain),
+            &website_manage_main(&site, notice, error),
+        )),
+        Err(err) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&err)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/websites/suspend")]
+pub async fn websites_suspend(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SiteDeleteForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish();
+    }
+    match modify_site(
+        &form.domain,
+        SiteModify {
+            enabled: Some(false),
+            ..Default::default()
+        },
+    ) {
+        Ok(site) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites/manage?domain={}&notice={}",
+                    urlencoding_simple(&site.domain),
+                    urlencoding_simple("Site suspended")
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/websites/resume")]
+pub async fn websites_resume(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SiteDeleteForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish();
+    }
+    match modify_site(
+        &form.domain,
+        SiteModify {
+            enabled: Some(true),
+            ..Default::default()
+        },
+    ) {
+        Ok(site) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites/manage?domain={}&notice={}",
+                    urlencoding_simple(&site.domain),
+                    urlencoding_simple("Site resumed")
                 ),
             ))
             .finish(),
@@ -465,6 +586,130 @@ pub async fn plugins_disable(
             ))
             .finish(),
     }
+}
+
+#[get("/plugins/settings")]
+pub async fn plugins_settings_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let id = query.get("id").map(String::as_str).unwrap_or("");
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    let sites = sites_manageable_by(&user).unwrap_or_default();
+    if !domain.trim().is_empty()
+        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(domain, "installed", None, Some(&err)),
+            ))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "plugins",
+        "Plugin settings",
+        &plugin_settings_main(&sites, domain, id, notice, error),
+    ))
+}
+
+#[post("/plugins/settings")]
+pub async fn plugins_settings_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = form.get("domain").map(String::as_str).unwrap_or("");
+    let id = form.get("id").map(String::as_str).unwrap_or("");
+    if let Err(error) = require_manage_site(&user, domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/plugins/settings?domain={}&id={}&error={}",
+                    urlencoding_simple(domain),
+                    urlencoding_simple(id),
+                    urlencoding_simple(&error)
+                ),
+            ))
+            .finish();
+    }
+    let previous = load_plugin_settings(domain, id).unwrap_or_default();
+    let declared: Vec<String> = declared_settings_fields(domain, id)
+        .into_iter()
+        .map(|f| f.key)
+        .collect();
+    let settings = settings_from_form(&form, &previous, &declared);
+    match save_plugin_settings(domain, id, &settings) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/plugins/settings?domain={}&id={}&notice={}",
+                    urlencoding_simple(domain),
+                    urlencoding_simple(id),
+                    urlencoding_simple("Settings saved")
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/plugins/settings?domain={}&id={}&error={}",
+                    urlencoding_simple(domain),
+                    urlencoding_simple(id),
+                    urlencoding_simple(&error)
+                ),
+            ))
+            .finish(),
+    }
+}
+
+#[get("/plugins/dashboard")]
+pub async fn plugins_dashboard_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let id = query.get("id").map(String::as_str).unwrap_or("");
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    if !domain.trim().is_empty()
+        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(domain, "installed", None, Some(&err)),
+            ))
+            .finish();
+    }
+    let active = if domain.is_empty() || id.is_empty() {
+        "plugins".to_string()
+    } else {
+        format!("plugin-{domain}-{id}")
+    };
+    html_ok(panel_shell(
+        &user,
+        &active,
+        "Plugin dashboard",
+        &plugin_dashboard_main(domain, id, notice, error),
+    ))
 }
 
 fn urlencoding_simple(value: &str) -> String {
