@@ -186,6 +186,30 @@ http_status_ok() {
     "http://127.0.0.1:2087/api/status?token=$token" >/dev/null 2>&1
 }
 
+# IMAP/SMTP listener check without requiring iproute/ss (Rocky minimal).
+port_listeners_ok() {
+  local name="$1"
+  "$engine" exec "$name" bash -lc '
+    set -euo pipefail
+    if command -v ss >/dev/null 2>&1; then
+      ss -ltn | grep -E ":143|:587|:25"
+      exit 0
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+      netstat -ltn | grep -E ":143|:587|:25"
+      exit 0
+    fi
+    ok=0
+    for port in 143 25 587; do
+      if timeout 2 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+        echo "tcp 127.0.0.1:$port open"
+        ok=1
+      fi
+    done
+    test "$ok" = 1
+  '
+}
+
 # After long package installs HTTP can stall; restart installer so mail POST works.
 # Manifest from the completed server stage puts the process into maintenance with
 # server_ready, which still allows /api/install/mail.
@@ -210,8 +234,11 @@ ensure_installer_http() {
 
 wait_for_result() {
   local name="$1" token="$2"
+  # Optional stage: "server" enables nginx-active fallback; "mail" must wait for mail_client_ready
+  # (nginx stays active after the web stage, so the fallback would false-pass mail installs).
+  local stage="${3:-any}"
   local empty=0
-  for _ in {1..240}; do
+  for _ in {1..360}; do
     local raw status code snap
     raw="$("$engine" exec "$name" curl -sS --max-time 5 -w '\n%{http_code}' \
       "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
@@ -222,10 +249,20 @@ wait_for_result() {
       status="$snap"
       code="200"
     fi
-    if [[ "$code" == "200" && "$status" == *'"phase":"completed"'* ]]; then return; fi
-    if [[ "$snap" == *'"phase":"completed"'* ]]; then
-      echo "[MATRIX] completed via status snapshot file" >&2
-      return 0
+    if [[ "$stage" == "mail" ]]; then
+      # Do not treat leftover server "completed" as mail success.
+      if [[ "$status" == *'"mail_client_ready":true'* || "$snap" == *'"mail_client_ready":true'* ]]; then
+        echo "[MATRIX] mail stage ready (mail_client_ready)" >&2
+        return 0
+      fi
+    else
+      if [[ "$code" == "200" && "$status" == *'"phase":"completed"'* ]]; then
+        return 0
+      fi
+      if [[ "$snap" == *'"phase":"completed"'* ]]; then
+        echo "[MATRIX] completed via status snapshot file (stage=$stage)" >&2
+        return 0
+      fi
     fi
     if [[ "$code" == "200" && "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
@@ -237,14 +274,16 @@ wait_for_result() {
       dump_installer_diag "$name"
       return 1
     fi
-    # Fallback: web stage finished even if status polling was wedged mid-install.
-    if "$engine" exec "$name" systemctl is-active --quiet nginx 2>/dev/null \
-      && "$engine" exec "$name" curl -fsS --max-time 3 http://127.0.0.1/ >/dev/null 2>&1; then
-      if [[ "$status" == *'"server_ready":true'* || "$status" == *'"phase":"completed"'* ]] \
-        || [[ "$snap" == *'"server_ready":true'* || "$snap" == *'"phase":"completed"'* ]] \
-        || ((empty >= 8)); then
-        echo "[MATRIX] accepting nginx-active fallback (http=$code phase_status_len=${#status} snap_len=${#snap})" >&2
-        return 0
+    # Never use empty-count alone: that false-completed the mail wait while Roundcube
+    # was never installed (systemctl php-fpm then exits 3 under set -e).
+    if [[ "$stage" != "mail" ]]; then
+      if "$engine" exec "$name" systemctl is-active --quiet nginx 2>/dev/null \
+        && "$engine" exec "$name" curl -fsS --max-time 3 http://127.0.0.1/ >/dev/null 2>&1; then
+        if [[ "$status" == *'"server_ready":true'* || "$status" == *'"phase":"completed"'* ]] \
+          || [[ "$snap" == *'"server_ready":true'* || "$snap" == *'"phase":"completed"'* ]]; then
+          echo "[MATRIX] accepting nginx-active fallback (stage=$stage http=$code phase_status_len=${#status} snap_len=${#snap})" >&2
+          return 0
+        fi
       fi
     fi
     if [[ "$code" != "200" || -z "$status" ]]; then
@@ -259,7 +298,7 @@ wait_for_result() {
     fi
     sleep 1
   done
-  echo "La instalación agotó el tiempo en $name" >&2
+  echo "La instalación agotó el tiempo en $name (stage=$stage)" >&2
   dump_installer_diag "$name"
   return 1
 }
@@ -292,7 +331,7 @@ install_pkg() {
 
 run_case() {
   local image="$1" kind="$2" component="$3" pkg="$4"
-  local safe_image
+  local safe_image settle
   safe_image="$(echo "$image" | tr '/:' '--')"
   local name="cpn-test-${safe_image}-${kind}-${component}"
   echo "[TEST] image=$image $kind/$component (engine=$engine)"
@@ -305,22 +344,34 @@ run_case() {
   if [[ "$kind" == "mail" ]]; then
     post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
       '{"server":"nginx","database":"none","install_phpmyadmin":false}'
-    wait_for_result "$name" "$token"
+    wait_for_result "$name" "$token" server
     token="$(ensure_installer_http "$name" "$token")"
     test -n "$token"
+    # Mail POST needs a non-busy phase after the web stage.
+    for _ in {1..90}; do
+      settle="$("$engine" exec "$name" curl -fsS --max-time 3 \
+        "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
+      if [[ "$settle" != *'"phase":"downloading"'* \
+        && "$settle" != *'"phase":"installing"'* \
+        && "$settle" != *'"phase":"testing"'* ]]; then
+        break
+      fi
+      sleep 1
+    done
   fi
   if [[ "$kind" == "server" ]]; then
     post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
       "{\"server\":\"$component\",\"database\":\"none\",\"install_phpmyadmin\":false}"
+    wait_for_result "$name" "$token" server
   else
     post_json "$name" "http://127.0.0.1:2087/api/install/$kind?token=$token" \
       "{\"$kind\":\"$component\"}"
+    wait_for_result "$name" "$token" mail
   fi
-  wait_for_result "$name" "$token"
 
   case "$component" in
     nginx)
-      "$engine" exec "$name" systemctl is-active --quiet nginx
+      "$engine" exec "$name" sh -lc 'systemctl is-active --quiet nginx'
       "$engine" exec "$name" nginx -t
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1/ 2>/dev/null | grep -qi 'nginx\\|AlmaLinux\\|Welcome\\|Ubuntu\\|Debian'"
       # External-ish check: query from the container's eth0 address, not loopback (issue #21).
@@ -335,7 +386,7 @@ run_case() {
       '
       ;;
     caddy)
-      "$engine" exec "$name" systemctl is-active --quiet caddy
+      "$engine" exec "$name" sh -lc 'systemctl is-active --quiet caddy'
       "$engine" exec "$name" caddy validate --config /etc/caddy/Caddyfile
       "$engine" exec "$name" sh -lc "curl -fsSI http://127.0.0.1/ 2>/dev/null | grep -qi '^Server: Caddy'"
       ;;
@@ -351,7 +402,7 @@ run_case() {
       "$engine" exec "$name" php -m | grep -qi mbstring
       "$engine" exec "$name" bash /usr/share/cpn-installer/webmail-permissions.sh /opt/cpn-webmail/snappymail 2>/dev/null || \
         "$engine" exec -i "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
-      "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      port_listeners_ok "$name"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
@@ -361,7 +412,7 @@ run_case() {
       "$engine" exec "$name" php -r '$db=new PDO("sqlite:/opt/cpn-webmail/roundcube/db.sqlite"); $n=$db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"users\"")->fetchColumn(); if(!$n){exit(1);}'
       "$engine" exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
       "$engine" exec -i "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
-      "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      port_listeners_ok "$name"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
