@@ -4,13 +4,13 @@ Date: 04/09/2026
 
 ## Why some rows stay Partial / Not yet
 
-PR #54 added CyberPanel-aligned **detection** and **dnf/apt recipes**. That is not the same as full lab proof on every guest.
+PR #54 added CPN **detection** and **dnf/apt recipes** for the guest list below. That is not the same as full lab proof on every guest.
 
 Status meanings (match `src/os_support.rs`):
 
 - **supported**: detection + install recipes implemented **and** smoke evidence (lab VM and/or `tests/docker-matrix.sh`)
 - **partial**: allowlisted; recipes run via the family path; less or no smoke evidence yet, or an external blocker remains
-- **not yet**: known CyberPanel/community target outside the installable allowlist (installer refuses with a helpful message)
+- **not yet**: known or planned community target outside the installable allowlist (installer refuses with a helpful message)
 - **host-only**: hypervisor or Windows host for Linux guests; not a CPN install target
 
 ## Product reality
@@ -22,7 +22,7 @@ CPN is a **Linux** control-panel installer (Rust + RPM, with apt recipes for Ubu
 | **Guest OS** | Where `cpn-installer` runs and installs packages (Alma, Rocky, Ubuntu, …) |
 | **Host / hypervisor** | Where those guests run (VirtualBox, Hyper-V, Windows Server as host). Documented for labs; no native Windows install path |
 
-## CyberPanel-aligned guest targets
+## CPN guest OS targets
 
 | Guest OS | Status | Package path | Evidence / notes |
 |---|---|---|---|
