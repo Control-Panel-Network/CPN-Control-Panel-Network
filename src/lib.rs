@@ -9,6 +9,8 @@ pub mod apps_pkg;
 pub mod apps_postgresql;
 pub mod apps_site;
 pub mod auth_api;
+#[cfg(test)]
+mod auth_http_tests;
 pub mod auth_i18n;
 pub mod auth_pages;
 pub mod backups;

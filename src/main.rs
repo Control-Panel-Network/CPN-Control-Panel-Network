@@ -6,9 +6,9 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    VERSION, authorized_request, enrich_status, install_finished, install_session_cookie_header,
-    normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
-    wants_html, websocket_origin_ok,
+    VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
+    install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
+    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
@@ -157,7 +157,7 @@ async fn bootstrap_session(
     if !token_matches(&state, Some(body.token.as_str())) {
         return HttpResponse::Unauthorized().json(serde_json::json!({"error": "invalid token"}));
     }
-    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     // Avoid connection_info()/Host-derived allocs (CodeQL rust/uncontrolled-allocation-size).
@@ -240,7 +240,7 @@ async fn set_language(
     if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     let language = match normalize_language(&request.language) {
@@ -265,7 +265,7 @@ async fn set_listen_port(
     if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     let port = match validate_listen_port(request.port) {
@@ -349,7 +349,7 @@ async fn start_install(
     if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     #[cfg(unix)]
@@ -411,7 +411,7 @@ async fn start_mail_install(
     if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
     #[cfg(unix)]
@@ -455,7 +455,7 @@ async fn websocket(
     if !authorized_request(&state, &query, &request) {
         return Ok(HttpResponse::Unauthorized().finish());
     }
-    if !websocket_origin_ok(&request, state.allow_remote, state.bind_port) {
+    if !websocket_origin_ok(&request, state.allow_remote, &state.allowed_hosts) {
         return Ok(HttpResponse::Forbidden().finish());
     }
     let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
@@ -695,6 +695,11 @@ async fn main() -> std::io::Result<()> {
     cpn_installer::installer::persist_status_snapshot(&initial);
     let startup_hostname = initial.panel_hostname.clone();
     let startup_migration = initial.port_migration.clone();
+    let mut host_seeds = environment.addresses.clone();
+    if let Some(hostname) = startup_hostname.as_ref() {
+        host_seeds.push(hostname.clone());
+    }
+    let allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
     let state = Arc::new(AppState {
         status: std::sync::RwLock::new(initial),
         events,
@@ -702,7 +707,9 @@ async fn main() -> std::io::Result<()> {
         session_id,
         bind_port: listen_port,
         allow_remote: remote,
+        allowed_hosts,
         cancel_requested: AtomicBool::new(false),
+        active_child_pids: std::sync::Mutex::new(Vec::new()),
     });
     println!("✓ El instalador web está listo para empezar:");
     if remote {

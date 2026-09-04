@@ -138,14 +138,17 @@ fn print_json(value: &impl serde::Serialize) {
 
 async fn make_state() -> Arc<AppState> {
     let (events, _) = broadcast::channel(64);
+    let bind_port = crate::listen_port::DEFAULT_PORT;
     Arc::new(AppState {
         status: std::sync::RwLock::new(Default::default()),
         events,
         token: "cli".into(),
         session_id: "clisessionid0000000000000001".into(),
-        bind_port: crate::listen_port::DEFAULT_PORT,
+        bind_port,
         allow_remote: false,
+        allowed_hosts: crate::http_helpers::build_allowed_hosts(bind_port, &[]),
         cancel_requested: std::sync::atomic::AtomicBool::new(false),
+        active_child_pids: std::sync::Mutex::new(Vec::new()),
     })
 }
 
