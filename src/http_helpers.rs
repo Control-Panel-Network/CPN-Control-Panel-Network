@@ -3,7 +3,7 @@
 use crate::account::account_public_from_disk;
 use crate::installer::AppState;
 use crate::model::{InstallerStatus, SmtpStatusPublic, TokenQuery};
-use crate::smtp_settings::{smtp_public_from_disk, SmtpTlsMode};
+use crate::smtp_settings::{SmtpTlsMode, smtp_public_from_disk};
 use actix_web::HttpRequest;
 use std::time::{SystemTime, UNIX_EPOCH};
 

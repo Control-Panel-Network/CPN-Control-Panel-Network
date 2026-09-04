@@ -1,4 +1,4 @@
-use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
@@ -6,9 +6,9 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    authorized_request, build_allowed_hosts, enrich_status, install_finished,
+    VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
     install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
-    smtp_status_public, token_matches, wants_html, websocket_origin_ok, VERSION,
+    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
@@ -46,8 +46,8 @@ use cpn_installer::panel_hub_routes::{
     users_profile_route, users_reseller_route,
 };
 use cpn_installer::panel_network::{
-    active_redirect_migration, apply_network_change, network_public, purge_expired_migration,
-    save_panel_hostname, OldPortPolicy,
+    OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
+    purge_expired_migration, save_panel_hostname,
 };
 use cpn_installer::panel_notifications_routes::{
     panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
@@ -72,11 +72,11 @@ use cpn_installer::panel_theme_routes::{
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use rust_embed::Embed;
 use std::{
     env,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 use tokio::sync::broadcast;
@@ -958,7 +958,7 @@ async fn main() -> std::io::Result<()> {
     tokio::spawn(async move {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
             let mut sigterm = signal(SignalKind::terminate()).ok();
             let mut sigint = signal(SignalKind::interrupt()).ok();
             tokio::select! {
