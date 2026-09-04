@@ -9,6 +9,7 @@ export type ScreenType =
 
 export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
 export type MailSystem = 'snappymail' | 'roundcube' | 'thunderbird';
+export type DatabaseEngine = 'mariadb' | 'mysql' | 'none';
 
 export type InstallerPhase =
   | 'preparing'

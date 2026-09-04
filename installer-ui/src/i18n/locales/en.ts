@@ -14,7 +14,7 @@ const en: LocaleMessages = {
   startMailError: 'Could not start the mail installation',
   selectServerTitle: 'Choose your web server',
   selectServerIntro:
-    'Pick the web engine that best fits your project. Supported Linux guests follow the CyberPanel matrix (AlmaLinux, Rocky, Ubuntu, and related EL targets). Windows Server and hypervisors host those guests; they are not native panel installs. You can change the engine later from the panel.',
+    'Pick the web engine that best fits your project. Supported Linux guests include AlmaLinux, Rocky, Ubuntu, and related EL targets. Windows Server and hypervisors host those guests; they are not native panel installs. You can change the engine later from the panel.',
   listenPortLabel: 'Installer listen port',
   listenPortHint:
     'Default is 2087 (Cloudflare-friendly, same family as cPanel WHM HTTPS). Lab installs may use another free port such as 8787. Ports below 1024 usually need root.',
@@ -41,6 +41,13 @@ const en: LocaleMessages = {
   closeLabel: 'Close',
   continueLabel: 'Continue',
   nothingInstallsYet: 'Nothing is installed until you press Continue.',
+  databaseTitle: 'Database defaults',
+  databaseHint:
+    'MariaDB and phpMyAdmin install by default with the web server. Choose MySQL instead, or skip either. Hosts typically run MariaDB XOR MySQL.',
+  databaseMariadb: 'MariaDB (default)',
+  databaseMysql: 'MySQL (instead of MariaDB)',
+  databaseNone: 'Skip local database engine',
+  databasePhpmyadmin: 'Also install phpMyAdmin (default on)',
   serverOpenlitespeedDesc:
     'High performance with low resource use. Ideal for WordPress and busy sites thanks to built-in LSCache.',
   serverNginxDesc:

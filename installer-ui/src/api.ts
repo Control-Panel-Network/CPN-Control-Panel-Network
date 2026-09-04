@@ -175,11 +175,18 @@ export async function startMailInstall(mail: MailSystem): Promise<void> {
   }
 }
 
-export async function startServerInstall(server: ServerEngine): Promise<void> {
+export async function startServerInstall(
+  server: ServerEngine,
+  options?: { database?: import('./types').DatabaseEngine; install_phpmyadmin?: boolean },
+): Promise<void> {
   const response = await apiFetch('/api/install/server', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ server }),
+    body: JSON.stringify({
+      server,
+      database: options?.database ?? 'mariadb',
+      install_phpmyadmin: options?.install_phpmyadmin ?? true,
+    }),
   });
   if (!response.ok) {
     throw new Error(await readError(response, 'server_install_failed'));

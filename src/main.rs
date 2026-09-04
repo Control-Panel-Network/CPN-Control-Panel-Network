@@ -303,9 +303,11 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install(
+    tokio::spawn(cpn_installer::installer::install_with_database(
         state.get_ref().clone(),
         request.server,
+        request.database,
+        request.install_phpmyadmin,
     ));
     HttpResponse::Accepted().finish()
 }

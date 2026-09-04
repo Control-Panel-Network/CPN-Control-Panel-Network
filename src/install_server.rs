@@ -228,6 +228,16 @@ pub async fn cleanup_service_ports() -> Result<(), String> {
 }
 
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
+    install_with_database(state, server, crate::model::DatabaseEngine::Mariadb, true).await;
+}
+
+/// Web server install plus optional MariaDB/MySQL + phpMyAdmin defaults.
+pub async fn install_with_database(
+    state: std::sync::Arc<AppState>,
+    server: ServerEngine,
+    database: crate::model::DatabaseEngine,
+    install_phpmyadmin: bool,
+) {
     let result = async {
         let _run = install_journal::begin_install_run("server")?;
         let report = install_journal::run_preflight(512)?;
@@ -370,6 +380,32 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
                 );
             }
         }
+
+        state
+            .progress(
+                "installing",
+                97,
+                format!(
+                    "Installing database defaults ({})",
+                    database.label()
+                ),
+            )
+            .await;
+        match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin) {
+            Ok(notes) => {
+                for note in notes {
+                    state.log(note, "info");
+                }
+            }
+            Err(error) => {
+                state.log(
+                    format!("Database defaults warning (continuing): {error}"),
+                    "error",
+                );
+                // Soft-fail: web server already verified; operator can fix DB from Apps.
+            }
+        }
+
         Ok::<_, String>(())
     }
     .await;

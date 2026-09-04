@@ -46,6 +46,12 @@ export interface LocaleMessages {
   closeLabel: string;
   continueLabel: string;
   nothingInstallsYet: string;
+  databaseTitle: string;
+  databaseHint: string;
+  databaseMariadb: string;
+  databaseMysql: string;
+  databaseNone: string;
+  databasePhpmyadmin: string;
   serverOpenlitespeedDesc: string;
   serverNginxDesc: string;
   serverCaddyDesc: string;
