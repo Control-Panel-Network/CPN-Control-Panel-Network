@@ -20,6 +20,8 @@ pub struct AppState {
     pub status: RwLock<InstallerStatus>,
     pub events: broadcast::Sender<InstallerEvent>,
     pub token: String,
+    /// HttpOnly cookie value (server-generated; never taken from the query string).
+    pub session_id: String,
     /// TCP port this process actually bound (may differ from a saved preference).
     pub bind_port: u16,
     /// True when bound to 0.0.0.0 (--allow-remote).

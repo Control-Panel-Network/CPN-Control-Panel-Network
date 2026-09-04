@@ -201,10 +201,8 @@ fn print_generated(password: Option<String>) -> Result<(), String> {
         return Ok(());
     };
     // Write once to a mode-0600 file; print only the path (no cleartext password on stdout).
-    let path = std::env::temp_dir().join(format!(
-        "cpn-generated-password-{}.txt",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("cpn-generated-password-{}.txt", std::process::id()));
     {
         use std::io::Write;
         let mut options = std::fs::OpenOptions::new();
@@ -299,10 +297,7 @@ fn run() -> Result<(), String> {
             }
             AccountCommands::Delete { username, yes } => {
                 require_root_for_mutation()?;
-                confirm_delete(
-                    "Delete the selected account? This cannot be undone.",
-                    yes,
-                )?;
+                confirm_delete("Delete the selected account? This cannot be undone.", yes)?;
                 delete_account(&username)?;
                 println!("deleted account ok");
                 Ok(())

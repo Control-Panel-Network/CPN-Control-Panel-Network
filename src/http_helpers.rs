@@ -14,6 +14,8 @@ pub const PORT: u16 = DEFAULT_PORT;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const INSTALL_TOKEN_COOKIE: &str = "cpn_install_token";
+/// Fixed cookie value length (matches generated session_id / install token size).
+const INSTALL_COOKIE_VALUE_LEN: usize = 28;
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
     let a = a.as_bytes();
@@ -31,6 +33,13 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 pub fn token_matches(state: &AppState, token: Option<&str>) -> bool {
     match token {
         Some(value) if !value.is_empty() => constant_time_eq(&state.token, value),
+        _ => false,
+    }
+}
+
+pub fn session_matches(state: &AppState, session: Option<&str>) -> bool {
+    match session {
+        Some(value) if !value.is_empty() => constant_time_eq(&state.session_id, value),
         _ => false,
     }
 }
@@ -62,25 +71,27 @@ fn token_from_headers(request: &HttpRequest) -> Option<String> {
             return Some(header.to_string());
         }
     }
-    if let Some(cookie_header) = request
+    None
+}
+
+fn session_from_cookie(request: &HttpRequest) -> Option<String> {
+    let cookie_header = request
         .headers()
         .get(actix_web::http::header::COOKIE)
-        .and_then(|value| value.to_str().ok())
-    {
-        for part in cookie_header.split(';') {
-            let part = part.trim();
-            if let Some(value) = part.strip_prefix(&format!("{INSTALL_TOKEN_COOKIE}=")) {
-                let value = value.trim();
-                if !value.is_empty() {
-                    return Some(value.to_string());
-                }
+        .and_then(|value| value.to_str().ok())?;
+    for part in cookie_header.split(';') {
+        let part = part.trim();
+        if let Some(value) = part.strip_prefix(&format!("{INSTALL_TOKEN_COOKIE}=")) {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
             }
         }
     }
     None
 }
 
-/// Accept token from query, Authorization Bearer, X-CPN-Token, or HttpOnly cookie (issue #1).
+/// Accept token from query, Authorization Bearer, X-CPN-Token, or HttpOnly session cookie (issue #1).
 pub fn authorized(state: &AppState, query: &TokenQuery) -> bool {
     token_matches(state, Some(query.token.as_str()))
 }
@@ -89,7 +100,10 @@ pub fn authorized_request(state: &AppState, query: &TokenQuery, request: &HttpRe
     if authorized(state, query) {
         return true;
     }
-    token_matches(state, token_from_headers(request).as_deref())
+    if token_matches(state, token_from_headers(request).as_deref()) {
+        return true;
+    }
+    session_matches(state, session_from_cookie(request).as_deref())
 }
 
 /// When listening on 0.0.0.0, reject cross-site browser POSTs without a matching Origin/Referer.
@@ -129,21 +143,23 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         || candidate.contains("localhost")
 }
 
-/// Cookie value only for tokens that are already length-capped and ASCII-safe.
-pub fn install_token_cookie_header(token: &str, secure: bool) -> Option<String> {
-    let token = token.trim();
-    if token.is_empty() || token.len() > 128 {
+/// Cookie for the server-generated install session (not the URL token).
+pub fn install_token_cookie_header(session_id: &str, secure: bool) -> Option<String> {
+    let session_id = session_id.as_bytes();
+    if session_id.len() != INSTALL_COOKIE_VALUE_LEN {
         return None;
     }
-    if !token
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-    {
+    if !session_id.iter().all(|b| b.is_ascii_alphanumeric()) {
         return None;
+    }
+    // Fixed-capacity buffer avoids unbounded allocation from request data.
+    let mut value = String::with_capacity(INSTALL_COOKIE_VALUE_LEN);
+    for &b in session_id {
+        value.push(b as char);
     }
     let secure_flag = if secure { "; Secure" } else { "" };
     Some(format!(
-        "{INSTALL_TOKEN_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict{secure_flag}; Max-Age=86400"
+        "{INSTALL_TOKEN_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict{secure_flag}; Max-Age=86400"
     ))
 }
 
