@@ -1,10 +1,10 @@
-Name:           cpn-installer
+Name:           cpn-installe
 Version:        0.2.2
 Release:        0.1.alpha.1%{?dist}%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
 URL:            https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
-Source0:        cpn-installer
+Source0:        cpn-installe
 Source1:        cpn
 
 ExclusiveArch:  x86_64 aarch64
@@ -21,11 +21,11 @@ Incluye la CLI de operador cpn para cuentas y sitios vÃ­a SSH.
 %build
 
 %install
-install -Dpm 0755 %{SOURCE0} %{buildroot}%{_bindir}/cpn-installer
+install -Dpm 0755 %{SOURCE0} %{buildroot}%{_bindir}/cpn-installe
 install -Dpm 0755 %{SOURCE1} %{buildroot}%{_bindir}/cpn
 
 %files
-%{_bindir}/cpn-installer
+%{_bindir}/cpn-installe
 %{_bindir}/cpn
 
 %changelog
