@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   AppWindow,
-  Bell,
   Database,
   Gauge,
   Globe2,
@@ -24,19 +23,16 @@ import {
   Users,
   X,
 } from "lucide-react";
+import {
+  NotificationsPopover,
+  type PanelNotice,
+} from "./NotificationsPopover";
 
 type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
 
 const STORAGE_KEY = "cpn-sidebar-collapsed";
 const COLOR_MODE_KEY = "cpn-color-mode";
 const NOTIFY_KEY = "cpn-panel-notifications";
-
-type PanelNotice = {
-  id: string;
-  title: string;
-  body: string;
-  read: boolean;
-};
 
 function readColorMode(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -204,7 +200,6 @@ export function PanelShell({
   children,
 }: PanelShellProps) {
   const [open, setOpen] = useState(false);
-  const [notifyOpen, setNotifyOpen] = useState(false);
   const colorMode = useSyncExternalStore(
     subscribeColorMode,
     readColorMode,
@@ -240,7 +235,6 @@ export function PanelShell({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
-        setNotifyOpen(false);
       }
     };
     const onResize = () => {
@@ -262,7 +256,6 @@ export function PanelShell({
   }, [open]);
 
   const drawerMode = collapsed || narrow;
-  const unread = notices.filter((item) => !item.read).length;
 
   const toggleCollapsed = () => {
     writeCollapsedPreference(!collapsed);
@@ -344,49 +337,7 @@ export function PanelShell({
         </nav>
         <div className="sidebar-footer">
           <div className="sidebar-footer-actions">
-            <div className="notify-wrap">
-              <button
-                type="button"
-                className="footer-icon-btn"
-                aria-expanded={notifyOpen}
-                aria-controls="cpn-notify-panel"
-                aria-label="Notifications"
-                title="Notifications"
-                onClick={() => setNotifyOpen((value) => !value)}
-              >
-                <Bell size={18} strokeWidth={1.9} />
-                {unread > 0 ? (
-                  <span className="notify-badge">{unread > 99 ? "99+" : unread}</span>
-                ) : null}
-              </button>
-              {notifyOpen ? (
-                <div
-                  id="cpn-notify-panel"
-                  className="notify-popover"
-                  role="dialog"
-                  aria-label="Notifications"
-                >
-                  <header>
-                    <span>Notifications</span>
-                    <button type="button" onClick={markAllRead}>
-                      Mark all read
-                    </button>
-                  </header>
-                  {notices.length === 0 ? (
-                    <p className="notify-empty">No notifications yet.</p>
-                  ) : (
-                    <ul className="notify-list">
-                      {notices.map((item) => (
-                        <li key={item.id} className={item.read ? undefined : "unread"}>
-                          <strong>{item.title}</strong>
-                          {item.body ? <span>{item.body}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
-            </div>
+            <NotificationsPopover notices={notices} onMarkAllRead={markAllRead} />
             <Link
               href="/account/users/profile"
               className="footer-icon-btn"
