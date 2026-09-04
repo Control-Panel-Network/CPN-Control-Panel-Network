@@ -278,13 +278,7 @@ fn nav_links(active: &str, username: &str) -> String {
         active,
         false,
     ));
-    parts.push(nav_link(
-        "packages",
-        "/packages",
-        "Packages",
-        active,
-        false,
-    ));
+    parts.push(nav_link("packages", "/packages", "Packages", active, false));
     parts.push(r#"<div class="nav-section">Administration</div>"#.to_string());
     for (id, href, label) in [
         ("server", "/server", "Server"),
