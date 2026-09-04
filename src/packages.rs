@@ -255,7 +255,7 @@ pub fn is_panel_admin(username: &str) -> bool {
 pub fn list_packages() -> Result<Vec<Package>, String> {
     ensure_default_package()?;
     let mut packages = load_packages_file().packages;
-    packages.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    packages.sort_by_key(|a| a.name.to_lowercase());
     Ok(packages)
 }
 
