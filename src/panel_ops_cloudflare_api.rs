@@ -215,10 +215,10 @@ pub fn create_dns_record(
     if matches!(rtype.as_str(), "A" | "AAAA" | "CNAME") {
         body["proxied"] = json!(proxied);
     }
-    if let Some(p) = priority {
-        if matches!(rtype.as_str(), "MX" | "SRV") {
-            body["priority"] = json!(p);
-        }
+    if let Some(p) = priority
+        && matches!(rtype.as_str(), "MX" | "SRV")
+    {
+        body["priority"] = json!(p);
     }
     let payload = serde_json::to_string(&body).map_err(|e| e.to_string())?;
     let url = format!("{CF_API}/zones/{zone_id}/dns_records");
