@@ -90,7 +90,7 @@ pub fn manage_styles() -> &'static str {
   text-transform:uppercase; color:var(--m-muted); border-left:3px solid var(--m-accent); padding-left:10px;
 }
 .site-manage .manage-tile-grid {
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:12px;
 }
 .site-manage .manage-tile {
   display:flex; align-items:center; gap:12px; min-height:78px; padding:14px;
