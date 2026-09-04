@@ -250,8 +250,8 @@ wait_for_result() {
       dump_installer_diag "$name"
       return 1
     fi
-    // Never use empty-count alone: that false-completed the mail wait while Roundcube
-    // was never installed (systemctl php-fpm then exits 3 under set -e).
+    # Never use empty-count alone: that false-completed the mail wait while Roundcube
+    # was never installed (systemctl php-fpm then exits 3 under set -e).
     if [[ "$stage" != "mail" ]]; then
       if "$engine" exec "$name" systemctl is-active --quiet nginx 2>/dev/null \
         && "$engine" exec "$name" curl -fsS --max-time 3 http://127.0.0.1/ >/dev/null 2>&1; then
