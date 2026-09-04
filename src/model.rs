@@ -1,5 +1,24 @@
 use crate::releases::CpnRelease;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+const MAX_BOOTSTRAP_TOKEN_CHARS: usize = 128;
+
+pub fn deserialize_capped_token<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if value.len() > MAX_BOOTSTRAP_TOKEN_CHARS {
+        return Err(serde::de::Error::custom("token too long"));
+    }
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err(serde::de::Error::custom("token has invalid characters"));
+    }
+    Ok(value)
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -324,5 +343,7 @@ pub struct OptionalTokenQuery {
 
 #[derive(Debug, Deserialize)]
 pub struct SessionBootstrapRequest {
+    /// Installer bootstrap token (server-issued; reject oversized bodies early).
+    #[serde(deserialize_with = "deserialize_capped_token")]
     pub token: String,
 }

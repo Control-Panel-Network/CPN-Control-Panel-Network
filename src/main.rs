@@ -93,7 +93,11 @@ async fn root_page(
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     if install_finished(&status) {
         return HttpResponse::Found()
             .append_header(("Location", "/login"))
@@ -138,7 +142,8 @@ async fn bootstrap_session(
     if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
-    let secure = http.connection_info().scheme() == "https";
+    // Avoid connection_info()/Host-derived allocs (CodeQL rust/uncontrolled-allocation-size).
+    let secure = cpn_installer::panel_session::request_https_from_headers(&http);
     HttpResponse::Ok()
         .append_header((
             actix_web::http::header::SET_COOKIE,
@@ -160,7 +165,26 @@ async fn api_status(
     if !authorized_request(&state, &query, &request) {
         return HttpResponse::Unauthorized().finish();
     }
-    let payload = enrich_status(state.status.read().await.clone(), &state.token);
+    let payload = enrich_status(
+        match state.status.try_read() {
+            Ok(guard) => guard.clone(),
+            Err(_) => {
+                // Prefer brief wait over wedging an Actix worker on a write lock.
+                for _ in 0..20 {
+                    std::thread::sleep(Duration::from_millis(5));
+                    if let Ok(guard) = state.status.try_read() {
+                        return status_response(
+                            &request,
+                            &enrich_status(guard.clone(), &state.token),
+                        );
+                    }
+                }
+                return HttpResponse::ServiceUnavailable()
+                    .json(serde_json::json!({"error": "status busy"}));
+            }
+        },
+        &state.token,
+    );
     status_response(&request, &payload)
 }
 
@@ -175,7 +199,14 @@ async fn status_page(
             .content_type("text/html; charset=utf-8")
             .body("<!DOCTYPE html><html lang=\"en\"><body><h1>Access denied</h1><p>Invalid token.</p></body></html>");
     }
-    let payload = enrich_status(state.status.read().await.clone(), &state.token);
+    let payload = enrich_status(
+        state
+            .status
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        &state.token,
+    );
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(status_html_page(&payload))
@@ -200,7 +231,7 @@ async fn set_language(
             return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
         }
     };
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     current.language = language;
     let payload = enrich_status(current.clone(), &state.token);
     HttpResponse::Ok().json(payload)
@@ -251,7 +282,7 @@ async fn set_listen_port(
         };
 
     let restart_required = preferred != state.bind_port;
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if !restart_required {
         current.listen_port = preferred;
         if let Some(env_info) = current.environment.as_mut() {
@@ -309,7 +340,7 @@ async fn start_install(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
         );
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_server(&current, request.force_reinstall) {
         return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
@@ -325,12 +356,30 @@ async fn start_install(
     current.progress = 1;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install_with_database(
-        state.get_ref().clone(),
-        request.server,
-        request.database,
-        request.install_phpmyadmin,
-    ));
+    // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.
+    let install_state = state.get_ref().clone();
+    let server = request.server;
+    let database = request.database;
+    let install_phpmyadmin = request.install_phpmyadmin;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-server".into())
+        .spawn(move || {
+            // current_thread keeps package work off Actix workers without a second
+            // multi-thread runtime competing for a 1-vCPU matrix guest.
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_with_database(
+                install_state,
+                server,
+                database,
+                install_phpmyadmin,
+            ));
+        });
     HttpResponse::Accepted().finish()
 }
 
@@ -353,7 +402,7 @@ async fn start_mail_install(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
         );
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
         return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
@@ -362,10 +411,20 @@ async fn start_mail_install(
     current.progress = 0;
     current.error = None;
     drop(current);
-    tokio::spawn(cpn_installer::installer::install_mail(
-        state.get_ref().clone(),
-        request.mail,
-    ));
+    let install_state = state.get_ref().clone();
+    let mail = request.mail;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-mail".into())
+        .spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build mail install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_mail(install_state, mail));
+        });
     HttpResponse::Accepted().finish()
 }
 
@@ -384,7 +443,14 @@ async fn websocket(
     let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
     let mut events = state.events.subscribe();
     let snapshot = InstallerEvent::Snapshot {
-        status: enrich_status(state.status.read().await.clone(), &state.token),
+        status: enrich_status(
+            state
+                .status
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            &state.token,
+        ),
     };
     actix_web::rt::spawn(async move {
         let _ = session
@@ -608,10 +674,11 @@ async fn main() -> std::io::Result<()> {
         maintenance: Some(maintenance),
     };
     initial = enrich_status(initial, &token);
+    cpn_installer::installer::persist_status_snapshot(&initial);
     let startup_hostname = initial.panel_hostname.clone();
     let startup_migration = initial.port_migration.clone();
     let state = Arc::new(AppState {
-        status: tokio::sync::RwLock::new(initial),
+        status: std::sync::RwLock::new(initial),
         events,
         token: token.clone(),
         session_id,
@@ -662,6 +729,8 @@ async fn main() -> std::io::Result<()> {
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(state.clone()))
+            .app_data(web::JsonConfig::default().limit(64 * 1024))
+            .app_data(web::PayloadConfig::new(64 * 1024))
             .service(root_page)
             .service(api_status)
             .service(status_page)
@@ -785,10 +854,23 @@ async fn main() -> std::io::Result<()> {
             .route("/api/events", web::get().to(websocket))
             .route("/{path:.*}", web::get().to(static_asset))
     })
-    .keep_alive(Duration::from_secs(30));
-    for host in hosts {
+    .keep_alive(actix_web::http::KeepAlive::Disabled)
+    // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
+    // work freezes /api/status for the whole smoke. Keep at least two workers.
+    .workers(std::cmp::max(
+        2,
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2),
+    ));
+    for host in &hosts {
         server = server.bind((host.as_str(), listen_port))?;
     }
+    println!(
+        "Listening on port {listen_port} (hosts: {})",
+        hosts.join(", ")
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
     let running = server.run();
     let handle = running.handle();
     tokio::spawn(async move {

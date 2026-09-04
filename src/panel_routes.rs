@@ -310,7 +310,11 @@ pub async fn email_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let _ = (status, notice, error);

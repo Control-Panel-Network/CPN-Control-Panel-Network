@@ -168,7 +168,7 @@ pub fn run_preflight(min_free_mb: u64) -> Result<PreflightReport, String> {
         notes.push("warning: no obvious package repository config found".into());
     }
     if std::process::Command::new("curl")
-        .args(["-fsSIL", "--max-time", "5", "https://example.com"])
+        .args(["-fsSIL", "--max-time", "2", "https://example.com"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()

@@ -48,7 +48,7 @@ pub async fn api_version_check(
         return HttpResponse::Unauthorized().finish();
     }
     let info = load_maintenance_info().await;
-    let mut status = state.status.write().await;
+    let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     status.maintenance = Some(info.clone());
     HttpResponse::Ok().json(info)
 }
@@ -84,7 +84,7 @@ pub async fn start_maintenance(
             "error": "Run the installer as root (sudo cpn-installer)"
         }));
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if ["downloading", "installing", "testing"].contains(&current.phase) {
         return HttpResponse::Conflict()
             .json(serde_json::json!({ "error": "An operation is already in progress" }));

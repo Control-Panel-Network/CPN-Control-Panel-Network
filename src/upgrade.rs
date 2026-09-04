@@ -252,7 +252,7 @@ pub async fn run_maintenance(
         state
             .progress("ready", 0, "Continuing configuration only")
             .await;
-        let mut status = state.status.write().await;
+        let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
         status.phase = if status
             .account
             .as_ref()
@@ -306,7 +306,11 @@ pub async fn run_maintenance(
     maybe_reset_data(request.reset_data)?;
     let source = apply_release(&state, &release, force).await?;
 
-    let status_snapshot = state.status.read().await.clone();
+    let status_snapshot = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     record_install(
         &release.version,
         &release.tag_name,
@@ -341,7 +345,7 @@ pub async fn run_maintenance(
         return Err("Post-maintenance version check failed".into());
     }
 
-    let mut status = state.status.write().await;
+    let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     status.phase = "completed";
     status.progress = 100;
     status.error = None;
@@ -368,7 +372,7 @@ pub async fn spawn_maintenance(state: Arc<AppState>, request: MaintenanceRequest
     let label = format!("{:?}", request.action);
     let result = run_maintenance(state.clone(), request).await;
     if let Err(error) = result {
-        let mut status = state.status.write().await;
+        let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
         status.phase = "failed";
         status.error = Some(error.clone());
         status.message = format!("Maintenance {label} stopped safely");

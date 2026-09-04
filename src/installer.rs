@@ -10,11 +10,15 @@ use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
 use std::process::Stdio;
+use std::sync::RwLock;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
-    sync::{RwLock, broadcast},
+    sync::broadcast,
 };
+
+/// Matrix-friendly status snapshot path (readable even if HTTP workers stall).
+pub const STATUS_SNAPSHOT_PATH: &str = "/tmp/cpn-installer-status.json";
 
 pub struct AppState {
     pub status: RwLock<InstallerStatus>,
@@ -30,6 +34,13 @@ pub struct AppState {
     pub cancel_requested: std::sync::atomic::AtomicBool,
 }
 
+/// Best-effort JSON snapshot for docker-matrix / lab probes (never blocks install).
+pub fn persist_status_snapshot(status: &InstallerStatus) {
+    if let Ok(json) = serde_json::to_vec(status) {
+        let _ = std::fs::write(STATUS_SNAPSHOT_PATH, json);
+    }
+}
+
 impl AppState {
     pub fn cancel_requested(&self) -> bool {
         self.cancel_requested
@@ -42,14 +53,18 @@ impl AppState {
     }
 
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
-        let mut status = self.status.write().await;
-        status.phase = phase;
-        status.progress = progress;
-        status.message = message.into();
-        status.error = None;
-        let _ = self.events.send(InstallerEvent::Progress {
-            status: status.clone(),
-        });
+        let snapshot = {
+            let mut status = self.status.write().unwrap_or_else(|e| e.into_inner());
+            status.phase = phase;
+            status.progress = progress;
+            status.message = message.into();
+            status.error = None;
+            status.clone()
+        };
+        persist_status_snapshot(&snapshot);
+        let _ = self
+            .events
+            .send(InstallerEvent::Progress { status: snapshot });
     }
 
     pub fn log(&self, line: impl Into<String>, level: &'static str) {
@@ -319,7 +334,9 @@ fn chrono_today_ymd() -> String {
 pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
     let result = async {
         let _run = install_journal::begin_install_run("mail")?;
-        let report = install_journal::run_preflight(512)?;
+        let report = tokio::task::spawn_blocking(|| install_journal::run_preflight(512))
+            .await
+            .map_err(|error| format!("preflight join failed: {error}"))??;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
         }
@@ -370,7 +387,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             )
             .await?;
             {
-                let mut status = state.status.write().await;
+                let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
                 status.mail_backend_ready = false;
                 status.access_note = Some(
@@ -382,7 +399,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             let engine = state
                 .status
                 .read()
-                .await
+                .unwrap_or_else(|e| e.into_inner())
                 .selected_server
                 .ok_or_else(|| {
                     "Web server selection missing; install and verify the web server before mail"
@@ -434,7 +451,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
             verify_imap_smtp_listeners().await?;
             {
-                let mut status = state.status.write().await;
+                let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
                 status.mail_backend_ready = true;
                 status.access_note = Some(
@@ -456,87 +473,113 @@ pub(crate) async fn finish(
     mark_server_ready: bool,
     mail_flow: bool,
 ) {
-    let mut status = state.status.write().await;
-    match result {
-        Ok(()) => {
-            if mark_server_ready {
-                status.server_ready = true;
-                // external_ports_configured is set by open_service_ports success path.
-                if status.access_note.is_none() {
-                    status.access_note = Some(
-                        "Servicio verificado en loopback. Comprueba acceso externo desde otra máquina si el firewall estaba activo."
-                            .into(),
+    let rollback = if result.is_err() {
+        Some(
+            install_journal::rollback_tracked_files().unwrap_or_else(|rollback_error| {
+                state.log(format!("Rollback journal error: {rollback_error}"), "error");
+                install_journal::RollbackReport {
+                    restored: Vec::new(),
+                    removed: Vec::new(),
+                    skipped: vec![rollback_error],
+                    kind: FailureKind::FailedPartial,
+                }
+            }),
+        )
+    } else {
+        None
+    };
+
+    let (snapshot, manifest_error) = {
+        let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
+        let mut manifest_error: Option<String> = None;
+        match &result {
+            Ok(()) => {
+                if mark_server_ready {
+                    status.server_ready = true;
+                    // external_ports_configured is set by open_service_ports success path.
+                    if status.access_note.is_none() {
+                        status.access_note = Some(
+                            "Servicio verificado en loopback. Comprueba acceso externo desde otra máquina si el firewall estaba activo."
+                                .into(),
+                        );
+                    }
+                }
+                status.phase = "completed";
+                status.progress = 100;
+                if mail_flow && matches!(status.selected_mail, Some(MailSystem::Thunderbird)) {
+                    status.message = format!(
+                        "{label} (desktop client) installed. No IMAP/SMTP backend was provisioned."
                     );
+                } else if mail_flow && status.mail_backend_ready {
+                    status.message =
+                        format!("{label} webmail + local IMAP/SMTP backend verified successfully");
+                } else if mail_flow && !status.mail_backend_ready {
+                    status.message = format!(
+                        "{label} installed without a verified IMAP/SMTP backend (unexpected state)."
+                    );
+                } else {
+                    status.message = format!("{label} se instaló y verificó correctamente");
+                }
+                install_journal::end_install_run();
+                if let Err(error) = manifest::record_install(
+                    env!("CARGO_PKG_VERSION"),
+                    &format!("v{}", env!("CARGO_PKG_VERSION")),
+                    ManifestSource::Local,
+                    status.selected_server,
+                    status.selected_mail,
+                ) {
+                    manifest_error = Some(error);
                 }
             }
-            status.phase = "completed";
-            status.progress = 100;
-            if mail_flow && matches!(status.selected_mail, Some(MailSystem::Thunderbird)) {
-                status.message = format!(
-                    "{label} (desktop client) installed. No IMAP/SMTP backend was provisioned."
-                );
-            } else if mail_flow && status.mail_backend_ready {
-                status.message =
-                    format!("{label} webmail + local IMAP/SMTP backend verified successfully");
-            } else if mail_flow && !status.mail_backend_ready {
-                status.message = format!(
-                    "{label} installed without a verified IMAP/SMTP backend (unexpected state)."
-                );
-            } else {
-                status.message = format!("{label} se instaló y verificó correctamente");
+            Err(error) => {
+                let report = rollback.as_ref().expect("rollback set for Err");
+                status.phase = "failed";
+                status.error = Some(error.clone());
+                status.message = install_journal::failure_message(report.kind);
+                status.access_note = Some(format!(
+                    "failure_kind={:?}; restored={}; removed={}; skipped={}",
+                    report.kind,
+                    report.restored.len(),
+                    report.removed.len(),
+                    report.skipped.len()
+                ));
+                install_journal::end_install_run();
             }
-            install_journal::end_install_run();
-            if let Err(error) = manifest::record_install(
-                env!("CARGO_PKG_VERSION"),
-                &format!("v{}", env!("CARGO_PKG_VERSION")),
-                ManifestSource::Local,
-                status.selected_server,
-                status.selected_mail,
-            ) {
-                state.log(
-                    format!("Warning: could not write install manifest: {error}"),
-                    "error",
-                );
-            }
-            let _ = state.events.send(InstallerEvent::Completed {
-                status: status.clone(),
-            });
+        }
+        (status.clone(), manifest_error)
+    };
+    persist_status_snapshot(&snapshot);
+
+    if let Some(error) = manifest_error {
+        state.log(
+            format!("Warning: could not write install manifest: {error}"),
+            "error",
+        );
+    }
+
+    match result {
+        Ok(()) => {
+            let _ = state
+                .events
+                .send(InstallerEvent::Completed { status: snapshot });
         }
         Err(error) => {
-            let rollback =
-                install_journal::rollback_tracked_files().unwrap_or_else(|rollback_error| {
-                    state.log(format!("Rollback journal error: {rollback_error}"), "error");
-                    install_journal::RollbackReport {
-                        restored: Vec::new(),
-                        removed: Vec::new(),
-                        skipped: vec![rollback_error],
-                        kind: FailureKind::FailedPartial,
-                    }
-                });
-            status.phase = "failed";
-            status.error = Some(error.clone());
-            status.message = install_journal::failure_message(rollback.kind);
-            status.access_note = Some(format!(
-                "failure_kind={:?}; restored={}; removed={}; skipped={}",
-                rollback.kind,
-                rollback.restored.len(),
-                rollback.removed.len(),
-                rollback.skipped.len()
-            ));
-            state.log(error, "error");
-            state.log(
-                format!(
-                    "rollback kind={:?} restored={} removed={} skipped={}",
-                    rollback.kind,
-                    rollback.restored.len(),
-                    rollback.removed.len(),
-                    rollback.skipped.len()
-                ),
-                "info",
-            );
-            let _ = state.events.send(InstallerEvent::Error {
-                status: status.clone(),
-            });
+            if let Some(report) = rollback {
+                state.log(error, "error");
+                state.log(
+                    format!(
+                        "rollback kind={:?} restored={} removed={} skipped={}",
+                        report.kind,
+                        report.restored.len(),
+                        report.removed.len(),
+                        report.skipped.len()
+                    ),
+                    "info",
+                );
+            }
+            let _ = state
+                .events
+                .send(InstallerEvent::Error { status: snapshot });
         }
     }
 }
@@ -545,8 +588,9 @@ pub(crate) async fn finish(
 mod tests {
     use super::{AppState, fraction};
     use crate::os_support::require_installable_guest;
+    use std::sync::RwLock;
     use std::sync::atomic::AtomicBool;
-    use tokio::sync::{RwLock, broadcast};
+    use tokio::sync::broadcast;
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {

@@ -57,7 +57,10 @@ pub fn can_start_mail(
             message: "El correo ya esta instalado. Envia force_reinstall=true para cambiar de receta.",
         });
     }
-    if !matches!(status.phase, "completed" | "failed" | "maintenance") {
+    if !matches!(
+        status.phase,
+        "completed" | "failed" | "maintenance" | "ready"
+    ) {
         return Err(TransitionDenied {
             message: "Transicion no valida para instalar el correo",
         });

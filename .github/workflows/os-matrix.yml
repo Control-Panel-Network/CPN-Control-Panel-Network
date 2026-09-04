@@ -21,6 +21,7 @@ on:
       - "src/install_recipes.rs"
       - "src/install_mail_backend.rs"
       - "src/install_webmail.rs"
+      - "src/manifest.rs"
       - "tests/docker-matrix.sh"
       - "scripts/docker-build-rpm.sh"
       - "scripts/docker-build-deb.sh"
@@ -34,6 +35,7 @@ jobs:
     name: Rocky 9 nginx smoke
     if: github.event_name == 'push' || inputs.scope == 'rocky9' || inputs.scope == 'extended'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - name: Build RPM
@@ -45,7 +47,7 @@ jobs:
           CPN_TEST_SERVERS=nginx \
           ./tests/docker-matrix.sh
       - name: Upload matrix diagnostics
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: rocky9-matrix-logs
@@ -61,6 +63,7 @@ jobs:
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && (inputs.scope == 'mail' || inputs.scope == 'extended'))
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
       - name: Build RPM
@@ -72,7 +75,7 @@ jobs:
           CPN_TEST_MAILS=roundcube \
           ./tests/docker-matrix.sh
       - name: Upload mail matrix diagnostics
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: mail-matrix-logs
@@ -85,6 +88,7 @@ jobs:
     name: Extended guest smoke
     if: github.event_name == 'workflow_dispatch' && inputs.scope == 'extended'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +122,7 @@ jobs:
           CPN_TEST_SERVERS=nginx \
           ./tests/docker-matrix.sh
       - name: Upload extended matrix diagnostics
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: matrix-${{ strategy.job-index }}-logs

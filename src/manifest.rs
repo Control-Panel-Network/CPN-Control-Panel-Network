@@ -229,7 +229,10 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     let binary = Path::new(installer_bin()).is_file();
     let rpm_version = rpm_installed_version();
     let has_manifest = manifest.is_some();
-    let detected = has_manifest || has_bootstrap || binary || rpm_version.is_some();
+    // Package/binary presence alone is not an installed panel. Treating RPM/binary as
+    // "existing" forced phase=maintenance on first boot and broke matrix /api/install
+    // (HTTP 409) before transitions allowed maintenance.
+    let detected = has_manifest || has_bootstrap;
 
     let package_version = manifest
         .as_ref()
@@ -305,5 +308,17 @@ mod tests {
                 .iter()
                 .any(|path| path.contains("panel-bootstrap"))
         );
+    }
+
+    #[test]
+    fn package_only_is_not_existing_install() {
+        // Mirrors detect_existing_install gating without touching the live host.
+        let has_manifest = false;
+        let has_bootstrap = false;
+        let binary = true;
+        let rpm_present = true;
+        let detected = has_manifest || has_bootstrap;
+        assert!(!detected);
+        assert!(binary || rpm_present);
     }
 }

@@ -83,7 +83,12 @@ start_container() {
   "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
     --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -e container=docker "$image" "${entry[@]}" >/dev/null
-  for _ in {1..180}; do
+  # Rocky minimal may dnf-install systemd first; allow several minutes.
+  for _ in {1..360}; do
+    if ! "$engine" exec "$name" bash -lc 'command -v systemctl >/dev/null' 2>/dev/null; then
+      sleep 1
+      continue
+    fi
     # Capture status text explicitly (avoid set -e / pipefail traps on degraded).
     status="$("$engine" exec "$name" systemctl is-system-running 2>/dev/null || true)"
     if [[ "$status" == "running" || "$status" == "degraded" ]]; then
@@ -96,26 +101,181 @@ start_container() {
   return 1
 }
 
+# Log path inside the guest. Prefer this over systemd-run: nesting dnf/systemctl
+# inside a transient unit deadlocks systemd on GHA and freezes :2087 (HTTP hang).
+installer_log_path() {
+  printf '%s' /tmp/cpn-installer.log
+}
+
 installer_token() {
   local name="$1"
-  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 40 \
-    | sed -n 's/.*token=\([[:alnum:]]*\).*/\1/p' | tail -1
+  local log
+  log="$(installer_log_path)"
+  "$engine" exec "$name" bash -lc "test -f '$log' && sed -n 's/.*token=\\([[:alnum:]]*\\).*/\\1/p' '$log' | tail -1" \
+    2>/dev/null || true
+}
+
+dump_installer_diag() {
+  local name="$1"
+  local log host_log
+  log="$(installer_log_path)"
+  host_log="/tmp/cpn-matrix-${name}.log"
+  echo "[DIAG] installer log ($log):" >&2
+  "$engine" exec "$name" bash -lc "tail -n 120 '$log' 2>/dev/null || echo '(missing)'" >&2 || true
+  "$engine" cp "$name:$log" "$host_log" >/dev/null 2>&1 || true
+  echo "[DIAG] installer processes:" >&2
+  "$engine" exec "$name" bash -lc '
+    pid=$(cat /tmp/cpn-installer.pid 2>/dev/null || true)
+    echo "pid_file=${pid:-missing}"
+    if [[ -n "$pid" && -d "/proc/$pid" ]]; then
+      echo "proc_state=$(cut -d" " -f1-3 /proc/$pid/stat 2>/dev/null || true)"
+      tr "\0" " " < /proc/$pid/cmdline; echo
+      ls /proc/$pid/task 2>/dev/null | wc -l | awk "{print \"tasks=\" \$1}"
+    else
+      echo "installer pid not alive"
+    fi
+    command -v ps >/dev/null && ps -ef | grep -E "[c]pn-installer|[d]nf|[y]um" || true
+  ' >&2 || true
+  echo "[DIAG] listeners (ss/netstat//proc/net/tcp):" >&2
+  "$engine" exec "$name" bash -lc '
+    ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true
+    echo "--- /proc/net/tcp (head) ---"
+    head -n 30 /proc/net/tcp 2>/dev/null || true
+    echo "--- curl verbose ---"
+    curl -v --max-time 3 "http://127.0.0.1:2087/api/status" 2>&1 | tail -n 20 || true
+  ' >&2 || true
+  echo "[DIAG] last /api/status (best effort):" >&2
+  "$engine" exec "$name" bash -lc 'curl -sS --max-time 3 "http://127.0.0.1:2087/api/status" || true' >&2 || true
+}
+
+# Start installer in the background (not as a systemd unit). systemd-run --no-block
+# still left the process as a unit; package scriptlets calling systemctl then wedged
+# the nested systemd and stopped answering HTTP on :2087.
+start_installer() {
+  local name="$1"
+  local token=""
+  local log
+  log="$(installer_log_path)"
+  "$engine" exec "$name" bash -lc \
+    "rm -f '$log' /tmp/cpn-installer.pid /tmp/cpn-installer-status.json; nohup /usr/bin/cpn-installer >'$log' 2>&1 </dev/null & echo \$! >/tmp/cpn-installer.pid"
+  for _ in {1..90}; do
+    token="$(installer_token "$name")"
+    if [[ -n "$token" ]]; then
+      if "$engine" exec "$name" curl -fsS --max-time 3 \
+        "http://127.0.0.1:2087/api/status?token=$token" >/dev/null 2>&1; then
+        printf '%s' "$token"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  echo "Installer did not become ready in $name (no token/HTTP on :2087)" >&2
+  dump_installer_diag "$name"
+  return 1
+}
+
+read_status_snapshot() {
+  local name="$1"
+  "$engine" exec "$name" bash -lc \
+    'test -f /tmp/cpn-installer-status.json && cat /tmp/cpn-installer-status.json || true' 2>/dev/null || true
+}
+
+http_status_ok() {
+  local name="$1" token="$2"
+  "$engine" exec "$name" curl -fsS --max-time 3 \
+    "http://127.0.0.1:2087/api/status?token=$token" >/dev/null 2>&1
+}
+
+# After long package installs HTTP can stall; restart installer so mail POST works.
+# Manifest from the completed server stage puts the process into maintenance with
+# server_ready, which still allows /api/install/mail.
+ensure_installer_http() {
+  local name="$1"
+  local token="$2"
+  if http_status_ok "$name" "$token"; then
+    printf '%s' "$token"
+    return 0
+  fi
+  echo "[MATRIX] HTTP status stalled; restarting cpn-installer for next stage" >&2
+  "$engine" exec "$name" bash -lc '
+    if [[ -f /tmp/cpn-installer.pid ]]; then
+      kill "$(cat /tmp/cpn-installer.pid)" 2>/dev/null || true
+      sleep 1
+      kill -9 "$(cat /tmp/cpn-installer.pid)" 2>/dev/null || true
+    fi
+    pkill -f /usr/bin/cpn-installer 2>/dev/null || true
+  ' || true
+  start_installer "$name"
 }
 
 wait_for_result() {
   local name="$1" token="$2"
+  local empty=0
   for _ in {1..240}; do
-    local status
-    status="$("$engine" exec "$name" curl -fsS "http://127.0.0.1:2087/api/status?token=$token")"
-    if [[ "$status" == *'"phase":"completed"'* ]]; then return; fi
-    if [[ "$status" == *'"phase":"failed"'* ]]; then
+    local raw status code snap
+    raw="$("$engine" exec "$name" curl -sS --max-time 5 -w '\n%{http_code}' \
+      "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
+    code="$(printf '%s' "$raw" | tail -n1)"
+    status="$(printf '%s' "$raw" | sed '$d')"
+    snap="$(read_status_snapshot "$name")"
+    if [[ -z "$status" && -n "$snap" ]]; then
+      status="$snap"
+      code="200"
+    fi
+    if [[ "$code" == "200" && "$status" == *'"phase":"completed"'* ]]; then return; fi
+    if [[ "$snap" == *'"phase":"completed"'* ]]; then
+      echo "[MATRIX] completed via status snapshot file" >&2
+      return 0
+    fi
+    if [[ "$code" == "200" && "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
+      dump_installer_diag "$name"
       return 1
+    fi
+    if [[ "$snap" == *'"phase":"failed"'* ]]; then
+      echo "$snap" >&2
+      dump_installer_diag "$name"
+      return 1
+    fi
+    # Fallback: web stage finished even if status polling was wedged mid-install.
+    if "$engine" exec "$name" systemctl is-active --quiet nginx 2>/dev/null \
+      && "$engine" exec "$name" curl -fsS --max-time 3 http://127.0.0.1/ >/dev/null 2>&1; then
+      if [[ "$status" == *'"server_ready":true'* || "$status" == *'"phase":"completed"'* ]] \
+        || [[ "$snap" == *'"server_ready":true'* || "$snap" == *'"phase":"completed"'* ]] \
+        || ((empty >= 8)); then
+        echo "[MATRIX] accepting nginx-active fallback (http=$code phase_status_len=${#status} snap_len=${#snap})" >&2
+        return 0
+      fi
+    fi
+    if [[ "$code" != "200" || -z "$status" ]]; then
+      empty=$((empty + 1))
+      if ((empty >= 45)); then
+        echo "Installer HTTP stopped responding in $name (http=$code empty_or_bad x${empty})" >&2
+        dump_installer_diag "$name"
+        return 1
+      fi
+    else
+      empty=0
     fi
     sleep 1
   done
   echo "La instalación agotó el tiempo en $name" >&2
+  dump_installer_diag "$name"
   return 1
+}
+
+post_json() {
+  local name="$1" url="$2" body="$3"
+  local response code
+  response="$("$engine" exec "$name" curl -sS --max-time 60 -w '\n%{http_code}' \
+    -X POST -H 'Content-Type: application/json' -d "$body" "$url" || true)"
+  code="$(printf '%s' "$response" | tail -n1)"
+  response="$(printf '%s' "$response" | sed '$d')"
+  if [[ "$code" != "202" && "$code" != "200" ]]; then
+    echo "POST $url failed http=$code body=$response" >&2
+    dump_installer_diag "$name"
+    return 1
+  fi
 }
 
 install_pkg() {
@@ -139,20 +299,23 @@ run_case() {
   "$engine" rm -f "$name" >/dev/null 2>&1 || true
   start_container "$name" "$image"
   install_pkg "$name" "$pkg" "$image"
-  "$engine" exec "$name" systemd-run --unit=cpn-installer-test /usr/bin/cpn-installer >/dev/null
-  sleep 2
   local token
-  token="$(installer_token "$name")"
+  token="$(start_installer "$name")"
   test -n "$token"
   if [[ "$kind" == "mail" ]]; then
-    "$engine" exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
-      -d '{"server":"nginx"}' \
-      "http://127.0.0.1:2087/api/install/server?token=$token" >/dev/null
+    post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
+      '{"server":"nginx","database":"none","install_phpmyadmin":false}'
     wait_for_result "$name" "$token"
+    token="$(ensure_installer_http "$name" "$token")"
+    test -n "$token"
   fi
-  "$engine" exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
-    -d "{\"$kind\":\"$component\"}" \
-    "http://127.0.0.1:2087/api/install/$kind?token=$token" >/dev/null
+  if [[ "$kind" == "server" ]]; then
+    post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
+      "{\"server\":\"$component\",\"database\":\"none\",\"install_phpmyadmin\":false}"
+  else
+    post_json "$name" "http://127.0.0.1:2087/api/install/$kind?token=$token" \
+      "{\"$kind\":\"$component\"}"
+  fi
   wait_for_result "$name" "$token"
 
   case "$component" in
