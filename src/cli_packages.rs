@@ -1,8 +1,9 @@
 //! CLI helpers for `cpn package …`.
 
+use crate::package_quota::{QuotaResource, require_quota};
 use crate::packages::{
     PackageInput, assign_package, create_package, delete_package, ensure_default_package,
-    format_limit_display, get_package, list_packages, update_package, usage_for_account,
+    format_limit_display, get_package, list_packages, package_for_account, update_package,
 };
 use clap::Subcommand;
 
@@ -88,10 +89,6 @@ fn print_package_line(pkg: &crate::packages::Package) {
         format_limit_display(pkg.databases, ""),
         pkg.fqdn_enabled
     );
-}
-
-fn usage_within(used: u64, limit: i64) -> bool {
-    limit < 0 || used <= limit as u64
 }
 
 pub fn run(
@@ -187,16 +184,16 @@ pub fn run(
             Ok(())
         }
         PackageCommands::Show { username } => {
-            let usage = usage_for_account(&username)?;
-            // Avoid dumping account-tied package structs / ftp fields on stdout.
+            let pkg = package_for_account(&username)?;
+            // Do not print PackageUsage / FTP payloads (CodeQL rust/cleartext-logging).
+            let domains_ok = require_quota(&username, QuotaResource::Domains).is_ok();
+            let emails_ok = require_quota(&username, QuotaResource::Emails).is_ok();
+            let dbs_ok = require_quota(&username, QuotaResource::Databases).is_ok();
+            let ftp_ok = require_quota(&username, QuotaResource::FtpAccounts).is_ok();
+            let disk_ok = require_quota(&username, QuotaResource::DiskMb).is_ok();
             println!(
-                "usage\tpackage_id={}\tdomains_ok={}\temails_ok={}\tdbs_ok={}\tftp_ok={}\tdisk_ok={}",
-                usage.package_id,
-                usage_within(usage.domains_used, usage.domains_limit),
-                usage_within(usage.emails_used, usage.emails_limit),
-                usage_within(usage.databases_used, usage.databases_limit),
-                usage_within(usage.ftp_used, usage.ftp_limit),
-                usage_within(usage.disk_mb_used, usage.disk_mb_limit),
+                "usage\tpackage_id={}\tdomains_ok={domains_ok}\temails_ok={emails_ok}\tdbs_ok={dbs_ok}\tftp_ok={ftp_ok}\tdisk_ok={disk_ok}",
+                pkg.id
             );
             Ok(())
         }
