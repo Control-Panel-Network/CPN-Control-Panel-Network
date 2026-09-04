@@ -368,9 +368,9 @@ pub async fn install_with_database(
             )
             .await?;
         }
-        if let Some(environment) = state.status.read().await.environment.clone() {
+        if let Some(environment) = state.status.read().unwrap_or_else(|e| e.into_inner()).environment.clone() {
             let opened = open_service_ports(&environment).await?;
-            let mut status = state.status.write().await;
+            let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
             status.external_ports_configured = opened;
             if opened {
                 status.access_note = Some(

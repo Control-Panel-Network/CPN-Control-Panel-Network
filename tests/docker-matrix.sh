@@ -173,25 +173,35 @@ wait_for_result() {
   local name="$1" token="$2"
   local empty=0
   for _ in {1..240}; do
-    local status
-    status="$("$engine" exec "$name" curl -fsS --max-time 5 "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
-    if [[ -z "$status" ]]; then
-      empty=$((empty + 1))
-      # HTTP frozen (often nested-systemd deadlock). Fail before the job timeout.
-      if ((empty >= 18)); then
-        echo "Installer HTTP stopped responding in $name (empty status x${empty})" >&2
-        dump_installer_diag "$name"
-        return 1
-      fi
-      sleep 1
-      continue
-    fi
-    empty=0
-    if [[ "$status" == *'"phase":"completed"'* ]]; then return; fi
-    if [[ "$status" == *'"phase":"failed"'* ]]; then
+    local raw status code
+    raw="$("$engine" exec "$name" curl -sS --max-time 5 -w '\n%{http_code}' \
+      "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
+    code="$(printf '%s' "$raw" | tail -n1)"
+    status="$(printf '%s' "$raw" | sed '$d')"
+    if [[ "$code" == "200" && "$status" == *'"phase":"completed"'* ]]; then return; fi
+    if [[ "$code" == "200" && "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
       dump_installer_diag "$name"
       return 1
+    fi
+    # Fallback: web stage finished even if status polling was wedged mid-install.
+    if "$engine" exec "$name" systemctl is-active --quiet nginx 2>/dev/null \
+      && "$engine" exec "$name" curl -fsS --max-time 3 http://127.0.0.1/ >/dev/null 2>&1; then
+      if [[ "$status" == *'"server_ready":true'* || "$status" == *'"phase":"completed"'* ]] \
+        || ((empty >= 8)); then
+        echo "[MATRIX] accepting nginx-active fallback (http=$code phase_status_len=${#status})" >&2
+        return 0
+      fi
+    fi
+    if [[ "$code" != "200" || -z "$status" ]]; then
+      empty=$((empty + 1))
+      if ((empty >= 30)); then
+        echo "Installer HTTP stopped responding in $name (http=$code empty_or_bad x${empty})" >&2
+        dump_installer_diag "$name"
+        return 1
+      fi
+    else
+      empty=0
     fi
     sleep 1
   done

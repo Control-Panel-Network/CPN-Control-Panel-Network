@@ -139,7 +139,7 @@ fn print_json(value: &impl serde::Serialize) {
 async fn make_state() -> Arc<AppState> {
     let (events, _) = broadcast::channel(64);
     Arc::new(AppState {
-        status: tokio::sync::RwLock::new(Default::default()),
+        status: std::sync::RwLock::new(Default::default()),
         events,
         token: "cli".into(),
         session_id: "clisessionid0000000000000001".into(),

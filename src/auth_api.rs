@@ -69,7 +69,11 @@ pub async fn login_page(
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let allow_login = install_finished(&status)
         || panel_account_ready(&status)
         || token_matches(&state, query.token.as_deref());
@@ -101,7 +105,11 @@ pub async fn login_submit(
     query: web::Query<OptionalTokenQuery>,
     form: web::Form<LoginForm>,
 ) -> HttpResponse {
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let allow_login = install_finished(&status)
         || panel_account_ready(&status)
         || token_matches(&state, query.token.as_deref());
@@ -257,7 +265,11 @@ pub async fn forgot_password_submit(
         && identifier_matches_account(&boot.username, &boot.recovery_email, &identifier)
         && !boot.recovery_email.trim().is_empty()
     {
-        let status = state.status.read().await.clone();
+        let status = state
+            .status
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let login_url = panel_login_url_for(&status, &state.token);
         let mut message = build_password_reset_notice(&login_url);
         message.to = boot.recovery_email.clone();
@@ -279,7 +291,7 @@ pub async fn account_setup(
     if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if ["downloading", "installing", "testing"].contains(&current.phase) {
         return HttpResponse::Conflict()
             .json(serde_json::json!({"error": "Hay una instalación en curso"}));

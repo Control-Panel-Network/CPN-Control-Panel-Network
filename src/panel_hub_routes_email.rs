@@ -20,7 +20,11 @@ pub async fn email_accounts_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     html_ok(panel_shell(
         &user,
         "email",
@@ -169,7 +173,11 @@ pub async fn email_webmail_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     html_ok(panel_shell(
         &user,
         "email",

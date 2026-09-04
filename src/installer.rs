@@ -10,10 +10,11 @@ use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
 use std::process::Stdio;
+use std::sync::RwLock;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
-    sync::{RwLock, broadcast},
+    sync::broadcast,
 };
 
 pub struct AppState {
@@ -42,7 +43,7 @@ impl AppState {
     }
 
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
-        let mut status = self.status.write().await;
+        let mut status = self.status.write().unwrap_or_else(|e| e.into_inner());
         status.phase = phase;
         status.progress = progress;
         status.message = message.into();
@@ -372,7 +373,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             )
             .await?;
             {
-                let mut status = state.status.write().await;
+                let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
                 status.mail_backend_ready = false;
                 status.access_note = Some(
@@ -384,7 +385,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             let engine = state
                 .status
                 .read()
-                .await
+                .unwrap_or_else(|e| e.into_inner())
                 .selected_server
                 .ok_or_else(|| {
                     "Web server selection missing; install and verify the web server before mail"
@@ -436,7 +437,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
             verify_imap_smtp_listeners().await?;
             {
-                let mut status = state.status.write().await;
+                let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
                 status.mail_backend_ready = true;
                 status.access_note = Some(
@@ -458,7 +459,7 @@ pub(crate) async fn finish(
     mark_server_ready: bool,
     mail_flow: bool,
 ) {
-    let mut status = state.status.write().await;
+    let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     match result {
         Ok(()) => {
             if mark_server_ready {
@@ -548,7 +549,7 @@ mod tests {
     use super::{AppState, fraction};
     use crate::os_support::require_installable_guest;
     use std::sync::atomic::AtomicBool;
-    use tokio::sync::{RwLock, broadcast};
+    use tokio::sync::broadcast;
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {

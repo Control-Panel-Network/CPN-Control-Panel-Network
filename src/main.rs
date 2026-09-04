@@ -93,7 +93,11 @@ async fn root_page(
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
-    let status = state.status.read().await.clone();
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     if install_finished(&status) {
         return HttpResponse::Found()
             .append_header(("Location", "/login"))
@@ -160,7 +164,14 @@ async fn api_status(
     if !authorized_request(&state, &query, &request) {
         return HttpResponse::Unauthorized().finish();
     }
-    let payload = enrich_status(state.status.read().await.clone(), &state.token);
+    let payload = enrich_status(
+        state
+            .status
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        &state.token,
+    );
     status_response(&request, &payload)
 }
 
@@ -175,7 +186,14 @@ async fn status_page(
             .content_type("text/html; charset=utf-8")
             .body("<!DOCTYPE html><html lang=\"en\"><body><h1>Access denied</h1><p>Invalid token.</p></body></html>");
     }
-    let payload = enrich_status(state.status.read().await.clone(), &state.token);
+    let payload = enrich_status(
+        state
+            .status
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        &state.token,
+    );
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(status_html_page(&payload))
@@ -200,7 +218,7 @@ async fn set_language(
             return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
         }
     };
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     current.language = language;
     let payload = enrich_status(current.clone(), &state.token);
     HttpResponse::Ok().json(payload)
@@ -251,7 +269,7 @@ async fn set_listen_port(
         };
 
     let restart_required = preferred != state.bind_port;
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if !restart_required {
         current.listen_port = preferred;
         if let Some(env_info) = current.environment.as_mut() {
@@ -309,7 +327,7 @@ async fn start_install(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
         );
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_server(&current, request.force_reinstall) {
         return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
@@ -370,7 +388,7 @@ async fn start_mail_install(
             serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
         );
     }
-    let mut current = state.status.write().await;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
         return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
     }
@@ -412,7 +430,14 @@ async fn websocket(
     let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
     let mut events = state.events.subscribe();
     let snapshot = InstallerEvent::Snapshot {
-        status: enrich_status(state.status.read().await.clone(), &state.token),
+        status: enrich_status(
+            state
+                .status
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            &state.token,
+        ),
     };
     actix_web::rt::spawn(async move {
         let _ = session
@@ -639,7 +664,7 @@ async fn main() -> std::io::Result<()> {
     let startup_hostname = initial.panel_hostname.clone();
     let startup_migration = initial.port_migration.clone();
     let state = Arc::new(AppState {
-        status: tokio::sync::RwLock::new(initial),
+        status: std::sync::RwLock::new(initial),
         events,
         token: token.clone(),
         session_id,
