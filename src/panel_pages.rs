@@ -252,6 +252,7 @@ fn nav_links(active: &str) -> String {
         ("websites", "/websites", "Websites"),
         ("email", "/email", "Email"),
         ("databases", "/databases", "Databases"),
+        ("apps", "/apps", "Apps"),
         ("backups", "/backups", "Backups"),
         ("plugins", "/plugins", "Plugins"),
     ];

@@ -100,8 +100,8 @@ const en: LocaleMessages = {
   accountError: 'Could not save the account',
   smtpOptionalTitle: 'Outbound email (optional)',
   smtpOptionalHint:
-    'Configure SMTP to send account notices. You can finish setup without mail. Secrets are stored only on this server.',
-  smtpEnableLabel: 'Configure SMTP for outbound mail',
+    'Configure external SMTP for account notices, or leave it empty to use local Postfix on Linux (installed automatically). Windows needs external SMTP. Secrets stay on this server.',
+  smtpEnableLabel: 'Configure external SMTP for outbound mail',
   smtpHostLabel: 'SMTP host',
   smtpPortLabel: 'Port',
   smtpTlsLabel: 'Encryption',

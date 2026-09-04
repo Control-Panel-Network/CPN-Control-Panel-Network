@@ -3,12 +3,8 @@
 use crate::http_helpers::smtp_status_public;
 use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
-use crate::paths::{legacy_panel_backups_dir, panel_backups_dir};
 use crate::service_detect::{detect_database, install_mariadb_server};
-use crate::sites::{SiteRecord, list_sites, site_backups_dir};
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use crate::sites::{SiteRecord, list_sites};
 
 fn html_escape(value: &str) -> String {
     value
@@ -166,7 +162,12 @@ pub fn email_main(
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
+    notice: Option<&str>,
+    error: Option<&str>,
 ) -> String {
+    use crate::mail_accounts::{MailSmtpMode, list_accounts_public};
+    use crate::postfix_fallback::postfix_is_ready;
+
     let mail = selected_mail
         .map(|value| value.label())
         .unwrap_or("Not selected");
@@ -181,6 +182,7 @@ pub fn email_main(
         "Not verified"
     };
     let smtp = smtp_status_public();
+    let postfix_ready = postfix_is_ready();
     let smtp_line = if smtp.configured {
         format!(
             "{}:{} ({}) from {}",
@@ -189,8 +191,15 @@ pub fn email_main(
             smtp.tls_mode.as_deref().unwrap_or("-"),
             smtp.from_address.as_deref().unwrap_or("-"),
         )
+    } else if postfix_ready {
+        "Using local Postfix fallback (127.0.0.1)".into()
     } else {
         "Outbound SMTP is not configured".into()
+    };
+    let mta_line = if postfix_ready {
+        "Postfix running (default local MTA)"
+    } else {
+        "Postfix not detected"
     };
     let webmail = if mail_client_ready
         && matches!(
@@ -209,27 +218,128 @@ pub fn email_main(
         "<p class=\"muted\">Install a webmail stack from the installer mail stage to enable a local webmail link.</p>"
             .into()
     };
+
+    let accounts = list_accounts_public();
+    let mut rows = String::new();
+    if accounts.is_empty() {
+        rows.push_str(r#"<p class="muted">No mailboxes yet. Enabled accounts require valid external SMTP or a running Postfix local binding.</p>"#);
+    } else {
+        rows.push_str(r#"<table class="data-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
+        for acct in &accounts {
+            let valid = if acct.smtp_valid {
+                "Valid"
+            } else {
+                "Invalid"
+            };
+            let err = acct
+                .smtp_error
+                .as_ref()
+                .map(|e| {
+                    format!(
+                        r#" <span class="muted">({})</span>"#,
+                        html_escape(e)
+                    )
+                })
+                .unwrap_or_default();
+            let mode = match acct.smtp_mode {
+                MailSmtpMode::External => "external",
+                MailSmtpMode::PostfixLocal => "postfix_local",
+            };
+            let toggle = if acct.enabled {
+                format!(
+                    r#"<form method="post" action="/email/accounts/disable" class="inline-form" style="display:inline;"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-secondary">Disable</button></form>"#,
+                    id = html_escape(&acct.id),
+                )
+            } else {
+                format!(
+                    r#"<form method="post" action="/email/accounts/enable" class="inline-form" style="display:inline;" onsubmit="return confirm('Enable only if SMTP is valid.');"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-primary">Enable</button></form>"#,
+                    id = html_escape(&acct.id),
+                )
+            };
+            rows.push_str(&format!(
+                r#"<tr><td>{addr}<br><span class="muted">{domain}</span></td><td>{mode}: {summary}</td><td><strong>{valid}</strong>{err}</td><td>{state}</td><td>{toggle}</td></tr>"#,
+                addr = html_escape(&acct.address),
+                domain = html_escape(if acct.domain.is_empty() {
+                    "-"
+                } else {
+                    &acct.domain
+                }),
+                mode = mode,
+                summary = html_escape(&acct.smtp_summary),
+                valid = valid,
+                err = err,
+                state = if acct.enabled { "Enabled" } else { "Disabled" },
+                toggle = toggle,
+            ));
+        }
+        rows.push_str("</tbody></table>");
+    }
+
+    let create_form = r#"
+      <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
+        <label for="address">Mailbox address</label>
+        <input id="address" name="address" type="email" required placeholder="user@example.com">
+        <label for="domain">Site FQDN (optional)</label>
+        <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
+        <label for="smtp_mode">SMTP mode</label>
+        <select id="smtp_mode" name="smtp_mode">
+          <option value="postfix_local">Local Postfix (default)</option>
+          <option value="external">External SMTP</option>
+        </select>
+        <label for="smtp_host">External host</label>
+        <input id="smtp_host" name="smtp_host" type="text" placeholder="smtp.example.com">
+        <label for="smtp_port">Port</label>
+        <input id="smtp_port" name="smtp_port" type="number" value="587">
+        <label for="smtp_tls">Encryption</label>
+        <select id="smtp_tls" name="smtp_tls">
+          <option value="starttls">STARTTLS</option>
+          <option value="tls">TLS</option>
+          <option value="none">None</option>
+        </select>
+        <label for="smtp_username">SMTP username</label>
+        <input id="smtp_username" name="smtp_username" type="text" autocomplete="off">
+        <label for="smtp_password">SMTP password</label>
+        <input id="smtp_password" name="smtp_password" type="password" autocomplete="new-password">
+        <label><input type="checkbox" name="enabled" value="1" checked> Enable now (requires valid SMTP)</label>
+        <button type="submit" class="btn-primary">Create mailbox</button>
+      </form>"#;
+
     format!(
         r#"{heading}
+      {ok}
+      {err}
       <article class="section-card">
         <h2>Mail stack</h2>
         <ul class="kv-list">
           <li><span>Selected client</span><strong>{mail}</strong></li>
           <li><span>Webmail client</span><strong>{client}</strong></li>
           <li><span>IMAP/SMTP backend</span><strong>{backend}</strong></li>
+          <li><span>Local MTA</span><strong>{mta}</strong></li>
           <li><span>Outbound SMTP</span><strong>{smtp}</strong></li>
         </ul>
+        <p class="muted">If no external SMTP was set during install, Postfix is the default local MTA. Switching to external SMTP later does not remove Postfix unless you uninstall Email.</p>
         {webmail}
+      </article>
+      <article class="section-card" style="margin-top:18px;">
+        <h2>Mailboxes</h2>
+        <p>Enabled accounts must have complete external SMTP or a verified Postfix local binding.</p>
+        {rows}
+        {create}
       </article>"#,
         heading = section_heading(
             "Email",
-            "Mail client status and outbound SMTP summary (no secrets).",
+            "Mail stack, Postfix default MTA, and per-mailbox SMTP validity.",
         ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
         mail = html_escape(mail),
         client = client_ready,
         backend = backend_ready,
+        mta = mta_line,
         smtp = html_escape(&smtp_line),
         webmail = webmail,
+        rows = rows,
+        create = create_form,
     )
 }
 
@@ -277,159 +387,4 @@ pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
 
 pub fn run_mariadb_install() -> Result<String, String> {
     install_mariadb_server()
-}
-
-fn list_backup_files(dir: &PathBuf) -> Vec<(String, u64)> {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut files = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let name = path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("")
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-        let size = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
-        files.push((name, size));
-    }
-    files.sort_by(|a, b| b.0.cmp(&a.0));
-    files
-}
-
-fn backup_rows(files: &[(String, u64)]) -> String {
-    if files.is_empty() {
-        return r#"<p class="empty-state">No panel backups yet. Run a panel-data backup below.</p>"#
-            .into();
-    }
-    let mut rows = String::from(
-        r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>File</th><th>Size</th></tr></thead><tbody>"#,
-    );
-    for (name, size) in files {
-        rows.push_str(&format!(
-            r#"<tr><td><code>{name}</code></td><td>{size} bytes</td></tr>"#,
-            name = html_escape(name),
-            size = size,
-        ));
-    }
-    rows.push_str("</tbody></table></div>");
-    rows
-}
-
-fn site_backup_notes(sites: &[SiteRecord]) -> String {
-    if sites.is_empty() {
-        return r#"<p class="muted">Create a website first. Site archives will land under <code>/home/&lt;domain&gt;/backups/</code> (subdomains: <code>/home/&lt;parent&gt;/&lt;sub.fqdn&gt;/backups/</code>).</p>"#.into();
-    }
-    let mut list =
-        String::from("<ul class=\"muted\" style=\"margin:12px 0 0;padding-left:18px;\">");
-    for site in sites.iter().take(8) {
-        list.push_str(&format!(
-            "<li><code>{}</code></li>",
-            html_escape(&site_backups_dir(site).display().to_string())
-        ));
-    }
-    if sites.len() > 8 {
-        list.push_str(&format!(
-            "<li>… and {} more site backup folders</li>",
-            sites.len() - 8
-        ));
-    }
-    list.push_str("</ul>");
-    list
-}
-
-pub fn backups_main(notice: Option<&str>, error: Option<&str>) -> String {
-    let dir = panel_backups_dir();
-    let files = list_backup_files(&dir);
-    let sites = list_sites().unwrap_or_default();
-    let legacy = legacy_panel_backups_dir();
-    let migrate_note = if legacy.is_dir() && legacy != dir {
-        format!(
-            r#"<p class="muted">Older archives may still exist under <code>{}</code>. New panel backups use <code>{}</code>.</p>"#,
-            html_escape(&legacy.display().to_string()),
-            html_escape(&dir.display().to_string()),
-        )
-    } else {
-        String::new()
-    };
-    format!(
-        r#"{heading}
-      {ok}
-      {err}
-      <article class="section-card">
-        <h2>Panel backup</h2>
-        <p>Stores panel config copies under <code>{panel_path}</code>. Includes panel bootstrap, accounts, site records, and preferences. SMTP secrets are included when present; treat archives as sensitive.</p>
-        {migrate}
-        {rows}
-        <form method="post" action="/backups/run" class="stack-form" style="margin-top:18px;">
-          <button type="submit" class="btn-primary">Run panel-data backup</button>
-        </form>
-      </article>
-      <article class="section-card" style="margin-top:22px;">
-        <h2>Site backup folders</h2>
-        <p class="muted">Per-domain archives belong under each site home (not under the panel data directory):</p>
-        {site_notes}
-      </article>"#,
-        heading = section_heading("Backups", "Panel and site archives under /home.",),
-        ok = notice_block("ok", notice),
-        err = notice_block("error", error),
-        panel_path = html_escape(&dir.display().to_string()),
-        migrate = migrate_note,
-        rows = backup_rows(&files),
-        site_notes = site_backup_notes(&sites),
-    )
-}
-
-pub fn create_panel_backup() -> Result<String, String> {
-    let dir = panel_backups_dir();
-    fs::create_dir_all(&dir).map_err(|error| format!("Could not create backups dir: {error}"))?;
-    let stamp = crate::account::now_unix();
-    let name = format!("panel-{stamp}.tar.gz");
-    let dest = dir.join(&name);
-    let data = crate::account::data_dir();
-    let mut paths = Vec::new();
-    for rel in [
-        "panel-bootstrap.json",
-        "accounts",
-        "sites",
-        "plugin-catalog-cache.json",
-        "smtp.json",
-        "panel-session.secret",
-        "panel-hostname.json",
-        "listen-port.json",
-        "install-manifest.json",
-        "panel-ui.json",
-    ] {
-        if data.join(rel).exists() {
-            paths.push(rel.to_string());
-        }
-    }
-    if paths.is_empty() {
-        return Err("No panel data files found to archive".into());
-    }
-    let status = Command::new("tar")
-        .arg("-czf")
-        .arg(&dest)
-        .arg("-C")
-        .arg(&data)
-        .args(&paths)
-        .status()
-        .map_err(|error| format!("Could not start tar: {error}"))?;
-    if !status.success() {
-        return Err("tar backup failed".into());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o600));
-    }
-    Ok(name)
 }

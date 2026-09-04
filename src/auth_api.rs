@@ -13,7 +13,7 @@ use crate::http_helpers::{
 };
 use crate::installer::AppState;
 use crate::mail_outbound::{
-    build_password_reset_notice, build_setup_confirmation, send_mail_with_settings,
+    build_password_reset_notice, build_setup_confirmation, send_mail, send_mail_with_settings,
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_pages::panel_dashboard_html;
@@ -21,6 +21,7 @@ use crate::panel_session::{
     clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
     session_cookie_header, session_secret, verify_session_token,
 };
+use crate::postfix_fallback::ensure_postfix_default;
 use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -254,13 +255,13 @@ pub async fn forgot_password_submit(
 
     if let Some(boot) = crate::account::load_bootstrap()
         && identifier_matches_account(&boot.username, &boot.recovery_email, &identifier)
-        && let Some(settings) = crate::smtp_settings::load_smtp()
+        && !boot.recovery_email.trim().is_empty()
     {
         let status = state.status.read().await.clone();
         let login_url = panel_login_url_for(&status, &state.token);
         let mut message = build_password_reset_notice(&login_url);
         message.to = boot.recovery_email.clone();
-        let _ = send_mail_with_settings(&settings, &message);
+        let _ = send_mail(&message);
     }
 
     HttpResponse::Ok()
@@ -313,7 +314,16 @@ pub async fn account_setup(
             }
         }
     } else {
-        None
+        // No external SMTP: install/enable Postfix on Linux and persist localhost settings.
+        match ensure_postfix_default(&request.recovery_email) {
+            Ok(settings) => {
+                if let Err(error) = persist_smtp(&settings) {
+                    return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+                }
+                Some(settings)
+            }
+            Err(_windows_or_guest) => None,
+        }
     };
 
     let result = crate::account::setup_account(
@@ -341,6 +351,12 @@ pub async fn account_setup(
                 if let Some(settings) = smtp_settings
                     .clone()
                     .or_else(crate::smtp_settings::load_smtp)
+                    .or_else(|| {
+                        crate::mail_outbound::resolve_outbound_settings(Some(
+                            setup.public.recovery_email.as_str(),
+                        ))
+                        .ok()
+                    })
                 {
                     let password_for_mail = if request.include_password_in_email {
                         setup
@@ -363,7 +379,8 @@ pub async fn account_setup(
                     }
                 } else {
                     setup_email_error = Some(
-                        "SMTP is not configured; setup completed without sending email".into(),
+                        "No outbound mail path (SMTP or local Postfix); setup completed without sending email"
+                            .into(),
                     );
                 }
             }

@@ -5,7 +5,7 @@ export default function BackupsPage() {
     <SectionPage
       title="Backups"
       active="backups"
-      blurb="Backup schedules and restore points."
+      blurb="Selective panel, website, and subdomain archives under /home/.../backups/."
     />
   );
 }

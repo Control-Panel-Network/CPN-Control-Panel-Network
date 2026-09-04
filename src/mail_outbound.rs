@@ -1,5 +1,6 @@
-//! Outbound mail helpers. Sends when SMTP is configured; otherwise no-ops safely.
+//! Outbound mail helpers. Prefer configured SMTP; fall back to local Postfix.
 
+use crate::postfix_fallback::{postfix_is_ready, postfix_local_smtp};
 use crate::smtp_settings::{SmtpSettings, SmtpTlsMode, load_smtp};
 use lettre::message::{Mailbox, Message};
 use lettre::transport::smtp::authentication::Credentials;
@@ -13,21 +14,34 @@ pub struct OutboundMessage {
     pub body: String,
 }
 
-#[allow(dead_code)]
 pub fn smtp_is_ready() -> bool {
-    load_smtp()
-        .map(|settings| {
-            !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
-        })
-        .unwrap_or(false)
+    if load_smtp().is_some_and(|settings| {
+        !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
+    }) {
+        return true;
+    }
+    postfix_is_ready()
 }
 
-/// Best-effort SMTP send. Returns Ok when the remote accepted the message.
-#[allow(dead_code)]
+/// Resolve outbound settings: disk SMTP first, else Postfix localhost when ready.
+pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings, String> {
+    if let Some(settings) = load_smtp() {
+        if !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty() {
+            return Ok(settings);
+        }
+    }
+    if postfix_is_ready() {
+        return Ok(postfix_local_smtp(from_hint.unwrap_or("")));
+    }
+    Err(
+        "No outbound mail path: configure SMTP or install/enable local Postfix."
+            .into(),
+    )
+}
+
+/// Best-effort send via configured SMTP or Postfix localhost.
 pub fn send_mail(message: &OutboundMessage) -> Result<(), String> {
-    let Some(settings) = load_smtp() else {
-        return Err("SMTP is not configured".into());
-    };
+    let settings = resolve_outbound_settings(Some(message.to.as_str()))?;
     send_mail_with_settings(&settings, message)
 }
 

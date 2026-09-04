@@ -4,7 +4,7 @@ use crate::plugins::{
     CatalogEntry, InstalledPlugin, catalog_next_refresh_unix, catalog_repo_url, fetch_catalog,
     format_unix_local, list_installed, plugins_install_path_display,
 };
-use crate::sites::{SiteRecord, list_sites};
+use crate::sites::SiteRecord;
 
 fn html_escape(value: &str) -> String {
     value
@@ -421,6 +421,7 @@ pub struct PluginsPageQuery<'a> {
     pub notice: Option<&'a str>,
     pub error: Option<&'a str>,
     pub refresh: bool,
+    pub sites: &'a [SiteRecord],
 }
 
 pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
@@ -429,9 +430,9 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
     } else {
         "installed"
     };
-    let sites = list_sites().unwrap_or_default();
-    let domain = resolve_domain(&sites, query.domain);
-    let picker = domain_picker(&sites, &domain, view);
+    let sites = query.sites;
+    let domain = resolve_domain(sites, query.domain);
+    let picker = domain_picker(sites, &domain, view);
     if domain.is_empty() {
         return format!(
             r#"{heading}
@@ -441,7 +442,7 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
       <article class="section-card">
         <h2>Plugins</h2>
         {picker}
-        <p class="muted">Plugins are installed per site under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code>.</p>
+        <p class="muted">Plugins install under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Only sites you own or are granted appear here.</p>
       </article>"#,
             heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),
             ok = notice_block("ok", query.notice),

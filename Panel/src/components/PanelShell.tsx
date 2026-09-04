@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  AppWindow,
   Database,
   Gauge,
   Globe2,
@@ -21,6 +22,7 @@ const navigation = [
   { label: "Websites", href: "/websites", icon: Globe2, id: "websites" },
   { label: "Email", href: "/email", icon: Mail, id: "email" },
   { label: "Databases", href: "/databases", icon: Database, id: "databases" },
+  { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
   { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
   { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
 ];

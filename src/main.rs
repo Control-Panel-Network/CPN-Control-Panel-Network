@@ -21,9 +21,11 @@ use cpn_installer::panel_network::{
     purge_expired_migration, save_panel_hostname,
 };
 use cpn_installer::panel_routes::{
-    backups_page, backups_run, databases_install_mariadb, databases_page, email_page,
-    plugins_disable, plugins_enable, plugins_install, plugins_page, plugins_uninstall,
-    websites_create, websites_delete, websites_page, websites_prefs,
+    apps_install, apps_page, apps_reinstall, apps_uninstall, backups_page, backups_run,
+    databases_install_mariadb, databases_page, email_account_create, email_account_disable,
+    email_account_enable, email_page, plugins_disable, plugins_enable,
+    plugins_install, plugins_page, plugins_uninstall, websites_create, websites_delete,
+    websites_page, websites_prefs,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -636,8 +638,15 @@ async fn main() -> std::io::Result<()> {
             .service(websites_delete)
             .service(websites_prefs)
             .service(email_page)
+            .service(email_account_create)
+            .service(email_account_enable)
+            .service(email_account_disable)
             .service(databases_page)
             .service(databases_install_mariadb)
+            .service(apps_page)
+            .service(apps_install)
+            .service(apps_reinstall)
+            .service(apps_uninstall)
             .service(backups_page)
             .service(backups_run)
             .service(plugins_page)

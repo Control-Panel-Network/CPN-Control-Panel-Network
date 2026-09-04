@@ -1,47 +1,41 @@
 # CPN Plugins
 
-CPN Panel can install optional plugins from the News Targeted / community plugin catalog.
+CPN Panel installs optional plugins from the community plugin catalog into **site homes**.
 
-## Install path
+## Install path (domain-keyed)
 
-Plugins are **per site**:
+Plugins are **per site FQDN**, not per panel username:
 
 - `/home/<domain>/plugins/<plugin-id>/`
-- Subdomains use the nested home: `/home/<parent>/<sub.fqdn>/plugins/<plugin-id>/`
+- Subdomains: `/home/<parent>/<sub.fqdn>/plugins/<plugin-id>/`
 
-Each installed plugin gets a CPN manifest at `cpn-plugin.json` next to the plugin files. Legacy catalog packages may ship `meta.xml`; CPN maps those fields into `cpn-plugin.json` and rewrites user-facing names/descriptions so the Panel never shows competing product branding.
+ACL (who may install/enable/uninstall) is per panel account/team via site ownership plus optional grants in `$CPN_DATA_DIR/site-acl.json`. Files always stay under the domain/subdomain home.
+
+Each installed plugin gets `cpn-plugin.json` next to the plugin files. Legacy catalog `meta.xml` is mapped into that manifest with CPN-only user-facing names.
 
 ### Legacy migration
 
-Older installs placed plugins under `/var/lib/cpn/plugins/`. Selecting a site in the Panel or running:
+Older installs under `/var/lib/cpn/plugins/` migrate with:
 
 ```bash
 sudo cpn plugin migrate --domain example.com
 ```
 
-moves those folders into `/home/example.com/plugins/` when the target id is not already present.
-
 ## Catalog
 
 Catalog URL: https://github.com/master3395/cyberpanel-plugins
 
-CPN downloads the catalog as a GitHub tarball (`codeload.github.com/.../tar.gz/refs/heads/main`), extracts plugin folders that contain `meta.xml`, and caches the result for one hour in `/var/lib/cpn/plugin-catalog-cache.json` (catalog cache only; not plugin files).
+Cache: `$CPN_DATA_DIR/plugin-catalog-cache.json` (one hour).
 
 ## Panel UI
 
-Session-gated **Plugins** nav item (same auth as Dashboard / Websites):
+Session-gated **Plugins** nav:
 
-- **Site picker**: required; installs target the selected domain
-- **Installed**: grid or table, activate/deactivate, settings/help/about stubs, uninstall
-- **Plugin Store**: search, categories, install from catalog into the selected site
+- Site picker: only domains/subdomains the session user may manage
+- Installed / Plugin Store views
+- Not a global install for every account on the host
 
-Routes (served by `cpn-installer`):
-
-- `GET /plugins`
-- `POST /plugins/install` (needs `domain` + `id`)
-- `POST /plugins/uninstall`
-- `POST /plugins/enable`
-- `POST /plugins/disable`
+Routes: `GET /plugins`, `POST /plugins/install|uninstall|enable|disable` (each checks site ACL).
 
 ## CLI
 
@@ -49,13 +43,12 @@ Routes (served by `cpn-installer`):
 sudo cpn plugin list
 sudo cpn plugin list --domain example.com
 sudo cpn plugin install --domain example.com --id examplePlugin
-sudo cpn plugin enable --domain example.com --id examplePlugin
-sudo cpn plugin disable --domain example.com --id examplePlugin
+sudo cpn plugin enable --domain blog.example.com --id examplePlugin
 sudo cpn plugin remove --domain example.com --id examplePlugin --yes
 sudo cpn plugin migrate --domain example.com
 ```
 
 ## Notes
 
-- Plugin runtime hooks (settings pages, service wiring) are stubs in this release; install/state management is live.
-- Treat third-party plugins as untrusted until reviewed. Use at your own risk on production hosts.
+- Plugin runtime hooks remain stubs in this release; install/state management is live.
+- Treat third-party plugins as untrusted until reviewed.

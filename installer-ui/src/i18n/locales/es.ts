@@ -100,8 +100,8 @@ const es: LocaleMessages = {
   accountError: 'No se pudo guardar la cuenta',
   smtpOptionalTitle: 'Correo saliente (opcional)',
   smtpOptionalHint:
-    'Configura SMTP para enviar avisos de cuenta. Puedes terminar sin correo. Los secretos se guardan solo en este servidor.',
-  smtpEnableLabel: 'Configurar SMTP para correo saliente',
+    'Configura SMTP externo para avisos de cuenta, o déjalo vacío para usar Postfix local en Linux (se instala automáticamente). Windows necesita SMTP externo. Los secretos se guardan solo en este servidor.',
+  smtpEnableLabel: 'Configurar SMTP externo para correo saliente',
   smtpHostLabel: 'Host SMTP',
   smtpPortLabel: 'Puerto',
   smtpTlsLabel: 'Cifrado',
