@@ -98,8 +98,7 @@ pub fn manage_styles() -> &'static str {
 }
 .site-manage .manage-tile:hover { border-color:#3b82f6; }
 .site-manage .manage-tile-icon {
-  width:40px; height:40px; flex:0 0 40px; border-radius:12px; background:#243047;
-  border:1px solid #334155;
+  width:40px; height:40px; flex:0 0 40px; border-radius:12px;
 }
 .site-manage .manage-tile strong { display:block; font-size:14px; }
 .site-manage .manage-tile span { display:block; color:var(--m-muted); font-size:12px; margin-top:2px; }
@@ -268,10 +267,11 @@ pub fn resource_card(label: &str, value: &str, pct: Option<u8>) -> String {
 pub fn tile(href: &str, title: &str, subtitle: &str) -> String {
     format!(
         r#"<a class="manage-tile" href="{href}">
-  <span class="manage-tile-icon" aria-hidden="true"></span>
+  {icon}
   <span><strong>{title}</strong><span>{subtitle}</span></span>
 </a>"#,
         href = html_escape(href),
+        icon = crate::panel_icons::manage_icon_html(href),
         title = html_escape(title),
         subtitle = html_escape(subtitle),
     )

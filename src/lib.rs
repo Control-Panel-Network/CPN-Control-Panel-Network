@@ -61,6 +61,8 @@ pub mod panel_hub_routes_email;
 pub mod panel_hub_routes_security;
 pub mod panel_hub_routes_server;
 pub mod panel_hubs;
+pub mod panel_icons;
+pub(crate) mod panel_icons_svg;
 pub mod panel_mail_routes;
 pub mod panel_network;
 pub mod panel_ops_backup_extra;

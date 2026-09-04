@@ -105,7 +105,7 @@ pub fn website_manage_main(
           {body}
         </article>
       </div>"##,
-        styles = manage_styles(),
+        styles = format!("{}{}", manage_styles(), crate::panel_icons::icon_tone_styles()),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         banner = manage_banner(site, username),
