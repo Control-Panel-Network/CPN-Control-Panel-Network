@@ -36,9 +36,10 @@ use cpn_installer::panel_hub_routes::{
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
     server_packages_page, server_page, server_php_configs, server_php_extensions,
     server_php_tuning, server_processes_page, server_services_control, server_services_page,
-    settings_page, settings_port_page, users_create_get, users_create_post, users_delete_post,
-    users_list_route, users_modify_get, users_password_post, users_plans_page, users_profile_route,
-    users_reseller_route,
+    settings_connect_page, settings_design_page, settings_page, settings_port_page,
+    settings_setup_page, settings_version_page, users_create_get, users_create_post,
+    users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
+    users_profile_route, users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -812,6 +813,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_dns_defaults)
             .service(server_dns_nameservers_save)
             .service(settings_page)
+            .service(settings_version_page)
+            .service(settings_design_page)
+            .service(settings_setup_page)
+            .service(settings_connect_page)
             .service(settings_port_page)
             .service(security_page)
             .service(security_firewall)

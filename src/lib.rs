@@ -51,6 +51,7 @@ pub mod panel_hub_pages_hosting;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
 pub mod panel_hub_pages_server_net;
+pub mod panel_hub_pages_settings;
 pub mod panel_hub_routes;
 pub mod panel_hub_routes_account;
 pub mod panel_hub_routes_backups;

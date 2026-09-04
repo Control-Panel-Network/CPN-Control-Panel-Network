@@ -3,7 +3,6 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
-use crate::panel_hub_pages_backups::settings_stub_page;
 use crate::panel_hub_pages_server::{
     docker_page, files_page, package_manager_page, php_configs_page, php_extensions_page,
     php_tuning_page, processes_page, run_service_control, server_hub_main, services_page,
@@ -11,6 +10,10 @@ use crate::panel_hub_pages_server::{
 use crate::panel_hub_pages_server_net::{
     change_port_page, dns_zones_page, nameservers_page, remove_dns_zone, save_dns_zone,
     save_ns_lines,
+};
+use crate::panel_hub_pages_settings::{
+    connect_page, design_settings_page, settings_hub_main, setup_wizard_page,
+    version_management_page,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -360,8 +363,67 @@ pub async fn settings_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -
         &user,
         "settings",
         "Settings",
-        &settings_stub_page(),
+        &settings_hub_main(),
     ))
+}
+
+#[get("/settings/version")]
+pub async fn settings_version_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "settings",
+        "Version Management",
+        &version_management_page(),
+    ))
+}
+
+#[get("/settings/design")]
+pub async fn settings_design_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "settings",
+        "Design",
+        &design_settings_page(&user),
+    ))
+}
+
+#[get("/settings/setup")]
+pub async fn settings_setup_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "settings",
+        "Setup Wizard",
+        &setup_wizard_page(),
+    ))
+}
+
+#[get("/settings/connect")]
+pub async fn settings_connect_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(&user, "settings", "Connect", &connect_page()))
 }
 
 #[get("/settings/port")]
