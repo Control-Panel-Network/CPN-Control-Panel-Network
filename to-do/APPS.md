@@ -23,7 +23,19 @@ Panel Apps shows a domain/subdomain picker limited to sites the session user own
 
 ## MariaDB XOR MySQL
 
-CPN refuses installing MariaDB while MySQL is present, and the reverse.
+CPN refuses installing MariaDB while MySQL is present, and the reverse. Detection ignores MariaDB unit aliases (`mysql` -> `mariadb.service`) so Apps does not report both as installed.
+
+## Installer defaults
+
+Fresh web-server installs install **MariaDB** and **phpMyAdmin** by default. Operators can pick MySQL, skip the engine, or skip phpMyAdmin in the installer UI, `/api/install/server`, or:
+
+```bash
+sudo cpn-installer --ensure-database-defaults
+sudo cpn-installer --ensure-database-defaults --database mysql
+sudo cpn-installer --ensure-database-defaults --database none --skip-phpmyadmin
+```
+
+See `to-do/DATABASE-DEFAULTS.md`.
 
 ## Postfix default MTA
 

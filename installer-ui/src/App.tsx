@@ -20,6 +20,7 @@ import {
 } from './api';
 import { I18nProvider, normalizeLocale, useI18n } from './i18n';
 import type {
+  DatabaseEngine,
   InstallerEvent,
   InstallerStatus,
   MailSystem,
@@ -57,6 +58,8 @@ function AppShell() {
   const [screen, setScreen] = useState<ScreenType>('preparing');
   const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(null);
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
+  const [database, setDatabase] = useState<DatabaseEngine>('mariadb');
+  const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
@@ -189,7 +192,10 @@ function AppShell() {
       selected_mail: null,
     }));
     try {
-      await startServerInstall(selectedServer);
+      await startServerInstall(selectedServer, {
+        database,
+        install_phpmyadmin: installPhpmyadmin,
+      });
     } catch (error) {
       setStatus((current) => ({
         ...current,
@@ -293,7 +299,11 @@ function AppShell() {
               selectedServer={selectedServer}
               listenPort={status.listen_port ?? status.environment?.port ?? 2087}
               panelHostname={status.panel_hostname}
+              database={database}
+              installPhpmyadmin={installPhpmyadmin}
               onSelectServer={setSelectedServer}
+              onDatabaseChange={setDatabase}
+              onPhpmyadminChange={setInstallPhpmyadmin}
               onNetworkChange={handleNetworkChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}

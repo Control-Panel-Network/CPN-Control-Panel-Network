@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CircleHelp } from 'lucide-react';
-import type { ServerEngine } from '../types';
+import type { DatabaseEngine, ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
 import { useI18n } from '../i18n';
 import { LanguageSelector } from '../i18n/LanguageSelector';
@@ -11,7 +11,11 @@ interface Props {
   selectedServer: ServerEngine | null;
   listenPort: number;
   panelHostname?: string | null;
+  database: DatabaseEngine;
+  installPhpmyadmin: boolean;
   onSelectServer: (server: ServerEngine) => void;
+  onDatabaseChange: (database: DatabaseEngine) => void;
+  onPhpmyadminChange: (enabled: boolean) => void;
   onNetworkChange: (input: {
     port: number;
     oldPortPolicy?: OldPortPolicy;
@@ -25,7 +29,11 @@ export function ServerSelectionScreen({
   selectedServer,
   listenPort,
   panelHostname,
+  database,
+  installPhpmyadmin,
   onSelectServer,
+  onDatabaseChange,
+  onPhpmyadminChange,
   onNetworkChange,
   onContinue,
   onOpenCompare,
@@ -202,6 +210,49 @@ export function ServerSelectionScreen({
             </article>
           );
         })}
+      </div>
+
+      <div className="w-full max-w-xl mt-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
+        <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{t.databaseTitle}</h2>
+        <p className="text-[13px] leading-[1.45] text-[#5f5e60] mb-4">{t.databaseHint}</p>
+        <fieldset>
+          <legend className="sr-only">{t.databaseTitle}</legend>
+          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
+            <input
+              type="radio"
+              name="cpn-database"
+              checked={database === 'mariadb'}
+              onChange={() => onDatabaseChange('mariadb')}
+            />
+            <span>{t.databaseMariadb}</span>
+          </label>
+          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
+            <input
+              type="radio"
+              name="cpn-database"
+              checked={database === 'mysql'}
+              onChange={() => onDatabaseChange('mysql')}
+            />
+            <span>{t.databaseMysql}</span>
+          </label>
+          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-3">
+            <input
+              type="radio"
+              name="cpn-database"
+              checked={database === 'none'}
+              onChange={() => onDatabaseChange('none')}
+            />
+            <span>{t.databaseNone}</span>
+          </label>
+        </fieldset>
+        <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d]">
+          <input
+            type="checkbox"
+            checked={installPhpmyadmin}
+            onChange={(event) => onPhpmyadminChange(event.target.checked)}
+          />
+          <span>{t.databasePhpmyadmin}</span>
+        </label>
       </div>
 
       <button type="button" onClick={onOpenCompare} className="compare-link mt-8">

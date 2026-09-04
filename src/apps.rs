@@ -97,15 +97,21 @@ pub struct AppStatus {
 }
 
 fn mariadb_present() -> bool {
-    systemd_unit_active("mariadb")
-        || rpm_or_dpkg_installed(&["mariadb-server", "MariaDB-server"])
+    rpm_or_dpkg_installed(&["mariadb-server", "MariaDB-server"])
+        || systemd_unit_active("mariadb")
         || first_active_service(&[("mariadb", "x")]).is_some()
 }
 
 fn mysql_present() -> bool {
+    // Prefer package names. MariaDB on EL often aliases mysql/mysqld units to mariadb.service.
+    if rpm_or_dpkg_installed(&["mysql-server", "mysql-community-server"]) {
+        return true;
+    }
+    if mariadb_present() {
+        return false;
+    }
     systemd_unit_active("mysqld")
         || systemd_unit_active("mysql")
-        || rpm_or_dpkg_installed(&["mysql-server", "mysql-community-server"])
         || first_active_service(&[("mysqld", "x"), ("mysql", "x")]).is_some()
 }
 
@@ -150,7 +156,9 @@ pub fn detect_app(id: AppId) -> AppStatus {
             }
         }
         AppId::Mysql => {
-            let running = (systemd_unit_active("mysqld") || systemd_unit_active("mysql"))
+            // Do not treat MariaDB's mysql/mysqld unit aliases as MySQL.
+            let running = mysql_present()
+                && (systemd_unit_active("mysqld") || systemd_unit_active("mysql"))
                 && port_open("127.0.0.1:3306", 250);
             let installed = mysql_present();
             let (state, detail) = if running {
@@ -177,10 +185,22 @@ pub fn detect_app(id: AppId) -> AppStatus {
             let installed = rpm_or_dpkg_installed(&["phpMyAdmin", "phpmyadmin"]);
             let path_hint = std::path::Path::new("/usr/share/phpMyAdmin").exists()
                 || std::path::Path::new("/usr/share/phpmyadmin").exists();
-            let (state, detail) = if installed || path_hint {
+            let listening = port_open("127.0.0.1:8081", 250);
+            let (state, detail) = if listening && (installed || path_hint) {
+                (
+                    AppStateKind::Running,
+                    format!(
+                        "phpMyAdmin reachable at {}.",
+                        crate::apps_phpmyadmin::phpmyadmin_health_url()
+                    ),
+                )
+            } else if installed || path_hint {
                 (
                     AppStateKind::Installed,
-                    "phpMyAdmin package or share path found. Wire a vhost to expose it.".into(),
+                    format!(
+                        "phpMyAdmin package or share path found. Expected local URL: {}.",
+                        crate::apps_phpmyadmin::phpmyadmin_health_url()
+                    ),
                 )
             } else {
                 (
@@ -289,10 +309,7 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 let _ = enable_now(&["mysql"]);
                 "Installed and started MySQL.".to_string()
             }
-            AppId::Phpmyadmin => {
-                install_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
-                "Installed phpMyAdmin packages.".to_string()
-            }
+            AppId::Phpmyadmin => crate::apps_phpmyadmin::install_and_expose()?,
             AppId::Email => {
                 install_packages_dnf_or_apt(
                     &["postfix", "dovecot"],

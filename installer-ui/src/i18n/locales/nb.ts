@@ -14,7 +14,7 @@ const nb: LocaleMessages = {
   startMailError: 'Kunne ikke starte e-postinstallasjonen',
   selectServerTitle: 'Velg webserver',
   selectServerIntro:
-    'Velg motoren som passer prosjektet ditt. StÃ¸ttede Linux-gjester fÃ¸lger CyberPanel-matrisen (AlmaLinux, Rocky, Ubuntu og relaterte EL-mÃ¥l). Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.',
+    'Velg motoren som passer prosjektet ditt. Stottede Linux-gjester inkluderer AlmaLinux, Rocky, Ubuntu og relaterte EL-mal. Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.',
   listenPortLabel: 'Lytteport for installasjonsprogrammet',
   listenPortHint:
     'Standard er 2087 (Cloudflare-vennlig, samme familie som cPanel WHM HTTPS). Lab kan bruke en annen ledig port, for eksempel 8787. Porter under 1024 krever vanligvis root.',
@@ -40,7 +40,14 @@ const nb: LocaleMessages = {
   compareIntro: 'Finn alternativet som passer prosjektet ditt.',
   closeLabel: 'Lukk',
   continueLabel: 'Fortsett',
-  nothingInstallsYet: 'Ingenting installeres fÃ¸r du trykker Fortsett.',
+  nothingInstallsYet: 'Ingenting installeres for du trykker Fortsett.',
+  databaseTitle: 'Database-standarder',
+  databaseHint:
+    'MariaDB og phpMyAdmin installeres som standard med webserveren. Velg MySQL i stedet, eller hopp over. Verter kjorer vanligvis MariaDB XOR MySQL.',
+  databaseMariadb: 'MariaDB (standard)',
+  databaseMysql: 'MySQL (i stedet for MariaDB)',
+  databaseNone: 'Hopp over lokal database-motor',
+  databasePhpmyadmin: 'Installer ogsa phpMyAdmin (pa som standard)',
   serverOpenlitespeedDesc:
     'HÃ¸y ytelse med lavt ressursbruk. Bra for WordPress og travle nettsteder med innebygd LSCache.',
   serverNginxDesc:

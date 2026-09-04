@@ -3,6 +3,7 @@
 pub mod account;
 pub mod account_mgmt;
 pub mod apps;
+pub mod apps_phpmyadmin;
 pub mod apps_pkg;
 pub mod apps_site;
 pub mod auth_api;
@@ -14,6 +15,7 @@ pub mod cli_common;
 pub mod cli_maintenance;
 pub mod cli_network;
 pub mod cli_plugins;
+pub mod db_defaults;
 pub mod environment;
 pub mod http_helpers;
 pub mod install_journal;

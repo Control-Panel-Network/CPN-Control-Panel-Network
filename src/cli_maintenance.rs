@@ -26,6 +26,10 @@ pub enum CliMode {
         yes: bool,
         reset_data: bool,
     },
+    EnsureDatabaseDefaults {
+        database: crate::model::DatabaseEngine,
+        install_phpmyadmin: bool,
+    },
     Help,
 }
 
@@ -53,6 +57,23 @@ pub fn parse_cli(args: &[String]) -> Option<CliMode> {
     };
     let yes = args.iter().any(|arg| arg == "--yes" || arg == "-y");
     let reset_data = args.iter().any(|arg| arg == "--reset-data");
+    if args.iter().any(|arg| arg == "--ensure-database-defaults") {
+        let database = match version_flag("--database") {
+            None => crate::model::DatabaseEngine::Mariadb,
+            Some(raw) => match crate::model::DatabaseEngine::parse_cli(&raw) {
+                Ok(engine) => engine,
+                Err(error) => {
+                    eprintln!("error: {error}");
+                    return Some(CliMode::Help);
+                }
+            },
+        };
+        let install_phpmyadmin = !args.iter().any(|arg| arg == "--skip-phpmyadmin");
+        return Some(CliMode::EnsureDatabaseDefaults {
+            database,
+            install_phpmyadmin,
+        });
+    }
     if args.iter().any(|arg| arg == "--upgrade") {
         return Some(CliMode::Upgrade {
             version: version_flag("--version-target").or_else(|| version_flag("--to")),
@@ -92,8 +113,11 @@ Usage:
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
   cpn-installer --allow-remote  Bind 0.0.0.0 (HTTP without TLS; operator opt-in)
+  cpn-installer --ensure-database-defaults [--database mariadb|mysql|none] [--skip-phpmyadmin]
+                                 Install MariaDB (default) + phpMyAdmin on Linux without the UI
 
 Notes:
+  Fresh web-server installs also install MariaDB + phpMyAdmin by default (override with API/UI or --database / --skip-phpmyadmin).
   Default listen port is 2087 (Cloudflare-friendly, WHM HTTPS family). Lab installs may use another free port (for example 8787).
   Ports 1-65535 are accepted; prefer >1024 unless running as root.
   Preferred port, optional panel hostname, and port migration live under the CPN data directory (mode 0600 on Unix). See to-do/PANEL-PORT-SUBDOMAIN.md.
@@ -216,5 +240,20 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 }
             }
         }
+        CliMode::EnsureDatabaseDefaults {
+            database,
+            install_phpmyadmin,
+        } => match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin) {
+            Ok(notes) => {
+                for note in notes {
+                    println!("{note}");
+                }
+                0
+            }
+            Err(error) => {
+                eprintln!("error: {error}");
+                1
+            }
+        },
     }
 }

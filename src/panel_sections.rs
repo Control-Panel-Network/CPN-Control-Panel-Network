@@ -362,15 +362,17 @@ pub fn email_main(
 
 pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
     let status = detect_database();
+    let pma = crate::apps::detect_app(crate::apps::AppId::Phpmyadmin);
     let install_form = if status.service_label == "Not detected" && !status.listening_3306 {
         r#"<form method="post" action="/databases/install-mariadb" class="stack-form" style="margin-top:18px;" onsubmit="return confirm('Install MariaDB server packages on this host now?');">
           <button type="submit" class="btn-primary">Install MariaDB</button>
         </form>
-        <p class="muted">Runs a package install via dnf or apt (mariadb-server), then enables the service. Requires root / panel host privileges.</p>"#
+        <p class="muted">Fresh installs default to MariaDB + phpMyAdmin. This button installs MariaDB only if the host was set up without them. Requires root / panel host privileges.</p>"#
             .into()
     } else {
         String::new()
     };
+    let pma_url = crate::apps_phpmyadmin::phpmyadmin_health_url();
     format!(
         r#"{heading}
       {ok}
@@ -380,14 +382,16 @@ pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
         <ul class="kv-list">
           <li><span>Detected service</span><strong>{title}</strong></li>
           <li><span>TCP 127.0.0.1:3306</span><strong>{port}</strong></li>
+          <li><span>phpMyAdmin</span><strong>{pma_state}</strong></li>
         </ul>
         <p>{detail}</p>
+        <p class="muted">phpMyAdmin: {pma_detail} Local URL when wired: <code>{pma_url}</code>.</p>
         {install}
-        <p class="muted">Next steps: install MariaDB, create databases with your preferred tooling, then wire panel DB management in a later release.</p>
+        <p class="muted">Default stack is MariaDB (not MySQL) plus phpMyAdmin. Hosts typically run MariaDB XOR MySQL.</p>
       </article>"#,
         heading = section_heading(
             "Databases",
-            "Honest detection of local MariaDB/MySQL. No credentials are stored here.",
+            "Honest detection of local MariaDB/MySQL and phpMyAdmin. No credentials are stored here.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
@@ -398,6 +402,9 @@ pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
             "Closed"
         },
         detail = html_escape(&status.detail),
+        pma_state = html_escape(pma.state.as_str()),
+        pma_detail = html_escape(&pma.detail),
+        pma_url = html_escape(pma_url),
         install = install_form,
     )
 }

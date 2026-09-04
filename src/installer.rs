@@ -225,7 +225,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     Ok(())
 }
 
-pub use crate::install_server::install;
+pub use crate::install_server::{install, install_with_database};
 
 pub(crate) async fn install_php_runtime(
     state: &AppState,

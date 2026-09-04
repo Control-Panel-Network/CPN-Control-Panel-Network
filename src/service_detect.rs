@@ -68,7 +68,7 @@ pub fn detect_database() -> DatabaseStatus {
         (None, false) => DatabaseStatus {
             service_label: "Not detected".into(),
             listening_3306: false,
-            detail: "CPN does not provision database instances yet. Install MariaDB/MySQL on the host, then re-open this page."
+            detail: "No local MariaDB/MySQL detected. Fresh installs default to MariaDB + phpMyAdmin; install from Apps or Databases if this host was set up without them."
                 .into(),
         },
     }

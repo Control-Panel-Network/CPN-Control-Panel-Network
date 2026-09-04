@@ -14,7 +14,7 @@ const es: LocaleMessages = {
   startMailError: 'No se pudo iniciar la instalaciÃ³n del correo',
   selectServerTitle: 'Selecciona tu servidor web',
   selectServerIntro:
-    'Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos siguen la matriz CyberPanel (AlmaLinux, Rocky, Ubuntu y EL relacionados). Windows Server e hipervisores alojan esos invitados; no son una instalaciÃ³n nativa del panel. PodrÃ¡s cambiar el motor mÃ¡s adelante desde el panel.',
+    'Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos incluyen AlmaLinux, Rocky, Ubuntu y EL relacionados. Windows Server e hipervisores alojan esos invitados; no son una instalacion nativa del panel. Podras cambiar el motor mas adelante desde el panel.',
   listenPortLabel: 'Puerto de escucha del instalador',
   listenPortHint:
     'El valor por defecto es 2087 (compatible con Cloudflare, misma familia que WHM HTTPS de cPanel). En laboratorio puedes usar otro puerto libre, por ejemplo 8787. Los puertos bajo 1024 suelen requerir root.',
@@ -40,7 +40,14 @@ const es: LocaleMessages = {
   compareIntro: 'Encuentra la opciÃ³n adecuada para tu proyecto.',
   closeLabel: 'Cerrar',
   continueLabel: 'Continuar',
-  nothingInstallsYet: 'Nada se instalarÃ¡ hasta que pulses Continuar.',
+  nothingInstallsYet: 'Nada se instalara hasta que pulses Continuar.',
+  databaseTitle: 'Valores predeterminados de base de datos',
+  databaseHint:
+    'MariaDB y phpMyAdmin se instalan por defecto con el servidor web. Puedes elegir MySQL o omitir cualquiera. En un host suele haber MariaDB XOR MySQL.',
+  databaseMariadb: 'MariaDB (predeterminado)',
+  databaseMysql: 'MySQL (en lugar de MariaDB)',
+  databaseNone: 'Omitir motor de base de datos local',
+  databasePhpmyadmin: 'Instalar tambien phpMyAdmin (activado por defecto)',
   serverOpenlitespeedDesc:
     'Alto rendimiento y bajo consumo de recursos. Ideal para WordPress y sitios con alto trÃ¡fico gracias a su cachÃ© integrado (LSCache).',
   serverNginxDesc:

@@ -17,6 +17,42 @@ pub enum MailSystem {
     Thunderbird,
 }
 
+/// Database engine installed with the web server stage (default: MariaDB).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DatabaseEngine {
+    #[default]
+    Mariadb,
+    Mysql,
+    /// Skip installing a local database engine.
+    None,
+}
+
+impl DatabaseEngine {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mariadb => "MariaDB",
+            Self::Mysql => "MySQL",
+            Self::None => "None",
+        }
+    }
+
+    pub fn parse_cli(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "mariadb" | "maria" => Ok(Self::Mariadb),
+            "mysql" => Ok(Self::Mysql),
+            "none" | "skip" | "off" => Ok(Self::None),
+            other => Err(format!(
+                "Unknown database `{other}`. Use: mariadb (default), mysql, or none."
+            )),
+        }
+    }
+}
+
+fn default_install_phpmyadmin() -> bool {
+    true
+}
+
 impl MailSystem {
     pub fn label(self) -> &'static str {
         match self {
@@ -221,6 +257,12 @@ pub struct InstallRequest {
     /// Explicit reinstall/migrate when a server is already ready (issue #20).
     #[serde(default)]
     pub force_reinstall: bool,
+    /// Local database engine. Defaults to MariaDB when omitted.
+    #[serde(default)]
+    pub database: DatabaseEngine,
+    /// Install phpMyAdmin packages (default true). Ignored only when false.
+    #[serde(default = "default_install_phpmyadmin")]
+    pub install_phpmyadmin: bool,
 }
 
 #[derive(Debug, Deserialize)]
