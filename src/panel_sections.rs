@@ -1,9 +1,11 @@
 //! Panel section page HTML (websites, email, databases, backups).
 
-use crate::account::data_dir;
 use crate::http_helpers::smtp_status_public;
 use crate::install_webmail_runtime::webmail_health_url;
-use crate::sites::{SiteRecord, list_sites};
+use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
+use crate::paths::{legacy_panel_backups_dir, panel_backups_dir};
+use crate::service_detect::{detect_database, install_mariadb_server};
+use crate::sites::{SiteRecord, list_sites, site_backups_dir};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -14,10 +16,6 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-fn backups_dir() -> PathBuf {
-    data_dir().join("backups")
 }
 
 fn section_heading(title: &str, blurb: &str) -> String {
@@ -50,33 +48,47 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
-fn site_rows(sites: &[SiteRecord]) -> String {
+fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
     if sites.is_empty() {
         return r#"<p class="empty-state">No sites yet. Create one below or use <code>cpn site create</code>.</p>
         <p class="muted">Files live under <code>/home/&lt;domain&gt;/public_html</code>. Subdomains nest under the parent home (for example <code>/home/example.com/blog.example.com/public_html</code>).</p>"#
             .into();
     }
-    let mut rows = String::from(
+    let docroot_th = if show_docroots {
+        "<th>Document root</th>"
+    } else {
+        ""
+    };
+    let mut rows = format!(
         r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Domain</th><th>Owner</th><th>Document root</th><th>Status</th><th></th></tr></thead><tbody>"#,
+      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th></th></tr></thead><tbody>"#
     );
     for site in sites {
         let status = if site.enabled { "Enabled" } else { "Disabled" };
         let wired = if site.vhost_wired {
             "vhost wired"
         } else {
-            "record only"
+            "files ready"
         };
-        let legacy = if crate::sites::is_legacy_docroot(&site.docroot) {
-            r#"<div class="muted">Legacy path (still served from this location). New sites use /home/&lt;domain&gt;/public_html.</div>"#
+        let docroot_td = if show_docroots {
+            let legacy = if crate::sites::is_legacy_docroot(&site.docroot) {
+                r#"<div class="muted">Legacy path (still served from this location). New sites use /home/&lt;domain&gt;/public_html.</div>"#
+            } else {
+                ""
+            };
+            format!(
+                r#"<td><details><summary>Show path</summary><code>{docroot}</code>{legacy}</details></td>"#,
+                docroot = html_escape(&site.docroot),
+                legacy = legacy,
+            )
         } else {
-            ""
+            String::new()
         };
         rows.push_str(&format!(
             r#"<tr>
           <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
           <td>{owner}</td>
-          <td><code>{docroot}</code>{legacy}</td>
+          {docroot_td}
           <td>{status}</td>
           <td>
             <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
@@ -87,8 +99,7 @@ fn site_rows(sites: &[SiteRecord]) -> String {
         </tr>"#,
             domain = html_escape(&site.domain),
             owner = html_escape(&site.owner),
-            docroot = html_escape(&site.docroot),
-            legacy = legacy,
+            docroot_td = docroot_td,
             status = status,
             wired = wired,
         ));
@@ -99,13 +110,25 @@ fn site_rows(sites: &[SiteRecord]) -> String {
 
 pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
     let sites = list_sites().unwrap_or_default();
+    let prefs = load_panel_ui_prefs();
+    let show = prefs.show_document_roots;
+    let toggle_label = if show {
+        "Hide document roots"
+    } else {
+        "Show document roots"
+    };
+    let toggle_value = if show { "0" } else { "1" };
     format!(
         r#"{heading}
       {ok}
       {err}
       <article class="section-card">
         <h2>Sites ({count})</h2>
-        <p class="muted">Website files live under <code>/home/&lt;domain&gt;/</code> (docroot <code>public_html</code>). A small registry JSON under <code>/var/lib/cpn/sites/</code> points at each docroot. Vhost wiring is applied later by panel recipes.</p>
+        <p class="muted">Website files live under <code>/home/&lt;domain&gt;/public_html</code> (subdomains nest under the parent home). Internal site records are for the panel only; operators work with the files under <code>/home/</code>. Vhost wiring is applied later by panel recipes.</p>
+        <form method="post" action="/websites/prefs" class="inline-form" style="margin:12px 0;">
+          <input type="hidden" name="show_document_roots" value="{toggle_value}">
+          <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
+        </form>
         {rows}
       </article>
       <article class="section-card" style="margin-top:22px;">
@@ -123,13 +146,20 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
       </article>"#,
         heading = section_heading(
             "Websites",
-            "Manage website files under /home and site registry records.",
+            "Manage website files under /home for each domain.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         count = sites.len(),
-        rows = site_rows(&sites),
+        toggle_value = toggle_value,
+        toggle_label = toggle_label,
+        rows = site_rows(&sites, show),
     )
+}
+
+pub fn set_websites_docroot_pref(show: bool) -> Result<(), String> {
+    set_show_document_roots(show)?;
+    Ok(())
 }
 
 pub fn email_main(
@@ -203,60 +233,21 @@ pub fn email_main(
     )
 }
 
-fn service_active(names: &[&str]) -> Option<&'static str> {
-    for name in names {
-        let output = Command::new("systemctl")
-            .args(["is-active", "--quiet", name])
-            .status();
-        if let Ok(status) = output
-            && status.success()
-        {
-            return Some(match *name {
-                "mariadb" => "MariaDB (active)",
-                "mysql" => "MySQL (active)",
-                "mysqld" => "mysqld (active)",
-                _ => "Database service (active)",
-            });
-        }
-    }
-    None
-}
-
-fn port_3306_open() -> bool {
-    std::net::TcpStream::connect_timeout(
-        &"127.0.0.1:3306"
-            .parse()
-            .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 3306))),
-        std::time::Duration::from_millis(250),
-    )
-    .is_ok()
-}
-
-pub fn databases_main() -> String {
-    let service = service_active(&["mariadb", "mysql", "mysqld"]);
-    let listening = port_3306_open();
-    let (title, detail) = match (service, listening) {
-        (Some(label), true) => (
-            label.to_string(),
-            "A database daemon is active and accepting connections on 127.0.0.1:3306.".to_string(),
-        ),
-        (Some(label), false) => (
-            label.to_string(),
-            "The service unit is active, but TCP :3306 did not accept a quick probe.".to_string(),
-        ),
-        (None, true) => (
-            "Listener on :3306".into(),
-            "Something accepts connections on 127.0.0.1:3306, but no MariaDB/MySQL systemd unit was active."
-                .into(),
-        ),
-        (None, false) => (
-            "Not detected".into(),
-            "CPN does not provision database instances yet. Install MariaDB/MySQL on the host, then re-open this page."
-                .into(),
-        ),
+pub fn databases_main(notice: Option<&str>, error: Option<&str>) -> String {
+    let status = detect_database();
+    let install_form = if status.service_label == "Not detected" && !status.listening_3306 {
+        r#"<form method="post" action="/databases/install-mariadb" class="stack-form" style="margin-top:18px;" onsubmit="return confirm('Install MariaDB server packages on this host now?');">
+          <button type="submit" class="btn-primary">Install MariaDB</button>
+        </form>
+        <p class="muted">Runs a package install via dnf or apt (mariadb-server), then enables the service. Requires root / panel host privileges.</p>"#
+            .into()
+    } else {
+        String::new()
     };
     format!(
         r#"{heading}
+      {ok}
+      {err}
       <article class="section-card">
         <h2>Database status</h2>
         <ul class="kv-list">
@@ -264,21 +255,32 @@ pub fn databases_main() -> String {
           <li><span>TCP 127.0.0.1:3306</span><strong>{port}</strong></li>
         </ul>
         <p>{detail}</p>
+        {install}
         <p class="muted">Next steps: install MariaDB, create databases with your preferred tooling, then wire panel DB management in a later release.</p>
       </article>"#,
         heading = section_heading(
             "Databases",
             "Honest detection of local MariaDB/MySQL. No credentials are stored here.",
         ),
-        title = html_escape(&title),
-        port = if listening { "Open" } else { "Closed" },
-        detail = html_escape(&detail),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
+        title = html_escape(&status.service_label),
+        port = if status.listening_3306 {
+            "Open"
+        } else {
+            "Closed"
+        },
+        detail = html_escape(&status.detail),
+        install = install_form,
     )
 }
 
-fn list_backup_files() -> Vec<(String, u64)> {
-    let dir = backups_dir();
-    let Ok(entries) = fs::read_dir(&dir) else {
+pub fn run_mariadb_install() -> Result<String, String> {
+    install_mariadb_server()
+}
+
+fn list_backup_files(dir: &PathBuf) -> Vec<(String, u64)> {
+    let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut files = Vec::new();
@@ -304,7 +306,7 @@ fn list_backup_files() -> Vec<(String, u64)> {
 
 fn backup_rows(files: &[(String, u64)]) -> String {
     if files.is_empty() {
-        return r#"<p class="empty-state">No backups yet. Run a panel-data backup below.</p>"#
+        return r#"<p class="empty-state">No panel backups yet. Run a panel-data backup below.</p>"#
             .into();
     }
     let mut rows = String::from(
@@ -322,46 +324,89 @@ fn backup_rows(files: &[(String, u64)]) -> String {
     rows
 }
 
+fn site_backup_notes(sites: &[SiteRecord]) -> String {
+    if sites.is_empty() {
+        return r#"<p class="muted">Create a website first. Site archives will land under <code>/home/&lt;domain&gt;/backups/</code> (subdomains: <code>/home/&lt;parent&gt;/&lt;sub.fqdn&gt;/backups/</code>).</p>"#.into();
+    }
+    let mut list =
+        String::from("<ul class=\"muted\" style=\"margin:12px 0 0;padding-left:18px;\">");
+    for site in sites.iter().take(8) {
+        list.push_str(&format!(
+            "<li><code>{}</code></li>",
+            html_escape(&site_backups_dir(site).display().to_string())
+        ));
+    }
+    if sites.len() > 8 {
+        list.push_str(&format!(
+            "<li>… and {} more site backup folders</li>",
+            sites.len() - 8
+        ));
+    }
+    list.push_str("</ul>");
+    list
+}
+
 pub fn backups_main(notice: Option<&str>, error: Option<&str>) -> String {
-    let files = list_backup_files();
+    let dir = panel_backups_dir();
+    let files = list_backup_files(&dir);
+    let sites = list_sites().unwrap_or_default();
+    let legacy = legacy_panel_backups_dir();
+    let migrate_note = if legacy.is_dir() && legacy != dir {
+        format!(
+            r#"<p class="muted">Older archives may still exist under <code>{}</code>. New panel backups use <code>{}</code>.</p>"#,
+            html_escape(&legacy.display().to_string()),
+            html_escape(&dir.display().to_string()),
+        )
+    } else {
+        String::new()
+    };
     format!(
         r#"{heading}
       {ok}
       {err}
       <article class="section-card">
-        <h2>Backup archive</h2>
-        <p>Stores copies under <code>/var/lib/cpn/backups/</code>. Includes panel bootstrap, accounts, sites, and preferences. SMTP secrets are included when present; treat archives as sensitive.</p>
+        <h2>Panel backup</h2>
+        <p>Stores panel config copies under <code>{panel_path}</code>. Includes panel bootstrap, accounts, site records, and preferences. SMTP secrets are included when present; treat archives as sensitive.</p>
+        {migrate}
         {rows}
         <form method="post" action="/backups/run" class="stack-form" style="margin-top:18px;">
           <button type="submit" class="btn-primary">Run panel-data backup</button>
         </form>
+      </article>
+      <article class="section-card" style="margin-top:22px;">
+        <h2>Site backup folders</h2>
+        <p class="muted">Per-domain archives belong under each site home (not under the panel data directory):</p>
+        {site_notes}
       </article>"#,
-        heading = section_heading("Backups", "Panel data archives for this host.",),
+        heading = section_heading("Backups", "Panel and site archives under /home.",),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
+        panel_path = html_escape(&dir.display().to_string()),
+        migrate = migrate_note,
         rows = backup_rows(&files),
+        site_notes = site_backup_notes(&sites),
     )
 }
 
 pub fn create_panel_backup() -> Result<String, String> {
-    let dir = backups_dir();
+    let dir = panel_backups_dir();
     fs::create_dir_all(&dir).map_err(|error| format!("Could not create backups dir: {error}"))?;
     let stamp = crate::account::now_unix();
     let name = format!("panel-{stamp}.tar.gz");
     let dest = dir.join(&name);
-    let data = data_dir();
+    let data = crate::account::data_dir();
     let mut paths = Vec::new();
     for rel in [
         "panel-bootstrap.json",
         "accounts",
         "sites",
-        "plugins",
         "plugin-catalog-cache.json",
         "smtp.json",
         "panel-session.secret",
         "panel-hostname.json",
         "listen-port.json",
         "install-manifest.json",
+        "panel-ui.json",
     ] {
         if data.join(rel).exists() {
             paths.push(rel.to_string());

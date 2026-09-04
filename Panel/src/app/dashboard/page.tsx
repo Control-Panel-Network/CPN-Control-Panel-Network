@@ -14,10 +14,18 @@ type ResourceGaugeProps = {
   detail: string;
 };
 
+/** Traffic-light stroke: green < 60%, orange 60-84%, red >= 85%. */
+function gaugeStrokeForUsage(percent: number): string {
+  if (percent >= 85) return "#d92d20";
+  if (percent >= 60) return "#f79009";
+  return "#12b76a";
+}
+
 function ResourceGauge({ label, value, detail }: ResourceGaugeProps) {
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - value / 100);
+  const stroke = gaugeStrokeForUsage(value);
 
   return (
     <article className="resource-card">
@@ -30,6 +38,7 @@ function ResourceGauge({ label, value, detail }: ResourceGaugeProps) {
             cx="50"
             cy="50"
             r={radius}
+            stroke={stroke}
             strokeDasharray={circumference}
             strokeDashoffset={offset}
           />
@@ -99,40 +108,33 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <div className="status-card-heading">
             <div>
               <p className="eyebrow">SYSTEM HEALTH</p>
-              <h2>All services operational</h2>
+              <h2>Service status (live on host Panel)</h2>
             </div>
             <ShieldCheck size={27} aria-hidden="true" />
           </div>
           <ul>
             <li>
-              <span>Nginx</span>
-              <strong>Running</strong>
+              <span>Web server</span>
+              <strong className="warn">See host Panel</strong>
             </li>
             <li>
               <span>MariaDB</span>
-              <strong>Running</strong>
+              <strong className="warn">See host Panel</strong>
             </li>
             <li>
               <span>Mail service</span>
-              <strong>Running</strong>
+              <strong className="warn">See host Panel</strong>
             </li>
           </ul>
+          <p className="muted" style={{ marginTop: 14 }}>
+            Preview build does not probe systemd. The host Panel uses the same
+            detection as the Databases page (no fake Running states).
+          </p>
         </article>
         <article className="activity-card">
           <p className="eyebrow">RECENT ACTIVITY</p>
           <h2>Latest changes</h2>
-          <div>
-            <span>SSL certificate renewed</span>
-            <time>12 min ago</time>
-          </div>
-          <div>
-            <span>Automated backup completed</span>
-            <time>2 hr ago</time>
-          </div>
-          <div>
-            <span>System packages updated</span>
-            <time>Yesterday</time>
-          </div>
+          <p className="empty-state">No recent panel activity to show yet.</p>
         </article>
       </div>
     </PanelShell>

@@ -21,9 +21,9 @@ use cpn_installer::panel_network::{
     purge_expired_migration, save_panel_hostname,
 };
 use cpn_installer::panel_routes::{
-    backups_page, backups_run, databases_page, email_page, plugins_disable, plugins_enable,
-    plugins_install, plugins_page, plugins_uninstall, websites_create, websites_delete,
-    websites_page,
+    backups_page, backups_run, databases_install_mariadb, databases_page, email_page,
+    plugins_disable, plugins_enable, plugins_install, plugins_page, plugins_uninstall,
+    websites_create, websites_delete, websites_page, websites_prefs,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -634,8 +634,10 @@ async fn main() -> std::io::Result<()> {
             .service(websites_page)
             .service(websites_create)
             .service(websites_delete)
+            .service(websites_prefs)
             .service(email_page)
             .service(databases_page)
+            .service(databases_install_mariadb)
             .service(backups_page)
             .service(backups_run)
             .service(plugins_page)

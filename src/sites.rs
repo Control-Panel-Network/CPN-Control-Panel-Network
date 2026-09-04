@@ -169,6 +169,28 @@ pub fn default_docroot(domain: &str, parent: Option<&str>) -> String {
         .into_owned()
 }
 
+/// Domain home derived from a site record (parent of `public_html` when standard).
+pub fn site_home_from_record(site: &SiteRecord) -> PathBuf {
+    let path = Path::new(&site.docroot);
+    if path.file_name().and_then(|name| name.to_str()) == Some("public_html") {
+        if let Some(parent) = path.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    let parent = resolve_parent_domain(&site.domain).ok().flatten();
+    site_home_dir(&site.domain, parent.as_deref())
+}
+
+/// Per-site backup directory: `/home/<domain>/backups` (or nested for subdomains).
+pub fn site_backups_dir(site: &SiteRecord) -> PathBuf {
+    site_home_from_record(site).join("backups")
+}
+
+/// Per-site plugins directory: `/home/<domain>/plugins`.
+pub fn site_plugins_dir(site: &SiteRecord) -> PathBuf {
+    site_home_from_record(site).join("plugins")
+}
+
 /// True when `docroot` does not follow the current `/home/.../public_html` layout
 /// (legacy `/var/www/...` or custom paths still shown in list/UI).
 pub fn is_legacy_docroot(docroot: &str) -> bool {
