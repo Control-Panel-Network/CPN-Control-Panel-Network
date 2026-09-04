@@ -114,10 +114,10 @@ mod tests {
 #[cfg(windows)]
 pub async fn inspect(port: u16) -> EnvironmentInfo {
     let mut addresses = addresses().await;
-    if addresses.is_empty() {
-        if let Some(ip) = primary_ip() {
-            addresses.push(ip);
-        }
+    if addresses.is_empty()
+        && let Some(ip) = primary_ip()
+    {
+        addresses.push(ip);
     }
     EnvironmentInfo {
         is_vps: false,
