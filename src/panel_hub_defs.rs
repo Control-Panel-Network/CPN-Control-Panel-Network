@@ -1,6 +1,81 @@
-﻿//! Hub tile catalogs for Server, Email, Databases & FTP, Backups, and Users & Plans.
+﻿//! Hub tile catalogs for Server, Email, Databases & FTP, Backups, Users & Plans, and Security.
 
 use crate::panel_hubs::HubTile;
+
+pub fn security_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![
+        (
+            "Security",
+            vec![
+                HubTile {
+                    title: "Firewall",
+                    subtitle: "Manage rules",
+                    href: "/security/firewall",
+                    live: true,
+                },
+                HubTile {
+                    title: "Secure SSH",
+                    subtitle: "Harden SSH",
+                    href: "/security/ssh",
+                    live: true,
+                },
+                HubTile {
+                    title: "Fail2ban",
+                    subtitle: "Brute-force jails",
+                    href: "/security/fail2ban",
+                    live: true,
+                },
+                HubTile {
+                    title: "ModSecurity",
+                    subtitle: "WAF config",
+                    href: "/security/modsecurity",
+                    live: true,
+                },
+                HubTile {
+                    title: "ModSec Rules",
+                    subtitle: "Edit / list rules",
+                    href: "/security/modsec-rules",
+                    live: true,
+                },
+                HubTile {
+                    title: "Rule Packs",
+                    subtitle: "OWASP CRS roots",
+                    href: "/security/rule-packs",
+                    live: true,
+                },
+                HubTile {
+                    title: "Malware scan",
+                    subtitle: "CPN malware status",
+                    href: "/security/malware-scan",
+                    live: true,
+                },
+            ],
+        ),
+        (
+            "SSL certificates",
+            vec![
+                HubTile {
+                    title: "Manage SSL",
+                    subtitle: "Site certificates",
+                    href: "/security/ssl",
+                    live: true,
+                },
+                HubTile {
+                    title: "Hostname SSL",
+                    subtitle: "Panel hostname cert",
+                    href: "/security/ssl/hostname",
+                    live: true,
+                },
+                HubTile {
+                    title: "Mail Server SSL",
+                    subtitle: "Mail cert status",
+                    href: "/security/ssl/mail",
+                    live: true,
+                },
+            ],
+        ),
+    ]
+}
 
 pub fn users_plans_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
     vec![

@@ -29,13 +29,15 @@ use cpn_installer::panel_hub_routes::{
     email_forwarding_route, email_forwarding_save, email_limits, email_mailscanner,
     email_marketing, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
     email_spamassassin, email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset,
-    security_page, server_dns_defaults, server_dns_nameservers, server_dns_nameservers_save,
-    server_dns_zones, server_dns_zones_delete, server_dns_zones_save, server_docker_apps,
-    server_docker_containers, server_docker_images, server_files_page, server_packages_page,
-    server_page, server_php_configs, server_php_extensions, server_php_tuning,
-    server_processes_page, server_services_control, server_services_page, settings_page,
-    settings_port_page, users_create_get, users_create_post, users_delete_post, users_list_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_route,
+    security_fail2ban, security_firewall, security_malware, security_modsec, security_modsec_rules,
+    security_page, security_rule_packs, security_ssh, security_ssh_toggle, security_ssl,
+    security_ssl_hostname, security_ssl_mail, server_dns_defaults, server_dns_nameservers,
+    server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
+    server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
+    server_packages_page, server_page, server_php_configs, server_php_extensions,
+    server_php_tuning, server_processes_page, server_services_control, server_services_page,
+    settings_page, settings_port_page, users_create_get, users_create_post, users_delete_post,
+    users_list_route, users_modify_get, users_password_post, users_plans_page, users_profile_route,
     users_reseller_route,
 };
 use cpn_installer::panel_network::{
@@ -812,6 +814,17 @@ async fn main() -> std::io::Result<()> {
             .service(settings_page)
             .service(settings_port_page)
             .service(security_page)
+            .service(security_firewall)
+            .service(security_ssh)
+            .service(security_ssh_toggle)
+            .service(security_fail2ban)
+            .service(security_modsec)
+            .service(security_modsec_rules)
+            .service(security_rule_packs)
+            .service(security_malware)
+            .service(security_ssl)
+            .service(security_ssl_hostname)
+            .service(security_ssl_mail)
             .service(users_plans_page)
             .service(users_profile_route)
             .service(users_list_route)

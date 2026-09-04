@@ -8,8 +8,7 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 |---|---|
 | **Hosting** | Dashboard, Websites, Email (hub), Databases & FTP (hub), Backups (hub), Apps, Plugins |
 | **Account** | Users & Plans (tile hub; Packages at `/packages`) |
-| **Administration** | Server (hub), Security (stub), Settings (Change Port) |
-
+| **Administration** | Server (hub), Security (hub), Settings (Change Port) |
 ## Shipped this PR
 
 ### Live (real backend or honest detection)
@@ -33,6 +32,12 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | Backups | Create | Existing selective backup chooser (concrete scope paths) |
 | Backups | Restore | Live archive listing (extract next) |
 | Backups | Schedule / Destinations | Local JSON records (timer/GDrive sync later) |
+| Security | Firewall | firewalld / ufw / iptables status + CPN journal (#21) |
+| Security | Secure SSH | sshd_config read + admin allowlisted toggles with backup |
+| Security | Fail2ban | Install detect + jail status (CTA if missing) |
+| Security | ModSecurity / Rules / Packs | Path detect; honest empty if absent |
+| Security | Malware scan | ClamAV when present; CPN-named scaffold otherwise |
+| Security | Manage / Hostname / Mail SSL | Site cert list + hostname/mail path detect |
 
 ### Scaffold (honest empty / not configured)
 
@@ -42,8 +47,6 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | FTP | Create / Delete / Reset FTP Account |
 | Email | Pattern Forwarding, Email Limits, Change Password, Email Debugger, Mail Queue, SpamAssassin, Rspamd, MailScanner, Email Marketing, Plus-Addressing |
 | Account | Users & Plans tile hub (list/create/modify users, Packages links, site ACL MVP) |
-| Administration | Security stub |
-
 ## Later (roadmap)
 
 - Reseller hierarchy and quotas under Reseller Center
@@ -57,7 +60,7 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 - Package manager install allowlist
 - Full file manager edit/upload
 - PowerDNS/BIND live DNS instead of file store only
-- Security hub (firewall, fail2ban, WAF)
+- Security hub deeper rule editors and on-demand malware scan UI (status hub shipped)
 
 ## Tests
 
@@ -71,4 +74,4 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 ## Authz
 
 - Session required on all hub routes
-- Bootstrap admin required for service control, DNS writes, and root file manager
+- Bootstrap admin required for service control, DNS writes, root file manager, and sshd toggles
