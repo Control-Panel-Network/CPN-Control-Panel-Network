@@ -4,7 +4,7 @@
 > **Work in progress (not finished).** This version is experimental and is not ready for production servers.
 
 [![Status: in development](https://img.shields.io/badge/status-in%20development-f59e0b)](#project-status)
-[![CI](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/KraoESPfan1n/CPN-Control-Panel-Network/actions/workflows/ci.yml)
+[![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 CPN is a Linux web installer for preparing server panel components on CyberPanel-aligned guest operating systems. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
@@ -13,33 +13,33 @@ Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on U
 
 ## Supported operating systems
 
-CPN installs on **Linux guests** only (CyberPanel-aligned targets). Status matches [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) and `src/os_support.rs`:
+CPN installs on **Linux guests** only (CyberPanel-aligned targets). This section mirrors [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) (authoritative) and `src/os_support.rs`.
 
 | Status | Meaning |
 |---|---|
-| **Supported** | Detection and install recipes implemented for that family |
-| **Partial** | Allowlisted; recipes run via the family path; less lab evidence |
-| **Not yet** | Known CyberPanel/community target; installer refuses with a helpful message |
+| **Supported** | Detection + install recipes implemented **and** smoke evidence (lab VM and/or `tests/docker-matrix.sh`) |
+| **Partial** | Allowlisted; recipes run via the family path; less or no smoke evidence yet, or an external blocker remains |
+| **Not yet** | Known CyberPanel/community target outside the installable allowlist; installer refuses with a helpful message |
 | **Host only** | Hypervisor or Windows host for Linux guests; not a CPN install target |
 
 ### Guest OS (where `cpn-installer` runs)
 
-| Guest OS | Status | Package path | Notes |
+| Guest OS | Status | Package path | Evidence / notes |
 |---|---|---|---|
-| AlmaLinux 10 | Supported | dnf | Lab-verified (AL10 VM) |
-| AlmaLinux 9 | Supported | dnf | Lab-verified; default Docker matrix image |
-| AlmaLinux 8 | Partial | dnf | Recipes + Remi PHP 8.2; matrix smoke pending |
-| Rocky Linux 9 | Supported | dnf | Same EL9 family; `os-matrix` nginx smoke |
-| Rocky Linux 8 | Partial | dnf | Same EL8 path; matrix smoke pending |
+| AlmaLinux 10 | Supported | dnf | Lab VM verified (SSH 2223 / UI 2088) |
+| AlmaLinux 9 | Supported | dnf | Lab VM verified (SSH 2222 / UI 2087); default Docker matrix image |
+| AlmaLinux 8 | Partial | dnf | Recipes + Remi PHP 8.2; promote after nginx matrix smoke |
+| Rocky Linux 9 | Supported | dnf | Same EL9 recipe family; CI/os-matrix nginx smoke |
+| Rocky Linux 8 | Partial | dnf | Same EL8 path; promote after matrix smoke |
 | RHEL 9 | Partial | dnf | Allowlisted; subscription/repos are operator responsibility |
-| RHEL 8 | Partial | dnf | Allowlisted; subscription/repos are operator responsibility |
-| CloudLinux 8 | Partial | dnf | Detected when `ID=cloudlinux`; no lab ISO here |
-| CentOS Stream 9 | Partial | dnf | Detected when `ID=centos` major 9 |
-| Ubuntu 24.04 | Supported | apt | Apt + OLS apt bootstrap; verify with matrix |
-| Ubuntu 22.04 | Supported | apt | Apt + OLS apt bootstrap; verify with matrix |
-| Ubuntu 20.04 | Partial | apt | Allowlisted; older PHP/repos |
-| Debian 11/12/13 | Partial | apt | Detection + apt family path (was not yet) |
-| openEuler 20-24 | Partial | dnf | Detection + dnf family path (was not yet) |
+| RHEL 8 | Partial | dnf | Same subscription blocker as RHEL 9 |
+| CloudLinux 8 | Partial | dnf | Detected when `ID=cloudlinux`; no public ISO/lab image here |
+| CentOS Stream 9 | Partial | dnf | Detected when `ID=centos` major 9; promote after matrix smoke |
+| Ubuntu 24.04 | Supported | apt | Apt recipes + OLS apt keyring bootstrap; lab/matrix verification in progress |
+| Ubuntu 22.04 | Supported | apt | Apt recipes + OLS apt keyring bootstrap; lab/matrix verification in progress |
+| Ubuntu 20.04 | Partial | apt | Allowlisted (focal OLS suite exists); older PHP/repos; thinner evidence |
+| Debian 11/12/13 | Partial | apt | Detection + Ubuntu-like apt path (nginx/Caddy/OLS/PHP); not full matrix yet |
+| openEuler 20-24 | Partial | dnf | Detection + dnf family path; package names may diverge; no lab ISO here |
 | Other RHEL derivatives | Not yet | dnf (planned) | Clear error when not in allowlist |
 
 Quick scan by status:
@@ -48,15 +48,15 @@ Quick scan by status:
 - **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04, Debian 11/12/13, openEuler 20-24
 - **Not yet:** other RHEL derivatives outside the allowlist
 
-Do not treat "Supported" as full mail/server matrix for every row. Authoritative detail: [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md).
+Do not treat "Supported" as a full mail/server matrix for every row. See the matrix for lab notes and blockers.
 
 ### Host / hypervisor (not install targets)
 
-| Platform | Role |
-|---|---|
-| Windows Server | Host only (Hyper-V role for Linux guests); not a native panel install |
-| VirtualBox | Host only (lab VMs for Linux guests) |
-| Hyper-V | Host only (lab VMs for Linux guests) |
+| Platform | Status | Role |
+|---|---|---|
+| Windows Server | Host only | Hyper-V role for Linux guests; not a native panel install |
+| VirtualBox | Host only | Lab VMs for Linux guests |
+| Hyper-V | Host only | Lab VMs for Linux guests |
 
 WSL2 is not a supported guest target for systemd and firewall recipes.
 
