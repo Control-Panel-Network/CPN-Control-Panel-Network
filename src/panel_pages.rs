@@ -16,20 +16,24 @@ fn panel_styles() -> &'static str {
   --sidebar-width:260px;
 }
 * { box-sizing:border-box; }
-html, body { margin:0; max-width:100%; overflow-x:hidden; }
+/* Fixed shell: sidebar stays put; main column scrolls. Avoid overflow-x on html/body (breaks sticky). */
+html, body { margin:0; height:100%; max-width:100%; overflow:hidden; }
 body { background:var(--surface); color:var(--ink);
   font-family:"Segoe UI",system-ui,sans-serif; font-size:17px; line-height:1.47; }
 a { color:inherit; text-decoration:none; }
 button { font:inherit; cursor:pointer; }
 .eyebrow { margin:0 0 8px; color:var(--blue); font-size:12px; font-weight:600; letter-spacing:.1em; }
-.panel-layout { min-height:100vh; display:flex; background:var(--surface); position:relative; }
+.panel-layout {
+  height:100vh; height:100dvh; max-height:100vh; max-height:100dvh;
+  display:flex; background:var(--surface); position:relative; overflow:hidden;
+}
 .sidebar-backdrop {
   display:none; position:fixed; inset:0; z-index:40; border:0; padding:0;
   background:rgba(29,29,31,.42); cursor:pointer;
 }
 .sidebar {
-  position:sticky; top:0; width:var(--sidebar-width);
-  height:100vh; height:100dvh; max-height:100vh; max-height:100dvh;
+  position:relative; align-self:stretch; width:var(--sidebar-width);
+  height:100%; max-height:100%;
   flex:0 0 var(--sidebar-width); min-height:0;
   display:flex; flex-direction:column; justify-content:flex-start;
   overflow:hidden; padding:28px 17px 20px; background:rgba(250,250,252,.96);
@@ -78,7 +82,12 @@ button { font:inherit; cursor:pointer; }
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
   min-height:44px; min-width:44px; padding:0 12px; color:var(--muted); font-size:13px;
 }
-.panel-main { min-width:0; flex:1; padding:64px clamp(20px,5vw,72px) 80px; }
+.panel-main {
+  min-width:0; flex:1; height:100%; max-height:100%;
+  overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:64px clamp(20px,5vw,72px) 80px;
+}
 .mobile-header { display:none; }
 .icon-btn {
   width:44px; height:44px; display:inline-grid; place-items:center;
@@ -121,6 +130,7 @@ button { font:inherit; cursor:pointer; }
   max-width:1200px; margin:22px auto 0; display:grid; grid-template-columns:1.15fr .85fr; gap:22px;
 }
 .status-card, .activity-card, .section-card {
+  min-width:0; max-width:100%;
   padding:28px; border-radius:18px; background:var(--canvas); border:1px solid var(--hairline);
 }
 .status-card-heading { display:flex; align-items:flex-start; justify-content:space-between; color:var(--green); }
@@ -143,18 +153,34 @@ button { font:inherit; cursor:pointer; }
 .panel-notice.error { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; }
 .empty-state { margin:0; color:var(--muted); }
 .muted { color:var(--muted); font-size:.9rem; }
-.table-wrap { overflow-x:auto; margin-top:14px; }
-.data-table { width:100%; border-collapse:collapse; font-size:14px; }
-.data-table th, .data-table td { text-align:left; padding:12px 10px; border-top:1px solid #eeeef0; vertical-align:top; }
+.table-wrap {
+  display:block; width:100%; max-width:100%; margin-top:14px;
+  overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+}
+.data-table {
+  width:max-content; min-width:100%; border-collapse:collapse; font-size:14px;
+}
+.data-table th, .data-table td {
+  text-align:left; padding:12px 10px; border-top:1px solid #eeeef0; vertical-align:top;
+}
 .data-table th { color:var(--muted); font-weight:600; border-top:0; }
+.data-table th:last-child, .data-table td:last-child { white-space:nowrap; }
 .badge-ok { display:inline-block; padding:2px 8px; border-radius:999px; background:#ecfdf3; color:#027a48; font-size:12px; font-weight:700; }
 .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 .status-dot.ok { background:#12b76a; }
 .status-dot.off { background:#98a2b3; }
-.panel-card { max-width:1200px; margin:0 auto; padding:22px; background:var(--canvas); border:1px solid var(--hairline); border-radius:18px; }
+.panel-card {
+  min-width:0; width:100%; max-width:1200px; margin:0 auto; padding:22px;
+  background:var(--canvas); border:1px solid var(--hairline); border-radius:18px;
+}
+.panel-card-head {
+  display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+}
 .stack-form label { display:grid; gap:6px; font-size:14px; font-weight:600; color:#344054; }
 .stack-form input, .stack-form select, .stack-form textarea {
-  font:inherit; padding:10px 12px; border:1px solid var(--hairline); border-radius:10px; background:#fff;
+  width:100%; max-width:100%; box-sizing:border-box; font:inherit;
+  padding:10px 12px; border:1px solid var(--hairline); border-radius:10px; background:#fff;
 }
 .btn-primary {
   display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px;
@@ -162,11 +188,8 @@ button { font:inherit; cursor:pointer; }
 }
 .kv-list { list-style:none; padding:0; margin:18px 0 0; }
 .kv-list li { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid #eeeef0; font-size:14px; }
-.stack-form { display:grid; gap:10px; margin-top:16px; max-width:420px; }
+.stack-form { display:grid; gap:10px; margin-top:16px; width:100%; max-width:420px; }
 .stack-form label { font-weight:600; font-size:.92rem; }
-.stack-form input {
-  width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit;
-}
 .btn-primary, .btn-danger {
   display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px;
   border:0; border-radius:999px; font-weight:700; cursor:pointer; text-decoration:none;
@@ -174,7 +197,8 @@ button { font:inherit; cursor:pointer; }
 .btn-primary { background:var(--blue); color:#fff; }
 .btn-danger { background:#fee4e2; color:#b42318; }
 .inline-form { display:inline; margin:0; }
-code { font-size:.9em; }
+code { font-size:.9em; word-break:break-word; }
+.panel-main pre { max-width:100%; overflow-x:auto; }
 @media (max-width:1023.98px) {
   body.nav-open { overflow:hidden; }
   .sidebar-backdrop { display:none; }
@@ -185,9 +209,9 @@ code { font-size:.9em; }
     transition:transform 180ms ease; box-shadow:none; flex:none;
   }
   body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); }
-  .panel-main { padding:0 20px 64px; width:100%; }
+  .panel-main { padding:0 16px 64px; width:100%; height:100%; overflow-y:auto; }
   .mobile-header {
-    height:58px; margin:0 -20px 28px; padding:0 12px 0 8px; display:flex; align-items:center;
+    display:flex; height:58px; margin:0 -16px 28px; padding:0 12px 0 8px; align-items:center;
     justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
     background:rgba(250,250,252,.94); border-bottom:1px solid var(--hairline);
   }
@@ -195,11 +219,25 @@ code { font-size:.9em; }
   .resource-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dashboard-lower-grid { grid-template-columns:1fr; }
 }
+@media (max-width:719.98px) {
+  .data-table th:first-child, .data-table td:first-child {
+    position:sticky; left:0; z-index:1; background:var(--canvas);
+    box-shadow:4px 0 8px rgba(29,29,31,.06);
+  }
+  .data-table th:last-child, .data-table td:last-child {
+    position:sticky; right:0; z-index:1; background:var(--canvas);
+    box-shadow:-4px 0 8px rgba(29,29,31,.06);
+  }
+  .data-table thead th:first-child, .data-table thead th:last-child { z-index:2; }
+}
 @media (max-width:679.98px) {
-  .dashboard-heading { flex-direction:column; align-items:stretch; }
+  .dashboard-heading { flex-direction:column; align-items:stretch; margin-bottom:28px; }
   .resource-grid { grid-template-columns:1fr; }
   .resource-card { min-height:200px; }
   .dashboard-heading h1 { font-size:clamp(28px,9vw,40px); }
+  .panel-card { padding:16px; }
+  .stack-form { max-width:100%; }
+  .status-card, .activity-card, .section-card { padding:18px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .sidebar { transition:none; }
@@ -363,4 +401,41 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         main = main,
         script = script,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::panel_styles;
+
+    #[test]
+    fn panel_styles_keep_sidebar_while_main_scrolls() {
+        let css = panel_styles();
+        assert!(
+            css.contains("overflow:hidden") && css.contains(".panel-main"),
+            "document scroll should be locked for the panel shell"
+        );
+        assert!(
+            css.contains("100dvh") && css.contains("overflow-y:auto"),
+            "shell should use a viewport-height layout with a scrolling main column"
+        );
+        assert!(
+            css.contains("align-self:stretch")
+                || (css.contains("position:sticky") && css.contains("top:0")),
+            "sidebar should fill the viewport column (or stay sticky) while main scrolls"
+        );
+        assert!(
+            css.contains(".table-wrap")
+                && css.contains("overflow-x:auto")
+                && css.contains("max-width:100%"),
+            "wide admin tables must scroll inside a constrained wrapper"
+        );
+        assert!(
+            css.contains("position:sticky") && css.contains("right:0"),
+            "narrow viewports should pin the Actions column"
+        );
+        assert!(
+            css.contains("min-width:0"),
+            "cards need min-width:0 so flex children do not blow out the page"
+        );
+    }
 }

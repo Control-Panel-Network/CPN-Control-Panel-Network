@@ -14,7 +14,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { min-height: 100%; max-width: 100%; overflow-x: hidden; }
+html, body { min-height: 100%; max-width: 100%; }
 
 body {
   margin: 0;
@@ -24,6 +24,13 @@ body {
   font-size: 17px;
   line-height: 1.47;
   letter-spacing: -0.01em;
+}
+
+/* Authenticated shell: only .panel-main scrolls; sidebar stays in the viewport. */
+body:has(.panel-layout) {
+  height: 100%;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
 button, input { font: inherit; }
@@ -125,7 +132,16 @@ a { color: inherit; text-decoration: none; }
 .demo-link { margin-top: 20px; color: var(--blue); font-size: 14px; }
 .login-page footer { position: absolute; bottom: 48px; color: var(--muted); font-size: 12px; }
 
-.panel-layout { min-height: 100vh; display: flex; background: var(--surface); position: relative; }
+.panel-layout {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  display: flex;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+}
 
 .sidebar-backdrop {
   display: none;
@@ -139,13 +155,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
+  position: relative;
+  align-self: stretch;
   width: 260px;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100vh;
-  max-height: 100dvh;
+  height: 100%;
+  max-height: 100%;
   flex: 0 0 260px;
   min-height: 0;
   display: flex;
@@ -356,7 +370,17 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
 }
 
-.panel-main { min-width: 0; flex: 1; padding: 64px clamp(20px, 5vw, 72px) 80px; }
+.panel-main {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 64px clamp(20px, 5vw, 72px) 80px;
+}
 .mobile-header { display: none; }
 .icon-btn {
   width: 44px;
@@ -397,7 +421,14 @@ a { color: inherit; text-decoration: none; }
 .gauge-copy span { margin-top: 3px; color: var(--muted); font-size: 11px; text-transform: capitalize; }
 
 .dashboard-lower-grid { max-width: 1200px; margin: 22px auto 0; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 22px; }
-.status-card, .activity-card, .section-card { padding: 28px; border-radius: 18px; background: var(--canvas); border: 1px solid var(--hairline); }
+.status-card, .activity-card, .section-card {
+  min-width: 0;
+  max-width: 100%;
+  padding: 28px;
+  border-radius: 18px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+}
 .status-card-heading { display: flex; align-items: flex-start; justify-content: space-between; color: var(--green); }
 .status-card h2, .activity-card h2, .section-card h2 { margin: 0; color: var(--ink); font-size: 23px; letter-spacing: -0.025em; }
 .status-card ul { list-style: none; padding: 0; margin: 25px 0 0; }
@@ -408,6 +439,50 @@ a { color: inherit; text-decoration: none; }
 .status-card li strong.bad { color: #b42318; }
 .activity-card time { color: var(--muted); font-size: 12px; }
 .section-card p { margin: 12px 0 0; color: var(--muted); max-width: 52ch; }
+
+.table-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.data-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-top: 1px solid #eeeeF0;
+  vertical-align: top;
+}
+.data-table th { color: var(--muted); font-weight: 600; border-top: 0; }
+.data-table th:last-child,
+.data-table td:last-child { white-space: nowrap; }
+.panel-card {
+  min-width: 0;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+}
+.panel-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
 @media (max-width: 1023.98px) {
   body.nav-open { overflow: hidden; }
@@ -430,10 +505,10 @@ a { color: inherit; text-decoration: none; }
     transform: translateX(0);
     box-shadow: 12px 0 32px rgba(0, 0, 0, 0.12);
   }
-  .panel-main { padding: 0 20px 64px; width: 100%; }
+  .panel-main { padding: 0 16px 64px; width: 100%; height: 100%; overflow-y: auto; }
   .mobile-header {
     height: 58px;
-    margin: 0 -20px 28px;
+    margin: 0 -16px 28px;
     padding: 0 12px 0 8px;
     display: flex;
     align-items: center;
@@ -472,7 +547,12 @@ body.sidebar-collapsed.nav-open .sidebar {
   transform: translateX(0);
   box-shadow: 12px 0 32px rgba(0, 0, 0, 0.12);
 }
-body.sidebar-collapsed .panel-main { padding: 0 20px 64px; width: 100%; }
+body.sidebar-collapsed .panel-main {
+  padding: 0 20px 64px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
 body.sidebar-collapsed .mobile-header {
   height: 58px;
   margin: 0 -20px 28px;
@@ -490,13 +570,36 @@ body.sidebar-collapsed .mobile-header {
 }
 body.sidebar-collapsed .mobile-header strong { flex: 1; font-size: 16px; }
 
+@media (max-width: 719.98px) {
+  .data-table th:first-child,
+  .data-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--canvas);
+    box-shadow: 4px 0 8px rgba(29, 29, 31, 0.06);
+  }
+  .data-table th:last-child,
+  .data-table td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: var(--canvas);
+    box-shadow: -4px 0 8px rgba(29, 29, 31, 0.06);
+  }
+  .data-table thead th:first-child,
+  .data-table thead th:last-child { z-index: 2; }
+}
+
 @media (max-width: 679.98px) {
-  .dashboard-heading { align-items: stretch; flex-direction: column; }
+  .dashboard-heading { align-items: stretch; flex-direction: column; margin-bottom: 28px; }
   .dashboard-search { width: 100%; }
   .resource-grid { grid-template-columns: 1fr; }
   .resource-card { min-height: 200px; }
   .dashboard-heading h1 { font-size: clamp(28px, 9vw, 40px); }
   .login-page { padding-inline: 20px; }
+  .panel-card { padding: 16px; }
+  .status-card, .activity-card, .section-card { padding: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

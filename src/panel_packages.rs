@@ -259,7 +259,7 @@ fn assign_form(packages: &[Package]) -> String {
         r#"<div class="panel-card" style="margin-top:22px;">
       <h2 style="margin:0 0 8px;font-size:18px;">Assign package</h2>
       <p class="muted">Packages apply per account owner. Site ACL stays domain-keyed.</p>
-      <form method="post" action="/packages/assign" class="stack-form" style="display:grid;gap:12px;max-width:520px;margin-top:12px;">
+      <form method="post" action="/packages/assign" class="stack-form">
         <label>Account
           <select name="username" required>{account_opts}</select>
         </label>
@@ -297,8 +297,8 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
     format!(
         r#"{heading}{notices}
     <div class="panel-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <h2 style="margin:0;font-size:18px;">| Hosting Packages</h2>
+      <div class="panel-card-head">
+        <h2 style="margin:0;font-size:18px;">Hosting Packages</h2>
         <a class="btn-primary" href="/packages/new">Create package</a>
       </div>
       {rows}
