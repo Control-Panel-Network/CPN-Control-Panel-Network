@@ -114,7 +114,7 @@ pub fn website_manage_main(site: &SiteRecord, notice: Option<&str>, error: Optio
     };
     let home = site_home_from_record(site);
     let disk = approx_dir_bytes(Path::new(&site.docroot), 8_000)
-        .map(|b| format_bytes(b))
+        .map(format_bytes)
         .unwrap_or_else(|| "Unavailable".into());
     let engine = site
         .engine

@@ -602,15 +602,15 @@ pub async fn plugins_settings_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let sites = sites_manageable_by(&user).unwrap_or_default();
-    if !domain.trim().is_empty() {
-        if let Err(err) = require_manage_site(&user, domain, SitePerm::Enable) {
-            return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    plugins_redirect(domain, "installed", None, Some(&err)),
-                ))
-                .finish();
-        }
+    if !domain.trim().is_empty()
+        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(domain, "installed", None, Some(&err)),
+            ))
+            .finish();
     }
     html_ok(panel_shell(
         &user,
@@ -689,15 +689,15 @@ pub async fn plugins_dashboard_page(
     let id = query.get("id").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    if !domain.trim().is_empty() {
-        if let Err(err) = require_manage_site(&user, domain, SitePerm::Enable) {
-            return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    plugins_redirect(domain, "installed", None, Some(&err)),
-                ))
-                .finish();
-        }
+    if !domain.trim().is_empty()
+        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(domain, "installed", None, Some(&err)),
+            ))
+            .finish();
     }
     let active = if domain.is_empty() || id.is_empty() {
         "plugins".to_string()

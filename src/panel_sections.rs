@@ -51,16 +51,14 @@ fn site_action_buttons(site: &SiteRecord) -> String {
             r#"<form method="post" action="/websites/suspend" class="inline-form" onsubmit="return confirm('Suspend {domain}?');">
               <input type="hidden" name="domain" value="{domain}">
               <button type="submit" class="btn-warn" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#fffaeb;color:#b54708;font-weight:700;cursor:pointer;">Suspend</button>
-            </form>"#,
-            domain = domain,
+            </form>"#
         )
     } else {
         format!(
             r#"<form method="post" action="/websites/resume" class="inline-form">
               <input type="hidden" name="domain" value="{domain}">
               <button type="submit" class="btn-secondary" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Resume</button>
-            </form>"#,
-            domain = domain,
+            </form>"#
         )
     };
     format!(
@@ -73,9 +71,7 @@ fn site_action_buttons(site: &SiteRecord) -> String {
               <input type="hidden" name="domain" value="{domain}">
               <button type="submit" class="btn-danger" style="min-height:36px;padding:0 12px;font-size:13px;">Delete</button>
             </form>
-          </div>"#,
-        domain = domain,
-        suspend = suspend,
+          </div>"#
     )
 }
 

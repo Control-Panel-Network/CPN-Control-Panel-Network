@@ -172,10 +172,10 @@ pub fn default_docroot(domain: &str, parent: Option<&str>) -> String {
 /// Domain home derived from a site record (parent of `public_html` when standard).
 pub fn site_home_from_record(site: &SiteRecord) -> PathBuf {
     let path = Path::new(&site.docroot);
-    if path.file_name().and_then(|name| name.to_str()) == Some("public_html") {
-        if let Some(parent) = path.parent() {
-            return parent.to_path_buf();
-        }
+    if path.file_name().and_then(|name| name.to_str()) == Some("public_html")
+        && let Some(parent) = path.parent()
+    {
+        return parent.to_path_buf();
     }
     let parent = resolve_parent_domain(&site.domain).ok().flatten();
     site_home_dir(&site.domain, parent.as_deref())
@@ -255,11 +255,11 @@ pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
     if let Some(home) = docroot_path.parent() {
         set_dir_mode(home, 0o755);
         try_chown_root(home);
-        if let Some(parent_home) = home.parent() {
-            if parent_home != hosting_home_root() {
-                set_dir_mode(parent_home, 0o755);
-                try_chown_root(parent_home);
-            }
+        if let Some(parent_home) = home.parent()
+            && parent_home != hosting_home_root()
+        {
+            set_dir_mode(parent_home, 0o755);
+            try_chown_root(parent_home);
         }
     }
     let index = docroot_path.join("index.html");

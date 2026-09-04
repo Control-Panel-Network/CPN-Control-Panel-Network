@@ -25,21 +25,12 @@ fn default_field_type() -> String {
     "text".into()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PluginSettings {
     #[serde(default)]
     pub show_in_sidebar: bool,
     #[serde(default)]
     pub fields: BTreeMap<String, String>,
-}
-
-impl Default for PluginSettings {
-    fn default() -> Self {
-        Self {
-            show_in_sidebar: false,
-            fields: BTreeMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -117,8 +108,10 @@ pub fn load_plugin_settings(
     let id = normalize_plugin_id(plugin_id_raw)?;
     let path = settings_path(&domain, &id)?;
     if !path.is_file() {
-        let mut settings = PluginSettings::default();
-        settings.show_in_sidebar = default_show_in_sidebar(&domain, &id);
+        let mut settings = PluginSettings {
+            show_in_sidebar: default_show_in_sidebar(&domain, &id),
+            ..Default::default()
+        };
         for field in declared_settings_fields(&domain, &id) {
             settings.fields.insert(field.key, field.default);
         }
