@@ -6,10 +6,14 @@ use crate::manifest::{
     preserve_paths_for_repair, record_install,
 };
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
+use crate::release_verify::{
+    maybe_check_rpm_sig, verify_gpg_enabled, verify_gpg_sums, verify_release_enabled,
+    verify_sha256_file,
+};
 use crate::releases::{self, CpnRelease, compare_versions, normalize_version};
 use rand::{Rng, distr::Alphanumeric};
 use std::cmp::Ordering;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -82,6 +86,8 @@ async fn download_file(url: &str, destination: &str) -> Result<(), String> {
             "--location",
             "--silent",
             "--show-error",
+            "--max-time",
+            "120",
             "--output",
             destination,
             url,
@@ -95,6 +101,70 @@ async fn download_file(url: &str, destination: &str) -> Result<(), String> {
     if !status.success() {
         return Err("Download of package asset failed".into());
     }
+    Ok(())
+}
+
+fn bundled_gpg_keyring() -> Option<PathBuf> {
+    // Prefer the key shipped next to the binary when installed from a source tree,
+    // then common packaging path under /usr/share when present.
+    let candidates = [
+        PathBuf::from("packaging/RPM-GPG-KEY-CPN"),
+        PathBuf::from("/usr/share/cpn/RPM-GPG-KEY-CPN"),
+        PathBuf::from("/etc/pki/rpm-gpg/RPM-GPG-KEY-CPN"),
+    ];
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+async fn verify_downloaded_artifact(
+    state: &AppState,
+    release: &CpnRelease,
+    artifact_path: &str,
+) -> Result<(), String> {
+    if !verify_release_enabled() {
+        state.log(
+            "CPN_VERIFY_RELEASE disabled; skipping release artifact verification",
+            "info",
+        );
+        return Ok(());
+    }
+
+    let sums_asset = release.checksums_asset.as_ref().ok_or_else(|| {
+        "Release is missing SHA256SUMS. Refuse install while CPN_VERIFY_RELEASE is enabled (set CPN_VERIFY_RELEASE=0 only for local lab builds)."
+            .to_string()
+    })?;
+
+    state
+        .progress("verifying", 35, "Downloading SHA256SUMS")
+        .await;
+    let sums_path = ephemeral_path("SHA256SUMS")?;
+    download_file(&sums_asset.browser_download_url, &sums_path).await?;
+    let sums_body = std::fs::read_to_string(&sums_path)
+        .map_err(|error| format!("Could not read SHA256SUMS: {error}"))?;
+    verify_sha256_file(Path::new(artifact_path), &sums_body)?;
+    state.log(
+        format!("SHA-256 verified for {}", Path::new(artifact_path).display()),
+        "info",
+    );
+
+    if verify_gpg_enabled() {
+        let asc = release.checksums_asc_asset.as_ref().ok_or_else(|| {
+            "Release is missing SHA256SUMS.asc while CPN_VERIFY_GPG=1".to_string()
+        })?;
+        let asc_path = ephemeral_path("SHA256SUMS.asc")?;
+        download_file(&asc.browser_download_url, &asc_path).await?;
+        let keyring = bundled_gpg_keyring();
+        verify_gpg_sums(
+            Path::new(&sums_path),
+            Path::new(&asc_path),
+            keyring.as_deref(),
+        )
+        .await?;
+        state.log("GPG verified SHA256SUMS.asc", "info");
+        let _ = std::fs::remove_file(&asc_path);
+    }
+
+    maybe_check_rpm_sig(Path::new(artifact_path)).await?;
+    let _ = std::fs::remove_file(&sums_path);
     Ok(())
 }
 
@@ -189,6 +259,7 @@ async fn apply_release(
             .await;
         let path = ephemeral_path(&rpm.name)?;
         download_file(&rpm.browser_download_url, &path).await?;
+        verify_downloaded_artifact(state, release, &path).await?;
         state
             .progress("installing", 60, "Installing RPM package")
             .await;
@@ -202,6 +273,7 @@ async fn apply_release(
             .await;
         let path = ephemeral_path("cpn-installer.bin")?;
         download_file(&bin.browser_download_url, &path).await?;
+        verify_downloaded_artifact(state, release, &path).await?;
         state
             .progress("installing", 60, "Replacing cpn-installer binary")
             .await;

@@ -18,6 +18,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Official signing identity fingerprint (public; matches packaging/RPM-GPG-KEY-CPN).
+  CPN_RELEASE_FINGERPRINT: EA5B57B1230FFA37F4426A873EC7121204EB5515
 
 jobs:
   release:
@@ -50,6 +52,7 @@ jobs:
             echo "runner: ${RUNNER_OS}/${RUNNER_ARCH}"
             echo "ref: ${GITHUB_REF}"
             echo "sha: ${GITHUB_SHA}"
+            echo "gpg_fingerprint: ${CPN_RELEASE_FINGERPRINT}"
           } | tee dist/build-environment.txt
 
       - name: Install Node.js (Vite embed)
@@ -86,41 +89,70 @@ jobs:
           fi
           cp "${rpms[@]}" dist/
 
-      - name: Publish SHA256SUMS
+      - name: Install GPG tools on runner
         run: |
-          chmod +x scripts/publish-checksums.sh
-          ./scripts/publish-checksums.sh dist/*
-          test -f dist/SHA256SUMS
-          cat dist/SHA256SUMS
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg2
 
-      - name: GPG sign (required for tag releases)
+      - name: Embed RPM signatures (AlmaLinux 9 rpmsign) then detached .asc
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           CPN_REQUIRE_GPG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+          CPN_REQUIRE_RPMSIGN: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
         run: |
-          chmod +x scripts/sign-release.sh
+          chmod +x scripts/sign-rpm-almalinux.sh scripts/sign-release.sh
           if [[ "${CPN_REQUIRE_GPG}" == "1" && -z "${GPG_PRIVATE_KEY:-}" ]]; then
             echo "Official tag release requires GPG_PRIVATE_KEY (issue #16)." >&2
             exit 1
           fi
-          ./scripts/sign-release.sh dist/SHA256SUMS
           shopt -s nullglob
-          for rpm in dist/*.rpm; do
-            ./scripts/sign-release.sh "$rpm"
-            if [[ "${CPN_REQUIRE_GPG}" == "1" ]]; then
+          rpms=(dist/*.rpm)
+          if ((${#rpms[@]} == 0)); then
+            echo "No RPMs in dist/ to sign" >&2
+            exit 1
+          fi
+          if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
+            ./scripts/sign-rpm-almalinux.sh "${rpms[@]}"
+            for rpm in "${rpms[@]}"; do
               test -f "${rpm}.asc"
-              if command -v rpmsign >/dev/null 2>&1; then
-                echo "$GPG_PASSPHRASE" | rpmsign --addsign --define "_gpg_name ${GPG_KEY_ID}" "$rpm" || {
-                  echo "rpmsign failed; detached .asc is present but RPM package signature missing" >&2
-                  exit 1
-                }
-              else
-                echo "rpmsign not installed on runner; detached .asc published (install rpm-sign for embedded RPM sig)." >&2
-              fi
-            fi
+            done
+          else
+            echo "Dry-run without GPG secrets; RPMs left unsigned."
+          fi
+
+      - name: Publish SHA256SUMS (after RPM signing)
+        run: |
+          chmod +x scripts/publish-checksums.sh
+          shopt -s nullglob
+          existing=()
+          for f in dist/cpn-installer dist/cpn dist/*.rpm dist/build-environment.txt; do
+            [[ -f "$f" ]] && existing+=("$f")
           done
+          ./scripts/publish-checksums.sh "${existing[@]}"
+          test -f dist/SHA256SUMS
+          cat dist/SHA256SUMS
+
+      - name: Detached-sign SHA256SUMS and binaries
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          CPN_REQUIRE_GPG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+          CPN_RPMSIGN: "0"
+        run: |
+          chmod +x scripts/sign-release.sh
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            if [[ "${CPN_REQUIRE_GPG}" == "1" ]]; then
+              echo "GPG_PRIVATE_KEY required" >&2
+              exit 1
+            fi
+            echo "Skipping detached signatures (no GPG secret)."
+            exit 0
+          fi
+          ./scripts/sign-release.sh dist/SHA256SUMS dist/cpn-installer dist/cpn
+          test -f dist/SHA256SUMS.asc
 
       - name: Optional cosign blob signatures
         env:
@@ -141,6 +173,38 @@ jobs:
           cargo cyclonedx -f json -o dist/cpn-installer.cdx.json
           test -s dist/cpn-installer.cdx.json
           ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
+          chmod +x scripts/publish-checksums.sh
+          shopt -s nullglob
+          existing=()
+          for f in dist/cpn-installer dist/cpn dist/*.rpm dist/cpn-installer.cdx.json dist/build-environment.txt; do
+            [[ -f "$f" ]] && existing+=("$f")
+          done
+          ./scripts/publish-checksums.sh "${existing[@]}"
+
+      - name: Re-sign SHA256SUMS after SBOM refresh
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          CPN_REQUIRE_GPG: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
+          CPN_RPMSIGN: "0"
+        run: |
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            if [[ "${CPN_REQUIRE_GPG}" == "1" ]]; then
+              echo "GPG_PRIVATE_KEY required" >&2
+              exit 1
+            fi
+            exit 0
+          fi
+          chmod +x scripts/sign-release.sh
+          rm -f dist/SHA256SUMS.asc
+          ./scripts/sign-release.sh dist/SHA256SUMS
+          test -f dist/SHA256SUMS.asc
+
+      - name: Copy public release key into dist
+        run: |
+          cp packaging/RPM-GPG-KEY-CPN dist/RPM-GPG-KEY-CPN
+          echo "${CPN_RELEASE_FINGERPRINT}" > dist/GPG-FINGERPRINT.txt
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
@@ -152,6 +216,7 @@ jobs:
             dist/*.rpm
             dist/cpn-installer.cdx.json
             dist/build-environment.txt
+            dist/RPM-GPG-KEY-CPN
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -165,13 +230,34 @@ jobs:
         with:
           files: dist/**
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            Verify before running as root:
+            ## Verify before running as root
 
-            ```bash
-            sha256sum -c SHA256SUMS
+            Release signing fingerprint (must match `packaging/RPM-GPG-KEY-CPN`):
+
+            ```
+            EA5B57B1230FFA37F4426A873EC7121204EB5515
             ```
 
-            See `to-do/RELEASE-SIGNING.md` for GPG/cosign verification.
-            Provenance attestation is attached via GitHub Artifact Attestations.
-            GPG/cosign signatures appear when repository secrets are configured.
+            ```bash
+            # 1) Checksums
+            sha256sum -c SHA256SUMS
+
+            # 2) Signed checksum manifest
+            gpg --import RPM-GPG-KEY-CPN
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+
+            # 3) Embedded RPM signature (when rpm is available)
+            rpm --import RPM-GPG-KEY-CPN
+            rpm --checksig *.rpm
+
+            # 4) Helper script from the source tree
+            ./scripts/verify-release.sh ./cpn-installer-*.rpm ./SHA256SUMS ./SHA256SUMS.asc
+
+            # 5) GitHub provenance attestation
+            gh attestation verify ./cpn-installer --repo Control-Panel-Network/CPN-Control-Panel-Network
+            ```
+
+            Full operator guide: `to-do/RELEASE-SIGNING.md`.
+            Upgrade/repair downloads verify SHA-256 by default (`CPN_VERIFY_RELEASE=0` disables; `CPN_VERIFY_GPG=1` also checks `SHA256SUMS.asc`).

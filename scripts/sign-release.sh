@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Optional GPG signing for release artifacts (issue #16).
-# Required secrets when signing is enabled:
+# GPG sign release artifacts (issue #16).
+# Required for official tag releases (CPN_REQUIRE_GPG=1):
 #   GPG_PRIVATE_KEY  armored private key
 #   GPG_PASSPHRASE   passphrase (may be empty)
 #   GPG_KEY_ID       optional key id / fingerprint
+#
+# When CPN_RPMSIGN=1 and the target is a .rpm, also embeds an RPM package
+# signature via rpmsign --addsign (requires rpm-sign / rpmsign on PATH).
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
@@ -33,17 +36,63 @@ if [[ -z "$KEY_ID" ]]; then
   exit 1
 fi
 
-sign_one() {
+# Prefer primary fingerprint when GPG_KEY_ID looks like a short id.
+FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+SIGN_USER="${GPG_KEY_ID:-$FPR}"
+if [[ -z "$SIGN_USER" ]]; then
+  SIGN_USER="$KEY_ID"
+fi
+
+gpg_sign_args=(--batch --yes --detach-sign --armor --local-user "$SIGN_USER")
+if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
+  gpg_sign_args+=(--pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+fi
+
+sign_detached() {
   local file="$1"
-  local args=(--batch --yes --detach-sign --armor --local-user "$KEY_ID")
-  if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
-    args+=(--pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
-  fi
-  gpg "${args[@]}" --output "${file}.asc" "$file"
+  gpg "${gpg_sign_args[@]}" --output "${file}.asc" "$file"
   echo "Signed $file -> ${file}.asc"
+}
+
+rpm_embed_sign() {
+  local rpm="$1"
+  if [[ "${CPN_RPMSIGN:-0}" != "1" ]]; then
+    return 0
+  fi
+  if ! command -v rpmsign >/dev/null 2>&1; then
+    if [[ "${CPN_REQUIRE_RPMSIGN:-0}" == "1" ]]; then
+      echo "rpmsign required but not installed (install rpm-sign)" >&2
+      exit 1
+    fi
+    echo "rpmsign not available; skipping embedded RPM signature for $rpm"
+    return 0
+  fi
+  # rpmmacros for non-interactive signing
+  cat >"$GNUPGHOME/rpmmacros" <<EOF
+%_gpg_name $SIGN_USER
+%__gpg $(command -v gpg)
+%_gpg_path $GNUPGHOME
+%__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+EOF
+  HOME="$GNUPGHOME" rpmsign --addsign "$rpm"
+  echo "Embedded RPM signature: $rpm"
+  if command -v rpm >/dev/null 2>&1; then
+    HOME="$GNUPGHOME" rpm --checksig "$rpm" || {
+      echo "rpm --checksig failed for $rpm" >&2
+      exit 1
+    }
+  fi
 }
 
 for path in "$@"; do
   [[ -f "$path" ]] || { echo "Missing file: $path" >&2; exit 1; }
-  sign_one "$path"
+  case "$path" in
+    *.rpm)
+      rpm_embed_sign "$path"
+      sign_detached "$path"
+      ;;
+    *)
+      sign_detached "$path"
+      ;;
+  esac
 done

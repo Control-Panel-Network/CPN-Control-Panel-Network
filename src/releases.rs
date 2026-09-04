@@ -27,6 +27,8 @@ pub struct CpnRelease {
     pub assets: Vec<ReleaseAsset>,
     pub rpm_asset: Option<ReleaseAsset>,
     pub binary_asset: Option<ReleaseAsset>,
+    pub checksums_asset: Option<ReleaseAsset>,
+    pub checksums_asc_asset: Option<ReleaseAsset>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -116,19 +118,34 @@ fn pick_rpm_asset(assets: &[serde_json::Value]) -> Option<ReleaseAsset> {
         if !(lower.contains("cpn-installer") && lower.ends_with(".rpm")) {
             return None;
         }
-        Some(ReleaseAsset {
-            name,
-            browser_download_url: asset.get("browser_download_url")?.as_str()?.into(),
-            content_type: asset
-                .get("content_type")
-                .and_then(|value| value.as_str())
-                .unwrap_or("application/octet-stream")
-                .into(),
-            size: asset
-                .get("size")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0),
-        })
+        asset_from_json(asset)
+    })
+}
+
+fn asset_from_json(asset: &serde_json::Value) -> Option<ReleaseAsset> {
+    Some(ReleaseAsset {
+        name: asset.get("name")?.as_str()?.into(),
+        browser_download_url: asset.get("browser_download_url")?.as_str()?.into(),
+        content_type: asset
+            .get("content_type")
+            .and_then(|value| value.as_str())
+            .unwrap_or("application/octet-stream")
+            .into(),
+        size: asset
+            .get("size")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+    })
+}
+
+fn pick_named_asset(assets: &[serde_json::Value], exact_name: &str) -> Option<ReleaseAsset> {
+    assets.iter().find_map(|asset| {
+        let name = asset.get("name")?.as_str()?;
+        if name == exact_name {
+            asset_from_json(asset)
+        } else {
+            None
+        }
     })
 }
 
@@ -145,19 +162,7 @@ fn pick_binary_asset(assets: &[serde_json::Value]) -> Option<ReleaseAsset> {
         if !is_binary {
             return None;
         }
-        Some(ReleaseAsset {
-            name,
-            browser_download_url: asset.get("browser_download_url")?.as_str()?.into(),
-            content_type: asset
-                .get("content_type")
-                .and_then(|value| value.as_str())
-                .unwrap_or("application/octet-stream")
-                .into(),
-            size: asset
-                .get("size")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0),
-        })
+        asset_from_json(asset)
     })
 }
 
@@ -173,24 +178,9 @@ fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
         .unwrap_or_default();
     let rpm_asset = pick_rpm_asset(&assets_json);
     let binary_asset = pick_binary_asset(&assets_json);
-    let assets = assets_json
-        .iter()
-        .filter_map(|asset| {
-            Some(ReleaseAsset {
-                name: asset.get("name")?.as_str()?.into(),
-                browser_download_url: asset.get("browser_download_url")?.as_str()?.into(),
-                content_type: asset
-                    .get("content_type")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("application/octet-stream")
-                    .into(),
-                size: asset
-                    .get("size")
-                    .and_then(|value| value.as_u64())
-                    .unwrap_or(0),
-            })
-        })
-        .collect();
+    let checksums_asset = pick_named_asset(&assets_json, "SHA256SUMS");
+    let checksums_asc_asset = pick_named_asset(&assets_json, "SHA256SUMS.asc");
+    let assets = assets_json.iter().filter_map(asset_from_json).collect();
     let published = value
         .get("published_at")
         .and_then(|item| item.as_str())
@@ -223,6 +213,8 @@ fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
         assets,
         rpm_asset,
         binary_asset,
+        checksums_asset,
+        checksums_asc_asset,
     })
 }
 
