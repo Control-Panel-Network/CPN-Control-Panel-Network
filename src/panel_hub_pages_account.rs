@@ -1,11 +1,13 @@
 //! Users & Plans hub HTML: accounts, ACL grants, and honest scaffolds.
 
-use crate::account_mgmt::{find_account, list_accounts};
-use crate::packages::{is_panel_admin, package_for_account};
+use crate::account_mgmt::list_accounts;
+use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
 use crate::panel_hub_pages_hosting::scaffold_feature;
-use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
+use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
 use crate::site_acl::{SiteAclGrant, list_grants};
+
+pub use crate::panel_hub_pages_profile::users_profile_page;
 
 fn html_escape(value: &str) -> String {
     value
@@ -24,47 +26,6 @@ pub fn users_plans_hub_main() -> String {
         body.push_str(&hub_tiles_grid(title, &tiles));
     }
     body
-}
-
-pub fn users_profile_page(username: &str) -> String {
-    let (detail, package_note) = match find_account(username) {
-        Ok((boot, _)) => {
-            let pkg = package_for_account(username)
-                .map(|p| format!("{} ({})", p.name, p.id))
-                .unwrap_or_else(|_| "Default package".into());
-            (
-                format!(
-                    r#"<ul class="kv-list">
-          <li><span>Username</span><strong>{}</strong></li>
-          <li><span>Recovery email</span><strong>{}</strong></li>
-          <li><span>Language</span><strong>{}</strong></li>
-          <li><span>Hosting package</span><strong>{}</strong></li>
-        </ul>"#,
-                    html_escape(&boot.username),
-                    html_escape(&boot.recovery_email),
-                    html_escape(&boot.language),
-                    html_escape(&pkg),
-                ),
-                String::new(),
-            )
-        }
-        Err(err) => (
-            not_configured_body(&err, "Sign in again if this account was removed."),
-            String::new(),
-        ),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Users & Plans", Some("/account/users")),
-            ("View Profile", None),
-        ],
-        "View Profile",
-        "Your account details.",
-        &format!("{detail}{package_note}"),
-        None,
-        None,
-    )
 }
 
 pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {

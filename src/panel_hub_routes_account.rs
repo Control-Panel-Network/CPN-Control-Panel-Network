@@ -1,4 +1,4 @@
-//! Users & Plans hub routes: accounts, ACL, and scaffolds.
+//! Users & Plans hub routes: admin account and ACL tooling.
 
 use crate::account::{default_password_policy, load_bootstrap};
 use crate::account_mgmt::{create_account, delete_account, reset_account_password};
@@ -8,7 +8,7 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_account::{
     acl_create_page, acl_modify_page, api_access_page, grant_from_form_fields, users_create_page,
     users_create_success_page, users_list_page, users_modify_page, users_password_success_page,
-    users_plans_hub_main, users_profile_page, users_reseller_page,
+    users_plans_hub_main, users_reseller_page,
 };
 use crate::panel_pages::panel_shell;
 use crate::site_acl::{add_grant, remove_grant_at};
@@ -90,22 +90,6 @@ pub async fn users_plans_page(http: HttpRequest, state: web::Data<Arc<AppState>>
         "users",
         "Users & Plans",
         &users_plans_hub_main(),
-    ))
-}
-
-#[get("/account/users/profile")]
-pub async fn users_profile_route(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
-    };
-    html_ok(panel_shell(
-        &user,
-        "users",
-        "View Profile",
-        &users_profile_page(&user),
     ))
 }
 

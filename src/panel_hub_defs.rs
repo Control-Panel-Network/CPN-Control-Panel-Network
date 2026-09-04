@@ -83,8 +83,8 @@ pub fn users_plans_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> 
             "Users",
             vec![
                 HubTile {
-                    title: "View Profile",
-                    subtitle: "Your account details",
+                    title: "Account profile",
+                    subtitle: "Edit account, password, 2FA",
                     href: "/account/users/profile",
                     live: true,
                 },

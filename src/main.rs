@@ -2,7 +2,8 @@ use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
-    forgot_password_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
+    forgot_password_submit, login_mfa_page, login_mfa_submit, login_page, login_submit, logout_get,
+    logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
@@ -43,7 +44,9 @@ use cpn_installer::panel_hub_routes::{
     settings_connect_page, settings_design_page, settings_page, settings_port_page,
     settings_setup_page, settings_version_page, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
-    users_profile_route, users_reseller_route,
+    users_profile_details_post, users_profile_password_post, users_profile_route,
+    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
+    users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -761,6 +764,8 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(login_submit)
+            .service(login_mfa_page)
+            .service(login_mfa_submit)
             .service(dashboard_page)
             .service(websites_page)
             .service(websites_manage)
@@ -866,6 +871,11 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_upload)
             .service(users_plans_page)
             .service(users_profile_route)
+            .service(users_profile_details_post)
+            .service(users_profile_password_post)
+            .service(users_profile_totp_begin)
+            .service(users_profile_totp_confirm)
+            .service(users_profile_totp_disable)
             .service(users_list_route)
             .service(users_create_get)
             .service(users_create_post)
