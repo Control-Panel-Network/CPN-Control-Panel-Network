@@ -91,22 +91,45 @@ fn view_tabs(active: &str, domain: &str) -> String {
         }}
         .btn-secondary {{ background:#f2f4f7; color:#344054; }}
         .btn-warn {{ background:#fffaeb; color:#b54708; }}
-        .plugin-search {{
-          width:100%; max-width:420px; box-sizing:border-box; border:1px solid #d0d5dd;
-          border-radius:10px; padding:11px 12px; font:inherit; margin:0 0 12px;
+        .plugin-search-row {{
+          display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0 10px; max-width:none;
         }}
-        .category-pills {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }}
+        .plugin-search-row label {{
+          position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+          clip:rect(0,0,0,0); white-space:nowrap; border:0;
+        }}
+        .plugin-search {{
+          flex:1 1 240px; min-width:180px; max-width:480px; box-sizing:border-box; border:1px solid #d0d5dd;
+          border-radius:10px; padding:10px 12px; font:inherit; margin:0;
+        }}
+        .plugin-search-row .btn-primary,
+        .plugin-search-row .btn-secondary {{ min-height:40px; }}
+        .plugin-store-meta {{ margin:8px 0 0; font-size:.88rem; color:var(--muted); max-width:none; }}
+        .plugin-store-meta a {{ color:var(--blue); }}
+        .plugin-count {{ margin:0 0 8px; font-size:.9rem; color:var(--ink); font-weight:600; }}
+        .category-pills {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }}
         .category-pills a {{
           display:inline-flex; align-items:center; min-height:34px; padding:0 12px; border-radius:999px;
           border:1px solid var(--hairline); background:var(--canvas); font-size:13px; color:var(--muted);
         }}
         .category-pills a.active {{ background:#e7f1ff; color:var(--blue); font-weight:600; }}
+        .plugin-store-table.table-wrap {{ margin-top:8px; }}
+        .plugin-store-table .data-table thead th {{
+          position:sticky; top:0; z-index:1; background:var(--canvas);
+        }}
         .plugin-links {{ display:flex; gap:12px; font-size:13px; }}
         .plugin-links a {{ color:var(--blue); }}
-        .domain-picker {{ display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:0 0 16px; }}
+        .domain-picker {{ display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:0 0 10px; }}
         .domain-picker select {{
           min-width:220px; border:1px solid #d0d5dd; border-radius:10px; padding:10px 12px; font:inherit;
         }}
+        [data-color-mode="dark"] .plugin-search {{
+          background:#1a1d26; border-color:#2a2f3a; color:var(--ink);
+        }}
+        [data-color-mode="dark"] .category-pills a.active {{
+          background:rgba(59,130,246,.18); color:var(--blue);
+        }}
+        [data-color-mode="dark"] .btn-secondary {{ background:#2a2f3a; color:#e4e7ec; }}
       </style>"#
     )
 }
@@ -326,7 +349,7 @@ fn store_rows(
         return r#"<p class="empty-state">No plugins match this search.</p>"#.into();
     }
     let mut rows = String::from(
-        r#"<div class="table-wrap"><table class="data-table">
+        r#"<div class="table-wrap plugin-store-table"><table class="data-table">
       <thead><tr><th>Plugin</th><th>Category</th><th>Version</th><th>Pricing</th><th>Action</th></tr></thead><tbody>"#,
     );
     for entry in filtered {
@@ -463,27 +486,29 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
                 let ids: Vec<String> = installed.iter().map(|p| p.manifest.id.clone()).collect();
                 let next = catalog_next_refresh_unix(fetched_at);
                 let note = format!(
-                    "Plugin store data is cached for 1 hour to reduce GitHub API pressure. Last refresh: {}. Next refresh after: {}.",
+                    "Cached 1 hour. Last refresh: {}. Next: {}.",
                     format_unix_local(fetched_at),
                     format_unix_local(next),
                 );
+                let count_label = if entries.len() == 1 {
+                    "1 plugin in catalog".to_string()
+                } else {
+                    format!("{} plugins in catalog", entries.len())
+                };
                 (
                     format!(
-                        r#"<form method="get" action="/plugins" class="stack-form" style="max-width:none;">
+                        r#"<p class="plugin-count">{count}</p>
+          <form method="get" action="/plugins" class="plugin-search-row">
             <input type="hidden" name="view" value="store">
             <input type="hidden" name="domain" value="{domain}">
             <label for="q">Search</label>
             <input class="plugin-search" id="q" name="q" type="search" value="{q}" placeholder="Search plugins by name or description...">
             <button type="submit" class="btn-primary">Search</button>
+            <button type="submit" class="btn-secondary" name="refresh" value="1">Refresh catalog</button>
           </form>
           {pills}
-          {rows}
-          <form method="get" action="/plugins" style="margin-top:16px;">
-            <input type="hidden" name="view" value="store">
-            <input type="hidden" name="domain" value="{domain}">
-            <input type="hidden" name="refresh" value="1">
-            <button type="submit" class="btn-secondary">Refresh catalog</button>
-          </form>"#,
+          {rows}"#,
+                        count = html_escape(&count_label),
                         domain = html_escape(&domain),
                         q = html_escape(query.q),
                         pills = category_pills(&entries, query.category, &domain),
@@ -517,10 +542,7 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
       <article class="section-card">
         <h2>Plugin Store</h2>
         {picker}
-        <p class="muted">Install into <code>{path}</code> for the selected site.</p>
-        <p class="panel-notice" role="note">{cache}</p>
-        <p class="muted"><strong>Use at your own risk.</strong> Plugins are third-party contributions. Review them before enabling on production hosts.</p>
-        <p class="muted">Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a></p>
+        <p class="plugin-store-meta">Install into <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache} Use at your own risk (third-party).</p>
         {body}
       </article>"#,
             heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),
