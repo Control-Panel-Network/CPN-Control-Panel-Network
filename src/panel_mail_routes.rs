@@ -3,6 +3,7 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::mail_accounts::{MailAccountInput, MailSmtpMode, create_account, set_account_enabled};
+use crate::packages::{QuotaResource, require_quota};
 use crate::smtp_settings::SmtpTlsMode;
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use std::sync::Arc;
@@ -116,10 +117,20 @@ pub async fn email_account_create(
     state: web::Data<Arc<AppState>>,
     form: web::Form<MailAccountCreateForm>,
 ) -> HttpResponse {
-    if panel_user_from_request(&state, &http).is_none() {
+    let Some(user) = panel_user_from_request(&state, &http) else {
         return login_redirect();
-    }
-    match form.to_input().and_then(create_account) {
+    };
+    let owner = if crate::packages::is_panel_admin(&user) && !form.domain.trim().is_empty() {
+        crate::sites::load_site(&form.domain)
+            .map(|s| s.owner)
+            .unwrap_or_else(|_| user.clone())
+    } else {
+        user.clone()
+    };
+    match require_quota(&owner, QuotaResource::Emails)
+        .and_then(|_| form.to_input())
+        .and_then(create_account)
+    {
         Ok(account) => HttpResponse::SeeOther()
             .append_header((
                 "Location",

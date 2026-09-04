@@ -39,14 +39,19 @@ use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
 };
+use cpn_installer::panel_package_routes::{
+    packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
+    packages_page, packages_update,
+};
 use cpn_installer::panel_routes::{
     apps_install, apps_page, apps_reinstall, apps_uninstall, backups_page, backups_run,
-    databases_install_mariadb, databases_page, email_account_create, email_account_disable,
-    email_account_enable, email_page, plugins_dashboard_page, plugins_disable, plugins_enable,
-    plugins_install, plugins_page, plugins_settings_page, plugins_settings_save, plugins_uninstall,
-    preview_content, preview_mode_page, websites_create, websites_delete, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
-    websites_resume, websites_suspend,
+    databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
+    email_account_create, email_account_disable, email_account_enable, email_page,
+    plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
+    plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
+    preview_mode_page, websites_create, websites_delete, websites_manage, websites_page,
+    websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_resume,
+    websites_suspend,
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
@@ -760,6 +765,15 @@ async fn main() -> std::io::Result<()> {
             .service(email_account_disable)
             .service(databases_page)
             .service(databases_install_mariadb)
+            .service(databases_create)
+            .service(databases_ftp_create)
+            .service(packages_page)
+            .service(packages_new_page)
+            .service(packages_edit_page)
+            .service(packages_create)
+            .service(packages_update)
+            .service(packages_delete)
+            .service(packages_assign)
             .service(apps_page)
             .service(apps_install)
             .service(apps_reinstall)

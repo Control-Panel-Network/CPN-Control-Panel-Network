@@ -12,6 +12,7 @@ import {
   Mail,
   Menu,
   Network,
+  Package,
   Puzzle,
   Server,
   Settings,
@@ -34,6 +35,7 @@ const hosting: NavItem[] = [
 
 const account: NavItem[] = [
   { label: "Users & Plans", href: "/account/users", icon: Users, id: "users" },
+  { label: "Packages", href: "/packages", icon: Package, id: "packages" },
 ];
 
 const administration: NavItem[] = [

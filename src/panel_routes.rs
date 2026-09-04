@@ -2,6 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::packages::require_site_create_allowed;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
@@ -79,13 +80,29 @@ pub async fn websites_create(
     state: web::Data<Arc<AppState>>,
     form: web::Form<SiteCreateForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    let owner = if form.owner.trim().is_empty() {
+        user.clone()
+    } else if crate::packages::is_panel_admin(&user) {
+        form.owner.trim().to_string()
+    } else {
+        // Non-admins may only create sites for themselves.
+        user.clone()
+    };
     let docroot = form.docroot.trim();
+    if let Err(error) = require_site_create_allowed(&owner, &form.domain) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish();
+    }
     let result = create_site(
         &form.domain,
-        &form.owner,
+        &owner,
         if docroot.is_empty() {
             None
         } else {
@@ -360,6 +377,103 @@ pub async fn databases_install_mariadb(
             .append_header((
                 "Location",
                 format!("/databases/manager?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct DatabaseCreateForm {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    owner: String,
+    #[serde(default)]
+    domain: String,
+}
+
+#[post("/databases/create")]
+pub async fn databases_create(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DatabaseCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let owner = if form.owner.trim().is_empty() {
+        user.clone()
+    } else if crate::packages::is_panel_admin(&user) {
+        form.owner.trim().to_string()
+    } else {
+        user.clone()
+    };
+    let result = crate::packages::require_quota(&owner, crate::packages::QuotaResource::Databases)
+        .and_then(|_| crate::resource_accounts::create_database(&owner, &form.name, &form.domain));
+    match result {
+        Ok(db) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/databases?notice={}",
+                    urlencoding_simple(&format!("Registered database {}", db.name))
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/databases?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct FtpCreateForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    owner: String,
+    #[serde(default)]
+    domain: String,
+}
+
+#[post("/databases/ftp-create")]
+pub async fn databases_ftp_create(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<FtpCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let owner = if form.owner.trim().is_empty() {
+        user.clone()
+    } else if crate::packages::is_panel_admin(&user) {
+        form.owner.trim().to_string()
+    } else {
+        user.clone()
+    };
+    let result =
+        crate::packages::require_quota(&owner, crate::packages::QuotaResource::FtpAccounts)
+            .and_then(|_| {
+                crate::resource_accounts::create_ftp_account(&owner, &form.username, &form.domain)
+            });
+    match result {
+        Ok(ftp) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/databases?notice={}",
+                    urlencoding_simple(&format!("Registered FTP account {}", ftp.username))
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/databases?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }

@@ -389,6 +389,21 @@ pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> Strin
         <p class="muted">phpMyAdmin: {pma_detail} Local URL when wired: <code>{pma_url}</code>.</p>
         {install}
         <p class="muted">Default stack is MariaDB (not MySQL) plus phpMyAdmin. Hosts typically run MariaDB XOR MySQL.</p>
+        <p class="muted">Registry entries below count toward package quotas. Full MariaDB user grants land in a later release.</p>
+        <h3 style="margin:18px 0 8px;font-size:15px;">Register database (quota)</h3>
+        <form method="post" action="/databases/create" class="stack-form" style="display:grid;gap:10px;max-width:420px;">
+          <label>Name <input name="name" required maxlength="64" placeholder="app_db"></label>
+          <label>Owner <input name="owner" maxlength="128" placeholder="defaults to signed-in user"></label>
+          <label>Domain <input name="domain" maxlength="253" placeholder="example.com"></label>
+          <button type="submit" class="btn-primary">Register database</button>
+        </form>
+        <h3 style="margin:22px 0 8px;font-size:15px;">Register FTP account (quota)</h3>
+        <form method="post" action="/databases/ftp-create" class="stack-form" style="display:grid;gap:10px;max-width:420px;">
+          <label>FTP username <input name="username" required maxlength="64" placeholder="siteftp"></label>
+          <label>Owner <input name="owner" maxlength="128" placeholder="defaults to signed-in user"></label>
+          <label>Domain <input name="domain" maxlength="253" placeholder="example.com"></label>
+          <button type="submit" class="btn-primary">Register FTP account</button>
+        </form>
       </article>"#,
         heading = section_heading(
             "MariaDB Manager",
