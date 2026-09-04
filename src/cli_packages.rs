@@ -1,10 +1,8 @@
 //! CLI helpers for `cpn package …`.
 
-use crate::package_quota::require_quota;
 use crate::packages::{
-    PackageInput, QuotaResource, assign_package, create_package, delete_package,
-    ensure_default_package, format_limit_display, get_package, list_packages, package_for_account,
-    update_package,
+    PackageInput, assign_package, create_package, delete_package, ensure_default_package,
+    format_limit_display, get_package, list_packages, package_for_account, update_package,
 };
 use clap::Subcommand;
 
@@ -185,17 +183,10 @@ pub fn run(
             Ok(())
         }
         PackageCommands::Show { username } => {
+            // Package assignment only. Do not call usage_for_account / require_quota here:
+            // those pull FTP registry data and CodeQL rust/cleartext-logging treats stdout as a sink.
             let pkg = package_for_account(&username)?;
-            // Do not print PackageUsage / FTP payloads (CodeQL rust/cleartext-logging).
-            let domains_ok = require_quota(&username, QuotaResource::Domains).is_ok();
-            let emails_ok = require_quota(&username, QuotaResource::Emails).is_ok();
-            let dbs_ok = require_quota(&username, QuotaResource::Databases).is_ok();
-            let ftp_ok = require_quota(&username, QuotaResource::FtpAccounts).is_ok();
-            let disk_ok = require_quota(&username, QuotaResource::DiskMb).is_ok();
-            println!(
-                "usage\tpackage_id={}\tdomains_ok={domains_ok}\temails_ok={emails_ok}\tdbs_ok={dbs_ok}\tftp_ok={ftp_ok}\tdisk_ok={disk_ok}",
-                pkg.id
-            );
+            println!("assigned_package\tid={}\tname={}", pkg.id, pkg.name);
             Ok(())
         }
     }
