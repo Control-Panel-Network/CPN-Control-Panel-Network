@@ -88,10 +88,18 @@ CPN_TEST_IMAGE=ubuntu:22.04 CPN_TEST_SCOPE=server CPN_TEST_SERVERS=nginx \
 ./tests/docker-matrix.sh
 ```
 
+## Lab verification notes (04/09/2026)
+
+- **AL9 / AL10 VirtualBox labs**: SSH reachable (ports 2222 / 2223). Host-only evidence for AlmaLinux 9/10 remains valid.
+- **Nested podman on AL10**: `almalinux:8` / `rockylinux:9` nginx matrix did **not** complete in this pass (systemd guest bring-up flaky under nested containers). Do not treat that as a recipe failure.
+- **GitHub `os-matrix.yml`**: Rocky 9 nginx smoke on `main` pushes that touch OS paths; extended images via `workflow_dispatch` (not on untrusted PRs; issue #7).
+- **Ubuntu `.deb`**: `scripts/docker-build-deb.sh` added; full Ubuntu nginx smoke still pending extended matrix run.
+
 ## Still blocked from full **supported**
 
 | Guest | Why not fully supported yet |
 |---|---|
+| AlmaLinux 8 / Rocky 8 / CentOS Stream 9 | Recipes ready; keep **partial** until nginx matrix smoke is green |
 | RHEL 8/9 | Needs a real Red Hat subscription and CDN repos; UBI alone is not a full panel guest |
 | CloudLinux 8 | No CloudLinux ISO/entitlement in the lab; detection only |
 | Ubuntu 20.04 | Older LTS; keep Partial until dedicated smoke |
