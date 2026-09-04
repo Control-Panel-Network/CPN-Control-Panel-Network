@@ -1,7 +1,10 @@
 //! Shared library for cpn-installer and the cpn operator CLI.
 
 pub mod account;
+pub mod account_mfa;
 pub mod account_mgmt;
+pub mod account_passkeys;
+pub mod account_totp;
 pub mod apps;
 pub mod apps_control;
 pub mod apps_phpmyadmin;
@@ -55,6 +58,7 @@ pub mod panel_hub_pages_account;
 pub mod panel_hub_pages_backups;
 pub mod panel_hub_pages_cloudflare;
 pub mod panel_hub_pages_hosting;
+pub mod panel_hub_pages_profile;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
 pub mod panel_hub_pages_server_net;
@@ -66,6 +70,8 @@ pub mod panel_hub_routes_backups;
 pub mod panel_hub_routes_cloudflare;
 pub mod panel_hub_routes_db;
 pub mod panel_hub_routes_email;
+pub mod panel_hub_routes_passkeys;
+pub mod panel_hub_routes_profile;
 pub mod panel_hub_routes_security;
 pub mod panel_hub_routes_server;
 pub mod panel_hubs;
@@ -106,6 +112,7 @@ pub mod panel_sidebar;
 pub mod panel_theme;
 pub mod panel_theme_chrome;
 pub mod panel_theme_routes;
+pub mod panel_webauthn;
 pub mod panel_website_logs;
 pub mod panel_website_manage;
 pub mod panel_website_manage_tabs;

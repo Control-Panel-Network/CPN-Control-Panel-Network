@@ -227,6 +227,111 @@ pub fn delete_account(username_raw: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Change password for the signed-in account (requires current password).
+pub fn change_own_password(
+    username_raw: &str,
+    current_password: &str,
+    new_password_raw: Option<&str>,
+    generate: bool,
+) -> Result<AccountSetupResult, String> {
+    use crate::account::verify_password;
+    let (mut boot, path) = find_account(username_raw)?;
+    if !verify_password(current_password, &boot.password_salt, &boot.password_hash) {
+        return Err("Current password is incorrect".into());
+    }
+    validate_policy(&boot.password_policy)?;
+    let (password, generated_password) = if generate {
+        let value = generate_password(&boot.password_policy);
+        (value.clone(), Some(value))
+    } else {
+        let Some(password) = new_password_raw
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Err("Enter a new password or enable generate".into());
+        };
+        password_meets_policy(password, &boot.password_policy)?;
+        (password.to_string(), None)
+    };
+    let salt = new_password_salt();
+    boot.password_salt = salt.clone();
+    boot.password_hash = hash_password(&password, &salt);
+    write_account_file(&path, &boot)?;
+    Ok(AccountSetupResult {
+        public: AccountPublic {
+            username: boot.username,
+            recovery_email: boot.recovery_email,
+            configured: true,
+        },
+        generated_password,
+    })
+}
+
+/// Update recovery email and/or language for the signed-in account.
+pub fn update_own_profile(
+    username_raw: &str,
+    recovery_email_raw: Option<&str>,
+    language_raw: Option<&str>,
+) -> Result<AccountPublic, String> {
+    let (mut boot, path) = find_account(username_raw)?;
+    if let Some(email_raw) = recovery_email_raw {
+        boot.recovery_email = validate_recovery_email(email_raw).map_err(|err| {
+            if err.contains("correo") || err.contains("Correo") || err.contains("Indica") {
+                "Recovery email is required and must look like user@example.com".into()
+            } else {
+                err
+            }
+        })?;
+    }
+    if let Some(lang_raw) = language_raw {
+        boot.language = crate::http_helpers::normalize_language(lang_raw)?;
+    }
+    write_account_file(&path, &boot)?;
+    Ok(AccountPublic {
+        username: boot.username,
+        recovery_email: boot.recovery_email,
+        configured: true,
+    })
+}
+
+/// Rename the signed-in account. Caller must re-issue the session cookie.
+pub fn rename_own_account(
+    current_username_raw: &str,
+    new_username_raw: &str,
+) -> Result<AccountPublic, String> {
+    let (mut boot, old_path) = find_account(current_username_raw)?;
+    let new_username = require_username(new_username_raw)?;
+    if usernames_equal(&boot.username, &new_username) {
+        return Ok(AccountPublic {
+            username: boot.username,
+            recovery_email: boot.recovery_email,
+            configured: true,
+        });
+    }
+    if account_exists(&new_username) {
+        return Err(format!("Account `{new_username}` already exists"));
+    }
+    boot.username = new_username.clone();
+    let is_bootstrap = old_path == bootstrap_path();
+    if is_bootstrap {
+        write_account_file(&old_path, &boot)?;
+    } else {
+        let new_path = extra_account_path(&new_username);
+        write_account_file(&new_path, &boot)?;
+        if new_path != old_path {
+            let _ = fs::remove_file(&old_path);
+        }
+    }
+    // Best-effort MFA file rename (encrypted ciphertext stays valid under new name).
+    let _ = crate::account_mfa::save_mfa_for_rename(current_username_raw, &new_username);
+    let _ = crate::account_passkeys::rename_passkey_store(current_username_raw, &new_username);
+    Ok(AccountPublic {
+        username: boot.username,
+        recovery_email: boot.recovery_email,
+        configured: true,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,6 +370,37 @@ mod tests {
             assert_eq!(list_accounts().unwrap().len(), 1);
             delete_account("admin").unwrap();
             assert!(list_accounts().unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn self_service_password_and_email() {
+        with_test_data_dir(|| {
+            let policy = default_password_policy();
+            // Ephemeral passwords only (CodeQL: no hard-coded password literals).
+            let initial = generate_password(&policy);
+            let next = generate_password(&policy);
+            let mut wrong = generate_password(&policy);
+            while wrong == initial || wrong == next {
+                wrong = generate_password(&policy);
+            }
+            let created = create_account(
+                "Admin",
+                Some(&initial),
+                false,
+                "admin@example.com",
+                policy,
+                "en",
+            )
+            .expect("create");
+            assert!(created.generated_password.is_none());
+            update_own_profile("Admin", Some("ops@example.com"), Some("nb")).unwrap();
+            let (boot, _) = find_account("Admin").unwrap();
+            assert_eq!(boot.recovery_email, "ops@example.com");
+            assert_eq!(boot.language, "nb");
+            let changed = change_own_password("Admin", &initial, Some(&next), false).unwrap();
+            assert!(changed.generated_password.is_none());
+            assert!(change_own_password("Admin", &wrong, Some(&next), false).is_err());
         });
     }
 }

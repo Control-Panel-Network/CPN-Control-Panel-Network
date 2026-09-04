@@ -1,11 +1,13 @@
 //! Users & Plans hub HTML: accounts, ACL grants, and honest scaffolds.
 
-use crate::account_mgmt::{find_account, list_accounts};
-use crate::packages::{is_panel_admin, package_for_account};
+use crate::account_mgmt::list_accounts;
+use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
 use crate::panel_hub_pages_hosting::scaffold_feature;
-use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
+use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
 use crate::site_acl::{SiteAclGrant, list_grants};
+
+pub use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
 
 fn html_escape(value: &str) -> String {
     value
@@ -24,47 +26,6 @@ pub fn users_plans_hub_main() -> String {
         body.push_str(&hub_tiles_grid(title, &tiles));
     }
     body
-}
-
-pub fn users_profile_page(username: &str) -> String {
-    let (detail, package_note) = match find_account(username) {
-        Ok((boot, _)) => {
-            let pkg = package_for_account(username)
-                .map(|p| format!("{} ({})", p.name, p.id))
-                .unwrap_or_else(|_| "Default package".into());
-            (
-                format!(
-                    r#"<ul class="kv-list">
-          <li><span>Username</span><strong>{}</strong></li>
-          <li><span>Recovery email</span><strong>{}</strong></li>
-          <li><span>Language</span><strong>{}</strong></li>
-          <li><span>Hosting package</span><strong>{}</strong></li>
-        </ul>"#,
-                    html_escape(&boot.username),
-                    html_escape(&boot.recovery_email),
-                    html_escape(&boot.language),
-                    html_escape(&pkg),
-                ),
-                String::new(),
-            )
-        }
-        Err(err) => (
-            not_configured_body(&err, "Sign in again if this account was removed."),
-            String::new(),
-        ),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Users & Plans", Some("/account/users")),
-            ("View Profile", None),
-        ],
-        "View Profile",
-        "Your account details.",
-        &format!("{detail}{package_note}"),
-        None,
-        None,
-    )
 }
 
 pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {
@@ -180,63 +141,6 @@ pub fn users_create_success_page(username: &str, generated_password: Option<&str
         &body,
         None,
         None,
-    )
-}
-
-pub fn users_modify_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let accounts = list_accounts().unwrap_or_default();
-    let mut options = String::new();
-    for acct in &accounts {
-        if is_panel_admin(&acct.username) {
-            continue;
-        }
-        options.push_str(&format!(
-            r#"<option value="{u}">{u}</option>"#,
-            u = html_escape(&acct.username),
-        ));
-    }
-    let select_inner = if options.is_empty() {
-        r#"<option value="">No non-admin accounts</option>"#.to_string()
-    } else {
-        options
-    };
-    let body = format!(
-        r#"
-      <form method="post" action="/account/users/password" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
-        <h3 style="margin:0;">Reset password</h3>
-        <label>Username
-          <select name="username" required>{select_inner}</select>
-        </label>
-        <label>New password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" maxlength="256">
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input name="generate" type="checkbox" value="1">
-          Generate a strong password
-        </label>
-        <button type="submit" class="btn-primary">Reset password</button>
-      </form>
-      <form method="post" action="/account/users/delete" class="stack-form" style="max-width:520px;display:grid;gap:12px;"
-            onsubmit="return confirm('Delete this panel account? This cannot be undone.');">
-        <h3 style="margin:0;">Delete user</h3>
-        <label>Username
-          <select name="username" required>{select_inner}</select>
-        </label>
-        <button type="submit" class="btn-secondary">Delete user</button>
-      </form>
-      <p class="muted">The bootstrap admin account cannot be deleted from this screen.</p>"#
-    );
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Users & Plans", Some("/account/users")),
-            ("Modify User", None),
-        ],
-        "Modify User",
-        "Reset password or remove a panel account.",
-        &body,
-        notice,
-        error,
     )
 }
 

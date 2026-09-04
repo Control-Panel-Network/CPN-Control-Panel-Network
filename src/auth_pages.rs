@@ -101,8 +101,12 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
         </div>
         <button id="i18n-submit" type="submit">Sign in</button>
       </form>
+      <p class="hint" style="margin-top:18px;text-align:center;">or</p>
+      <button type="button" onclick="cpnLoginPasskey()" style="margin-top:8px;width:100%;border:1px solid #d0d5dd;border-radius:999px;padding:12px 16px;background:#fff;color:#1d1d1f;font-weight:700;cursor:pointer;">Sign in with passkey</button>
+      <p id="cpn-passkey-login-status" class="hint" role="status"></p>
     </section>
   </main>
+  <script>{passkey_script}</script>
   {script}
 </body>
 </html>"#,
@@ -115,6 +119,51 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
         } else {
             ""
         },
+        passkey_script = crate::panel_webauthn::passkey_client_script(),
+        script = PANEL_I18N_SCRIPT,
+    )
+}
+
+pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
+    let initial_locale = resolve_initial_locale(status);
+    let error_block = match error {
+        Some(message) if !message.is_empty() => format!(
+            r#"<p class="error" role="alert">{msg}</p>"#,
+            msg = html_escape(message)
+        ),
+        _ => String::new(),
+    };
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Two-factor · CPN Panel</title>
+  <style>{styles}</style>
+</head>
+<body data-page="login-mfa">
+  <main>
+    <section class="card">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1>Two-factor authentication</h1>
+      <p class="hint">Enter the 6-digit code from your authenticator app, or a one-time backup code.</p>
+      {error_block}
+      <form method="post" action="/login/2fa" autocomplete="off">
+        <label for="code">Authenticator code</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required maxlength="32" autofocus>
+        <button type="submit">Verify</button>
+      </form>
+      <p class="hint"><a href="/login">Back to sign in</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        locale = initial_locale,
+        styles = shared_auth_styles(),
+        error_block = error_block,
         script = PANEL_I18N_SCRIPT,
     )
 }

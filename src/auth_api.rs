@@ -3,9 +3,11 @@
 use crate::account::{
     hash_password, password_hash_needs_upgrade, verify_password, write_account_file,
 };
+use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
 use crate::auth_pages::{
-    forgot_password_ack_html, forgot_password_html, installer_token_required_html, panel_login_html,
+    forgot_password_ack_html, forgot_password_html, installer_token_required_html,
+    panel_login_html, panel_mfa_html,
 };
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
@@ -18,8 +20,9 @@ use crate::mail_outbound::{
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
-    clear_session_cookie_header, create_session_token, read_session_cookie, session_cookie_header,
-    session_secret, verify_session_token,
+    clear_mfa_pending_cookie_header, clear_session_cookie_header, create_mfa_pending_token,
+    create_session_token, mfa_pending_cookie_header, read_mfa_pending_cookie, read_session_cookie,
+    session_cookie_header, session_secret, verify_mfa_pending_token, verify_session_token,
 };
 use crate::postfix_fallback::ensure_postfix_default;
 use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};
@@ -147,12 +150,102 @@ pub async fn login_submit(
     };
 
     let secret = session_secret(Some(&state.token));
-    let token = create_session_token(&session_user, &secret);
     let secure = request_secure(&http);
+
+    if totp_enabled_for(&session_user) {
+        let pending = create_mfa_pending_token(&session_user, &secret);
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/login/2fa"))
+            .append_header(("Set-Cookie", mfa_pending_cookie_header(&pending, secure)))
+            .append_header(("Set-Cookie", clear_session_cookie_header(secure)))
+            .finish();
+    }
+
+    let token = create_session_token(&session_user, &secret);
     HttpResponse::SeeOther()
         .append_header(("Location", "/dashboard"))
         .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
+        .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
         .finish()
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MfaForm {
+    #[serde(default)]
+    code: String,
+}
+
+#[get("/login/2fa")]
+pub async fn login_mfa_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let payload = enrich_status(status, &state.token);
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let secret = session_secret(Some(&state.token));
+    let pending_ok = read_mfa_pending_cookie(cookie)
+        .and_then(|token| verify_mfa_pending_token(&token, &secret))
+        .is_some();
+    if !pending_ok {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/login"))
+            .finish();
+    }
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(panel_mfa_html(&payload, None))
+}
+
+#[post("/login/2fa")]
+pub async fn login_mfa_submit(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<MfaForm>,
+) -> HttpResponse {
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let payload = enrich_status(status, &state.token);
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let secret = session_secret(Some(&state.token));
+    let secure = request_secure(&http);
+    let Some(username) =
+        read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret))
+    else {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/login"))
+            .finish();
+    };
+
+    match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
+        Ok(true) => {
+            let token = create_session_token(&username, &secret);
+            HttpResponse::SeeOther()
+                .append_header(("Location", "/dashboard"))
+                .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
+                .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
+                .finish()
+        }
+        Ok(false) => HttpResponse::Unauthorized()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_mfa_html(
+                &payload,
+                Some("Invalid authenticator or backup code."),
+            )),
+        Err(error) => HttpResponse::TooManyRequests()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_mfa_html(&payload, Some(&error))),
+    }
 }
 
 fn panel_html_response(

@@ -79,6 +79,33 @@ jobs:
           cache: npm
           cache-dependency-path: installer-ui/package-lock.json
 
+      - name: Install OpenSSL (Windows)
+        shell: pwsh
+        run: |
+          choco install openssl -y --no-progress
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL",
+            "C:\Program Files (x86)\OpenSSL-Win64"
+          )
+          $dir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $dir) { throw "OpenSSL install directory not found" }
+          $libCandidates = @(
+            (Join-Path $dir "lib\VC\x64\MD"),
+            (Join-Path $dir "lib\VC\x64\MT"),
+            (Join-Path $dir "lib")
+          )
+          $libDir = $libCandidates | Where-Object { Test-Path (Join-Path $_ "libssl.lib") } | Select-Object -First 1
+          if (-not $libDir) {
+            $hit = Get-ChildItem -Path $dir -Recurse -Filter "libssl.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { $libDir = $hit.Directory.FullName }
+          }
+          if (-not $libDir) { throw "OpenSSL libssl.lib not found under $dir" }
+          "OPENSSL_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "OPENSSL_LIB_DIR=$libDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "OPENSSL_DIR=$dir"
+          Write-Host "OPENSSL_LIB_DIR=$libDir"
+
       - name: Build installer-ui embed
         working-directory: installer-ui
         run: |

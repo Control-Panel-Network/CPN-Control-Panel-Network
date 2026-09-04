@@ -2,7 +2,8 @@ use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
-    forgot_password_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
+    forgot_password_submit, login_mfa_page, login_mfa_submit, login_page, login_submit, logout_get,
+    logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
@@ -30,12 +31,14 @@ use cpn_installer::panel_hub_routes::{
     email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
     email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_password,
     email_pattern_fwd, email_plus, email_queue, email_rspamd, email_spamassassin,
-    email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset, security_fail2ban,
-    security_firewall, security_malware, security_modsec, security_modsec_rules, security_page,
-    security_rule_packs, security_ssh, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
-    security_ssl_mark_custom, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
-    security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
+    email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset,
+    passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_register_finish,
+    passkey_register_start, security_fail2ban, security_firewall, security_malware,
+    security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
+    security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
+    security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom,
+    security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
+    server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
     server_packages_page, server_page, server_php_configs, server_php_extensions,
@@ -43,7 +46,9 @@ use cpn_installer::panel_hub_routes::{
     settings_connect_page, settings_design_page, settings_page, settings_port_page,
     settings_setup_page, settings_version_page, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
-    users_profile_route, users_reseller_route,
+    users_profile_details_post, users_profile_password_post, users_profile_route,
+    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
+    users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -761,6 +766,10 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(login_submit)
+            .service(login_mfa_page)
+            .service(login_mfa_submit)
+            .service(passkey_login_start)
+            .service(passkey_login_finish)
             .service(dashboard_page)
             .service(websites_page)
             .service(websites_manage)
@@ -866,6 +875,14 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_upload)
             .service(users_plans_page)
             .service(users_profile_route)
+            .service(users_profile_details_post)
+            .service(users_profile_password_post)
+            .service(users_profile_totp_begin)
+            .service(users_profile_totp_confirm)
+            .service(users_profile_totp_disable)
+            .service(passkey_register_start)
+            .service(passkey_register_finish)
+            .service(passkey_delete_post)
             .service(users_list_route)
             .service(users_create_get)
             .service(users_create_post)

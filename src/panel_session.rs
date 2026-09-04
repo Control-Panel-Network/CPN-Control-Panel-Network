@@ -12,7 +12,9 @@ use std::{
 };
 
 pub const SESSION_COOKIE: &str = "cpn_panel_session";
+pub const MFA_PENDING_COOKIE: &str = "cpn_panel_mfa_pending";
 pub const SESSION_TTL_SECONDS: u64 = 60 * 60 * 12;
+pub const MFA_PENDING_TTL_SECONDS: u64 = 60 * 5;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -122,6 +124,14 @@ pub fn create_session_token(username: &str, secret: &str) -> String {
     URL_SAFE_NO_PAD.encode(format!("{payload}|{sig}").as_bytes())
 }
 
+/// Short-lived token proving password auth succeeded; MFA still required.
+pub fn create_mfa_pending_token(username: &str, secret: &str) -> String {
+    let exp = now_unix() + MFA_PENDING_TTL_SECONDS;
+    let payload = format!("mfa|{username}|{exp}");
+    let sig = hmac_hex(secret, &payload);
+    URL_SAFE_NO_PAD.encode(format!("{payload}|{sig}").as_bytes())
+}
+
 pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
     let decoded = URL_SAFE_NO_PAD.decode(token.as_bytes()).ok()?;
     let decoded = String::from_utf8(decoded).ok()?;
@@ -129,7 +139,7 @@ pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
     let username = parts.next()?.to_string();
     let exp_raw = parts.next()?;
     let sig = parts.next()?;
-    if username.is_empty() {
+    if username.is_empty() || username == "mfa" {
         return None;
     }
     let exp: u64 = exp_raw.parse().ok()?;
@@ -144,10 +154,43 @@ pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
     Some(username)
 }
 
+pub fn verify_mfa_pending_token(token: &str, secret: &str) -> Option<String> {
+    let decoded = URL_SAFE_NO_PAD.decode(token.as_bytes()).ok()?;
+    let decoded = String::from_utf8(decoded).ok()?;
+    let mut parts = decoded.splitn(4, '|');
+    let marker = parts.next()?;
+    if marker != "mfa" {
+        return None;
+    }
+    let username = parts.next()?.to_string();
+    let exp_raw = parts.next()?;
+    let sig = parts.next()?;
+    if username.is_empty() {
+        return None;
+    }
+    let exp: u64 = exp_raw.parse().ok()?;
+    if exp < now_unix() {
+        return None;
+    }
+    let payload = format!("mfa|{username}|{exp}");
+    let expected = hmac_hex(secret, &payload);
+    if !constant_time_eq(sig, &expected) {
+        return None;
+    }
+    Some(username)
+}
+
 pub fn session_cookie_header(token: &str, secure: bool) -> String {
     let secure_flag = if secure { "; Secure" } else { "" };
     format!(
         "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL_SECONDS}{secure_flag}"
+    )
+}
+
+pub fn mfa_pending_cookie_header(token: &str, secure: bool) -> String {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    format!(
+        "{MFA_PENDING_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={MFA_PENDING_TTL_SECONDS}{secure_flag}"
     )
 }
 
@@ -156,11 +199,24 @@ pub fn clear_session_cookie_header(secure: bool) -> String {
     format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
 }
 
+pub fn clear_mfa_pending_cookie_header(secure: bool) -> String {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    format!("{MFA_PENDING_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
+}
+
 pub fn read_session_cookie(cookie_header: Option<&str>) -> Option<String> {
+    read_named_cookie(cookie_header, SESSION_COOKIE)
+}
+
+pub fn read_mfa_pending_cookie(cookie_header: Option<&str>) -> Option<String> {
+    read_named_cookie(cookie_header, MFA_PENDING_COOKIE)
+}
+
+fn read_named_cookie(cookie_header: Option<&str>, name: &str) -> Option<String> {
     let cookie_header = cookie_header?;
     for part in cookie_header.split(';') {
         let part = part.trim();
-        if let Some(value) = part.strip_prefix(&format!("{SESSION_COOKIE}=")) {
+        if let Some(value) = part.strip_prefix(&format!("{name}=")) {
             let value = value.trim();
             if !value.is_empty() {
                 return Some(value.to_string());
