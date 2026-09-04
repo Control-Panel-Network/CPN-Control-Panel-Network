@@ -349,6 +349,8 @@ pub fn color_mode_styles() -> &'static str {
 [data-color-mode="dark"] .panel-notice.ok { background:#052e1c; border-color:#0f7a45; color:#6ce9a6; }
 [data-color-mode="dark"] .panel-notice.error { background:#3f1d22; border-color:#912018; color:#fda29b; }
 [data-color-mode="dark"] .btn-danger { background:#3f1d22; color:#fda29b; }
+[data-color-mode="dark"] .hub-badge.live { background:rgba(6,118,71,.22); color:#6ce9a6; }
+[data-color-mode="dark"] .hub-badge.scaffold { background:#2a2f3a; color:#98a2b3; }
 [data-color-mode="dark"] .stack-form input {
   background:#1a1d26; border-color:#2a2f3a; color:var(--ink);
 }

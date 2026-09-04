@@ -80,7 +80,7 @@ pub fn hub_tiles_grid(section_title: &str, tiles: &[HubTile<'_>]) -> String {
         };
         out.push_str(&format!(
             r#"<a class="hub-tile" href="{href}">
-          <span class="hub-tile-icon" aria-hidden="true"></span>
+          {icon}
           <span class="hub-tile-copy">
             <strong>{title}</strong>
             <span>{subtitle}</span>
@@ -88,6 +88,7 @@ pub fn hub_tiles_grid(section_title: &str, tiles: &[HubTile<'_>]) -> String {
           {badge}
         </a>"#,
             href = html_escape(tile.href),
+            icon = crate::panel_icons::hub_icon_html(tile.href),
             title = html_escape(tile.title),
             subtitle = html_escape(tile.subtitle),
             badge = badge,
@@ -162,7 +163,6 @@ pub fn hub_styles() -> &'static str {
 .hub-tile:hover { border-color:#b6d0f7; box-shadow:0 6px 18px rgba(0,102,204,.08); }
 .hub-tile-icon {
   width:40px; height:40px; flex:0 0 40px; border-radius:12px;
-  background:#eef4ff; border:1px solid #d7e6ff;
 }
 .hub-tile-copy { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
 .hub-tile-copy strong { font-size:15px; letter-spacing:-.01em; }
@@ -177,6 +177,11 @@ pub fn hub_styles() -> &'static str {
   .hub-tile { transition:none; }
 }
 "#
+}
+
+/// Hub layout CSS plus shared icon tone chips (light/dark).
+pub fn hub_styles_with_icons() -> String {
+    format!("{}{}", hub_styles(), crate::panel_icons::icon_tone_styles())
 }
 
 #[cfg(test)]
@@ -197,5 +202,7 @@ mod tests {
         assert!(html.contains("&lt;x&gt;"));
         assert!(html.contains("a&amp;b"));
         assert!(!html.contains("<x>"));
+        assert!(html.contains("<svg"));
+        assert!(html.contains("hub-tile-icon"));
     }
 }

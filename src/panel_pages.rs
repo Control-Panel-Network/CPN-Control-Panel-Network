@@ -59,11 +59,15 @@ button { font:inherit; cursor:pointer; }
   overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
 }
 .sidebar nav a {
-  display:flex; align-items:center; gap:12px; min-height:44px; padding:0 13px;
+  display:flex; align-items:center; gap:10px; min-height:44px; padding:0 13px;
   border-radius:999px; color:#4b4b50; font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
 .sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
+.nav-icon {
+  width:28px; height:28px; flex:0 0 28px; border-radius:8px;
+}
+.nav-icon svg { width:16px; height:16px; }
 .nav-section {
   margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase;
@@ -271,7 +275,10 @@ fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> Str
     } else {
         format!(r#" class="{class}""#)
     };
-    format!(r#"<a{class_attr} href="{href}">{label}</a>"#)
+    format!(
+        r#"<a{class_attr} href="{href}">{icon}<span>{label}</span></a>"#,
+        icon = crate::panel_icons::nav_icon_html(id),
+    )
 }
 
 fn nav_links(active: &str, username: &str) -> String {
@@ -345,7 +352,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         "{}{}{}{}{}",
         panel_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
-        crate::panel_hubs::hub_styles(),
+        crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );
