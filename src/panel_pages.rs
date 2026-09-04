@@ -28,11 +28,14 @@ button { font:inherit; cursor:pointer; }
   background:rgba(29,29,31,.42); cursor:pointer;
 }
 .sidebar {
-  position:sticky; top:0; width:var(--sidebar-width); height:100vh; flex:0 0 var(--sidebar-width);
-  display:flex; flex-direction:column; justify-content:space-between;
-  padding:28px 17px 20px; background:rgba(250,250,252,.96);
+  position:sticky; top:0; width:var(--sidebar-width);
+  height:100vh; height:100dvh; max-height:100vh; max-height:100dvh;
+  flex:0 0 var(--sidebar-width); min-height:0;
+  display:flex; flex-direction:column; justify-content:flex-start;
+  overflow:hidden; padding:28px 17px 20px; background:rgba(250,250,252,.96);
   border-right:1px solid var(--hairline); z-index:50;
 }
+.sidebar-header { flex:0 0 auto; }
 .panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
 .server-summary {
   display:flex; align-items:center; gap:12px; margin:28px 0 25px; padding:14px;
@@ -41,7 +44,16 @@ button { font:inherit; cursor:pointer; }
 .server-summary div { display:flex; flex-direction:column; min-width:0; }
 .server-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
 .server-summary span { color:var(--muted); font-size:12px; }
-.sidebar nav { display:grid; gap:4px; }
+.sidebar nav {
+  flex:1 1 auto; min-height:0; display:grid; gap:4px; align-content:start;
+  overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin;
+  scrollbar-color:rgba(110,110,115,.55) transparent;
+}
+.sidebar nav::-webkit-scrollbar { width:8px; }
+.sidebar nav::-webkit-scrollbar-thumb {
+  background:rgba(110,110,115,.45); border-radius:999px;
+}
 .sidebar nav a {
   display:flex; align-items:center; gap:12px; min-height:44px; padding:0 13px;
   border-radius:999px; color:#4b4b50; font-size:15px;
@@ -53,7 +65,8 @@ button { font:inherit; cursor:pointer; }
   letter-spacing:.08em; text-transform:uppercase;
 }
 .sidebar-footer {
-  display:flex; align-items:center; gap:6px; padding-top:18px; border-top:1px solid var(--hairline);
+  flex:0 0 auto; display:flex; align-items:center; gap:6px;
+  padding-top:18px; border-top:1px solid var(--hairline);
 }
 .logout {
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
@@ -161,7 +174,8 @@ code { font-size:.9em; }
   .sidebar-backdrop { display:none; }
   body.nav-open .sidebar-backdrop { display:block; }
   .sidebar {
-    position:fixed; left:0; top:0; height:100%; transform:translateX(-105%);
+    position:fixed; left:0; top:0; height:100%; height:100dvh;
+    max-height:100%; max-height:100dvh; transform:translateX(-105%);
     transition:transform 180ms ease; box-shadow:none; flex:none;
   }
   body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); }
@@ -351,7 +365,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
   <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
   <div class="panel-layout" data-page="{active}">
     <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
-      <div>
+      <div class="sidebar-header">
         <a class="panel-brand" href="/dashboard">CPN Panel</a>
         <div class="server-summary">
           <div>
@@ -359,10 +373,10 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
             <span>Signed in</span>
           </div>
         </div>
-        <nav aria-label="Primary navigation">
-          {nav}
-        </nav>
       </div>
+      <nav aria-label="Primary navigation">
+        {nav}
+      </nav>
       <div class="sidebar-footer">
         {toggle}
         <a class="logout" href="/logout">Log out</a>

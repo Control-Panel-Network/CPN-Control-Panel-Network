@@ -123,7 +123,7 @@ export function PanelShell({
         aria-label="Panel navigation"
         aria-hidden={undefined}
       >
-        <div>
+        <div className="sidebar-header">
           <Link href="/dashboard" className="panel-brand">
             <Server size={23} strokeWidth={1.9} />
             <span>CPN Panel</span>
@@ -135,27 +135,27 @@ export function PanelShell({
               <span>{signedInLabel}</span>
             </div>
           </div>
-          <nav aria-label="Primary navigation">
-            <NavGroup
-              title="Hosting"
-              items={hosting}
-              active={active}
-              onNavigate={() => setOpen(false)}
-            />
-            <NavGroup
-              title="Account"
-              items={account}
-              active={active}
-              onNavigate={() => setOpen(false)}
-            />
-            <NavGroup
-              title="Administration"
-              items={administration}
-              active={active}
-              onNavigate={() => setOpen(false)}
-            />
-          </nav>
         </div>
+        <nav aria-label="Primary navigation">
+          <NavGroup
+            title="Hosting"
+            items={hosting}
+            active={active}
+            onNavigate={() => setOpen(false)}
+          />
+          <NavGroup
+            title="Account"
+            items={account}
+            active={active}
+            onNavigate={() => setOpen(false)}
+          />
+          <NavGroup
+            title="Administration"
+            items={administration}
+            active={active}
+            onNavigate={() => setOpen(false)}
+          />
+        </nav>
         <div className="sidebar-footer">
           <Link href="/api/logout" className="logout">
             <LogOut size={18} /> Log out
