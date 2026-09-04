@@ -116,6 +116,7 @@ async fn make_state() -> Arc<AppState> {
         events,
         token: "cli".into(),
         bind_port: crate::listen_port::DEFAULT_PORT,
+        allow_remote: false,
     })
 }
 

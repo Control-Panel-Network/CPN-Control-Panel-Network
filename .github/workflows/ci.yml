@@ -39,20 +39,24 @@ jobs:
       - name: Comprobar formato
         run: cargo fmt --check
 
-      - name: Comprobar compilación
-        run: cargo check
+      - name: Comprobar versión sincronizada
+        run: |
+          chmod +x scripts/check-version-sync.sh scripts/sync-version.sh
+          ./scripts/check-version-sync.sh
+
+      - name: Comprobar compilación (locked)
+        run: cargo check --locked
 
       - name: Ejecutar pruebas
-        run: cargo test
+        run: cargo test --locked
 
       - name: Ejecutar Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
 
       - name: Auditoría de dependencias Rust
-        continue-on-error: true
         run: |
-          cargo install cargo-audit --locked || true
-          cargo audit || true
+          cargo install cargo-audit --locked
+          cargo audit
 
   frontend:
     name: React
@@ -76,6 +80,12 @@ jobs:
 
       - name: Comprobar TypeScript
         run: npm run lint
+
+      - name: Auditoría npm (instalador UI)
+        run: npm audit --audit-level=high
+
+      - name: Build Vite de producción
+        run: npm run build
 
   panel:
     name: Panel Next.js
@@ -103,6 +113,9 @@ jobs:
       - name: Comprobar TypeScript
         run: npm run typecheck
 
+      - name: Auditoría npm (Panel)
+        run: npm audit --audit-level=high
+
       - name: Build de producción Next.js
         run: npm run build
 
@@ -113,14 +126,19 @@ jobs:
       - name: Obtener el código
         uses: actions/checkout@v7
 
-      # Privileged docker-matrix is manual only (issue #7).
+      # Privileged docker-matrix stays manual / dedicated workflow: untrusted PRs must not get
+      # --privileged / host cgroup mounts (issue #7). See .github/workflows/os-matrix.yml.
+      # Operators: CPN_TEST_IMAGES="rockylinux:9 almalinux:8" ./tests/docker-matrix.sh
       - name: Comprobar sintaxis Bash
         run: >
           bash -n
           scripts/build-rpm.sh
+          scripts/build-deb.sh
           scripts/docker-build-rpm.sh
+          scripts/docker-build-deb.sh
           scripts/docker-run.sh
           scripts/sync-version.sh
+          scripts/check-version-sync.sh
           scripts/publish-checksums.sh
           scripts/sign-release.sh
           scripts/sign-cosign.sh

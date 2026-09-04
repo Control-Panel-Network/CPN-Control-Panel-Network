@@ -1,5 +1,5 @@
 /target/
-Cargo.lock
+# Cargo.lock committed for reproducible builds (issue #12)
 /installer-ui/node_modules/
 /installer-ui/dist/
 *.rpm

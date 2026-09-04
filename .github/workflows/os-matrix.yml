@@ -1,0 +1,80 @@
+name: OS matrix
+
+# Privileged systemd containers. Not run on untrusted PRs (issue #7).
+# Trigger manually or on main pushes after merge.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Matrix scope"
+        type: choice
+        options:
+          - rocky9
+          - extended
+        default: extended
+  push:
+    branches: [main]
+    paths:
+      - "src/os_support.rs"
+      - "src/install_recipes.rs"
+      - "tests/docker-matrix.sh"
+      - "scripts/docker-build-rpm.sh"
+      - "scripts/docker-build-deb.sh"
+      - ".github/workflows/os-matrix.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rocky9:
+    name: Rocky 9 nginx smoke
+    if: github.event_name == 'push' || inputs.scope == 'rocky9' || inputs.scope == 'extended'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build RPM
+        run: ./scripts/docker-build-rpm.sh
+      - name: Nginx smoke
+        run: |
+          CPN_TEST_IMAGE=rockylinux:9 \
+          CPN_TEST_SCOPE=server \
+          CPN_TEST_SERVERS=nginx \
+          ./tests/docker-matrix.sh
+
+  extended:
+    name: Extended guest smoke
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'extended'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: almalinux:8
+            pkg: rpm
+          - image: rockylinux:8
+            pkg: rpm
+          - image: quay.io/centos/centos:stream9
+            pkg: rpm
+          - image: ubuntu:22.04
+            pkg: deb
+            ubuntu: "22.04"
+          - image: ubuntu:24.04
+            pkg: deb
+            ubuntu: "24.04"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build RPM
+        if: matrix.pkg == 'rpm'
+        run: ./scripts/docker-build-rpm.sh
+      - name: Build Deb
+        if: matrix.pkg == 'deb'
+        env:
+          CPN_UBUNTU_VERSION: ${{ matrix.ubuntu }}
+        run: ./scripts/docker-build-deb.sh
+      - name: Nginx smoke on ${{ matrix.image }}
+        run: |
+          CPN_TEST_IMAGE='${{ matrix.image }}' \
+          CPN_TEST_SCOPE=server \
+          CPN_TEST_SERVERS=nginx \
+          ./tests/docker-matrix.sh

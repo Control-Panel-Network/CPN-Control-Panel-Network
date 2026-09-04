@@ -32,6 +32,11 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Verify tag matches Cargo.toml
+        run: |
+          chmod +x scripts/check-version-sync.sh
+          ./scripts/check-version-sync.sh
+
       - name: Record toolchain provenance notes
         run: |
           mkdir -p dist
@@ -60,25 +65,26 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build release binary
+      - name: Build release binary (locked)
         run: |
-          cargo build --release --locked 2>/dev/null || cargo build --release
+          cargo build --release --locked
           mkdir -p dist
           cp target/release/cpn-installer dist/cpn-installer
-          cp target/release/cpn dist/cpn || true
-          chmod +x dist/cpn-installer
+          cp target/release/cpn dist/cpn
+          chmod +x dist/cpn-installer dist/cpn
 
-      - name: Build RPM via Docker helper when available
-        continue-on-error: true
+      - name: Build RPM via Docker helper
         run: |
-          if [[ -x scripts/docker-build-rpm.sh ]]; then
-            ./scripts/docker-build-rpm.sh || true
-            shopt -s nullglob
-            rpms=(target/rpmbuild/RPMS/*/*.rpm)
-            if ((${#rpms[@]})); then
-              cp "${rpms[@]}" dist/
-            fi
+          chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh scripts/sync-version.sh
+          ./scripts/sync-version.sh
+          ./scripts/docker-build-rpm.sh
+          shopt -s nullglob
+          rpms=(target/rpmbuild/RPMS/*/*.rpm)
+          if ((${#rpms[@]} == 0)); then
+            echo "RPM build produced no packages" >&2
+            exit 1
           fi
+          cp "${rpms[@]}" dist/
 
       - name: Publish SHA256SUMS
         run: |
@@ -113,19 +119,23 @@ jobs:
           chmod +x scripts/sign-cosign.sh
           ./scripts/sign-cosign.sh dist/cpn-installer dist/SHA256SUMS
 
-      - name: Generate SBOM (best effort)
-        continue-on-error: true
+      - name: Generate SBOM
         run: |
-          cargo install cargo-cyclonedx --locked || true
-          cargo cyclonedx -f json -o dist/cpn-installer.cdx.json || \
-            echo '{"bomFormat":"CycloneDX","specVersion":"1.5","note":"SBOM generation skipped"}' > dist/cpn-installer.cdx.json
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx -f json -o dist/cpn-installer.cdx.json
+          test -s dist/cpn-installer.cdx.json
+          ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             dist/cpn-installer
+            dist/cpn
             dist/SHA256SUMS
+            dist/*.rpm
+            dist/cpn-installer.cdx.json
+            dist/build-environment.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -148,3 +158,4 @@ jobs:
 
             See `to-do/RELEASE-SIGNING.md` for GPG/cosign verification.
             Provenance attestation is attached via GitHub Artifact Attestations.
+            GPG/cosign signatures appear when repository secrets are configured.

@@ -146,7 +146,7 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
     }
 }
 
-/// Write LiteSpeed yum repo directly instead of `curl | bash` (issue #2).
+/// Write LiteSpeed yum/apt repo directly instead of `curl | bash` (issue #2).
 pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), String> {
     match guest.family {
         PackageFamily::Dnf => {
@@ -163,10 +163,43 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")
             })
         }
-        PackageFamily::Apt => Err(
-            "OpenLiteSpeed apt bootstrap is not implemented yet; use a RHEL-family guest".into(),
-        ),
+        PackageFamily::Apt => {
+            let codename = guest.apt_codename().ok_or_else(|| {
+                format!(
+                    "No LiteSpeed apt suite mapping for {} (need Ubuntu 20/22/24 or Debian 11/12/13)",
+                    guest.label
+                )
+            })?;
+            let repository = format!(
+                "deb http://rpms.litespeedtech.com/debian/ {codename} main\n\
+                 #deb http://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
+            );
+            std::fs::create_dir_all("/etc/apt/sources.list.d")
+                .map_err(|error| format!("No se pudo crear /etc/apt/sources.list.d: {error}"))?;
+            std::fs::write("/etc/apt/sources.list.d/lst_debian_repo.list", repository).map_err(
+                |error| {
+                    format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}")
+                },
+            )
+        }
     }
+}
+
+/// Register LiteSpeed apt keys and refresh indexes (matches vendor key paths, no curl|bash).
+pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
+    command(
+        "bash",
+        vec![
+            "-c",
+            "apt-get update -y && apt-get install -y wget ca-certificates \
+&& wget -O /etc/apt/trusted.gpg.d/lst_debian_repo.gpg http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+&& wget -O /etc/apt/trusted.gpg.d/lst_repo.gpg http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+&& apt-get update -y",
+        ],
+        "Preparando el repositorio apt de OpenLiteSpeed",
+        "downloading",
+        3,
+    )
 }
 
 pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
@@ -237,15 +270,18 @@ pub(crate) const PHP_PACKAGES_APT: &[&str] = &[
 
 pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> {
     // If PHP is already present (any enabled stream), do not fail trying to switch streams.
-    // Fresh hosts still enable the preferred stream when php is missing.
+    // Fresh hosts still enable a supported stream when php is missing (never EOL 8.0/8.1).
     match guest.php_module_stream()? {
-        "php:8.0" => Some(command(
+        "remi-8.2" => Some(command(
             "bash",
             vec![
                 "-c",
-                "php -v >/dev/null 2>&1 || dnf module enable -y php:8.0",
+                "php -v >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);' \
+|| (dnf -y install https://rpms.remirepo.net/enterprise/remi-release-8.rpm \
+&& dnf -y module reset php \
+&& dnf -y module enable php:remi-8.2)",
             ],
-            "Preparando PHP 8.0",
+            "Preparando PHP 8.2 (Remi en EL8)",
             "downloading",
             38,
         )),
@@ -253,7 +289,8 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
             "bash",
             vec![
                 "-c",
-                "php -v >/dev/null 2>&1 || dnf module enable -y php:8.2",
+                "php -v >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);' \
+|| dnf module enable -y php:8.2",
             ],
             "Preparando PHP 8.2",
             "downloading",

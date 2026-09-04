@@ -206,11 +206,17 @@ pub enum InstallerEvent {
 #[derive(Debug, Deserialize)]
 pub struct InstallRequest {
     pub server: ServerEngine,
+    /// Explicit reinstall/migrate when a server is already ready (issue #20).
+    #[serde(default)]
+    pub force_reinstall: bool,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct MailInstallRequest {
     pub mail: MailSystem,
+    /// Explicit mail swap when mail is already installed (issue #20).
+    #[serde(default)]
+    pub force_reinstall: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,6 +250,8 @@ pub struct ListenPortRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct TokenQuery {
+    /// Optional when the installer session cookie or Authorization header is set (issue #1).
+    #[serde(default)]
     pub token: String,
 }
 

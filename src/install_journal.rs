@@ -5,11 +5,14 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 pub const JOURNAL_FILE: &str = "install-journal.jsonl";
 pub const BACKUP_DIR: &str = "install-backups";
+
+static CURRENT_RUN_ID: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +29,8 @@ pub enum JournalAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JournalEntry {
     pub ts_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
     pub stage: String,
     pub action: JournalAction,
     pub path: String,
@@ -67,6 +72,37 @@ pub fn journal_path() -> PathBuf {
 
 pub fn backup_root() -> PathBuf {
     data_root().join(BACKUP_DIR)
+}
+
+/// Start a scoped install transaction; rollback only undoes this run (issue #13).
+pub fn begin_install_run(label: &str) -> Result<String, String> {
+    ensure_journal_dirs()?;
+    let stamp = now_unix();
+    let run_id = format!("run-{stamp}-{label}");
+    {
+        let mut guard = CURRENT_RUN_ID
+            .lock()
+            .map_err(|_| "install journal run lock poisoned".to_string())?;
+        *guard = Some(run_id.clone());
+    }
+    record(
+        "run",
+        JournalAction::Note,
+        "begin",
+        None,
+        Some(format!("begin install run {run_id}")),
+    )?;
+    Ok(run_id)
+}
+
+pub fn end_install_run() {
+    if let Ok(mut guard) = CURRENT_RUN_ID.lock() {
+        *guard = None;
+    }
+}
+
+fn current_run_id() -> Option<String> {
+    CURRENT_RUN_ID.lock().ok().and_then(|guard| guard.clone())
 }
 
 /// Run cheap checks before mutating the host.
@@ -177,6 +213,7 @@ pub fn record(
 ) -> Result<(), String> {
     append_journal(JournalEntry {
         ts_unix: now_unix(),
+        run_id: current_run_id(),
         stage: stage.into(),
         action,
         path: path.into(),
@@ -278,14 +315,23 @@ pub struct RollbackReport {
     pub kind: FailureKind,
 }
 
-/// Restore tracked file changes from the current journal (newest first for files).
+/// Restore tracked file changes for the current install run only (newest first).
 pub fn rollback_tracked_files() -> Result<RollbackReport, String> {
+    let run_id = current_run_id();
     let entries = load_journal()?;
+    let scoped: Vec<&JournalEntry> = entries
+        .iter()
+        .filter(|entry| match (&run_id, &entry.run_id) {
+            (Some(expected), Some(actual)) => actual == expected,
+            (Some(_), None) => false,
+            (None, _) => true,
+        })
+        .collect();
     let mut restored = Vec::new();
     let mut removed = Vec::new();
     let mut skipped = Vec::new();
 
-    for entry in entries.iter().rev() {
+    for entry in scoped.iter().rev() {
         match entry.action {
             JournalAction::ChangedFile => {
                 if let Some(backup) = entry.backup.as_ref() {
@@ -305,9 +351,9 @@ pub fn rollback_tracked_files() -> Result<RollbackReport, String> {
                     skipped.push(format!("{} (no backup)", entry.path));
                 }
             }
-            JournalAction::CreatedFile => {
+            JournalAction::CreatedFile | JournalAction::WroteRepo => {
                 let path = Path::new(&entry.path);
-                if path.exists() {
+                if path.is_file() {
                     fs::remove_file(path).map_err(|error| {
                         format!("Rollback remove failed for {}: {error}", entry.path)
                     })?;
@@ -320,7 +366,7 @@ pub fn rollback_tracked_files() -> Result<RollbackReport, String> {
                     entry.path, entry.action
                 ));
             }
-            JournalAction::CreatedDir | JournalAction::WroteRepo | JournalAction::Note => {}
+            JournalAction::CreatedDir | JournalAction::Note => {}
         }
     }
 
@@ -340,11 +386,12 @@ pub fn rollback_tracked_files() -> Result<RollbackReport, String> {
         "rollback",
         None,
         Some(format!(
-            "kind={kind:?}; restored={}; removed={}",
+            "kind={kind:?}; run={run_id:?}; restored={}; removed={}",
             restored.len(),
             removed.len()
         )),
     )?;
+    end_install_run();
 
     Ok(RollbackReport {
         restored,
@@ -373,6 +420,7 @@ mod tests {
     #[test]
     fn write_and_rollback_restores_prior_content() {
         with_test_data_dir(|| {
+            begin_install_run("unit").unwrap();
             let target = data_root().join("sample.conf");
             fs::create_dir_all(data_root()).unwrap();
             fs::write(&target, "old\n").unwrap();

@@ -26,29 +26,29 @@ CPN installs on **Linux guests** only (CyberPanel-aligned targets). Status match
 
 | Guest OS | Status | Package path | Notes |
 |---|---|---|---|
-| AlmaLinux 10 | Supported | dnf | Lab-verified earlier |
+| AlmaLinux 10 | Supported | dnf | Lab-verified (AL10 VM) |
 | AlmaLinux 9 | Supported | dnf | Lab-verified; default Docker matrix image |
-| AlmaLinux 8 | Partial | dnf | Detected; PHP module `php:8.0`; needs more lab proof |
-| Rocky Linux 9 | Supported | dnf | Same EL9 recipe family as Alma 9 |
-| Rocky Linux 8 | Partial | dnf | Same EL8 path; needs lab proof |
+| AlmaLinux 8 | Partial | dnf | Recipes + Remi PHP 8.2; matrix smoke pending |
+| Rocky Linux 9 | Supported | dnf | Same EL9 family; `os-matrix` nginx smoke |
+| Rocky Linux 8 | Partial | dnf | Same EL8 path; matrix smoke pending |
 | RHEL 9 | Partial | dnf | Allowlisted; subscription/repos are operator responsibility |
-| RHEL 8 | Partial | dnf | Allowlisted; needs lab proof |
-| CloudLinux 8 | Partial | dnf | Detected when `ID=cloudlinux` |
+| RHEL 8 | Partial | dnf | Allowlisted; subscription/repos are operator responsibility |
+| CloudLinux 8 | Partial | dnf | Detected when `ID=cloudlinux`; no lab ISO here |
 | CentOS Stream 9 | Partial | dnf | Detected when `ID=centos` major 9 |
-| Ubuntu 24.04 | Supported | apt | Code path present; lab verification still needed |
-| Ubuntu 22.04 | Supported | apt | Code path present; lab verification still needed |
-| Ubuntu 20.04 | Partial | apt | Allowlisted; older PHP/repos; verify before production |
-| Debian | Not yet | apt (planned) | Clear error; best-effort community |
-| openEuler | Not yet | (planned) | Clear error; best-effort community |
+| Ubuntu 24.04 | Supported | apt | Apt + OLS apt bootstrap; verify with matrix |
+| Ubuntu 22.04 | Supported | apt | Apt + OLS apt bootstrap; verify with matrix |
+| Ubuntu 20.04 | Partial | apt | Allowlisted; older PHP/repos |
+| Debian 11/12/13 | Partial | apt | Detection + apt family path (was not yet) |
+| openEuler 20-24 | Partial | dnf | Detection + dnf family path (was not yet) |
 | Other RHEL derivatives | Not yet | dnf (planned) | Clear error when not in allowlist |
 
 Quick scan by status:
 
 - **Supported:** AlmaLinux 10, AlmaLinux 9, Rocky Linux 9, Ubuntu 24.04, Ubuntu 22.04
-- **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04
-- **Not yet:** Debian, openEuler, other RHEL derivatives outside the allowlist
+- **Partial:** AlmaLinux 8, Rocky Linux 8, RHEL 9, RHEL 8, CloudLinux 8, CentOS Stream 9, Ubuntu 20.04, Debian 11/12/13, openEuler 20-24
+- **Not yet:** other RHEL derivatives outside the allowlist
 
-Do not treat "Supported" as lab-verified for every row. AlmaLinux 9/10 have lab verification; Ubuntu 22.04/24.04 and Rocky 9 are supported in code and still need full lab proof (see the matrix).
+Do not treat "Supported" as full mail/server matrix for every row. Authoritative detail: [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md).
 
 ### Host / hypervisor (not install targets)
 
@@ -70,7 +70,8 @@ The first phase implements the installer flow and is still in development. It cu
 - VPS and container detection; opening port `2087` in `firewalld` or `ufw` when those are active.
 - RPM packaging for RHEL-family guests (AlmaLinux/Rocky/RHEL 8-10); experimental Ubuntu `.deb` via `scripts/build-deb.sh`.
 - Docker/Podman runtime images for AlmaLinux 9 and 10 (`Dockerfile`, `docker-compose.yml`, `scripts/docker-run.sh`).
-- Service tests in clean AlmaLinux containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE`).
+- Service tests in clean containers (`almalinux:9.8` by default; override with `CPN_TEST_IMAGE` or `CPN_TEST_IMAGES`).
+- Privileged multi-OS nginx smoke: `.github/workflows/os-matrix.yml` (not on untrusted PRs; see issue #7).
 
 Recipes, security, and compatibility still need review before CPN can be considered production-ready.
 

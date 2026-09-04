@@ -6,7 +6,7 @@ use crate::auth_pages::{
     login_post_ack_html, panel_login_html,
 };
 use crate::http_helpers::{
-    authorized, enrich_status, install_finished, normalize_language, panel_login_url_for,
+    authorized_request, enrich_status, install_finished, normalize_language, panel_login_url_for,
     smtp_status_public, token_matches,
 };
 use crate::installer::AppState;
@@ -15,7 +15,7 @@ use crate::mail_outbound::{
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};
-use actix_web::{HttpResponse, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
 #[get("/login")]
@@ -109,11 +109,12 @@ pub async fn forgot_password_submit(
 
 #[post("/api/account/setup")]
 pub async fn account_setup(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
     request: web::Json<AccountSetupRequest>,
 ) -> HttpResponse {
-    if !authorized(&state, &query) {
+    if !authorized_request(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     let mut current = state.status.write().await;

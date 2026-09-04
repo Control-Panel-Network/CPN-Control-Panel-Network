@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   Bell,
@@ -15,6 +16,11 @@ import {
   Settings,
   ShieldCheck,
 } from "lucide-react";
+import {
+  readSessionCookie,
+  sessionCookieName,
+  verifySessionToken,
+} from "../../lib/auth";
 
 type ResourceGaugeProps = {
   label: string;
@@ -65,7 +71,19 @@ type DashboardProps = {
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   const params = await Promise.resolve(searchParams ?? {});
-  if (params.preview !== "1") {
+  const jar = await cookies();
+  const raw =
+    jar.get(sessionCookieName())?.value ||
+    readSessionCookie(
+      jar
+        .getAll()
+        .map((item) => `${item.name}=${item.value}`)
+        .join("; "),
+    );
+  const sessionUser = raw ? verifySessionToken(raw) : null;
+  const previewOnly = params.preview === "1" && !sessionUser;
+
+  if (!sessionUser && !previewOnly) {
     redirect("/?notice=auth-required");
   }
 
@@ -73,15 +91,15 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     <main className="panel-layout">
       <aside className="sidebar">
         <div>
-          <Link href="/dashboard?preview=1" className="panel-brand">
+          <Link href="/dashboard" className="panel-brand">
             <Server size={23} strokeWidth={1.9} />
             <span>NT&amp;DBN Panel</span>
           </Link>
           <div className="server-summary">
             <Network size={20} aria-hidden="true" />
             <div>
-              <strong>84.247.184.182</strong>
-              <span>Online · 49d 23h</span>
+              <strong>{sessionUser || "preview"}</strong>
+              <span>{sessionUser ? "Signed in" : "Preview mode"}</span>
             </div>
           </div>
           <nav aria-label="Primary navigation">
@@ -96,7 +114,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         <div className="sidebar-footer">
           <button aria-label="Notifications"><Bell size={19} /></button>
           <button aria-label="Settings"><Settings size={19} /></button>
-          <Link href="/" className="logout"><LogOut size={18} /> Log out</Link>
+          <Link href="/api/logout" className="logout"><LogOut size={18} /> Log out</Link>
         </div>
       </aside>
       <section className="panel-main">
@@ -108,8 +126,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         <div className="dashboard-heading">
           <div>
             <p className="eyebrow">SERVER OVERVIEW</p>
-            <h1>Dashboard preview</h1>
-            <p>Preview only. Real data requires a signed-in session (not yet connected).</p>
+            <h1>{sessionUser ? "Dashboard" : "Dashboard preview"}</h1>
+            <p>
+              {sessionUser
+                ? `Signed in as ${sessionUser}.`
+                : "Preview only. Sign in with POST /api/login for a real session."}
+            </p>
           </div>
           <label className="dashboard-search">
             <Search size={18} aria-hidden="true" />
