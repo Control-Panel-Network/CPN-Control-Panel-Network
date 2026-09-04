@@ -4,6 +4,7 @@ use crate::service_detect::detect_web_server_label;
 use crate::sites::{
     SiteRecord, is_legacy_docroot, list_sites, resolve_parent_domain, site_home_from_record,
 };
+use crate::website_preview::{PreviewSize, preview_card_html, public_site_url};
 use std::path::Path;
 
 fn html_escape(value: &str) -> String {
@@ -177,6 +178,27 @@ pub fn website_manage_main(site: &SiteRecord, notice: Option<&str>, error: Optio
         )
     };
     let domain_q = html_escape(&site.domain);
+    let preview = preview_card_html(&site.domain, PreviewSize::Manage).unwrap_or_else(|_| {
+        let fallback_url = public_site_url(&site.domain)
+            .unwrap_or_else(|_| format!("http://{}", site.domain));
+        format!(
+            r#"<div class="site-preview site-preview--manage">
+  <div class="site-preview-viewport">
+    <div class="site-preview-fallback" style="display:flex;">
+      <div class="site-preview-fallback-inner">
+        <strong>{domain}</strong>
+        <p>Preview unavailable.</p>
+      </div>
+    </div>
+  </div>
+  <div class="site-preview-actions">
+    <a class="site-preview-visit" href="{url}" target="_blank" rel="noopener noreferrer">Visit Site</a>
+  </div>
+</div>"#,
+            domain = html_escape(&site.domain),
+            url = html_escape(&fallback_url),
+        )
+    });
     format!(
         r##"{heading}
       {ok}
@@ -195,18 +217,25 @@ pub fn website_manage_main(site: &SiteRecord, notice: Option<&str>, error: Optio
           </form>
         </div>
         <h3 id="overview">Overview</h3>
-        <ul class="kv-list">
-          <li><span>Status</span><strong>{status}</strong></li>
-          <li><span>Owner</span><strong>{owner}</strong></li>
-          <li><span>Provisioning</span><strong>{wired}</strong></li>
-          <li><span>Document root</span><strong><code>{docroot}</code></strong></li>
-          <li><span>Site home</span><strong><code>{home}</code></strong></li>
-          <li><span>Disk (approx.)</span><strong>{disk}</strong></li>
-          <li><span>Engine hint</span><strong>{engine}</strong></li>
-          <li><span>Detected web stack</span><strong>{stack}</strong></li>
-          {parent_line}
-        </ul>
-        {legacy}
+        <div class="site-manage-layout">
+          <aside class="site-preview-col" aria-label="Website preview">
+            {preview}
+          </aside>
+          <div class="site-manage-details">
+            <ul class="kv-list" style="margin-top:0;">
+              <li><span>Status</span><strong>{status}</strong></li>
+              <li><span>Owner</span><strong>{owner}</strong></li>
+              <li><span>Provisioning</span><strong>{wired}</strong></li>
+              <li><span>Document root</span><strong><code>{docroot}</code></strong></li>
+              <li><span>Site home</span><strong><code>{home}</code></strong></li>
+              <li><span>Disk (approx.)</span><strong>{disk}</strong></li>
+              <li><span>Engine hint</span><strong>{engine}</strong></li>
+              <li><span>Detected web stack</span><strong>{stack}</strong></li>
+              {parent_line}
+            </ul>
+            {legacy}
+          </div>
+        </div>
         <h3 id="docroot" style="margin-top:22px;">Document root</h3>
         <p>Files for this site are in <code>{docroot}</code>.</p>
         <p class="muted">A full in-panel file manager ships later. Until then, manage files on the host at that path.</p>
@@ -225,6 +254,7 @@ pub fn website_manage_main(site: &SiteRecord, notice: Option<&str>, error: Optio
         err = notice_block("error", error),
         domain = html_escape(&site.domain),
         domain_q = domain_q,
+        preview = preview,
         status = status,
         owner = html_escape(&site.owner),
         wired = wired,
@@ -238,4 +268,33 @@ pub fn website_manage_main(site: &SiteRecord, notice: Option<&str>, error: Optio
         suspend = suspend_form,
         subs = sub_block,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::website_manage_main;
+    use crate::sites::SiteRecord;
+
+    #[test]
+    fn manage_page_includes_preview_column() {
+        let site = SiteRecord {
+            schema_version: 1,
+            domain: "cpn-lab-test.example".into(),
+            owner: "Admin".into(),
+            docroot: "/tmp/cpn-preview-missing".into(),
+            enabled: true,
+            engine: None,
+            notes: String::new(),
+            created_at_unix: 0,
+            updated_at_unix: 0,
+            vhost_wired: false,
+        };
+        let html = website_manage_main(&site, None, None);
+        assert!(html.contains("site-manage-layout"));
+        assert!(html.contains("site-preview-col"));
+        assert!(html.contains("Visit Site"));
+        assert!(html.contains("data-site-preview"));
+        assert!(html.contains("http://cpn-lab-test.example"));
+        assert!(html.contains("rel=\"noopener noreferrer\""));
+    }
 }
