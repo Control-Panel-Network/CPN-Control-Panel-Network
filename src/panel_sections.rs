@@ -5,6 +5,7 @@ use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
 use crate::service_detect::{detect_database, install_mariadb_server};
 use crate::sites::{SiteRecord, list_sites};
+use crate::website_preview::{list_preview_cell_html, public_site_url};
 
 fn html_escape(value: &str) -> String {
     value
@@ -111,9 +112,19 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
         } else {
             String::new()
         };
+        let visit =
+            public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
+        let preview = list_preview_cell_html(&site.domain);
         rows.push_str(&format!(
             r#"<tr>
-          <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
+          <td>
+            <strong>{domain}</strong>
+            <div class="muted">{wired}</div>
+            <div class="site-list-preview-row">
+              <a class="site-preview-visit site-preview-visit--inline" href="{visit}" target="_blank" rel="noopener noreferrer">Visit Site</a>
+              {preview}
+            </div>
+          </td>
           <td>{owner}</td>
           {docroot_td}
           <td>{status}</td>
@@ -124,6 +135,9 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
             docroot_td = docroot_td,
             status = status,
             actions = site_action_buttons(site),
+            visit = html_escape(&visit),
+            preview = preview,
+            wired = wired,
         ));
     }
     rows.push_str("</tbody></table></div>");

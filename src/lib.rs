@@ -86,3 +86,4 @@ pub mod sites;
 pub mod smtp_settings;
 pub mod status_pages;
 pub mod upgrade;
+pub mod website_preview;
