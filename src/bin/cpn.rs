@@ -12,7 +12,9 @@ use cpn_installer::cli_common::{
     confirm_delete, print_generated, read_password, require_root_for_mutation,
 };
 use cpn_installer::cli_network::{NetworkCommands, run_network};
+use cpn_installer::cli_packages::{self, PackageCommands};
 use cpn_installer::cli_plugins;
+use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::paths;
 use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
 
@@ -59,6 +61,11 @@ enum Commands {
     App {
         #[command(subcommand)]
         command: cli_apps::AppCommands,
+    },
+    /// Hosting packages and account quota assignment
+    Package {
+        #[command(subcommand)]
+        command: PackageCommands,
     },
 }
 
@@ -202,6 +209,7 @@ fn run() -> Result<(), String> {
             println!("network  Manage listen port, hostname, and port migration");
             println!("plugin   Manage per-site plugins under /home/<domain>/plugins");
             println!("app      Manage host apps (mariadb, mysql, phpmyadmin, email, rabbitmq)");
+            println!("package  Manage hosting packages and account assignments");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
@@ -299,6 +307,7 @@ fn run() -> Result<(), String> {
                 notes,
             } => {
                 require_root_for_mutation()?;
+                require_site_create_allowed(&owner, &domain)?;
                 let site = create_site(
                     &domain,
                     &owner,
@@ -403,6 +412,9 @@ fn run() -> Result<(), String> {
         },
         Commands::App { command } => {
             cli_apps::run(command, require_root_for_mutation, confirm_delete)
+        }
+        Commands::Package { command } => {
+            cli_packages::run(command, require_root_for_mutation, confirm_delete)
         }
     }
 }

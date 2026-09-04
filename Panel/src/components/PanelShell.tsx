@@ -12,6 +12,7 @@ import {
   Mail,
   Menu,
   Network,
+  Package,
   Puzzle,
   Server,
   Settings,
@@ -34,6 +35,7 @@ const hosting: NavItem[] = [
 
 const account: NavItem[] = [
   { label: "Users & Plans", href: "/account/users", icon: Users, id: "users" },
+  { label: "Packages", href: "/packages", icon: Package, id: "packages" },
 ];
 
 const administration: NavItem[] = [
@@ -105,6 +107,23 @@ export function PanelShell({
     document.body.classList.toggle("nav-open", open);
     return () => document.body.classList.remove("nav-open");
   }, [open]);
+
+  const renderLink = ({
+    label,
+    href,
+    icon: Icon,
+    id,
+  }: (typeof hostingNav)[number]) => (
+    <Link
+      key={id}
+      href={href}
+      className={id === active ? "active" : undefined}
+      onClick={() => setOpen(false)}
+    >
+      <Icon size={20} strokeWidth={1.8} />
+      {label}
+    </Link>
+  );
 
   return (
     <div className="panel-layout">

@@ -76,9 +76,20 @@ ssh -p 2222 root@127.0.0.1 'cpn account passwd --username admin --generate'
 ssh -p 2222 root@127.0.0.1 'cpn site create --domain demo.example.com --owner admin'
 ```
 
-## Extending later
+## Packages
 
-Add new top-level groups beside `account`, `site`, `network`, `plugin`, and `app` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+Hosting packages live under `$CPN_DATA_DIR/packages.json` with assignments in `package-assignments.json`. Unlimited limits use `-1`.
+
+```bash
+sudo cpn package list
+sudo cpn package create --name Starter --disk-mb 2000 --domains 5 --emails 50
+sudo cpn package assign --username ops --package Starter
+sudo cpn package show --username ops
+sudo cpn package delete --id pkg-123 --yes
+```
+
+Site create checks the owner's package domain/FQDN/disk quotas before writing the site record.
+
 
 ## Apps
 

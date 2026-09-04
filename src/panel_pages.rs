@@ -128,6 +128,19 @@ button { font:inherit; cursor:pointer; }
 .data-table { width:100%; border-collapse:collapse; font-size:14px; }
 .data-table th, .data-table td { text-align:left; padding:12px 10px; border-top:1px solid #eeeef0; vertical-align:top; }
 .data-table th { color:var(--muted); font-weight:600; border-top:0; }
+.badge-ok { display:inline-block; padding:2px 8px; border-radius:999px; background:#ecfdf3; color:#027a48; font-size:12px; font-weight:700; }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+.status-dot.ok { background:#12b76a; }
+.status-dot.off { background:#98a2b3; }
+.panel-card { max-width:1200px; margin:0 auto; padding:22px; background:var(--canvas); border:1px solid var(--hairline); border-radius:18px; }
+.stack-form label { display:grid; gap:6px; font-size:14px; font-weight:600; color:#344054; }
+.stack-form input, .stack-form select, .stack-form textarea {
+  font:inherit; padding:10px 12px; border:1px solid var(--hairline); border-radius:10px; background:#fff;
+}
+.btn-primary {
+  display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px;
+  border-radius:999px; background:var(--blue); color:#fff; font-weight:700; border:0;
+}
 .kv-list { list-style:none; padding:0; margin:18px 0 0; }
 .kv-list li { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid #eeeef0; font-size:14px; }
 .stack-form { display:grid; gap:10px; margin-top:16px; max-width:420px; }
@@ -262,6 +275,13 @@ fn nav_links(active: &str, username: &str) -> String {
         "users",
         "/account/users",
         "Users & Plans",
+        active,
+        false,
+    ));
+    parts.push(nav_link(
+        "packages",
+        "/packages",
+        "Packages",
         active,
         false,
     ));

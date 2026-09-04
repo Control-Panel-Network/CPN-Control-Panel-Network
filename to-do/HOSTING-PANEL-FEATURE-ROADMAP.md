@@ -1,4 +1,4 @@
-﻿# Hosting panel feature hubs (CPN)
+# Hosting panel feature hubs (CPN)
 
 CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from other panels were UX inspiration only. No third-party product branding.
 
