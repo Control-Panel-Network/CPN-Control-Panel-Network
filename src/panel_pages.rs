@@ -419,7 +419,8 @@ mod tests {
             "shell should use a viewport-height layout with a scrolling main column"
         );
         assert!(
-            css.contains("align-self:stretch") || (css.contains("position:sticky") && css.contains("top:0")),
+            css.contains("align-self:stretch")
+                || (css.contains("position:sticky") && css.contains("top:0")),
             "sidebar should fill the viewport column (or stay sticky) while main scrolls"
         );
         assert!(
