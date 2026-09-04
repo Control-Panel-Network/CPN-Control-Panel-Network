@@ -3,8 +3,11 @@
 //! Supported apps: MariaDB, MySQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ.
 //! MariaDB and MySQL are treated as mutually exclusive on one host.
 
+use crate::apps_pkg::{
+    disable_now, enable_now, install_packages_dnf_or_apt, remove_packages_dnf_or_apt,
+    rpm_or_dpkg_installed,
+};
 use crate::service_detect::{first_active_service, port_open, systemd_unit_active};
-use std::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppId {
@@ -91,108 +94,6 @@ pub struct AppStatus {
     pub state: AppStateKind,
     pub detail: String,
     pub warning: Option<String>,
-}
-
-fn package_manager() -> Result<&'static str, String> {
-    if Command::new("dnf").arg("--version").status().is_ok() {
-        return Ok("dnf");
-    }
-    if Command::new("apt-get").arg("--version").status().is_ok() {
-        return Ok("apt");
-    }
-    Err("No supported package manager found (need dnf or apt-get).".into())
-}
-
-fn run_pkg(args: &[&str]) -> Result<(), String> {
-    let pm = package_manager()?;
-    let status = if pm == "dnf" {
-        Command::new("dnf")
-            .args(args)
-            .status()
-            .map_err(|error| format!("Could not start dnf: {error}"))?
-    } else {
-        if args.first() == Some(&"install") || args.first() == Some(&"remove") {
-            let update = Command::new("apt-get")
-                .args(["update", "-y"])
-                .status()
-                .map_err(|error| format!("Could not start apt-get update: {error}"))?;
-            if !update.success() {
-                return Err("apt-get update failed".into());
-            }
-        }
-        let mut apt_args: Vec<&str> = Vec::new();
-        match args.first().copied() {
-            Some("install") => {
-                apt_args.push("install");
-                apt_args.push("-y");
-                apt_args.extend_from_slice(&args[1..]);
-            }
-            Some("remove") => {
-                apt_args.push("remove");
-                apt_args.push("-y");
-                apt_args.extend_from_slice(&args[1..]);
-            }
-            _ => {
-                apt_args.extend_from_slice(args);
-            }
-        }
-        Command::new("apt-get")
-            .args(&apt_args)
-            .status()
-            .map_err(|error| format!("Could not start apt-get: {error}"))?
-    };
-    if !status.success() {
-        return Err(format!("{pm} {} failed", args.join(" ")));
-    }
-    Ok(())
-}
-
-fn enable_now(units: &[&str]) -> Result<(), String> {
-    for unit in units {
-        let status = Command::new("systemctl")
-            .args(["enable", "--now", unit])
-            .status()
-            .map_err(|error| format!("Could not start systemctl for {unit}: {error}"))?;
-        if !status.success() {
-            return Err(format!("systemctl enable --now {unit} failed"));
-        }
-    }
-    Ok(())
-}
-
-fn disable_now(units: &[&str]) -> Result<(), String> {
-    for unit in units {
-        let _ = Command::new("systemctl")
-            .args(["disable", "--now", unit])
-            .status();
-    }
-    Ok(())
-}
-
-fn rpm_or_dpkg_installed(names: &[&str]) -> bool {
-    for name in names {
-        let rpm = Command::new("rpm")
-            .args(["-q", name])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if rpm {
-            return true;
-        }
-        let dpkg = Command::new("dpkg-query")
-            .args(["-W", "-f=${Status}", name])
-            .output()
-            .ok()
-            .map(|out| {
-                let text = String::from_utf8_lossy(&out.stdout);
-                text.contains("install ok installed")
-            })
-            .unwrap_or(false);
-        if dpkg {
-            return true;
-        }
-    }
-    false
 }
 
 fn mariadb_present() -> bool {
@@ -366,81 +267,92 @@ fn enforce_db_xor(id: AppId) -> Result<(), String> {
     }
 }
 
-fn install_packages_dnf_or_apt(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Result<(), String> {
-    let pm = package_manager()?;
-    if pm == "dnf" {
-        let mut args = vec!["install", "-y"];
-        args.extend_from_slice(dnf_pkgs);
-        run_pkg(&args)
-    } else {
-        let mut args = vec!["install"];
-        args.extend_from_slice(apt_pkgs);
-        run_pkg(&args)
-    }
-}
-
-fn remove_packages_dnf_or_apt(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Result<(), String> {
-    let pm = package_manager()?;
-    if pm == "dnf" {
-        let mut args = vec!["remove", "-y"];
-        args.extend_from_slice(dnf_pkgs);
-        run_pkg(&args)
-    } else {
-        let mut args = vec!["remove"];
-        args.extend_from_slice(apt_pkgs);
-        run_pkg(&args)
-    }
-}
-
 pub fn install_app(id: AppId) -> Result<String, String> {
+    install_app_on(id, None)
+}
+
+/// Install host packages and optionally associate/drop site-scoped pieces under a domain home.
+pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
     enforce_db_xor(id)?;
     let current = detect_app(id);
-    if current.state == AppStateKind::Running {
-        return Ok(format!("{} is already running.", id.label()));
+    let mut messages = Vec::new();
+    if current.state != AppStateKind::Running {
+        let msg = match id {
+            AppId::Mariadb => {
+                install_packages_dnf_or_apt(&["mariadb-server"], &["mariadb-server"])?;
+                enable_now(&["mariadb"])?;
+                "Installed and started MariaDB.".to_string()
+            }
+            AppId::Mysql => {
+                install_packages_dnf_or_apt(&["mysql-server"], &["mysql-server"])?;
+                let _ = enable_now(&["mysqld"]);
+                let _ = enable_now(&["mysql"]);
+                "Installed and started MySQL.".to_string()
+            }
+            AppId::Phpmyadmin => {
+                install_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
+                "Installed phpMyAdmin packages.".to_string()
+            }
+            AppId::Email => {
+                install_packages_dnf_or_apt(
+                    &["postfix", "dovecot"],
+                    &["postfix", "dovecot-core", "dovecot-imapd"],
+                )?;
+                enable_now(&["postfix", "dovecot"])?;
+                "Installed and started Email stack (Postfix + Dovecot).".to_string()
+            }
+            AppId::Rabbitmq => {
+                install_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
+                enable_now(&["rabbitmq-server"])?;
+                "Installed and started RabbitMQ.".to_string()
+            }
+        };
+        messages.push(msg);
+    } else {
+        messages.push(format!("{} is already running on the host.", id.label()));
     }
-    match id {
-        AppId::Mariadb => {
-            install_packages_dnf_or_apt(&["mariadb-server"], &["mariadb-server"])?;
-            enable_now(&["mariadb"])?;
-            Ok("Installed and started MariaDB.".into())
+    if let Some(domain) = domain.map(str::trim).filter(|v| !v.is_empty()) {
+        if crate::apps_site::is_associable(id) {
+            messages.push(crate::apps_site::apply_site_scope(id, domain)?);
         }
-        AppId::Mysql => {
-            install_packages_dnf_or_apt(&["mysql-server"], &["mysql-server"])?;
-            let _ = enable_now(&["mysqld"]);
-            let _ = enable_now(&["mysql"]);
-            Ok("Installed and started MySQL.".into())
-        }
-        AppId::Phpmyadmin => {
-            install_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
-            Ok("Installed phpMyAdmin packages. Configure a web vhost to expose the UI.".into())
-        }
-        AppId::Email => {
-            install_packages_dnf_or_apt(
-                &["postfix", "dovecot"],
-                &["postfix", "dovecot-core", "dovecot-imapd"],
-            )?;
-            enable_now(&["postfix", "dovecot"])?;
-            Ok("Installed and started Email stack (Postfix + Dovecot).".into())
-        }
-        AppId::Rabbitmq => {
-            install_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
-            enable_now(&["rabbitmq-server"])?;
-            Ok("Installed and started RabbitMQ.".into())
-        }
+    } else if crate::apps_site::is_site_scoped(id) {
+        messages.push(
+            "No domain selected: host packages only. Choose a domain or subdomain to drop site paths under /home/<domain>/apps/."
+                .into(),
+        );
     }
+    Ok(messages.join(" "))
 }
 
 pub fn reinstall_app(id: AppId) -> Result<String, String> {
-    let _ = uninstall_app(id);
-    install_app(id).map(|msg| format!("Reinstall: {msg}"))
+    reinstall_app_on(id, None)
+}
+
+pub fn reinstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
+    let _ = uninstall_app_on(id, domain);
+    install_app_on(id, domain).map(|msg| format!("Reinstall: {msg}"))
 }
 
 pub fn uninstall_app(id: AppId) -> Result<String, String> {
-    match id {
+    uninstall_app_on(id, None)
+}
+
+pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
+    let mut messages = Vec::new();
+    if let Some(domain) = domain.map(str::trim).filter(|v| !v.is_empty()) {
+        if crate::apps_site::is_associable(id) {
+            messages.push(crate::apps_site::clear_site_scope(id, domain)?);
+        }
+        if crate::apps_site::is_site_scoped(id) {
+            // Site-scoped uninstall clears domain paths only; leave host packages unless no domain.
+            return Ok(messages.join(" "));
+        }
+    }
+    let msg = match id {
         AppId::Mariadb => {
             disable_now(&["mariadb"])?;
             remove_packages_dnf_or_apt(&["mariadb-server"], &["mariadb-server"])?;
-            Ok("Uninstalled MariaDB.".into())
+            "Uninstalled MariaDB.".to_string()
         }
         AppId::Mysql => {
             disable_now(&["mysqld"])?;
@@ -449,11 +361,11 @@ pub fn uninstall_app(id: AppId) -> Result<String, String> {
                 &["mysql-server", "mysql-community-server"],
                 &["mysql-server"],
             )?;
-            Ok("Uninstalled MySQL.".into())
+            "Uninstalled MySQL.".to_string()
         }
         AppId::Phpmyadmin => {
             remove_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
-            Ok("Uninstalled phpMyAdmin.".into())
+            "Uninstalled phpMyAdmin.".to_string()
         }
         AppId::Email => {
             disable_now(&["postfix", "dovecot"])?;
@@ -461,14 +373,16 @@ pub fn uninstall_app(id: AppId) -> Result<String, String> {
                 &["postfix", "dovecot"],
                 &["postfix", "dovecot-core", "dovecot-imapd"],
             )?;
-            Ok("Uninstalled Email stack (Postfix + Dovecot).".into())
+            "Uninstalled Email stack (Postfix + Dovecot).".to_string()
         }
         AppId::Rabbitmq => {
             disable_now(&["rabbitmq-server"])?;
             remove_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
-            Ok("Uninstalled RabbitMQ.".into())
+            "Uninstalled RabbitMQ.".to_string()
         }
-    }
+    };
+    messages.push(msg);
+    Ok(messages.join(" "))
 }
 
 #[cfg(test)]

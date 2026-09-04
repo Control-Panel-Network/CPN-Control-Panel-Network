@@ -8,12 +8,16 @@ use crate::panel_sections::{
     databases_main, email_main, run_mariadb_install, set_websites_docroot_pref, websites_main,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
+use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
 use crate::sites::{create_site, delete_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
 pub use crate::panel_app_routes::{apps_install, apps_page, apps_reinstall, apps_uninstall};
 pub use crate::panel_backup_routes::{backups_page, backups_run};
+pub use crate::panel_mail_routes::{
+    email_account_create, email_account_disable, email_account_enable,
+};
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
@@ -174,11 +178,17 @@ pub async fn websites_prefs(
 }
 
 #[get("/email")]
-pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn email_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
     let status = state.status.read().await.clone();
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "email",
@@ -187,6 +197,8 @@ pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> H
             status.selected_mail,
             status.mail_client_ready,
             status.mail_backend_ready,
+            notice,
+            error,
         ),
     ))
 }
@@ -251,6 +263,17 @@ pub async fn plugins_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let refresh = query.get("refresh").map(String::as_str) == Some("1");
+    let sites = sites_manageable_by(&user).unwrap_or_default();
+    let domain = if domain.trim().is_empty() {
+        ""
+    } else if sites
+        .iter()
+        .any(|s| s.domain.eq_ignore_ascii_case(domain.trim()))
+    {
+        domain.trim()
+    } else {
+        ""
+    };
     html_ok(panel_shell(
         &user,
         "plugins",
@@ -264,6 +287,7 @@ pub async fn plugins_page(
             notice,
             error,
             refresh,
+            sites: &sites,
         }),
     ))
 }
@@ -297,9 +321,17 @@ pub async fn plugins_install(
     state: web::Data<Arc<AppState>>,
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Install) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish();
+    }
     match install_plugin(&form.domain, &form.id) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((
@@ -327,9 +359,17 @@ pub async fn plugins_uninstall(
     state: web::Data<Arc<AppState>>,
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Uninstall) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
+            ))
+            .finish();
+    }
     match uninstall_plugin(&form.domain, &form.id) {
         Ok(()) => HttpResponse::SeeOther()
             .append_header((
@@ -357,9 +397,17 @@ pub async fn plugins_enable(
     state: web::Data<Arc<AppState>>,
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
+            ))
+            .finish();
+    }
     match set_plugin_enabled(&form.domain, &form.id, true) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((
@@ -387,9 +435,17 @@ pub async fn plugins_disable(
     state: web::Data<Arc<AppState>>,
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
+            ))
+            .finish();
+    }
     match set_plugin_enabled(&form.domain, &form.id, false) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((

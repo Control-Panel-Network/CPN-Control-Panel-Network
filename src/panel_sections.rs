@@ -162,7 +162,12 @@ pub fn email_main(
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
+    notice: Option<&str>,
+    error: Option<&str>,
 ) -> String {
+    use crate::mail_accounts::{MailSmtpMode, list_accounts_public};
+    use crate::postfix_fallback::postfix_is_ready;
+
     let mail = selected_mail
         .map(|value| value.label())
         .unwrap_or("Not selected");
@@ -177,6 +182,7 @@ pub fn email_main(
         "Not verified"
     };
     let smtp = smtp_status_public();
+    let postfix_ready = postfix_is_ready();
     let smtp_line = if smtp.configured {
         format!(
             "{}:{} ({}) from {}",
@@ -185,8 +191,15 @@ pub fn email_main(
             smtp.tls_mode.as_deref().unwrap_or("-"),
             smtp.from_address.as_deref().unwrap_or("-"),
         )
+    } else if postfix_ready {
+        "Using local Postfix fallback (127.0.0.1)".into()
     } else {
         "Outbound SMTP is not configured".into()
+    };
+    let mta_line = if postfix_ready {
+        "Postfix running (default local MTA)"
+    } else {
+        "Postfix not detected"
     };
     let webmail = if mail_client_ready
         && matches!(
@@ -205,27 +218,128 @@ pub fn email_main(
         "<p class=\"muted\">Install a webmail stack from the installer mail stage to enable a local webmail link.</p>"
             .into()
     };
+
+    let accounts = list_accounts_public();
+    let mut rows = String::new();
+    if accounts.is_empty() {
+        rows.push_str(r#"<p class="muted">No mailboxes yet. Enabled accounts require valid external SMTP or a running Postfix local binding.</p>"#);
+    } else {
+        rows.push_str(r#"<table class="data-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
+        for acct in &accounts {
+            let valid = if acct.smtp_valid {
+                "Valid"
+            } else {
+                "Invalid"
+            };
+            let err = acct
+                .smtp_error
+                .as_ref()
+                .map(|e| {
+                    format!(
+                        r#" <span class="muted">({})</span>"#,
+                        html_escape(e)
+                    )
+                })
+                .unwrap_or_default();
+            let mode = match acct.smtp_mode {
+                MailSmtpMode::External => "external",
+                MailSmtpMode::PostfixLocal => "postfix_local",
+            };
+            let toggle = if acct.enabled {
+                format!(
+                    r#"<form method="post" action="/email/accounts/disable" class="inline-form" style="display:inline;"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-secondary">Disable</button></form>"#,
+                    id = html_escape(&acct.id),
+                )
+            } else {
+                format!(
+                    r#"<form method="post" action="/email/accounts/enable" class="inline-form" style="display:inline;" onsubmit="return confirm('Enable only if SMTP is valid.');"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-primary">Enable</button></form>"#,
+                    id = html_escape(&acct.id),
+                )
+            };
+            rows.push_str(&format!(
+                r#"<tr><td>{addr}<br><span class="muted">{domain}</span></td><td>{mode}: {summary}</td><td><strong>{valid}</strong>{err}</td><td>{state}</td><td>{toggle}</td></tr>"#,
+                addr = html_escape(&acct.address),
+                domain = html_escape(if acct.domain.is_empty() {
+                    "-"
+                } else {
+                    &acct.domain
+                }),
+                mode = mode,
+                summary = html_escape(&acct.smtp_summary),
+                valid = valid,
+                err = err,
+                state = if acct.enabled { "Enabled" } else { "Disabled" },
+                toggle = toggle,
+            ));
+        }
+        rows.push_str("</tbody></table>");
+    }
+
+    let create_form = r#"
+      <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
+        <label for="address">Mailbox address</label>
+        <input id="address" name="address" type="email" required placeholder="user@example.com">
+        <label for="domain">Site FQDN (optional)</label>
+        <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
+        <label for="smtp_mode">SMTP mode</label>
+        <select id="smtp_mode" name="smtp_mode">
+          <option value="postfix_local">Local Postfix (default)</option>
+          <option value="external">External SMTP</option>
+        </select>
+        <label for="smtp_host">External host</label>
+        <input id="smtp_host" name="smtp_host" type="text" placeholder="smtp.example.com">
+        <label for="smtp_port">Port</label>
+        <input id="smtp_port" name="smtp_port" type="number" value="587">
+        <label for="smtp_tls">Encryption</label>
+        <select id="smtp_tls" name="smtp_tls">
+          <option value="starttls">STARTTLS</option>
+          <option value="tls">TLS</option>
+          <option value="none">None</option>
+        </select>
+        <label for="smtp_username">SMTP username</label>
+        <input id="smtp_username" name="smtp_username" type="text" autocomplete="off">
+        <label for="smtp_password">SMTP password</label>
+        <input id="smtp_password" name="smtp_password" type="password" autocomplete="new-password">
+        <label><input type="checkbox" name="enabled" value="1" checked> Enable now (requires valid SMTP)</label>
+        <button type="submit" class="btn-primary">Create mailbox</button>
+      </form>"#;
+
     format!(
         r#"{heading}
+      {ok}
+      {err}
       <article class="section-card">
         <h2>Mail stack</h2>
         <ul class="kv-list">
           <li><span>Selected client</span><strong>{mail}</strong></li>
           <li><span>Webmail client</span><strong>{client}</strong></li>
           <li><span>IMAP/SMTP backend</span><strong>{backend}</strong></li>
+          <li><span>Local MTA</span><strong>{mta}</strong></li>
           <li><span>Outbound SMTP</span><strong>{smtp}</strong></li>
         </ul>
+        <p class="muted">If no external SMTP was set during install, Postfix is the default local MTA. Switching to external SMTP later does not remove Postfix unless you uninstall Email.</p>
         {webmail}
+      </article>
+      <article class="section-card" style="margin-top:18px;">
+        <h2>Mailboxes</h2>
+        <p>Enabled accounts must have complete external SMTP or a verified Postfix local binding.</p>
+        {rows}
+        {create}
       </article>"#,
         heading = section_heading(
             "Email",
-            "Mail client status and outbound SMTP summary (no secrets).",
+            "Mail stack, Postfix default MTA, and per-mailbox SMTP validity.",
         ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
         mail = html_escape(mail),
         client = client_ready,
         backend = backend_ready,
+        mta = mta_line,
         smtp = html_escape(&smtp_line),
         webmail = webmail,
+        rows = rows,
+        create = create_form,
     )
 }
 

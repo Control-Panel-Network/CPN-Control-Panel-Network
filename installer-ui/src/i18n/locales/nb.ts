@@ -100,8 +100,8 @@ const nb: LocaleMessages = {
   accountError: 'Kunne ikke lagre kontoen',
   smtpOptionalTitle: 'Utgående e-post (valgfritt)',
   smtpOptionalHint:
-    'Konfigurer SMTP for å sende kontovarsler. Du kan fullføre uten e-post. Hemmeligheter lagres bare på denne serveren.',
-  smtpEnableLabel: 'Konfigurer SMTP for utgående e-post',
+    'Konfigurer ekstern SMTP for kontovarsler, eller la feltet stå tomt for lokal Postfix på Linux (installeres automatisk). Windows trenger ekstern SMTP. Hemmeligheter lagres bare på denne serveren.',
+  smtpEnableLabel: 'Konfigurer ekstern SMTP for utgående e-post',
   smtpHostLabel: 'SMTP-vert',
   smtpPortLabel: 'Port',
   smtpTlsLabel: 'Kryptering',

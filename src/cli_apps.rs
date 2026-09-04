@@ -1,8 +1,9 @@
-//! CLI handlers for `cpn app …`.
+//! CLI handlers for `cpn app …` (optional --domain / --subdomain site scope).
 
 use clap::Subcommand;
 
-use crate::apps::{AppId, install_app, list_apps, reinstall_app, uninstall_app};
+use crate::apps::{AppId, install_app_on, list_apps, reinstall_app_on, uninstall_app_on};
+use crate::site_acl::resolve_target_domain;
 
 #[derive(Subcommand, Debug)]
 pub enum AppCommands {
@@ -12,11 +13,19 @@ pub enum AppCommands {
     Install {
         #[arg(long)]
         name: String,
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        subdomain: Option<String>,
     },
     /// Reinstall an app by name
     Reinstall {
         #[arg(long)]
         name: String,
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        subdomain: Option<String>,
         #[arg(long)]
         yes: bool,
     },
@@ -25,8 +34,27 @@ pub enum AppCommands {
         #[arg(long)]
         name: String,
         #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        subdomain: Option<String>,
+        #[arg(long)]
         yes: bool,
     },
+}
+
+fn optional_site(
+    domain: Option<String>,
+    subdomain: Option<String>,
+) -> Result<Option<String>, String> {
+    if domain.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+        && subdomain.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+    {
+        return Ok(None);
+    }
+    Ok(Some(resolve_target_domain(
+        domain.as_deref(),
+        subdomain.as_deref(),
+    )?))
 }
 
 pub fn run(
@@ -36,25 +64,42 @@ pub fn run(
 ) -> Result<(), String> {
     match command {
         AppCommands::List => list(),
-        AppCommands::Install { name } => {
+        AppCommands::Install {
+            name,
+            domain,
+            subdomain,
+        } => {
             require_root()?;
-            install(&name)
+            let site = optional_site(domain, subdomain)?;
+            install(&name, site.as_deref())
         }
-        AppCommands::Reinstall { name, yes } => {
+        AppCommands::Reinstall {
+            name,
+            domain,
+            subdomain,
+            yes,
+        } => {
             require_root()?;
             confirm(
                 &format!("Reinstall app `{name}`? Packages may be removed and reinstalled."),
                 yes,
             )?;
-            reinstall(&name)
+            let site = optional_site(domain, subdomain)?;
+            reinstall(&name, site.as_deref())
         }
-        AppCommands::Uninstall { name, yes } => {
+        AppCommands::Uninstall {
+            name,
+            domain,
+            subdomain,
+            yes,
+        } => {
             require_root()?;
             confirm(
                 &format!("Uninstall app `{name}`? This removes packages and stops services."),
                 yes,
             )?;
-            uninstall(&name)
+            let site = optional_site(domain, subdomain)?;
+            uninstall(&name, site.as_deref())
         }
     }
 }
@@ -78,23 +123,23 @@ pub fn list() -> Result<(), String> {
     Ok(())
 }
 
-pub fn install(name: &str) -> Result<(), String> {
+pub fn install(name: &str, domain: Option<&str>) -> Result<(), String> {
     let id = AppId::parse(name)?;
-    let msg = install_app(id)?;
+    let msg = install_app_on(id, domain)?;
     println!("{msg}");
     Ok(())
 }
 
-pub fn reinstall(name: &str) -> Result<(), String> {
+pub fn reinstall(name: &str, domain: Option<&str>) -> Result<(), String> {
     let id = AppId::parse(name)?;
-    let msg = reinstall_app(id)?;
+    let msg = reinstall_app_on(id, domain)?;
     println!("{msg}");
     Ok(())
 }
 
-pub fn uninstall(name: &str) -> Result<(), String> {
+pub fn uninstall(name: &str, domain: Option<&str>) -> Result<(), String> {
     let id = AppId::parse(name)?;
-    let msg = uninstall_app(id)?;
+    let msg = uninstall_app_on(id, domain)?;
     println!("{msg}");
     Ok(())
 }
