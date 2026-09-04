@@ -123,7 +123,31 @@ button { font:inherit; cursor:pointer; }
 }
 .status-card li strong { color:var(--green); font-size:12px; }
 .activity-card time { color:var(--muted); font-size:12px; }
-.section-card p { margin:12px 0 0; color:var(--muted); max-width:52ch; }
+.section-card p { margin:12px 0 0; color:var(--muted); max-width:62ch; }
+.panel-notice { margin:0 0 16px; padding:10px 12px; border-radius:10px; font-size:.92rem; }
+.panel-notice.ok { background:#ecfdf3; border:1px solid #abefc6; color:#067647; }
+.panel-notice.error { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; }
+.empty-state { margin:0; color:var(--muted); }
+.muted { color:var(--muted); font-size:.9rem; }
+.table-wrap { overflow-x:auto; margin-top:14px; }
+.data-table { width:100%; border-collapse:collapse; font-size:14px; }
+.data-table th, .data-table td { text-align:left; padding:12px 10px; border-top:1px solid #eeeef0; vertical-align:top; }
+.data-table th { color:var(--muted); font-weight:600; border-top:0; }
+.kv-list { list-style:none; padding:0; margin:18px 0 0; }
+.kv-list li { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid #eeeef0; font-size:14px; }
+.stack-form { display:grid; gap:10px; margin-top:16px; max-width:420px; }
+.stack-form label { font-weight:600; font-size:.92rem; }
+.stack-form input {
+  width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit;
+}
+.btn-primary, .btn-danger {
+  display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px;
+  border:0; border-radius:999px; font-weight:700; cursor:pointer; text-decoration:none;
+}
+.btn-primary { background:var(--blue); color:#fff; }
+.btn-danger { background:#fee4e2; color:#b42318; }
+.inline-form { display:inline; margin:0; }
+code { font-size:.9em; }
 @media (max-width:1023.98px) {
   body.nav-open { overflow:hidden; }
   .sidebar-backdrop { display:none; }
@@ -227,7 +251,7 @@ fn nav_links(active: &str) -> String {
         .join("\n          ")
 }
 
-fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
+pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
     let user = html_escape(username);
     let nav = nav_links(active);
     format!(
@@ -344,25 +368,4 @@ pub fn panel_dashboard_html(username: &str) -> String {
       </div>"#
     );
     panel_shell(username, "dashboard", "Dashboard", &main)
-}
-
-pub fn panel_section_html(username: &str, section_id: &str, title: &str, blurb: &str) -> String {
-    let main = format!(
-        r#"
-      <div class="dashboard-heading">
-        <div>
-          <p class="eyebrow">CPN PANEL</p>
-          <h1>{title}</h1>
-          <p>{blurb}</p>
-        </div>
-      </div>
-      <article class="section-card">
-        <h2>{title}</h2>
-        <p>This section uses the same responsive shell as the dashboard. Management tools for {title_lower} will land here in a later release.</p>
-      </article>"#,
-        title = html_escape(title),
-        blurb = html_escape(blurb),
-        title_lower = html_escape(&title.to_lowercase()),
-    );
-    panel_shell(username, section_id, title, &main)
 }
