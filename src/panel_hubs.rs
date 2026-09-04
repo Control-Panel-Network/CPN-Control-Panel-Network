@@ -153,7 +153,7 @@ pub fn hub_styles() -> &'static str {
 }
 .hub-tile-grid {
   max-width:1200px; margin:0 auto; display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr)); gap:14px;
 }
 .hub-tile {
   display:flex; align-items:flex-start; gap:12px; min-height:88px; padding:16px 14px;
@@ -173,6 +173,10 @@ pub fn hub_styles() -> &'static str {
 }
 .hub-badge.live { background:#ecfdf3; color:#067647; }
 .hub-badge.scaffold { background:#f2f4f7; color:#475467; }
+@media (max-width:679.98px) {
+  .hub-tile-grid { grid-template-columns:1fr; }
+  .hub-tile { min-height:76px; }
+}
 @media (prefers-reduced-motion:reduce) {
   .hub-tile { transition:none; }
 }

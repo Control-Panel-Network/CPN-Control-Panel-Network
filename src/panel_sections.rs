@@ -251,7 +251,7 @@ pub fn email_accounts_main(
     if accounts.is_empty() {
         rows.push_str(r#"<p class="muted">No mailboxes yet. Enabled accounts require valid external SMTP or a running Postfix local binding.</p>"#);
     } else {
-        rows.push_str(r#"<table class="data-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
+        rows.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
         for acct in &accounts {
             let valid = if acct.smtp_valid { "Valid" } else { "Invalid" };
             let err = acct
@@ -290,7 +290,7 @@ pub fn email_accounts_main(
                 toggle = toggle,
             ));
         }
-        rows.push_str("</tbody></table>");
+        rows.push_str("</tbody></table></div>");
     }
 
     let create_form = r#"
