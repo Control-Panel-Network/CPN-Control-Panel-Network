@@ -142,7 +142,8 @@ async fn bootstrap_session(
     if !remote_origin_ok(&http, state.allow_remote, state.bind_port) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
     }
-    let secure = http.connection_info().scheme() == "https";
+    // Avoid connection_info()/Host-derived allocs (CodeQL rust/uncontrolled-allocation-size).
+    let secure = cpn_installer::panel_session::request_https_from_headers(&http);
     HttpResponse::Ok()
         .append_header((
             actix_web::http::header::SET_COOKIE,
@@ -165,11 +166,20 @@ async fn api_status(
         return HttpResponse::Unauthorized().finish();
     }
     let payload = enrich_status(
-        state
-            .status
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone(),
+        match state.status.try_read() {
+            Ok(guard) => guard.clone(),
+            Err(_) => {
+                // Prefer brief wait over wedging an Actix worker on a write lock.
+                for _ in 0..20 {
+                    std::thread::sleep(Duration::from_millis(5));
+                    if let Ok(guard) = state.status.try_read() {
+                        return status_response(&request, &enrich_status(guard.clone(), &state.token));
+                    }
+                }
+                return HttpResponse::ServiceUnavailable()
+                    .json(serde_json::json!({"error": "status busy"}));
+            }
+        },
         &state.token,
     );
     status_response(&request, &payload)
@@ -351,8 +361,9 @@ async fn start_install(
     let _ = std::thread::Builder::new()
         .name("cpn-install-server".into())
         .spawn(move || {
-            let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+            // current_thread keeps package work off Actix workers without a second
+            // multi-thread runtime competing for a 1-vCPU matrix guest.
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
             else {
@@ -402,8 +413,7 @@ async fn start_mail_install(
     let _ = std::thread::Builder::new()
         .name("cpn-install-mail".into())
         .spawn(move || {
-            let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
             else {
@@ -661,6 +671,7 @@ async fn main() -> std::io::Result<()> {
         maintenance: Some(maintenance),
     };
     initial = enrich_status(initial, &token);
+    cpn_installer::installer::persist_status_snapshot(&initial);
     let startup_hostname = initial.panel_hostname.clone();
     let startup_migration = initial.port_migration.clone();
     let state = Arc::new(AppState {
@@ -715,6 +726,8 @@ async fn main() -> std::io::Result<()> {
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(state.clone()))
+            .app_data(web::JsonConfig::default().limit(64 * 1024))
+            .app_data(web::PayloadConfig::new(64 * 1024))
             .service(root_page)
             .service(api_status)
             .service(status_page)
@@ -838,7 +851,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/events", web::get().to(websocket))
             .route("/{path:.*}", web::get().to(static_asset))
     })
-    .keep_alive(Duration::from_secs(30))
+    .keep_alive(actix_web::http::KeepAlive::Disabled)
     // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
     // work freezes /api/status for the whole smoke. Keep at least two workers.
     .workers(std::cmp::max(

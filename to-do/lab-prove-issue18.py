@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import paramiko
+import lab_ssh
 
 body = r"""#!/bin/bash
 set -uo pipefail
@@ -26,17 +26,7 @@ if [ "$AFTER_COUNT" != "0" ]; then exit 1; fi
 exit 0
 """
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(
-    "127.0.0.1",
-    port=2222,
-    username="cpn",
-    password="CpnLab2026!",
-    timeout=20,
-    allow_agent=False,
-    look_for_keys=False,
-)
+c = lab_ssh.connect(port=2222, password="CpnLab2026!")
 sftp = c.open_sftp()
 with sftp.file("/tmp/cpn-issue18b.sh", "w") as f:
     f.write(body)

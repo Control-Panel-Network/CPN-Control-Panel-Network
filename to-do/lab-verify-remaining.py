@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.request
 
+import lab_ssh
 import paramiko
 
 CREDS = {"username": "cpn", "password": "CpnLab2026!", "host": "127.0.0.1"}
@@ -19,18 +20,12 @@ TOKENS = {
 
 
 def connect(port: int) -> paramiko.SSHClient:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
-        CREDS["host"],
+    return lab_ssh.connect(
+        host=CREDS["host"],
         port=port,
         username=CREDS["username"],
         password=CREDS["password"],
-        timeout=20,
-        allow_agent=False,
-        look_for_keys=False,
     )
-    return client
 
 
 def run_script(port: int, name: str, body: str, timeout: int = 600) -> tuple[int, str]:

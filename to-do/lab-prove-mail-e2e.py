@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import paramiko
+import lab_ssh
 
 SCRIPT = r"""#!/bin/bash
 set -euo pipefail
@@ -41,17 +41,7 @@ test "$ok" = 1
 echo ISSUE9_LAB_OK=yes
 """
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(
-    "127.0.0.1",
-    port=2222,
-    username="cpn",
-    password="CpnLab2026!",
-    timeout=20,
-    allow_agent=False,
-    look_for_keys=False,
-)
+c = lab_ssh.connect(port=2222, password="CpnLab2026!")
 sftp = c.open_sftp()
 with sftp.file("/tmp/cpn-mail-e2e.sh", "w") as handle:
     handle.write(SCRIPT)

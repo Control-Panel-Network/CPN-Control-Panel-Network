@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild cpn-installer on AL9 from origin/main and restart with allow-remote."""
+"""Rebuild cpn-installer on AL9 from main (post-#93) and restart on :2087."""
 from __future__ import annotations
 
 import lab_ssh
@@ -17,7 +17,6 @@ cd /home/cpn/CPN-Control-Panel-Network
 git fetch origin
 git checkout -f main
 git reset --hard origin/main
-# Build installer-ui embed then release binary
 cd installer-ui
 npm ci --silent
 npm run build
@@ -27,30 +26,32 @@ sudo pkill -f /usr/bin/cpn-installer || true
 sleep 1
 sudo cp -f target/release/cpn-installer /usr/bin/cpn-installer
 sudo chmod 755 /usr/bin/cpn-installer
-# Keep firewalld lab access
 sudo firewall-cmd --add-port=2087/tcp || true
 sudo bash -lc 'nohup /usr/bin/cpn-installer --allow-remote --port 2087 >/tmp/cpn-installer-out.log 2>&1 &'
 sleep 2
-pgrep -a cpn-installer
-grep -E 'fingerprint|Bootstrap|2087' /tmp/cpn-installer-out.log | head -10
-# Confirm SPA strip marker present
-strings /usr/bin/cpn-installer | grep -F 'stripTokenFromUrl' | head -2 || strings /usr/bin/cpn-installer | grep -F 'cpn_install_token' | head -2
+pgrep -a cpn-installer || true
+grep -E 'fingerprint|Bootstrap|2087|error|Error' /tmp/cpn-installer-out.log | head -20 || true
+strings /usr/bin/cpn-installer | grep -F 'cpn-color-toggle' | head -2 || true
+strings /usr/bin/cpn-installer | grep -F 'cpn-design-open' | head -2 || true
 echo REDEPLOY_OK=yes
 """
     sftp = client.open_sftp()
-    with sftp.file("/tmp/cpn-redeploy-main.sh", "w") as handle:
+    with sftp.file("/tmp/cpn-redeploy-theme.sh", "w") as handle:
         handle.write(script)
-    sftp.chmod("/tmp/cpn-redeploy-main.sh", 0o755)
+    sftp.chmod("/tmp/cpn-redeploy-theme.sh", 0o755)
     sftp.close()
-    print("=== rebuilding on AL9 (may take several minutes) ===", flush=True)
+    print("=== rebuilding theme branch on AL9 (may take several minutes) ===", flush=True)
     _stdin, stdout, stderr = client.exec_command(
-        "bash /tmp/cpn-redeploy-main.sh", timeout=2400, get_pty=True
+        "bash /tmp/cpn-redeploy-theme.sh", timeout=2400, get_pty=True
     )
     while True:
         line = stdout.readline()
         if not line:
             break
-        print(line, end="", flush=True)
+        try:
+            print(line, end="", flush=True)
+        except UnicodeEncodeError:
+            print(line.encode("ascii", "replace").decode("ascii"), end="", flush=True)
     err = stderr.read().decode("utf-8", "replace")
     if err.strip():
         print(err, flush=True)

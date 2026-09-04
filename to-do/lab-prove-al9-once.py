@@ -5,24 +5,14 @@ from __future__ import annotations
 import json
 import urllib.request
 
+import lab_ssh
 import paramiko
 
 TOKEN = "mQvixnqzFnkduthWcCp1LFeAq2Ij"
 
 
 def connect() -> paramiko.SSHClient:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
-        "127.0.0.1",
-        port=2222,
-        username="cpn",
-        password="CpnLab2026!",
-        timeout=20,
-        allow_agent=False,
-        look_for_keys=False,
-    )
-    return client
+    return lab_ssh.connect(port=2222, password="CpnLab2026!")
 
 
 def run(client: paramiko.SSHClient, cmd: str, timeout: int = 300) -> tuple[int, str]:

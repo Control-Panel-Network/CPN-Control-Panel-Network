@@ -172,7 +172,9 @@ pub fn read_session_cookie(cookie_header: Option<&str>) -> Option<String> {
 
 pub fn request_is_https(connection_scheme: &str, forwarded_proto: Option<&str>) -> bool {
     if let Some(proto) = forwarded_proto {
-        let first = proto.split(',').next().unwrap_or("").trim();
+        // Cap length before parsing so Host/X-Forwarded-* cannot drive large allocs.
+        let clipped = if proto.len() > 16 { &proto[..16] } else { proto };
+        let first = clipped.split(',').next().unwrap_or("").trim();
         if first.eq_ignore_ascii_case("https") {
             return true;
         }
@@ -180,7 +182,29 @@ pub fn request_is_https(connection_scheme: &str, forwarded_proto: Option<&str>) 
             return false;
         }
     }
-    connection_scheme.eq_ignore_ascii_case("https")
+    let scheme = if connection_scheme.len() > 8 {
+        &connection_scheme[..8]
+    } else {
+        connection_scheme
+    };
+    scheme.eq_ignore_ascii_case("https")
+}
+
+/// Resolve HTTPS for cookies without calling `connection_info()` (CodeQL Host alloc).
+/// Only allowlisted short `X-Forwarded-Proto` values or direct TLS peers count.
+pub fn request_https_from_headers(http: &actix_web::HttpRequest) -> bool {
+    if let Some(raw) = http.headers().get("X-Forwarded-Proto") {
+        let bytes = raw.as_bytes();
+        if bytes.len() > 16 {
+            return false;
+        }
+        if let Ok(value) = raw.to_str() {
+            return request_is_https("http", Some(value));
+        }
+        return false;
+    }
+    // No forwarded header: treat as plain HTTP (installer default bind).
+    false
 }
 
 #[cfg(test)]

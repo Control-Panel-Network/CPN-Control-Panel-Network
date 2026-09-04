@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 import re
-import paramiko
 
-c = paramiko.SSHClient()
-c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(
-    "127.0.0.1",
-    port=2222,
-    username="cpn",
-    password="CpnLab2026!",
-    timeout=20,
-    allow_agent=False,
-    look_for_keys=False,
-)
+import lab_ssh
+
+c = lab_ssh.connect(port=2222, password="CpnLab2026!")
 cmds = [
     "sudo pkill -9 -f /usr/bin/cpn-installer || true; sleep 1; pgrep -a cpn || echo none",
     "sudo firewall-cmd --add-port=2087/tcp || true",

@@ -18,7 +18,7 @@ use crate::mail_outbound::{
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
-    clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
+    clear_session_cookie_header, create_session_token, read_session_cookie,
     session_cookie_header, session_secret, verify_session_token,
 };
 use crate::postfix_fallback::ensure_postfix_default;
@@ -35,11 +35,7 @@ fn login_error_message(locale: &str) -> &'static str {
 }
 
 fn request_secure(http: &HttpRequest) -> bool {
-    let forwarded = http
-        .headers()
-        .get("X-Forwarded-Proto")
-        .and_then(|value| value.to_str().ok());
-    request_is_https(http.connection_info().scheme(), forwarded)
+    crate::panel_session::request_https_from_headers(http)
 }
 
 pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
