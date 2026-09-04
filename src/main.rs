@@ -1,8 +1,9 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
-    account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
-    forgot_password_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
+    account_setup, api_logout_get, api_logout_post, backups_page, dashboard_page, databases_page,
+    email_page, forgot_password_page, forgot_password_submit, login_page, login_submit, logout_get,
+    logout_post, panel_alias, websites_page,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
@@ -626,6 +627,10 @@ async fn main() -> std::io::Result<()> {
             .service(login_page)
             .service(login_submit)
             .service(dashboard_page)
+            .service(websites_page)
+            .service(email_page)
+            .service(databases_page)
+            .service(backups_page)
             .service(panel_alias)
             .service(logout_get)
             .service(logout_post)

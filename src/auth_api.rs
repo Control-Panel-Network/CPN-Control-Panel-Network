@@ -16,7 +16,7 @@ use crate::mail_outbound::{
     build_password_reset_notice, build_setup_confirmation, send_mail_with_settings,
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
-use crate::panel_pages::panel_dashboard_html;
+use crate::panel_pages::{panel_dashboard_html, panel_section_html};
 use crate::panel_session::{
     clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
     session_cookie_header, session_secret, verify_session_token,
@@ -150,6 +150,27 @@ pub async fn login_submit(
         .finish()
 }
 
+fn panel_html_response(
+    http: &HttpRequest,
+    state: &AppState,
+    preview: bool,
+    render: impl FnOnce(&str) -> String,
+) -> HttpResponse {
+    if let Some(user) = panel_user_from_request(state, http) {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(render(&user));
+    }
+    if preview {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(render("preview"));
+    }
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/login"))
+        .finish()
+}
+
 #[get("/dashboard")]
 pub async fn dashboard_page(
     http: HttpRequest,
@@ -157,19 +178,50 @@ pub async fn dashboard_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let preview = query.get("preview").map(String::as_str) == Some("1");
-    if let Some(user) = panel_user_from_request(&state, &http) {
-        return HttpResponse::Ok()
-            .content_type("text/html; charset=utf-8")
-            .body(panel_dashboard_html(&user));
-    }
-    if preview {
-        return HttpResponse::Ok()
-            .content_type("text/html; charset=utf-8")
-            .body(panel_dashboard_html("preview"));
-    }
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
+    panel_html_response(&http, &state, preview, panel_dashboard_html)
+}
+
+#[get("/websites")]
+pub async fn websites_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    panel_html_response(&http, &state, false, |user| {
+        panel_section_html(
+            user,
+            "websites",
+            "Websites",
+            "Manage sites and domains on this host.",
+        )
+    })
+}
+
+#[get("/email")]
+pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    panel_html_response(&http, &state, false, |user| {
+        panel_section_html(user, "email", "Email", "Mail accounts and delivery status.")
+    })
+}
+
+#[get("/databases")]
+pub async fn databases_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    panel_html_response(&http, &state, false, |user| {
+        panel_section_html(
+            user,
+            "databases",
+            "Databases",
+            "Database instances and credentials.",
+        )
+    })
+}
+
+#[get("/backups")]
+pub async fn backups_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    panel_html_response(&http, &state, false, |user| {
+        panel_section_html(
+            user,
+            "backups",
+            "Backups",
+            "Backup schedules and restore points.",
+        )
+    })
 }
 
 #[get("/panel")]
