@@ -1,6 +1,6 @@
 Name:           cpn-installer
 Version:        0.2.2
-Release:        0.1.alpha.1%{?dist}
+Release:        0.1.alpha.1%{?dist}%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
 URL:            https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
@@ -14,7 +14,7 @@ Requires:       curl
 
 %description
 Instalador local con interfaz web para preparar CPN Server Panel en invitados Linux alineados con CyberPanel (AlmaLinux/Rocky/RHEL y afines; ver to-do/OS-SUPPORT-MATRIX.md).
-Incluye la CLI de operador cpn para cuentas y sitios vía SSH.
+Incluye la CLI de operador cpn para cuentas y sitios vÃ­a SSH.
 
 %prep
 
@@ -37,4 +37,4 @@ install -Dpm 0755 %{SOURCE1} %{buildroot}%{_bindir}/cpn
 - Soporte de empaquetado para AlmaLinux 9 y AlmaLinux 10 (%{dist} el9/el10)
 
 * Tue Aug 11 2026 CPN <dev@cpn.invalid> - 0.1.0-1
-- Primera versión del instalador para AlmaLinux
+- Primera versiÃ³n del instalador para AlmaLinux
