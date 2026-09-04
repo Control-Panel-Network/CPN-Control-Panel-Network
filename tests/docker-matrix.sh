@@ -83,7 +83,12 @@ start_container() {
   "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
     --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -e container=docker "$image" "${entry[@]}" >/dev/null
-  for _ in {1..180}; do
+  # Rocky minimal may dnf-install systemd first; allow several minutes.
+  for _ in {1..360}; do
+    if ! "$engine" exec "$name" bash -lc 'command -v systemctl >/dev/null' 2>/dev/null; then
+      sleep 1
+      continue
+    fi
     # Capture status text explicitly (avoid set -e / pipefail traps on degraded).
     status="$("$engine" exec "$name" systemctl is-system-running 2>/dev/null || true)"
     if [[ "$status" == "running" || "$status" == "degraded" ]]; then
@@ -262,7 +267,7 @@ wait_for_result() {
 post_json() {
   local name="$1" url="$2" body="$3"
   local response code
-  response="$("$engine" exec "$name" curl -sS --max-time 30 -w '\n%{http_code}' \
+  response="$("$engine" exec "$name" curl -sS --max-time 60 -w '\n%{http_code}' \
     -X POST -H 'Content-Type: application/json' -d "$body" "$url" || true)"
   code="$(printf '%s' "$response" | tail -n1)"
   response="$(printf '%s' "$response" | sed '$d')"
