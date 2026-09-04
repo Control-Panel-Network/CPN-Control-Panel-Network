@@ -16,7 +16,7 @@ use crate::mail_outbound::{
     build_password_reset_notice, build_setup_confirmation, send_mail_with_settings,
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
-use crate::panel_pages::{panel_dashboard_html, panel_section_html};
+use crate::panel_pages::panel_dashboard_html;
 use crate::panel_session::{
     clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
     session_cookie_header, session_secret, verify_session_token,
@@ -41,7 +41,7 @@ fn request_secure(http: &HttpRequest) -> bool {
     request_is_https(http.connection_info().scheme(), forwarded)
 }
 
-fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
+pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
     let cookie = http
         .headers()
         .get(actix_web::http::header::COOKIE)
@@ -179,49 +179,6 @@ pub async fn dashboard_page(
 ) -> HttpResponse {
     let preview = query.get("preview").map(String::as_str) == Some("1");
     panel_html_response(&http, &state, preview, panel_dashboard_html)
-}
-
-#[get("/websites")]
-pub async fn websites_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    panel_html_response(&http, &state, false, |user| {
-        panel_section_html(
-            user,
-            "websites",
-            "Websites",
-            "Manage sites and domains on this host.",
-        )
-    })
-}
-
-#[get("/email")]
-pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    panel_html_response(&http, &state, false, |user| {
-        panel_section_html(user, "email", "Email", "Mail accounts and delivery status.")
-    })
-}
-
-#[get("/databases")]
-pub async fn databases_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    panel_html_response(&http, &state, false, |user| {
-        panel_section_html(
-            user,
-            "databases",
-            "Databases",
-            "Database instances and credentials.",
-        )
-    })
-}
-
-#[get("/backups")]
-pub async fn backups_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    panel_html_response(&http, &state, false, |user| {
-        panel_section_html(
-            user,
-            "backups",
-            "Backups",
-            "Backup schedules and restore points.",
-        )
-    })
 }
 
 #[get("/panel")]

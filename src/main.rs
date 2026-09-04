@@ -1,9 +1,8 @@
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
-    account_setup, api_logout_get, api_logout_post, backups_page, dashboard_page, databases_page,
-    email_page, forgot_password_page, forgot_password_submit, login_page, login_submit, logout_get,
-    logout_post, panel_alias, websites_page,
+    account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
+    forgot_password_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
@@ -20,6 +19,10 @@ use cpn_installer::model::{
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
+};
+use cpn_installer::panel_routes::{
+    backups_page, backups_run, databases_page, email_page, websites_create, websites_delete,
+    websites_page,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -628,9 +631,12 @@ async fn main() -> std::io::Result<()> {
             .service(login_submit)
             .service(dashboard_page)
             .service(websites_page)
+            .service(websites_create)
+            .service(websites_delete)
             .service(email_page)
             .service(databases_page)
             .service(backups_page)
+            .service(backups_run)
             .service(panel_alias)
             .service(logout_get)
             .service(logout_post)

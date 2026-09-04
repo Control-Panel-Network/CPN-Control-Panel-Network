@@ -25,6 +25,8 @@ pub mod model;
 pub mod os_support;
 pub mod panel_network;
 pub mod panel_pages;
+pub mod panel_routes;
+pub mod panel_sections;
 pub mod panel_session;
 pub mod paths;
 pub mod port_redirect;
