@@ -191,17 +191,3 @@ pub fn settings_stub_page() -> String {
         None,
     )
 }
-
-pub fn security_stub_page() -> String {
-    feature_shell(
-        &[("Dashboard", Some("/dashboard")), ("Security", None)],
-        "Security",
-        "Firewall, fail2ban, and WAF tools.",
-        &not_configured_body(
-            "Security hub is scaffolded for navigation parity.",
-            "Firewall and fail2ban management are on the hosting roadmap.",
-        ),
-        None,
-        None,
-    )
-}
