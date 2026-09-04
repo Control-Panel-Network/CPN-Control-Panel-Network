@@ -350,8 +350,26 @@ async function cpnJson(url,body){
     body:JSON.stringify(body||{})
   });
   const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error||('Request failed ('+res.status+')'));
+  if(!res.ok) throw new Error(cpnStripUrls(data.error||('Request failed ('+res.status+')')));
   return data;
+}
+function cpnStripUrls(text){
+  return String(text||'').replace(/https?:\/\/\S+/gi,'').replace(/\s{2,}/g,' ').replace(/\s+([.,;:!?])/g,'$1').trim();
+}
+function cpnPasskeyUserMessage(err,kind){
+  const name=String((err&&err.name)||'');
+  const raw=String((err&&err.message)||err||'');
+  const cancelled=name==='NotAllowedError'||name==='AbortError'
+    ||/not allowed|timed out|timeout|abort|cancel+ed/i.test(raw)
+    ||/w3\.org\/TR\/webauthn/i.test(raw);
+  if(cancelled){
+    return kind==='login'
+      ? 'Passkey sign-in was cancelled or timed out.'
+      : 'Passkey registration was cancelled or timed out.';
+  }
+  const cleaned=cpnStripUrls(raw);
+  if(cleaned) return cleaned;
+  return kind==='login' ? 'Passkey sign-in failed.' : 'Passkey registration failed.';
 }
 async function cpnRegisterPasskey(){
   const status=document.getElementById('cpn-passkey-status');
@@ -367,7 +385,7 @@ async function cpnRegisterPasskey(){
     const start=await cpnJson('/account/users/profile/passkey/register/start',{});
     const pk=await cpnDecodeCreateOptions(start.publicKey);
     const cred=await navigator.credentials.create({publicKey:pk});
-    if(!cred) throw new Error('Passkey creation cancelled');
+    if(!cred) throw new Error('Passkey registration was cancelled or timed out.');
     await cpnJson('/account/users/profile/passkey/register/finish',{
       ceremony_id:start.ceremony_id,
       label:label,
@@ -376,7 +394,7 @@ async function cpnRegisterPasskey(){
     if(status) status.textContent='Passkey registered.';
     location.reload();
   }catch(err){
-    if(status) status.textContent=String(err.message||err);
+    if(status) status.textContent=cpnPasskeyUserMessage(err,'register');
   }
 }
 async function cpnLoginPasskey(){
@@ -386,18 +404,18 @@ async function cpnLoginPasskey(){
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     const username=(userEl&&userEl.value||'').trim();
     if(!username) throw new Error('Enter your username first');
-    if(status) status.textContent='Waiting for authenticator…';
+    if(status) status.textContent='Waiting for authenticator...';
     const start=await cpnJson('/login/passkey/start',{username:username});
     const pk=await cpnDecodeGetOptions(start.publicKey);
     const cred=await navigator.credentials.get({publicKey:pk});
-    if(!cred) throw new Error('Passkey sign-in cancelled');
+    if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
     const finish=await cpnJson('/login/passkey/finish',{
       ceremony_id:start.ceremony_id,
       credential:cpnCredToJson(cred)
     });
     location.href=finish.redirect||'/dashboard';
   }catch(err){
-    if(status) status.textContent=String(err.message||err);
+    if(status) status.textContent=cpnPasskeyUserMessage(err,'login');
   }
 }
 "#

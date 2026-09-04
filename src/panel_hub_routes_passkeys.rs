@@ -23,8 +23,24 @@ fn host_header(http: &HttpRequest) -> Option<&str> {
         .and_then(|v| v.to_str().ok())
 }
 
+fn strip_urls(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut rest = message;
+    while let Some(idx) = rest.find("http://").or_else(|| rest.find("https://")) {
+        out.push_str(&rest[..idx]);
+        let after = &rest[idx..];
+        let end = after
+            .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | ',' | ';' | '"' | '\''))
+            .unwrap_or(after.len());
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn json_err(status: actix_web::http::StatusCode, message: &str) -> HttpResponse {
-    HttpResponse::build(status).json(serde_json::json!({ "error": message }))
+    let safe = strip_urls(message);
+    HttpResponse::build(status).json(serde_json::json!({ "error": safe }))
 }
 
 fn json_ok(value: serde_json::Value) -> HttpResponse {
