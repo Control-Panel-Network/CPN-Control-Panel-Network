@@ -3,6 +3,7 @@
 use clap::Subcommand;
 
 use crate::apps::{AppId, install_app_on, list_apps, reinstall_app_on, uninstall_app_on};
+use crate::apps_control::{start_app, stop_app};
 use crate::site_acl::resolve_target_domain;
 
 #[derive(Subcommand, Debug)]
@@ -17,6 +18,16 @@ pub enum AppCommands {
         domain: Option<String>,
         #[arg(long)]
         subdomain: Option<String>,
+    },
+    /// Start a host app service
+    Start {
+        #[arg(long)]
+        name: String,
+    },
+    /// Stop a host app service
+    Stop {
+        #[arg(long)]
+        name: String,
     },
     /// Reinstall an app by name
     Reinstall {
@@ -76,6 +87,14 @@ pub fn run(
             let site = optional_site(domain, subdomain)?;
             install(&name, site.as_deref())
         }
+        AppCommands::Start { name } => {
+            require_root()?;
+            start(&name)
+        }
+        AppCommands::Stop { name } => {
+            require_root()?;
+            stop(&name)
+        }
         AppCommands::Reinstall {
             name,
             domain,
@@ -129,6 +148,20 @@ pub fn list() -> Result<(), String> {
 pub fn install(name: &str, domain: Option<&str>) -> Result<(), String> {
     let id = AppId::parse(name)?;
     let msg = install_app_on(id, domain)?;
+    println!("{msg}");
+    Ok(())
+}
+
+pub fn start(name: &str) -> Result<(), String> {
+    let id = AppId::parse(name)?;
+    let msg = start_app(id)?;
+    println!("{msg}");
+    Ok(())
+}
+
+pub fn stop(name: &str) -> Result<(), String> {
+    let id = AppId::parse(name)?;
+    let msg = stop_app(id)?;
     println!("{msg}");
     Ok(())
 }

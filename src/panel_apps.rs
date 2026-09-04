@@ -98,8 +98,35 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
             name = html_escape(name),
             hidden = hidden,
         ),
-        AppStateKind::Installed | AppStateKind::Running => format!(
-            r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
+        AppStateKind::Installed | AppStateKind::Running => {
+            let mut out = String::new();
+            if status.id.supports_service_control() {
+                if status.state == AppStateKind::Installed {
+                    out.push_str(&format!(
+                        r#"<form method="post" action="/apps/start" class="inline-form" onsubmit="return confirm('Start {label}?');">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-primary">Start</button>
+            </form>"#,
+                        label = html_escape(label),
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        r#"<form method="post" action="/apps/stop" class="inline-form" onsubmit="return confirm('Stop {label}?');">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-secondary" style="min-height:44px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Stop</button>
+            </form>"#,
+                        label = html_escape(label),
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                }
+            }
+            out.push_str(&format!(
+                r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <button type="submit" class="btn-secondary" style="min-height:44px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Reinstall</button>
@@ -109,10 +136,12 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
               {hidden}
               <button type="submit" class="btn-danger">Uninstall</button>
             </form>"#,
-            label = html_escape(label),
-            name = html_escape(name),
-            hidden = hidden,
-        ),
+                label = html_escape(label),
+                name = html_escape(name),
+                hidden = hidden,
+            ));
+            out
+        }
     }
 }
 
@@ -130,6 +159,10 @@ fn app_card(status: &AppStatus, domain: &str) -> String {
     let xor_note = match status.id {
         AppId::Mariadb | AppId::Mysql => {
             r#"<p class="muted" style="margin-top:8px;">Hosts typically run MariaDB XOR MySQL. CPN refuses installing one while the other is present. Engines stay system-wide.</p>"#
+        }
+        AppId::Postgresql => {
+            r#"<p class="muted" style="margin-top:8px;">Opt-in only. Default stack remains MariaDB + phpMyAdmin. PostgreSQL can coexist with MariaDB/MySQL.</p>
+        <p class="muted" style="margin-top:8px;"><a href="/databases">Open Databases hub</a> (MariaDB-focused today). A dedicated Postgres Manager plugin is optional and not required for this install.</p>"#
         }
         _ => "",
     };
@@ -225,8 +258,8 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card">
         <h2>Host and site apps</h2>
-        <p>MariaDB, MySQL, and RabbitMQ are host packages. phpMyAdmin and Email can also drop paths under the selected domain or subdomain home. Only sites you own or are granted appear below.</p>
-        <p class="muted">CLI: <code>cpn app install --name phpmyadmin --domain example.com</code> or <code>--subdomain blog --domain example.com</code></p>
+        <p>MariaDB, MySQL, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin and Email can also drop paths under the selected domain or subdomain home. Only sites you own or are granted appear below.</p>
+        <p class="muted">CLI: <code>cpn app install --name postgresql</code> or <code>cpn app install --name phpmyadmin --domain example.com</code></p>
         {picker}
       </article>
       {cards}"#,

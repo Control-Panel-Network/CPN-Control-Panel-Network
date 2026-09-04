@@ -50,8 +50,8 @@ use cpn_installer::panel_package_routes::{
     packages_page, packages_update,
 };
 use cpn_installer::panel_routes::{
-    apps_install, apps_page, apps_reinstall, apps_uninstall, backups_page, backups_run,
-    databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
+    apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
+    backups_run, databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
     email_account_create, email_account_disable, email_account_enable, email_page,
     plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
     plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
@@ -784,6 +784,8 @@ async fn main() -> std::io::Result<()> {
             .service(apps_install)
             .service(apps_reinstall)
             .service(apps_uninstall)
+            .service(apps_start)
+            .service(apps_stop)
             .service(backups_page)
             .service(backups_run)
             .service(backups_create_route)

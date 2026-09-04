@@ -3,8 +3,10 @@
 pub mod account;
 pub mod account_mgmt;
 pub mod apps;
+pub mod apps_control;
 pub mod apps_phpmyadmin;
 pub mod apps_pkg;
+pub mod apps_postgresql;
 pub mod apps_site;
 pub mod auth_api;
 pub mod auth_i18n;

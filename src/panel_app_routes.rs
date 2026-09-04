@@ -1,6 +1,7 @@
 //! Authenticated Apps panel routes.
 
 use crate::apps::{AppId, install_app_on, reinstall_app_on, uninstall_app_on};
+use crate::apps_control::{start_app, stop_app};
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_apps::{AppsPageQuery, apps_main};
@@ -208,6 +209,56 @@ pub async fn apps_uninstall(
             .append_header((
                 "Location",
                 apps_redirect(domain.as_deref().unwrap_or(""), None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/apps/start")]
+pub async fn apps_start(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<AppNameForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match AppId::parse(&form.name).and_then(start_app) {
+        Ok(message) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), Some(&message), None),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/apps/stop")]
+pub async fn apps_stop(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<AppNameForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match AppId::parse(&form.name).and_then(stop_app) {
+        Ok(message) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), Some(&message), None),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), None, Some(&error)),
             ))
             .finish(),
     }

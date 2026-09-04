@@ -78,6 +78,26 @@ pub fn disable_now(units: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
+pub fn start_units(units: &[&str]) -> Result<(), String> {
+    for unit in units {
+        let status = Command::new("systemctl")
+            .args(["start", unit])
+            .status()
+            .map_err(|error| format!("Could not start systemctl for {unit}: {error}"))?;
+        if !status.success() {
+            return Err(format!("systemctl start {unit} failed"));
+        }
+    }
+    Ok(())
+}
+
+pub fn stop_units(units: &[&str]) -> Result<(), String> {
+    for unit in units {
+        let _ = Command::new("systemctl").args(["stop", unit]).status();
+    }
+    Ok(())
+}
+
 pub fn install_packages_dnf_or_apt(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Result<(), String> {
     let pm = package_manager()?;
     if pm == "dnf" {

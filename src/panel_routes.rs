@@ -23,7 +23,9 @@ pub use crate::website_preview_routes::{
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
-pub use crate::panel_app_routes::{apps_install, apps_page, apps_reinstall, apps_uninstall};
+pub use crate::panel_app_routes::{
+    apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall,
+};
 pub use crate::panel_backup_routes::{backups_page, backups_run};
 pub use crate::panel_mail_routes::{
     email_account_create, email_account_disable, email_account_enable,
