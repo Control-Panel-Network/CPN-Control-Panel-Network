@@ -18,8 +18,8 @@ use crate::mail_outbound::{
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
-    clear_session_cookie_header, create_session_token, read_session_cookie,
-    session_cookie_header, session_secret, verify_session_token,
+    clear_session_cookie_header, create_session_token, read_session_cookie, session_cookie_header,
+    session_secret, verify_session_token,
 };
 use crate::postfix_fallback::ensure_postfix_default;
 use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};

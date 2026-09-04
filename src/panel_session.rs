@@ -173,7 +173,11 @@ pub fn read_session_cookie(cookie_header: Option<&str>) -> Option<String> {
 pub fn request_is_https(connection_scheme: &str, forwarded_proto: Option<&str>) -> bool {
     if let Some(proto) = forwarded_proto {
         // Cap length before parsing so Host/X-Forwarded-* cannot drive large allocs.
-        let clipped = if proto.len() > 16 { &proto[..16] } else { proto };
+        let clipped = if proto.len() > 16 {
+            &proto[..16]
+        } else {
+            proto
+        };
         let first = clipped.split(',').next().unwrap_or("").trim();
         if first.eq_ignore_ascii_case("https") {
             return true;

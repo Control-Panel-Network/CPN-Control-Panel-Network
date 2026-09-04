@@ -173,7 +173,10 @@ async fn api_status(
                 for _ in 0..20 {
                     std::thread::sleep(Duration::from_millis(5));
                     if let Ok(guard) = state.status.try_read() {
-                        return status_response(&request, &enrich_status(guard.clone(), &state.token));
+                        return status_response(
+                            &request,
+                            &enrich_status(guard.clone(), &state.token),
+                        );
                     }
                 }
                 return HttpResponse::ServiceUnavailable()

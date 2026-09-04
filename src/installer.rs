@@ -62,7 +62,9 @@ impl AppState {
             status.clone()
         };
         persist_status_snapshot(&snapshot);
-        let _ = self.events.send(InstallerEvent::Progress { status: snapshot });
+        let _ = self
+            .events
+            .send(InstallerEvent::Progress { status: snapshot });
     }
 
     pub fn log(&self, line: impl Into<String>, level: &'static str) {
@@ -557,9 +559,9 @@ pub(crate) async fn finish(
 
     match result {
         Ok(()) => {
-            let _ = state.events.send(InstallerEvent::Completed {
-                status: snapshot,
-            });
+            let _ = state
+                .events
+                .send(InstallerEvent::Completed { status: snapshot });
         }
         Err(error) => {
             if let Some(report) = rollback {
@@ -575,9 +577,9 @@ pub(crate) async fn finish(
                     "info",
                 );
             }
-            let _ = state.events.send(InstallerEvent::Error {
-                status: snapshot,
-            });
+            let _ = state
+                .events
+                .send(InstallerEvent::Error { status: snapshot });
         }
     }
 }
