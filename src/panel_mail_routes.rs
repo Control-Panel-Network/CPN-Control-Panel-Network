@@ -28,7 +28,7 @@ fn urlencoding_simple(value: &str) -> String {
 }
 
 fn email_redirect(notice: Option<&str>, error: Option<&str>) -> String {
-    let mut url = "/email".to_string();
+    let mut url = "/email/accounts".to_string();
     if let Some(notice) = notice {
         url.push_str(&format!("?notice={}", urlencoding_simple(notice)));
     } else if let Some(error) = error {

@@ -18,6 +18,23 @@ use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
+use cpn_installer::panel_hub_routes::{
+    backups_create_route, backups_destinations_route, backups_destinations_save,
+    backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
+    backups_schedule_save, databases_all_route, databases_create_get, databases_create_post,
+    databases_delete_get, databases_delete_post, databases_manager_route,
+    databases_phpmyadmin_route, email_accounts_route, email_catchall_route, email_catchall_save,
+    email_create_route, email_debugger, email_delivery_route, email_dkim_ensure, email_dkim_route,
+    email_forwarding_route, email_forwarding_save, email_limits, email_mailscanner,
+    email_marketing, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
+    email_spamassassin, email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset,
+    security_page, server_dns_defaults, server_dns_nameservers, server_dns_nameservers_save,
+    server_dns_zones, server_dns_zones_delete, server_dns_zones_save, server_docker_apps,
+    server_docker_containers, server_docker_images, server_files_page, server_packages_page,
+    server_page, server_php_configs, server_php_extensions, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_page,
+    settings_port_page, users_plans_page,
+};
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
@@ -665,6 +682,67 @@ async fn main() -> std::io::Result<()> {
             .service(apps_uninstall)
             .service(backups_page)
             .service(backups_run)
+            .service(backups_create_route)
+            .service(backups_restore_route)
+            .service(backups_schedule_route)
+            .service(backups_schedule_save)
+            .service(backups_destinations_route)
+            .service(backups_destinations_save)
+            .service(backups_gdrive_route)
+            .service(backups_remote_route)
+            .service(server_page)
+            .service(server_services_page)
+            .service(server_services_control)
+            .service(server_processes_page)
+            .service(server_php_extensions)
+            .service(server_php_configs)
+            .service(server_php_tuning)
+            .service(server_packages_page)
+            .service(server_docker_apps)
+            .service(server_docker_containers)
+            .service(server_docker_images)
+            .service(server_files_page)
+            .service(server_dns_zones)
+            .service(server_dns_zones_save)
+            .service(server_dns_zones_delete)
+            .service(server_dns_nameservers)
+            .service(server_dns_defaults)
+            .service(server_dns_nameservers_save)
+            .service(settings_page)
+            .service(settings_port_page)
+            .service(security_page)
+            .service(users_plans_page)
+            .service(email_accounts_route)
+            .service(email_create_route)
+            .service(email_forwarding_route)
+            .service(email_forwarding_save)
+            .service(email_catchall_route)
+            .service(email_catchall_save)
+            .service(email_dkim_route)
+            .service(email_dkim_ensure)
+            .service(email_webmail_route)
+            .service(email_delivery_route)
+            .service(email_pattern_fwd)
+            .service(email_limits)
+            .service(email_password)
+            .service(email_debugger)
+            .service(email_queue)
+            .service(email_spamassassin)
+            .service(email_rspamd)
+            .service(email_mailscanner)
+            .service(email_marketing)
+            .service(email_plus)
+            .service(databases_all_route)
+            .service(databases_create_get)
+            .service(databases_create_post)
+            .service(databases_delete_get)
+            .service(databases_delete_post)
+            .service(databases_manager_route)
+            .service(databases_phpmyadmin_route)
+            .service(ftp_accounts_route)
+            .service(ftp_create)
+            .service(ftp_delete)
+            .service(ftp_reset)
             .service(plugins_page)
             .service(plugins_settings_page)
             .service(plugins_settings_save)

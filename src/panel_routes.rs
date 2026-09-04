@@ -2,14 +2,13 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
     plugin_dashboard_main, plugin_settings_main, settings_from_form,
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
-use crate::panel_sections::{
-    databases_main, email_main, run_mariadb_install, set_websites_docroot_pref, websites_main,
-};
+use crate::panel_sections::{run_mariadb_install, set_websites_docroot_pref, websites_main};
 use crate::panel_website_manage::website_manage_main;
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
@@ -310,18 +309,8 @@ pub async fn email_page(
     let status = state.status.read().await.clone();
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "Email",
-        &email_main(
-            status.selected_mail,
-            status.mail_client_ready,
-            status.mail_backend_ready,
-            notice,
-            error,
-        ),
-    ))
+    let _ = (status, notice, error);
+    html_ok(panel_shell(&user, "email", "Email", &email_hub_html()))
 }
 
 #[get("/databases")]
@@ -335,11 +324,12 @@ pub async fn databases_page(
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let _ = (notice, error);
     html_ok(panel_shell(
         &user,
         "databases",
-        "Databases",
-        &databases_main(notice, error),
+        "Databases & FTP",
+        &databases_hub_html(),
     ))
 }
 
@@ -355,13 +345,13 @@ pub async fn databases_install_mariadb(
         Ok(message) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/databases?notice={}", urlencoding_simple(&message)),
+                format!("/databases/manager?notice={}", urlencoding_simple(&message)),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/databases?error={}", urlencoding_simple(&error)),
+                format!("/databases/manager?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }

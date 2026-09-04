@@ -3,7 +3,7 @@
 use crate::auth_api::panel_user_from_request;
 use crate::backups::{BackupRequest, create_selective_backup};
 use crate::installer::AppState;
-use crate::panel_backups::{BackupsPageQuery, backups_main};
+use crate::panel_hub_pages_backups::backups_hub_main;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -47,20 +47,12 @@ pub async fn backups_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let scope = query.get("scope").map(String::as_str).unwrap_or("panel");
-    let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let _ = query;
     html_ok(panel_shell(
         &user,
         "backups",
         "Backups",
-        &backups_main(BackupsPageQuery {
-            notice,
-            error,
-            scope,
-            domain,
-        }),
+        &backups_hub_main(),
     ))
 }
 
@@ -111,7 +103,7 @@ pub async fn backups_run(
     }) {
         Ok(name) => {
             let mut loc = format!(
-                "/backups?scope={}&notice={}",
+                "/backups/create?scope={}&notice={}",
                 urlencoding_simple(scope),
                 urlencoding_simple(&format!("Created {name}"))
             );
@@ -124,7 +116,7 @@ pub async fn backups_run(
         }
         Err(error) => {
             let mut loc = format!(
-                "/backups?scope={}&error={}",
+                "/backups/create?scope={}&error={}",
                 urlencoding_simple(scope),
                 urlencoding_simple(&error)
             );
