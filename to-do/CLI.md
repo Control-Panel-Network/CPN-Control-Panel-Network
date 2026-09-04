@@ -18,7 +18,7 @@ Default data root: `/var/lib/cpn` (override with `CPN_DATA_DIR`).
 |---|---|
 | `/var/lib/cpn/panel-bootstrap.json` | First / panel account (mode `0600`) |
 | `/var/lib/cpn/accounts/<user>.json` | Extra accounts after bootstrap exists |
-| `/var/lib/cpn/sites/<domain>.json` | Website records (mode `0600`) |
+| `/var/lib/cpn/sites/<domain>.json` | Website registry (mode `0600`); `docroot` points at files under `/home/...` |
 
 Password hashes use the same format as the installer: `sha256(salt_hex + "|" + utf8_password)` as lowercase hex. Passwords are never written to logs; generated passwords print once as `generated_password=...` on stdout.
 
@@ -51,15 +51,20 @@ sudo cpn account passwd --username admin --generate
 sudo cpn account delete --username ops --yes
 ```
 
-## Sites (structured JSON; vhost wiring stubbed)
+## Sites (files under `/home`; JSON registry stubbed for vhosts)
 
-Site commands create and update records under `/var/lib/cpn/sites/`. They do **not** yet write Nginx / Caddy / OpenLiteSpeed vhost files (`vhost_wired=false`). When panel recipes own vhost generation, wire those writers into the same CLI commands.
+Site commands create document roots under `/home/<domain>/public_html` (subdomains nest under the parent home). Registry JSON under `/var/lib/cpn/sites/` points at each `docroot`. They do **not** yet write Nginx / Caddy / OpenLiteSpeed vhost files (`vhost_wired=false`). See `to-do/SITE-DOCROOT.md`.
 
 ```bash
-sudo cpn site create --domain app.example.com --owner admin
-sudo cpn site modify --domain app.example.com --owner ops --disable
+sudo cpn site create --domain example.com --owner admin
+sudo cpn site create --domain blog.example.com --owner admin
+sudo cpn site modify --domain example.com --owner ops --disable
 sudo cpn site list
-sudo cpn site delete --domain app.example.com --yes
+sudo cpn site delete --domain blog.example.com --yes
+```
+
+```bash
+ssh -p 2222 root@127.0.0.1 'cpn site create --domain demo.example.com --owner admin'
 ```
 
 ## Example over SSH (AlmaLinux lab)

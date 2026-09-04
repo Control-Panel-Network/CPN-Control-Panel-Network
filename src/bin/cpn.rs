@@ -90,7 +90,7 @@ enum AccountCommands {
 
 #[derive(Subcommand, Debug)]
 enum SiteCommands {
-    /// Create a website record (vhost wiring may be stubbed)
+    /// Create a website under /home/<domain>/public_html (vhost wiring may be stubbed)
     Create {
         #[arg(long)]
         domain: String,
@@ -322,9 +322,19 @@ fn run() -> Result<(), String> {
                     return Ok(());
                 }
                 for site in sites {
+                    let legacy = if cpn_installer::sites::is_legacy_docroot(&site.docroot) {
+                        "\tlegacy_path=true"
+                    } else {
+                        ""
+                    };
                     println!(
-                        "{}\towner={}\tenabled={}\tvhost_wired={}\tdocroot={}",
-                        site.domain, site.owner, site.enabled, site.vhost_wired, site.docroot
+                        "{}\towner={}\tenabled={}\tvhost_wired={}\tdocroot={}{}",
+                        site.domain,
+                        site.owner,
+                        site.enabled,
+                        site.vhost_wired,
+                        site.docroot,
+                        legacy
                     );
                 }
                 Ok(())
@@ -345,14 +355,16 @@ fn run() -> Result<(), String> {
                     notes.as_deref(),
                 )?;
                 println!(
-                    "created site {} (vhost_wired={}; JSON under {}/sites)",
+                    "created site {} docroot={} (vhost_wired={}; registry {}/sites/{}.json)",
                     site.domain,
+                    site.docroot,
                     site.vhost_wired,
-                    paths::platform_data_dir()
+                    paths::platform_data_dir(),
+                    site.domain
                 );
                 if !site.vhost_wired {
                     eprintln!(
-                        "note: web server vhost files are not written yet; only the site record was saved"
+                        "note: web server vhost files are not written yet; files are under the docroot above"
                     );
                 }
                 Ok(())
