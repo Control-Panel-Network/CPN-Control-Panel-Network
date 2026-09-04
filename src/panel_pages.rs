@@ -38,7 +38,7 @@ button { font:inherit; cursor:pointer; }
 .sidebar-header { flex:0 0 auto; }
 .panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
 .server-summary {
-  display:flex; align-items:center; gap:12px; margin:28px 0 25px; padding:14px;
+  display:flex; align-items:center; gap:12px; margin:0 0 12px; padding:14px;
   border-radius:18px; background:var(--canvas); border:1px solid var(--hairline); color:var(--blue);
 }
 .server-summary div { display:flex; flex-direction:column; min-width:0; }
@@ -53,6 +53,10 @@ button { font:inherit; cursor:pointer; }
 .sidebar nav::-webkit-scrollbar { width:8px; }
 .sidebar nav::-webkit-scrollbar-thumb {
   background:rgba(110,110,115,.45); border-radius:999px;
+}
+.sr-only {
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
 }
 .sidebar nav a {
   display:flex; align-items:center; gap:12px; min-height:44px; padding:0 13px;
@@ -333,13 +337,14 @@ fn nav_links(active: &str, username: &str) -> String {
 }
 
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
-    let user = html_escape(username);
     let nav = nav_links(active, username);
+    let header = crate::panel_sidebar::sidebar_header_html(username);
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}",
+        "{}{}{}{}{}",
         panel_styles(),
+        crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_hubs::hub_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
@@ -347,8 +352,9 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let toggle = crate::panel_theme_chrome::sidebar_theme_toggle(color_mode);
     let script = format!(
-        "{}{}",
+        "{}{}{}",
         panel_nav_script(),
+        crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script()
     );
     format!(
@@ -365,15 +371,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
   <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
   <div class="panel-layout" data-page="{active}">
     <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
-      <div class="sidebar-header">
-        <a class="panel-brand" href="/dashboard">CPN Panel</a>
-        <div class="server-summary">
-          <div>
-            <strong>{user}</strong>
-            <span>Signed in</span>
-          </div>
-        </div>
-      </div>
+      {header}
       <nav aria-label="Primary navigation">
         {nav}
       </nav>
@@ -402,7 +400,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         mode = color_mode.as_str(),
         preset = design.preset.as_str(),
         active = html_escape(active),
-        user = user,
+        header = header,
         nav = nav,
         toggle = toggle,
         main = main,
