@@ -202,7 +202,7 @@ fn hash_password_legacy_sha256(password: &str, salt_hex: &str) -> String {
 
 fn salt_material(salt_hex: &str) -> Vec<u8> {
     let trimmed = salt_hex.trim();
-    if trimmed.len() % 2 == 0 && !trimmed.is_empty() {
+    if trimmed.len().is_multiple_of(2) && !trimmed.is_empty() {
         let mut out = Vec::with_capacity(trimmed.len() / 2);
         let mut ok = true;
         let bytes = trimmed.as_bytes();
