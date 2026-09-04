@@ -34,11 +34,12 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_hostname, security_ssl_mail, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
-    server_packages_page, server_page, server_php_configs, server_php_extensions, server_php_tuning,
-    server_processes_page, server_services_control, server_services_page, settings_page,
-    settings_port_page, users_create_get, users_create_post, users_delete_post, users_list_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_route,
+    server_packages_page, server_page, server_php_configs, server_php_extensions,
+    server_php_tuning, server_processes_page, server_services_control, server_services_page,
+    settings_page, settings_port_page, users_create_get, users_create_post, users_delete_post,
+    users_list_route, users_modify_get, users_password_post, users_plans_page, users_profile_route,
     users_reseller_route,
+};
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
