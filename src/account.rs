@@ -71,10 +71,13 @@ pub fn now_unix() -> u64 {
 #[cfg(test)]
 pub(crate) static DATA_DIR_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// Run a closure with an isolated `CPN_DATA_DIR` (serialized across crate tests).
+/// Run a closure with an isolated `CPN_DATA_DIR` and `CPN_SITES_HOME`
+/// (serialized across crate tests). Site creates must not touch `/home/`.
 #[cfg(test)]
 pub(crate) fn with_test_data_dir<T>(f: impl FnOnce() -> T) -> T {
-    let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let dir = std::env::temp_dir().join(format!(
         "cpn-data-{}-{}",
         std::process::id(),
@@ -85,13 +88,17 @@ pub(crate) fn with_test_data_dir<T>(f: impl FnOnce() -> T) -> T {
     ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
+    let sites_home = dir.join("home");
+    fs::create_dir_all(&sites_home).unwrap();
     // SAFETY: exclusive lock held for the duration of f().
     unsafe {
         std::env::set_var("CPN_DATA_DIR", &dir);
+        std::env::set_var("CPN_SITES_HOME", &sites_home);
     }
     let result = f();
     unsafe {
         std::env::remove_var("CPN_DATA_DIR");
+        std::env::remove_var("CPN_SITES_HOME");
     }
     let _ = fs::remove_dir_all(&dir);
     result

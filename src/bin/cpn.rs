@@ -15,8 +15,11 @@ use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
 use cpn_installer::cli_plugins;
 use cpn_installer::packages::require_site_create_allowed;
+use cpn_installer::panel_ops_ssl_provider::SslProvider;
 use cpn_installer::paths;
-use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
+use cpn_installer::sites::{
+    SiteModify, create_site_with_ssl, delete_site, list_sites, modify_site,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -120,6 +123,10 @@ enum SiteCommands {
         engine: Option<String>,
         #[arg(long)]
         notes: Option<String>,
+        /// Per-domain SSL provider stored on this site only:
+        /// letsencrypt|zerossl|cloudflare_ca|custom|none
+        #[arg(long = "ssl-provider")]
+        ssl_provider: Option<String>,
     },
     /// Modify an existing website record
     Modify {
@@ -137,6 +144,9 @@ enum SiteCommands {
         enable: bool,
         #[arg(long, action = clap::ArgAction::SetTrue)]
         disable: bool,
+        /// Change this domain's SSL provider only (siblings unchanged)
+        #[arg(long = "ssl-provider")]
+        ssl_provider: Option<String>,
     },
     /// Delete a website record (confirmation required unless --yes)
     Delete {
@@ -290,11 +300,12 @@ fn run() -> Result<(), String> {
                         ""
                     };
                     println!(
-                        "{}\towner={}\tenabled={}\tvhost_wired={}\tdocroot={}{}",
+                        "{}\towner={}\tenabled={}\tvhost_wired={}\tssl={}\tdocroot={}{}",
                         site.domain,
                         site.owner,
                         site.enabled,
                         site.vhost_wired,
+                        site.ssl.provider.as_str(),
                         site.docroot,
                         legacy
                     );
@@ -307,20 +318,27 @@ fn run() -> Result<(), String> {
                 docroot,
                 engine,
                 notes,
+                ssl_provider,
             } => {
                 require_root_for_mutation()?;
                 require_site_create_allowed(&owner, &domain)?;
-                let site = create_site(
+                let provider = match ssl_provider.as_deref() {
+                    Some(raw) => Some(SslProvider::parse(raw)?),
+                    None => None,
+                };
+                let site = create_site_with_ssl(
                     &domain,
                     &owner,
                     docroot.as_deref(),
                     engine.as_deref(),
                     notes.as_deref(),
+                    provider,
                 )?;
                 println!(
-                    "created site {} docroot={} (vhost_wired={}; registry {}/sites/{}.json)",
+                    "created site {} docroot={} ssl_provider={} (vhost_wired={}; registry {}/sites/{}.json)",
                     site.domain,
                     site.docroot,
+                    site.ssl.provider.as_str(),
                     site.vhost_wired,
                     paths::platform_data_dir(),
                     site.domain
@@ -340,6 +358,7 @@ fn run() -> Result<(), String> {
                 notes,
                 enable,
                 disable,
+                ssl_provider,
             } => {
                 require_root_for_mutation()?;
                 if enable && disable {
@@ -352,6 +371,10 @@ fn run() -> Result<(), String> {
                 } else {
                     None
                 };
+                let ssl_provider = match ssl_provider.as_deref() {
+                    Some(raw) => Some(SslProvider::parse(raw)?),
+                    None => None,
+                };
                 let site = modify_site(
                     &domain,
                     SiteModify {
@@ -360,11 +383,15 @@ fn run() -> Result<(), String> {
                         enabled,
                         engine,
                         notes,
+                        ssl_provider,
+                        ..SiteModify::default()
                     },
                 )?;
                 println!(
-                    "updated site {} (vhost_wired={})",
-                    site.domain, site.vhost_wired
+                    "updated site {} ssl_provider={} (vhost_wired={})",
+                    site.domain,
+                    site.ssl.provider.as_str(),
+                    site.vhost_wired
                 );
                 if !site.vhost_wired {
                     eprintln!(
