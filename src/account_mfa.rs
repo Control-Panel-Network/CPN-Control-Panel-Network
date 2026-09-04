@@ -439,11 +439,11 @@ fn consume_backup_code(username: &str, code: &str) -> bool {
         return false;
     };
     let mut match_idx: Option<usize> = None;
-    for i in 0..hashes.len() {
+    for (i, hash) in hashes.iter().enumerate() {
         let Some(salt) = salts.get(i).map(String::as_str).filter(|s| !s.is_empty()) else {
             continue;
         };
-        if verify_backup_code(code, &hashes[i], salt) {
+        if verify_backup_code(code, hash, salt) {
             match_idx = Some(i);
             break;
         }
