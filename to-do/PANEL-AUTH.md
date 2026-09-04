@@ -26,11 +26,24 @@ Lab and packaged installs serve the Panel dashboard **from the installer binary*
 
 The Next.js app under `Panel/` remains the reference UI and can run standalone (`npm run build && npm start`) against the same bootstrap file and cookie name when operators prefer a Node host. Cookie format matches `Panel/src/lib/auth.ts` so both paths can share sessions when they use the same secret.
 
+## Responsive shell
+
+Breakpoints used by the installer-served Panel and the Next.js `Panel/` app:
+
+| Viewport | Sidebar | Metric cards | Health / activity |
+|----------|---------|--------------|-------------------|
+| ≥1024px (desktop) | Always visible | 3 columns | 2 columns |
+| 680px to 1023px (tablet) | Off-canvas drawer; hamburger opens it | 2 columns | 1 column |
+| &lt;680px (phone) | Off-canvas drawer; hamburger opens it | 1 column | 1 column |
+
+On smaller screens the sidebar does not disappear without a control: the mobile header exposes an accessible hamburger (`aria-expanded`, `aria-controls`) plus backdrop click and Escape to close.
+
 ## Lab check
 
 1. Open `http://127.0.0.1:2087/login` (AL9) or `:2088` (AL10 host forward).
 2. Sign in with the panel account (not the installer `?token=`).
 3. Expect a redirect to `/dashboard` with sidebar and "Signed in as …".
-4. `/logout` returns to `/login` and clears the cookie.
+4. Narrow the viewport below 1024px: hamburger opens the drawer; overlay or Escape closes it.
+5. `/logout` returns to `/login` and clears the cookie.
 
 Installer SPA upgrade/repair at `/` still requires `?token=` when the phase is `maintenance`.

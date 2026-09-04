@@ -1,21 +1,7 @@
-﻿import Link from "next/link";
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  Bell,
-  Database,
-  Gauge,
-  Globe2,
-  HardDrive,
-  LogOut,
-  Mail,
-  Menu,
-  Network,
-  Search,
-  Server,
-  Settings,
-  ShieldCheck,
-} from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
+import { PanelShell } from "../../components/PanelShell";
 import {
   readSessionCookie,
   sessionCookieName,
@@ -57,14 +43,6 @@ function ResourceGauge({ label, value, detail }: ResourceGaugeProps) {
   );
 }
 
-const navigation = [
-  { label: "Dashboard", icon: Gauge, active: true },
-  { label: "Websites", icon: Globe2 },
-  { label: "Email", icon: Mail },
-  { label: "Databases", icon: Database },
-  { label: "Backups", icon: HardDrive },
-];
-
 type DashboardProps = {
   searchParams?: Promise<{ preview?: string }> | { preview?: string };
 };
@@ -87,87 +65,76 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     redirect("/?notice=auth-required");
   }
 
+  const username = sessionUser || "preview";
+
   return (
-    <main className="panel-layout">
-      <aside className="sidebar">
+    <PanelShell
+      username={username}
+      active="dashboard"
+      signedInLabel={sessionUser ? "Signed in" : "Preview mode"}
+    >
+      <div className="dashboard-heading">
         <div>
-          <Link href="/dashboard" className="panel-brand">
-            <Server size={23} strokeWidth={1.9} />
-            <span>NT&amp;DBN Panel</span>
-          </Link>
-          <div className="server-summary">
-            <Network size={20} aria-hidden="true" />
+          <p className="eyebrow">SERVER OVERVIEW</p>
+          <h1>{sessionUser ? "Dashboard" : "Dashboard preview"}</h1>
+          <p>
+            {sessionUser
+              ? `Signed in as ${sessionUser}.`
+              : "Preview only. Sign in with POST /api/login for a real session."}
+          </p>
+        </div>
+        <label className="dashboard-search">
+          <Search size={18} aria-hidden="true" />
+          <span className="sr-only">Search</span>
+          <input type="search" placeholder="Search services" />
+        </label>
+      </div>
+      <div className="resource-grid">
+        <ResourceGauge label="CPU Usage" value={45} detail="4 cores" />
+        <ResourceGauge label="RAM Usage" value={72} detail="11.5 / 16 GB" />
+        <ResourceGauge label="Disk Usage" value={28} detail="140 / 500 GB" />
+      </div>
+      <div className="dashboard-lower-grid">
+        <article className="status-card">
+          <div className="status-card-heading">
             <div>
-              <strong>{sessionUser || "preview"}</strong>
-              <span>{sessionUser ? "Signed in" : "Preview mode"}</span>
+              <p className="eyebrow">SYSTEM HEALTH</p>
+              <h2>All services operational</h2>
             </div>
+            <ShieldCheck size={27} aria-hidden="true" />
           </div>
-          <nav aria-label="Primary navigation">
-            {navigation.map(({ label, icon: Icon, active }) => (
-              <a key={label} href="#" className={active ? "active" : undefined}>
-                <Icon size={20} strokeWidth={1.8} />
-                {label}
-              </a>
-            ))}
-          </nav>
-        </div>
-        <div className="sidebar-footer">
-          <button aria-label="Notifications"><Bell size={19} /></button>
-          <button aria-label="Settings"><Settings size={19} /></button>
-          <Link href="/api/logout" className="logout"><LogOut size={18} /> Log out</Link>
-        </div>
-      </aside>
-      <section className="panel-main">
-        <header className="mobile-header">
-          <button aria-label="Open menu"><Menu size={22} /></button>
-          <strong>NT&amp;DBN Panel</strong>
-          <button aria-label="Notifications"><Bell size={21} /></button>
-        </header>
-        <div className="dashboard-heading">
+          <ul>
+            <li>
+              <span>Nginx</span>
+              <strong>Running</strong>
+            </li>
+            <li>
+              <span>MariaDB</span>
+              <strong>Running</strong>
+            </li>
+            <li>
+              <span>Mail service</span>
+              <strong>Running</strong>
+            </li>
+          </ul>
+        </article>
+        <article className="activity-card">
+          <p className="eyebrow">RECENT ACTIVITY</p>
+          <h2>Latest changes</h2>
           <div>
-            <p className="eyebrow">SERVER OVERVIEW</p>
-            <h1>{sessionUser ? "Dashboard" : "Dashboard preview"}</h1>
-            <p>
-              {sessionUser
-                ? `Signed in as ${sessionUser}.`
-                : "Preview only. Sign in with POST /api/login for a real session."}
-            </p>
+            <span>SSL certificate renewed</span>
+            <time>12 min ago</time>
           </div>
-          <label className="dashboard-search">
-            <Search size={18} aria-hidden="true" />
-            <span className="sr-only">Search</span>
-            <input type="search" placeholder="Search services" />
-          </label>
-        </div>
-        <div className="resource-grid">
-          <ResourceGauge label="CPU Usage" value={45} detail="4 cores" />
-          <ResourceGauge label="RAM Usage" value={72} detail="11.5 / 16 GB" />
-          <ResourceGauge label="Disk Usage" value={28} detail="140 / 500 GB" />
-        </div>
-        <div className="dashboard-lower-grid">
-          <article className="status-card">
-            <div className="status-card-heading">
-              <div>
-                <p className="eyebrow">SYSTEM HEALTH</p>
-                <h2>All services operational</h2>
-              </div>
-              <ShieldCheck size={27} aria-hidden="true" />
-            </div>
-            <ul>
-              <li><span>Nginx</span><strong>Running</strong></li>
-              <li><span>MariaDB</span><strong>Running</strong></li>
-              <li><span>Mail service</span><strong>Running</strong></li>
-            </ul>
-          </article>
-          <article className="activity-card">
-            <p className="eyebrow">RECENT ACTIVITY</p>
-            <h2>Latest changes</h2>
-            <div><span>SSL certificate renewed</span><time>12 min ago</time></div>
-            <div><span>Automated backup completed</span><time>2 hr ago</time></div>
-            <div><span>System packages updated</span><time>Yesterday</time></div>
-          </article>
-        </div>
-      </section>
-    </main>
+          <div>
+            <span>Automated backup completed</span>
+            <time>2 hr ago</time>
+          </div>
+          <div>
+            <span>System packages updated</span>
+            <time>Yesterday</time>
+          </div>
+        </article>
+      </div>
+    </PanelShell>
   );
 }

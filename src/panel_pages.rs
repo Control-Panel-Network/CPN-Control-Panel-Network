@@ -1,4 +1,4 @@
-//! HTML for the authenticated CPN Panel dashboard (served by the installer process).
+//! HTML for authenticated CPN Panel pages (served by the installer process).
 
 fn html_escape(value: &str) -> String {
     value
@@ -26,20 +26,27 @@ fn panel_styles() -> &'static str {
 :root {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
   --muted:#6e6e73; --hairline:#e0e0e0; --blue:#0066cc; --blue-focus:#0071e3; --green:#18864b;
+  --sidebar-width:260px;
 }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--surface); color:var(--ink);
+html, body { margin:0; max-width:100%; overflow-x:hidden; }
+body { background:var(--surface); color:var(--ink);
   font-family:"Segoe UI",system-ui,sans-serif; font-size:17px; line-height:1.47; }
 a { color:inherit; text-decoration:none; }
+button { font:inherit; cursor:pointer; }
 .eyebrow { margin:0 0 8px; color:var(--blue); font-size:12px; font-weight:600; letter-spacing:.1em; }
-.panel-layout { min-height:100vh; display:flex; background:var(--surface); }
-.sidebar {
-  position:sticky; top:0; width:260px; height:100vh; flex:0 0 260px;
-  display:flex; flex-direction:column; justify-content:space-between;
-  padding:28px 17px 20px; background:rgba(250,250,252,.92);
-  border-right:1px solid var(--hairline);
+.panel-layout { min-height:100vh; display:flex; background:var(--surface); position:relative; }
+.sidebar-backdrop {
+  display:none; position:fixed; inset:0; z-index:40; border:0; padding:0;
+  background:rgba(29,29,31,.42); cursor:pointer;
 }
-.panel-brand { display:flex; align-items:center; gap:11px; padding:0 10px; font-size:17px; font-weight:600; }
+.sidebar {
+  position:sticky; top:0; width:var(--sidebar-width); height:100vh; flex:0 0 var(--sidebar-width);
+  display:flex; flex-direction:column; justify-content:space-between;
+  padding:28px 17px 20px; background:rgba(250,250,252,.96);
+  border-right:1px solid var(--hairline); z-index:50;
+}
+.panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
 .server-summary {
   display:flex; align-items:center; gap:12px; margin:28px 0 25px; padding:14px;
   border-radius:18px; background:var(--canvas); border:1px solid var(--hairline); color:var(--blue);
@@ -56,22 +63,36 @@ a { color:inherit; text-decoration:none; }
 .sidebar-footer {
   display:flex; align-items:center; gap:6px; padding-top:18px; border-top:1px solid var(--hairline);
 }
-.logout { margin-left:auto; display:flex; align-items:center; gap:7px; color:var(--muted); font-size:13px; }
-.panel-main { min-width:0; flex:1; padding:64px clamp(24px,5vw,72px) 80px; }
+.logout {
+  margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
+  min-height:44px; min-width:44px; padding:0 12px; color:var(--muted); font-size:13px;
+}
+.panel-main { min-width:0; flex:1; padding:64px clamp(20px,5vw,72px) 80px; }
 .mobile-header { display:none; }
+.icon-btn {
+  width:44px; height:44px; display:inline-grid; place-items:center;
+  border:0; border-radius:12px; background:transparent; color:var(--ink);
+}
+.icon-btn:focus-visible, .sidebar nav a:focus-visible, .logout:focus-visible {
+  outline:2px solid var(--blue-focus); outline-offset:2px;
+}
+.hamburger-bars {
+  width:18px; height:14px; display:flex; flex-direction:column; justify-content:space-between;
+}
+.hamburger-bars span { display:block; height:2px; border-radius:2px; background:currentColor; }
 .dashboard-heading {
   max-width:1200px; margin:0 auto 42px; display:flex; justify-content:space-between;
   align-items:flex-end; gap:32px;
 }
 .dashboard-heading h1 {
-  margin:0; font-size:clamp(36px,5vw,56px); line-height:1.07; letter-spacing:-.045em; font-weight:600;
+  margin:0; font-size:clamp(32px,5vw,56px); line-height:1.07; letter-spacing:-.045em; font-weight:600;
 }
 .dashboard-heading > div > p:last-child { margin:14px 0 0; color:var(--muted); max-width:600px; }
 .resource-grid {
   max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px;
 }
 .resource-card {
-  min-height:240px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center;
   padding:24px; background:var(--canvas); border:1px solid var(--hairline); border-radius:18px;
 }
 .resource-card h2 { margin:0 0 22px; font-size:16px; font-weight:600; }
@@ -88,11 +109,11 @@ a { color:inherit; text-decoration:none; }
 .dashboard-lower-grid {
   max-width:1200px; margin:22px auto 0; display:grid; grid-template-columns:1.15fr .85fr; gap:22px;
 }
-.status-card, .activity-card {
+.status-card, .activity-card, .section-card {
   padding:28px; border-radius:18px; background:var(--canvas); border:1px solid var(--hairline);
 }
 .status-card-heading { display:flex; align-items:flex-start; justify-content:space-between; color:var(--green); }
-.status-card h2, .activity-card h2 {
+.status-card h2, .activity-card h2, .section-card h2 {
   margin:0; color:var(--ink); font-size:23px; letter-spacing:-.025em;
 }
 .status-card ul { list-style:none; padding:0; margin:25px 0 0; }
@@ -102,40 +123,126 @@ a { color:inherit; text-decoration:none; }
 }
 .status-card li strong { color:var(--green); font-size:12px; }
 .activity-card time { color:var(--muted); font-size:12px; }
-@media (max-width:980px) {
-  .sidebar { display:none; }
-  .panel-main { padding:0 24px 64px; }
-  .mobile-header {
-    height:58px; margin:0 -24px 42px; padding:0 20px; display:flex; align-items:center;
-    justify-content:space-between; position:sticky; top:0; z-index:10;
-    background:rgba(250,250,252,.86); border-bottom:1px solid var(--hairline);
+.section-card p { margin:12px 0 0; color:var(--muted); max-width:52ch; }
+@media (max-width:1023.98px) {
+  body.nav-open { overflow:hidden; }
+  .sidebar-backdrop { display:none; }
+  body.nav-open .sidebar-backdrop { display:block; }
+  .sidebar {
+    position:fixed; left:0; top:0; height:100%; transform:translateX(-105%);
+    transition:transform 180ms ease; box-shadow:none; flex:none;
   }
-  .resource-grid { grid-template-columns:repeat(2,1fr); }
+  body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); }
+  .panel-main { padding:0 20px 64px; width:100%; }
+  .mobile-header {
+    height:58px; margin:0 -20px 28px; padding:0 12px 0 8px; display:flex; align-items:center;
+    justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
+    background:rgba(250,250,252,.94); border-bottom:1px solid var(--hairline);
+  }
+  .mobile-header strong { flex:1; font-size:16px; }
+  .resource-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .dashboard-lower-grid { grid-template-columns:1fr; }
 }
-@media (max-width:680px) {
+@media (max-width:679.98px) {
   .dashboard-heading { flex-direction:column; align-items:stretch; }
-  .resource-grid, .dashboard-lower-grid { grid-template-columns:1fr; }
+  .resource-grid { grid-template-columns:1fr; }
+  .resource-card { min-height:200px; }
+  .dashboard-heading h1 { font-size:clamp(28px,9vw,40px); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .sidebar { transition:none; }
 }
 "#
 }
 
-pub fn panel_dashboard_html(username: &str) -> String {
+fn panel_nav_script() -> &'static str {
+    r#"
+<script>
+(function () {
+  var body = document.body;
+  var toggle = document.getElementById('nav-toggle');
+  var backdrop = document.getElementById('nav-backdrop');
+  var sidebar = document.getElementById('panel-sidebar');
+  if (!toggle || !sidebar) return;
+
+  function setOpen(open) {
+    body.classList.toggle('nav-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    sidebar.setAttribute('aria-hidden', open ? 'false' : String(window.matchMedia('(max-width: 1023.98px)').matches));
+    if (open) {
+      var first = sidebar.querySelector('a, button');
+      if (first) first.focus();
+    } else {
+      toggle.focus();
+    }
+  }
+
+  function syncDesktop() {
+    if (!window.matchMedia('(max-width: 1023.98px)').matches) {
+      body.classList.remove('nav-open');
+      toggle.setAttribute('aria-expanded', 'false');
+      sidebar.setAttribute('aria-hidden', 'false');
+    } else if (!body.classList.contains('nav-open')) {
+      sidebar.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  toggle.addEventListener('click', function () {
+    setOpen(!body.classList.contains('nav-open'));
+  });
+  if (backdrop) {
+    backdrop.addEventListener('click', function () { setOpen(false); });
+  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && body.classList.contains('nav-open')) {
+      setOpen(false);
+    }
+  });
+  window.addEventListener('resize', syncDesktop);
+  syncDesktop();
+})();
+</script>
+"#
+}
+
+fn nav_links(active: &str) -> String {
+    let items = [
+        ("dashboard", "/dashboard", "Dashboard"),
+        ("websites", "/websites", "Websites"),
+        ("email", "/email", "Email"),
+        ("databases", "/databases", "Databases"),
+        ("backups", "/backups", "Backups"),
+    ];
+    items
+        .iter()
+        .map(|(id, href, label)| {
+            let class = if *id == active {
+                " class=\"active\""
+            } else {
+                ""
+            };
+            format!(r#"<a{class} href="{href}">{label}</a>"#)
+        })
+        .collect::<Vec<_>>()
+        .join("\n          ")
+}
+
+fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
     let user = html_escape(username);
-    let cpu = gauge_svg(45);
-    let ram = gauge_svg(72);
-    let disk = gauge_svg(28);
+    let nav = nav_links(active);
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard · CPN Panel</title>
+  <title>{title} · CPN Panel</title>
   <style>{styles}</style>
 </head>
 <body>
-  <main class="panel-layout" data-page="dashboard">
-    <aside class="sidebar">
+  <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
+  <div class="panel-layout" data-page="{active}">
+    <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
       <div>
         <a class="panel-brand" href="/dashboard">CPN Panel</a>
         <div class="server-summary">
@@ -145,11 +252,7 @@ pub fn panel_dashboard_html(username: &str) -> String {
           </div>
         </div>
         <nav aria-label="Primary navigation">
-          <a class="active" href="/dashboard">Dashboard</a>
-          <a href="/dashboard">Websites</a>
-          <a href="/dashboard">Email</a>
-          <a href="/dashboard">Databases</a>
-          <a href="/dashboard">Backups</a>
+          {nav}
         </nav>
       </div>
       <div class="sidebar-footer">
@@ -158,9 +261,35 @@ pub fn panel_dashboard_html(username: &str) -> String {
     </aside>
     <section class="panel-main">
       <header class="mobile-header">
+        <button type="button" id="nav-toggle" class="icon-btn" aria-controls="panel-sidebar" aria-expanded="false" aria-label="Open navigation">
+          <span class="hamburger-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
         <strong>CPN Panel</strong>
-        <a href="/logout">Log out</a>
+        <a class="logout" href="/logout">Log out</a>
       </header>
+      {main}
+    </section>
+  </div>
+  {script}
+</body>
+</html>"#,
+        title = html_escape(title),
+        styles = panel_styles(),
+        active = html_escape(active),
+        user = user,
+        nav = nav,
+        main = main,
+        script = panel_nav_script(),
+    )
+}
+
+pub fn panel_dashboard_html(username: &str) -> String {
+    let user = html_escape(username);
+    let cpu = gauge_svg(45);
+    let ram = gauge_svg(72);
+    let disk = gauge_svg(28);
+    let main = format!(
+        r#"
       <div class="dashboard-heading">
         <div>
           <p class="eyebrow">SERVER OVERVIEW</p>
@@ -212,15 +341,28 @@ pub fn panel_dashboard_html(username: &str) -> String {
           <div><span>Automated backup completed</span><time>2 hr ago</time></div>
           <div><span>System packages updated</span><time>Yesterday</time></div>
         </article>
+      </div>"#
+    );
+    panel_shell(username, "dashboard", "Dashboard", &main)
+}
+
+pub fn panel_section_html(username: &str, section_id: &str, title: &str, blurb: &str) -> String {
+    let main = format!(
+        r#"
+      <div class="dashboard-heading">
+        <div>
+          <p class="eyebrow">CPN PANEL</p>
+          <h1>{title}</h1>
+          <p>{blurb}</p>
+        </div>
       </div>
-    </section>
-  </main>
-</body>
-</html>"#,
-        styles = panel_styles(),
-        user = user,
-        cpu = cpu,
-        ram = ram,
-        disk = disk,
-    )
+      <article class="section-card">
+        <h2>{title}</h2>
+        <p>This section uses the same responsive shell as the dashboard. Management tools for {title_lower} will land here in a later release.</p>
+      </article>"#,
+        title = html_escape(title),
+        blurb = html_escape(blurb),
+        title_lower = html_escape(&title.to_lowercase()),
+    );
+    panel_shell(username, section_id, title, &main)
 }
