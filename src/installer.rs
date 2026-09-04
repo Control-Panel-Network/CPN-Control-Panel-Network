@@ -68,10 +68,10 @@ impl AppState {
     }
 
     fn register_child_pid(&self, pid: u32) {
-        if let Ok(mut pids) = self.active_child_pids.lock() {
-            if !pids.contains(&pid) {
-                pids.push(pid);
-            }
+        if let Ok(mut pids) = self.active_child_pids.lock()
+            && !pids.contains(&pid)
+        {
+            pids.push(pid);
         }
     }
 
