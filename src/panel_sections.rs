@@ -52,12 +52,13 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
 
 fn site_rows(sites: &[SiteRecord]) -> String {
     if sites.is_empty() {
-        return r#"<p class="empty-state">No sites yet. Create one below or use <code>cpn site add</code>.</p>"#
+        return r#"<p class="empty-state">No sites yet. Create one below or use <code>cpn site create</code>.</p>
+        <p class="muted">Files live under <code>/home/&lt;domain&gt;/public_html</code>. Subdomains nest under the parent home (for example <code>/home/example.com/blog.example.com/public_html</code>).</p>"#
             .into();
     }
     let mut rows = String::from(
         r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Domain</th><th>Owner</th><th>Docroot</th><th>Status</th><th></th></tr></thead><tbody>"#,
+      <thead><tr><th>Domain</th><th>Owner</th><th>Document root</th><th>Status</th><th></th></tr></thead><tbody>"#,
     );
     for site in sites {
         let status = if site.enabled { "Enabled" } else { "Disabled" };
@@ -66,14 +67,19 @@ fn site_rows(sites: &[SiteRecord]) -> String {
         } else {
             "record only"
         };
+        let legacy = if crate::sites::is_legacy_docroot(&site.docroot) {
+            r#"<div class="muted">Legacy path (still served from this location). New sites use /home/&lt;domain&gt;/public_html.</div>"#
+        } else {
+            ""
+        };
         rows.push_str(&format!(
             r#"<tr>
           <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
           <td>{owner}</td>
-          <td><code>{docroot}</code></td>
+          <td><code>{docroot}</code>{legacy}</td>
           <td>{status}</td>
           <td>
-            <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}?');">
+            <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
               <input type="hidden" name="domain" value="{domain}">
               <button type="submit" class="btn-danger">Delete</button>
             </form>
@@ -82,6 +88,7 @@ fn site_rows(sites: &[SiteRecord]) -> String {
             domain = html_escape(&site.domain),
             owner = html_escape(&site.owner),
             docroot = html_escape(&site.docroot),
+            legacy = legacy,
             status = status,
             wired = wired,
         ));
@@ -98,22 +105,26 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
       {err}
       <article class="section-card">
         <h2>Sites ({count})</h2>
+        <p class="muted">Website files live under <code>/home/&lt;domain&gt;/</code> (docroot <code>public_html</code>). A small registry JSON under <code>/var/lib/cpn/sites/</code> points at each docroot. Vhost wiring is applied later by panel recipes.</p>
         {rows}
       </article>
       <article class="section-card" style="margin-top:22px;">
         <h2>Add site</h2>
-        <p>Creates a site record under <code>/var/lib/cpn/sites/</code>. Vhost wiring is applied later by panel recipes.</p>
+        <p>Creates <code>/home/&lt;domain&gt;/public_html</code> (or nests a subdomain under the parent home). Subdomains require the parent domain site first. Optional custom docroot must be an absolute path.</p>
         <form method="post" action="/websites/create" class="stack-form">
           <label for="domain">Domain</label>
           <input id="domain" name="domain" type="text" required placeholder="example.com" autocomplete="off">
           <label for="owner">Owner</label>
           <input id="owner" name="owner" type="text" required placeholder="admin" autocomplete="username">
           <label for="docroot">Docroot (optional)</label>
-          <input id="docroot" name="docroot" type="text" placeholder="/var/www/example.com/public_html">
+          <input id="docroot" name="docroot" type="text" placeholder="/home/example.com/public_html">
           <button type="submit" class="btn-primary">Create site</button>
         </form>
       </article>"#,
-        heading = section_heading("Websites", "Manage site records on this host.",),
+        heading = section_heading(
+            "Websites",
+            "Manage website files under /home and site registry records.",
+        ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         count = sites.len(),

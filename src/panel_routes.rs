@@ -82,7 +82,7 @@ pub async fn websites_create(
                 "Location",
                 format!(
                     "/websites?notice={}",
-                    urlencoding_simple(&format!("Created {}", site.domain))
+                    urlencoding_simple(&format!("Created {} at {}", site.domain, site.docroot))
                 ),
             ))
             .finish(),

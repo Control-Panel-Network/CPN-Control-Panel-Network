@@ -64,7 +64,7 @@ Not automated yet. Operators can place a reverse proxy in front of the CPN insta
 
 - **IIS** with URL Rewrite + ARR, or Http.Sys reserved URL, terminating TLS on 443
 - Document root / site creation helpers may land later; do not expect Linux vhost writers to run on Windows
-- Site JSON records via `cpn site` still work under `C:\ProgramData\CPN\sites`
+- Site JSON registry via `cpn site` under `C:\ProgramData\CPN\sites`; document roots default under `C:\CPN\SitesHome\<domain>\public_html` (override with `CPN_SITES_HOME`)
 
 ## Phase C (later): mail / webmail
 
