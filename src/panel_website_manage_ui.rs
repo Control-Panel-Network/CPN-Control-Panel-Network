@@ -140,11 +140,12 @@ pub fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
-pub fn manage_banner(site: &SiteRecord) -> String {
+pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
     let status = if site.enabled { "Active" } else { "Suspended" };
     let badge_class = if site.enabled { "active" } else { "suspended" };
     let preview = preview_mode_url(&site.domain).unwrap_or_else(|_| "#".into());
     let domain_q = html_escape(&site.domain);
+    let design = crate::panel_theme_chrome::manage_design_controls(username);
     format!(
         r#"<div class="manage-banner">
   <h1>{domain}<span class="manage-badge {badge}">{status}</span></h1>
@@ -152,6 +153,7 @@ pub fn manage_banner(site: &SiteRecord) -> String {
   <div class="manage-banner-actions">
     <a class="manage-btn primary" href="{preview}">Preview Website</a>
     <a class="manage-btn" href="/websites/manage?domain={domain_q}&amp;tab=files">File Manager</a>
+    {design}
   </div>
 </div>"#,
         domain = html_escape(&site.domain),
@@ -159,6 +161,7 @@ pub fn manage_banner(site: &SiteRecord) -> String {
         status = status,
         preview = html_escape(&preview),
         domain_q = domain_q,
+        design = design,
     )
 }
 

@@ -48,6 +48,10 @@ use cpn_installer::panel_routes::{
     websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
     websites_resume, websites_suspend,
 };
+use cpn_installer::panel_theme_routes::{
+    panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
+    panel_design_restore, panel_design_save,
+};
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
 use rand::{Rng, distr::Alphanumeric};
@@ -675,6 +679,12 @@ async fn main() -> std::io::Result<()> {
             .service(websites_suspend)
             .service(websites_resume)
             .service(websites_prefs)
+            .service(panel_color_mode_get)
+            .service(panel_color_mode_set)
+            .service(panel_design_get)
+            .service(panel_design_save)
+            .service(panel_design_preset)
+            .service(panel_design_restore)
             .service(email_page)
             .service(email_account_create)
             .service(email_account_enable)
