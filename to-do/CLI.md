@@ -78,7 +78,19 @@ ssh -p 2222 root@127.0.0.1 'cpn site create --domain demo.example.com --owner ad
 
 ## Extending later
 
-Add new top-level groups beside `account`, `site`, and `network` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+Add new top-level groups beside `account`, `site`, `network`, and `plugin` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+
+## Plugins
+
+See `to-do/PLUGINS.md`. Install root: `/var/lib/cpn/plugins/`. Catalog: https://github.com/master3395/cyberpanel-plugins
+
+```bash
+sudo cpn plugin list
+sudo cpn plugin install --id examplePlugin
+sudo cpn plugin enable --id examplePlugin
+sudo cpn plugin disable --id examplePlugin
+sudo cpn plugin remove --id examplePlugin --yes
+```
 
 ## Network (listen port / hostname)
 

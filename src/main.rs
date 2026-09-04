@@ -21,7 +21,8 @@ use cpn_installer::panel_network::{
     purge_expired_migration, save_panel_hostname,
 };
 use cpn_installer::panel_routes::{
-    backups_page, backups_run, databases_page, email_page, websites_create, websites_delete,
+    backups_page, backups_run, databases_page, email_page, plugins_disable, plugins_enable,
+    plugins_install, plugins_page, plugins_uninstall, websites_create, websites_delete,
     websites_page,
 };
 use cpn_installer::status_pages::status_html_page;
@@ -637,6 +638,11 @@ async fn main() -> std::io::Result<()> {
             .service(databases_page)
             .service(backups_page)
             .service(backups_run)
+            .service(plugins_page)
+            .service(plugins_install)
+            .service(plugins_uninstall)
+            .service(plugins_enable)
+            .service(plugins_disable)
             .service(panel_alias)
             .service(logout_get)
             .service(logout_post)
