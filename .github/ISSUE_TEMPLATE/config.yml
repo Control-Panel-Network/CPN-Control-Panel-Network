@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/security/advisories/new
+    about: Do not open a public issue for security-sensitive findings. Use private vulnerability reporting or contact a maintainer (see SECURITY.md).
+  - name: Security policy
+    url: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/main/SECURITY.md
+    about: Supported versions, reporting channels, and threat model for CPN.
