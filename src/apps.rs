@@ -1,18 +1,21 @@
-//! Host app lifecycle: detect, install, reinstall, uninstall via dnf/apt.
+//! Host app lifecycle: detect, install, start, stop, reinstall, uninstall via dnf/apt.
 //!
-//! Supported apps: MariaDB, MySQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ.
+//! Supported apps: MariaDB, MySQL, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ.
 //! MariaDB and MySQL are treated as mutually exclusive on one host.
+//! PostgreSQL is opt-in and may coexist with MariaDB/MySQL.
 
 use crate::apps_pkg::{
     disable_now, enable_now, install_packages_dnf_or_apt, remove_packages_dnf_or_apt,
     rpm_or_dpkg_installed,
 };
+use crate::apps_postgresql::{detect_postgresql_flags, install_postgresql, uninstall_postgresql};
 use crate::service_detect::{first_active_service, port_open, systemd_unit_active};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppId {
     Mariadb,
     Mysql,
+    Postgresql,
     Phpmyadmin,
     Email,
     Rabbitmq,
@@ -23,11 +26,12 @@ impl AppId {
         match raw.trim().to_ascii_lowercase().as_str() {
             "mariadb" => Ok(Self::Mariadb),
             "mysql" => Ok(Self::Mysql),
+            "postgresql" | "postgres" | "pgsql" => Ok(Self::Postgresql),
             "phpmyadmin" | "php-myadmin" => Ok(Self::Phpmyadmin),
             "email" | "mail" => Ok(Self::Email),
             "rabbitmq" => Ok(Self::Rabbitmq),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, mysql, phpmyadmin, email, rabbitmq"
+                "Unknown app `{other}`. Use: mariadb, mysql, postgresql, phpmyadmin, email, rabbitmq"
             )),
         }
     }
@@ -36,6 +40,7 @@ impl AppId {
         match self {
             Self::Mariadb => "mariadb",
             Self::Mysql => "mysql",
+            Self::Postgresql => "postgresql",
             Self::Phpmyadmin => "phpmyadmin",
             Self::Email => "email",
             Self::Rabbitmq => "rabbitmq",
@@ -46,16 +51,26 @@ impl AppId {
         match self {
             Self::Mariadb => "MariaDB",
             Self::Mysql => "MySQL",
+            Self::Postgresql => "PostgreSQL",
             Self::Phpmyadmin => "phpMyAdmin",
             Self::Email => "Email (Postfix + Dovecot)",
             Self::Rabbitmq => "RabbitMQ",
         }
     }
 
+    /// Host apps with systemd units support Start / Stop from Apps.
+    pub fn supports_service_control(self) -> bool {
+        matches!(
+            self,
+            Self::Mariadb | Self::Mysql | Self::Postgresql | Self::Email | Self::Rabbitmq
+        )
+    }
+
     pub fn all() -> &'static [AppId] {
         &[
             Self::Mariadb,
             Self::Mysql,
+            Self::Postgresql,
             Self::Phpmyadmin,
             Self::Email,
             Self::Rabbitmq,
@@ -179,6 +194,22 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 state,
                 detail,
                 warning,
+            }
+        }
+        AppId::Postgresql => {
+            let (running, installed, detail) = detect_postgresql_flags();
+            let state = if running {
+                AppStateKind::Running
+            } else if installed {
+                AppStateKind::Installed
+            } else {
+                AppStateKind::NotInstalled
+            };
+            AppStatus {
+                id,
+                state,
+                detail,
+                warning: None,
             }
         }
         AppId::Phpmyadmin => {
@@ -309,6 +340,7 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 let _ = enable_now(&["mysql"]);
                 "Installed and started MySQL.".to_string()
             }
+            AppId::Postgresql => install_postgresql()?,
             AppId::Phpmyadmin => crate::apps_phpmyadmin::install_and_expose()?,
             AppId::Email => {
                 install_packages_dnf_or_apt(
@@ -380,6 +412,7 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
             )?;
             "Uninstalled MySQL.".to_string()
         }
+        AppId::Postgresql => uninstall_postgresql()?,
         AppId::Phpmyadmin => {
             remove_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
             "Uninstalled phpMyAdmin.".to_string()
@@ -410,6 +443,14 @@ mod tests {
     fn parse_app_ids() {
         assert_eq!(AppId::parse("MariaDB").unwrap(), AppId::Mariadb);
         assert_eq!(AppId::parse("php-myadmin").unwrap(), AppId::Phpmyadmin);
+        assert_eq!(AppId::parse("postgres").unwrap(), AppId::Postgresql);
+        assert_eq!(AppId::parse("PostgreSQL").unwrap(), AppId::Postgresql);
         assert!(AppId::parse("nginx").is_err());
+    }
+
+    #[test]
+    fn postgresql_supports_service_control() {
+        assert!(AppId::Postgresql.supports_service_control());
+        assert!(!AppId::Phpmyadmin.supports_service_control());
     }
 }

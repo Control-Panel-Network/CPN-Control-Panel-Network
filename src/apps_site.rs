@@ -1,6 +1,6 @@
 //! Site-scoped app pieces under `/home/<domain>/...` (nested for subdomains).
 //!
-//! Host engines (MariaDB, MySQL, RabbitMQ) stay system packages. This module
+//! Host engines (MariaDB, MySQL, PostgreSQL, RabbitMQ) stay system packages. This module
 //! drops markers/links under the selected domain home and records ACL associations.
 
 use crate::account::{data_dir, now_unix};
@@ -145,7 +145,12 @@ pub fn is_site_scoped(app: AppId) -> bool {
 pub fn is_associable(app: AppId) -> bool {
     matches!(
         app,
-        AppId::Mariadb | AppId::Mysql | AppId::Rabbitmq | AppId::Phpmyadmin | AppId::Email
+        AppId::Mariadb
+            | AppId::Mysql
+            | AppId::Postgresql
+            | AppId::Rabbitmq
+            | AppId::Phpmyadmin
+            | AppId::Email
     )
 }
 
@@ -198,7 +203,7 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
                 dest.display()
             ))
         }
-        AppId::Mariadb | AppId::Mysql | AppId::Rabbitmq => {
+        AppId::Mariadb | AppId::Mysql | AppId::Postgresql | AppId::Rabbitmq => {
             upsert_binding(app, &site.domain, "")?;
             Ok(format!(
                 "Associated host app `{}` with `{}` for ACL/display (engine stays system-wide)",
