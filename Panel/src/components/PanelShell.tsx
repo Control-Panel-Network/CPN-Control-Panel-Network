@@ -56,6 +56,7 @@ function writeColorMode(mode: "light" | "dark") {
   }
   document.documentElement.setAttribute("data-color-mode", mode);
   document.body.setAttribute("data-color-mode", mode);
+  window.dispatchEvent(new Event(COLOR_MODE_EVENT));
 }
 
 function readNotices(): PanelNotice[] {
@@ -76,8 +77,30 @@ function writeNotices(items: PanelNotice[]) {
   } catch {
     /* ignore */
   }
+  window.dispatchEvent(new Event(NOTIFY_EVENT));
 }
+
+function subscribeColorMode(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(COLOR_MODE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(COLOR_MODE_EVENT, onStoreChange);
+  };
+}
+
+function subscribeNotices(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(NOTIFY_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(NOTIFY_EVENT, onStoreChange);
+  };
+}
+
 const COLLAPSED_EVENT = "cpn-sidebar-collapsed-change";
+const COLOR_MODE_EVENT = "cpn-color-mode-change";
+const NOTIFY_EVENT = "cpn-panel-notifications-change";
 const NARROW_MQ = "(max-width: 1023.98px)";
 
 const hosting: NavItem[] = [
@@ -182,8 +205,16 @@ export function PanelShell({
 }: PanelShellProps) {
   const [open, setOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
-  const [colorMode, setColorMode] = useState<"light" | "dark">("light");
-  const [notices, setNotices] = useState<PanelNotice[]>([]);
+  const colorMode = useSyncExternalStore(
+    subscribeColorMode,
+    readColorMode,
+    () => "light" as const,
+  );
+  const notices = useSyncExternalStore(
+    subscribeNotices,
+    readNotices,
+    (): PanelNotice[] => [],
+  );
   const collapsed = useSyncExternalStore(
     subscribeCollapsed,
     readCollapsedPreference,
@@ -196,9 +227,9 @@ export function PanelShell({
   );
 
   useEffect(() => {
-    setColorMode(readColorMode());
-    setNotices(readNotices());
-  }, []);
+    document.documentElement.setAttribute("data-color-mode", colorMode);
+    document.body.setAttribute("data-color-mode", colorMode);
+  }, [colorMode]);
 
   useEffect(() => {
     document.body.classList.toggle("sidebar-collapsed", collapsed);
@@ -239,15 +270,11 @@ export function PanelShell({
   };
 
   const toggleColorMode = () => {
-    const next = colorMode === "dark" ? "light" : "dark";
-    setColorMode(next);
-    writeColorMode(next);
+    writeColorMode(colorMode === "dark" ? "light" : "dark");
   };
 
   const markAllRead = () => {
-    const next = notices.map((item) => ({ ...item, read: true }));
-    setNotices(next);
-    writeNotices(next);
+    writeNotices(notices.map((item) => ({ ...item, read: true })));
   };
 
   return (
@@ -361,7 +388,7 @@ export function PanelShell({
               ) : null}
             </div>
             <Link
-              href="/settings"
+              href="/account/users/profile"
               className="footer-icon-btn"
               aria-label="Account settings"
               title="Account settings"
