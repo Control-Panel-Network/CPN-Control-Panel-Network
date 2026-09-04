@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AL9 lab proof for issue #18: cancel via AppState kills the live process group.
 
-Runs the unix unit test `slow_child_dies_when_cancel_requested` on the lab checkout.
+Runs the unix unit test `slow_child_dies_when_cancel_requested` on the PR branch.
 That test starts `run_command` with a slow process group, calls `request_cancel()`
 (the same path SIGINT/SIGTERM uses), and asserts the PGID is gone.
 """
@@ -11,17 +11,19 @@ import lab_ssh
 
 HOST = "127.0.0.1"
 PORT = 2222
+BRANCH = "fix/issues-1-8-18-acceptance"
 
 
 def main() -> int:
     client = lab_ssh.connect(host=HOST, port=PORT, password="CpnLab2026!")
-    script = r"""#!/bin/bash
+    script = f"""#!/bin/bash
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:/usr/bin:$PATH"
 cd /home/cpn/CPN-Control-Panel-Network
 git fetch origin
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo BRANCH=$BRANCH
+git checkout -f {BRANCH}
+git reset --hard origin/{BRANCH}
+echo BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo HEAD=$(git rev-parse --short HEAD)
 cargo test --locked slow_child_dies_when_cancel_requested -- --nocapture
 echo ISSUE18_CANCEL_PROOF=ok
@@ -33,7 +35,7 @@ echo ISSUE18_CANCEL_PROOF=ok
     sftp.close()
     print("=== issue #18 cancel proof on AL9 ===", flush=True)
     _stdin, stdout, stderr = client.exec_command(
-        "bash /tmp/cpn-issue18-cancel.sh", timeout=1200, get_pty=True
+        "bash /tmp/cpn-issue18-cancel.sh", timeout=1800, get_pty=True
     )
     while True:
         line = stdout.readline()

@@ -169,7 +169,11 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 "existing": existing,
                 "check": check,
             }));
-            if check.error.is_some() { 2 } else { 0 }
+            if check.error.is_some() {
+                2
+            } else {
+                0
+            }
         }
         CliMode::Upgrade { version } => {
             let state = make_state().await;

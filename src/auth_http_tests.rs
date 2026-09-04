@@ -1,16 +1,16 @@
 //! Actix HTTP coverage for panel login and dashboard ACL (issue #8).
 
 use crate::account::{
-    PanelBootstrap, default_password_policy, hash_password, with_test_data_dir, write_account_file,
+    default_password_policy, hash_password, with_test_data_dir, write_account_file, PanelBootstrap,
 };
 use crate::auth_api::{dashboard_page, login_submit};
 use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
 use crate::panel_session::SESSION_COOKIE;
-use actix_web::{App, http::StatusCode, web};
-use std::sync::Arc;
+use actix_web::{http::StatusCode, web, App};
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 
 fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
@@ -156,7 +156,9 @@ fn dashboard_without_session_redirects_to_login() {
                 .service(dashboard_page),
         )
         .await;
-        let req = actix_web::test::TestRequest::get().uri("/dashboard").to_request();
+        let req = actix_web::test::TestRequest::get()
+            .uri("/dashboard")
+            .to_request();
         let resp = actix_web::test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
         let location = resp

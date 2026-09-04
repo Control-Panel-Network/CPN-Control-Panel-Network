@@ -1,8 +1,8 @@
 use crate::install_journal::{self, FailureKind};
 use crate::install_mail_backend::{provision_local_mail_backend, verify_imap_smtp_listeners};
 use crate::install_recipes::{
-    CommandSpec, DnfProgress, apt_update_command, command, php_install_command,
-    php_module_enable_command, pkg_install,
+    apt_update_command, command, php_install_command, php_module_enable_command, pkg_install,
+    CommandSpec, DnfProgress,
 };
 use crate::install_webmail::install_webmail;
 use crate::install_webmail_runtime::webmail_health_url;
@@ -655,10 +655,10 @@ pub(crate) async fn finish(
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, fraction};
+    use super::{fraction, AppState};
     use crate::os_support::require_installable_guest;
-    use std::sync::RwLock;
     use std::sync::atomic::AtomicBool;
+    use std::sync::RwLock;
     use tokio::sync::broadcast;
 
     #[test]
@@ -698,7 +698,7 @@ mod tests {
         use crate::install_recipes::command;
         use std::sync::Arc;
         use tokio::process::Command;
-        use tokio::time::{Duration, sleep};
+        use tokio::time::{sleep, Duration};
 
         let (events, _) = broadcast::channel(8);
         let state = Arc::new(AppState {
@@ -767,7 +767,7 @@ mod tests {
     #[tokio::test]
     async fn slow_child_process_group_dies_on_timeout_kill() {
         use tokio::process::Command;
-        use tokio::time::{Duration, timeout};
+        use tokio::time::{timeout, Duration};
 
         // Mirror run_command process-group + kill -TERM -<pid> behaviour (issue #18).
         let mut command = Command::new("bash");

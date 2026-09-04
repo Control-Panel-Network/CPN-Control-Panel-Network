@@ -3,7 +3,7 @@
 use crate::account::account_public_from_disk;
 use crate::installer::AppState;
 use crate::model::{InstallerStatus, SmtpStatusPublic, TokenQuery};
-use crate::smtp_settings::{SmtpTlsMode, smtp_public_from_disk};
+use crate::smtp_settings::{smtp_public_from_disk, SmtpTlsMode};
 use actix_web::HttpRequest;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -185,7 +185,11 @@ fn host_header_allowed(request: &HttpRequest, allowed_hosts: &[String]) -> bool 
 }
 
 /// When listening on 0.0.0.0, reject unexpected Host and cross-site Origin/Referer.
-pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, allowed_hosts: &[String]) -> bool {
+pub fn remote_origin_ok(
+    request: &HttpRequest,
+    allow_remote: bool,
+    allowed_hosts: &[String],
+) -> bool {
     if !allow_remote {
         return true;
     }
@@ -358,8 +362,8 @@ pub fn now_unix() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_allowed_hosts, install_finished, install_session_cookie_header, origin_matches_allowed,
-        panel_account_ready, remote_origin_ok, websocket_origin_ok,
+        build_allowed_hosts, install_finished, install_session_cookie_header,
+        origin_matches_allowed, panel_account_ready, remote_origin_ok, websocket_origin_ok,
     };
     use crate::model::{AccountPublic, InstallerStatus};
     use actix_web::test::TestRequest;
@@ -437,10 +441,7 @@ mod tests {
         let req = TestRequest::default()
             .method(actix_web::http::Method::POST)
             .insert_header((actix_web::http::header::HOST, "192.168.1.10:2087"))
-            .insert_header((
-                actix_web::http::header::ORIGIN,
-                "http://192.168.1.10:2087",
-            ))
+            .insert_header((actix_web::http::header::ORIGIN, "http://192.168.1.10:2087"))
             .to_http_request();
         assert!(remote_origin_ok(&req, true, &allowed));
         assert!(websocket_origin_ok(&req, true, &allowed));
