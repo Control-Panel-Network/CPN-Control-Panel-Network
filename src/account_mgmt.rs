@@ -3,9 +3,9 @@
 use std::{fs, path::PathBuf};
 
 use crate::account::{
-    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, generate_password,
-    hash_password, load_bootstrap, new_password_salt, now_unix, password_meets_policy,
-    validate_policy, validate_recovery_email, write_account_file,
+    accounts_dir, bootstrap_path, generate_password, hash_password, load_bootstrap,
+    new_password_salt, now_unix, password_meets_policy, validate_policy, validate_recovery_email,
+    write_account_file, AccountSetupResult, PanelBootstrap,
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 
@@ -398,8 +398,7 @@ mod tests {
             let (boot, _) = find_account("Admin").unwrap();
             assert_eq!(boot.recovery_email, "ops@example.com");
             assert_eq!(boot.language, "nb");
-            let changed =
-                change_own_password("Admin", &initial, Some(&next), false).unwrap();
+            let changed = change_own_password("Admin", &initial, Some(&next), false).unwrap();
             assert!(changed.generated_password.is_none());
             assert!(change_own_password("Admin", &wrong, Some(&next), false).is_err());
         });

@@ -10,7 +10,7 @@ use crate::account_totp::{
 };
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
-use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -158,8 +158,8 @@ fn decode_hex_key32(hex: &str) -> Result<[u8; 32], String> {
 fn load_or_create_mfa_key() -> Result<[u8; 32], String> {
     let path = mfa_key_path();
     if path.is_file() {
-        let raw = fs::read(&path)
-            .map_err(|err| format!("Could not read {}: {err}", path.display()))?;
+        let raw =
+            fs::read(&path).map_err(|err| format!("Could not read {}: {err}", path.display()))?;
         if raw.len() == 32 {
             return raw
                 .try_into()
@@ -246,10 +246,10 @@ pub fn save_mfa_for_rename(old_username: &str, new_username: &str) -> Result<(),
     if !old_path.is_file() {
         return Ok(());
     }
-    let raw = fs::read_to_string(&old_path)
-        .map_err(|err| format!("Could not read MFA record: {err}"))?;
-    let mut value: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|err| format!("Corrupt MFA record: {err}"))?;
+    let raw =
+        fs::read_to_string(&old_path).map_err(|err| format!("Could not read MFA record: {err}"))?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|err| format!("Corrupt MFA record: {err}"))?;
     if let Some(obj) = value.as_object_mut() {
         obj.insert(
             "username".into(),
@@ -388,10 +388,10 @@ fn persist_backup_code_lists(
     salts: Vec<String>,
 ) -> Result<(), String> {
     let path = mfa_record_path(username);
-    let raw = fs::read_to_string(&path)
-        .map_err(|err| format!("Could not read MFA record: {err}"))?;
-    let mut value: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|err| format!("Corrupt MFA record: {err}"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|err| format!("Could not read MFA record: {err}"))?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|err| format!("Corrupt MFA record: {err}"))?;
     let obj = value
         .as_object_mut()
         .ok_or_else(|| "Corrupt MFA record root".to_string())?;
