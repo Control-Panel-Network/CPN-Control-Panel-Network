@@ -44,7 +44,8 @@ use cpn_installer::panel_routes::{
     databases_install_mariadb, databases_page, email_account_create, email_account_disable,
     email_account_enable, email_page, plugins_dashboard_page, plugins_disable, plugins_enable,
     plugins_install, plugins_page, plugins_settings_page, plugins_settings_save, plugins_uninstall,
-    websites_create, websites_delete, websites_manage, websites_page, websites_prefs,
+    preview_content, preview_mode_page, websites_create, websites_delete, websites_manage,
+    websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
     websites_resume, websites_suspend,
 };
 use cpn_installer::status_pages::status_html_page;
@@ -665,6 +666,10 @@ async fn main() -> std::io::Result<()> {
             .service(dashboard_page)
             .service(websites_page)
             .service(websites_manage)
+            .service(websites_preview_redirect)
+            .service(websites_pretty_manage)
+            .service(preview_mode_page)
+            .service(preview_content)
             .service(websites_create)
             .service(websites_delete)
             .service(websites_suspend)

@@ -16,6 +16,9 @@ use crate::plugins_settings::{
 };
 use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
 use crate::sites::{SiteModify, create_site, delete_site, modify_site};
+pub use crate::website_preview_routes::{
+    preview_content, preview_mode_page, websites_pretty_manage, websites_preview_redirect,
+};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -193,6 +196,7 @@ pub async fn websites_manage(
         return login_redirect();
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let tab = query.get("tab").map(String::as_str);
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     match require_manage_site(&user, domain, SitePerm::Enable) {
@@ -200,7 +204,7 @@ pub async fn websites_manage(
             &user,
             "websites",
             &format!("Manage {}", site.domain),
-            &website_manage_main(&site, notice, error),
+            &website_manage_main(&site, tab, notice, error),
         )),
         Err(err) => HttpResponse::SeeOther()
             .append_header((
