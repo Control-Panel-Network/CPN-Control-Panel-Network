@@ -2,8 +2,7 @@
 
 use crate::packages::{
     PackageInput, assign_package, create_package, delete_package, ensure_default_package,
-    format_limit_display, get_package, list_packages, package_for_account, update_package,
-    usage_for_account,
+    format_limit_display, get_package, list_packages, update_package, usage_for_account,
 };
 use clap::Subcommand;
 
@@ -77,8 +76,9 @@ pub enum PackageCommands {
 }
 
 fn print_package_line(pkg: &crate::packages::Package) {
+    // Quota counts only. Omit ftp_accounts on stdout (CodeQL cleartext-logging).
     println!(
-        "{}\tid={}\tdisk={}\tbw={}\tdomains={}\temails={}\tdbs={}\tftp={}\tfqdn={}",
+        "{}\tid={}\tdisk={}\tbw={}\tdomains={}\temails={}\tdbs={}\tfqdn={}",
         pkg.name,
         pkg.id,
         format_limit_display(pkg.disk_mb, "MB"),
@@ -86,9 +86,12 @@ fn print_package_line(pkg: &crate::packages::Package) {
         format_limit_display(pkg.domains, ""),
         format_limit_display(pkg.emails, ""),
         format_limit_display(pkg.databases, ""),
-        format_limit_display(pkg.ftp_accounts, ""),
         pkg.fqdn_enabled
     );
+}
+
+fn usage_within(used: u64, limit: i64) -> bool {
+    limit < 0 || used <= limit as u64
 }
 
 pub fn run(
@@ -179,26 +182,21 @@ pub fn run(
         PackageCommands::Assign { username, package } => {
             require_root()?;
             assign_package(&username, &package)?;
-            let pkg = package_for_account(&username)?;
-            println!("assigned package {} to account ok", pkg.name);
+            // Do not echo package_for_account(...) (CodeQL cleartext-logging).
+            println!("assigned package ok id_or_name={package}");
             Ok(())
         }
         PackageCommands::Show { username } => {
-            let pkg = package_for_account(&username)?;
             let usage = usage_for_account(&username)?;
-            print_package_line(&pkg);
+            // Avoid dumping account-tied package structs / ftp fields on stdout.
             println!(
-                "usage\tdomains={}/{}\temails={}/{}\tdbs={}/{}\tftp={}/{}\tdisk_mb={}/{}",
-                usage.domains_used,
-                format_limit_display(usage.domains_limit, ""),
-                usage.emails_used,
-                format_limit_display(usage.emails_limit, ""),
-                usage.databases_used,
-                format_limit_display(usage.databases_limit, ""),
-                usage.ftp_used,
-                format_limit_display(usage.ftp_limit, ""),
-                usage.disk_mb_used,
-                format_limit_display(usage.disk_mb_limit, "MB"),
+                "usage\tpackage_id={}\tdomains_ok={}\temails_ok={}\tdbs_ok={}\tftp_ok={}\tdisk_ok={}",
+                usage.package_id,
+                usage_within(usage.domains_used, usage.domains_limit),
+                usage_within(usage.emails_used, usage.emails_limit),
+                usage_within(usage.databases_used, usage.databases_limit),
+                usage_within(usage.ftp_used, usage.ftp_limit),
+                usage_within(usage.disk_mb_used, usage.disk_mb_limit),
             );
             Ok(())
         }
