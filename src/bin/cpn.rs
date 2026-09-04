@@ -9,6 +9,7 @@ use cpn_installer::account_mgmt::{
     create_account, delete_account, list_accounts, reset_account_password,
 };
 use cpn_installer::cli_network::{NetworkCommands, run_network};
+use cpn_installer::cli_plugins;
 use cpn_installer::paths;
 use cpn_installer::sites::{SiteModify, create_site, delete_site, list_sites, modify_site};
 
@@ -48,6 +49,11 @@ enum Commands {
     Network {
         #[command(subcommand)]
         command: NetworkCommands,
+    },
+    /// Installed plugins and catalog installs
+    Plugin {
+        #[command(subcommand)]
+        command: PluginCommands,
     },
 }
 
@@ -129,6 +135,34 @@ enum SiteCommands {
     },
     /// List website records
     List,
+}
+
+#[derive(Subcommand, Debug)]
+enum PluginCommands {
+    /// List installed plugins
+    List,
+    /// Install a plugin id from the community catalog
+    Install {
+        #[arg(long)]
+        id: String,
+    },
+    /// Remove an installed plugin
+    Remove {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Enable an installed plugin
+    Enable {
+        #[arg(long)]
+        id: String,
+    },
+    /// Disable an installed plugin
+    Disable {
+        #[arg(long)]
+        id: String,
+    },
 }
 
 fn is_root() -> bool {
@@ -250,6 +284,10 @@ fn run() -> Result<(), String> {
                 paths::platform_data_dir()
             );
             println!("network  Manage listen port, hostname, and port migration");
+            println!(
+                "plugin   Manage plugins under {}/plugins",
+                paths::platform_data_dir()
+            );
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
@@ -422,6 +460,29 @@ fn run() -> Result<(), String> {
             }
         },
         Commands::Network { command } => run_network(command, require_root_for_mutation),
+        Commands::Plugin { command } => match command {
+            PluginCommands::List => cli_plugins::list_plugins(),
+            PluginCommands::Install { id } => {
+                require_root_for_mutation()?;
+                cli_plugins::install(&id)
+            }
+            PluginCommands::Remove { id, yes } => {
+                require_root_for_mutation()?;
+                confirm_delete(
+                    &format!("Remove plugin `{id}`? This cannot be undone."),
+                    yes,
+                )?;
+                cli_plugins::remove(&id)
+            }
+            PluginCommands::Enable { id } => {
+                require_root_for_mutation()?;
+                cli_plugins::enable(&id)
+            }
+            PluginCommands::Disable { id } => {
+                require_root_for_mutation()?;
+                cli_plugins::disable(&id)
+            }
+        },
     }
 }
 

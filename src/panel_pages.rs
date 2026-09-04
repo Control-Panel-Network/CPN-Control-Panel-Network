@@ -236,6 +236,7 @@ fn nav_links(active: &str) -> String {
         ("email", "/email", "Email"),
         ("databases", "/databases", "Databases"),
         ("backups", "/backups", "Backups"),
+        ("plugins", "/plugins", "Plugins"),
     ];
     items
         .iter()

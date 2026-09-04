@@ -11,6 +11,7 @@ import {
   Mail,
   Menu,
   Network,
+  Puzzle,
   Server,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navigation = [
   { label: "Email", href: "/email", icon: Mail, id: "email" },
   { label: "Databases", href: "/databases", icon: Database, id: "databases" },
   { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
+  { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
 ];
 
 type PanelShellProps = {

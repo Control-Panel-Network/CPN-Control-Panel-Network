@@ -355,6 +355,8 @@ pub fn create_panel_backup() -> Result<String, String> {
         "panel-bootstrap.json",
         "accounts",
         "sites",
+        "plugins",
+        "plugin-catalog-cache.json",
         "smtp.json",
         "panel-session.secret",
         "panel-hostname.json",
