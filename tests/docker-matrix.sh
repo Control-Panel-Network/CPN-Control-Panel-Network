@@ -68,18 +68,31 @@ resolve_pkg() {
 
 start_container() {
   local name="$1" image="$2"
+  local entry=()
+  local status=""
+  if "$engine" run --rm "$image" test -x /usr/lib/systemd/systemd >/dev/null 2>&1; then
+    entry=(/usr/lib/systemd/systemd)
+  else
+    # Minimal Rocky (and some apt) images omit systemd; install then exec as PID 1.
+    entry=(
+      bash -lc
+      'if command -v dnf >/dev/null 2>&1; then dnf install -y systemd systemd-udev; elif command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y systemd systemd-sysv; else echo missing systemd and no package manager >&2; exit 1; fi; exec /usr/lib/systemd/systemd'
+    )
+  fi
+
   "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
     --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    -e container=docker "$image" /usr/lib/systemd/systemd >/dev/null
-  for _ in {1..45}; do
-    if "$engine" exec "$name" systemctl is-system-running --quiet 2>/dev/null; then return; fi
-    # Some images report "degraded" while still usable.
-    if "$engine" exec "$name" systemctl is-system-running 2>/dev/null | grep -Eq 'running|degraded'; then
-      return
+    -e container=docker "$image" "${entry[@]}" >/dev/null
+  for _ in {1..180}; do
+    # Capture status text explicitly (avoid set -e / pipefail traps on degraded).
+    status="$("$engine" exec "$name" systemctl is-system-running 2>/dev/null || true)"
+    if [[ "$status" == "running" || "$status" == "degraded" ]]; then
+      return 0
     fi
     sleep 1
   done
-  echo "systemd no inició en $name ($image)" >&2
+  echo "systemd no inició en $name ($image) (last status='${status:-empty}')" >&2
+  "$engine" logs "$name" 2>&1 | tail -n 80 >&2 || true
   return 1
 }
 
