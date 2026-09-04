@@ -141,17 +141,28 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         || candidate.contains("localhost")
 }
 
+/// True when a panel bootstrap account exists (memory or disk).
+///
+/// Used so `/login` stays reachable after install even when the installer is
+/// re-opened in `maintenance` phase (upgrade/repair), which must still require
+/// a token for the installer SPA at `/`.
+pub fn panel_account_ready(status: &InstallerStatus) -> bool {
+    status
+        .account
+        .as_ref()
+        .map(|value| value.configured)
+        .unwrap_or(false)
+        || account_public_from_disk().is_some()
+}
+
 pub fn install_finished(status: &InstallerStatus) -> bool {
+    // Maintenance keeps the installer SPA available (with token). Panel login
+    // uses `panel_account_ready` separately so users are not stuck on the
+    // "Installation is not finished yet" token page.
     if status.phase == "maintenance" {
         return false;
     }
-    status.phase == "completed"
-        || status
-            .account
-            .as_ref()
-            .map(|value| value.configured)
-            .unwrap_or(false)
-        || account_public_from_disk().is_some()
+    status.phase == "completed" || panel_account_ready(status)
 }
 
 pub fn wants_html(request: &HttpRequest) -> bool {
@@ -242,4 +253,42 @@ pub fn now_unix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_secs())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{install_finished, panel_account_ready};
+    use crate::model::{AccountPublic, InstallerStatus};
+
+    fn status_with_phase(phase: &'static str) -> InstallerStatus {
+        let mut status = InstallerStatus::default();
+        status.phase = phase;
+        status
+    }
+
+    #[test]
+    fn maintenance_without_account_is_not_finished() {
+        let status = status_with_phase("maintenance");
+        assert!(!install_finished(&status));
+        // Disk bootstrap may exist in labs; panel_account_ready is covered below
+        // with an in-memory configured account.
+    }
+
+    #[test]
+    fn configured_account_ready_in_maintenance() {
+        let mut status = status_with_phase("maintenance");
+        status.account = Some(AccountPublic {
+            username: "Admin".into(),
+            recovery_email: "admin@example.com".into(),
+            configured: true,
+        });
+        assert!(panel_account_ready(&status));
+        assert!(!install_finished(&status));
+    }
+
+    #[test]
+    fn completed_phase_is_finished() {
+        let status = status_with_phase("completed");
+        assert!(install_finished(&status));
+    }
 }

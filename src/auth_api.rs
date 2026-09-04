@@ -6,8 +6,8 @@ use crate::auth_pages::{
     login_post_ack_html, panel_login_html,
 };
 use crate::http_helpers::{
-    authorized_request, enrich_status, install_finished, normalize_language, panel_login_url_for,
-    smtp_status_public, token_matches,
+    authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
+    panel_login_url_for, smtp_status_public, token_matches,
 };
 use crate::installer::AppState;
 use crate::mail_outbound::{
@@ -24,9 +24,9 @@ pub async fn login_page(
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
     let status = state.status.read().await.clone();
-    let finished = install_finished(&status);
-    let valid_token = token_matches(&state, query.token.as_deref());
-    if !(finished || valid_token) {
+    let allow_login =
+        install_finished(&status) || panel_account_ready(&status) || token_matches(&state, query.token.as_deref());
+    if !allow_login {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body(installer_token_required_html());
@@ -43,9 +43,9 @@ pub async fn login_submit(
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
     let status = state.status.read().await.clone();
-    let finished = install_finished(&status);
-    let valid_token = token_matches(&state, query.token.as_deref());
-    if !(finished || valid_token) {
+    let allow_login =
+        install_finished(&status) || panel_account_ready(&status) || token_matches(&state, query.token.as_deref());
+    if !allow_login {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body(installer_token_required_html());

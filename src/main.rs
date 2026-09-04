@@ -6,6 +6,7 @@ use cpn_installer::auth_api::{
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, enrich_status, install_finished, normalize_language,
+    panel_account_ready,
     remote_origin_ok, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
@@ -74,6 +75,14 @@ async fn root_page(
     };
     if authorized_request(&state, &fake, &request) {
         return serve_index_html();
+    }
+    // Already-installed systems (incl. maintenance phase): send token-less visitors
+    // to panel login instead of the "installation is not finished" blocker.
+    // Installer SPA remains available with ?token= above.
+    if panel_account_ready(&status) {
+        return HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish();
     }
     HttpResponse::Unauthorized()
         .content_type("text/html; charset=utf-8")
