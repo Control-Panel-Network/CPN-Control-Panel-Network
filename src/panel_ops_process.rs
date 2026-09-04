@@ -17,7 +17,7 @@ pub fn snapshot_top_processes(limit: usize) -> Result<Vec<ProcessRow>, String> {
     #[cfg(windows)]
     {
         let _ = limit;
-        return Err("Process snapshot is supported on Linux hosts only".into());
+        Err("Process snapshot is supported on Linux hosts only".into())
     }
     #[cfg(not(windows))]
     {
