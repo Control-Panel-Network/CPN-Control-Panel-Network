@@ -105,6 +105,7 @@ pub fn authorized_request(state: &AppState, query: &TokenQuery, request: &HttpRe
 }
 
 /// When listening on 0.0.0.0, reject cross-site browser POSTs without a matching Origin/Referer.
+/// Host allowlist prefers the bound loopback/public hostnames, not only the client-supplied Host header.
 pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u16) -> bool {
     if !allow_remote {
         return true;
@@ -126,19 +127,54 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         // Non-browser clients (curl) may omit Origin; allow when Bearer/cookie/query already matched.
         return true;
     };
+    origin_matches_allowed(candidate, bind_port, request)
+}
+
+fn origin_matches_allowed(candidate: &str, bind_port: u16, request: &HttpRequest) -> bool {
     let host_hdr = request
         .headers()
         .get(actix_web::http::header::HOST)
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
-    let expected_port = if host_hdr.contains(':') {
-        host_hdr.to_string()
-    } else {
-        format!("{host_hdr}:{bind_port}")
-    };
-    candidate.contains(&expected_port)
+    let mut allowed = vec![
+        format!("127.0.0.1:{bind_port}"),
+        format!("localhost:{bind_port}"),
+        format!("[::1]:{bind_port}"),
+    ];
+    if !host_hdr.is_empty() {
+        if host_hdr.contains(':') {
+            allowed.push(host_hdr.to_string());
+        } else {
+            allowed.push(format!("{host_hdr}:{bind_port}"));
+        }
+    }
+    allowed.iter().any(|host| candidate.contains(host.as_str()))
         || candidate.contains("127.0.0.1")
         || candidate.contains("localhost")
+}
+
+/// Origin check for WebSocket upgrades when `--allow-remote` is set (issue #1).
+pub fn websocket_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u16) -> bool {
+    if !allow_remote {
+        return true;
+    }
+    let origin = request
+        .headers()
+        .get(actix_web::http::header::ORIGIN)
+        .and_then(|value| value.to_str().ok());
+    let Some(origin) = origin else {
+        // Non-browser clients may omit Origin after Authorization already matched.
+        return true;
+    };
+    origin_matches_allowed(origin, bind_port, request)
+}
+
+/// Build HttpOnly install-session cookie (value is server-generated session_id).
+pub fn install_session_cookie_header(session_id: &str, secure: bool) -> String {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    format!(
+        "{INSTALL_TOKEN_COOKIE}={session_id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400{secure_flag}"
+    )
 }
 
 /// True when a panel bootstrap account exists (memory or disk).
@@ -257,8 +293,12 @@ pub fn now_unix() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{install_finished, panel_account_ready};
+    use super::{
+        install_finished, install_session_cookie_header, origin_matches_allowed,
+        panel_account_ready,
+    };
     use crate::model::{AccountPublic, InstallerStatus};
+    use actix_web::test::TestRequest;
 
     fn status_with_phase(phase: &'static str) -> InstallerStatus {
         InstallerStatus {
@@ -291,5 +331,26 @@ mod tests {
     fn completed_phase_is_finished() {
         let status = status_with_phase("completed");
         assert!(install_finished(&status));
+    }
+
+    #[test]
+    fn install_cookie_is_httponly_samesite_strict() {
+        let value = install_session_cookie_header("abc123", false);
+        assert!(value.contains("HttpOnly"));
+        assert!(value.contains("SameSite=Strict"));
+        assert!(!value.contains("Secure"));
+    }
+
+    #[test]
+    fn origin_allowlist_accepts_loopback() {
+        let req = TestRequest::default()
+            .insert_header((actix_web::http::header::HOST, "evil.example:9999"))
+            .to_http_request();
+        assert!(origin_matches_allowed("http://127.0.0.1:2087", 2087, &req));
+        assert!(!origin_matches_allowed(
+            "https://attacker.example",
+            2087,
+            &req
+        ));
     }
 }

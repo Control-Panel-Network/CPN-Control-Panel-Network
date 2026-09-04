@@ -26,9 +26,21 @@ pub struct AppState {
     pub bind_port: u16,
     /// True when bound to 0.0.0.0 (--allow-remote).
     pub allow_remote: bool,
+    /// Set on SIGINT/SIGTERM so in-flight stages stop starting new work (issue #18).
+    pub cancel_requested: std::sync::atomic::AtomicBool,
 }
 
 impl AppState {
+    pub fn cancel_requested(&self) -> bool {
+        self.cancel_requested
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn request_cancel(&self) {
+        self.cancel_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
         let mut status = self.status.write().await;
         status.phase = phase;
@@ -101,6 +113,9 @@ async fn process_dnf_line(
 }
 
 pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> {
+    if state.cancel_requested() {
+        return Err("Instalacion cancelada por el operador".into());
+    }
     if let Some(tracking) = spec.dnf {
         state
             .progress(
@@ -231,6 +246,10 @@ pub(crate) async fn install_php_runtime(
         run_command(state, apt_update_command()).await?;
     }
     run_command(state, php_install_command(&guest, label)).await?;
+    if let Some(stream) = guest.php_module_stream() {
+        let today = chrono_today_ymd();
+        crate::php_lifecycle::assert_selected_runtime_ok(stream, &today)?;
+    }
     // Refuse EOL runtimes even if a host already had an old php package (issue #4).
     let status = Command::new("bash")
         .args([
@@ -248,6 +267,53 @@ pub(crate) async fn install_php_runtime(
         );
     }
     Ok(())
+}
+
+fn chrono_today_ymd() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+    // Approximate UTC date without chrono crate (good enough for EOL gate).
+    // Days since 1970-01-01.
+    let days = (secs / 86400) as i64;
+    let mut y = 1970i32;
+    let mut rem = days;
+    loop {
+        let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+        let diy = if leap { 366 } else { 365 };
+        if rem < diy {
+            break;
+        }
+        rem -= diy;
+        y += 1;
+    }
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let mdays = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut m = 1u32;
+    for dim in mdays {
+        if rem < dim {
+            break;
+        }
+        rem -= dim;
+        m += 1;
+    }
+    let d = (rem + 1) as u32;
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
@@ -477,8 +543,10 @@ pub(crate) async fn finish(
 
 #[cfg(test)]
 mod tests {
-    use super::fraction;
+    use super::{AppState, fraction};
     use crate::os_support::require_installable_guest;
+    use std::sync::atomic::AtomicBool;
+    use tokio::sync::{RwLock, broadcast};
 
     #[test]
     fn parses_dnf_download_and_transaction_fractions() {
@@ -490,5 +558,22 @@ mod tests {
     #[test]
     fn guest_os_detection_is_callable() {
         let _ = require_installable_guest();
+    }
+
+    #[test]
+    fn cancel_flag_blocks_new_commands() {
+        let (events, _) = broadcast::channel(8);
+        let state = AppState {
+            status: RwLock::new(Default::default()),
+            events,
+            token: "t".into(),
+            session_id: "s".into(),
+            bind_port: 2087,
+            allow_remote: false,
+            cancel_requested: AtomicBool::new(false),
+        };
+        assert!(!state.cancel_requested());
+        state.request_cancel();
+        assert!(state.cancel_requested());
     }
 }

@@ -279,3 +279,8 @@ pub struct TokenQuery {
 pub struct OptionalTokenQuery {
     pub token: Option<String>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct SessionBootstrapRequest {
+    pub token: String,
+}

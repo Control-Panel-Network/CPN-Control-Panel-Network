@@ -173,6 +173,9 @@ jobs:
       - name: Comprobar TypeScript
         run: npm run typecheck
 
+      - name: Auth session self-test (issue #8)
+        run: npm run auth-selftest
+
       - name: Auditoría npm (Panel)
         continue-on-error: true
         run: npm audit --audit-level=high
