@@ -275,7 +275,10 @@ fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> Str
     } else {
         format!(r#" class="{class}""#)
     };
-    format!(r#"<a{class_attr} href="{href}">{icon}<span>{label}</span></a>"#, icon = crate::panel_icons::nav_icon_html(id),)
+    format!(
+        r#"<a{class_attr} href="{href}">{icon}<span>{label}</span></a>"#,
+        icon = crate::panel_icons::nav_icon_html(id),
+    )
 }
 
 fn nav_links(active: &str, username: &str) -> String {
