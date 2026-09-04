@@ -146,41 +146,62 @@ fn is_loopback_host(host_no_port: &str) -> bool {
     )
 }
 
+fn origin_url(scheme: &str, host_no_port: &str, port: Option<&str>) -> Result<Url, String> {
+    let host = match port {
+        Some(p) if !p.is_empty() => format!("{host_no_port}:{p}"),
+        _ => host_no_port.to_string(),
+    };
+    Url::parse(&format!("{scheme}://{host}")).map_err(|err| format!("Invalid origin URL: {err}"))
+}
+
 /// Build a Webauthn RP for this HTTP request (origin + RP ID without port).
 ///
-/// Loopback IPs (`127.0.0.1`, `::1`) are mapped to `localhost` because
-/// `url::Url::domain()` is `None` for raw IP literals and `WebauthnBuilder`
-/// rejects that configuration. Prefer opening the panel as `http://localhost:PORT`
-/// when registering passkeys in a browser on the lab VM.
+/// `webauthn-rs` rejects raw IP RP IDs because `url::Url::domain()` is `None`
+/// for IP literals (builder error: "The configuration was invalid"). Loopback
+/// Hosts (`127.0.0.1`, `::1`, `localhost`) therefore use RP ID `localhost`, and
+/// both `http://localhost:PORT` and `http://127.0.0.1:PORT` are allowed origins
+/// so lab access via either URL can verify ceremonies. Prefer `localhost` in the
+/// browser for create/get; API begin-register works for either Host header.
 pub fn webauthn_for_request(
     host_header: Option<&str>,
     https: bool,
 ) -> Result<(Webauthn, String), String> {
     let host = sanitize_host(host_header.unwrap_or("127.0.0.1"))?;
-    let (mut rp_id, port) = split_host_port(&host);
-    if rp_id.is_empty() {
+    let (host_no_port, port) = split_host_port(&host);
+    if host_no_port.is_empty() {
         return Err("Could not derive WebAuthn RP ID".into());
     }
-    if rp_id.parse::<std::net::IpAddr>().is_ok() && !is_loopback_host(&rp_id) {
+    if host_no_port.parse::<std::net::IpAddr>().is_ok() && !is_loopback_host(&host_no_port) {
         return Err(
             "Passkeys require a hostname. Use a domain name or localhost (not a public IP)."
                 .into(),
         );
     }
-    if is_loopback_host(&rp_id) {
-        rp_id = "localhost".to_string();
-    }
     let scheme = if https { "https" } else { "http" };
-    let origin_host = match &port {
-        Some(p) => format!("{rp_id}:{p}"),
-        None => rp_id.clone(),
+    let port_ref = port.as_deref();
+    let loopback = is_loopback_host(&host_no_port);
+    let rp_id = if loopback {
+        "localhost".to_string()
+    } else {
+        host_no_port.clone()
     };
-    let origin = format!("{scheme}://{origin_host}");
-    let origin_url = Url::parse(&origin).map_err(|err| format!("Invalid origin URL: {err}"))?;
-    let webauthn = WebauthnBuilder::new(&rp_id, &origin_url)
+    // Primary origin must have a domain() for WebauthnBuilder::new.
+    let primary = origin_url(scheme, &rp_id, port_ref)?;
+    let mut builder = WebauthnBuilder::new(&rp_id, &primary)
         .map_err(|err| format!("WebAuthn builder error: {err}"))?
         .rp_name("CPN Panel")
-        .allow_any_port(true)
+        .allow_any_port(true);
+    if loopback {
+        // Accept either loopback spelling used by the lab browser/API client.
+        for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
+            if let Ok(alt) = origin_url(scheme, alt_host, port_ref) {
+                if alt != primary {
+                    builder = builder.append_allowed_origin(&alt);
+                }
+            }
+        }
+    }
+    let webauthn = builder
         .build()
         .map_err(|err| format!("WebAuthn build error: {err}"))?;
     Ok((webauthn, rp_id))
@@ -337,7 +358,12 @@ async function cpnRegisterPasskey(){
   const status=document.getElementById('cpn-passkey-status');
   try{
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    if(status) status.textContent='Starting registration…';
+    // Browsers bind RP ID to the page host; use localhost (not 127.0.0.1) for create().
+    if(location.hostname==='127.0.0.1'||location.hostname==='[::1]'||location.hostname==='::1'){
+      const port=location.port?(':'+location.port):'';
+      throw new Error('Open this page as http://localhost'+port+' (not 127.0.0.1) to register a passkey.');
+    }
+    if(status) status.textContent='Starting registration...';
     const label=(document.getElementById('cpn-passkey-label')||{}).value||'';
     const start=await cpnJson('/account/users/profile/passkey/register/start',{});
     const pk=await cpnDecodeCreateOptions(start.publicKey);
@@ -376,4 +402,33 @@ async function cpnLoginPasskey(){
   }
 }
 "#
+}
+
+#[cfg(test)]
+mod tests {
+    use super::webauthn_for_request;
+
+    #[test]
+    fn loopback_ip_host_builds_webauthn() {
+        let (wan, rp_id) =
+            webauthn_for_request(Some("127.0.0.1:2087"), false).expect("builder should accept loopback");
+        assert_eq!(rp_id, "localhost");
+        let origins = wan.get_allowed_origins();
+        assert!(
+            origins.iter().any(|u| u.as_str().contains("127.0.0.1")),
+            "expected 127.0.0.1 origin among {origins:?}"
+        );
+        assert!(
+            origins.iter().any(|u| u.as_str().contains("localhost")),
+            "expected localhost origin among {origins:?}"
+        );
+    }
+
+    #[test]
+    fn localhost_host_builds_webauthn() {
+        let (wan, rp_id) =
+            webauthn_for_request(Some("localhost:2087"), false).expect("builder should accept localhost");
+        assert_eq!(rp_id, "localhost");
+        assert!(!wan.get_allowed_origins().is_empty());
+    }
 }

@@ -145,8 +145,8 @@ pub async fn passkey_login_start(
             "Username is required",
         );
     }
-    // Existence check without leaking password material; same error if missing/no keys.
-    if find_account(username).is_err() {
+    // Same error for missing accounts and accounts with no passkeys (no user enumeration).
+    if find_account(username).is_err() || !crate::account_passkeys::has_passkeys(username) {
         return json_err(
             actix_web::http::StatusCode::BAD_REQUEST,
             "No passkeys registered for this account",
