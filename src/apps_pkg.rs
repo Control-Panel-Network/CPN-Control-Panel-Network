@@ -125,9 +125,12 @@ pub fn remove_packages_dnf_or_apt(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Resul
 }
 
 pub fn rpm_or_dpkg_installed(names: &[&str]) -> bool {
+    use std::process::Stdio;
     for name in names {
         let rpm = Command::new("rpm")
             .args(["-q", name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
@@ -136,6 +139,8 @@ pub fn rpm_or_dpkg_installed(names: &[&str]) -> bool {
         }
         let dpkg = Command::new("dpkg-query")
             .args(["-W", "-f=${Status}", name])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .output()
             .ok()
             .map(|out| {
