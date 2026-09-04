@@ -12,9 +12,10 @@ use std::path::PathBuf;
 
 pub const COLOR_MODE_STORAGE_KEY: &str = "cpn-color-mode";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ColorMode {
+    #[default]
     Light,
     Dark,
 }
@@ -43,15 +44,10 @@ impl ColorMode {
     }
 }
 
-impl Default for ColorMode {
-    fn default() -> Self {
-        Self::Light
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DesignPreset {
+    #[default]
     Default,
     Light,
     Dark,
@@ -76,12 +72,6 @@ impl DesignPreset {
             "custom" => Some(Self::Custom),
             _ => None,
         }
-    }
-}
-
-impl Default for DesignPreset {
-    fn default() -> Self {
-        Self::Default
     }
 }
 
@@ -239,10 +229,7 @@ pub fn resolve_tokens(design: &PanelDesignFile) -> DesignTokens {
         DesignPreset::Default => default_tokens(),
         DesignPreset::Light => light_preset_tokens(),
         DesignPreset::Dark => dark_preset_tokens(),
-        DesignPreset::Custom => design
-            .custom
-            .clone()
-            .unwrap_or_else(default_tokens),
+        DesignPreset::Custom => design.custom.clone().unwrap_or_else(default_tokens),
     }
 }
 

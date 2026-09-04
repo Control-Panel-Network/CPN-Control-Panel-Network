@@ -19,10 +19,7 @@ fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
 fn json_ok(value: serde_json::Value) -> HttpResponse {
     HttpResponse::Ok()
         .content_type("application/json; charset=utf-8")
-        .body(
-            serde_json::to_string_pretty(&value)
-                .unwrap_or_else(|_| "{\"ok\":false}".into()),
-        )
+        .body(serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{\"ok\":false}".into()))
 }
 
 fn json_err(status: u16, message: &str) -> HttpResponse {
@@ -82,10 +79,7 @@ pub async fn panel_color_mode_set(
 }
 
 #[get("/api/panel/design")]
-pub async fn panel_design_get(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
+pub async fn panel_design_get(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
         return json_err(401, "Login required");
     };
