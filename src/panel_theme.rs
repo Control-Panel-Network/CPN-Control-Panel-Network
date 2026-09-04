@@ -355,18 +355,10 @@ pub fn color_mode_styles() -> &'static str {
   background:#1a1d26; border-color:#2a2f3a; color:var(--ink);
 }
 .theme-toggle {
-  display:flex; align-items:center; gap:10px; width:100%; min-height:44px;
-  padding:0 12px; margin:0 0 8px; border:1px solid var(--hairline);
-  border-radius:12px; background:var(--canvas); color:var(--ink); font:inherit; font-weight:600;
-  font-size:13px; text-align:left; cursor:pointer;
+  display:inline-grid; place-items:center; cursor:pointer; color:var(--muted);
 }
 .theme-toggle:focus-visible { outline:2px solid var(--blue-focus); outline-offset:2px; }
-.theme-toggle-icon {
-  width:28px; height:28px; border-radius:8px; display:inline-grid; place-items:center;
-  background:var(--surface); border:1px solid var(--hairline); font-size:14px; line-height:1;
-}
-.sidebar-footer { flex-direction:column; align-items:stretch; gap:4px; }
-.sidebar-footer .logout { margin-left:0; width:100%; justify-content:flex-start; }
+.theme-toggle-icon { display:inline-grid; place-items:center; line-height:1; }
 "#
 }
 

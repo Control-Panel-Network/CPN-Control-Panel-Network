@@ -73,10 +73,7 @@ button { font:inherit; cursor:pointer; }
   margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase;
 }
-.sidebar-footer {
-  flex:0 0 auto; display:flex; align-items:center; gap:6px;
-  padding-top:18px; border-top:1px solid var(--hairline);
-}
+/* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
 .logout {
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
   min-height:44px; min-width:44px; padding:0 12px; color:var(--muted); font-size:13px;
@@ -300,21 +297,23 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
+        crate::panel_footer_chrome::sidebar_footer_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
-    let toggle = crate::panel_theme_chrome::sidebar_theme_toggle(color_mode);
+    let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}",
+        "{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
-        crate::panel_theme_chrome::color_mode_toggle_script()
+        crate::panel_theme_chrome::color_mode_toggle_script(),
+        crate::panel_footer_chrome::notifications_popover_script()
     );
     format!(
         r#"<!DOCTYPE html>
@@ -335,8 +334,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         {nav}
       </nav>
       <div class="sidebar-footer">
-        {toggle}
-        <a class="logout" href="/logout">Log out</a>
+        {footer}
       </div>
     </aside>
     <section class="panel-main">
@@ -361,7 +359,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         active = html_escape(active),
         header = header,
         nav = nav,
-        toggle = toggle,
+        footer = footer,
         main = main,
         script = script,
     )

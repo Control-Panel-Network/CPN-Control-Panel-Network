@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   AppWindow,
+  Bell,
   Database,
   Gauge,
   Globe2,
   HardDrive,
-  LogOut,
   Mail,
   Menu,
+  Moon,
   Network,
   Package,
   PanelLeftClose,
@@ -19,6 +20,7 @@ import {
   Server,
   Settings,
   Shield,
+  Sun,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +28,55 @@ import {
 type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
 
 const STORAGE_KEY = "cpn-sidebar-collapsed";
+const COLOR_MODE_KEY = "cpn-color-mode";
+const NOTIFY_KEY = "cpn-panel-notifications";
+
+type PanelNotice = {
+  id: string;
+  title: string;
+  body: string;
+  read: boolean;
+};
+
+function readColorMode(): "light" | "dark" {
+  if (typeof window === "undefined") return "light";
+  try {
+    const stored = window.localStorage.getItem(COLOR_MODE_KEY);
+    return stored === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function writeColorMode(mode: "light" | "dark") {
+  try {
+    window.localStorage.setItem(COLOR_MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+  document.documentElement.setAttribute("data-color-mode", mode);
+  document.body.setAttribute("data-color-mode", mode);
+}
+
+function readNotices(): PanelNotice[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(NOTIFY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PanelNotice[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeNotices(items: PanelNotice[]) {
+  try {
+    window.localStorage.setItem(NOTIFY_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore */
+  }
+}
 const COLLAPSED_EVENT = "cpn-sidebar-collapsed-change";
 const NARROW_MQ = "(max-width: 1023.98px)";
 
@@ -130,6 +181,9 @@ export function PanelShell({
   children,
 }: PanelShellProps) {
   const [open, setOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [colorMode, setColorMode] = useState<"light" | "dark">("light");
+  const [notices, setNotices] = useState<PanelNotice[]>([]);
   const collapsed = useSyncExternalStore(
     subscribeCollapsed,
     readCollapsedPreference,
@@ -142,13 +196,21 @@ export function PanelShell({
   );
 
   useEffect(() => {
+    setColorMode(readColorMode());
+    setNotices(readNotices());
+  }, []);
+
+  useEffect(() => {
     document.body.classList.toggle("sidebar-collapsed", collapsed);
     return () => document.body.classList.remove("sidebar-collapsed");
   }, [collapsed]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setNotifyOpen(false);
+      }
     };
     const onResize = () => {
       if (!window.matchMedia(NARROW_MQ).matches && !collapsed) {
@@ -169,10 +231,23 @@ export function PanelShell({
   }, [open]);
 
   const drawerMode = collapsed || narrow;
+  const unread = notices.filter((item) => !item.read).length;
 
   const toggleCollapsed = () => {
     writeCollapsedPreference(!collapsed);
     setOpen(false);
+  };
+
+  const toggleColorMode = () => {
+    const next = colorMode === "dark" ? "light" : "dark";
+    setColorMode(next);
+    writeColorMode(next);
+  };
+
+  const markAllRead = () => {
+    const next = notices.map((item) => ({ ...item, read: true }));
+    setNotices(next);
+    writeNotices(next);
   };
 
   return (
@@ -241,8 +316,81 @@ export function PanelShell({
           />
         </nav>
         <div className="sidebar-footer">
+          <div className="sidebar-footer-actions">
+            <div className="notify-wrap">
+              <button
+                type="button"
+                className="footer-icon-btn"
+                aria-expanded={notifyOpen}
+                aria-controls="cpn-notify-panel"
+                aria-label="Notifications"
+                title="Notifications"
+                onClick={() => setNotifyOpen((value) => !value)}
+              >
+                <Bell size={18} strokeWidth={1.9} />
+                {unread > 0 ? (
+                  <span className="notify-badge">{unread > 99 ? "99+" : unread}</span>
+                ) : null}
+              </button>
+              {notifyOpen ? (
+                <div
+                  id="cpn-notify-panel"
+                  className="notify-popover"
+                  role="dialog"
+                  aria-label="Notifications"
+                >
+                  <header>
+                    <span>Notifications</span>
+                    <button type="button" onClick={markAllRead}>
+                      Mark all read
+                    </button>
+                  </header>
+                  {notices.length === 0 ? (
+                    <p className="notify-empty">No notifications yet.</p>
+                  ) : (
+                    <ul className="notify-list">
+                      {notices.map((item) => (
+                        <li key={item.id} className={item.read ? undefined : "unread"}>
+                          <strong>{item.title}</strong>
+                          {item.body ? <span>{item.body}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <Link
+              href="/settings"
+              className="footer-icon-btn"
+              aria-label="Account settings"
+              title="Account settings"
+              onClick={() => setOpen(false)}
+            >
+              <Settings size={18} strokeWidth={1.9} />
+            </Link>
+            <button
+              type="button"
+              id="cpn-color-toggle"
+              className="theme-toggle footer-icon-btn"
+              aria-pressed={colorMode === "dark"}
+              aria-label={
+                colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"
+              }
+              title={
+                colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"
+              }
+              onClick={toggleColorMode}
+            >
+              {colorMode === "dark" ? (
+                <Sun size={18} strokeWidth={1.9} aria-hidden="true" />
+              ) : (
+                <Moon size={18} strokeWidth={1.9} aria-hidden="true" />
+              )}
+            </button>
+          </div>
           <Link href="/api/logout" className="logout">
-            <LogOut size={18} /> Log out
+            Log out
           </Link>
         </div>
       </aside>
