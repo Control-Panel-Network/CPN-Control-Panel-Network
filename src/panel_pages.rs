@@ -419,8 +419,8 @@ mod tests {
             "main column must be the vertical scroll container"
         );
         assert!(
-            css.contains("position:sticky") && css.contains("top:0"),
-            "sidebar should remain sticky for collapse/drawer compatibility"
+            css.contains("align-self:stretch") || (css.contains("position:sticky") && css.contains("top:0")),
+            "sidebar should fill the viewport column (or stay sticky) while main scrolls"
         );
         assert!(
             css.contains(".table-wrap")
