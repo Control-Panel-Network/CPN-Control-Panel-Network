@@ -7,19 +7,19 @@
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a Linux web installer for preparing server panel components on CyberPanel-aligned guest operating systems. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
+CPN is a Linux web installer for preparing server panel components on supported guest operating systems (AlmaLinux, Rocky Linux, RHEL, Ubuntu, Debian, and related targets listed below). A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
 Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), or run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd). See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix) and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
 
 ## Supported operating systems
 
-CPN installs on **Linux guests** only (CyberPanel-aligned targets). This section mirrors [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) (authoritative) and `src/os_support.rs`.
+CPN installs on **Linux guests** only. This section mirrors [`to-do/OS-SUPPORT-MATRIX.md`](to-do/OS-SUPPORT-MATRIX.md) (authoritative guest OS matrix) and `src/os_support.rs`.
 
 | Status | Meaning |
 |---|---|
 | **Supported** | Detection + install recipes implemented **and** smoke evidence (lab VM and/or `tests/docker-matrix.sh`) |
 | **Partial** | Allowlisted; recipes run via the family path; less or no smoke evidence yet, or an external blocker remains |
-| **Not yet** | Known CyberPanel/community target outside the installable allowlist; installer refuses with a helpful message |
+| **Not yet** | Known or planned community target outside the installable allowlist; installer refuses with a helpful message |
 | **Host only** | Hypervisor or Windows host for Linux guests; not a CPN install target |
 
 ### Guest OS (where `cpn-installer` runs)
