@@ -16,14 +16,16 @@ git fetch origin
 git checkout -f {BRANCH}
 git reset --hard origin/{BRANCH}
 git rev-parse --short HEAD
+rpm -q openssl-devel || sudo dnf install -y openssl-devel
 cd installer-ui
 npm ci --silent
 npm run build
 cd ..
 rm -f target/release/cpn-installer target/release/cpn-installer.d
 cargo build --release --locked --bin cpn-installer
-strings target/release/cpn-installer | grep -F 'Account profile' | head -2
-strings target/release/cpn-installer | grep -F '/login/2fa' | head -2
+strings target/release/cpn-installer | grep -F 'View Profile' | head -2
+strings target/release/cpn-installer | grep -F 'Register passkey' | head -2
+strings target/release/cpn-installer | grep -F '/login/passkey/start' | head -2
 sudo cp -f target/release/cpn-installer /usr/bin/cpn-installer
 sudo chmod 755 /usr/bin/cpn-installer
 sudo firewall-cmd --add-port=2087/tcp || true

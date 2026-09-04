@@ -120,27 +120,67 @@ fn sanitize_host(raw: &str) -> Result<String, String> {
     Ok(host.to_string())
 }
 
+fn split_host_port(host: &str) -> (String, Option<String>) {
+    // Bracketed IPv6: [::1]:2087
+    if let Some(rest) = host.strip_prefix('[') {
+        if let Some((addr, port)) = rest.split_once("]:") {
+            return (addr.to_string(), Some(port.to_string()));
+        }
+        if let Some(addr) = rest.strip_suffix(']') {
+            return (addr.to_string(), None);
+        }
+    }
+    // IPv4 or hostname with optional port (last ':' for host:port).
+    if let Some((name, port)) = host.rsplit_once(':') {
+        if !name.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
+            return (name.to_string(), Some(port.to_string()));
+        }
+    }
+    (host.to_string(), None)
+}
+
+fn is_loopback_host(host_no_port: &str) -> bool {
+    matches!(
+        host_no_port.to_ascii_lowercase().as_str(),
+        "localhost" | "127.0.0.1" | "::1" | "0:0:0:0:0:0:0:1"
+    )
+}
+
 /// Build a Webauthn RP for this HTTP request (origin + RP ID without port).
+///
+/// Loopback IPs (`127.0.0.1`, `::1`) are mapped to `localhost` because
+/// `url::Url::domain()` is `None` for raw IP literals and `WebauthnBuilder`
+/// rejects that configuration. Prefer opening the panel as `http://localhost:PORT`
+/// when registering passkeys in a browser on the lab VM.
 pub fn webauthn_for_request(
     host_header: Option<&str>,
     https: bool,
 ) -> Result<(Webauthn, String), String> {
     let host = sanitize_host(host_header.unwrap_or("127.0.0.1"))?;
-    let rp_id = host
-        .split(':')
-        .next()
-        .unwrap_or("127.0.0.1")
-        .trim()
-        .to_string();
+    let (mut rp_id, port) = split_host_port(&host);
     if rp_id.is_empty() {
         return Err("Could not derive WebAuthn RP ID".into());
     }
+    if rp_id.parse::<std::net::IpAddr>().is_ok() && !is_loopback_host(&rp_id) {
+        return Err(
+            "Passkeys require a hostname. Use a domain name or localhost (not a public IP)."
+                .into(),
+        );
+    }
+    if is_loopback_host(&rp_id) {
+        rp_id = "localhost".to_string();
+    }
     let scheme = if https { "https" } else { "http" };
-    let origin = format!("{scheme}://{host}");
+    let origin_host = match &port {
+        Some(p) => format!("{rp_id}:{p}"),
+        None => rp_id.clone(),
+    };
+    let origin = format!("{scheme}://{origin_host}");
     let origin_url = Url::parse(&origin).map_err(|err| format!("Invalid origin URL: {err}"))?;
     let webauthn = WebauthnBuilder::new(&rp_id, &origin_url)
         .map_err(|err| format!("WebAuthn builder error: {err}"))?
         .rp_name("CPN Panel")
+        .allow_any_port(true)
         .build()
         .map_err(|err| format!("WebAuthn build error: {err}"))?;
     Ok((webauthn, rp_id))
