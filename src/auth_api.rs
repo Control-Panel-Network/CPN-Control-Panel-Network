@@ -1,9 +1,11 @@
-//! Login, forgot-password, and first-account setup HTTP handlers.
+//! Login, forgot-password, panel dashboard, logout, and first-account setup HTTP handlers.
 
-use crate::account::{load_bootstrap, setup_account};
+use crate::account::{
+    hash_password, password_hash_needs_upgrade, verify_password, write_account_file,
+};
+use crate::account_mgmt::find_account;
 use crate::auth_pages::{
-    forgot_password_ack_html, forgot_password_html, installer_token_required_html,
-    login_post_ack_html, panel_login_html,
+    forgot_password_ack_html, forgot_password_html, installer_token_required_html, panel_login_html,
 };
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
@@ -14,9 +16,52 @@ use crate::mail_outbound::{
     build_password_reset_notice, build_setup_confirmation, send_mail_with_settings,
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
+use crate::panel_pages::panel_dashboard_html;
+use crate::panel_session::{
+    clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
+    session_cookie_header, session_secret, verify_session_token,
+};
 use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
+
+fn login_error_message(locale: &str) -> &'static str {
+    match locale {
+        "es" => "Usuario o contraseña no válidos.",
+        "nb" => "Ugyldig brukernavn eller passord.",
+        _ => "Invalid username or password.",
+    }
+}
+
+fn request_secure(http: &HttpRequest) -> bool {
+    let forwarded = http
+        .headers()
+        .get("X-Forwarded-Proto")
+        .and_then(|value| value.to_str().ok());
+    request_is_https(http.connection_info().scheme(), forwarded)
+}
+
+fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let token = read_session_cookie(cookie)?;
+    let secret = session_secret(Some(&state.token));
+    verify_session_token(&token, &secret)
+}
+
+fn maybe_upgrade_password_hash(
+    path: &std::path::Path,
+    boot: &mut crate::account::PanelBootstrap,
+    password: &str,
+) {
+    if !password_hash_needs_upgrade(&boot.password_hash) {
+        return;
+    }
+    boot.password_hash = hash_password(password, &boot.password_salt);
+    let _ = write_account_file(path, boot);
+}
 
 #[get("/login")]
 pub async fn login_page(
@@ -24,8 +69,9 @@ pub async fn login_page(
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
     let status = state.status.read().await.clone();
-    let allow_login =
-        install_finished(&status) || panel_account_ready(&status) || token_matches(&state, query.token.as_deref());
+    let allow_login = install_finished(&status)
+        || panel_account_ready(&status)
+        || token_matches(&state, query.token.as_deref());
     if !allow_login {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
@@ -34,25 +80,131 @@ pub async fn login_page(
     let payload = enrich_status(status, &state.token);
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(panel_login_html(&payload))
+        .body(panel_login_html(&payload, None))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct LoginForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    password: String,
+    #[serde(default)]
+    remember_me: String,
 }
 
 #[post("/login")]
 pub async fn login_submit(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
+    form: web::Form<LoginForm>,
 ) -> HttpResponse {
     let status = state.status.read().await.clone();
-    let allow_login =
-        install_finished(&status) || panel_account_ready(&status) || token_matches(&state, query.token.as_deref());
+    let allow_login = install_finished(&status)
+        || panel_account_ready(&status)
+        || token_matches(&state, query.token.as_deref());
     if !allow_login {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body(installer_token_required_html());
     }
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(login_post_ack_html(query.token.as_deref()))
+
+    let payload = enrich_status(status, &state.token);
+    let locale = payload.language.as_str();
+    let username = form.username.trim();
+    let password = form.password.as_str();
+    let _remember_me = form.remember_me.trim() == "1";
+
+    let authed = if username.is_empty() || password.is_empty() {
+        None
+    } else {
+        match find_account(username) {
+            Ok((mut boot, path)) => {
+                if verify_password(password, &boot.password_salt, &boot.password_hash) {
+                    maybe_upgrade_password_hash(&path, &mut boot, password);
+                    Some(boot.username)
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
+    };
+
+    let Some(session_user) = authed else {
+        return HttpResponse::Unauthorized()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_login_html(
+                &payload,
+                Some(login_error_message(locale)),
+            ));
+    };
+
+    let secret = session_secret(Some(&state.token));
+    let token = create_session_token(&session_user, &secret);
+    let secure = request_secure(&http);
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/dashboard"))
+        .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
+        .finish()
+}
+
+#[get("/dashboard")]
+pub async fn dashboard_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let preview = query.get("preview").map(String::as_str) == Some("1");
+    if let Some(user) = panel_user_from_request(&state, &http) {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_dashboard_html(&user));
+    }
+    if preview {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_dashboard_html("preview"));
+    }
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/login"))
+        .finish()
+}
+
+#[get("/panel")]
+pub async fn panel_alias() -> HttpResponse {
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/dashboard"))
+        .finish()
+}
+
+fn logout_response(http: &HttpRequest) -> HttpResponse {
+    let secure = request_secure(http);
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/login"))
+        .append_header(("Set-Cookie", clear_session_cookie_header(secure)))
+        .finish()
+}
+
+#[get("/logout")]
+pub async fn logout_get(http: HttpRequest) -> HttpResponse {
+    logout_response(&http)
+}
+
+#[post("/logout")]
+pub async fn logout_post(http: HttpRequest) -> HttpResponse {
+    logout_response(&http)
+}
+
+#[get("/api/logout")]
+pub async fn api_logout_get(http: HttpRequest) -> HttpResponse {
+    logout_response(&http)
+}
+
+#[post("/api/logout")]
+pub async fn api_logout_post(http: HttpRequest) -> HttpResponse {
+    logout_response(&http)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -91,7 +243,7 @@ pub async fn forgot_password_submit(
         }
     };
 
-    if let Some(boot) = load_bootstrap()
+    if let Some(boot) = crate::account::load_bootstrap()
         && identifier_matches_account(&boot.username, &boot.recovery_email, &identifier)
         && let Some(settings) = crate::smtp_settings::load_smtp()
     {
@@ -155,7 +307,7 @@ pub async fn account_setup(
         None
     };
 
-    let result = setup_account(
+    let result = crate::account::setup_account(
         request.username.as_deref().unwrap_or(""),
         request.password.as_deref(),
         request.generate_password,

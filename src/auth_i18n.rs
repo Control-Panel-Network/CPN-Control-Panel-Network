@@ -19,9 +19,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       remember: 'Remember me',
       forgot: 'Forgot password?',
       submit: 'Sign in',
-      postTitle: 'Sign in received',
-      postBody: 'Full panel authentication will connect in a later version.',
-      postBack: 'Back to sign in',
+      loginError: 'Invalid username or password.',
       forgotTitle: 'Forgot password',
       forgotDocumentTitle: 'Forgot password · CPN Panel',
       forgotIntro: 'Enter your username or email. If a matching account exists, a reset message will be sent when mail delivery is configured.',
@@ -45,9 +43,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       remember: 'Recuérdame',
       forgot: '¿Olvidaste la contraseña?',
       submit: 'Entrar',
-      postTitle: 'Inicio de sesión recibido',
-      postBody: 'La autenticación completa del panel se conectará en una versión posterior.',
-      postBack: 'Volver al inicio de sesión',
+      loginError: 'Usuario o contraseña no válidos.',
       forgotTitle: 'Contraseña olvidada',
       forgotDocumentTitle: 'Contraseña olvidada · CPN Panel',
       forgotIntro: 'Introduce tu usuario o correo. Si existe una cuenta coincidente, se enviará un mensaje de restablecimiento cuando el correo esté configurado.',
@@ -71,9 +67,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       remember: 'Husk meg',
       forgot: 'Glemt passordet?',
       submit: 'Logg inn',
-      postTitle: 'Innlogging mottatt',
-      postBody: 'Full panelautentisering kobles til i en senere versjon.',
-      postBack: 'Tilbake til innlogging',
+      loginError: 'Ugyldig brukernavn eller passord.',
       forgotTitle: 'Glemt passord',
       forgotDocumentTitle: 'Glemt passord · CPN Panel',
       forgotIntro: 'Skriv inn brukernavn eller e-post. Hvis en konto matcher, sendes en tilbakestillingsmelding når e-post er konfigurert.',
@@ -160,9 +154,6 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
 
     if (page === 'post') {
       document.title = t.documentTitle;
-      setText('i18n-post-title', t.postTitle);
-      setText('i18n-post-body', t.postBody);
-      setText('i18n-post-back', t.postBack);
       return;
     }
 
@@ -174,6 +165,11 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     setText('i18n-remember', t.remember);
     setText('i18n-forgot', t.forgot);
     setText('i18n-submit', t.submit);
+    var err = document.getElementById('i18n-login-error');
+    if (err && document.body.getAttribute('data-login-error') === '1') {
+      err.hidden = false;
+      err.textContent = t.loginError;
+    }
     restoreRememberedUsername();
   }
 

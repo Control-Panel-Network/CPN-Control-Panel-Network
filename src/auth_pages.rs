@@ -43,6 +43,10 @@ fn shared_auth_styles() -> &'static str {
     .remember input { width:auto; margin:0; }
     a { color:#0066cc; text-decoration:none; font-size:.92rem; }
     .hint { margin-top:14px; font-size:.9rem; }
+    .error {
+      margin:0 0 14px; padding:10px 12px; border-radius:10px; background:#fef2f2;
+      border:1px solid #fecaca; color:#b91c1c; font-size:.92rem; line-height:1.4;
+    }
     .lang-host { position:absolute; top:16px; right:16px; }
     .lang { display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin:0; font-weight:600; font-size:.8rem; color:#6e6e73; }
     .lang select { min-width:120px; border:1px solid #d0d5dd; border-radius:8px; padding:6px 8px; font:inherit; background:#fff; color:#1d1d1f; }
@@ -50,7 +54,7 @@ fn shared_auth_styles() -> &'static str {
 "#
 }
 
-pub fn panel_login_html(status: &InstallerStatus) -> String {
+pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String {
     let initial_locale = resolve_initial_locale(status);
     let token_q = status
         .panel_login_url
@@ -58,6 +62,13 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
         .and_then(|url| url.split("token=").nth(1))
         .map(|value| format!("?token={}", html_escape(value)))
         .unwrap_or_default();
+    let error_block = match error {
+        Some(message) if !message.is_empty() => format!(
+            r#"<p class="error" id="i18n-login-error" role="alert">{msg}</p>"#,
+            msg = html_escape(message)
+        ),
+        _ => r#"<p class="error" id="i18n-login-error" role="alert" hidden></p>"#.into(),
+    };
 
     format!(
         r#"<!DOCTYPE html>
@@ -68,12 +79,13 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
   <title>Sign in · CPN Panel</title>
   <style>{styles}</style>
 </head>
-<body data-page="login">
+<body data-page="login"{error_attr}>
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
       <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
       <h1 id="i18n-title">Sign in</h1>
+      {error_block}
       <form method="post" action="/login{token_q}" autocomplete="on">
         <label for="username" id="i18n-username">Username</label>
         <input id="username" name="username" value="" autocomplete="username" required>
@@ -97,38 +109,12 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
         locale = initial_locale,
         styles = shared_auth_styles(),
         token_q = token_q,
-        script = PANEL_I18N_SCRIPT,
-    )
-}
-
-pub fn login_post_ack_html(token: Option<&str>) -> String {
-    let back = match token {
-        Some(value) if !value.is_empty() => format!("/login?token={}", html_escape(value)),
-        _ => "/login".into(),
-    };
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en" data-initial-locale="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in · CPN Panel</title>
-  <style>{styles}</style>
-</head>
-<body data-page="post">
-  <main>
-    <section class="card">
-      <div id="cpn-lang-host" class="lang-host"></div>
-      <h1 id="i18n-post-title">Sign in received</h1>
-      <p id="i18n-post-body"></p>
-      <p><a id="i18n-post-back" href="{back}">Back to sign in</a></p>
-    </section>
-  </main>
-  {script}
-</body>
-</html>"#,
-        styles = shared_auth_styles(),
-        back = back,
+        error_block = error_block,
+        error_attr = if error.is_some() {
+            r#" data-login-error="1""#
+        } else {
+            ""
+        },
         script = PANEL_I18N_SCRIPT,
     )
 }
