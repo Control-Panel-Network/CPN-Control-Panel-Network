@@ -173,8 +173,7 @@ pub fn webauthn_for_request(
     }
     if host_no_port.parse::<std::net::IpAddr>().is_ok() && !is_loopback_host(&host_no_port) {
         return Err(
-            "Passkeys require a hostname. Use a domain name or localhost (not a public IP)."
-                .into(),
+            "Passkeys require a hostname. Use a domain name or localhost (not a public IP).".into(),
         );
     }
     let scheme = if https { "https" } else { "http" };
@@ -410,8 +409,8 @@ mod tests {
 
     #[test]
     fn loopback_ip_host_builds_webauthn() {
-        let (wan, rp_id) =
-            webauthn_for_request(Some("127.0.0.1:2087"), false).expect("builder should accept loopback");
+        let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2087"), false)
+            .expect("builder should accept loopback");
         assert_eq!(rp_id, "localhost");
         let origins = wan.get_allowed_origins();
         assert!(
@@ -426,8 +425,8 @@ mod tests {
 
     #[test]
     fn localhost_host_builds_webauthn() {
-        let (wan, rp_id) =
-            webauthn_for_request(Some("localhost:2087"), false).expect("builder should accept localhost");
+        let (wan, rp_id) = webauthn_for_request(Some("localhost:2087"), false)
+            .expect("builder should accept localhost");
         assert_eq!(rp_id, "localhost");
         assert!(!wan.get_allowed_origins().is_empty());
     }
