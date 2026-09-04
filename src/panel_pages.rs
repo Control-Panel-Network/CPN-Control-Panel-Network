@@ -415,8 +415,8 @@ mod tests {
             "document scroll should be locked for the panel shell"
         );
         assert!(
-            css.contains("overflow-y:auto"),
-            "main column must be the vertical scroll container"
+            css.contains("100dvh") && css.contains("overflow-y:auto"),
+            "shell should use a viewport-height layout with a scrolling main column"
         );
         assert!(
             css.contains("align-self:stretch") || (css.contains("position:sticky") && css.contains("top:0")),
@@ -427,6 +427,10 @@ mod tests {
                 && css.contains("overflow-x:auto")
                 && css.contains("max-width:100%"),
             "wide admin tables must scroll inside a constrained wrapper"
+        );
+        assert!(
+            css.contains("position:sticky") && css.contains("right:0"),
+            "narrow viewports should pin the Actions column"
         );
         assert!(
             css.contains("min-width:0"),
