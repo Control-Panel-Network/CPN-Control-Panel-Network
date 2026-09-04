@@ -45,6 +45,9 @@ use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
 };
+use cpn_installer::panel_notifications_routes::{
+    panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
+};
 use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
@@ -761,6 +764,9 @@ async fn main() -> std::io::Result<()> {
             .service(websites_prefs)
             .service(panel_color_mode_get)
             .service(panel_color_mode_set)
+            .service(panel_notifications_get)
+            .service(panel_notifications_mark_read)
+            .service(panel_notifications_push)
             .service(panel_design_get)
             .service(panel_design_save)
             .service(panel_design_preset)

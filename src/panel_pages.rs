@@ -37,6 +37,7 @@ button { font:inherit; cursor:pointer; }
 }
 .sidebar-header { flex:0 0 auto; }
 .panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
+/* Collapse / brand-row styles: panel_nav_chrome::sidebar_collapse_styles */
 .server-summary {
   display:flex; align-items:center; gap:12px; margin:0 0 12px; padding:14px;
   border-radius:18px; background:var(--canvas); border:1px solid var(--hairline); color:var(--blue);
@@ -72,10 +73,7 @@ button { font:inherit; cursor:pointer; }
   margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase;
 }
-.sidebar-footer {
-  flex:0 0 auto; display:flex; align-items:center; gap:6px;
-  padding-top:18px; border-top:1px solid var(--hairline);
-}
+/* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
 .logout {
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
   min-height:44px; min-width:44px; padding:0 12px; color:var(--muted); font-size:13px;
@@ -209,56 +207,6 @@ code { font-size:.9em; }
 "#
 }
 
-fn panel_nav_script() -> &'static str {
-    r#"
-<script>
-(function () {
-  var body = document.body;
-  var toggle = document.getElementById('nav-toggle');
-  var backdrop = document.getElementById('nav-backdrop');
-  var sidebar = document.getElementById('panel-sidebar');
-  if (!toggle || !sidebar) return;
-
-  function setOpen(open) {
-    body.classList.toggle('nav-open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    sidebar.setAttribute('aria-hidden', open ? 'false' : String(window.matchMedia('(max-width: 1023.98px)').matches));
-    if (open) {
-      var first = sidebar.querySelector('a, button');
-      if (first) first.focus();
-    } else {
-      toggle.focus();
-    }
-  }
-
-  function syncDesktop() {
-    if (!window.matchMedia('(max-width: 1023.98px)').matches) {
-      body.classList.remove('nav-open');
-      toggle.setAttribute('aria-expanded', 'false');
-      sidebar.setAttribute('aria-hidden', 'false');
-    } else if (!body.classList.contains('nav-open')) {
-      sidebar.setAttribute('aria-hidden', 'true');
-    }
-  }
-
-  toggle.addEventListener('click', function () {
-    setOpen(!body.classList.contains('nav-open'));
-  });
-  if (backdrop) {
-    backdrop.addEventListener('click', function () { setOpen(false); });
-  }
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && body.classList.contains('nav-open')) {
-      setOpen(false);
-    }
-  });
-  window.addEventListener('resize', syncDesktop);
-  syncDesktop();
-})();
-</script>
-"#
-}
-
 fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> String {
     let mut class = String::new();
     if id == active {
@@ -349,20 +297,23 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}",
+        "{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
+        crate::panel_nav_chrome::sidebar_collapse_styles(),
+        crate::panel_footer_chrome::sidebar_footer_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
-    let toggle = crate::panel_theme_chrome::sidebar_theme_toggle(color_mode);
+    let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}",
-        panel_nav_script(),
+        "{}{}{}{}",
+        crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
-        crate::panel_theme_chrome::color_mode_toggle_script()
+        crate::panel_theme_chrome::color_mode_toggle_script(),
+        crate::panel_footer_chrome::notifications_popover_script()
     );
     format!(
         r#"<!DOCTYPE html>
@@ -383,8 +334,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         {nav}
       </nav>
       <div class="sidebar-footer">
-        {toggle}
-        <a class="logout" href="/logout">Log out</a>
+        {footer}
       </div>
     </aside>
     <section class="panel-main">
@@ -409,7 +359,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         active = html_escape(active),
         header = header,
         nav = nav,
-        toggle = toggle,
+        footer = footer,
         main = main,
         script = script,
     )

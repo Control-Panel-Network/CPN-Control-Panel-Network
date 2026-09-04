@@ -15,19 +15,18 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn sidebar_theme_toggle(color_mode: ColorMode) -> String {
-    let next_label = match color_mode {
-        ColorMode::Light => "Dark mode",
-        ColorMode::Dark => "Light mode",
+    let aria = match color_mode {
+        ColorMode::Light => "Switch to dark mode",
+        ColorMode::Dark => "Switch to light mode",
     };
     let icon = match color_mode {
         ColorMode::Light => "&#9790;",
         ColorMode::Dark => "&#9788;",
     };
     format!(
-        r#"<button type="button" id="cpn-color-toggle" class="theme-toggle"
-          aria-pressed="{pressed}" data-mode="{mode}" title="Toggle light and dark mode">
+        r#"<button type="button" id="cpn-color-toggle" class="theme-toggle footer-icon-btn"
+          aria-pressed="{pressed}" aria-label="{aria}" data-mode="{mode}" title="{aria}">
           <span class="theme-toggle-icon" aria-hidden="true">{icon}</span>
-          <span class="theme-toggle-label">{label}</span>
         </button>"#,
         pressed = if color_mode == ColorMode::Dark {
             "true"
@@ -36,7 +35,7 @@ pub fn sidebar_theme_toggle(color_mode: ColorMode) -> String {
         },
         mode = color_mode.as_str(),
         icon = icon,
-        label = next_label,
+        aria = aria,
     )
 }
 
@@ -78,9 +77,10 @@ pub fn color_mode_toggle_script() -> &'static str {
     document.body.setAttribute("data-color-mode", mode);
     btn.setAttribute("data-mode", mode);
     btn.setAttribute("aria-pressed", mode === "dark" ? "true" : "false");
-    var label = btn.querySelector(".theme-toggle-label");
+    var nextLabel = mode === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    btn.setAttribute("aria-label", nextLabel);
+    btn.setAttribute("title", nextLabel);
     var icon = btn.querySelector(".theme-toggle-icon");
-    if (label) label.textContent = mode === "dark" ? "Light mode" : "Dark mode";
     if (icon) icon.innerHTML = mode === "dark" ? "&#9788;" : "&#9790;";
     try { window.localStorage.setItem(KEY, mode); } catch (e) {}
   }
