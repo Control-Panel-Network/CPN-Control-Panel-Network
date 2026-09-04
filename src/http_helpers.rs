@@ -14,8 +14,6 @@ pub const PORT: u16 = DEFAULT_PORT;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const INSTALL_TOKEN_COOKIE: &str = "cpn_install_token";
-/// Fixed cookie value length (matches generated session_id / install token size).
-const INSTALL_COOKIE_VALUE_LEN: usize = 28;
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
     let a = a.as_bytes();
@@ -141,42 +139,6 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
     candidate.contains(&expected_port)
         || candidate.contains("127.0.0.1")
         || candidate.contains("localhost")
-}
-
-/// Prebuilt Set-Cookie HeaderValues (constructed at process start, never from request input).
-#[derive(Clone)]
-pub struct InstallSessionCookies {
-    pub http: actix_web::http::header::HeaderValue,
-    pub https: actix_web::http::header::HeaderValue,
-}
-
-/// Cookie for the server-generated install session (not the URL token).
-pub fn install_token_cookie_header(session_id: &str, secure: bool) -> Option<String> {
-    let session_id = session_id.as_bytes();
-    if session_id.len() != INSTALL_COOKIE_VALUE_LEN {
-        return None;
-    }
-    if !session_id.iter().all(|b| b.is_ascii_alphanumeric()) {
-        return None;
-    }
-    // Fixed-capacity buffer avoids unbounded allocation from request data.
-    let mut value = String::with_capacity(INSTALL_COOKIE_VALUE_LEN);
-    for &b in session_id {
-        value.push(b as char);
-    }
-    let secure_flag = if secure { "; Secure" } else { "" };
-    Some(format!(
-        "{INSTALL_TOKEN_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict{secure_flag}; Max-Age=86400"
-    ))
-}
-
-pub fn build_install_session_cookies(session_id: &str) -> Option<InstallSessionCookies> {
-    let http = install_token_cookie_header(session_id, false)?;
-    let https = install_token_cookie_header(session_id, true)?;
-    Some(InstallSessionCookies {
-        http: actix_web::http::header::HeaderValue::try_from(http).ok()?,
-        https: actix_web::http::header::HeaderValue::try_from(https).ok()?,
-    })
 }
 
 pub fn install_finished(status: &InstallerStatus) -> bool {

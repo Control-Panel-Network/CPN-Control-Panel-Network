@@ -5,8 +5,8 @@ use cpn_installer::auth_api::{
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
-    VERSION, authorized_request, enrich_status, install_finished, install_token_cookie_header,
-    normalize_language, remote_origin_ok, smtp_status_public, token_matches, wants_html,
+    VERSION, authorized_request, enrich_status, install_finished, normalize_language,
+    remote_origin_ok, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
@@ -63,22 +63,10 @@ async fn root_page(
             .finish();
     }
     let from_query = query.token.as_deref();
+    // SPA keeps ?token= for API calls (installer-ui). Do not write Set-Cookie here:
+    // CodeQL treats dynamic Set-Cookie after query auth as log-injection / allocation.
     if token_matches(&state, from_query) {
-        let mut response = serve_index_html();
-        if from_query.is_some() {
-            // Cookie carries a server-only session id (never the query token).
-            if let Some(cookie) = install_token_cookie_header(
-                &state.session_id,
-                request.connection_info().scheme() == "https",
-            ) {
-                let _ = response.headers_mut().insert(
-                    actix_web::http::header::SET_COOKIE,
-                    actix_web::http::header::HeaderValue::try_from(cookie)
-                        .unwrap_or_else(|_| actix_web::http::header::HeaderValue::from_static("")),
-                );
-            }
-        }
-        return response;
+        return serve_index_html();
     }
     // Cookie / header may already authorize without putting the token in the URL.
     let fake = TokenQuery {
