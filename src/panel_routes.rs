@@ -204,7 +204,7 @@ pub async fn websites_manage(
             &user,
             "websites",
             &format!("Manage {}", site.domain),
-            &website_manage_main(&site, tab, notice, error),
+            &website_manage_main(&site, &user, tab, notice, error),
         )),
         Err(err) => HttpResponse::SeeOther()
             .append_header((

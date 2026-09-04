@@ -16,7 +16,7 @@ use crate::mail_outbound::{
     build_password_reset_notice, build_setup_confirmation, send_mail, send_mail_with_settings,
 };
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
-use crate::panel_pages::panel_dashboard_html;
+use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
     clear_session_cookie_header, create_session_token, read_session_cookie, request_is_https,
     session_cookie_header, session_secret, verify_session_token,

@@ -61,6 +61,7 @@ fn tab_body(site: &SiteRecord, tab: ManageTab) -> String {
 
 pub fn website_manage_main(
     site: &SiteRecord,
+    username: &str,
     tab_raw: Option<&str>,
     notice: Option<&str>,
     error: Option<&str>,
@@ -107,7 +108,7 @@ pub fn website_manage_main(
         styles = manage_styles(),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
-        banner = manage_banner(site),
+        banner = manage_banner(site, username),
         quick = quick_actions(site),
         tabs = tab_bar(&site.domain, tab.as_str()),
         suspend = suspend,
@@ -138,10 +139,11 @@ mod tests {
 
     #[test]
     fn manage_dashboard_has_banner_tabs_and_preview() {
-        let html = website_manage_main(&sample(), Some("overview"), None, None);
+        let html = website_manage_main(&sample(), "Admin", Some("overview"), None, None);
         assert!(html.contains("manage-banner"));
         assert!(html.contains("Preview Website"));
         assert!(html.contains("File Manager"));
+        assert!(html.contains("cpn-design-open"));
         assert!(html.contains("manage-tabs"));
         assert!(html.contains("Disk Usage"));
         assert!(html.contains("/preview/cpn-lab-test.example/"));
