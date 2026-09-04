@@ -127,7 +127,7 @@ fn try_symlink(target: &Path, link: &Path) -> Result<(), String> {
     {
         std::os::unix::fs::symlink(target, link)
             .map_err(|e| format!("Could not link {}: {e}", link.display()))?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(unix))]
     {
