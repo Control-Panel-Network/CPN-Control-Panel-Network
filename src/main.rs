@@ -6,17 +6,18 @@ use cpn_installer::auth_api::{
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, enrich_status, install_finished, install_token_cookie_header,
-    normalize_language, panel_login_url_for, remote_origin_ok, smtp_status_public, token_matches,
-    wants_html,
+    normalize_language, remote_origin_ok, smtp_status_public, token_matches, wants_html,
 };
 use cpn_installer::installer::AppState;
-use cpn_installer::listen_port::{
-    resolve_listen_port, save_preferred_listen_port, validate_listen_port,
-};
+use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
     MailInstallRequest, OptionalTokenQuery, TokenQuery,
+};
+use cpn_installer::panel_network::{
+    OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
+    purge_expired_migration, save_panel_hostname,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -165,34 +166,68 @@ async fn set_listen_port(
             return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
         }
     };
-    if let Err(error) = save_preferred_listen_port(port) {
-        return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
-    }
+    let policy = match request.old_port_policy.as_deref() {
+        None => None,
+        Some(raw) => match OldPortPolicy::parse(raw) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            }
+        },
+    };
+    let hostname_update = request.panel_hostname.as_ref().map(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let (preferred, migration) =
+        match apply_network_change(port, state.bind_port, policy, hostname_update) {
+            Ok(value) => value,
+            Err(error) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            }
+        };
 
-    let restart_required = port != state.bind_port;
+    let restart_required = preferred != state.bind_port;
     let mut current = state.status.write().await;
     if !restart_required {
-        current.listen_port = port;
+        current.listen_port = preferred;
         if let Some(env_info) = current.environment.as_mut() {
-            env_info.port = port;
+            env_info.port = preferred;
         }
         current.panel_login_url = None;
     }
     let payload = enrich_status(current.clone(), &state.token);
     let note = if restart_required {
+        let policy_note = migration
+            .as_ref()
+            .map(|value| {
+                format!(
+                    " Old-port policy: {} (expires unix {}). Restart to bind the new port; redirect helper starts automatically when policy is redirect_*.",
+                    value.mode.as_str(),
+                    value.expires_at
+                )
+            })
+            .unwrap_or_default();
         format!(
-            "Preferred listen port {port} saved. Restart with: cpn-installer --port {port} (current session stays on {})",
+            "Preferred listen port {preferred} saved. Restart with: cpn-installer --port {preferred} (current session stays on {}).{policy_note}",
             state.bind_port
         )
     } else {
-        format!("Listen port {port} confirmed for this session")
+        format!("Listen port {preferred} confirmed for this session")
     };
+    let network = network_public(state.bind_port, None);
     HttpResponse::Ok().json(serde_json::json!({
         "status": payload,
         "listen_port": state.bind_port,
-        "preferred_listen_port": port,
+        "preferred_listen_port": preferred,
         "restart_required": restart_required,
         "message": note,
+        "network": network,
+        "port_migration": migration,
     }))
 }
 
@@ -372,6 +407,66 @@ fn allow_remote_listen() -> bool {
         || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
 }
 
+fn apply_startup_network_flags(args: &[String], listen_port: u16) {
+    let mut hostname: Option<String> = None;
+    let mut policy: Option<OldPortPolicy> = None;
+    let mut iter = args.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        if arg == "--panel-hostname" {
+            if let Some(value) = iter.next() {
+                hostname = Some(value.clone());
+            }
+        } else if let Some(value) = arg.strip_prefix("--panel-hostname=") {
+            hostname = Some(value.to_string());
+        } else if arg == "--old-port-policy" {
+            if let Some(value) = iter.next() {
+                match OldPortPolicy::parse(value) {
+                    Ok(parsed) => policy = Some(parsed),
+                    Err(error) => eprintln!("cpn-installer: {error}"),
+                }
+            }
+        } else if let Some(value) = arg.strip_prefix("--old-port-policy=") {
+            match OldPortPolicy::parse(value) {
+                Ok(parsed) => policy = Some(parsed),
+                Err(error) => eprintln!("cpn-installer: {error}"),
+            }
+        }
+    }
+    // Capture previous preferred port before --port overwrites preferences on apply.
+    let previous_preferred = cpn_installer::listen_port::load_preferred_listen_port();
+    if let Some(host) = hostname {
+        match save_panel_hostname(&host) {
+            Ok(()) => println!("  Panel hostname saved: {host}"),
+            Err(error) => eprintln!("cpn-installer: could not save panel hostname: {error}"),
+        }
+    }
+    if let Some(policy) = policy {
+        let old = previous_preferred.unwrap_or(cpn_installer::listen_port::DEFAULT_PORT);
+        if old != listen_port {
+            match cpn_installer::panel_network::build_port_migration(old, listen_port, policy) {
+                Ok(Some(migration)) => {
+                    if let Err(error) =
+                        cpn_installer::panel_network::save_port_migration(&migration)
+                    {
+                        eprintln!("cpn-installer: could not save port migration: {error}");
+                    } else {
+                        println!(
+                            "  Old-port policy {}: {} -> {} (expires unix {})",
+                            policy.as_str(),
+                            migration.old_port,
+                            migration.new_port,
+                            migration.expires_at
+                        );
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => eprintln!("cpn-installer: {error}"),
+            }
+        }
+        let _ = cpn_installer::listen_port::save_preferred_listen_port(listen_port);
+    }
+}
+
 fn listen_hosts() -> Vec<String> {
     if allow_remote_listen() {
         vec!["0.0.0.0".into()]
@@ -398,6 +493,8 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(2);
         }
     };
+    apply_startup_network_flags(&args, listen_port);
+    purge_expired_migration();
     #[cfg(unix)]
     if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
         eprintln!(
@@ -456,6 +553,9 @@ async fn main() -> std::io::Result<()> {
         error: None,
         language: "en".into(),
         listen_port,
+        panel_hostname: None,
+        port_migration: None,
+        public_base_url: None,
         account: bootstrap_account,
         password_policy: default_password_policy(),
         panel_login_path: "/login".into(),
@@ -470,7 +570,9 @@ async fn main() -> std::io::Result<()> {
         smtp: Some(smtp_status_public()),
         maintenance: Some(maintenance),
     };
-    initial.panel_login_url = Some(panel_login_url_for(&initial, &token));
+    initial = enrich_status(initial, &token);
+    let startup_hostname = initial.panel_hostname.clone();
+    let startup_migration = initial.port_migration.clone();
     let state = Arc::new(AppState {
         status: tokio::sync::RwLock::new(initial),
         events,
@@ -499,8 +601,25 @@ async fn main() -> std::io::Result<()> {
         println!("  Para escuchar en todas las interfaces: --allow-remote o CPN_ALLOW_REMOTE=1");
     }
     println!("  Puerto de escucha: {listen_port} (cambia con --port, CPN_LISTEN_PORT, o la UI)");
+    if let Some(hostname) = startup_hostname.as_ref() {
+        println!(
+            "  Panel hostname: https://{hostname}/login (DNS + reverse proxy on 443 -> {listen_port})"
+        );
+    }
+    if let Some(migration) = startup_migration.as_ref() {
+        println!(
+            "  Port migration: {} -> {} ({}; expires unix {})",
+            migration.old_port, migration.new_port, migration.mode, migration.expires_at
+        );
+    }
     println!("\nMantén esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
     let hosts = listen_hosts();
+    if let Some(migration) = active_redirect_migration(listen_port) {
+        let redirect_hosts = hosts.clone();
+        tokio::spawn(async move {
+            cpn_installer::port_redirect::run_redirect_listeners(redirect_hosts, migration).await;
+        });
+    }
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(state.clone()))

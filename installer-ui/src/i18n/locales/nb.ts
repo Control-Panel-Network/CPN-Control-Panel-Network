@@ -21,8 +21,19 @@ const nb: LocaleMessages = {
   listenPortApply: 'Lagre port',
   listenPortSaved: 'Portpreferanse lagret.',
   listenPortRestartHint:
-    'Port lagret. Start installasjonsprogrammet pÃ¥ nytt med --port {port} for Ã¥ bruke den. Denne Ã¸kten blir pÃ¥ gjeldende port.',
+    'Port lagret. Start installasjonsprogrammet på nytt med --port {port} for å bruke den. Denne økten blir på gjeldende port.',
   listenPortInvalid: 'Skriv inn en port mellom 1 og 65535.',
+  oldPortPolicyLabel: 'Hva skal skje på den gamle porten?',
+  oldPortPolicyHint:
+    'Velg hvor lenge (om i det hele tatt) den forrige porten skal omdirigere nettlesere til den nye porten etter omstart.',
+  oldPortPolicyRedirect1m: 'Behold omdirigering fra gammel port i 1 måned',
+  oldPortPolicyRedirect3m: 'Behold omdirigering fra gammel port i 3 måneder',
+  oldPortPolicyDeny: 'Nekt tilgang på gammel port (ingen omdirigering)',
+  panelHostnameLabel: 'Panel-vertsnavn (valgfri underdomene)',
+  panelHostnameHint:
+    'Bruk et DNS-navn som panel.example.com for HTTPS-innlogging uten port i URL-en. Du må peke DNS til denne serveren og avslutte TLS på 443 med en reverse proxy til CPN-lytteporten.',
+  panelHostnamePlaceholder: 'panel.example.com',
+  networkSave: 'Lagre nettverk',
   selectLabel: 'Velg',
   compareLink: 'Usikker pÃ¥ valget? Sammenlign funksjoner',
   compareTitle: 'Sammenligning av webservere',

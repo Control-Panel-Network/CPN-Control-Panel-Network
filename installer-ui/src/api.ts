@@ -41,11 +41,24 @@ export interface ListenPortResponse {
   message: string;
 }
 
-export async function setListenPort(port: number): Promise<ListenPortResponse> {
+export async function setListenPort(
+  port: number,
+  options?: {
+    old_port_policy?: 'redirect_1m' | 'redirect_3m' | 'deny';
+    panel_hostname?: string;
+  },
+): Promise<ListenPortResponse> {
+  const body: Record<string, unknown> = { port };
+  if (options?.old_port_policy) {
+    body.old_port_policy = options.old_port_policy;
+  }
+  if (options?.panel_hostname !== undefined) {
+    body.panel_hostname = options.panel_hostname;
+  }
   const response = await fetch(apiUrl('/api/listen-port'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ port }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await readError(response, 'listen_port_failed'));
   return response.json();

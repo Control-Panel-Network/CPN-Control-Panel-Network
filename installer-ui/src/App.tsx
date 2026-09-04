@@ -250,8 +250,15 @@ function AppShell() {
     }
   };
 
-  const handleListenPortChange = async (port: number): Promise<string | null> => {
-    const result = await setListenPort(port);
+  const handleNetworkChange = async (input: {
+    port: number;
+    oldPortPolicy?: 'redirect_1m' | 'redirect_3m' | 'deny';
+    panelHostname?: string;
+  }): Promise<string | null> => {
+    const result = await setListenPort(input.port, {
+      old_port_policy: input.oldPortPolicy,
+      panel_hostname: input.panelHostname,
+    });
     setStatus(result.status);
     if (result.restart_required) {
       return t.listenPortRestartHint.replace('{port}', String(result.preferred_listen_port));
@@ -285,8 +292,9 @@ function AppShell() {
             <ServerSelectionScreen
               selectedServer={selectedServer}
               listenPort={status.listen_port ?? status.environment?.port ?? 2087}
+              panelHostname={status.panel_hostname}
               onSelectServer={setSelectedServer}
-              onListenPortChange={handleListenPortChange}
+              onNetworkChange={handleNetworkChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}
             />

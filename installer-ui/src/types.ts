@@ -101,6 +101,16 @@ export interface InstallerStatus {
   error: string | null;
   language?: string;
   listen_port?: number;
+  panel_hostname?: string | null;
+  public_base_url?: string | null;
+  port_migration?: {
+    old_port: number;
+    new_port: number;
+    mode: string;
+    expires_at: number;
+    active: boolean;
+    redirect_active: boolean;
+  } | null;
   account?: AccountPublic | null;
   password_policy?: PasswordPolicy;
   panel_login_path?: string;

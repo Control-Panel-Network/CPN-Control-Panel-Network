@@ -23,6 +23,17 @@ const en: LocaleMessages = {
   listenPortRestartHint:
     'Port saved. Restart the installer with --port {port} to apply. This session stays on the current port.',
   listenPortInvalid: 'Enter a port between 1 and 65535.',
+  oldPortPolicyLabel: 'What should happen on the old port?',
+  oldPortPolicyHint:
+    'Choose how long (if at all) the previous port should redirect browsers to the new port after you restart.',
+  oldPortPolicyRedirect1m: 'Keep redirect from the old port for 1 month',
+  oldPortPolicyRedirect3m: 'Keep redirect from the old port for 3 months',
+  oldPortPolicyDeny: 'Deny access on the old port (no redirect)',
+  panelHostnameLabel: 'Panel hostname (optional subdomain)',
+  panelHostnameHint:
+    'Use a DNS name such as panel.example.com for HTTPS login without a port in the URL. You must point DNS at this server and terminate TLS on 443 with a reverse proxy to the CPN listen port.',
+  panelHostnamePlaceholder: 'panel.example.com',
+  networkSave: 'Save networking',
   selectLabel: 'Select',
   compareLink: 'Not sure which one to pick? Compare features',
   compareTitle: 'Web server comparison',
