@@ -5,6 +5,16 @@ SCRIPT = r"""#!/bin/bash
 set -euo pipefail
 echo LISTENERS:
 ss -lntp | grep -E ':143|:587|:25' || true
+# Align Postfix + Dovecot on Maildir when missing (issue #9 delivery mismatch).
+if ! sudo postconf -h home_mailbox 2>/dev/null | grep -q 'Maildir'; then
+  sudo postconf -e home_mailbox=Maildir/
+  sudo systemctl reload postfix || true
+fi
+mail_conf=/etc/dovecot/conf.d/10-mail.conf
+if [ -f "$mail_conf" ] && ! grep -E '^[[:space:]]*mail_location[[:space:]]*=' "$mail_conf" | grep -vq '^[[:space:]]*#'; then
+  echo 'mail_location = maildir:~/Maildir' | sudo tee -a "$mail_conf" >/dev/null
+  sudo systemctl reload dovecot || true
+fi
 user=cpnmailprobe
 pass="CpnProbe!$(date +%s)"
 marker="CPN-MAIL-PROBE-$pass"
@@ -21,6 +31,10 @@ for i in $(seq 1 20); do
     break
   fi
   if sudo ls /home/"$user"/Maildir/new/* >/dev/null 2>&1 && sudo grep -q "$marker" /home/"$user"/Maildir/new/*; then
+    ok=1
+    break
+  fi
+  if sudo grep -q "$marker" /var/mail/"$user" /var/spool/mail/"$user" 2>/dev/null; then
     ok=1
     break
   fi

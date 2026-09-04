@@ -69,12 +69,43 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         }
     }
 
+    // Deliver into ~/Maildir so IMAP (Dovecot) and SMTP (Postfix) share one store (issue #9).
+    // Default RHEL/Alma Postfix uses /var/mail mbox, which the Maildir probe never sees.
+    let _ = Command::new("postconf")
+        .args(["-e", "home_mailbox=Maildir/"])
+        .status()
+        .await;
+    install_journal::record(
+        STAGE,
+        JournalAction::Note,
+        "home_mailbox",
+        None,
+        Some("Maildir/ for local delivery".into()),
+    )?;
+
     let dovecot_conf = "/etc/dovecot/dovecot.conf";
     if std::path::Path::new(dovecot_conf).exists() {
         let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
         if !raw.contains("protocols =") {
             raw.push_str("\nprotocols = imap\n");
             install_journal::write_file_tracked(STAGE, std::path::Path::new(dovecot_conf), &raw)?;
+        }
+    }
+
+    let mail_conf = "/etc/dovecot/conf.d/10-mail.conf";
+    if std::path::Path::new(mail_conf).exists() {
+        let raw = std::fs::read_to_string(mail_conf).unwrap_or_default();
+        let already = raw.lines().any(|line| {
+            let t = line.trim_start();
+            t.starts_with("mail_location") && !t.starts_with('#')
+        });
+        if !already {
+            let mut updated = raw;
+            if !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            updated.push_str("# CPN local Maildir (issue #9)\nmail_location = maildir:~/Maildir\n");
+            install_journal::write_file_tracked(STAGE, std::path::Path::new(mail_conf), &updated)?;
         }
     }
 
@@ -106,7 +137,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
     )
     .await?;
     install_journal::record(STAGE, JournalAction::EnabledService, "postfix", None, None)?;
-    // Apply master.cf submission listener if we changed it.
+    // Apply master.cf submission listener and home_mailbox=Maildir/.
     let _ = Command::new("systemctl")
         .args(["reload", "postfix"])
         .status()
@@ -193,13 +224,16 @@ mkdir -p /home/{user}/Maildir/{{new,cur,tmp}}
 chown -R {user}:{user} /home/{user}/Maildir
 printf 'From: cpn-probe@localhost\nTo: {user}@localhost\nSubject: {marker}\n\n{marker}\n' | sendmail -t || \
   printf 'Subject: {marker}\n\n{marker}\n' | sendmail {user}
-# Wait briefly for local delivery.
+# Wait briefly for local delivery (Maildir preferred; /var/mail mbox fallback).
 for i in $(seq 1 20); do
   if doveadm search -u {user} mailbox INBOX SUBJECT "{marker}" 2>/dev/null | grep -q .; then
     exit 0
   fi
   if ls /home/{user}/Maildir/new/* >/dev/null 2>&1; then
     grep -q '{marker}' /home/{user}/Maildir/new/* && exit 0
+  fi
+  if grep -q '{marker}' /var/mail/{user} /var/spool/mail/{user} 2>/dev/null; then
+    exit 0
   fi
   sleep 1
 done
@@ -210,6 +244,9 @@ if doveadm search -u {user} mailbox INBOX SUBJECT "{marker}" 2>/dev/null | grep 
   exit 0
 fi
 if ls /home/{user}/Maildir/new/* >/dev/null 2>&1 && grep -q '{marker}' /home/{user}/Maildir/new/*; then
+  exit 0
+fi
+if grep -q '{marker}' /var/mail/{user} /var/spool/mail/{user} 2>/dev/null; then
   exit 0
 fi
 echo 'mail roundtrip: auth ok but message not found in mailbox within timeout' >&2
