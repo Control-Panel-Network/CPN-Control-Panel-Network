@@ -66,6 +66,59 @@ fn load_acl() -> SiteAclFile {
     })
 }
 
+fn save_acl(file: &SiteAclFile) -> Result<(), String> {
+    let path = acl_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Could not create ACL dir: {e}"))?;
+    }
+    let mut out = file.clone();
+    out.schema_version = SCHEMA_VERSION;
+    let raw = serde_json::to_string_pretty(&out)
+        .map_err(|e| format!("Could not serialize site ACL: {e}"))?;
+    fs::write(&path, raw).map_err(|e| format!("Could not write site ACL: {e}"))
+}
+
+/// List all site ACL grants (team permission profiles).
+pub fn list_grants() -> Vec<SiteAclGrant> {
+    load_acl().grants
+}
+
+/// Add a site ACL grant for a panel account.
+pub fn add_grant(grant: SiteAclGrant) -> Result<(), String> {
+    let member = grant.member.trim();
+    if member.is_empty() {
+        return Err("Member username is required".into());
+    }
+    let domain = grant.domain.trim();
+    let all_owned_by = grant.all_owned_by.trim();
+    if domain.is_empty() && all_owned_by.is_empty() {
+        return Err("Provide a domain FQDN or an all-owned-by account".into());
+    }
+    if !domain.is_empty() && !all_owned_by.is_empty() {
+        return Err("Set either domain or all-owned-by, not both".into());
+    }
+    let mut file = load_acl();
+    file.grants.push(SiteAclGrant {
+        member: member.to_string(),
+        domain: domain.to_string(),
+        all_owned_by: all_owned_by.to_string(),
+        can_install: grant.can_install,
+        can_uninstall: grant.can_uninstall,
+        can_enable: grant.can_enable,
+    });
+    save_acl(&file)
+}
+
+/// Remove a grant by zero-based index in [`list_grants`] order.
+pub fn remove_grant_at(index: usize) -> Result<(), String> {
+    let mut file = load_acl();
+    if index >= file.grants.len() {
+        return Err("ACL grant not found".into());
+    }
+    file.grants.remove(index);
+    save_acl(&file)
+}
+
 fn names_equal(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
@@ -188,6 +241,27 @@ mod tests {
                 std::env::remove_var("CPN_SITES_HOME");
             }
             let _ = fs::remove_dir_all(&home);
+        });
+    }
+
+    #[test]
+    fn add_and_remove_grant_roundtrip() {
+        with_test_data_dir(|| {
+            assert!(list_grants().is_empty());
+            add_grant(SiteAclGrant {
+                member: "ops".into(),
+                domain: "example.com".into(),
+                all_owned_by: String::new(),
+                can_install: true,
+                can_uninstall: false,
+                can_enable: true,
+            })
+            .unwrap();
+            assert_eq!(list_grants().len(), 1);
+            assert_eq!(list_grants()[0].member, "ops");
+            remove_grant_at(0).unwrap();
+            assert!(list_grants().is_empty());
+            assert!(remove_grant_at(0).is_err());
         });
     }
 }
