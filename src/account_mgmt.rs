@@ -3,9 +3,9 @@
 use std::{fs, path::PathBuf};
 
 use crate::account::{
-    accounts_dir, bootstrap_path, generate_password, hash_password, load_bootstrap,
-    new_password_salt, now_unix, password_meets_policy, validate_policy, validate_recovery_email,
-    write_account_file, AccountSetupResult, PanelBootstrap,
+    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, generate_password,
+    hash_password, load_bootstrap, new_password_salt, now_unix, password_meets_policy,
+    validate_policy, validate_recovery_email, write_account_file,
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 

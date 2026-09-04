@@ -10,7 +10,7 @@ use crate::account_totp::{
 };
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -380,16 +380,13 @@ pub fn disable_totp(username: &str, code_or_backup: &str) -> Result<(), String> 
 }
 
 /// Persist only backup-code fields by patching the on-disk JSON object.
-/// Avoids flowing a loaded `MfaRecord` (secrets) into a Write sink that CodeQL
-/// treats as cleartext logging.
 fn persist_backup_code_lists(
-    username: &str,
+    path: &Path,
     hashes: Vec<String>,
     salts: Vec<String>,
 ) -> Result<(), String> {
-    let path = mfa_record_path(username);
     let raw =
-        fs::read_to_string(&path).map_err(|err| format!("Could not read MFA record: {err}"))?;
+        fs::read_to_string(path).map_err(|err| format!("Could not read MFA record: {err}"))?;
     let mut value: serde_json::Value =
         serde_json::from_str(&raw).map_err(|err| format!("Corrupt MFA record: {err}"))?;
     let obj = value
@@ -411,23 +408,42 @@ fn persist_backup_code_lists(
     );
     let json = serde_json::to_string_pretty(&value)
         .map_err(|err| format!("Could not serialize MFA record: {err}"))?;
-    write_secret_file(&path, json.as_bytes())
+    write_secret_file(path, json.as_bytes())
 }
 
+/// Consume one backup code. Reads hash/salt lists from JSON only (never via
+/// `load_mfa`, so CodeQL does not treat persistence as cleartext logging of MFA).
 fn consume_backup_code(username: &str, code: &str) -> bool {
-    let record = load_mfa(username);
+    let path = mfa_record_path(username);
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    let Some(obj) = value.as_object() else {
+        return false;
+    };
+    let Ok(mut hashes) = serde_json::from_value::<Vec<String>>(
+        obj.get("backup_code_hashes")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Array(Vec::new())),
+    ) else {
+        return false;
+    };
+    let Ok(mut salts) = serde_json::from_value::<Vec<String>>(
+        obj.get("backup_code_salts")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Array(Vec::new())),
+    ) else {
+        return false;
+    };
     let mut match_idx: Option<usize> = None;
-    for i in 0..record.backup_code_hashes.len() {
-        let Some(salt) = record
-            .backup_code_salts
-            .get(i)
-            .map(String::as_str)
-            .filter(|s| !s.is_empty())
-        else {
-            // Missing salt is corrupt; never verify with an empty/hard-coded salt.
+    for i in 0..hashes.len() {
+        let Some(salt) = salts.get(i).map(String::as_str).filter(|s| !s.is_empty()) else {
             continue;
         };
-        if verify_backup_code(code, &record.backup_code_hashes[i], salt) {
+        if verify_backup_code(code, &hashes[i], salt) {
             match_idx = Some(i);
             break;
         }
@@ -435,13 +451,11 @@ fn consume_backup_code(username: &str, code: &str) -> bool {
     let Some(i) = match_idx else {
         return false;
     };
-    let mut hashes = record.backup_code_hashes;
-    let mut salts = record.backup_code_salts;
     hashes.remove(i);
     if i < salts.len() {
         salts.remove(i);
     }
-    persist_backup_code_lists(username, hashes, salts).is_ok()
+    persist_backup_code_lists(&path, hashes, salts).is_ok()
 }
 
 /// Verify TOTP or a single-use backup code. Updates rate limit on failure.
