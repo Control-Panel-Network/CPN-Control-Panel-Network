@@ -1,13 +1,7 @@
 "use client";
 
 import { Bell } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 export type PanelNotice = {
@@ -46,46 +40,43 @@ function computeNotifyPos(btn: HTMLElement): NotifyPos {
   return { bottom, left, width };
 }
 
+function subscribeMounted() {
+  return () => {};
+}
+
 export function NotificationsPopover({
   notices,
   onMarkAllRead,
 }: NotificationsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<NotifyPos | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const unread = notices.filter((item) => !item.read).length;
 
-  useEffect(() => {
-    setMounted(true);
+  const close = useCallback(() => {
+    setOpen(false);
+    setPos(null);
   }, []);
 
-  const reposition = useCallback(() => {
+  const openPanel = useCallback(() => {
     const btn = btnRef.current;
     if (!btn) return;
     setPos(computeNotifyPos(btn));
+    setOpen(true);
   }, []);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
-    reposition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-  }, [open, reposition]);
 
   useEffect(() => {
     if (!open) return;
+    const onReposition = () => {
+      const btn = btnRef.current;
+      if (!btn) return;
+      setPos(computeNotifyPos(btn));
+    };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        close();
       }
     };
     const onPointer = (event: MouseEvent) => {
@@ -93,15 +84,19 @@ export function NotificationsPopover({
       if (!target) return;
       if (btnRef.current?.contains(target)) return;
       if (panelRef.current?.contains(target)) return;
-      setOpen(false);
+      close();
     };
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
     window.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onPointer);
     return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onPointer);
     };
-  }, [open]);
+  }, [open, close]);
 
   const panel =
     open && mounted && pos
@@ -151,7 +146,13 @@ export function NotificationsPopover({
         aria-controls="cpn-notify-panel"
         aria-label="Notifications"
         title="Notifications"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (open) {
+            close();
+          } else {
+            openPanel();
+          }
+        }}
       >
         <Bell size={18} strokeWidth={1.9} />
         {unread > 0 ? (
