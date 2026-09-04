@@ -98,24 +98,73 @@ start_container() {
 
 installer_token() {
   local name="$1"
-  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 40 \
+  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 80 \
     | sed -n 's/.*token=\([[:alnum:]]*\).*/\1/p' | tail -1
+}
+
+dump_installer_diag() {
+  local name="$1"
+  echo "[DIAG] journalctl -u cpn-installer-test:" >&2
+  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 120 >&2 || true
+  echo "[DIAG] systemctl status cpn-installer-test:" >&2
+  "$engine" exec "$name" systemctl status cpn-installer-test --no-pager -l >&2 || true
+  echo "[DIAG] ss listeners:" >&2
+  "$engine" exec "$name" ss -ltn >&2 || true
+}
+
+# Start installer without blocking on the long-lived process (systemd-run default
+# can hang for hours inside nested privileged systemd on GHA runners).
+start_installer() {
+  local name="$1"
+  local token=""
+  "$engine" exec "$name" systemd-run --no-block --unit=cpn-installer-test \
+    /usr/bin/cpn-installer >/dev/null
+  for _ in {1..90}; do
+    token="$(installer_token "$name")"
+    if [[ -n "$token" ]]; then
+      if "$engine" exec "$name" curl -fsS --max-time 3 \
+        "http://127.0.0.1:2087/api/status?token=$token" >/dev/null 2>&1; then
+        printf '%s' "$token"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  echo "Installer did not become ready in $name (no token/HTTP on :2087)" >&2
+  dump_installer_diag "$name"
+  return 1
 }
 
 wait_for_result() {
   local name="$1" token="$2"
   for _ in {1..240}; do
     local status
-    status="$("$engine" exec "$name" curl -fsS "http://127.0.0.1:2087/api/status?token=$token")"
+    status="$("$engine" exec "$name" curl -fsS --max-time 5 "http://127.0.0.1:2087/api/status?token=$token" || true)"
     if [[ "$status" == *'"phase":"completed"'* ]]; then return; fi
     if [[ "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
+      dump_installer_diag "$name"
       return 1
     fi
     sleep 1
   done
   echo "La instalación agotó el tiempo en $name" >&2
+  dump_installer_diag "$name"
   return 1
+}
+
+post_json() {
+  local name="$1" url="$2" body="$3"
+  local response code
+  response="$("$engine" exec "$name" curl -sS --max-time 30 -w '\n%{http_code}' \
+    -X POST -H 'Content-Type: application/json' -d "$body" "$url" || true)"
+  code="$(printf '%s' "$response" | tail -n1)"
+  response="$(printf '%s' "$response" | sed '$d')"
+  if [[ "$code" != "202" && "$code" != "200" ]]; then
+    echo "POST $url failed http=$code body=$response" >&2
+    dump_installer_diag "$name"
+    return 1
+  fi
 }
 
 install_pkg() {
@@ -139,20 +188,16 @@ run_case() {
   "$engine" rm -f "$name" >/dev/null 2>&1 || true
   start_container "$name" "$image"
   install_pkg "$name" "$pkg" "$image"
-  "$engine" exec "$name" systemd-run --unit=cpn-installer-test /usr/bin/cpn-installer >/dev/null
-  sleep 2
   local token
-  token="$(installer_token "$name")"
+  token="$(start_installer "$name")"
   test -n "$token"
   if [[ "$kind" == "mail" ]]; then
-    "$engine" exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
-      -d '{"server":"nginx"}' \
-      "http://127.0.0.1:2087/api/install/server?token=$token" >/dev/null
+    post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
+      '{"server":"nginx"}'
     wait_for_result "$name" "$token"
   fi
-  "$engine" exec "$name" curl -fsS -X POST -H 'Content-Type: application/json' \
-    -d "{\"$kind\":\"$component\"}" \
-    "http://127.0.0.1:2087/api/install/$kind?token=$token" >/dev/null
+  post_json "$name" "http://127.0.0.1:2087/api/install/$kind?token=$token" \
+    "{\"$kind\":\"$component\"}"
   wait_for_result "$name" "$token"
 
   case "$component" in
