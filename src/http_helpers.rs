@@ -129,11 +129,22 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         || candidate.contains("localhost")
 }
 
-pub fn install_token_cookie_header(token: &str, secure: bool) -> String {
+/// Cookie value only for tokens that are already length-capped and ASCII-safe.
+pub fn install_token_cookie_header(token: &str, secure: bool) -> Option<String> {
+    let token = token.trim();
+    if token.is_empty() || token.len() > 128 {
+        return None;
+    }
+    if !token
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return None;
+    }
     let secure_flag = if secure { "; Secure" } else { "" };
-    format!(
+    Some(format!(
         "{INSTALL_TOKEN_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict{secure_flag}; Max-Age=86400"
-    )
+    ))
 }
 
 pub fn install_finished(status: &InstallerStatus) -> bool {

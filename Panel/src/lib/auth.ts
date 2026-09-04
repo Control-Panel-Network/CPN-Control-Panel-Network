@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHmac, pbkdf2Sync, timingSafeEqual, createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -13,6 +13,8 @@ export type PanelBootstrap = {
 
 const SESSION_COOKIE = "cpn_panel_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+/** Match Rust `PBKDF2_ITERATIONS`. */
+export const PBKDF2_ITERATIONS = 600_000;
 
 function dataDir(): string {
   return process.env.CPN_DATA_DIR || "/var/lib/cpn";
@@ -33,13 +35,32 @@ function sessionSecret(): string {
   );
 }
 
-/** Match Rust `hash_password`: SHA-256(salt_hex + "|" + password) as hex. */
-export function hashPassword(password: string, saltHex: string): string {
+function saltMaterial(saltHex: string): Buffer {
+  const trimmed = saltHex.trim();
+  if (trimmed.length > 0 && trimmed.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(trimmed)) {
+    return Buffer.from(trimmed, "hex");
+  }
+  return Buffer.from(saltHex, "utf8");
+}
+
+function hashPasswordLegacySha256(password: string, saltHex: string): string {
   return createHash("sha256")
     .update(saltHex, "utf8")
     .update("|", "utf8")
     .update(password, "utf8")
     .digest("hex");
+}
+
+/** Match Rust `hash_password`: `pbkdf2$<iters>$<hex>`. */
+export function hashPassword(password: string, saltHex: string): string {
+  const key = pbkdf2Sync(
+    password,
+    saltMaterial(saltHex),
+    PBKDF2_ITERATIONS,
+    32,
+    "sha256",
+  );
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${key.toString("hex")}`;
 }
 
 function safeEqualHex(a: string, b: string): boolean {
@@ -53,6 +74,31 @@ function safeEqualHex(a: string, b: string): boolean {
   }
 }
 
+export function verifyPassword(
+  password: string,
+  saltHex: string,
+  stored: string,
+): boolean {
+  const value = stored.trim();
+  if (value.startsWith("pbkdf2$")) {
+    const rest = value.slice("pbkdf2$".length);
+    const sep = rest.indexOf("$");
+    if (sep <= 0) return false;
+    const iters = Number(rest.slice(0, sep));
+    const digestHex = rest.slice(sep + 1);
+    if (!Number.isFinite(iters) || iters <= 0 || iters > 5_000_000) {
+      return false;
+    }
+    const key = pbkdf2Sync(password, saltMaterial(saltHex), iters, 32, "sha256");
+    return safeEqualHex(key.toString("hex"), digestHex);
+  }
+  return safeEqualHex(hashPasswordLegacySha256(password, saltHex), value);
+}
+
+export function passwordHashNeedsUpgrade(stored: string): boolean {
+  return !stored.trim().startsWith("pbkdf2$");
+}
+
 export async function loadBootstrap(): Promise<PanelBootstrap | null> {
   try {
     const raw = await fs.readFile(/*turbopackIgnore: true*/ bootstrapPath(), "utf8");
@@ -60,6 +106,15 @@ export async function loadBootstrap(): Promise<PanelBootstrap | null> {
   } catch {
     return null;
   }
+}
+
+export async function saveBootstrap(boot: PanelBootstrap): Promise<void> {
+  const target = bootstrapPath();
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, JSON.stringify(boot, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 export async function verifyCredentials(
@@ -71,9 +126,17 @@ export async function verifyCredentials(
   if (boot.username.trim().toLowerCase() !== username.trim().toLowerCase()) {
     return null;
   }
-  const hashed = hashPassword(password, boot.password_salt);
-  if (!safeEqualHex(hashed, boot.password_hash)) {
+  if (!verifyPassword(password, boot.password_salt, boot.password_hash)) {
     return null;
+  }
+  if (passwordHashNeedsUpgrade(boot.password_hash)) {
+    boot.password_hash = hashPassword(password, boot.password_salt);
+    boot.schema_version = Math.max(boot.schema_version || 1, 2);
+    try {
+      await saveBootstrap(boot);
+    } catch {
+      // Login still succeeds if upgrade write fails.
+    }
   }
   return boot;
 }
