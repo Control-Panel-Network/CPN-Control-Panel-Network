@@ -334,17 +334,8 @@ fn nav_links(active: &str, username: &str) -> String {
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
     let user = html_escape(username);
     let nav = nav_links(active, username);
-    let styles = format!(
-        "{}{}{}",
-        panel_styles(),
-        crate::panel_hubs::hub_styles(),
-        crate::website_preview::preview_styles()
-    );
-    let script = format!(
-        "{}{}",
-        panel_nav_script(),
-        crate::website_preview::preview_script()
-    );
+    let styles = format!("{}{}", panel_styles(), crate::panel_hubs::hub_styles());
+    let script = panel_nav_script();
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">

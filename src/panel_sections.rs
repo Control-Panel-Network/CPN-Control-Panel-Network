@@ -5,7 +5,6 @@ use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
 use crate::service_detect::{detect_database, install_mariadb_server};
 use crate::sites::{SiteRecord, list_sites};
-use crate::website_preview::{list_preview_cell_html, public_site_url};
 
 fn html_escape(value: &str) -> String {
     value
@@ -65,8 +64,8 @@ fn site_action_buttons(site: &SiteRecord) -> String {
     format!(
         r#"<div class="site-actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">
             <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
-            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}#settings">Settings</a>
-            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}#docroot">File manager</a>
+            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/">Preview</a>
+            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}&amp;tab=files">File manager</a>
             {suspend}
             <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
               <input type="hidden" name="domain" value="{domain}">
@@ -112,19 +111,9 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
         } else {
             String::new()
         };
-        let visit =
-            public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
-        let preview = list_preview_cell_html(&site.domain);
         rows.push_str(&format!(
             r#"<tr>
-          <td>
-            <strong>{domain}</strong>
-            <div class="muted">{wired}</div>
-            <div class="site-list-preview-row">
-              <a class="site-preview-visit site-preview-visit--inline" href="{visit}" target="_blank" rel="noopener noreferrer">Visit Site</a>
-              {preview}
-            </div>
-          </td>
+          <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
           <td>{owner}</td>
           {docroot_td}
           <td>{status}</td>
@@ -135,8 +124,6 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
             docroot_td = docroot_td,
             status = status,
             actions = site_action_buttons(site),
-            visit = html_escape(&visit),
-            preview = preview,
             wired = wired,
         ));
     }
