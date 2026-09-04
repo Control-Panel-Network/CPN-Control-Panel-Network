@@ -528,4 +528,79 @@ mod tests {
             end_install_run();
         });
     }
+
+    #[test]
+    fn preflight_notes_include_soft_checks() {
+        with_test_data_dir(|| {
+            // Non-root Windows/dev hosts still return a structured report or a clear error.
+            match run_preflight(1) {
+                Ok(report) => {
+                    assert!(report.disk_ok, "disk_ok expected for min_free_mb=1");
+                    let joined = report.notes.join("|");
+                    assert!(
+                        joined.contains("port 80") || joined.contains("port 443"),
+                        "expected port soft checks, notes={joined}"
+                    );
+                    assert!(
+                        joined.contains("package repositories")
+                            || joined.contains("outbound HTTPS")
+                            || joined.contains("guest"),
+                        "expected soft/network notes, notes={joined}"
+                    );
+                }
+                Err(message) => {
+                    assert!(
+                        message.contains("Preflight failed"),
+                        "unexpected preflight error: {message}"
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn rollback_is_scoped_to_current_run_id() {
+        with_test_data_dir(|| {
+            begin_install_run("run-one").unwrap();
+            let older = data_root().join("older.conf");
+            write_file_tracked("run-one", &older, "keep-me\n").unwrap();
+            end_install_run();
+
+            begin_install_run("run-two").unwrap();
+            let newer = data_root().join("newer.conf");
+            write_file_tracked("run-two", &newer, "remove-me\n").unwrap();
+            let report = rollback_tracked_files().unwrap();
+            assert!(
+                report.removed.iter().any(|p| p.contains("newer.conf")) || !newer.exists(),
+                "expected run-two file rolled back, report={report:?}"
+            );
+            assert!(
+                older.exists(),
+                "run-one file must survive scoped rollback of run-two"
+            );
+            assert_eq!(fs::read_to_string(&older).unwrap(), "keep-me\n");
+        });
+    }
+
+    #[test]
+    fn wrote_repo_action_is_removable_on_rollback() {
+        with_test_data_dir(|| {
+            begin_install_run("repo").unwrap();
+            let repo = data_root().join("cpn-test.repo");
+            fs::write(&repo, "[cpn]\nenabled=1\n").unwrap();
+            record(
+                "repo",
+                JournalAction::WroteRepo,
+                &repo.to_string_lossy(),
+                None,
+                Some("unit".into()),
+            )
+            .unwrap();
+            let report = rollback_tracked_files().unwrap();
+            assert!(
+                !repo.exists() || report.removed.iter().any(|p| p.contains("cpn-test.repo")),
+                "WroteRepo should be removable, report={report:?}"
+            );
+        });
+    }
 }

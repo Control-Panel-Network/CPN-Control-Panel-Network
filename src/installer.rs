@@ -1,4 +1,4 @@
-﻿use crate::install_journal::{self, FailureKind};
+use crate::install_journal::{self, FailureKind};
 use crate::install_mail_backend::{provision_local_mail_backend, verify_imap_smtp_listeners};
 use crate::install_recipes::{
     CommandSpec, DnfProgress, apt_update_command, command, php_install_command,
@@ -575,5 +575,54 @@ mod tests {
         assert!(!state.cancel_requested());
         state.request_cancel();
         assert!(state.cancel_requested());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn slow_child_process_group_dies_on_timeout_kill() {
+        use tokio::process::Command;
+        use tokio::time::{Duration, timeout};
+
+        // Mirror run_command process-group + kill -TERM -<pid> behaviour (issue #18).
+        let mut command = Command::new("bash");
+        command
+            .args(["-c", "sleep 120 & sleep 120 & wait"])
+            .kill_on_drop(true)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setpgid(0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let mut child = command.spawn().expect("spawn slow group");
+        let pid = child.id().expect("pid");
+        let pump = async {
+            let _ = child.wait().await;
+        };
+        let timed_out = timeout(Duration::from_millis(400), pump).await.is_err();
+        assert!(timed_out, "expected timeout before sleep finishes");
+        let _ = Command::new("kill")
+            .args(["-TERM", &format!("-{pid}")])
+            .kill_on_drop(true)
+            .status()
+            .await;
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        // Process group leader and descendants must be gone.
+        let still = Command::new("bash")
+            .args(["-c", &format!("ps -o pid= -g {pid} | grep -q .")])
+            .status()
+            .await
+            .map(|s| s.success())
+            .unwrap_or(false);
+        assert!(
+            !still,
+            "process group {pid} still has members after TERM+kill"
+        );
     }
 }
