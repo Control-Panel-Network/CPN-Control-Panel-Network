@@ -44,12 +44,26 @@ pub fn install_and_expose() -> Result<String, String> {
     })?;
     write_fpm_pool(&share)?;
     write_nginx_vhost(&share)?;
-    let _ = Command::new("systemctl")
-        .args(["reload", "php-fpm"])
-        .status();
+    ensure_selinux_http_port(8081);
+    if !systemd_unit_active("php-fpm") {
+        let _ = enable_now(&["php-fpm"]);
+    } else {
+        let _ = Command::new("systemctl")
+            .args(["reload", "php-fpm"])
+            .status();
+    }
     if Path::new("/usr/sbin/nginx").exists() || Path::new("/usr/bin/nginx").exists() {
         let _ = Command::new("nginx").args(["-t"]).status();
-        let _ = Command::new("systemctl").args(["reload", "nginx"]).status();
+        let reload_ok = Command::new("systemctl")
+            .args(["reload", "nginx"])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if !reload_ok {
+            let _ = Command::new("systemctl")
+                .args(["restart", "nginx"])
+                .status();
+        }
         if !systemd_unit_active("nginx") {
             enable_now(&["nginx"])?;
         }
@@ -145,6 +159,24 @@ fn user_exists(name: &str) -> bool {
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
+}
+
+/// Port 8081 is labeled `transproxy_port_t` on some EL hosts; nginx (httpd_t) cannot bind.
+fn ensure_selinux_http_port(port: u16) {
+    if !Path::new("/usr/sbin/semanage").exists() && !Path::new("/usr/bin/semanage").exists() {
+        return;
+    }
+    let port_s = port.to_string();
+    let add = Command::new("semanage")
+        .args(["port", "-a", "-t", "http_port_t", "-p", "tcp", &port_s])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !add {
+        let _ = Command::new("semanage")
+            .args(["port", "-m", "-t", "http_port_t", "-p", "tcp", &port_s])
+            .status();
+    }
 }
 
 #[cfg(test)]
