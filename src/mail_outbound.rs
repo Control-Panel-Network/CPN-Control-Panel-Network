@@ -25,10 +25,11 @@ pub fn smtp_is_ready() -> bool {
 
 /// Resolve outbound settings: disk SMTP first, else Postfix localhost when ready.
 pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings, String> {
-    if let Some(settings) = load_smtp() {
-        if !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty() {
-            return Ok(settings);
-        }
+    if let Some(settings) = load_smtp()
+        && !settings.host.trim().is_empty()
+        && !settings.from_address.trim().is_empty()
+    {
+        return Ok(settings);
     }
     if postfix_is_ready() {
         return Ok(postfix_local_smtp(from_hint.unwrap_or("")));
