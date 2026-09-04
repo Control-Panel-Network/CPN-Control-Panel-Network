@@ -25,6 +25,7 @@ clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
 libc = "0.2"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 rand = "0.9"
 rpassword = "7"
 rust-embed = "8"

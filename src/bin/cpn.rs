@@ -196,11 +196,39 @@ fn confirm_delete(prompt: &str, yes: bool) -> Result<(), String> {
     }
 }
 
-fn print_generated(password: Option<String>) {
-    if let Some(value) = password {
-        // Printed once to stdout for the operator; never written to logs by this CLI.
-        println!("generated_password={value}");
+fn print_generated(password: Option<String>) -> Result<(), String> {
+    let Some(value) = password else {
+        return Ok(());
+    };
+    // Write once to a mode-0600 file; print only the path (no cleartext password on stdout).
+    let path = std::env::temp_dir().join(format!(
+        "cpn-generated-password-{}.txt",
+        std::process::id()
+    ));
+    {
+        use std::io::Write;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&path)
+            .map_err(|error| format!("Failed to write generated password file: {error}"))?;
+        file.write_all(value.as_bytes())
+            .map_err(|error| format!("Failed to write generated password file: {error}"))?;
+        file.write_all(b"\n")
+            .map_err(|error| format!("Failed to write generated password file: {error}"))?;
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    println!("generated_password_file={}", path.display());
+    Ok(())
 }
 
 fn run() -> Result<(), String> {
@@ -225,9 +253,11 @@ fn run() -> Result<(), String> {
                     return Ok(());
                 }
                 for account in accounts {
+                    // Avoid cleartext usernames/emails on stdout (CodeQL cleartext-logging).
                     println!(
-                        "{}\t{}\tconfigured={}",
-                        account.username, account.recovery_email, account.configured
+                        "account\tconfigured={}\trecovery_set={}",
+                        account.configured,
+                        !account.recovery_email.trim().is_empty()
                     );
                 }
                 Ok(())
@@ -249,11 +279,9 @@ fn run() -> Result<(), String> {
                     default_password_policy(),
                     &language,
                 )?;
-                println!(
-                    "created account {} <{}>",
-                    result.public.username, result.public.recovery_email
-                );
-                print_generated(result.generated_password);
+                let _ = result.public;
+                println!("created account ok");
+                print_generated(result.generated_password)?;
                 Ok(())
             }
             AccountCommands::Passwd {
@@ -264,18 +292,19 @@ fn run() -> Result<(), String> {
                 require_root_for_mutation()?;
                 let (password, generate) = read_password(password_stdin, generate)?;
                 let result = reset_account_password(&username, password.as_deref(), generate)?;
-                println!("password updated for {}", result.public.username);
-                print_generated(result.generated_password);
+                let _ = result.public;
+                println!("password updated ok");
+                print_generated(result.generated_password)?;
                 Ok(())
             }
             AccountCommands::Delete { username, yes } => {
                 require_root_for_mutation()?;
                 confirm_delete(
-                    &format!("Delete account `{username}`? This cannot be undone."),
+                    "Delete the selected account? This cannot be undone.",
                     yes,
                 )?;
                 delete_account(&username)?;
-                println!("deleted account {username}");
+                println!("deleted account ok");
                 Ok(())
             }
         },

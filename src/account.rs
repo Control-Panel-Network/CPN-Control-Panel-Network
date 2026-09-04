@@ -189,12 +189,92 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-pub fn hash_password(password: &str, salt_hex: &str) -> String {
+/// PBKDF2-HMAC-SHA256 iteration count (CodeQL / OWASP-oriented).
+pub const PBKDF2_ITERATIONS: u32 = 600_000;
+
+fn hash_password_legacy_sha256(password: &str, salt_hex: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(salt_hex.as_bytes());
     hasher.update(b"|");
     hasher.update(password.as_bytes());
     hex_encode(&hasher.finalize())
+}
+
+fn salt_material(salt_hex: &str) -> Vec<u8> {
+    let trimmed = salt_hex.trim();
+    if trimmed.len() % 2 == 0 && !trimmed.is_empty() {
+        let mut out = Vec::with_capacity(trimmed.len() / 2);
+        let mut ok = true;
+        let bytes = trimmed.as_bytes();
+        let mut i = 0;
+        while i + 1 < bytes.len() {
+            let hi = (bytes[i] as char).to_digit(16);
+            let lo = (bytes[i + 1] as char).to_digit(16);
+            match (hi, lo) {
+                (Some(h), Some(l)) => out.push(((h << 4) | l) as u8),
+                _ => {
+                    ok = false;
+                    break;
+                }
+            }
+            i += 2;
+        }
+        if ok && !out.is_empty() {
+            return out;
+        }
+    }
+    salt_hex.as_bytes().to_vec()
+}
+
+/// New hashes: `pbkdf2$<iters>$<32-byte hex>`. Legacy SHA-256 hex still verifies.
+pub fn hash_password(password: &str, salt_hex: &str) -> String {
+    let salt = salt_material(salt_hex);
+    let mut key = [0u8; 32];
+    pbkdf2::pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key);
+    format!("pbkdf2${PBKDF2_ITERATIONS}${}", hex_encode(&key))
+}
+
+fn constant_time_eq_hex(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (left, right) in a.iter().zip(b.iter()) {
+        diff |= left ^ right;
+    }
+    diff == 0
+}
+
+/// Verify password against stored hash (PBKDF2 or legacy SHA-256).
+pub fn verify_password(password: &str, salt_hex: &str, stored: &str) -> bool {
+    let stored = stored.trim();
+    if let Some(rest) = stored.strip_prefix("pbkdf2$") {
+        let mut parts = rest.splitn(2, '$');
+        let Some(iters_raw) = parts.next() else {
+            return false;
+        };
+        let Some(digest_hex) = parts.next() else {
+            return false;
+        };
+        let Ok(iters) = iters_raw.parse::<u32>() else {
+            return false;
+        };
+        if iters == 0 || iters > 5_000_000 {
+            return false;
+        }
+        let salt = salt_material(salt_hex);
+        let mut key = [0u8; 32];
+        pbkdf2::pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, iters, &mut key);
+        return constant_time_eq_hex(&hex_encode(&key), digest_hex);
+    }
+    constant_time_eq_hex(&hash_password_legacy_sha256(password, salt_hex), stored)
+}
+
+/// True when the stored hash should be upgraded to PBKDF2 on successful login.
+pub fn password_hash_needs_upgrade(stored: &str) -> bool {
+    !stored.trim().starts_with("pbkdf2$")
 }
 
 /// Wide UTF-8 alphabet for generated passwords (Latin letters with accents, digits, symbols).

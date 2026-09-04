@@ -64,16 +64,18 @@ async fn root_page(
     let from_query = query.token.as_deref();
     if token_matches(&state, from_query) {
         let mut response = serve_index_html();
-        if let Some(token) = from_query {
-            // Exchange query token for HttpOnly cookie so later API calls need not use ?token= (issue #1).
-            let _ = response.headers_mut().insert(
-                actix_web::http::header::SET_COOKIE,
-                actix_web::http::header::HeaderValue::try_from(install_token_cookie_header(
-                    token,
-                    request.connection_info().scheme() == "https",
-                ))
-                .unwrap_or_else(|_| actix_web::http::header::HeaderValue::from_static("")),
-            );
+        if from_query.is_some() {
+            // Cookie uses the server-side token (not raw query input) after a match (issue #1).
+            if let Some(cookie) = install_token_cookie_header(
+                &state.token,
+                request.connection_info().scheme() == "https",
+            ) {
+                let _ = response.headers_mut().insert(
+                    actix_web::http::header::SET_COOKIE,
+                    actix_web::http::header::HeaderValue::try_from(cookie)
+                        .unwrap_or_else(|_| actix_web::http::header::HeaderValue::from_static("")),
+                );
+            }
         }
         return response;
     }
