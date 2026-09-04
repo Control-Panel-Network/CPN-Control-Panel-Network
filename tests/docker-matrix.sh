@@ -186,6 +186,30 @@ http_status_ok() {
     "http://127.0.0.1:2087/api/status?token=$token" >/dev/null 2>&1
 }
 
+# IMAP/SMTP listener check without requiring iproute/ss (Rocky minimal).
+port_listeners_ok() {
+  local name="$1"
+  "$engine" exec "$name" bash -lc '
+    set -euo pipefail
+    if command -v ss >/dev/null 2>&1; then
+      ss -ltn | grep -E ":143|:587|:25"
+      exit 0
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+      netstat -ltn | grep -E ":143|:587|:25"
+      exit 0
+    fi
+    ok=0
+    for port in 143 25 587; do
+      if timeout 2 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+        echo "tcp 127.0.0.1:$port open"
+        ok=1
+      fi
+    done
+    test "$ok" = 1
+  '
+}
+
 # After long package installs HTTP can stall; restart installer so mail POST works.
 # Manifest from the completed server stage puts the process into maintenance with
 # server_ready, which still allows /api/install/mail.
@@ -378,7 +402,7 @@ run_case() {
       "$engine" exec "$name" php -m | grep -qi mbstring
       "$engine" exec "$name" bash /usr/share/cpn-installer/webmail-permissions.sh /opt/cpn-webmail/snappymail 2>/dev/null || \
         "$engine" exec -i "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
-      "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      port_listeners_ok "$name"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
@@ -388,7 +412,7 @@ run_case() {
       "$engine" exec "$name" php -r '$db=new PDO("sqlite:/opt/cpn-webmail/roundcube/db.sqlite"); $n=$db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"users\"")->fetchColumn(); if(!$n){exit(1);}'
       "$engine" exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
       "$engine" exec -i "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
-      "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
+      port_listeners_ok "$name"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
