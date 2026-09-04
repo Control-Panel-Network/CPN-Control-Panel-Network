@@ -65,9 +65,9 @@ async fn root_page(
     if token_matches(&state, from_query) {
         let mut response = serve_index_html();
         if from_query.is_some() {
-            // Cookie uses the server-side token (not raw query input) after a match (issue #1).
+            // Cookie carries a server-only session id (never the query token).
             if let Some(cookie) = install_token_cookie_header(
-                &state.token,
+                &state.session_id,
                 request.connection_info().scheme() == "https",
             ) {
                 let _ = response.headers_mut().insert(
@@ -413,6 +413,11 @@ async fn main() -> std::io::Result<()> {
         .take(28)
         .map(char::from)
         .collect();
+    let session_id: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(28)
+        .map(char::from)
+        .collect();
     let environment = cpn_installer::environment::inspect(listen_port).await;
     let remote = allow_remote_listen();
     if remote {
@@ -470,6 +475,7 @@ async fn main() -> std::io::Result<()> {
         status: tokio::sync::RwLock::new(initial),
         events,
         token: token.clone(),
+        session_id,
         bind_port: listen_port,
         allow_remote: remote,
     });

@@ -1,4 +1,4 @@
-import { createHmac, pbkdf2Sync, timingSafeEqual, createHash } from "crypto";
+import { createHmac, pbkdf2Sync, timingSafeEqual } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -43,14 +43,6 @@ function saltMaterial(saltHex: string): Buffer {
   return Buffer.from(saltHex, "utf8");
 }
 
-function hashPasswordLegacySha256(password: string, saltHex: string): string {
-  return createHash("sha256")
-    .update(saltHex, "utf8")
-    .update("|", "utf8")
-    .update(password, "utf8")
-    .digest("hex");
-}
-
 /** Match Rust `hash_password`: `pbkdf2$<iters>$<hex>`. */
 export function hashPassword(password: string, saltHex: string): string {
   const key = pbkdf2Sync(
@@ -80,23 +72,20 @@ export function verifyPassword(
   stored: string,
 ): boolean {
   const value = stored.trim();
-  if (value.startsWith("pbkdf2$")) {
-    const rest = value.slice("pbkdf2$".length);
-    const sep = rest.indexOf("$");
-    if (sep <= 0) return false;
-    const iters = Number(rest.slice(0, sep));
-    const digestHex = rest.slice(sep + 1);
-    if (!Number.isFinite(iters) || iters <= 0 || iters > 5_000_000) {
-      return false;
-    }
-    const key = pbkdf2Sync(password, saltMaterial(saltHex), iters, 32, "sha256");
-    return safeEqualHex(key.toString("hex"), digestHex);
+  if (!value.startsWith("pbkdf2$")) {
+    // Legacy SHA-256 hashes are not verified in Panel (CodeQL). Reset via `cpn account passwd`.
+    return false;
   }
-  return safeEqualHex(hashPasswordLegacySha256(password, saltHex), value);
-}
-
-export function passwordHashNeedsUpgrade(stored: string): boolean {
-  return !stored.trim().startsWith("pbkdf2$");
+  const rest = value.slice("pbkdf2$".length);
+  const sep = rest.indexOf("$");
+  if (sep <= 0) return false;
+  const iters = Number(rest.slice(0, sep));
+  const digestHex = rest.slice(sep + 1);
+  if (!Number.isFinite(iters) || iters <= 0 || iters > 5_000_000) {
+    return false;
+  }
+  const key = pbkdf2Sync(password, saltMaterial(saltHex), iters, 32, "sha256");
+  return safeEqualHex(key.toString("hex"), digestHex);
 }
 
 export async function loadBootstrap(): Promise<PanelBootstrap | null> {
@@ -128,15 +117,6 @@ export async function verifyCredentials(
   }
   if (!verifyPassword(password, boot.password_salt, boot.password_hash)) {
     return null;
-  }
-  if (passwordHashNeedsUpgrade(boot.password_hash)) {
-    boot.password_hash = hashPassword(password, boot.password_salt);
-    boot.schema_version = Math.max(boot.schema_version || 1, 2);
-    try {
-      await saveBootstrap(boot);
-    } catch {
-      // Login still succeeds if upgrade write fails.
-    }
   }
   return boot;
 }

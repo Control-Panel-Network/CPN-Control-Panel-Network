@@ -115,6 +115,7 @@ async fn make_state() -> Arc<AppState> {
         status: tokio::sync::RwLock::new(Default::default()),
         events,
         token: "cli".into(),
+        session_id: "clisessionid0000000000000001".into(),
         bind_port: crate::listen_port::DEFAULT_PORT,
         allow_remote: false,
     })
