@@ -144,18 +144,21 @@ pub async fn run_redirect_listeners(hosts: Vec<String>, migration: PortMigration
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::with_test_data_dir;
     use crate::panel_network::OldPortPolicy;
 
     #[test]
     fn builds_redirect_with_port() {
-        let migration = PortMigration {
-            old_port: 2087,
-            new_port: 9443,
-            mode: OldPortPolicy::Redirect1m,
-            expires_at: 0,
-        };
-        let location = redirect_location(&migration, Some("10.0.0.8:2087"), "/login");
-        assert_eq!(location, "http://10.0.0.8:9443/login");
+        with_test_data_dir(|| {
+            let migration = PortMigration {
+                old_port: 2087,
+                new_port: 9443,
+                mode: OldPortPolicy::Redirect1m,
+                expires_at: 0,
+            };
+            let location = redirect_location(&migration, Some("10.0.0.8:2087"), "/login");
+            assert_eq!(location, "http://10.0.0.8:9443/login");
+        });
     }
 
     #[test]
