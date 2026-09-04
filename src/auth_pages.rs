@@ -39,6 +39,8 @@ fn shared_auth_styles() -> &'static str {
     input { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit; }
     button { margin-top:18px; width:100%; border:0; border-radius:999px; padding:12px 16px; background:#0066cc; color:#fff; font-weight:700; cursor:pointer; }
     .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .remember { display:flex; align-items:center; gap:8px; margin:14px 0 0; font-weight:600; font-size:.92rem; }
+    .remember input { width:auto; margin:0; }
     a { color:#0066cc; text-decoration:none; font-size:.92rem; }
     .hint { margin-top:14px; font-size:.9rem; }
     .lang-host { position:absolute; top:16px; right:16px; }
@@ -76,7 +78,11 @@ pub fn panel_login_html(status: &InstallerStatus) -> String {
         <label for="username" id="i18n-username">Username</label>
         <input id="username" name="username" value="" autocomplete="username" required>
         <label for="password" id="i18n-password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <input id="password" name="password" type="password" value="" autocomplete="current-password" required>
+        <label class="remember" for="remember_me">
+          <input id="remember_me" name="remember_me" type="checkbox" value="1">
+          <span id="i18n-remember">Remember me</span>
+        </label>
         <div class="row">
           <span></span>
           <a id="i18n-forgot" href="/forgot-password">Forgot password?</a>

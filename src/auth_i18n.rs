@@ -4,7 +4,8 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
 <script>
 (function () {
   var STORAGE_KEY = 'cpn-panel-locale';
-  var LAST_USER_KEY = 'cpn-panel-last-username';
+  var REMEMBER_USER_KEY = 'cpn_remember_username';
+  var LEGACY_USER_KEY = 'cpn-panel-last-username';
   var COOKIE_KEY = 'cpn_locale';
   var LABELS = { en: 'English', es: 'Español', nb: 'Norsk' };
   var M = {
@@ -15,6 +16,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       brand: 'CPN PANEL',
       username: 'Username',
       password: 'Password',
+      remember: 'Remember me',
       forgot: 'Forgot password?',
       submit: 'Sign in',
       postTitle: 'Sign in received',
@@ -40,6 +42,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       brand: 'CPN PANEL',
       username: 'Usuario',
       password: 'Contraseña',
+      remember: 'Recuérdame',
       forgot: '¿Olvidaste la contraseña?',
       submit: 'Entrar',
       postTitle: 'Inicio de sesión recibido',
@@ -65,6 +68,7 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       brand: 'CPN PANEL',
       username: 'Brukernavn',
       password: 'Passord',
+      remember: 'Husk meg',
       forgot: 'Glemt passordet?',
       submit: 'Logg inn',
       postTitle: 'Innlogging mottatt',
@@ -167,28 +171,63 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     setText('i18n-title', t.title);
     setText('i18n-username', t.username);
     setText('i18n-password', t.password);
+    setText('i18n-remember', t.remember);
     setText('i18n-forgot', t.forgot);
     setText('i18n-submit', t.submit);
-    restoreLastUsername();
+    restoreRememberedUsername();
   }
 
-  function restoreLastUsername() {
-    var input = document.getElementById('username');
-    if (!input) return;
+  function clearRememberedUsername() {
     try {
-      var last = window.localStorage.getItem(LAST_USER_KEY);
-      if (last) input.value = last;
+      window.localStorage.removeItem(REMEMBER_USER_KEY);
+      window.localStorage.removeItem(LEGACY_USER_KEY);
     } catch (e) {}
+  }
+
+  function readRememberedUsername() {
+    try {
+      var remembered = window.localStorage.getItem(REMEMBER_USER_KEY);
+      if (remembered) return String(remembered);
+      var legacy = window.localStorage.getItem(LEGACY_USER_KEY);
+      if (legacy) {
+        window.localStorage.setItem(REMEMBER_USER_KEY, legacy);
+        window.localStorage.removeItem(LEGACY_USER_KEY);
+        return String(legacy);
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function restoreRememberedUsername() {
+    var input = document.getElementById('username');
+    var checkbox = document.getElementById('remember_me');
+    var password = document.getElementById('password');
+    if (password) password.value = '';
+    if (!input) return;
+    var remembered = readRememberedUsername();
+    if (!remembered) {
+      if (checkbox) checkbox.checked = false;
+      return;
+    }
+    input.value = remembered;
+    if (checkbox) checkbox.checked = true;
   }
 
   function bindLoginRemember() {
     var form = document.querySelector('form[action*="/login"]');
     var input = document.getElementById('username');
+    var checkbox = document.getElementById('remember_me');
     if (!form || !input) return;
     form.addEventListener('submit', function () {
       try {
         var value = String(input.value || '').trim();
-        if (value) window.localStorage.setItem(LAST_USER_KEY, value);
+        var remember = checkbox && checkbox.checked;
+        if (remember && value) {
+          window.localStorage.setItem(REMEMBER_USER_KEY, value);
+          window.localStorage.removeItem(LEGACY_USER_KEY);
+        } else {
+          clearRememberedUsername();
+        }
       } catch (e) {}
     });
   }
