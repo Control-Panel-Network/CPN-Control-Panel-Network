@@ -2,9 +2,13 @@
 
 pub mod account;
 pub mod account_mgmt;
+pub mod apps;
 pub mod auth_api;
 pub mod auth_i18n;
 pub mod auth_pages;
+pub mod backups;
+pub mod cli_apps;
+pub mod cli_common;
 pub mod cli_maintenance;
 pub mod cli_network;
 pub mod cli_plugins;
@@ -24,6 +28,10 @@ pub mod maintenance_api;
 pub mod manifest;
 pub mod model;
 pub mod os_support;
+pub mod panel_app_routes;
+pub mod panel_apps;
+pub mod panel_backup_routes;
+pub mod panel_backups;
 pub mod panel_network;
 pub mod panel_pages;
 pub mod panel_plugins;

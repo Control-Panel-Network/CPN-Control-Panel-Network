@@ -14,7 +14,7 @@ sudo cpn-installer --port 2087
 ```
 
 3. Open the printed URL (`http://127.0.0.1:2087/?token=...` or the lab host port). Complete server, mail, and first-account stages in the browser.
-4. After install, open the Panel login (same host/port, `/login` or `/`). Use Websites, Email, Databases, Backups, and Plugins from the sidebar.
+4. After install, open the Panel login (same host/port, `/login` or `/`). Use Websites, Email, Databases, Apps, Backups, and Plugins from the sidebar.
 
 Panel website create uses the same `/home/<domain>/public_html` layout as the CLI.
 

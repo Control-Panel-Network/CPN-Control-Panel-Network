@@ -5,13 +5,15 @@ use crate::installer::AppState;
 use crate::panel_pages::panel_shell;
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
-    backups_main, create_panel_backup, databases_main, email_main, run_mariadb_install,
-    set_websites_docroot_pref, websites_main,
+    databases_main, email_main, run_mariadb_install, set_websites_docroot_pref, websites_main,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::sites::{create_site, delete_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
+
+pub use crate::panel_app_routes::{apps_install, apps_page, apps_reinstall, apps_uninstall};
+pub use crate::panel_backup_routes::{backups_page, backups_run};
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
@@ -227,49 +229,6 @@ pub async fn databases_install_mariadb(
             .append_header((
                 "Location",
                 format!("/databases?error={}", urlencoding_simple(&error)),
-            ))
-            .finish(),
-    }
-}
-
-#[get("/backups")]
-pub async fn backups_page(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
-    };
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    html_ok(panel_shell(
-        &user,
-        "backups",
-        "Backups",
-        &backups_main(notice, error),
-    ))
-}
-
-#[post("/backups/run")]
-pub async fn backups_run(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
-    };
-    match create_panel_backup() {
-        Ok(name) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!(
-                    "/backups?notice={}",
-                    urlencoding_simple(&format!("Created {name}"))
-                ),
-            ))
-            .finish(),
-        Err(error) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!("/backups?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }

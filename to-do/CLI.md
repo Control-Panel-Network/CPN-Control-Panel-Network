@@ -78,7 +78,18 @@ ssh -p 2222 root@127.0.0.1 'cpn site create --domain demo.example.com --owner ad
 
 ## Extending later
 
-Add new top-level groups beside `account`, `site`, `network`, and `plugin` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+Add new top-level groups beside `account`, `site`, `network`, `plugin`, and `app` in `src/bin/cpn.rs` (for example `mail`, `ssl`, `service`). Keep mutation commands root-only, confirm deletes unless `--yes`, and avoid putting secrets in argv when a stdin flag can be used.
+
+## Apps
+
+See `to-do/APPS.md`.
+
+```bash
+sudo cpn app list
+sudo cpn app install --name mariadb
+sudo cpn app reinstall --name email --yes
+sudo cpn app uninstall --name rabbitmq --yes
+```
 
 ## Plugins
 
