@@ -148,9 +148,7 @@ fn origin_matches_allowed(candidate: &str, bind_port: u16, request: &HttpRequest
             allowed.push(format!("{host_hdr}:{bind_port}"));
         }
     }
-    allowed
-        .iter()
-        .any(|host| candidate.contains(host.as_str()))
+    allowed.iter().any(|host| candidate.contains(host.as_str()))
         || candidate.contains("127.0.0.1")
         || candidate.contains("localhost")
 }
@@ -295,7 +293,10 @@ pub fn now_unix() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{install_finished, install_session_cookie_header, origin_matches_allowed, panel_account_ready};
+    use super::{
+        install_finished, install_session_cookie_header, origin_matches_allowed,
+        panel_account_ready,
+    };
     use crate::model::{AccountPublic, InstallerStatus};
     use actix_web::test::TestRequest;
 
@@ -344,11 +345,7 @@ mod tests {
         let req = TestRequest::default()
             .insert_header((actix_web::http::header::HOST, "evil.example:9999"))
             .to_http_request();
-        assert!(origin_matches_allowed(
-            "http://127.0.0.1:2087",
-            2087,
-            &req
-        ));
+        assert!(origin_matches_allowed("http://127.0.0.1:2087", 2087, &req));
         assert!(!origin_matches_allowed(
             "https://attacker.example",
             2087,

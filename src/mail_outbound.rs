@@ -33,10 +33,7 @@ pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings
     if postfix_is_ready() {
         return Ok(postfix_local_smtp(from_hint.unwrap_or("")));
     }
-    Err(
-        "No outbound mail path: configure SMTP or install/enable local Postfix."
-            .into(),
-    )
+    Err("No outbound mail path: configure SMTP or install/enable local Postfix.".into())
 }
 
 /// Best-effort send via configured SMTP or Postfix localhost.

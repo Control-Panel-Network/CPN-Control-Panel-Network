@@ -83,17 +83,12 @@ pub fn session_secret(installer_token: Option<&str>) -> String {
     {
         return token.to_string();
     }
-    if std::env::var("CPN_ALLOW_DEV_SESSION").ok().as_deref() == Some("1")
-        || cfg!(test)
-    {
+    if std::env::var("CPN_ALLOW_DEV_SESSION").ok().as_deref() == Some("1") || cfg!(test) {
         return "cpn-panel-dev-session".into();
     }
     // Last resort for unit/dev hosts that cannot write the data dir: still unique per process.
     let bytes: [u8; 32] = rand::rng().random();
-    bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn hmac_hex(secret: &str, payload: &str) -> String {

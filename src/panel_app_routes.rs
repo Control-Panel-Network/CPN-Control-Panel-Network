@@ -57,7 +57,11 @@ fn apps_redirect(domain: &str, notice: Option<&str>, error: Option<&str>) -> Str
     url
 }
 
-fn optional_domain_for_user(user: &str, domain: &str, perm: SitePerm) -> Result<Option<String>, String> {
+fn optional_domain_for_user(
+    user: &str,
+    domain: &str,
+    perm: SitePerm,
+) -> Result<Option<String>, String> {
     let domain = domain.trim();
     if domain.is_empty() {
         return Ok(None);
@@ -81,7 +85,10 @@ pub async fn apps_page(
     let sites = sites_manageable_by(&user).unwrap_or_default();
     let domain = if domain.trim().is_empty() {
         ""
-    } else if sites.iter().any(|s| s.domain.eq_ignore_ascii_case(domain.trim())) {
+    } else if sites
+        .iter()
+        .any(|s| s.domain.eq_ignore_ascii_case(domain.trim()))
+    {
         domain.trim()
     } else {
         ""
@@ -120,10 +127,7 @@ pub async fn apps_install(
         Ok(v) => v,
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    apps_redirect(&form.domain, None, Some(&error)),
-                ))
+                .append_header(("Location", apps_redirect(&form.domain, None, Some(&error))))
                 .finish();
         }
     };
@@ -156,10 +160,7 @@ pub async fn apps_reinstall(
         Ok(v) => v,
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    apps_redirect(&form.domain, None, Some(&error)),
-                ))
+                .append_header(("Location", apps_redirect(&form.domain, None, Some(&error))))
                 .finish();
         }
     };
@@ -192,10 +193,7 @@ pub async fn apps_uninstall(
         Ok(v) => v,
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    apps_redirect(&form.domain, None, Some(&error)),
-                ))
+                .append_header(("Location", apps_redirect(&form.domain, None, Some(&error))))
                 .finish();
         }
     };

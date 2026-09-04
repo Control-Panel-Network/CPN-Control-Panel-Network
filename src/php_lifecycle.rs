@@ -109,9 +109,8 @@ pub fn branch_from_module_stream(stream: &str) -> Option<&'static str> {
 }
 
 pub fn assert_selected_runtime_ok(stream: &str, today_ymd: &str) -> Result<(), String> {
-    let branch = branch_from_module_stream(stream).ok_or_else(|| {
-        format!("Cannot derive PHP branch from module stream '{stream}'")
-    })?;
+    let branch = branch_from_module_stream(stream)
+        .ok_or_else(|| format!("Cannot derive PHP branch from module stream '{stream}'"))?;
     assert_php_branch_not_eol(branch, today_ymd)
 }
 

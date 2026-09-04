@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { PanelShell } from "../../../components/PanelShell";
+import { PanelShell } from "./PanelShell";
 import {
   readSessionCookie,
   sessionCookieName,
   verifySessionToken,
-} from "../../../lib/auth";
+} from "../lib/auth";
 
 type SectionPageProps = {
   title: string;

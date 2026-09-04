@@ -2,7 +2,7 @@
 
 use crate::account::{data_dir, now_unix};
 use crate::postfix_fallback::{postfix_is_ready, require_postfix_smtp_ready};
-use crate::smtp_settings::{SmtpTlsMode, validate_smtp_input, SmtpSetupInput};
+use crate::smtp_settings::{SmtpSetupInput, SmtpTlsMode, validate_smtp_input};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
