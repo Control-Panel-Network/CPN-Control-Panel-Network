@@ -9,9 +9,9 @@ use crate::install_webmail_runtime::webmail_health_url;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
-use std::process::Stdio;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+use std::process::Stdio;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
