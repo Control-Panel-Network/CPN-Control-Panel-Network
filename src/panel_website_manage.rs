@@ -139,6 +139,7 @@ mod tests {
             created_at_unix: 0,
             updated_at_unix: 0,
             vhost_wired: false,
+            ssl: Default::default(),
         }
     }
 

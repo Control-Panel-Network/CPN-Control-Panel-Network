@@ -217,12 +217,13 @@ pub fn ssl_status_card(site: &SiteRecord) -> String {
     let has = ssl_material_present(&site.domain);
     let live = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let domain_q = html_escape(&site.domain);
+    let provider = html_escape(site.ssl.provider.label());
     if has {
         format!(
             r#"<div class="manage-ssl">
   <div>
     <strong>{domain} has SSL material on this host.</strong>
-    <p>Certificate files were found under Let's Encrypt or CPN SSL paths.</p>
+    <p>Provider: <strong>{provider}</strong>. Manage per-domain settings on the SSL tab (siblings are independent).</p>
   </div>
   <div class="manage-actions-row">
     <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Renew / Manage SSL</a>
@@ -232,18 +233,20 @@ pub fn ssl_status_card(site: &SiteRecord) -> String {
             domain = html_escape(&site.domain),
             domain_q = domain_q,
             live = html_escape(&live),
+            provider = provider,
         )
     } else {
         format!(
             r#"<div class="manage-ssl">
   <div>
     <strong>No SSL certificate detected for {domain}.</strong>
-    <p>Issue a Let's Encrypt certificate from the SSL tab when certbot is available.</p>
+    <p>Provider: <strong>{provider}</strong>. Open the SSL tab to issue ACME, upload Custom, or set None.</p>
   </div>
-  <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Issue SSL</a>
+  <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Manage SSL</a>
 </div>"#,
             domain = html_escape(&site.domain),
             domain_q = domain_q,
+            provider = provider,
         )
     }
 }

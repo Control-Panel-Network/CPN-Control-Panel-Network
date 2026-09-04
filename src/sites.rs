@@ -22,8 +22,11 @@ use std::{
 };
 
 use crate::account::{data_dir, now_unix};
+use crate::panel_ops_ssl_provider::{
+    SiteSslSettings, SslProvider, initial_provider_for_new_site, load_ssl_defaults,
+};
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 const DEFAULT_INDEX_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en">
@@ -53,6 +56,9 @@ pub struct SiteRecord {
     pub updated_at_unix: u64,
     /// True until a future release writes real vhost files for this domain.
     pub vhost_wired: bool,
+    /// Per-domain SSL provider and renewal state (never account-wide).
+    #[serde(default)]
+    pub ssl: SiteSslSettings,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,6 +68,9 @@ pub struct SiteModify {
     pub enabled: Option<bool>,
     pub engine: Option<String>,
     pub notes: Option<String>,
+    pub ssl_provider: Option<SslProvider>,
+    pub ssl_include_subdomains_on_cert: Option<bool>,
+    pub ssl: Option<SiteSslSettings>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -341,6 +350,19 @@ pub fn create_site(
     engine: Option<&str>,
     notes: Option<&str>,
 ) -> Result<SiteRecord, String> {
+    create_site_with_ssl(domain_raw, owner, docroot, engine, notes, None)
+}
+
+/// Create a site with an optional explicit SSL provider (CLI `--ssl-provider`).
+/// Subdomains inherit the parent provider as the initial value only when `ssl_provider` is None.
+pub fn create_site_with_ssl(
+    domain_raw: &str,
+    owner: &str,
+    docroot: Option<&str>,
+    engine: Option<&str>,
+    notes: Option<&str>,
+    ssl_provider: Option<SslProvider>,
+) -> Result<SiteRecord, String> {
     let domain = normalize_domain(domain_raw)?;
     let path = site_path(&domain);
     if path.is_file() {
@@ -354,6 +376,10 @@ pub fn create_site(
         return Err("Owner cannot include control characters".into());
     }
     let parent = resolve_parent_domain(&domain)?;
+    let parent_ssl = parent
+        .as_ref()
+        .and_then(|p| load_site_at(&site_path(p)).ok())
+        .map(|s| s.ssl.provider);
     let resolved_docroot = match docroot.map(str::trim).filter(|value| !value.is_empty()) {
         Some(custom) => {
             validate_docroot(custom)?;
@@ -363,6 +389,8 @@ pub fn create_site(
     };
     ensure_site_directories(&resolved_docroot)?;
     let now = now_unix();
+    let provider = initial_provider_for_new_site(ssl_provider, parent_ssl);
+    let _ = load_ssl_defaults(); // ensure defaults file convention is known
     let site = SiteRecord {
         schema_version: SCHEMA_VERSION,
         domain: domain.clone(),
@@ -377,6 +405,7 @@ pub fn create_site(
         created_at_unix: now,
         updated_at_unix: now,
         vhost_wired: false,
+        ssl: SiteSslSettings::with_provider(provider),
     };
     persist_site(&path, &site)?;
     Ok(site)
@@ -418,6 +447,22 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     if let Some(notes) = patch.notes {
         site.notes = notes;
     }
+    if let Some(ssl) = patch.ssl {
+        site.ssl = ssl;
+    } else {
+        if let Some(provider) = patch.ssl_provider {
+            // Leaving a shared cert: clear owner link when switching away from auto ACME peers.
+            if provider.is_custom() || provider.is_none() {
+                site.ssl.shared_cert_owner = None;
+                site.ssl.include_subdomains_on_cert = false;
+            }
+            site.ssl.provider = provider;
+        }
+        if let Some(inc) = patch.ssl_include_subdomains_on_cert {
+            site.ssl.include_subdomains_on_cert = inc;
+        }
+    }
+    site.schema_version = SCHEMA_VERSION;
     site.updated_at_unix = now_unix();
     persist_site(&path, &site)?;
     Ok(site)

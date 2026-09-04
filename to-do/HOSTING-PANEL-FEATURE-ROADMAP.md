@@ -21,7 +21,8 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | Server | Package Manager | dnf list/search read-only |
 | Server | Docker Apps / Containers / Images | docker/podman CLI or "Docker not installed" |
 | Server | Root File Manager | Browse `/home`, `/var/www`, CPN data dir with traversal guards (admin) |
-| Server | DNS Zones / Nameservers / Defaults | Zone + NS JSON under CPN data dir |
+| Server | DNS Zones / Nameservers / Defaults / Cloudflare DNS | Zone + NS JSON; Cloudflare API under `/dns/cloudflare` |
+| Security | Manage SSL (per-domain providers) | `/security/ssl` Let's Encrypt / ZeroSSL / Cloudflare CA / Custom / None |
 | Settings | Change Port | Existing `/api/listen-port` JSON migration UI |
 | Databases | All / Create / Delete | MariaDB/MySQL client `SHOW`/`CREATE`/`DROP` with ident sanitization |
 | Databases | MariaDB Manager | Existing install/detect UI (MariaDB-first naming) |
@@ -47,6 +48,7 @@ CPN-branded tile hubs shipped in the hosting-panel-hubs work. Screenshots from o
 | FTP | Create / Delete / Reset FTP Account |
 | Email | Pattern Forwarding, Email Limits, Change Password, Email Debugger, Mail Queue, SpamAssassin, Rspamd, MailScanner, Email Marketing, Plus-Addressing |
 | Account | Users & Plans tile hub (list/create/modify users, Packages links, site ACL MVP) |
+
 ## Later (roadmap)
 
 - Reseller hierarchy and quotas under Reseller Center

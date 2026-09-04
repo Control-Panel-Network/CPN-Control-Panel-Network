@@ -266,6 +266,12 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "Cloudflare DNS",
+                    subtitle: "API settings and records",
+                    href: "/dns/cloudflare",
+                    live: true,
+                },
+                HubTile {
                     title: "Nameservers",
                     subtitle: "NS records list",
                     href: "/server/dns/nameservers",

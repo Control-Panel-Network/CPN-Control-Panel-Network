@@ -4,10 +4,10 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_security::{
-    fail2ban_page, firewall_page, hostname_ssl_page, mail_ssl_page, malware_scan_page,
-    manage_ssl_page, modsec_page, modsec_rules_page, rule_packs_page, run_sshd_toggle,
-    secure_ssh_page, security_hub_main,
+    fail2ban_page, firewall_page, hostname_ssl_page, mail_ssl_page, malware_scan_page, modsec_page,
+    modsec_rules_page, rule_packs_page, run_sshd_toggle, secure_ssh_page, security_hub_main,
 };
+use crate::panel_hub_pages_ssl_le::manage_ssl_page as manage_ssl_providers_page;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -144,7 +144,11 @@ pub async fn security_malware(http: HttpRequest, state: web::Data<Arc<AppState>>
 }
 
 #[get("/security/ssl")]
-pub async fn security_ssl(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn security_ssl(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
@@ -152,7 +156,10 @@ pub async fn security_ssl(http: HttpRequest, state: web::Data<Arc<AppState>>) ->
         &user,
         "security",
         "Manage SSL",
-        &manage_ssl_page(),
+        &manage_ssl_providers_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
 }
 
