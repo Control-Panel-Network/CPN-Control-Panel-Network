@@ -12,6 +12,10 @@ if [[ $# -lt 1 ]]; then
 fi
 
 if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+  if [[ "${CPN_REQUIRE_GPG:-0}" == "1" ]]; then
+    echo "GPG_PRIVATE_KEY required for official signed releases (issue #16)." >&2
+    exit 1
+  fi
   echo "GPG_PRIVATE_KEY not set; skipping GPG signatures (checksums still required)."
   exit 0
 fi

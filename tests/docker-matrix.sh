@@ -160,6 +160,16 @@ run_case() {
       "$engine" exec "$name" systemctl is-active --quiet nginx
       "$engine" exec "$name" nginx -t
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1/ 2>/dev/null | grep -qi 'nginx\\|AlmaLinux\\|Welcome\\|Ubuntu\\|Debian'"
+      # External-ish check: query from the container's eth0 address, not loopback (issue #21).
+      "$engine" exec "$name" sh -lc '
+        set -e
+        ip=$(hostname -I 2>/dev/null | awk "{print \$1}")
+        if [[ -n "$ip" && "$ip" != "127.0.0.1" ]]; then
+          curl -fsS --max-time 5 "http://$ip/" >/dev/null
+        else
+          echo "skip non-loopback probe (no eth IP)"
+        fi
+      '
       ;;
     caddy)
       "$engine" exec "$name" systemctl is-active --quiet caddy
@@ -180,7 +190,7 @@ run_case() {
         "$engine" exec -i "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
       "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
-      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
+      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     roundcube)
       "$engine" exec "$name" sh -lc 'systemctl is-active --quiet php-fpm || systemctl is-active --quiet php*-fpm'
@@ -190,7 +200,7 @@ run_case() {
       "$engine" exec -i "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
       "$engine" exec "$name" sh -lc "ss -ltn | grep -E ':143|:587|:25'"
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
-      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
+      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     thunderbird)
       if is_apt_image "$image"; then
@@ -199,7 +209,7 @@ run_case() {
         "$engine" exec "$name" rpm -q thunderbird
       fi
       "$engine" exec "$name" thunderbird --version | grep -qi Thunderbird
-      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8787/api/status?token=$token | grep -q '\"mail_backend_ready\":false'"
+      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":false'"
       ;;
   esac
   "$engine" rm -f "$name" >/dev/null

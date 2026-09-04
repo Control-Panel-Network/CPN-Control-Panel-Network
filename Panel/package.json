@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "auth-selftest": "node scripts/auth-selftest.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",

@@ -10,34 +10,98 @@ use tokio::{io::AsyncReadExt, process::Command};
 const SNAPPYMAIL_SHA256: &str = "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec";
 const ROUNDCUBE_SHA256: &str = "443cde2ea03b840ce4701fe23c273f01e68702f176d282e60248236bbb5f5f85";
 
-fn ephemeral_download_path(filename: &str) -> Result<String, String> {
-    let suffix: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(16)
-        .map(char::from)
-        .collect();
-    let dir = format!("/var/tmp/cpn-dl-{suffix}");
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+fn ephemeral_download_path(filename: &str) -> Result<EphemeralDownload, String> {
+    EphemeralDownload::create(filename)
+}
+
+/// Private download area under `/var/tmp` with RAII cleanup (issue #10).
+pub struct EphemeralDownload {
+    dir: std::path::PathBuf,
+    path: std::path::PathBuf,
+}
+
+impl EphemeralDownload {
+    pub fn create(filename: &str) -> Result<Self, String> {
+        let suffix: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+        let root = if cfg!(unix) && Path::new("/var/tmp").is_dir() {
+            Path::new("/var/tmp").to_path_buf()
+        } else {
+            std::env::temp_dir()
+        };
+        let dir = root.join(format!("cpn-dl-{suffix}"));
+        if dir.exists() {
+            return Err(format!("Temp dir collision at {}", dir.display()));
+        }
+        std::fs::create_dir_all(&dir)
+            .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        }
+        let path = dir.join(filename);
+        reject_if_symlink_clobber(&path)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options
+            .open(&path)
+            .map_err(|error| {
+                let _ = std::fs::remove_dir_all(&dir);
+                format!("No se pudo crear el archivo temporal de forma segura: {error}")
+            })?
+            .write_all(b"")
+            .map_err(|error| {
+                let _ = std::fs::remove_dir_all(&dir);
+                error.to_string()
+            })?;
+        Ok(Self { dir, path })
     }
-    let path = format!("{dir}/{filename}");
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+
+    pub fn as_str(&self) -> &str {
+        self.path.to_str().unwrap_or_default()
     }
-    options
-        .open(&path)
-        .map_err(|error| format!("No se pudo crear el archivo temporal de forma segura: {error}"))?
-        .write_all(b"")
-        .map_err(|error| error.to_string())?;
-    Ok(path)
+
+    #[cfg(test)]
+    fn path_buf(&self) -> &Path {
+        &self.path
+    }
+
+    #[cfg(test)]
+    fn dir_buf(&self) -> &Path {
+        &self.dir
+    }
+}
+
+impl Drop for EphemeralDownload {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn reject_if_symlink_clobber(path: &Path) -> Result<(), String> {
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            return Err(format!(
+                "Refusing to write through symlink at {}",
+                path.display()
+            ));
+        }
+        return Err(format!(
+            "Refusing to clobber existing path {}",
+            path.display()
+        ));
+    }
+    Ok(())
 }
 
 fn verify_sha256(path: &str, expected_hex: &str) -> Result<(), String> {
@@ -176,7 +240,8 @@ pub(crate) async fn install_webmail(
         MailSystem::Snappymail => {
             std::fs::create_dir_all("/opt/cpn-webmail/snappymail")
                 .map_err(|error| error.to_string())?;
-            let archive = ephemeral_download_path("snappymail.tar.gz")?;
+            let download_area = ephemeral_download_path("snappymail.tar.gz")?;
+            let archive = download_area.as_str().to_string();
             download(
                 state,
                 "https://github.com/the-djmaze/snappymail/releases/download/v2.38.2/snappymail-2.38.2.tar.gz",
@@ -196,13 +261,14 @@ pub(crate) async fn install_webmail(
                 80,
             )
             .await?;
-            let _ = std::fs::remove_file(&archive);
+            drop(download_area);
             configure_webmail_runtime(state, "/opt/cpn-webmail/snappymail", engine).await?;
         }
         MailSystem::Roundcube => {
             std::fs::create_dir_all("/opt/cpn-webmail/roundcube")
                 .map_err(|error| error.to_string())?;
-            let archive = ephemeral_download_path("roundcube.tar.gz")?;
+            let download_area = ephemeral_download_path("roundcube.tar.gz")?;
+            let archive = download_area.as_str().to_string();
             download(
                 state,
                 "https://github.com/roundcube/roundcubemail/releases/download/1.7.3/roundcubemail-1.7.3-complete.tar.gz",
@@ -237,7 +303,7 @@ pub(crate) async fn install_webmail(
                 80,
             )
             .await?;
-            let _ = std::fs::remove_file(&archive);
+            drop(download_area);
             let key: String = rand::rng()
                 .sample_iter(&Alphanumeric)
                 .take(24)
@@ -284,4 +350,62 @@ pub(crate) async fn install_webmail(
         MailSystem::Thunderbird => unreachable!(),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn ephemeral_download_cleans_up_on_drop() {
+        let area = EphemeralDownload::create("probe.bin").expect("create");
+        let path = area.path_buf().to_path_buf();
+        let dir = area.dir_buf().to_path_buf();
+        assert!(path.is_file());
+        drop(area);
+        assert!(!path.exists());
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn create_new_rejects_preexisting_file() {
+        let area = EphemeralDownload::create("collision.bin").expect("create");
+        let path = area.path_buf().to_path_buf();
+        let err = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .expect_err("must refuse clobber");
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        drop(area);
+    }
+
+    #[test]
+    fn reject_symlink_clobber_helper() {
+        let dir = std::env::temp_dir().join(format!(
+            "cpn-symlink-test-{}",
+            rand::rng()
+                .sample_iter(&Alphanumeric)
+                .take(8)
+                .map(char::from)
+                .collect::<String>()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("target.txt");
+        fs::write(&target, b"secret").unwrap();
+        let link = dir.join("link.txt");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&target, &link).unwrap();
+            let err = reject_if_symlink_clobber(&link).expect_err("symlink");
+            assert!(err.contains("symlink"));
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&link, b"x").unwrap();
+            assert!(reject_if_symlink_clobber(&link).is_err());
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

@@ -150,6 +150,36 @@ pub fn run_preflight(min_free_mb: u64) -> Result<PreflightReport, String> {
         }
     }
 
+    // Soft checks: connectivity / ports / preexisting services (issue #13).
+    for port in [80u16, 443u16] {
+        match std::net::TcpListener::bind(("127.0.0.1", port)) {
+            Ok(listener) => {
+                notes.push(format!("port {port}/tcp appears free on loopback"));
+                drop(listener);
+            }
+            Err(_) => notes.push(format!(
+                "port {port}/tcp already in use on loopback (may be preexisting web server)"
+            )),
+        }
+    }
+    if Path::new("/etc/yum.repos.d").is_dir() || Path::new("/etc/apt/sources.list").is_file() {
+        notes.push("package repositories present on host".into());
+    } else {
+        notes.push("warning: no obvious package repository config found".into());
+    }
+    if std::process::Command::new("curl")
+        .args(["-fsSIL", "--max-time", "5", "https://example.com"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+    {
+        notes.push("outbound HTTPS connectivity ok".into());
+    } else {
+        notes.push("warning: outbound HTTPS probe failed (repos may be unreachable)".into());
+    }
+
     if !(os_ok && root_ok && disk_ok) {
         return Err(format!("Preflight failed: {}", notes.join("; ")));
     }
@@ -469,5 +499,33 @@ mod tests {
         assert!(failure_message(FailureKind::FailedPartial).contains("partial"));
         assert!(!failure_message(FailureKind::FailedPartial).contains("de forma segura"));
         assert!(failure_message(FailureKind::FailedRolledBack).contains("rolled back"));
+    }
+
+    #[test]
+    fn failure_injection_then_retry_converges() {
+        with_test_data_dir(|| {
+            begin_install_run("stage-a").unwrap();
+            let conf = data_root().join("stage-a.conf");
+            write_file_tracked("stage-a", &conf, "v1\n").unwrap();
+            // Inject failure: write a second file, then roll back the run.
+            let conf2 = data_root().join("stage-a-extra.conf");
+            write_file_tracked("stage-a", &conf2, "extra\n").unwrap();
+            let report = rollback_tracked_files().unwrap();
+            assert!(
+                matches!(
+                    report.kind,
+                    FailureKind::FailedRolledBack | FailureKind::FailedPartial
+                ),
+                "unexpected kind {report:?}"
+            );
+            assert!(!conf2.exists() || report.removed.iter().any(|p| p.contains("stage-a-extra")));
+
+            // Retry: same stage should converge to intended content.
+            begin_install_run("stage-a-retry").unwrap();
+            write_file_tracked("stage-a-retry", &conf, "v2\n").unwrap();
+            assert_eq!(fs::read_to_string(&conf).unwrap(), "v2\n");
+            write_file_tracked("stage-a-retry", &conf, "v2\n").unwrap();
+            end_install_run();
+        });
     }
 }

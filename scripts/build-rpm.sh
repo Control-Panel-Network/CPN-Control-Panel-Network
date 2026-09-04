@@ -32,8 +32,13 @@ npm ci
 npm run bundle
 
 cd "$project_dir"
+
+if [[ ! -f "$project_dir/Cargo.lock" ]]; then
+  echo "Cargo.lock missing; refuse unlockable release build (issue #12)." >&2
+  exit 1
+fi
 bash "$project_dir/scripts/sync-version.sh"
-cargo build --release
+cargo build --release --locked
 
 mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"

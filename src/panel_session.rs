@@ -63,10 +63,9 @@ fn load_or_create_persisted_secret() -> Option<String> {
     None
 }
 
-/// Resolve the HMAC secret used for panel sessions.
-///
-/// Order: `CPN_PANEL_SESSION_SECRET`, persisted `panel-session.secret`,
-/// then optional installer token fallback (process lifetime only).
+/// Resolve HMAC secret for panel sessions (issue #8).
+/// Prefer env and persisted secret; never use a public hardcoded secret outside
+/// explicit development/test overrides.
 pub fn session_secret(installer_token: Option<&str>) -> String {
     if let Some(env_secret) = std::env::var("CPN_PANEL_SESSION_SECRET")
         .ok()
@@ -84,7 +83,17 @@ pub fn session_secret(installer_token: Option<&str>) -> String {
     {
         return token.to_string();
     }
-    "cpn-panel-dev-session".into()
+    if std::env::var("CPN_ALLOW_DEV_SESSION").ok().as_deref() == Some("1")
+        || cfg!(test)
+    {
+        return "cpn-panel-dev-session".into();
+    }
+    // Last resort for unit/dev hosts that cannot write the data dir: still unique per process.
+    let bytes: [u8; 32] = rand::rng().random();
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn hmac_hex(secret: &str, payload: &str) -> String {

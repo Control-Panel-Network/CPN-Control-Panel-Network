@@ -7,8 +7,80 @@ import type {
   ServerEngine,
 } from './types';
 
-const accessToken = new URLSearchParams(window.location.search).get('token') ?? '';
-const apiUrl = (path: string) => `${path}?token=${encodeURIComponent(accessToken)}`;
+const TOKEN_STORAGE_KEY = 'cpn_install_token';
+
+function readTokenFromUrl(): string {
+  return new URLSearchParams(window.location.search).get('token') ?? '';
+}
+
+function stripTokenFromUrl(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('token')) {
+    return;
+  }
+  url.searchParams.delete('token');
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, document.title, next);
+}
+
+/** Capture bootstrap token once, then keep it out of the address bar (issue #1). */
+function resolveAccessToken(): string {
+  const fromUrl = readTokenFromUrl();
+  if (fromUrl) {
+    try {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, fromUrl);
+    } catch {
+      // Private mode may block storage; Bearer header still works for this page load.
+    }
+    stripTokenFromUrl();
+    return fromUrl;
+  }
+  try {
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+let accessToken = resolveAccessToken();
+let sessionBootstrapped = false;
+
+function authHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  headers.set('Accept', 'application/json');
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    headers.set('X-CPN-Token', accessToken);
+  }
+  return headers;
+}
+
+async function ensureInstallSession(): Promise<void> {
+  if (sessionBootstrapped || !accessToken) {
+    return;
+  }
+  sessionBootstrapped = true;
+  try {
+    await fetch('/api/session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ token: accessToken }),
+    });
+  } catch {
+    // Cookie bootstrap is best-effort; Bearer still authorizes API calls.
+  }
+}
+
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  await ensureInstallSession();
+  const headers = authHeaders(init.headers);
+  return fetch(path, {
+    ...init,
+    credentials: 'same-origin',
+    headers,
+  });
+}
 
 async function readError(response: Response, fallback: string): Promise<string> {
   const payload = await response.json().catch(() => null);
@@ -16,17 +88,15 @@ async function readError(response: Response, fallback: string): Promise<string> 
 }
 
 export async function getStatus(): Promise<InstallerStatus> {
-  const response = await fetch(apiUrl('/api/status'), {
-    headers: { Accept: 'application/json' },
-  });
+  const response = await apiFetch('/api/status');
   if (!response.ok) throw new Error('status_fetch_failed');
   return response.json();
 }
 
 export async function setLanguage(language: string): Promise<InstallerStatus> {
-  const response = await fetch(apiUrl('/api/language'), {
+  const response = await apiFetch('/api/language', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ language }),
   });
   if (!response.ok) throw new Error(await readError(response, 'language_failed'));
@@ -55,9 +125,9 @@ export async function setListenPort(
   if (options?.panel_hostname !== undefined) {
     body.panel_hostname = options.panel_hostname;
   }
-  const response = await fetch(apiUrl('/api/listen-port'), {
+  const response = await apiFetch('/api/listen-port', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await readError(response, 'listen_port_failed'));
@@ -85,9 +155,9 @@ export async function setupAccount(payload: {
   send_username_email?: boolean;
   include_password_in_email?: boolean;
 }): Promise<AccountSetupResponse> {
-  const response = await fetch(apiUrl('/api/account/setup'), {
+  const response = await apiFetch('/api/account/setup', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error(await readError(response, 'account_failed'));
@@ -95,7 +165,7 @@ export async function setupAccount(payload: {
 }
 
 export async function startMailInstall(mail: MailSystem): Promise<void> {
-  const response = await fetch(apiUrl('/api/install/mail'), {
+  const response = await apiFetch('/api/install/mail', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mail }),
@@ -106,7 +176,7 @@ export async function startMailInstall(mail: MailSystem): Promise<void> {
 }
 
 export async function startServerInstall(server: ServerEngine): Promise<void> {
-  const response = await fetch(apiUrl('/api/install/server'), {
+  const response = await apiFetch('/api/install/server', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ server }),
@@ -122,9 +192,9 @@ export async function startMaintenance(payload: {
   confirm_downgrade?: boolean;
   reset_data?: boolean;
 }): Promise<void> {
-  const response = await fetch(apiUrl('/api/maintenance'), {
+  const response = await apiFetch('/api/maintenance', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
@@ -133,8 +203,11 @@ export async function startMaintenance(payload: {
 }
 
 export function connectInstallerEvents(onEvent: (event: InstallerEvent) => void) {
+  void ensureInstallSession();
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${window.location.host}${apiUrl('/api/events')}`);
+  // Prefer cookie session after /api/session; keep Bearer via short-lived storage only.
+  // Do not put the install token back into the WebSocket URL (issue #1).
+  const socket = new WebSocket(`${protocol}//${window.location.host}/api/events`);
 
   socket.addEventListener('message', (message) => {
     try {
@@ -151,6 +224,6 @@ export function resolvePanelLoginUrl(status: InstallerStatus): string {
   if (status.panel_login_url) return status.panel_login_url;
   const path = status.panel_login_path || '/login';
   if (path.startsWith('http')) return path;
-  const token = new URLSearchParams(window.location.search).get('token') ?? '';
-  return `${path}?token=${encodeURIComponent(token)}`;
+  // Panel login must not carry the installer root token (issue #1 / #8).
+  return path;
 }
