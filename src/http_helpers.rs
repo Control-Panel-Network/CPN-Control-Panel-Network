@@ -104,11 +104,93 @@ pub fn authorized_request(state: &AppState, query: &TokenQuery, request: &HttpRe
     session_matches(state, session_from_cookie(request).as_deref())
 }
 
-/// When listening on 0.0.0.0, reject cross-site browser POSTs without a matching Origin/Referer.
-/// Host allowlist prefers the bound loopback/public hostnames, not only the client-supplied Host header.
-pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u16) -> bool {
+/// Build Origin/Host allowlist from bind port and server-known addresses.
+/// Never trusts the client-supplied `Host` header (issue #1).
+pub fn build_allowed_hosts(bind_port: u16, configured_hosts: &[String]) -> Vec<String> {
+    let mut allowed = vec![
+        format!("127.0.0.1:{bind_port}"),
+        format!("localhost:{bind_port}"),
+        format!("[::1]:{bind_port}"),
+        format!("::1:{bind_port}"),
+    ];
+    for host in configured_hosts {
+        let raw = host.trim();
+        if raw.is_empty() || raw == "0.0.0.0" || raw == "::" || raw == "*" {
+            continue;
+        }
+        let entry = if raw.starts_with('[') {
+            if raw.contains("]:") {
+                raw.to_string()
+            } else {
+                format!("{raw}:{bind_port}")
+            }
+        } else if raw.matches(':').count() >= 2 {
+            format!("[{raw}]:{bind_port}")
+        } else if let Some((name, port)) = raw.rsplit_once(':') {
+            if !name.is_empty() && port.parse::<u16>().is_ok() {
+                raw.to_string()
+            } else {
+                format!("{raw}:{bind_port}")
+            }
+        } else {
+            format!("{raw}:{bind_port}")
+        };
+        if !allowed
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(&entry))
+        {
+            allowed.push(entry);
+        }
+    }
+    allowed
+}
+
+fn extract_authority(urlish: &str) -> Option<String> {
+    let trimmed = urlish.trim();
+    let rest = trimmed
+        .strip_prefix("http://")
+        .or_else(|| trimmed.strip_prefix("https://"))
+        .unwrap_or(trimmed);
+    let authority = rest.split('/').next()?.trim();
+    if authority.is_empty() {
+        return None;
+    }
+    Some(authority.to_string())
+}
+
+fn authority_allowed(authority: &str, allowed_hosts: &[String]) -> bool {
+    let authority = authority.trim();
+    allowed_hosts
+        .iter()
+        .any(|host| authority.eq_ignore_ascii_case(host))
+}
+
+/// True when Origin/Referer authority matches the server-configured allowlist.
+pub fn origin_matches_allowed(candidate: &str, allowed_hosts: &[String]) -> bool {
+    let Some(authority) = extract_authority(candidate) else {
+        return false;
+    };
+    authority_allowed(&authority, allowed_hosts)
+}
+
+fn host_header_allowed(request: &HttpRequest, allowed_hosts: &[String]) -> bool {
+    let Some(host_hdr) = request
+        .headers()
+        .get(actix_web::http::header::HOST)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    authority_allowed(host_hdr.trim(), allowed_hosts)
+}
+
+/// When listening on 0.0.0.0, reject unexpected Host and cross-site Origin/Referer.
+pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, allowed_hosts: &[String]) -> bool {
     if !allow_remote {
         return true;
+    }
+    if !host_header_allowed(request, allowed_hosts) {
+        return false;
     }
     let method = request.method().as_str();
     if matches!(method, "GET" | "HEAD" | "OPTIONS") {
@@ -124,49 +206,31 @@ pub fn remote_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u1
         .and_then(|value| value.to_str().ok());
     let candidate = origin.or(referer);
     let Some(candidate) = candidate else {
-        // Non-browser clients (curl) may omit Origin; allow when Bearer/cookie/query already matched.
         return true;
     };
-    origin_matches_allowed(candidate, bind_port, request)
-}
-
-fn origin_matches_allowed(candidate: &str, bind_port: u16, request: &HttpRequest) -> bool {
-    let host_hdr = request
-        .headers()
-        .get(actix_web::http::header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
-    let mut allowed = vec![
-        format!("127.0.0.1:{bind_port}"),
-        format!("localhost:{bind_port}"),
-        format!("[::1]:{bind_port}"),
-    ];
-    if !host_hdr.is_empty() {
-        if host_hdr.contains(':') {
-            allowed.push(host_hdr.to_string());
-        } else {
-            allowed.push(format!("{host_hdr}:{bind_port}"));
-        }
-    }
-    allowed.iter().any(|host| candidate.contains(host.as_str()))
-        || candidate.contains("127.0.0.1")
-        || candidate.contains("localhost")
+    origin_matches_allowed(candidate, allowed_hosts)
 }
 
 /// Origin check for WebSocket upgrades when `--allow-remote` is set (issue #1).
-pub fn websocket_origin_ok(request: &HttpRequest, allow_remote: bool, bind_port: u16) -> bool {
+pub fn websocket_origin_ok(
+    request: &HttpRequest,
+    allow_remote: bool,
+    allowed_hosts: &[String],
+) -> bool {
     if !allow_remote {
         return true;
+    }
+    if !host_header_allowed(request, allowed_hosts) {
+        return false;
     }
     let origin = request
         .headers()
         .get(actix_web::http::header::ORIGIN)
         .and_then(|value| value.to_str().ok());
     let Some(origin) = origin else {
-        // Non-browser clients may omit Origin after Authorization already matched.
         return true;
     };
-    origin_matches_allowed(origin, bind_port, request)
+    origin_matches_allowed(origin, allowed_hosts)
 }
 
 /// Build HttpOnly install-session cookie (value is server-generated session_id).
@@ -294,8 +358,8 @@ pub fn now_unix() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        install_finished, install_session_cookie_header, origin_matches_allowed,
-        panel_account_ready,
+        build_allowed_hosts, install_finished, install_session_cookie_header, origin_matches_allowed,
+        panel_account_ready, remote_origin_ok, websocket_origin_ok,
     };
     use crate::model::{AccountPublic, InstallerStatus};
     use actix_web::test::TestRequest;
@@ -342,15 +406,43 @@ mod tests {
     }
 
     #[test]
-    fn origin_allowlist_accepts_loopback() {
-        let req = TestRequest::default()
-            .insert_header((actix_web::http::header::HOST, "evil.example:9999"))
-            .to_http_request();
-        assert!(origin_matches_allowed("http://127.0.0.1:2087", 2087, &req));
+    fn origin_allowlist_accepts_loopback_not_attacker_pair() {
+        let allowed = build_allowed_hosts(2087, &["10.0.0.5".into()]);
+        assert!(origin_matches_allowed("http://127.0.0.1:2087/", &allowed));
+        assert!(origin_matches_allowed("http://10.0.0.5:2087", &allowed));
         assert!(!origin_matches_allowed(
-            "https://attacker.example",
-            2087,
-            &req
+            "http://attacker.example:2087",
+            &allowed
         ));
+    }
+
+    #[test]
+    fn remote_rejects_attacker_host_and_origin() {
+        let allowed = build_allowed_hosts(2087, &["192.168.1.10".into()]);
+        let req = TestRequest::default()
+            .method(actix_web::http::Method::POST)
+            .insert_header((actix_web::http::header::HOST, "attacker.example:2087"))
+            .insert_header((
+                actix_web::http::header::ORIGIN,
+                "http://attacker.example:2087",
+            ))
+            .to_http_request();
+        assert!(!remote_origin_ok(&req, true, &allowed));
+        assert!(!websocket_origin_ok(&req, true, &allowed));
+    }
+
+    #[test]
+    fn remote_accepts_configured_host_origin() {
+        let allowed = build_allowed_hosts(2087, &["192.168.1.10".into()]);
+        let req = TestRequest::default()
+            .method(actix_web::http::Method::POST)
+            .insert_header((actix_web::http::header::HOST, "192.168.1.10:2087"))
+            .insert_header((
+                actix_web::http::header::ORIGIN,
+                "http://192.168.1.10:2087",
+            ))
+            .to_http_request();
+        assert!(remote_origin_ok(&req, true, &allowed));
+        assert!(websocket_origin_ok(&req, true, &allowed));
     }
 }

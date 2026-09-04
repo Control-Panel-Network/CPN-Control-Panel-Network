@@ -1,38 +1,53 @@
 #!/usr/bin/env python3
+"""AL9 lab proof for issue #18: cancel via AppState kills the live process group.
+
+Runs the unix unit test `slow_child_dies_when_cancel_requested` on the lab checkout.
+That test starts `run_command` with a slow process group, calls `request_cancel()`
+(the same path SIGINT/SIGTERM uses), and asserts the PGID is gone.
+"""
+from __future__ import annotations
+
 import lab_ssh
 
-body = r"""#!/bin/bash
-set -uo pipefail
-pkill -f 'sleep 180' >/dev/null 2>&1 || true
-setsid bash -c 'sleep 180 & sleep 180 & wait' >/tmp/cpnslow.out 2>&1 &
-sleep 1
-SPID=$(pgrep -n -f 'sleep 180')
-PGID=$(ps -o pgid= -p "$SPID" | tr -d ' ')
-echo SPID=$SPID
-echo PGID=$PGID
-BEFORE=$(ps -o pid= -g "$PGID" | wc -l | tr -d ' ')
-echo BEFORE=$BEFORE
-kill -TERM -"$PGID" 2>/dev/null || true
-sleep 2
-kill -KILL -"$PGID" 2>/dev/null || true
-sleep 1
-AFTER_COUNT=$(ps -o pid= -g "$PGID" 2>/dev/null | wc -l | tr -d ' ')
-AFTER_COUNT=${AFTER_COUNT:-0}
-echo AFTER=$AFTER_COUNT
-REMAIN=$(pgrep -a -f 'sleep 180' || true)
-if [ -n "$REMAIN" ]; then echo REMAINING=yes; echo "$REMAIN"; exit 1; fi
-echo REMAINING=no
-if [ "$AFTER_COUNT" != "0" ]; then exit 1; fi
-exit 0
-"""
+HOST = "127.0.0.1"
+PORT = 2222
 
-c = lab_ssh.connect(port=2222, password="CpnLab2026!")
-sftp = c.open_sftp()
-with sftp.file("/tmp/cpn-issue18b.sh", "w") as f:
-    f.write(body)
-sftp.chmod("/tmp/cpn-issue18b.sh", 0o755)
-sftp.close()
-_i, o, e = c.exec_command("sudo bash /tmp/cpn-issue18b.sh", timeout=60, get_pty=True)
-print((o.read() + e.read()).decode("utf-8", "replace"))
-print("exit", o.channel.recv_exit_status())
-c.close()
+
+def main() -> int:
+    client = lab_ssh.connect(host=HOST, port=PORT, password="CpnLab2026!")
+    script = r"""#!/bin/bash
+set -euo pipefail
+export PATH="$HOME/.cargo/bin:/usr/bin:$PATH"
+cd /home/cpn/CPN-Control-Panel-Network
+git fetch origin
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo BRANCH=$BRANCH
+echo HEAD=$(git rev-parse --short HEAD)
+cargo test --locked slow_child_dies_when_cancel_requested -- --nocapture
+echo ISSUE18_CANCEL_PROOF=ok
+"""
+    sftp = client.open_sftp()
+    with sftp.file("/tmp/cpn-issue18-cancel.sh", "w") as handle:
+        handle.write(script)
+    sftp.chmod("/tmp/cpn-issue18-cancel.sh", 0o755)
+    sftp.close()
+    print("=== issue #18 cancel proof on AL9 ===", flush=True)
+    _stdin, stdout, stderr = client.exec_command(
+        "bash /tmp/cpn-issue18-cancel.sh", timeout=1200, get_pty=True
+    )
+    while True:
+        line = stdout.readline()
+        if not line:
+            break
+        print(line, end="", flush=True)
+    err = stderr.read().decode("utf-8", "replace")
+    if err.strip():
+        print(err, flush=True)
+    code = stdout.channel.recv_exit_status()
+    client.close()
+    print("=== exit", code, "===", flush=True)
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

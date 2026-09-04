@@ -30,8 +30,12 @@ pub struct AppState {
     pub bind_port: u16,
     /// True when bound to 0.0.0.0 (--allow-remote).
     pub allow_remote: bool,
+    /// Server-known Host/Origin authorities (never from the client Host header).
+    pub allowed_hosts: Vec<String>,
     /// Set on SIGINT/SIGTERM so in-flight stages stop starting new work (issue #18).
     pub cancel_requested: std::sync::atomic::AtomicBool,
+    /// Live child PIDs (process-group leaders) so cancel can reap them while running.
+    pub active_child_pids: std::sync::Mutex<Vec<u32>>,
 }
 
 /// Best-effort JSON snapshot for docker-matrix / lab probes (never blocks install).
@@ -50,6 +54,31 @@ impl AppState {
     pub fn request_cancel(&self) {
         self.cancel_requested
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        // Best-effort: TERM any active process groups immediately (issue #18).
+        #[cfg(unix)]
+        {
+            if let Ok(pids) = self.active_child_pids.lock() {
+                for &pid in pids.iter() {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-TERM", &format!("-{pid}")])
+                        .status();
+                }
+            }
+        }
+    }
+
+    fn register_child_pid(&self, pid: u32) {
+        if let Ok(mut pids) = self.active_child_pids.lock() {
+            if !pids.contains(&pid) {
+                pids.push(pid);
+            }
+        }
+    }
+
+    fn unregister_child_pid(&self, pid: u32) {
+        if let Ok(mut pids) = self.active_child_pids.lock() {
+            pids.retain(|value| *value != pid);
+        }
     }
 
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
@@ -155,7 +184,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         .stderr(Stdio::piped());
     #[cfg(unix)]
     {
-        // New process group so timeout/kill can reap descendants (issue #18).
+        // New process group so timeout/cancel can reap descendants (issue #18).
         // SAFETY: runs in the child after fork, before exec.
         unsafe {
             command.pre_exec(|| {
@@ -169,65 +198,105 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     let mut child = command
         .spawn()
         .map_err(|error| format!("No se pudo ejecutar {}: {error}", spec.program))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("No se pudo leer la salida del proceso")?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or("No se pudo leer el error del proceso")?;
-    let mut out_lines = BufReader::new(stdout).lines();
-    let mut err_lines = BufReader::new(stderr).lines();
-    let (mut out_done, mut err_done, mut transaction) = (false, false, false);
+    let child_pid = child.id();
+    if let Some(pid) = child_pid {
+        state.register_child_pid(pid);
+    }
+
+    let description = spec.description;
     let pump = async {
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "No se pudo leer la salida del proceso".to_string())?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "No se pudo leer el error del proceso".to_string())?;
+        let mut out_lines = BufReader::new(stdout).lines();
+        let mut err_lines = BufReader::new(stderr).lines();
+        let (mut out_done, mut err_done, mut transaction) = (false, false, false);
         while !out_done || !err_done {
+            if state.cancel_requested() {
+                return Err("Instalacion cancelada por el operador".into());
+            }
             tokio::select! {
                 line = out_lines.next_line(), if !out_done => match line {
                     Ok(Some(line)) => {
                         if !line.trim().is_empty() { state.log(&line, "info"); }
-                        if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
+                        if let Some(tracking) = spec.dnf {
+                            process_dnf_line(state, tracking, &mut transaction, &line).await;
+                        }
                     }
                     Ok(None) | Err(_) => out_done = true,
                 },
                 line = err_lines.next_line(), if !err_done => match line {
                     Ok(Some(line)) => {
                         if !line.trim().is_empty() { state.log(&line, "info"); }
-                        if let Some(tracking) = spec.dnf { process_dnf_line(state, tracking, &mut transaction, &line).await; }
+                        if let Some(tracking) = spec.dnf {
+                            process_dnf_line(state, tracking, &mut transaction, &line).await;
+                        }
                     }
                     Ok(None) | Err(_) => err_done = true,
                 },
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
             }
+        }
+        if state.cancel_requested() {
+            return Err("Instalacion cancelada por el operador".into());
         }
         let exit = child.wait().await.map_err(|error| error.to_string())?;
         if !exit.success() {
             return Err(format!(
-                "{} terminó con código {}",
-                spec.description,
+                "{description} terminó con código {}",
                 exit.code().unwrap_or(-1)
             ));
         }
         Ok::<(), String>(())
     };
-    match tokio::time::timeout(std::time::Duration::from_secs(1800), pump).await {
-        Ok(result) => result?,
-        Err(_) => {
-            #[cfg(unix)]
-            {
-                let pid = child.id();
-                if let Some(pid) = pid {
-                    let _ = Command::new("kill")
-                        .args(["-TERM", &format!("-{pid}")])
-                        .kill_on_drop(true)
-                        .status()
-                        .await;
-                }
+
+    let cancel_watch = async {
+        loop {
+            if state.cancel_requested() {
+                break;
             }
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            return Err(format!("Tiempo de espera agotado en: {}", spec.description));
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
+    };
+
+    let outcome = tokio::select! {
+        result = tokio::time::timeout(std::time::Duration::from_secs(1800), pump) => {
+            match result {
+                Ok(inner) => inner,
+                Err(_) => Err(format!("Tiempo de espera agotado en: {description}")),
+            }
+        }
+        _ = cancel_watch => Err("Instalacion cancelada por el operador".into()),
+    };
+
+    if outcome.is_err() {
+        #[cfg(unix)]
+        {
+            if let Some(pid) = child_pid {
+                let _ = Command::new("kill")
+                    .args(["-TERM", &format!("-{pid}")])
+                    .kill_on_drop(true)
+                    .status()
+                    .await;
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                let _ = Command::new("kill")
+                    .args(["-KILL", &format!("-{pid}")])
+                    .kill_on_drop(true)
+                    .status()
+                    .await;
+            }
+        }
+        // Child handle is dropped with the cancelled/timed-out pump (kill_on_drop).
     }
+    if let Some(pid) = child_pid {
+        state.unregister_child_pid(pid);
+    }
+    outcome?;
     if let Some(tracking) = spec.dnf {
         state
             .progress(
@@ -614,11 +683,84 @@ mod tests {
             session_id: "s".into(),
             bind_port: 2087,
             allow_remote: false,
+            allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
             cancel_requested: AtomicBool::new(false),
+            active_child_pids: std::sync::Mutex::new(Vec::new()),
         };
         assert!(!state.cancel_requested());
         state.request_cancel();
         assert!(state.cancel_requested());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn slow_child_dies_when_cancel_requested() {
+        use crate::install_recipes::command;
+        use std::sync::Arc;
+        use tokio::process::Command;
+        use tokio::time::{Duration, sleep};
+
+        let (events, _) = broadcast::channel(8);
+        let state = Arc::new(AppState {
+            status: RwLock::new(Default::default()),
+            events,
+            token: "t".into(),
+            session_id: "s".into(),
+            bind_port: 2087,
+            allow_remote: false,
+            allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
+            cancel_requested: AtomicBool::new(false),
+            active_child_pids: std::sync::Mutex::new(Vec::new()),
+        });
+        let worker = state.clone();
+        let join = tokio::spawn(async move {
+            super::run_command(
+                &worker,
+                command(
+                    "bash",
+                    vec!["-c", "sleep 120 & sleep 120 & wait"],
+                    "slow cancel probe",
+                    "testing",
+                    1,
+                ),
+            )
+            .await
+        });
+        sleep(Duration::from_millis(300)).await;
+        let pids: Vec<u32> = state
+            .active_child_pids
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
+        assert!(
+            !pids.is_empty(),
+            "expected an active child pid before cancel"
+        );
+        let pgid = pids[0];
+        state.request_cancel();
+        let result = tokio::time::timeout(Duration::from_secs(8), join)
+            .await
+            .expect("join timed out")
+            .expect("join failed");
+        assert!(
+            result
+                .as_ref()
+                .err()
+                .map(|msg| msg.contains("cancelada"))
+                .unwrap_or(false),
+            "expected cancel error, got {result:?}"
+        );
+        sleep(Duration::from_millis(400)).await;
+        let still = Command::new("bash")
+            .args(["-c", &format!("ps -o pid= -g {pgid} | grep -q .")])
+            .status()
+            .await
+            .map(|status| status.success())
+            .unwrap_or(false);
+        assert!(
+            !still,
+            "process group {pgid} still has members after AppState::request_cancel"
+        );
     }
 
     #[cfg(unix)]
