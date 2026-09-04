@@ -96,29 +96,46 @@ start_container() {
   return 1
 }
 
+# Log path inside the guest. Prefer this over systemd-run: nesting dnf/systemctl
+# inside a transient unit deadlocks systemd on GHA and freezes :2087 (HTTP hang).
+installer_log_path() {
+  printf '%s' /tmp/cpn-installer.log
+}
+
 installer_token() {
   local name="$1"
-  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 80 \
-    | sed -n 's/.*token=\([[:alnum:]]*\).*/\1/p' | tail -1
+  local log
+  log="$(installer_log_path)"
+  "$engine" exec "$name" bash -lc "test -f '$log' && sed -n 's/.*token=\\([[:alnum:]]*\\).*/\\1/p' '$log' | tail -1" \
+    2>/dev/null || true
 }
 
 dump_installer_diag() {
   local name="$1"
-  echo "[DIAG] journalctl -u cpn-installer-test:" >&2
-  "$engine" exec "$name" journalctl -u cpn-installer-test --no-pager -n 120 >&2 || true
-  echo "[DIAG] systemctl status cpn-installer-test:" >&2
-  "$engine" exec "$name" systemctl status cpn-installer-test --no-pager -l >&2 || true
-  echo "[DIAG] ss listeners:" >&2
-  "$engine" exec "$name" ss -ltn >&2 || true
+  local log host_log
+  log="$(installer_log_path)"
+  host_log="/tmp/cpn-matrix-${name}.log"
+  echo "[DIAG] installer log ($log):" >&2
+  "$engine" exec "$name" bash -lc "tail -n 120 '$log' 2>/dev/null || echo '(missing)'" >&2 || true
+  "$engine" cp "$name:$log" "$host_log" >/dev/null 2>&1 || true
+  echo "[DIAG] installer processes:" >&2
+  "$engine" exec "$name" bash -lc "ps -ef | grep -E '[c]pn-installer|[d]nf|[y]um' || true" >&2 || true
+  echo "[DIAG] listeners (ss/netstat fallback):" >&2
+  "$engine" exec "$name" bash -lc 'ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true' >&2 || true
+  echo "[DIAG] last /api/status (best effort):" >&2
+  "$engine" exec "$name" bash -lc 'curl -sS --max-time 3 "http://127.0.0.1:2087/api/status" || true' >&2 || true
 }
 
-# Start installer without blocking on the long-lived process (systemd-run default
-# can hang for hours inside nested privileged systemd on GHA runners).
+# Start installer in the background (not as a systemd unit). systemd-run --no-block
+# still left the process as a unit; package scriptlets calling systemctl then wedged
+# the nested systemd and stopped answering HTTP on :2087.
 start_installer() {
   local name="$1"
   local token=""
-  "$engine" exec "$name" systemd-run --no-block --unit=cpn-installer-test \
-    /usr/bin/cpn-installer >/dev/null
+  local log
+  log="$(installer_log_path)"
+  "$engine" exec "$name" bash -lc \
+    "rm -f '$log' /tmp/cpn-installer.pid; nohup /usr/bin/cpn-installer >'$log' 2>&1 </dev/null & echo \$! >/tmp/cpn-installer.pid"
   for _ in {1..90}; do
     token="$(installer_token "$name")"
     if [[ -n "$token" ]]; then
@@ -137,9 +154,22 @@ start_installer() {
 
 wait_for_result() {
   local name="$1" token="$2"
+  local empty=0
   for _ in {1..240}; do
     local status
-    status="$("$engine" exec "$name" curl -fsS --max-time 5 "http://127.0.0.1:2087/api/status?token=$token" || true)"
+    status="$("$engine" exec "$name" curl -fsS --max-time 5 "http://127.0.0.1:2087/api/status?token=$token" 2>/dev/null || true)"
+    if [[ -z "$status" ]]; then
+      empty=$((empty + 1))
+      # HTTP frozen (often nested-systemd deadlock). Fail before the job timeout.
+      if ((empty >= 18)); then
+        echo "Installer HTTP stopped responding in $name (empty status x${empty})" >&2
+        dump_installer_diag "$name"
+        return 1
+      fi
+      sleep 1
+      continue
+    fi
+    empty=0
     if [[ "$status" == *'"phase":"completed"'* ]]; then return; fi
     if [[ "$status" == *'"phase":"failed"'* ]]; then
       echo "$status" >&2
