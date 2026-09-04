@@ -131,10 +131,11 @@ fn split_host_port(host: &str) -> (String, Option<String>) {
         }
     }
     // IPv4 or hostname with optional port (last ':' for host:port).
-    if let Some((name, port)) = host.rsplit_once(':') {
-        if !name.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
-            return (name.to_string(), Some(port.to_string()));
-        }
+    if let Some((name, port)) = host.rsplit_once(':')
+        && !name.is_empty()
+        && port.chars().all(|c| c.is_ascii_digit())
+    {
+        return (name.to_string(), Some(port.to_string()));
     }
     (host.to_string(), None)
 }
@@ -193,10 +194,10 @@ pub fn webauthn_for_request(
     if loopback {
         // Accept either loopback spelling used by the lab browser/API client.
         for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
-            if let Ok(alt) = origin_url(scheme, alt_host, port_ref) {
-                if alt != primary {
-                    builder = builder.append_allowed_origin(&alt);
-                }
+            if let Ok(alt) = origin_url(scheme, alt_host, port_ref)
+                && alt != primary
+            {
+                builder = builder.append_allowed_origin(&alt);
             }
         }
     }
