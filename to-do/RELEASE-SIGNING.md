@@ -52,13 +52,15 @@ gh attestation verify dist/cpn-installer --repo Control-Panel-Network/CPN-Contro
 
 ## Remaining ops steps (keeps issue #16 open until done)
 
+Checked 04/09/2026: `gh secret list` for this repo shows **no** org/repo GPG secrets visible to the operator token (empty list). Tag `v*` releases will fail closed until secrets are added (`CPN_REQUIRE_GPG=1` in `.github/workflows/release.yml`).
+
 1. Create a release-only GPG key (not a daily-dev key).
-2. Store `GPG_PRIVATE_KEY`, `GPG_PASSPHRASE`, and `GPG_KEY_ID` in the GitHub repo secrets.
+2. Store `GPG_PRIVATE_KEY`, `GPG_PASSPHRASE`, and `GPG_KEY_ID` in the GitHub repo secrets (Settings > Secrets and variables > Actions).
 3. Publish the public fingerprint in release notes / SECURITY.md.
-4. Confirm a tagged release produces both `*.rpm.asc` and an `rpmsign`-embedded signature (install `rpm-sign` in the release environment if needed).
+4. Push a signed tag `vX.Y.Z` and confirm the Release job uploads `SHA256SUMS.asc` plus `*.rpm.asc` (and `rpmsign` when `rpm-sign` is available).
 5. Optionally enable cosign secrets for blob signatures.
 
-Until those secrets exist, do not close #16 as complete.
+Until those secrets exist **and** a signed `v*` GitHub Release is published, do not close #16 as complete.
 
 ## Bootstrap policy
 

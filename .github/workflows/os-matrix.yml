@@ -56,7 +56,10 @@ jobs:
 
   mail-roundtrip:
     name: Rocky 9 mail E2E (Roundcube)
-    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'mail' || inputs.scope == 'extended')
+    # Run on main path pushes (mail/matrix files) and on manual mail/extended dispatch (issues #7/#9).
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.scope == 'mail' || inputs.scope == 'extended'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
