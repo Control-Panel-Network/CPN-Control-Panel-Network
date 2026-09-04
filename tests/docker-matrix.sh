@@ -119,9 +119,23 @@ dump_installer_diag() {
   "$engine" exec "$name" bash -lc "tail -n 120 '$log' 2>/dev/null || echo '(missing)'" >&2 || true
   "$engine" cp "$name:$log" "$host_log" >/dev/null 2>&1 || true
   echo "[DIAG] installer processes:" >&2
-  "$engine" exec "$name" bash -lc "ps -ef | grep -E '[c]pn-installer|[d]nf|[y]um' || true" >&2 || true
-  echo "[DIAG] listeners (ss/netstat fallback):" >&2
-  "$engine" exec "$name" bash -lc 'ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true' >&2 || true
+  "$engine" exec "$name" bash -lc '
+    pid=$(cat /tmp/cpn-installer.pid 2>/dev/null || true)
+    echo "pid_file=${pid:-missing}"
+    if [[ -n "$pid" && -d "/proc/$pid" ]]; then
+      echo "proc_state=$(cut -d" " -f1-3 /proc/$pid/stat 2>/dev/null || true)"
+      tr "\0" " " < /proc/$pid/cmdline; echo
+      ls /proc/$pid/task 2>/dev/null | wc -l | awk "{print \"tasks=\" \$1}"
+    else
+      echo "installer pid not alive"
+    fi
+    command -v ps >/dev/null && ps -ef | grep -E "[c]pn-installer|[d]nf|[y]um" || true
+  ' >&2 || true
+  echo "[DIAG] listeners (ss/netstat//proc/net/tcp):" >&2
+  "$engine" exec "$name" bash -lc '
+    ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true
+    grep -E " 0517 | 0050 " /proc/net/tcp 2>/dev/null || true
+  ' >&2 || true
   echo "[DIAG] last /api/status (best effort):" >&2
   "$engine" exec "$name" bash -lc 'curl -sS --max-time 3 "http://127.0.0.1:2087/api/status" || true' >&2 || true
 }
@@ -223,11 +237,16 @@ run_case() {
   test -n "$token"
   if [[ "$kind" == "mail" ]]; then
     post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
-      '{"server":"nginx"}'
+      '{"server":"nginx","database":"none","install_phpmyadmin":false}'
     wait_for_result "$name" "$token"
   fi
-  post_json "$name" "http://127.0.0.1:2087/api/install/$kind?token=$token" \
-    "{\"$kind\":\"$component\"}"
+  if [[ "$kind" == "server" ]]; then
+    post_json "$name" "http://127.0.0.1:2087/api/install/server?token=$token" \
+      "{\"server\":\"$component\",\"database\":\"none\",\"install_phpmyadmin\":false}"
+  else
+    post_json "$name" "http://127.0.0.1:2087/api/install/$kind?token=$token" \
+      "{\"$kind\":\"$component\"}"
+  fi
   wait_for_result "$name" "$token"
 
   case "$component" in

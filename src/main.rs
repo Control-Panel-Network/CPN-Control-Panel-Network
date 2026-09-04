@@ -785,7 +785,10 @@ async fn main() -> std::io::Result<()> {
             .route("/api/events", web::get().to(websocket))
             .route("/{path:.*}", web::get().to(static_asset))
     })
-    .keep_alive(Duration::from_secs(30));
+    .keep_alive(Duration::from_secs(30))
+    // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
+    // work freezes /api/status for the whole smoke. Keep at least two workers.
+    .workers(std::cmp::max(2, std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2)));
     for host in hosts {
         server = server.bind((host.as_str(), listen_port))?;
     }

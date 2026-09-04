@@ -319,7 +319,9 @@ fn chrono_today_ymd() -> String {
 pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
     let result = async {
         let _run = install_journal::begin_install_run("mail")?;
-        let report = install_journal::run_preflight(512)?;
+        let report = tokio::task::spawn_blocking(|| install_journal::run_preflight(512))
+            .await
+            .map_err(|error| format!("preflight join failed: {error}"))??;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
         }

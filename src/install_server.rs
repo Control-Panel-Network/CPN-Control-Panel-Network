@@ -240,7 +240,10 @@ pub async fn install_with_database(
 ) {
     let result = async {
         let _run = install_journal::begin_install_run("server")?;
-        let report = install_journal::run_preflight(512)?;
+        // Keep the Actix/tokio worker free: preflight uses sync process/IO.
+        let report = tokio::task::spawn_blocking(|| install_journal::run_preflight(512))
+            .await
+            .map_err(|error| format!("preflight join failed: {error}"))??;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
         }
@@ -391,18 +394,28 @@ pub async fn install_with_database(
                 ),
             )
             .await;
-        match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin) {
-            Ok(notes) => {
+        match tokio::task::spawn_blocking(move || {
+            crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin)
+        })
+        .await
+        {
+            Ok(Ok(notes)) => {
                 for note in notes {
                     state.log(note, "info");
                 }
             }
-            Err(error) => {
+            Ok(Err(error)) => {
                 state.log(
                     format!("Database defaults warning (continuing): {error}"),
                     "error",
                 );
                 // Soft-fail: web server already verified; operator can fix DB from Apps.
+            }
+            Err(error) => {
+                state.log(
+                    format!("Database defaults join failed (continuing): {error}"),
+                    "error",
+                );
             }
         }
 
