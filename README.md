@@ -9,7 +9,7 @@
 
 CPN is a web installer for preparing server panel components. The primary path is Linux guests (AlmaLinux, Rocky Linux, RHEL, Ubuntu, Debian, and related targets listed below). Windows Server 2016+ has a Phase A path (installer UI + account bootstrap) without Linux package parity. A single Rust process serves the HTTP interface, streams real progress over WebSockets, and embeds the React app in the final binary.
 
-Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd), or use the Windows zip + PowerShell installer on Server 2016+. See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix), [to-do/WINDOWS-SERVER-INSTALL.md](to-do/WINDOWS-SERVER-INSTALL.md), and [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md).
+Install on a supported Linux guest (RPM on RHEL-family, experimental `.deb` on Ubuntu), run an AlmaLinux-based installer inside Docker/Podman (privileged + systemd), or use the Windows zip + PowerShell installer on Server 2016+. See [to-do/OS-SUPPORT-MATRIX.md](to-do/OS-SUPPORT-MATRIX.md) (authoritative matrix), [to-do/WINDOWS-SERVER-INSTALL.md](to-do/WINDOWS-SERVER-INSTALL.md), [to-do/DOCKER-INSTALL.md](to-do/DOCKER-INSTALL.md), and [to-do/INSTALL-METHODS.md](to-do/INSTALL-METHODS.md) (GUI + CLI + SSH).
 
 ## Supported operating systems
 

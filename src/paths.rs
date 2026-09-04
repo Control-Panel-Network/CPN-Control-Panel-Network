@@ -7,8 +7,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Unix default data directory.
+/// Unix default data directory (registry, bootstrap, catalog cache).
 pub const UNIX_DATA_DIR: &str = "/var/lib/cpn";
+
+/// Unix default panel home (panel-wide backups under `backups/`).
+pub const UNIX_PANEL_HOME: &str = "/home/cpn-panel";
 
 /// Windows default data directory (under ProgramData).
 pub const WINDOWS_DATA_DIR: &str = r"C:\ProgramData\CPN";
@@ -65,6 +68,34 @@ pub fn data_dir_display() -> String {
 
 pub fn join_data(relative: impl AsRef<Path>) -> PathBuf {
     default_data_dir().join(relative)
+}
+
+/// Panel operator home (`CPN_PANEL_HOME`, or `<CPN_SITES_HOME>/cpn-panel`, or `/home/cpn-panel`).
+pub fn panel_home_dir() -> PathBuf {
+    if let Some(override_dir) = env::var_os("CPN_PANEL_HOME") {
+        return PathBuf::from(override_dir);
+    }
+    if let Ok(sites_home) = env::var("CPN_SITES_HOME") {
+        let trimmed = sites_home.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed).join("cpn-panel");
+        }
+    }
+    if cfg!(windows) {
+        PathBuf::from(r"C:\CPN\SitesHome\cpn-panel")
+    } else {
+        PathBuf::from(UNIX_PANEL_HOME)
+    }
+}
+
+/// Panel-wide backup archives (`/home/cpn-panel/backups` by default).
+pub fn panel_backups_dir() -> PathBuf {
+    panel_home_dir().join("backups")
+}
+
+/// Legacy panel backup location under the data dir (pre home-path change).
+pub fn legacy_panel_backups_dir() -> PathBuf {
+    default_data_dir().join("backups")
 }
 
 #[cfg(test)]

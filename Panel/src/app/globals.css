@@ -217,7 +217,7 @@ a { color: inherit; text-decoration: none; }
 .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
 .gauge circle { fill: none; stroke-width: 9; }
 .gauge-track { stroke: #e5e5e7; }
-.gauge-value { stroke: var(--blue); stroke-linecap: round; transition: stroke-dashoffset 600ms ease; }
+.gauge-value { stroke-linecap: round; transition: stroke-dashoffset 600ms ease; }
 .gauge-copy { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .gauge-copy strong { font-size: 21px; line-height: 1.05; letter-spacing: 0.02em; }
 .gauge-copy span { margin-top: 3px; color: var(--muted); font-size: 11px; text-transform: capitalize; }
@@ -228,7 +228,10 @@ a { color: inherit; text-decoration: none; }
 .status-card h2, .activity-card h2, .section-card h2 { margin: 0; color: var(--ink); font-size: 23px; letter-spacing: -0.025em; }
 .status-card ul { list-style: none; padding: 0; margin: 25px 0 0; }
 .status-card li, .activity-card > div { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid #eeeeF0; font-size: 14px; }
-.status-card li strong { color: var(--green); font-size: 12px; }
+.status-card li strong { font-size: 12px; }
+.status-card li strong.ok { color: var(--green); }
+.status-card li strong.warn { color: #b54708; }
+.status-card li strong.bad { color: #b42318; }
 .activity-card time { color: var(--muted); font-size: 12px; }
 .section-card p { margin: 12px 0 0; color: var(--muted); max-width: 52ch; }
 

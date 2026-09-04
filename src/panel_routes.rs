@@ -5,7 +5,8 @@ use crate::installer::AppState;
 use crate::panel_pages::panel_shell;
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
-    backups_main, create_panel_backup, databases_main, email_main, websites_main,
+    backups_main, create_panel_backup, databases_main, email_main, run_mariadb_install,
+    set_websites_docroot_pref, websites_main,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::sites::{create_site, delete_site};
@@ -131,6 +132,45 @@ pub async fn websites_delete(
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct WebsitePrefsForm {
+    #[serde(default)]
+    show_document_roots: String,
+}
+
+#[post("/websites/prefs")]
+pub async fn websites_prefs(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<WebsitePrefsForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let show = matches!(form.show_document_roots.trim(), "1" | "true" | "on" | "yes");
+    match set_websites_docroot_pref(show) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites?notice={}",
+                    urlencoding_simple(if show {
+                        "Document roots visible"
+                    } else {
+                        "Document roots hidden"
+                    })
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
 #[get("/email")]
 pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
@@ -150,16 +190,46 @@ pub async fn email_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> H
 }
 
 #[get("/databases")]
-pub async fn databases_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn databases_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "databases",
         "Databases",
-        &databases_main(),
+        &databases_main(notice, error),
     ))
+}
+
+#[post("/databases/install-mariadb")]
+pub async fn databases_install_mariadb(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match run_mariadb_install() {
+        Ok(message) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/databases?notice={}", urlencoding_simple(&message)),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/databases?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
 }
 
 #[get("/backups")]
@@ -218,6 +288,7 @@ pub async fn plugins_page(
     let layout = query.get("layout").map(String::as_str).unwrap_or("grid");
     let q = query.get("q").map(String::as_str).unwrap_or("");
     let category = query.get("category").map(String::as_str).unwrap_or("");
+    let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let refresh = query.get("refresh").map(String::as_str) == Some("1");
@@ -230,6 +301,7 @@ pub async fn plugins_page(
             layout,
             q,
             category,
+            domain,
             notice,
             error,
             refresh,
@@ -241,6 +313,23 @@ pub async fn plugins_page(
 pub struct PluginIdForm {
     #[serde(default)]
     id: String,
+    #[serde(default)]
+    domain: String,
+}
+
+fn plugins_redirect(domain: &str, view: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    let mut url = format!(
+        "/plugins?view={}&domain={}",
+        urlencoding_simple(view),
+        urlencoding_simple(domain)
+    );
+    if let Some(notice) = notice {
+        url.push_str(&format!("&notice={}", urlencoding_simple(notice)));
+    }
+    if let Some(error) = error {
+        url.push_str(&format!("&error={}", urlencoding_simple(error)));
+    }
+    url
 }
 
 #[post("/plugins/install")]
@@ -252,20 +341,22 @@ pub async fn plugins_install(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    match install_plugin(&form.id) {
+    match install_plugin(&form.domain, &form.id) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&notice={}",
-                    urlencoding_simple(&format!("Installed {}", manifest.name))
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Installed {}", manifest.name)),
+                    None,
                 ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/plugins?view=store&error={}", urlencoding_simple(&error)),
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
             ))
             .finish(),
     }
@@ -280,23 +371,22 @@ pub async fn plugins_uninstall(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    match uninstall_plugin(&form.id) {
+    match uninstall_plugin(&form.domain, &form.id) {
         Ok(()) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&notice={}",
-                    urlencoding_simple(&format!("Uninstalled {}", form.id.trim()))
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Uninstalled {}", form.id.trim())),
+                    None,
                 ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&error={}",
-                    urlencoding_simple(&error)
-                ),
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
             ))
             .finish(),
     }
@@ -311,23 +401,22 @@ pub async fn plugins_enable(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    match set_plugin_enabled(&form.id, true) {
+    match set_plugin_enabled(&form.domain, &form.id, true) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&notice={}",
-                    urlencoding_simple(&format!("Activated {}", manifest.name))
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Activated {}", manifest.name)),
+                    None,
                 ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&error={}",
-                    urlencoding_simple(&error)
-                ),
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
             ))
             .finish(),
     }
@@ -342,23 +431,22 @@ pub async fn plugins_disable(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    match set_plugin_enabled(&form.id, false) {
+    match set_plugin_enabled(&form.domain, &form.id, false) {
         Ok(manifest) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&notice={}",
-                    urlencoding_simple(&format!("Deactivated {}", manifest.name))
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Deactivated {}", manifest.name)),
+                    None,
                 ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins?view=installed&error={}",
-                    urlencoding_simple(&error)
-                ),
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
             ))
             .finish(),
     }

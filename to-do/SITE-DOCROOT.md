@@ -11,7 +11,16 @@ Subdomain create requires a parent site record (longest matching registered pare
 
 ## Registry
 
-JSON records remain at `/var/lib/cpn/sites/<domain>.json` (or `$CPN_DATA_DIR/sites/`) with a `docroot` field. That path is metadata only. Website files live under `/home/...`.
+JSON records remain at `/var/lib/cpn/sites/<domain>.json` (or `$CPN_DATA_DIR/sites/`) with a `docroot` field. That path is **internal panel metadata** only. Website files live under `/home/...`. The Websites UI can hide or collapse document root display; operators should think in terms of `/home/<domain>/`.
+
+Related backups:
+
+- Site: `/home/<domain>/backups/` (subdomain: `/home/<parent>/<sub.fqdn>/backups/`)
+- Panel-wide: `/home/cpn-panel/backups/`
+
+Related plugins:
+
+- `/home/<domain>/plugins/<plugin-id>/`
 
 Override the hosting home root with `CPN_SITES_HOME` (labs and unit tests).
 

@@ -139,29 +139,45 @@ enum SiteCommands {
 
 #[derive(Subcommand, Debug)]
 enum PluginCommands {
-    /// List installed plugins
-    List,
-    /// Install a plugin id from the community catalog
+    /// List installed plugins (optional --domain filter)
+    List {
+        #[arg(long)]
+        domain: Option<String>,
+    },
+    /// Install a plugin id from the community catalog into a site
     Install {
+        #[arg(long)]
+        domain: String,
         #[arg(long)]
         id: String,
     },
-    /// Remove an installed plugin
+    /// Remove an installed plugin from a site
     Remove {
+        #[arg(long)]
+        domain: String,
         #[arg(long)]
         id: String,
         #[arg(long)]
         yes: bool,
     },
-    /// Enable an installed plugin
+    /// Enable an installed plugin on a site
     Enable {
+        #[arg(long)]
+        domain: String,
         #[arg(long)]
         id: String,
     },
-    /// Disable an installed plugin
+    /// Disable an installed plugin on a site
     Disable {
         #[arg(long)]
+        domain: String,
+        #[arg(long)]
         id: String,
+    },
+    /// Move legacy $CPN_DATA_DIR/plugins into /home/<domain>/plugins
+    Migrate {
+        #[arg(long)]
+        domain: String,
     },
 }
 
@@ -284,10 +300,7 @@ fn run() -> Result<(), String> {
                 paths::platform_data_dir()
             );
             println!("network  Manage listen port, hostname, and port migration");
-            println!(
-                "plugin   Manage plugins under {}/plugins",
-                paths::platform_data_dir()
-            );
+            println!("plugin   Manage per-site plugins under /home/<domain>/plugins");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
@@ -461,26 +474,30 @@ fn run() -> Result<(), String> {
         },
         Commands::Network { command } => run_network(command, require_root_for_mutation),
         Commands::Plugin { command } => match command {
-            PluginCommands::List => cli_plugins::list_plugins(),
-            PluginCommands::Install { id } => {
+            PluginCommands::List { domain } => cli_plugins::list_plugins(domain.as_deref()),
+            PluginCommands::Install { domain, id } => {
                 require_root_for_mutation()?;
-                cli_plugins::install(&id)
+                cli_plugins::install(&domain, &id)
             }
-            PluginCommands::Remove { id, yes } => {
+            PluginCommands::Remove { domain, id, yes } => {
                 require_root_for_mutation()?;
                 confirm_delete(
-                    &format!("Remove plugin `{id}`? This cannot be undone."),
+                    &format!("Remove plugin `{id}` from `{domain}`? This cannot be undone."),
                     yes,
                 )?;
-                cli_plugins::remove(&id)
+                cli_plugins::remove(&domain, &id)
             }
-            PluginCommands::Enable { id } => {
+            PluginCommands::Enable { domain, id } => {
                 require_root_for_mutation()?;
-                cli_plugins::enable(&id)
+                cli_plugins::enable(&domain, &id)
             }
-            PluginCommands::Disable { id } => {
+            PluginCommands::Disable { domain, id } => {
                 require_root_for_mutation()?;
-                cli_plugins::disable(&id)
+                cli_plugins::disable(&domain, &id)
+            }
+            PluginCommands::Migrate { domain } => {
+                require_root_for_mutation()?;
+                cli_plugins::migrate(&domain)
             }
         },
     }

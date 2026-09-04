@@ -82,14 +82,16 @@ Add new top-level groups beside `account`, `site`, `network`, and `plugin` in `s
 
 ## Plugins
 
-See `to-do/PLUGINS.md`. Install root: `/var/lib/cpn/plugins/`. Catalog: https://github.com/master3395/cyberpanel-plugins
+See `to-do/PLUGINS.md`. Install root: `/home/<domain>/plugins/`. Catalog: https://github.com/master3395/cyberpanel-plugins
 
 ```bash
 sudo cpn plugin list
-sudo cpn plugin install --id examplePlugin
-sudo cpn plugin enable --id examplePlugin
-sudo cpn plugin disable --id examplePlugin
-sudo cpn plugin remove --id examplePlugin --yes
+sudo cpn plugin list --domain example.com
+sudo cpn plugin install --domain example.com --id examplePlugin
+sudo cpn plugin enable --domain example.com --id examplePlugin
+sudo cpn plugin disable --domain example.com --id examplePlugin
+sudo cpn plugin remove --domain example.com --id examplePlugin --yes
+sudo cpn plugin migrate --domain example.com
 ```
 
 ## Network (listen port / hostname)
