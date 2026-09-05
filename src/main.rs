@@ -375,8 +375,8 @@ async fn start_install(
     } else {
         current.selected_mail = None;
     }
-    current.phase = "downloading";
-    current.progress = 1;
+    current.phase = "configuring";
+    current.progress = 0;
     current.error = None;
     drop(current);
     // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.

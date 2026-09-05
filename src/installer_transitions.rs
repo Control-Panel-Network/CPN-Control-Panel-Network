@@ -8,7 +8,10 @@ pub struct TransitionDenied {
 }
 
 fn busy(phase: &str) -> bool {
-    matches!(phase, "downloading" | "installing" | "testing")
+    matches!(
+        phase,
+        "configuring" | "downloading" | "installing" | "testing"
+    )
 }
 
 /// Whether `/api/install/server` may start from the current status.
@@ -114,9 +117,11 @@ mod tests {
     #[test]
     fn busy_phases_conflict() {
         let mut status = base();
-        status.phase = "installing";
-        assert!(can_start_server(&status, true).is_err());
         status.server_ready = true;
-        assert!(can_start_mail(&status, true).is_err());
+        for phase in ["configuring", "downloading", "installing", "testing"] {
+            status.phase = phase;
+            assert!(can_start_server(&status, true).is_err(), "{phase}");
+            assert!(can_start_mail(&status, true).is_err(), "{phase}");
+        }
     }
 }

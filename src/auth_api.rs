@@ -381,7 +381,7 @@ pub async fn account_setup(
         return HttpResponse::Unauthorized().finish();
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
-    if ["downloading", "installing", "testing"].contains(&current.phase) {
+    if ["configuring", "downloading", "installing", "testing"].contains(&current.phase) {
         return HttpResponse::Conflict()
             .json(serde_json::json!({"error": "Hay una instalación en curso"}));
     }

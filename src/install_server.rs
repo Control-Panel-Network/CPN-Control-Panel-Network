@@ -247,6 +247,7 @@ pub async fn install_with_database(
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
         }
+        state.progress("configuring", 0, "Configurando el repositorio verificado").await;
         let guest = require_installable_guest()?;
         state.log(
             format!(
@@ -274,6 +275,19 @@ pub async fn install_with_database(
             }
         }
         if matches!(server, ServerEngine::Openlitespeed) {
+            if matches!(guest.id.as_str(), "almalinux" | "rocky" | "centos") {
+                run_command(&state, command("dnf", vec!["install", "-y", "epel-release", "dnf-plugins-core"], "Configurando las dependencias de OpenLiteSpeed", "configuring", 0)).await?;
+                run_command(&state, command("dnf", vec!["config-manager", "--set-enabled", "crb"], "Habilitando CRB para las dependencias de PHP", "configuring", 0)).await?;
+                // lsphp83-gd requires libgd.so.103 from remi-safe (gd3php).
+                let repository = match guest.major {
+                    9 => Some("https://rpms.remirepo.net/enterprise/remi-release-9.rpm"),
+                    10 => Some("https://rpms.remirepo.net/enterprise/remi-release-10.rpm"),
+                    _ => None,
+                };
+                if let Some(repository) = repository {
+                    run_command(&state, command("dnf", vec!["install", "-y", repository], "Configurando Remi para las dependencias de PHP", "configuring", 0)).await?;
+                }
+            }
             prepare_openlitespeed_repository(&guest)?;
             let repo_path = if guest.uses_apt() {
                 "/etc/apt/sources.list.d/lst_debian_repo.list"
@@ -337,7 +351,7 @@ pub async fn install_with_database(
             let status = Command::new("bash")
                 .args([
                     "-c",
-                    "curl --fail --silent --show-error --max-time 10 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'",
+                    "set -o pipefail; for attempt in {1..15}; do if curl --fail --silent --show-error --max-time 2 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'; then exit 0; fi; sleep 1; done; exit 1",
                 ])
                 .kill_on_drop(true)
                 .status()
@@ -366,7 +380,7 @@ pub async fn install_with_database(
                     96,
                 ),
             )
-            .await?;
+                .await?;
         }
         let environment = state
             .status

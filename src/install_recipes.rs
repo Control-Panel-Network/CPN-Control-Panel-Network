@@ -158,13 +158,24 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
     match guest.family {
         PackageFamily::Dnf => {
             let major = guest.major;
+            let key = if major > 9 {
+                "RPM-GPG-KEY-litespeed2025"
+            } else {
+                "RPM-GPG-KEY-litespeed"
+            };
             let repository = format!(
                 "[litespeed]\n\
                  name=LiteSpeed Tech Repository for EL{major}\n\
                  baseurl=https://rpms.litespeedtech.com/centos/{major}/$basearch/\n\
                  enabled=1\n\
                  gpgcheck=1\n\
-                 gpgkey=https://rpms.litespeedtech.com/centos/RPM-GPG-KEY-litespeed\n"
+                 gpgkey=https://rpms.litespeedtech.com/centos/{key}\n\n\
+                 [litespeed-update]\n\
+                 name=LiteSpeed Tech Updates for EL{major}\n\
+                 baseurl=https://rpms.litespeedtech.com/centos/{major}/update/$basearch/\n\
+                 enabled=1\n\
+                 gpgcheck=1\n\
+                 gpgkey=https://rpms.litespeedtech.com/centos/{key}\n"
             );
             std::fs::write("/etc/yum.repos.d/litespeed.repo", repository).map_err(|error| {
                 format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")

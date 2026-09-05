@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -21,10 +22,13 @@ const STORAGE_KEY = 'cpn-installer-locale';
 
 function readStoredLocale(): LocaleCode {
   try {
-    return normalizeLocale(window.localStorage.getItem(STORAGE_KEY));
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored) return normalizeLocale(stored);
   } catch {
-    return 'en';
+    // Fall back to the browser when storage is unavailable.
   }
+  const preferred = navigator.languages.find((language) => /^(es|en|nb|nn|no)(-|$)/i.test(language));
+  return normalizeLocale(preferred || navigator.language);
 }
 
 interface I18nContextValue {
@@ -48,6 +52,7 @@ export function I18nProvider({
   const [locale, setLocaleState] = useState<LocaleCode>(() =>
     normalizeLocale(initialLocale ?? readStoredLocale()),
   );
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
 
   const setLocale = useCallback(
     (next: LocaleCode) => {

@@ -2,7 +2,6 @@ import { ArrowRight, Mail, Mails } from 'lucide-react';
 import { siRoundcube, siThunderbird } from 'simple-icons';
 import type { MailSystem } from '../types';
 import { useI18n } from '../i18n';
-import { LanguageSelector } from '../i18n/LanguageSelector';
 
 interface Props {
   selectedMail: MailSystem | null;
@@ -55,7 +54,6 @@ export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: 
 
   return (
     <div className="min-h-screen px-6 md:px-12 py-16 flex flex-col items-center justify-center max-w-6xl mx-auto w-full">
-      <div className="w-full flex justify-end mb-4"><LanguageSelector /></div>
       <div className="text-center mb-12 w-full">
         <h1 className="text-[34px] leading-[1.47] font-semibold tracking-tight text-[#1a1c1d] mb-2">
           {t.selectMailTitle}

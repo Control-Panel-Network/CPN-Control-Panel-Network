@@ -59,9 +59,10 @@ impl AppState {
         {
             if let Ok(pids) = self.active_child_pids.lock() {
                 for &pid in pids.iter() {
-                    let _ = std::process::Command::new("kill")
-                        .args(["-TERM", &format!("-{pid}")])
-                        .status();
+                    // ESRCH is harmless: the process may have exited already.
+                    unsafe {
+                        libc::kill(-(pid as i32), libc::SIGTERM);
+                    }
                 }
             }
         }
@@ -216,6 +217,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let mut out_lines = BufReader::new(stdout).lines();
         let mut err_lines = BufReader::new(stderr).lines();
         let (mut out_done, mut err_done, mut transaction) = (false, false, false);
+        let mut diagnostic = std::collections::VecDeque::with_capacity(12);
         while !out_done || !err_done {
             if state.cancel_requested() {
                 return Err("Instalacion cancelada por el operador".into());
@@ -223,6 +225,8 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
             tokio::select! {
                 line = out_lines.next_line(), if !out_done => match line {
                     Ok(Some(line)) => {
+                        if diagnostic.len() == 12 { diagnostic.pop_front(); }
+                        diagnostic.push_back(line.clone());
                         if !line.trim().is_empty() { state.log(&line, "info"); }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
@@ -232,6 +236,8 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                 },
                 line = err_lines.next_line(), if !err_done => match line {
                     Ok(Some(line)) => {
+                        if diagnostic.len() == 12 { diagnostic.pop_front(); }
+                        diagnostic.push_back(line.clone());
                         if !line.trim().is_empty() { state.log(&line, "info"); }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
@@ -248,8 +254,9 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let exit = child.wait().await.map_err(|error| error.to_string())?;
         if !exit.success() {
             return Err(format!(
-                "{description} terminó con código {}",
-                exit.code().unwrap_or(-1)
+                "{description} terminó con código {}\n{}",
+                exit.code().unwrap_or(-1),
+                diagnostic.into_iter().collect::<Vec<_>>().join("\n")
             ));
         }
         Ok::<(), String>(())
@@ -274,21 +281,17 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         _ = cancel_watch => Err("Instalacion cancelada por el operador".into()),
     };
 
-    if outcome.is_err() {
+    if outcome.is_err() && child.try_wait().ok().flatten().is_none() {
         #[cfg(unix)]
         {
             if let Some(pid) = child_pid {
-                let _ = Command::new("kill")
-                    .args(["-TERM", &format!("-{pid}")])
-                    .kill_on_drop(true)
-                    .status()
-                    .await;
+                unsafe {
+                    libc::kill(-(pid as i32), libc::SIGTERM);
+                }
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                let _ = Command::new("kill")
-                    .args(["-KILL", &format!("-{pid}")])
-                    .kill_on_drop(true)
-                    .status()
-                    .await;
+                unsafe {
+                    libc::kill(-(pid as i32), libc::SIGKILL);
+                }
             }
         }
         // Child handle is dropped with the cancelled/timed-out pump (kill_on_drop).
@@ -690,6 +693,38 @@ mod tests {
         assert!(!state.cancel_requested());
         state.request_cancel();
         assert!(state.cancel_requested());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_command_includes_stderr_and_unregisters_child() {
+        let (events, _) = broadcast::channel(8);
+        let state = AppState {
+            status: RwLock::new(Default::default()),
+            events,
+            token: "t".into(),
+            session_id: "s".into(),
+            bind_port: 2087,
+            allow_remote: false,
+            allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
+            cancel_requested: AtomicBool::new(false),
+            active_child_pids: std::sync::Mutex::new(Vec::new()),
+        };
+        let error = super::run_command(
+            &state,
+            crate::install_recipes::command(
+                "sh",
+                vec!["-c", "echo 'missing dependency libgd.so.103' >&2; exit 1"],
+                "dependency probe",
+                "configuring",
+                0,
+            ),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("missing dependency libgd.so.103"), "{error}");
+        assert!(error.contains("código 1"), "{error}");
+        assert!(state.active_child_pids.lock().unwrap().is_empty());
     }
 
     #[cfg(unix)]

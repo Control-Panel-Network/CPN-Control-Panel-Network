@@ -111,7 +111,7 @@ pub fn default_tokens() -> DesignTokens {
     DesignTokens {
         accent: "#0066cc".into(),
         accent_focus: "#0071e3".into(),
-        radius_px: 18,
+        radius_px: 8,
         density: "comfortable".into(),
         font_scale: 1.0,
     }

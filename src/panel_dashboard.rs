@@ -2,6 +2,81 @@
 
 use crate::panel_pages::panel_shell;
 
+fn host_gauges() -> [(Option<u8>, String); 3] {
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let cpu = std::fs::read_to_string("/proc/stat").ok().and_then(|raw| {
+        let values: Vec<u64> = raw
+            .lines()
+            .next()?
+            .split_whitespace()
+            .skip(1)
+            .take(8)
+            .map(str::parse)
+            .collect::<Result<_, _>>()
+            .ok()?;
+        let total: u64 = values.iter().sum();
+        let idle = values.get(3)? + values.get(4)?;
+        (total > 0).then(|| (100 * total.saturating_sub(idle) / total) as u8)
+    });
+    let memory = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|raw| {
+            let value = |key: &str| {
+                raw.lines().find_map(|line| {
+                    line.strip_prefix(key)?
+                        .split_whitespace()
+                        .next()?
+                        .parse::<u64>()
+                        .ok()
+                })
+            };
+            let total = value("MemTotal:")?;
+            let used = total.saturating_sub(value("MemAvailable:")?);
+            (total > 0).then(|| {
+                (
+                    (used * 100 / total) as u8,
+                    format!(
+                        "{:.1}/{:.1} GB",
+                        used as f64 / 1048576.0,
+                        total as f64 / 1048576.0
+                    ),
+                )
+            })
+        });
+    let disk = std::process::Command::new("df")
+        .args(["-Pk", "/"])
+        .env("LC_ALL", "C")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|out| {
+            let raw = String::from_utf8(out.stdout).ok()?;
+            let fields: Vec<_> = raw.lines().nth(1)?.split_whitespace().collect();
+            let total = fields.get(1)?.parse::<f64>().ok()?;
+            let used = fields.get(2)?.parse::<f64>().ok()?;
+            let percent = fields
+                .get(4)?
+                .trim_end_matches('%')
+                .parse::<u8>()
+                .ok()?
+                .min(100);
+            Some((
+                percent,
+                format!("{:.0}/{:.0} GB", used / 1048576.0, total / 1048576.0),
+            ))
+        });
+    [
+        (cpu, format!("{cores} cores")),
+        memory
+            .map(|(v, d)| (Some(v), d))
+            .unwrap_or((None, "Unavailable".into())),
+        disk.map(|(v, d)| (Some(v), d))
+            .unwrap_or((None, "Unavailable".into())),
+    ]
+}
+
 fn html_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -10,16 +85,8 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Traffic-light stroke for resource gauges by usage percent.
-/// Thresholds: green < 60%, orange 60-84%, red >= 85%.
-fn gauge_stroke_for_usage(percent: u8) -> &'static str {
-    if percent >= 85 {
-        "#d92d20"
-    } else if percent >= 60 {
-        "#f79009"
-    } else {
-        "#12b76a"
-    }
+fn gauge_stroke_for_usage(_percent: u8) -> &'static str {
+    "#0066cc"
 }
 
 fn gauge_svg(value: u8) -> String {
@@ -39,13 +106,18 @@ fn gauge_svg(value: u8) -> String {
 
 pub fn panel_dashboard_html(username: &str) -> String {
     let user = html_escape(username);
-    // Placeholder percents until host metrics are wired; colors still follow thresholds.
-    let cpu_pct: u8 = 45;
-    let ram_pct: u8 = 72;
-    let disk_pct: u8 = 28;
-    let cpu = gauge_svg(cpu_pct);
-    let ram = gauge_svg(ram_pct);
-    let disk = gauge_svg(disk_pct);
+    let [
+        (cpu_value, cpu_detail),
+        (ram_value, ram_detail),
+        (disk_value, disk_detail),
+    ] = host_gauges();
+    let label = |v: Option<u8>| v.map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+    let cpu_pct = label(cpu_value);
+    let ram_pct = label(ram_value);
+    let disk_pct = label(disk_value);
+    let cpu = gauge_svg(cpu_value.unwrap_or(0));
+    let ram = gauge_svg(ram_value.unwrap_or(0));
+    let disk = gauge_svg(disk_value.unwrap_or(0));
 
     let db = crate::service_detect::detect_database();
     let db_label = crate::service_detect::database_health_label(&db);
@@ -69,31 +141,30 @@ pub fn panel_dashboard_html(username: &str) -> String {
         r#"
       <div class="dashboard-heading">
         <div>
-          <p class="eyebrow">SERVER OVERVIEW</p>
           <h1>Dashboard</h1>
           <p>Signed in as {user}.</p>
         </div>
       </div>
       <div class="resource-grid">
         <article class="resource-card">
-          <h2>CPU Usage</h2>
+          <h2 title="Average CPU usage since boot">CPU Usage</h2>
           <div class="gauge" role="img" aria-label="CPU Usage: {cpu_pct}%">
             {cpu}
-            <div class="gauge-copy"><strong>{cpu_pct}%</strong><span>4 cores</span></div>
+            <div class="gauge-copy"><strong>{cpu_pct}%</strong><span>{cpu_detail}</span></div>
           </div>
         </article>
         <article class="resource-card">
           <h2>RAM Usage</h2>
           <div class="gauge" role="img" aria-label="RAM Usage: {ram_pct}%">
             {ram}
-            <div class="gauge-copy"><strong>{ram_pct}%</strong><span>11.5 / 16 GB</span></div>
+            <div class="gauge-copy"><strong>{ram_pct}%</strong><span>{ram_detail}</span></div>
           </div>
         </article>
         <article class="resource-card">
           <h2>Disk Usage</h2>
           <div class="gauge" role="img" aria-label="Disk Usage: {disk_pct}%">
             {disk}
-            <div class="gauge-copy"><strong>{disk_pct}%</strong><span>140 / 500 GB</span></div>
+            <div class="gauge-copy"><strong>{disk_pct}%</strong><span>{disk_detail}</span></div>
           </div>
         </article>
       </div>

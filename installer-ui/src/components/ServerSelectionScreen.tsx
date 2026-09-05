@@ -3,7 +3,6 @@ import { ArrowRight, CircleHelp } from 'lucide-react';
 import type { DatabaseEngine, ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
 import { useI18n } from '../i18n';
-import { LanguageSelector } from '../i18n/LanguageSelector';
 
 export type OldPortPolicy = 'redirect_1m' | 'redirect_3m' | 'deny';
 
@@ -38,7 +37,9 @@ export function ServerSelectionScreen({
   onContinue,
   onOpenCompare,
 }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const networkTitle = locale === 'es' ? 'Configuración de red' : locale === 'nb' ? 'Nettverksoppsett' : 'Network configuration';
+  const [step, setStep] = useState<'network' | 'server' | 'database'>('network');
   const [portDraft, setPortDraft] = useState(String(listenPort || 2087));
   const [hostnameDraft, setHostnameDraft] = useState(panelHostname || '');
   const [oldPortPolicy, setOldPortPolicy] = useState<OldPortPolicy>('redirect_1m');
@@ -60,13 +61,13 @@ export function ServerSelectionScreen({
     { id: 'caddy', name: 'Caddy', description: t.serverCaddyDesc },
   ];
 
-  const parsedPort = Number.parseInt(portDraft.trim(), 10);
+  const parsedPort = Number(portDraft.trim());
   const portChanging =
     Number.isFinite(parsedPort) && parsedPort >= 1 && parsedPort <= 65535 && parsedPort !== listenPort;
 
   const applyNetwork = async () => {
-    const parsed = Number.parseInt(portDraft.trim(), 10);
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
+    const parsed = Number(portDraft.trim());
+    if (!/^\d+$/.test(portDraft.trim()) || !Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
       setPortError(t.listenPortInvalid);
       setPortMessage(null);
       return;
@@ -80,6 +81,7 @@ export function ServerSelectionScreen({
         panelHostname: hostnameDraft.trim(),
       });
       setPortMessage(message ?? t.listenPortSaved);
+      setStep('server');
     } catch (error) {
       setPortMessage(null);
       setPortError(error instanceof Error ? error.message : t.listenPortInvalid);
@@ -90,17 +92,19 @@ export function ServerSelectionScreen({
 
   return (
     <div className="min-h-screen px-6 md:px-12 py-16 flex flex-col items-center justify-center max-w-6xl mx-auto w-full">
-      <div className="w-full flex justify-end mb-4"><LanguageSelector /></div>
       <div className="text-center mb-12 w-full">
         <h1 className="text-[34px] leading-[1.47] font-semibold tracking-tight text-[#1a1c1d] mb-2">
-          {t.selectServerTitle}
+          {step === 'network' ? networkTitle : step === 'database' ? t.databaseTitle : t.selectServerTitle}
         </h1>
         <p className="text-[17px] leading-[1.47] text-[#5f5e60] max-w-2xl mx-auto">
-          {t.selectServerIntro}
+          {step === 'network' ? t.panelHostnameHint : step === 'database' ? t.databaseHint : t.selectServerIntro}
         </p>
       </div>
 
-      <div className="w-full max-w-xl mb-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
+      <nav className="setup-steps" aria-label="Setup">
+        {[networkTitle, t.selectServerTitle, t.databaseTitle].map((label, index) => <span key={label} aria-current={index === ['network', 'server', 'database'].indexOf(step) ? 'step' : undefined}>{index + 1}. {label}</span>)}
+      </nav>
+      {step === 'network' && <div className="w-full max-w-xl mb-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
         <label className="block text-[15px] font-semibold text-[#1a1c1d]" htmlFor="cpn-listen-port">
           {t.listenPortLabel}
         </label>
@@ -174,15 +178,15 @@ export function ServerSelectionScreen({
           type="button"
           onClick={() => void applyNetwork()}
           disabled={portBusy}
-          className="selection-button mt-4"
+          className="primary-button w-full mt-4"
         >
-          {t.networkSave}
+          {t.continueLabel}
         </button>
         {portMessage && <p className="text-sm text-[#067647] mt-3">{portMessage}</p>}
         {portError && <p className="text-sm text-[#b42318] mt-3">{portError}</p>}
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+      {step === 'server' && <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
         {servers.map((server) => {
           const selected = selectedServer === server.id;
           return (
@@ -210,9 +214,9 @@ export function ServerSelectionScreen({
             </article>
           );
         })}
-      </div>
+      </div>}
 
-      <div className="w-full max-w-xl mt-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
+      {step === 'database' && <div className="w-full max-w-xl mt-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
         <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{t.databaseTitle}</h2>
         <p className="text-[13px] leading-[1.45] text-[#5f5e60] mb-4">{t.databaseHint}</p>
         <fieldset>
@@ -253,21 +257,22 @@ export function ServerSelectionScreen({
           />
           <span>{t.databasePhpmyadmin}</span>
         </label>
-      </div>
+      </div>}
 
-      <button type="button" onClick={onOpenCompare} className="compare-link mt-8">
+      {step === 'server' && <button type="button" onClick={onOpenCompare} className="compare-link mt-8">
         <CircleHelp size={17} /> {t.compareLink}
-      </button>
+      </button>}
 
       <div className="mt-8 flex flex-col items-center gap-3">
-        <button
+        {step !== 'network' && <button className="secondary-button" onClick={() => setStep(step === 'database' ? 'server' : 'network')}>{locale === 'es' ? 'Atrás' : locale === 'nb' ? 'Tilbake' : 'Back'}</button>}
+        {step !== 'network' && <button
           type="button"
-          onClick={onContinue}
+          onClick={() => step === 'server' ? setStep('database') : onContinue()}
           disabled={!selectedServer}
           className="primary-button min-w-52"
         >
           {t.continueLabel} <ArrowRight size={18} />
-        </button>
+        </button>}
         <p className="text-sm text-[#667085]">{t.nothingInstallsYet}</p>
       </div>
     </div>

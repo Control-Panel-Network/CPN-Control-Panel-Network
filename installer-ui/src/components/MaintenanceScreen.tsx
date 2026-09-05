@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useI18n } from '../i18n';
-import { LanguageSelector } from '../i18n/LanguageSelector';
 import type { MaintenanceAction, MaintenanceInfo } from '../types';
 
 export function MaintenanceScreen({
@@ -39,7 +38,6 @@ export function MaintenanceScreen({
   return (
     <section className="min-h-screen px-6 py-10 grid place-items-center">
       <div className="w-full max-w-2xl">
-        <div className="flex justify-end mb-6"><LanguageSelector /></div>
         <p className="eyebrow">{t.maintenanceEyebrow}</p>
         <h1 className="text-4xl sm:text-5xl font-semibold tracking-[-0.04em] mt-2">
           {t.maintenanceTitle}

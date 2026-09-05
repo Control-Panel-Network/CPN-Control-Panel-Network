@@ -10,7 +10,7 @@ function StepIcon({ state }: { state: 'pending' | 'active' | 'done' | 'error' })
 }
 
 export function InstallingScreen({ status }: { status: InstallerStatus }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const phase = status.phase;
   const failed = phase === 'failed';
   const downloading = phase === 'downloading';
@@ -28,6 +28,10 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         </h1>
 
         <div className="flex flex-col gap-8">
+          <div className="flex items-center gap-[17px]">
+            <StepIcon state={phase === 'configuring' ? 'active' : failed && status.progress === 0 ? 'error' : 'done'} />
+            <span className="text-[17px] font-semibold">{locale === 'es' ? 'Configurando' : locale === 'nb' ? 'Konfigurerer' : 'Configuring'}</span>
+          </div>
           <div className="flex items-center gap-[17px]">
             <StepIcon
               state={
@@ -85,7 +89,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         <p className="mt-10 text-[14px] text-[#7a7a7a] min-h-5" aria-live="polite">
           {status.message || t.installingSubtitle}
         </p>
-        {failed && <p className="mt-3 text-[14px] text-[#c2413b]">{status.error}</p>}
+        {failed && <p className="mt-3 whitespace-pre-wrap break-words text-[14px] text-[#c2413b]">{status.error}</p>}
       </div>
     </section>
   );

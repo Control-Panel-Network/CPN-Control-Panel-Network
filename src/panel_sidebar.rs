@@ -111,7 +111,7 @@ pub fn sidebar_extra_styles() -> &'static str {
 .sidebar-search-empty { padding:10px; color:var(--muted); font-size:12px; }
 .host-status {
   display:flex; align-items:flex-start; gap:12px; margin:14px 0 12px; padding:12px 14px;
-  border-radius:16px; background:var(--canvas); border:1px solid var(--hairline);
+  border-radius:8px; background:var(--surface); border:0;
 }
 .host-status-icon {
   flex:0 0 auto; width:36px; height:36px; border-radius:10px;

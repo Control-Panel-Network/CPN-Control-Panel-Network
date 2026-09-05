@@ -13,7 +13,7 @@ fn panel_styles() -> &'static str {
 :root {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
   --muted:#6e6e73; --hairline:#e0e0e0; --blue:#0066cc; --blue-focus:#0071e3; --green:#18864b;
-  --sidebar-width:260px;
+  --sidebar-width:256px;
 }
 * { box-sizing:border-box; }
 /* Fixed shell: sidebar stays put; main column scrolls. Avoid overflow-x on html/body (breaks sticky). */
@@ -44,7 +44,7 @@ button { font:inherit; cursor:pointer; }
 /* Collapse / brand-row styles: panel_nav_chrome::sidebar_collapse_styles */
 .server-summary {
   display:flex; align-items:center; gap:12px; margin:0 0 12px; padding:14px;
-  border-radius:18px; background:var(--canvas); border:1px solid var(--hairline); color:var(--blue);
+  border-radius:8px; background:var(--surface); border:0; color:var(--blue);
 }
 .server-summary div { display:flex; flex-direction:column; min-width:0; }
 .server-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
@@ -65,7 +65,7 @@ button { font:inherit; cursor:pointer; }
 }
 .sidebar nav a {
   display:flex; align-items:center; gap:10px; min-height:44px; padding:0 13px;
-  border-radius:999px; color:#4b4b50; font-size:15px;
+  border-radius:8px; color:var(--ink); font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
 .sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
@@ -86,7 +86,7 @@ button { font:inherit; cursor:pointer; }
   min-width:0; flex:1; height:100%; max-height:100%;
   overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding:64px clamp(20px,5vw,72px) 80px;
+  padding:76px clamp(24px,8vw,192px) 48px;
 }
 .mobile-header { display:none; }
 .icon-btn {
@@ -105,17 +105,17 @@ button { font:inherit; cursor:pointer; }
   align-items:flex-end; gap:32px;
 }
 .dashboard-heading h1 {
-  margin:0; font-size:clamp(32px,5vw,56px); line-height:1.07; letter-spacing:-.045em; font-weight:600;
+  margin:0; font-size:34px; line-height:1.25; letter-spacing:-.025em; font-weight:600;
 }
 .dashboard-heading > div > p:last-child { margin:14px 0 0; color:var(--muted); max-width:600px; }
 .resource-grid {
   max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px;
 }
 .resource-card {
-  min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  padding:24px; background:var(--canvas); border:1px solid var(--hairline); border-radius:18px;
+  min-height:260px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:28px; background:var(--canvas); border:1px solid var(--hairline); border-radius:8px;
 }
-.resource-card h2 { margin:0 0 22px; font-size:16px; font-weight:600; }
+.resource-card h2 { margin:0 0 48px; font-size:19px; font-weight:600; }
 .gauge { position:relative; width:112px; height:112px; }
 .gauge svg { width:100%; height:100%; transform:rotate(-90deg); overflow:visible; }
 .gauge circle { fill:none; stroke-width:9; }
@@ -124,14 +124,14 @@ button { font:inherit; cursor:pointer; }
 .gauge-copy {
   position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
 }
-.gauge-copy strong { font-size:21px; line-height:1.05; }
-.gauge-copy span { margin-top:3px; color:var(--muted); font-size:11px; }
+.gauge-copy strong { font-size:24px; line-height:1.05; }
+.gauge-copy span { margin-top:3px; color:var(--muted); font-size:12px; white-space:nowrap; }
 .dashboard-lower-grid {
   max-width:1200px; margin:22px auto 0; display:grid; grid-template-columns:1.15fr .85fr; gap:22px;
 }
 .status-card, .activity-card, .section-card {
   min-width:0; max-width:100%;
-  padding:28px; border-radius:18px; background:var(--canvas); border:1px solid var(--hairline);
+  padding:24px; border-radius:8px; background:var(--canvas); border:1px solid var(--hairline);
 }
 .status-card-heading { display:flex; align-items:flex-start; justify-content:space-between; color:var(--green); }
 .status-card h2, .activity-card h2, .section-card h2 {

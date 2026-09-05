@@ -8,6 +8,7 @@ import { MailSelectionScreen } from './components/MailSelectionScreen';
 import { CompleteScreen } from './components/CompleteScreen';
 import { CompareModal } from './components/CompareModal';
 import { AccountSetupScreen } from './components/AccountSetupScreen';
+import { LanguageSelector } from './i18n/LanguageSelector';
 import {
   connectInstallerEvents,
   getStatus,
@@ -18,7 +19,7 @@ import {
   startMaintenance,
   startServerInstall,
 } from './api';
-import { I18nProvider, normalizeLocale, useI18n } from './i18n';
+import { I18nProvider, useI18n } from './i18n';
 import type {
   DatabaseEngine,
   InstallerEvent,
@@ -54,7 +55,7 @@ const INITIAL_STATUS: InstallerStatus = {
 };
 
 function AppShell() {
-  const { t, locale, setLocale } = useI18n();
+  const { t, locale } = useI18n();
   const [screen, setScreen] = useState<ScreenType>('preparing');
   const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(null);
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
@@ -66,28 +67,11 @@ function AppShell() {
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
-  const skipLanguagePush = useRef(true);
-  const localeRef = useRef(locale);
-  localeRef.current = locale;
 
   const applyStatusScreen = useCallback((next: InstallerStatus, delayComplete = false) => {
     setStatus(next);
     setSelectedServer(next.selected_server);
     setSelectedMail(next.selected_mail);
-    // Prefer a stored user locale. Only adopt server language when none is stored yet.
-    let hasStoredPreference = false;
-    try {
-      hasStoredPreference = Boolean(window.localStorage.getItem('cpn-installer-locale'));
-    } catch {
-      hasStoredPreference = false;
-    }
-    if (next.language && !hasStoredPreference) {
-      const normalized = normalizeLocale(next.language);
-      if (normalized !== localeRef.current) {
-        skipLanguagePush.current = true;
-        setLocale(normalized);
-      }
-    }
 
     if (next.phase === 'maintenance') {
       setScreen('maintenance');
@@ -98,7 +82,7 @@ function AppShell() {
       setScreen('selection');
       return;
     }
-    if (['downloading', 'installing', 'testing', 'failed'].includes(next.phase)) {
+    if (['configuring', 'downloading', 'installing', 'testing', 'failed'].includes(next.phase)) {
       setScreen('installing');
       return;
     }
@@ -125,7 +109,7 @@ function AppShell() {
         go();
       }
     }
-  }, [setLocale]);
+  }, []);
 
   const handleEvent = useCallback((event: InstallerEvent) => {
     if (event.type === 'snapshot' || event.type === 'progress') {
@@ -171,12 +155,7 @@ function AppShell() {
   }, [handleEvent, applyStatusScreen]);
 
   useEffect(() => {
-    if (skipLanguagePush.current) {
-      skipLanguagePush.current = false;
-      return;
-    }
     void setLanguage(locale)
-      .then((next) => setStatus(next))
       .catch(() => undefined);
   }, [locale]);
 
@@ -185,7 +164,7 @@ function AppShell() {
     setScreen('installing');
     setStatus((current) => ({
       ...current,
-      phase: 'downloading',
+      phase: 'configuring',
       progress: 0,
       error: null,
       selected_server: selectedServer,
@@ -276,6 +255,7 @@ function AppShell() {
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
+      <LanguageSelector />
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={screen}

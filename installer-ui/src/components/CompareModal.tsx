@@ -63,7 +63,7 @@ export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }
                 <ul className="text-[13px] space-y-2 my-5 flex-1">
                   {meta.features.map((feature) => (
                     <li key={feature} className="flex gap-2">
-                      <Check size={16} className="text-emerald-600 shrink-0" />
+                      <Check size={16} className="text-blue-600 shrink-0" />
                       {feature}
                     </li>
                   ))}

@@ -82,7 +82,7 @@ const en: LocaleMessages = {
   accountIntro:
     'This account signs in to the panel. Leave the username empty to use admin. Full UTF-8 names and passwords are supported.',
   usernameLabel: 'Username',
-  usernameHint: 'Optional. Defaults to admin. Letters (including Ã…), numbers, and symbols are allowed.',
+  usernameHint: 'Optional. Defaults to admin. Letters (including Å), numbers, and symbols are allowed.',
   usernamePlaceholder: 'admin',
   passwordLabel: 'Password',
   passwordConfirmLabel: 'Confirm password',

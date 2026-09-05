@@ -436,7 +436,7 @@ pub fn failure_message(kind: FailureKind) -> String {
     let backups = crate::paths::join_data("install-backups");
     match kind {
         FailureKind::FailedRolledBack => format!(
-            "Installation failed; tracked file changes were rolled back. Review {}.",
+            "Installation failed; tracked file changes were rolled back. Installed packages and repository dependencies may remain. Review {}.",
             journal.display()
         ),
         FailureKind::FailedPartial => format!(
