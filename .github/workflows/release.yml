@@ -18,12 +18,11 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Official signing identity fingerprint (public; matches packaging/RPM-GPG-KEY-CPN).
   CPN_RELEASE_FINGERPRINT: FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
 
 jobs:
   release:
-    name: Build RPM checksums provenance
+    name: Build packages, checksums and provenance
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -68,7 +67,7 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build release binary (locked)
+      - name: Build release binaries (locked)
         run: |
           cargo build --release --locked
           mkdir -p dist
@@ -76,25 +75,41 @@ jobs:
           cp target/release/cpn dist/cpn
           chmod +x dist/cpn-installer dist/cpn
 
-      - name: Build RPM via Docker helper
+      - name: Build RPMs for EL 8, 9 and 10
         run: |
           chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh scripts/sync-version.sh
           ./scripts/sync-version.sh
-          ./scripts/docker-build-rpm.sh
+          for major in 8 9 10; do
+            echo "Building EL${major} RPM"
+            CPN_ALMA_VERSION="$major" ./scripts/docker-build-rpm.sh
+          done
           shopt -s nullglob
           rpms=(target/rpmbuild/RPMS/*/*.rpm)
-          if ((${#rpms[@]} == 0)); then
-            echo "RPM build produced no packages" >&2
+          if ((${#rpms[@]} < 3)); then
+            echo "Expected EL8/EL9/EL10 RPM builds; found ${#rpms[@]} package(s)" >&2
+            printf '%s\n' "${rpms[@]}" >&2
             exit 1
           fi
           cp "${rpms[@]}" dist/
+
+      - name: Build apt-family DEB on Ubuntu 22.04 baseline
+        run: |
+          chmod +x scripts/docker-build-deb.sh scripts/build-deb.sh scripts/sync-version.sh
+          CPN_BUILD_IMAGE=ubuntu:22.04 CPN_UBUNTU_VERSION=22.04 ./scripts/docker-build-deb.sh
+          shopt -s nullglob
+          debs=(target/deb/*.deb)
+          if ((${#debs[@]} == 0)); then
+            echo "DEB build produced no packages" >&2
+            exit 1
+          fi
+          cp "${debs[@]}" dist/
 
       - name: Install GPG tools on runner
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg2
 
-      - name: Embed RPM signatures (AlmaLinux 9 rpmsign) then detached .asc
+      - name: Embed RPM signatures and create detached RPM signatures
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -104,7 +119,7 @@ jobs:
         run: |
           chmod +x scripts/sign-rpm-almalinux.sh scripts/sign-release.sh
           if [[ "${CPN_REQUIRE_GPG}" == "1" && -z "${GPG_PRIVATE_KEY:-}" ]]; then
-            echo "Official tag release requires GPG_PRIVATE_KEY (issue #16)." >&2
+            echo "Official tag release requires GPG_PRIVATE_KEY." >&2
             exit 1
           fi
           shopt -s nullglob
@@ -122,19 +137,16 @@ jobs:
             echo "Dry-run without GPG secrets; RPMs left unsigned."
           fi
 
-      - name: Publish SHA256SUMS (after RPM signing)
+      - name: Publish SHA256SUMS
         run: |
           chmod +x scripts/publish-checksums.sh
           shopt -s nullglob
-          existing=()
-          for f in dist/cpn-installer dist/cpn dist/*.rpm dist/build-environment.txt; do
-            [[ -f "$f" ]] && existing+=("$f")
-          done
-          ./scripts/publish-checksums.sh "${existing[@]}"
+          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/build-environment.txt)
+          ./scripts/publish-checksums.sh "${files[@]}"
           test -f dist/SHA256SUMS
           cat dist/SHA256SUMS
 
-      - name: Detached-sign SHA256SUMS and binaries
+      - name: Detached-sign checksum manifest, binaries and DEB
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -151,7 +163,9 @@ jobs:
             echo "Skipping detached signatures (no GPG secret)."
             exit 0
           fi
-          ./scripts/sign-release.sh dist/SHA256SUMS dist/cpn-installer dist/cpn
+          shopt -s nullglob
+          debs=(dist/*.deb)
+          ./scripts/sign-release.sh dist/SHA256SUMS dist/cpn-installer dist/cpn "${debs[@]}"
           test -f dist/SHA256SUMS.asc
 
       - name: Optional cosign blob signatures
@@ -170,19 +184,14 @@ jobs:
       - name: Generate SBOM
         run: |
           cargo install cargo-cyclonedx --locked
-          # cargo-cyclonedx writes next to Cargo.toml; use its supported
-          # filename override and then stage the result for the release.
           cargo cyclonedx -f json --override-filename cpn-installer.cdx
           mv cpn-installer.cdx.json dist/cpn-installer.cdx.json
           test -s dist/cpn-installer.cdx.json
           ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
           chmod +x scripts/publish-checksums.sh
           shopt -s nullglob
-          existing=()
-          for f in dist/cpn-installer dist/cpn dist/*.rpm dist/cpn-installer.cdx.json dist/build-environment.txt; do
-            [[ -f "$f" ]] && existing+=("$f")
-          done
-          ./scripts/publish-checksums.sh "${existing[@]}"
+          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/cpn-installer.cdx.json dist/build-environment.txt)
+          ./scripts/publish-checksums.sh "${files[@]}"
 
       - name: Re-sign SHA256SUMS after SBOM refresh
         env:
@@ -217,6 +226,7 @@ jobs:
             dist/cpn
             dist/SHA256SUMS
             dist/*.rpm
+            dist/*.deb
             dist/cpn-installer.cdx.json
             dist/build-environment.txt
             dist/RPM-GPG-KEY-CPN
@@ -235,32 +245,42 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
+            ## Install from this release
+
+            Download the native package for the guest OS instead of building CPN from source:
+
+            - EL8: `cpn-installer-*.el8.*.rpm`
+            - EL9: `cpn-installer-*.el9.*.rpm`
+            - EL10: `cpn-installer-*.el10.*.rpm`
+            - Ubuntu 22.04/24.04 and compatible tested apt guests: `cpn-installer_*.deb`
+
+            ```bash
+            sudo dnf install ./cpn-installer-*.rpm
+            # or
+            sudo apt install ./cpn-installer_*.deb
+
+            sudo cpn-installer
+            ```
+
             ## Verify before running as root
 
-            Release signing fingerprint (must match `packaging/RPM-GPG-KEY-CPN`):
+            Release signing fingerprint:
 
-            ```
+            ```text
             FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
             ```
 
             ```bash
-            # 1) Checksums
             sha256sum -c SHA256SUMS
-
-            # 2) Signed checksum manifest
             gpg --import RPM-GPG-KEY-CPN
             gpg --verify SHA256SUMS.asc SHA256SUMS
 
-            # 3) Embedded RPM signature (when rpm is available)
+            # RPM only
             rpm --import RPM-GPG-KEY-CPN
             rpm --checksig *.rpm
 
-            # 4) Helper script from the source tree
-            ./scripts/verify-release.sh ./cpn-installer-*.rpm ./SHA256SUMS ./SHA256SUMS.asc
-
-            # 5) GitHub provenance attestation
+            # GitHub provenance attestation
             gh attestation verify ./cpn-installer --repo Control-Panel-Network/CPN-Control-Panel-Network
             ```
 
-            Full operator guide: `to-do/RELEASE-SIGNING.md`.
             Upgrade/repair downloads verify SHA-256 by default (`CPN_VERIFY_RELEASE=0` disables; `CPN_VERIFY_GPG=1` also checks `SHA256SUMS.asc`).
