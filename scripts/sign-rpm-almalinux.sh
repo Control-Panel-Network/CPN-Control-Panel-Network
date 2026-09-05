@@ -55,7 +55,9 @@ cat >"$work/sign-inside.sh" <<'EOS'
 #!/usr/bin/env bash
 set -euo pipefail
 dnf -y install --setopt=install_weak_deps=False gnupg2 rpm-sign rpm-build >/dev/null
-export GNUPGHOME=/work/gnupg
+# Do not place root-owned GnuPG state in the bind mount: the GitHub runner
+# must be able to remove the workspace after the container exits.
+export GNUPGHOME=/tmp/cpn-gnupg
 mkdir -p "$GNUPGHOME"
 chmod 700 "$GNUPGHOME"
 # Required for non-interactive CI: without this, loopback passphrase looks like "Bad passphrase".
