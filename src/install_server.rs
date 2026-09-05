@@ -98,11 +98,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         changed = true;
     }
     if changed {
-        install_journal::write_file_tracked(
-            "server",
-            std::path::Path::new(httpd),
-            &conf,
-        )?;
+        install_journal::write_file_tracked("server", std::path::Path::new(httpd), &conf)?;
     } else {
         install_journal::record(
             "server",
@@ -119,11 +115,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
             .map_err(|error| format!("No se pudo leer {admin}: {error}"))?;
         let (updated, admin_changed) = bind_ols_admin_to_loopback(&original);
         if admin_changed {
-            install_journal::write_file_tracked(
-                "server",
-                std::path::Path::new(admin),
-                &updated,
-            )?;
+            install_journal::write_file_tracked("server", std::path::Path::new(admin), &updated)?;
         }
     }
 
@@ -132,8 +124,9 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         && !std::path::Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
         && std::path::Path::new(vendor_unit).exists()
     {
-        let contents = std::fs::read_to_string(vendor_unit)
-            .map_err(|error| format!("No se pudo leer la unidad vendor de OpenLiteSpeed: {error}"))?;
+        let contents = std::fs::read_to_string(vendor_unit).map_err(|error| {
+            format!("No se pudo leer la unidad vendor de OpenLiteSpeed: {error}")
+        })?;
         install_journal::write_file_tracked(
             "server",
             std::path::Path::new("/usr/lib/systemd/system/lshttpd.service"),
