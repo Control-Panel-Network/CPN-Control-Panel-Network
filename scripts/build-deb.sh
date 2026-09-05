@@ -38,9 +38,13 @@ cd "$project_dir"
 bash "$project_dir/scripts/sync-version.sh"
 cargo build --release --locked
 
-version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+# Debian's '~' sorts before the empty string, so 0.2.2~alpha.7 upgrades cleanly
+# to 0.2.2. A raw Cargo hyphen would be interpreted as a Debian revision and can
+# produce surprising ordering against the final release.
+deb_version="${cargo_version/-/~}"
 arch="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
-pkg_root="$out_dir/cpn-installer_${version}_$arch"
+pkg_root="$out_dir/cpn-installer_${deb_version}_$arch"
 rm -rf "$pkg_root"
 mkdir -p "$pkg_root/DEBIAN" "$pkg_root/usr/bin" "$pkg_root/lib/systemd/system"
 
@@ -50,7 +54,7 @@ install -m 0644 packaging/cpn-installer.service "$pkg_root/lib/systemd/system/cp
 
 cat >"$pkg_root/DEBIAN/control" <<EOF
 Package: cpn-installer
-Version: ${version}
+Version: ${deb_version}
 Section: admin
 Priority: optional
 Architecture: ${arch}
@@ -82,5 +86,5 @@ exit 0
 EOF
 chmod 0755 "$pkg_root/DEBIAN/postrm"
 
-dpkg-deb --build "$pkg_root" "$out_dir/cpn-installer_${version}_${arch}.deb"
+dpkg-deb --build "$pkg_root" "$out_dir/cpn-installer_${deb_version}_${arch}.deb"
 find "$out_dir" -type f -name '*.deb' -print
