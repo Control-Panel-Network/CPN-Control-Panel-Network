@@ -1,7 +1,8 @@
-//! Package-manager aware install recipes (dnf for RHEL-family, apt for Ubuntu).
+//! Package-manager aware install recipes (dnf for RHEL-family, apt for Ubuntu/Debian).
 
 use crate::model::ServerEngine;
 use crate::os_support::{GuestOs, PackageFamily};
+use std::path::Path;
 
 #[derive(Clone, Copy)]
 pub(crate) struct DnfProgress {
@@ -87,49 +88,68 @@ pub(crate) fn pkg_install(
     }
 }
 
+fn existing_server_probe(server: ServerEngine) -> &'static str {
+    match server {
+        ServerEngine::Nginx => "command -v nginx >/dev/null 2>&1",
+        ServerEngine::Caddy => "command -v caddy >/dev/null 2>&1",
+        ServerEngine::Openlitespeed => {
+            "test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1"
+        }
+    }
+}
+
+fn server_package_recipe(guest: &GuestOs, server: ServerEngine) -> CommandSpec {
+    let (dnf_script, apt_script, description, progress) = match server {
+        ServerEngine::Nginx => (
+            "if command -v nginx >/dev/null 2>&1; then echo 'Nginx already installed; reusing existing binary'; else dnf install -y nginx; fi",
+            "if command -v nginx >/dev/null 2>&1; then echo 'Nginx already installed; reusing existing binary'; else apt-get install -y nginx; fi",
+            "Asegurando Nginx",
+            2,
+        ),
+        ServerEngine::Caddy => (
+            "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; reusing existing binary'; else dnf install -y caddy; fi",
+            "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; reusing existing binary'; else apt-get install -y caddy; fi",
+            "Asegurando Caddy",
+            5,
+        ),
+        ServerEngine::Openlitespeed => (
+            "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; reusing existing installation'; else dnf install -y openlitespeed; fi",
+            "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; reusing existing installation'; else apt-get install -y openlitespeed; fi",
+            "Asegurando OpenLiteSpeed",
+            5,
+        ),
+    };
+
+    match guest.family {
+        PackageFamily::Dnf => command(
+            "bash",
+            vec!["-c", dnf_script],
+            description,
+            "downloading",
+            progress,
+        ),
+        PackageFamily::Apt => command(
+            "bash",
+            vec!["-c", apt_script],
+            description,
+            "downloading",
+            progress,
+        ),
+        PackageFamily::Windows => command(
+            "cmd",
+            vec!["/C", "echo Windows Phase A has no web-server package recipes"],
+            "Windows web-server install is not available",
+            "failed",
+            0,
+        ),
+    }
+}
+
 pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<CommandSpec> {
-    let nginx = pkg_install(
-        guest,
-        vec!["nginx"],
-        vec!["nginx"],
-        "Instalando Nginx",
-        DnfProgress {
-            download_start: 2,
-            download_end: 48,
-            install_start: 50,
-            install_end: 82,
-            label: "Nginx",
-        },
-    );
-    let caddy = pkg_install(
-        guest,
-        vec!["caddy"],
-        vec!["caddy"],
-        "Instalando Caddy",
-        DnfProgress {
-            download_start: 5,
-            download_end: 48,
-            install_start: 50,
-            install_end: 82,
-            label: "Caddy",
-        },
-    );
-    let ols = pkg_install(
-        guest,
-        vec!["openlitespeed"],
-        vec!["openlitespeed"],
-        "Instalando OpenLiteSpeed",
-        DnfProgress {
-            download_start: 5,
-            download_end: 48,
-            install_start: 50,
-            install_end: 78,
-            label: "OpenLiteSpeed",
-        },
-    );
+    let package = server_package_recipe(guest, server);
     match server {
         ServerEngine::Nginx => vec![
-            nginx,
+            package,
             command(
                 "systemctl",
                 vec!["enable", "--now", "nginx"],
@@ -139,7 +159,7 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
             ),
         ],
         ServerEngine::Caddy => vec![
-            caddy,
+            package,
             command(
                 "systemctl",
                 vec!["enable", "--now", "caddy"],
@@ -149,12 +169,26 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
             ),
         ],
         // Repo file is written by prepare_openlitespeed_repository (no curl|bash, issue #2).
-        ServerEngine::Openlitespeed => vec![ols],
+        ServerEngine::Openlitespeed => vec![package],
     }
+}
+
+fn openlitespeed_present() -> bool {
+    Path::new("/usr/local/lsws/bin/openlitespeed").is_file()
+        || Path::new("/usr/bin/openlitespeed").is_file()
+        || Path::new("/usr/sbin/openlitespeed").is_file()
+}
+
+fn caddy_present() -> bool {
+    Path::new("/usr/bin/caddy").is_file() || Path::new("/usr/local/bin/caddy").is_file()
 }
 
 /// Write LiteSpeed yum/apt repo directly instead of `curl | bash` (issue #2).
 pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), String> {
+    if openlitespeed_present() {
+        return Ok(());
+    }
+
     match guest.family {
         PackageFamily::Dnf => {
             let major = guest.major;
@@ -184,13 +218,13 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
         PackageFamily::Apt => {
             let codename = guest.apt_codename().ok_or_else(|| {
                 format!(
-                    "No LiteSpeed apt suite mapping for {} (need Ubuntu 20/22/24 or Debian 11/12/13)",
+                    "No LiteSpeed apt suite mapping for {} (need Ubuntu 22/24 or Debian 12/13)",
                     guest.label
                 )
             })?;
             let repository = format!(
-                "deb http://rpms.litespeedtech.com/debian/ {codename} main\n\
-                 #deb http://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
+                "deb https://rpms.litespeedtech.com/debian/ {codename} main\n\
+                 #deb https://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
             );
             std::fs::create_dir_all("/etc/apt/sources.list.d")
                 .map_err(|error| format!("No se pudo crear /etc/apt/sources.list.d: {error}"))?;
@@ -212,9 +246,10 @@ pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
         "bash",
         vec![
             "-c",
-            "apt-get update -y && apt-get install -y wget ca-certificates \
-&& wget -O /etc/apt/trusted.gpg.d/lst_debian_repo.gpg http://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
-&& wget -O /etc/apt/trusted.gpg.d/lst_repo.gpg http://rpms.litespeedtech.com/debian/lst_repo.gpg \
+            "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; skipping repository bootstrap'; exit 0; fi; \
+apt-get update -y && apt-get install -y wget ca-certificates \
+&& wget -qO /etc/apt/trusted.gpg.d/lst_debian_repo.gpg https://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
+&& wget -qO /etc/apt/trusted.gpg.d/lst_repo.gpg https://rpms.litespeedtech.com/debian/lst_repo.gpg \
 && apt-get update -y",
         ],
         "Preparando el repositorio apt de OpenLiteSpeed",
@@ -224,6 +259,10 @@ pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
 }
 
 pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
+    if caddy_present() {
+        return Ok(());
+    }
+
     match guest.family {
         PackageFamily::Dnf => {
             let major = guest.epel_major_for_caddy()?;
@@ -254,7 +293,11 @@ pub(crate) fn prepare_caddy_apt_command() -> CommandSpec {
         "bash",
         vec![
             "-c",
-            "apt-get update -y && apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null && apt-get update -y",
+            "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; skipping repository bootstrap'; exit 0; fi; \
+apt-get update -y && apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg \
+&& curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
+&& curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null \
+&& apt-get update -y",
         ],
         "Preparando el repositorio apt de Caddy",
         "downloading",
@@ -363,4 +406,17 @@ pub(crate) fn apt_update_command() -> CommandSpec {
         "downloading",
         39,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::existing_server_probe;
+    use crate::model::ServerEngine;
+
+    #[test]
+    fn existing_server_probes_cover_each_engine() {
+        assert!(existing_server_probe(ServerEngine::Nginx).contains("nginx"));
+        assert!(existing_server_probe(ServerEngine::Caddy).contains("caddy"));
+        assert!(existing_server_probe(ServerEngine::Openlitespeed).contains("lsws"));
+    }
 }
