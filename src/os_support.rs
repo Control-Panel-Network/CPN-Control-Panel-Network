@@ -136,26 +136,18 @@ fn classify(id: &str, major: u32, version_id: &str) -> (PackageFamily, SupportSt
         }
         "almalinux" if major == 8 => (PackageFamily::Dnf, SupportStatus::Partial, label),
         "rocky" if major == 9 => (PackageFamily::Dnf, SupportStatus::Supported, label),
-        "rocky" if matches!(major, 8 | 10) => {
-            (PackageFamily::Dnf, SupportStatus::Partial, label)
-        }
-        "rhel" if (8..=10).contains(&major) => {
-            (PackageFamily::Dnf, SupportStatus::Partial, label)
-        }
+        "rocky" if matches!(major, 8 | 10) => (PackageFamily::Dnf, SupportStatus::Partial, label),
+        "rhel" if (8..=10).contains(&major) => (PackageFamily::Dnf, SupportStatus::Partial, label),
         "cloudlinux" if (8..=10).contains(&major) => {
             (PackageFamily::Dnf, SupportStatus::Partial, label)
         }
-        "centos" if matches!(major, 9 | 10) => {
-            (PackageFamily::Dnf, SupportStatus::Partial, label)
-        }
+        "centos" if matches!(major, 9 | 10) => (PackageFamily::Dnf, SupportStatus::Partial, label),
         "ubuntu" if matches!(major, 22 | 24) => {
             (PackageFamily::Apt, SupportStatus::Supported, label)
         }
         // Ubuntu 20.04 is outside standard support and is not an upstream OLS target anymore.
         "ubuntu" if major == 20 => (PackageFamily::Apt, SupportStatus::NotYet, label),
-        "debian" if matches!(major, 12 | 13) => {
-            (PackageFamily::Apt, SupportStatus::Partial, label)
-        }
+        "debian" if matches!(major, 12 | 13) => (PackageFamily::Apt, SupportStatus::Partial, label),
         // Debian 11 LTS ended on 2026-08-31. Keep detection but refuse new installs.
         "debian" if major == 11 => (PackageFamily::Apt, SupportStatus::NotYet, label),
         // openEuler package compatibility has not been validated against CPN's third-party repos.
@@ -398,8 +390,8 @@ mod tests {
         assert!(rocky.uses_dnf());
 
         for version in ["8.10", "10.0"] {
-            let rocky = detect_from_os_release(&format!("ID=rocky\nVERSION_ID=\"{version}\"\n"))
-                .unwrap();
+            let rocky =
+                detect_from_os_release(&format!("ID=rocky\nVERSION_ID=\"{version}\"\n")).unwrap();
             assert_eq!(rocky.support, SupportStatus::Partial);
             assert!(rocky.is_installable());
         }
@@ -439,8 +431,8 @@ mod tests {
         }
 
         for (version, codename) in [("12", "bookworm"), ("13", "trixie")] {
-            let debian = detect_from_os_release(&format!("ID=debian\nVERSION_ID=\"{version}\"\n"))
-                .unwrap();
+            let debian =
+                detect_from_os_release(&format!("ID=debian\nVERSION_ID=\"{version}\"\n")).unwrap();
             assert_eq!(debian.support, SupportStatus::Partial);
             assert!(debian.is_installable());
             assert_eq!(debian.apt_codename(), Some(codename));
