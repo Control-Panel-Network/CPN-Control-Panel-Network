@@ -29,7 +29,12 @@ chmod 700 "$GNUPGHOME"
 cleanup() { rm -rf "$GNUPGHOME"; }
 trap cleanup EXIT
 
+# Required for non-interactive CI signing (loopback passphrase).
+printf '%s\n' 'allow-loopback-pinentry' >"$GNUPGHOME/gpg-agent.conf"
+printf '%s\n' 'pinentry-mode loopback' >"$GNUPGHOME/gpg.conf"
+
 printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+gpgconf --kill gpg-agent >/dev/null 2>&1 || true
 KEY_ID="${GPG_KEY_ID:-$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')}"
 if [[ -z "$KEY_ID" ]]; then
   echo "Could not determine GPG key id" >&2

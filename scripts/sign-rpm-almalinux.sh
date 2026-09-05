@@ -60,10 +60,21 @@ done
     export GNUPGHOME=/work/gnupg
     mkdir -p "$GNUPGHOME"
     chmod 700 "$GNUPGHOME"
+    # Required for non-interactive CI: without this, loopback passphrase looks like "Bad passphrase".
+    printf '%s\n' 'allow-loopback-pinentry' >"$GNUPGHOME/gpg-agent.conf"
+    printf '%s\n' 'pinentry-mode loopback' >"$GNUPGHOME/gpg.conf"
     gpg --batch --import /work/private.asc
+    gpgconf --kill gpg-agent >/dev/null 2>&1 || true
     KEY_ID="$(tr -d "\r\n" </work/key_id)"
     if [[ -z "$KEY_ID" ]]; then
       KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: "/^fpr:/ {print \$10; exit}")"
+    fi
+    # Preflight unlock before rpmsign (clearer failure than rpm macros).
+    echo preflight > /work/preflight.txt
+    if ! gpg --batch --yes --pinentry-mode loopback --passphrase-file /work/passphrase \
+      --local-user "$KEY_ID" --detach-sign --armor --output /work/preflight.txt.asc /work/preflight.txt; then
+      echo "GPG passphrase unlock failed inside AlmaLinux container (check GPG_PASSPHRASE secret)." >&2
+      exit 1
     fi
     # Prefer passphrase-file so special characters never break rpmmacros quoting.
     cat >"$HOME/.rpmmacros" <<EOF
