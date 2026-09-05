@@ -13,17 +13,19 @@ fi
 # shellcheck disable=SC1091
 source /etc/os-release
 major="${VERSION_ID%%.*}"
-# RHEL-family RPM build hosts (CyberPanel-aligned EL guests).
+# RHEL-family RPM build hosts.
 allowed_ids=(almalinux rocky rhel centos cloudlinux)
 id_ok=0
 for candidate in "${allowed_ids[@]}"; do
-  if [[ "${ID:-}" == "$candidate" ]]; then id_ok=1; break; fi
+  if [[ "${ID:-}" == "$candidate" ]]; then
+    id_ok=1
+    break
+  fi
 done
 if [[ "$id_ok" -ne 1 ]] || [[ "$major" != "8" && "$major" != "9" && "$major" != "10" ]]; then
   echo "Este empaquetado RPM debe ejecutarse en AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10 (detectado: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
-  echo "En otros hosts, construye el RPM con: ./scripts/docker-build-rpm.sh" >&2
-  echo "En Ubuntu, prueba el helper experimental: ./scripts/build-deb.sh" >&2
-  echo "Matriz: to-do/OS-SUPPORT-MATRIX.md" >&2
+  echo "En otros hosts de desarrollo, usa ./scripts/docker-build-rpm.sh." >&2
+  echo "Los usuarios finales deben instalar los paquetes publicados en GitHub Releases." >&2
   exit 1
 fi
 
@@ -43,6 +45,7 @@ cargo build --release --locked
 mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"
 install -m 0755 target/release/cpn "$rpm_root/SOURCES/cpn"
+install -m 0644 packaging/cpn-installer.service "$rpm_root/SOURCES/cpn-installer.service"
 install -m 0644 packaging/cpn-installer.spec "$rpm_root/SPECS/cpn-installer.spec"
 rpmbuild --define "_topdir $rpm_root" -bb "$rpm_root/SPECS/cpn-installer.spec"
 
