@@ -1,6 +1,6 @@
 Name:           cpn-installer
 Version:        0.2.2
-Release:        0.alpha1%{?dist}
+Release:        0.alpha2%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
 URL:            https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
@@ -38,4 +38,3 @@ install -Dpm 0755 %{SOURCE1} %{buildroot}%{_bindir}/cpn
 
 * Tue Aug 11 2026 CPN <dev@cpn.invalid> - 0.1.0-1
 - Primera versiÃ³n del instalador para AlmaLinux
-

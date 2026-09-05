@@ -35,7 +35,10 @@ printf '%s\n' 'pinentry-mode loopback' >"$GNUPGHOME/gpg.conf"
 
 printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
 gpgconf --kill gpg-agent >/dev/null 2>&1 || true
-KEY_ID="${GPG_KEY_ID:-$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')}"
+# GitHub secrets pasted from terminals can carry CR/LF characters.  The RPM
+# signing helper already normalizes this value; keep detached signatures on
+# the exact same signing identity.
+KEY_ID="$(printf '%s' "${GPG_KEY_ID:-$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')}" | tr -d '\r\n')"
 if [[ -z "$KEY_ID" ]]; then
   echo "Could not determine GPG key id" >&2
   exit 1
@@ -44,6 +47,7 @@ fi
 # Prefer primary fingerprint when GPG_KEY_ID looks like a short id.
 FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
 SIGN_USER="${GPG_KEY_ID:-$FPR}"
+SIGN_USER="$(printf '%s' "$SIGN_USER" | tr -d '\r\n')"
 if [[ -z "$SIGN_USER" ]]; then
   SIGN_USER="$KEY_ID"
 fi
@@ -53,10 +57,13 @@ PASS_FILE="$GNUPGHOME/passphrase"
 printf '%s' "${GPG_PASSPHRASE:-}" | tr -d '\r\n' >"$PASS_FILE"
 chmod 600 "$PASS_FILE"
 
-gpg_sign_args=(--batch --yes --detach-sign --armor --local-user "$SIGN_USER")
-if [[ -s "$PASS_FILE" ]]; then
-  gpg_sign_args+=(--pinentry-mode loopback --passphrase-file "$PASS_FILE")
-fi
+# Always use loopback mode, including an intentionally empty passphrase.  In
+# CI this avoids falling back to a nonexistent pinentry program for unprotected
+# keys and makes detached signatures behave identically to AlmaLinux rpmsign.
+gpg_sign_args=(
+  --batch --yes --detach-sign --armor --local-user "$SIGN_USER"
+  --pinentry-mode loopback --passphrase-file "$PASS_FILE"
+)
 
 sign_detached() {
   local file="$1"
