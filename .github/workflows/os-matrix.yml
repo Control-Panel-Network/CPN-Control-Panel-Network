@@ -19,9 +19,11 @@ on:
     paths:
       - "src/os_support.rs"
       - "src/install_recipes.rs"
+      - "src/install_server.rs"
       - "src/install_mail_backend.rs"
       - "src/install_webmail.rs"
       - "src/manifest.rs"
+      - "src/environment.rs"
       - "packaging/**"
       - "tests/docker-matrix.sh"
       - "scripts/build-rpm.sh"
@@ -43,10 +45,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: rockylinux:9
+          - image: almalinux:9
             el_major: "9"
           - image: almalinux:10
             el_major: "10"
+          - image: rockylinux:9
+            el_major: "9"
     steps:
       - uses: actions/checkout@v7
       - name: Build matching RPM
@@ -71,28 +75,33 @@ jobs:
           if-no-files-found: ignore
 
   primary-apt:
-    name: Primary apt smoke (Ubuntu 24.04)
+    name: Primary apt smoke (${{ matrix.image }})
     if: github.event_name == 'push' || inputs.scope == 'primary' || inputs.scope == 'extended'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:22.04
+          - ubuntu:24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Build DEB on Ubuntu 24.04
+      - name: Build matching DEB
         env:
-          CPN_BUILD_IMAGE: ubuntu:24.04
-          CPN_UBUNTU_VERSION: "24.04"
+          CPN_BUILD_IMAGE: ${{ matrix.image }}
         run: ./scripts/docker-build-deb.sh
       - name: Nginx smoke
-        run: |
-          CPN_TEST_IMAGE=ubuntu:24.04 \
-          CPN_TEST_SCOPE=server \
-          CPN_TEST_SERVERS=nginx \
-          ./tests/docker-matrix.sh
+        env:
+          CPN_TEST_IMAGE: ${{ matrix.image }}
+          CPN_TEST_SCOPE: server
+          CPN_TEST_SERVERS: nginx
+        run: ./tests/docker-matrix.sh
       - name: Upload matrix diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: primary-apt-logs
+          name: primary-apt-${{ strategy.job-index }}-logs
           path: |
             target/deb/*.deb
             /tmp/cpn-matrix-*.log
@@ -149,8 +158,6 @@ jobs:
           - image: rockylinux:10
             pkg: rpm
             el_major: "10"
-          - image: ubuntu:22.04
-            pkg: deb
           - image: debian:12
             pkg: deb
           - image: debian:13
