@@ -49,7 +49,7 @@ pub fn version_management_page() -> String {
 <p class="muted" style="margin-top:18px;">
   Upgrade, repair, and downgrade run through the CPN installer maintenance path
   (<code>sudo cpn-installer --upgrade</code> / <code>--repair</code>), or the installer UI when the process is in maintenance phase.
-  See <code>to-do/UPGRADE-REPAIR.md</code> in the CPN repository.
+  Release assets and verification material are published on the CPN GitHub Releases page.
 </p>
 <script>
 (function () {{
@@ -167,6 +167,7 @@ pub fn connect_page() -> String {
   <li><span>Repository</span><strong><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network" target="_blank" rel="noopener noreferrer">CPN-Control-Panel-Network</a></strong></li>
   <li><span>Organization</span><strong><a href="https://github.com/Control-Panel-Network" target="_blank" rel="noopener noreferrer">github.com/Control-Panel-Network</a></strong></li>
   <li><span>Issues</span><strong><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a></strong></li>
+  <li><span>Releases</span><strong><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a></strong></li>
   <li><span>Contributing</span><strong><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a></strong></li>
   <li><span>Security</span><strong><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a></strong></li>
 </ul>
@@ -210,6 +211,7 @@ mod tests {
         let html = connect_page();
         assert!(html.contains("Control-Panel-Network"));
         assert!(html.contains("Community & docs") || html.contains("Community &amp; docs"));
+        assert!(html.contains("GitHub Releases"));
         assert!(!html.to_lowercase().contains("cyberpersons"));
     }
 }
