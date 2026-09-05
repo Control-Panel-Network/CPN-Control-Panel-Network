@@ -39,7 +39,7 @@ export function ServerSelectionScreen({
 }: Props) {
   const { t, locale } = useI18n();
   const networkTitle = locale === 'es' ? 'Configuración de red' : locale === 'nb' ? 'Nettverksoppsett' : 'Network configuration';
-  const [step, setStep] = useState<'network' | 'server' | 'database'>('network');
+  const [step, setStep] = useState<'network' | 'server' | 'database'>('server');
   const [portDraft, setPortDraft] = useState(String(listenPort || 2087));
   const [hostnameDraft, setHostnameDraft] = useState(panelHostname || '');
   const [oldPortPolicy, setOldPortPolicy] = useState<OldPortPolicy>('redirect_1m');
@@ -81,7 +81,7 @@ export function ServerSelectionScreen({
         panelHostname: hostnameDraft.trim(),
       });
       setPortMessage(message ?? t.listenPortSaved);
-      setStep('server');
+      onContinue();
     } catch (error) {
       setPortMessage(null);
       setPortError(error instanceof Error ? error.message : t.listenPortInvalid);
@@ -102,7 +102,7 @@ export function ServerSelectionScreen({
       </div>
 
       <nav className="setup-steps" aria-label="Setup">
-        {[networkTitle, t.selectServerTitle, t.databaseTitle].map((label, index) => <span key={label} aria-current={index === ['network', 'server', 'database'].indexOf(step) ? 'step' : undefined}>{index + 1}. {label}</span>)}
+        {[t.selectServerTitle, t.databaseTitle, networkTitle].map((label, index) => <span key={label} aria-current={index === ['server', 'database', 'network'].indexOf(step) ? 'step' : undefined}>{index + 1}. {label}</span>)}
       </nav>
       {step === 'network' && <div className="w-full max-w-xl mb-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
         <label className="block text-[15px] font-semibold text-[#1a1c1d]" htmlFor="cpn-listen-port">
@@ -249,13 +249,14 @@ export function ServerSelectionScreen({
             <span>{t.databaseNone}</span>
           </label>
         </fieldset>
-        <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d]">
+        <label className="phpmyadmin-option">
           <input
             type="checkbox"
             checked={installPhpmyadmin}
             onChange={(event) => onPhpmyadminChange(event.target.checked)}
           />
-          <span>{t.databasePhpmyadmin}</span>
+          <span>{locale === 'es' ? 'Instalar phpMyAdmin' : locale === 'nb' ? 'Installer phpMyAdmin' : 'Install phpMyAdmin'}</span>
+          <span className="default-badge">{locale === 'es' ? 'Recomendado · activado por defecto' : locale === 'nb' ? 'Anbefalt · aktivert som standard' : 'Recommended · enabled by default'}</span>
         </label>
       </div>}
 
@@ -264,10 +265,10 @@ export function ServerSelectionScreen({
       </button>}
 
       <div className="mt-8 flex flex-col items-center gap-3">
-        {step !== 'network' && <button className="secondary-button" onClick={() => setStep(step === 'database' ? 'server' : 'network')}>{locale === 'es' ? 'Atrás' : locale === 'nb' ? 'Tilbake' : 'Back'}</button>}
+        {step !== 'server' && <button className="secondary-button" onClick={() => setStep(step === 'network' ? 'database' : 'server')}>{locale === 'es' ? 'Atrás' : locale === 'nb' ? 'Tilbake' : 'Back'}</button>}
         {step !== 'network' && <button
           type="button"
-          onClick={() => step === 'server' ? setStep('database') : onContinue()}
+          onClick={() => step === 'server' ? setStep('database') : setStep('network')}
           disabled={!selectedServer}
           className="primary-button min-w-52"
         >

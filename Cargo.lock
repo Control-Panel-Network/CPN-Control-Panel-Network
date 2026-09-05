@@ -582,7 +582,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "cpn-installer"
-version = "0.2.2-alpha.6"
+version = "0.2.2-alpha.7"
 dependencies = [
  "actix-web",
  "actix-ws",

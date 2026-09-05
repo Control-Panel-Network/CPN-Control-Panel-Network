@@ -22,6 +22,19 @@ async fn detect_lsws_unit() -> Result<&'static str, String> {
     Err("No se encontró la unidad systemd vendor de OpenLiteSpeed (lsws/lshttpd)".into())
 }
 
+fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
+    let diagnostics = output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    let fatal = diagnostics
+        .iter()
+        .any(|line| line.contains("[ERROR]") || line.contains("[FATAL]"));
+    !fatal
+        && (success
+            || (!diagnostics.is_empty() && diagnostics.iter().all(|line| line.contains("[WARN]"))))
+}
+
 async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, String> {
     let wrapper = std::path::Path::new("/etc/systemd/system/openlitespeed.service");
     if wrapper.exists() {
@@ -42,12 +55,29 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         "docRoot                   $VH_ROOT/html/\nenableGzip                1\nindex  {\n  useServer               0\n  indexFiles              index.html, index.php\n}\n",
     )
     .map_err(|error| error.to_string())?;
+    run_command(
+        state,
+        command(
+            "chown",
+            vec!["-R", "nobody:nobody", "/var/www/cpn"],
+            "Ajustando permisos para OpenLiteSpeed",
+            "installing",
+            81,
+        ),
+    )
+    .await?;
     let httpd = "/usr/local/lsws/conf/httpd_config.conf";
     let mut conf = std::fs::read_to_string(httpd).unwrap_or_default();
+    let mut changed = false;
     if !conf.contains("virtualHost CPN") {
-        conf.push_str(
-            "\nvirtualHost CPN {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPN/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n\nlistener CPNHttp {\n  address                 *:80\n  secure                  0\n  map                     CPN *\n}\n",
-        );
+        conf.push_str("\nvirtualHost CPN {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPN/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n");
+        changed = true;
+    }
+    if !conf.contains("listener CPNHttp") {
+        conf.push_str("\nlistener CPNHttp {\n  address                 *:80\n  secure                  0\n  map                     CPN *\n}\n");
+        changed = true;
+    }
+    if changed {
         std::fs::write(httpd, conf).map_err(|error| error.to_string())?;
     }
     let admin = "/usr/local/lsws/admin/conf/admin_config.conf";
@@ -61,7 +91,33 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
             .status()
             .await;
     }
+    let vendor_unit = "/usr/local/lsws/admin/misc/lshttpd.service";
+    if !std::path::Path::new("/usr/lib/systemd/system/lsws.service").exists()
+        && !std::path::Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
+        && std::path::Path::new(vendor_unit).exists()
+    {
+        std::fs::copy(vendor_unit, "/usr/lib/systemd/system/lshttpd.service").map_err(|error| {
+            format!("No se pudo registrar la unidad vendor de OpenLiteSpeed: {error}")
+        })?;
+    }
     let unit = detect_lsws_unit().await?;
+    let validation = Command::new("/usr/local/lsws/bin/openlitespeed")
+        .arg("-t")
+        .env("LC_ALL", "C")
+        .output()
+        .await
+        .map_err(|error| format!("No se pudo validar OpenLiteSpeed: {error}"))?;
+    let validation_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&validation.stdout),
+        String::from_utf8_lossy(&validation.stderr)
+    );
+    if !openlitespeed_config_is_valid(validation.status.success(), &validation_output) {
+        return Err(format!(
+            "La configuración de OpenLiteSpeed no es válida:\n{}",
+            validation_output.trim()
+        ));
+    }
     run_command(
         state,
         command(
@@ -73,24 +129,61 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         ),
     )
     .await?;
-    let enable = match unit {
-        "lshttpd" => command(
+    run_command(
+        state,
+        command(
             "systemctl",
-            vec!["enable", "--now", "lshttpd"],
-            "Activando el servicio vendor lshttpd",
+            vec!["enable", unit],
+            "Habilitando OpenLiteSpeed al arrancar",
+            "installing",
+            83,
+        ),
+    )
+    .await?;
+    // The RPM may start OpenLiteSpeed before CPN writes its listener. A real
+    // restart is required; `enable --now` is a no-op for an active service.
+    run_command(
+        state,
+        command(
+            "systemctl",
+            vec!["restart", unit],
+            "Reiniciando OpenLiteSpeed con el vhost CPN",
             "installing",
             84,
         ),
-        _ => command(
-            "systemctl",
-            vec!["enable", "--now", "lsws"],
-            "Activando el servicio vendor lsws",
-            "installing",
-            84,
-        ),
-    };
-    run_command(state, enable).await?;
+    )
+    .await?;
     Ok(unit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::openlitespeed_config_is_valid;
+
+    #[test]
+    fn openlitespeed_validation_accepts_success_and_warning_only_exit() {
+        assert!(openlitespeed_config_is_valid(
+            true,
+            "[OK] configuration valid"
+        ));
+        assert!(openlitespeed_config_is_valid(
+            false,
+            "[WARN] module unavailable"
+        ));
+    }
+
+    #[test]
+    fn openlitespeed_validation_rejects_errors_and_unknown_failures() {
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "[ERROR] listener conflict"
+        ));
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "configuration failed"
+        ));
+        assert!(!openlitespeed_config_is_valid(false, ""));
+    }
 }
 
 fn server_service(server: ServerEngine) -> &'static str {
@@ -353,6 +446,8 @@ pub async fn install_with_database(
                     "-c",
                     "set -o pipefail; for attempt in {1..15}; do if curl --fail --silent --show-error --max-time 2 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'; then exit 0; fi; sleep 1; done; exit 1",
                 ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .kill_on_drop(true)
                 .status()
                 .await

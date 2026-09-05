@@ -9,6 +9,9 @@
 .appearance-popover button { width:100%; justify-content:space-between; }
 .setup-steps { display:flex; flex-wrap:wrap; gap:16px; margin:0 0 32px; color:var(--installer-muted); font-size:12px; }
 .setup-steps [aria-current="step"] { color:#0071e3; font-weight:650; }
+.phpmyadmin-option { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#1a1c1d; font-size:14px; }
+.default-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; background:#e7f1ff; color:#0059b3; font-size:11px; font-weight:650; }
+:root[data-theme="dark"] .phpmyadmin-option { color:var(--installer-ink); }
 button:focus-visible, input:focus-visible { outline:2px solid #0071e3; outline-offset:3px; }
 :root[data-theme="dark"] body, :root[data-theme="dark"] main { background:var(--installer-bg); color:var(--installer-ink); }
 :root[data-theme="dark"] .bg-white, :root[data-theme="dark"] .panel, :root[data-theme="dark"] .field-shell, :root[data-theme="dark"] .field-input, :root[data-theme="dark"] .selection-button:not(.selection-button-active) { background:var(--installer-card); color:var(--installer-ink); }

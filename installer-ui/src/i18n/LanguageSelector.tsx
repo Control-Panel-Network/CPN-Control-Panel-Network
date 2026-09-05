@@ -10,7 +10,7 @@ const LABELS: Record<LocaleCode, string> = {
 
 export function LanguageSelector({ className = '' }: { className?: string }) {
   const { locale, setLocale, locales, t } = useI18n();
-  const [menu, setMenu] = useState<'language' | 'theme' | null>(null);
+  const [menu, setMenu] = useState<'language' | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     try { const saved = localStorage.getItem('cpn-installer-theme'); return saved === 'light' || saved === 'dark' ? saved : 'system'; } catch { return 'system'; }
@@ -31,11 +31,15 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
   }, []);
   const names = locale === 'es' ? ['Sistema', 'Claro', 'Oscuro'] : locale === 'nb' ? ['System', 'Lys', 'Mørk'] : ['System', 'Light', 'Dark'];
   const ThemeIcon = theme === 'system' ? Monitor : theme === 'dark' ? Moon : Sun;
+  const themeModes = ['system', 'light', 'dark'] as const;
+  const themeIndex = themeModes.indexOf(theme);
+  const nextTheme = themeModes[(themeIndex + 1) % themeModes.length];
+  const appearanceLabel = `${locale === 'es' ? 'Apariencia' : locale === 'nb' ? 'Utseende' : 'Appearance'}: ${names[themeIndex]}. ${locale === 'es' ? 'Cambiar a' : locale === 'nb' ? 'Bytt til' : 'Switch to'} ${names[(themeIndex + 1) % names.length]}`;
   return <div ref={root} className={`appearance-toolbar ${className}`} onKeyDown={(event) => { if (event.key === 'Escape') { setMenu(null); root.current?.querySelector<HTMLButtonElement>('button')?.focus(); } }}>
     <button type="button" aria-label={t.languageLabel} aria-expanded={menu === 'language'} onClick={() => setMenu(menu === 'language' ? null : 'language')}><Globe2 size={18} /><span>{locale.toUpperCase()}</span></button>
-    <button type="button" aria-label={locale === 'es' ? 'Apariencia' : 'Appearance'} aria-expanded={menu === 'theme'} onClick={() => setMenu(menu === 'theme' ? null : 'theme')}><ThemeIcon size={18} /></button>
+    <button type="button" aria-label={appearanceLabel} title={appearanceLabel} onClick={() => { setTheme(nextTheme); setMenu(null); }}><ThemeIcon size={18} /></button>
     {menu && <div className="appearance-popover">
-      {menu === 'language' ? locales.map((code) => <button key={code} type="button" aria-pressed={locale === code} onClick={() => { setLocale(code); setMenu(null); }}>{LABELS[code]}{locale === code && <Check size={16} />}</button>) : (['system', 'light', 'dark'] as const).map((mode, index) => <button key={mode} type="button" aria-pressed={theme === mode} onClick={() => { setTheme(mode); setMenu(null); }}>{names[index]}{theme === mode && <Check size={16} />}</button>)}
+      {locales.map((code) => <button key={code} type="button" aria-pressed={locale === code} onClick={() => { setLocale(code); setMenu(null); }}>{LABELS[code]}{locale === code && <Check size={16} />}</button>)}
     </div>}
   </div>;
 }

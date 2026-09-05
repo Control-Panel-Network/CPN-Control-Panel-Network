@@ -19,6 +19,8 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const downloadDone =
     installing || testing || phase === 'completed' || (failed && status.progress > 15);
   const installDone = testing || phase === 'completed';
+  const labelClass = (active: boolean, done = false) =>
+    `text-[17px] ${active ? 'font-semibold text-[#1a1c1d]' : done ? 'font-normal text-[#1a1c1d]' : 'font-normal text-[#7a7a7a]'}`;
 
   return (
     <section className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-white">
@@ -30,7 +32,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         <div className="flex flex-col gap-8">
           <div className="flex items-center gap-[17px]">
             <StepIcon state={phase === 'configuring' ? 'active' : failed && status.progress === 0 ? 'error' : 'done'} />
-            <span className="text-[17px] font-semibold">{locale === 'es' ? 'Configurando' : locale === 'nb' ? 'Konfigurerer' : 'Configuring'}</span>
+            <span className={labelClass(phase === 'configuring', phase !== 'configuring')}>{locale === 'es' ? 'Configurando' : locale === 'nb' ? 'Konfigurerer' : 'Configuring'}</span>
           </div>
           <div className="flex items-center gap-[17px]">
             <StepIcon
@@ -38,7 +40,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
                 downloading ? 'active' : downloadDone ? 'done' : failed ? 'error' : 'pending'
               }
             />
-            <span className="text-[17px] font-semibold text-[#1a1c1d]">
+            <span className={labelClass(downloading, downloadDone)}>
               {downloading
                 ? `${t.phaseDownloading} ${status.progress}%`
                 : t.phaseDownloading}
@@ -58,7 +60,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
               }
             />
             <span
-              className={`text-[17px] ${installing || installDone ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}
+              className={labelClass(installing, installDone)}
             >
               {installing
                 ? `${t.phaseInstalling} ${status.progress}%`
@@ -79,7 +81,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
               }
             />
             <span
-              className={`text-[17px] ${testing || phase === 'completed' ? 'font-semibold text-[#1a1c1d]' : 'text-[#7a7a7a]'}`}
+              className={labelClass(testing, phase === 'completed')}
             >
               {t.phaseTesting}
             </span>
