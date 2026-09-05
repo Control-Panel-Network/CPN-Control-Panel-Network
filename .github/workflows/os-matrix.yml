@@ -1,6 +1,6 @@
 name: OS matrix
 
-# Privileged systemd containers. Not run on untrusted PRs (issue #7).
+# Privileged systemd containers. Not run on untrusted PRs.
 # Trigger manually or on main pushes after merge.
 
 on:
@@ -10,7 +10,7 @@ on:
         description: "Matrix scope"
         type: choice
         options:
-          - rocky9
+          - primary
           - extended
           - mail
         default: extended
@@ -22,7 +22,10 @@ on:
       - "src/install_mail_backend.rs"
       - "src/install_webmail.rs"
       - "src/manifest.rs"
+      - "packaging/**"
       - "tests/docker-matrix.sh"
+      - "scripts/build-rpm.sh"
+      - "scripts/build-deb.sh"
       - "scripts/docker-build-rpm.sh"
       - "scripts/docker-build-deb.sh"
       - ".github/workflows/os-matrix.yml"
@@ -31,18 +34,57 @@ permissions:
   contents: read
 
 jobs:
-  rocky9:
-    name: Rocky 9 nginx smoke
-    if: github.event_name == 'push' || inputs.scope == 'rocky9' || inputs.scope == 'extended'
+  primary-rpm:
+    name: Primary RPM smoke (${{ matrix.image }})
+    if: github.event_name == 'push' || inputs.scope == 'primary' || inputs.scope == 'extended'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rockylinux:9
+            el_major: "9"
+          - image: almalinux:10
+            el_major: "10"
     steps:
       - uses: actions/checkout@v7
-      - name: Build RPM
+      - name: Build matching RPM
+        env:
+          CPN_ALMA_VERSION: ${{ matrix.el_major }}
+          CPN_BUILD_IMAGE: ${{ matrix.image }}
         run: ./scripts/docker-build-rpm.sh
       - name: Nginx smoke
+        env:
+          CPN_TEST_IMAGE: ${{ matrix.image }}
+          CPN_TEST_SCOPE: server
+          CPN_TEST_SERVERS: nginx
+        run: ./tests/docker-matrix.sh
+      - name: Upload matrix diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: primary-rpm-${{ strategy.job-index }}-logs
+          path: |
+            target/rpmbuild/RPMS/**/*.rpm
+            /tmp/cpn-matrix-*.log
+          if-no-files-found: ignore
+
+  primary-apt:
+    name: Primary apt smoke (Ubuntu 24.04)
+    if: github.event_name == 'push' || inputs.scope == 'primary' || inputs.scope == 'extended'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build DEB on Ubuntu 24.04
+        env:
+          CPN_BUILD_IMAGE: ubuntu:24.04
+          CPN_UBUNTU_VERSION: "24.04"
+        run: ./scripts/docker-build-deb.sh
+      - name: Nginx smoke
         run: |
-          CPN_TEST_IMAGE=rockylinux:9 \
+          CPN_TEST_IMAGE=ubuntu:24.04 \
           CPN_TEST_SCOPE=server \
           CPN_TEST_SERVERS=nginx \
           ./tests/docker-matrix.sh
@@ -50,15 +92,14 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: rocky9-matrix-logs
+          name: primary-apt-logs
           path: |
-            target/rpmbuild/RPMS/**/*.rpm
+            target/deb/*.deb
             /tmp/cpn-matrix-*.log
           if-no-files-found: ignore
 
   mail-roundtrip:
     name: Rocky 9 mail E2E (Roundcube)
-    # Run on main path pushes (mail/matrix files) and on manual mail/extended dispatch (issues #7/#9).
     if: |
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && (inputs.scope == 'mail' || inputs.scope == 'extended'))
@@ -66,7 +107,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
-      - name: Build RPM
+      - name: Build Rocky 9 RPM
+        env:
+          CPN_ALMA_VERSION: "9"
+          CPN_BUILD_IMAGE: rockylinux:9
         run: ./scripts/docker-build-rpm.sh
       - name: Roundcube + Postfix/Dovecot smoke
         run: |
@@ -85,42 +129,51 @@ jobs:
           if-no-files-found: ignore
 
   extended:
-    name: Extended guest smoke
+    name: Extended guest smoke (${{ matrix.image }})
     if: github.event_name == 'workflow_dispatch' && inputs.scope == 'extended'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
         include:
           - image: almalinux:8
             pkg: rpm
+            el_major: "8"
           - image: rockylinux:8
             pkg: rpm
+            el_major: "8"
           - image: quay.io/centos/centos:stream9
             pkg: rpm
+            el_major: "9"
+          - image: rockylinux:10
+            pkg: rpm
+            el_major: "10"
           - image: ubuntu:22.04
             pkg: deb
-            ubuntu: "22.04"
-          - image: ubuntu:24.04
+          - image: debian:12
             pkg: deb
-            ubuntu: "24.04"
+          - image: debian:13
+            pkg: deb
     steps:
       - uses: actions/checkout@v7
-      - name: Build RPM
+      - name: Build matching RPM
         if: matrix.pkg == 'rpm'
+        env:
+          CPN_ALMA_VERSION: ${{ matrix.el_major }}
+          CPN_BUILD_IMAGE: ${{ matrix.image }}
         run: ./scripts/docker-build-rpm.sh
-      - name: Build Deb
+      - name: Build matching DEB
         if: matrix.pkg == 'deb'
         env:
-          CPN_UBUNTU_VERSION: ${{ matrix.ubuntu }}
+          CPN_BUILD_IMAGE: ${{ matrix.image }}
         run: ./scripts/docker-build-deb.sh
-      - name: Nginx smoke on ${{ matrix.image }}
-        run: |
-          CPN_TEST_IMAGE='${{ matrix.image }}' \
-          CPN_TEST_SCOPE=server \
-          CPN_TEST_SERVERS=nginx \
-          ./tests/docker-matrix.sh
+      - name: Nginx smoke
+        env:
+          CPN_TEST_IMAGE: ${{ matrix.image }}
+          CPN_TEST_SCOPE: server
+          CPN_TEST_SERVERS: nginx
+        run: ./tests/docker-matrix.sh
       - name: Upload extended matrix diagnostics
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
