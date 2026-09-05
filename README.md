@@ -6,19 +6,19 @@
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
-CPN is a Rust-based web installer and server-control project. The installer embeds its React UI, reports real progress over WebSockets, and prepares web, database, mail, and panel components on supported Linux guests. Windows Server currently has only a limited Phase A path.
+CPN is a Rust-based web installer and server-control project. The installer embeds its React UI, reports real progress over WebSockets, and prepares web, database, mail, and panel components on supported Linux guests. Windows Server currently has a limited Phase A path.
 
 ## Install
 
-**End users should install a package from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases). You do not need Rust, Node.js, Docker, `rpmbuild`, or the source repository to install a release.**
+**End users should download the package for their OS from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases). You do not need Rust, Node.js, Docker, `rpmbuild`, or the source repository to install a release.**
 
-Choose the package that matches the guest OS:
+Release assets are produced for these distribution paths:
 
 - Enterprise Linux family: `cpn-installer-...el8...rpm`, `...el9...rpm`, or `...el10...rpm`.
-- Ubuntu/Debian: `cpn-installer_...amd64.deb` when the release contains an apt-family package.
-- Raw binaries are release/debug artifacts; prefer the native package because it also installs the `cpn` CLI and the systemd unit.
+- Ubuntu/Debian: `cpn-installer_...amd64.deb`.
+- Windows Server 2016+ Phase A: `cpn-windows-x86_64.zip`.
 
-After downloading the asset:
+Linux installation:
 
 ```bash
 # AlmaLinux / Rocky / RHEL-family
@@ -31,7 +31,7 @@ sudo apt install ./cpn-installer_*.deb
 sudo cpn-installer
 ```
 
-The installer listens on `127.0.0.1:2087` by default and prints a temporary URL containing its access token. For a remote server, prefer SSH port forwarding rather than exposing the installer directly:
+The Linux installer listens on `127.0.0.1:2087` by default and prints a temporary URL containing its access token. For a remote server, prefer SSH port forwarding rather than exposing the installer directly:
 
 ```bash
 ssh -L 2087:127.0.0.1:2087 root@your-server
@@ -39,8 +39,10 @@ ssh -L 2087:127.0.0.1:2087 root@your-server
 
 Then open the URL printed by `cpn-installer` locally. `--allow-remote` binds to all interfaces and should only be used on a trusted network because the installer UI currently uses HTTP rather than TLS.
 
+Windows Phase A installation: extract `cpn-windows-x86_64.zip`, open an elevated PowerShell prompt, and run `Install-Cpn.ps1`. The default Windows mode also binds only to loopback and does not create an inbound firewall rule. `-AllowRemote` is an explicit HTTP/network exposure opt-in.
+
 > [!NOTE]
-> If the newest release does not contain a package for your target OS, treat that target as unavailable for that release. The build scripts in `scripts/` are maintainer/development tools, not an installation requirement.
+> If the newest release does not contain an asset for your target OS, treat that target as unavailable for that release. The build scripts in `scripts/` are maintainer/development tools, not an installation requirement.
 
 ## Current guest support
 
@@ -57,7 +59,7 @@ CPN distinguishes between targets with recurring smoke evidence and targets that
 | CloudLinux 8 / 9 / 10 | Partial | RPM / dnf | Shared EL recipes; no public CPN lab matrix |
 | CentOS Stream 9 / 10 | Partial | RPM / dnf | Shared EL recipes |
 | Debian 12 / 13 | Partial | DEB / apt | Implemented apt path; matrix coverage is being expanded |
-| Windows Server 2016+ | Partial | Windows Phase A | Installer UI/account bootstrap only; no Linux web/mail package parity |
+| Windows Server 2016+ | Partial | Windows ZIP | Phase A: installer UI/account bootstrap; no Linux web/mail package parity |
 
 CPN recognizes but refuses new installs on Ubuntu 20.04 and Debian 11 because their normal security-support windows have ended, and on openEuler because CPN's third-party web/mail repository stack has not been validated there. Windows Server 2012/2012 R2 and unknown distributions are also refused.
 
@@ -67,10 +69,12 @@ CPN recognizes but refuses new installs on Ubuntu 20.04 and Debian 11 because th
 
 CPN is designed to be increasingly idempotent instead of assuming every machine is empty:
 
-- Nginx, Caddy, and OpenLiteSpeed recipes reuse an existing selected server binary instead of deliberately installing a second copy, then continue with service/configuration steps.
+- Nginx, Caddy, and OpenLiteSpeed recipes detect an existing selected server and reuse it instead of deliberately installing a second copy, then continue with activation/configuration.
+- Existing Caddy/LiteSpeed repository files that CPN must change are backed up through the install journal; rollback restores operator-owned content instead of deleting it.
+- OpenLiteSpeed configuration changes are journaled, and CPN no longer deletes administrator-owned systemd units while adopting an existing installation.
 - MariaDB/MySQL defaults detect an existing database service and avoid replacing it with the conflicting engine.
 - PHP setup keeps a sufficiently new existing PHP installation rather than blindly switching module streams.
-- Firewall cleanup is intended to remove only rules created by CPN; pre-existing operator rules must remain owned by the operator.
+- Firewall cleanup removes only rules CPN recorded as its own; pre-existing firewalld/UFW rules remain operator-owned.
 
 Do not use CPN as an automatic migration tool for a complex production host. Existing custom virtual hosts, nonstandard package layouts, or another web server already bound to the same ports can still require manual review.
 
