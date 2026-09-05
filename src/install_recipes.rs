@@ -88,13 +88,28 @@ pub(crate) fn pkg_install(
     }
 }
 
-fn existing_server_probe(server: ServerEngine) -> &'static str {
+/// Detect common package/manual-install locations before CPN mutates repositories.
+pub(crate) fn web_server_present(server: ServerEngine) -> bool {
     match server {
-        ServerEngine::Nginx => "command -v nginx >/dev/null 2>&1",
-        ServerEngine::Caddy => "command -v caddy >/dev/null 2>&1",
-        ServerEngine::Openlitespeed => {
-            "test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1"
-        }
+        ServerEngine::Nginx => [
+            "/usr/sbin/nginx",
+            "/usr/bin/nginx",
+            "/usr/local/sbin/nginx",
+            "/usr/local/nginx/sbin/nginx",
+        ]
+        .iter()
+        .any(|path| Path::new(path).is_file()),
+        ServerEngine::Caddy => ["/usr/bin/caddy", "/usr/local/bin/caddy"]
+            .iter()
+            .any(|path| Path::new(path).is_file()),
+        ServerEngine::Openlitespeed => [
+            "/usr/local/lsws/bin/openlitespeed",
+            "/usr/bin/openlitespeed",
+            "/usr/sbin/openlitespeed",
+            "/usr/local/lsws/bin/lshttpd",
+        ]
+        .iter()
+        .any(|path| Path::new(path).is_file()),
     }
 }
 
@@ -168,24 +183,13 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
                 84,
             ),
         ],
-        // Repo file is written by prepare_openlitespeed_repository (no curl|bash, issue #2).
         ServerEngine::Openlitespeed => vec![package],
     }
 }
 
-fn openlitespeed_present() -> bool {
-    Path::new("/usr/local/lsws/bin/openlitespeed").is_file()
-        || Path::new("/usr/bin/openlitespeed").is_file()
-        || Path::new("/usr/sbin/openlitespeed").is_file()
-}
-
-fn caddy_present() -> bool {
-    Path::new("/usr/bin/caddy").is_file() || Path::new("/usr/local/bin/caddy").is_file()
-}
-
-/// Write LiteSpeed yum/apt repo directly instead of `curl | bash` (issue #2).
+/// Write the LiteSpeed repository without executing a remote shell script.
 pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), String> {
-    if openlitespeed_present() {
+    if web_server_present(ServerEngine::Openlitespeed) {
         return Ok(());
     }
 
@@ -211,9 +215,12 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                  gpgcheck=1\n\
                  gpgkey=https://rpms.litespeedtech.com/centos/{key}\n"
             );
-            std::fs::write("/etc/yum.repos.d/litespeed.repo", repository).map_err(|error| {
-                format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")
-            })
+            crate::install_journal::write_file_tracked(
+                "server",
+                Path::new("/etc/yum.repos.d/litespeed.repo"),
+                &repository,
+            )
+            .map_err(|error| format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}"))
         }
         PackageFamily::Apt => {
             let codename = guest.apt_codename().ok_or_else(|| {
@@ -226,13 +233,12 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 "deb https://rpms.litespeedtech.com/debian/ {codename} main\n\
                  #deb https://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
             );
-            std::fs::create_dir_all("/etc/apt/sources.list.d")
-                .map_err(|error| format!("No se pudo crear /etc/apt/sources.list.d: {error}"))?;
-            std::fs::write("/etc/apt/sources.list.d/lst_debian_repo.list", repository).map_err(
-                |error| {
-                    format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}")
-                },
+            crate::install_journal::write_file_tracked(
+                "server",
+                Path::new("/etc/apt/sources.list.d/lst_debian_repo.list"),
+                &repository,
             )
+            .map_err(|error| format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}"))
         }
         PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
             "OpenLiteSpeed repository setup",
@@ -240,7 +246,7 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
     }
 }
 
-/// Register LiteSpeed apt keys and refresh indexes (matches vendor key paths, no curl|bash).
+/// Register LiteSpeed apt keys without overwriting operator-provided key files.
 pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
     command(
         "bash",
@@ -248,8 +254,8 @@ pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
             "-c",
             "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; skipping repository bootstrap'; exit 0; fi; \
 apt-get update -y && apt-get install -y wget ca-certificates \
-&& wget -qO /etc/apt/trusted.gpg.d/lst_debian_repo.gpg https://rpms.litespeedtech.com/debian/lst_debian_repo.gpg \
-&& wget -qO /etc/apt/trusted.gpg.d/lst_repo.gpg https://rpms.litespeedtech.com/debian/lst_repo.gpg \
+&& (test -s /etc/apt/trusted.gpg.d/lst_debian_repo.gpg || wget -qO /etc/apt/trusted.gpg.d/lst_debian_repo.gpg https://rpms.litespeedtech.com/debian/lst_debian_repo.gpg) \
+&& (test -s /etc/apt/trusted.gpg.d/lst_repo.gpg || wget -qO /etc/apt/trusted.gpg.d/lst_repo.gpg https://rpms.litespeedtech.com/debian/lst_repo.gpg) \
 && apt-get update -y",
         ],
         "Preparando el repositorio apt de OpenLiteSpeed",
@@ -259,7 +265,7 @@ apt-get update -y && apt-get install -y wget ca-certificates \
 }
 
 pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
-    if caddy_present() {
+    if web_server_present(ServerEngine::Caddy) {
         return Ok(());
     }
 
@@ -277,8 +283,12 @@ pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
                  repo_gpgcheck=0\n\
                  enabled=1\n"
             );
-            std::fs::write("/etc/yum.repos.d/caddy.repo", repository)
-                .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
+            crate::install_journal::write_file_tracked(
+                "server",
+                Path::new("/etc/yum.repos.d/caddy.repo"),
+                &repository,
+            )
+            .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
         }
         PackageFamily::Apt => Ok(()),
         PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
@@ -295,8 +305,8 @@ pub(crate) fn prepare_caddy_apt_command() -> CommandSpec {
             "-c",
             "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; skipping repository bootstrap'; exit 0; fi; \
 apt-get update -y && apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg \
-&& curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
-&& curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null \
+&& (test -s /usr/share/keyrings/caddy-stable-archive-keyring.gpg || (curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg)) \
+&& (test -s /etc/apt/sources.list.d/caddy-stable.list || (curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null)) \
 && apt-get update -y",
         ],
         "Preparando el repositorio apt de Caddy",
@@ -406,17 +416,4 @@ pub(crate) fn apt_update_command() -> CommandSpec {
         "downloading",
         39,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::existing_server_probe;
-    use crate::model::ServerEngine;
-
-    #[test]
-    fn existing_server_probes_cover_each_engine() {
-        assert!(existing_server_probe(ServerEngine::Nginx).contains("nginx"));
-        assert!(existing_server_probe(ServerEngine::Caddy).contains("caddy"));
-        assert!(existing_server_probe(ServerEngine::Openlitespeed).contains("lsws"));
-    }
 }
