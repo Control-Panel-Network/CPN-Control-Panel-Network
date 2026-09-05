@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Build the cpn-installer RPM inside an AlmaLinux 9 or 10 container.
-# Use this when the host is not AlmaLinux (for example Windows or Ubuntu).
-# Native path on AlmaLinux remains: ./scripts/build-rpm.sh
+# Build the cpn-installer RPM inside an AlmaLinux 8, 9, or 10 container.
+# End users should install release assets; this helper is for maintainers/development.
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,8 +8,8 @@ alma_version="${CPN_ALMA_VERSION:-9}"
 image="${CPN_BUILD_IMAGE:-almalinux:${alma_version}}"
 container_engine="${CPN_CONTAINER_ENGINE:-}"
 
-if [[ "$alma_version" != "9" && "$alma_version" != "10" ]]; then
-  echo "CPN_ALMA_VERSION must be 9 or 10 (got: ${alma_version})." >&2
+if [[ "$alma_version" != "8" && "$alma_version" != "9" && "$alma_version" != "10" ]]; then
+  echo "CPN_ALMA_VERSION must be 8, 9, or 10 (got: ${alma_version})." >&2
   exit 1
 fi
 
@@ -34,7 +33,6 @@ detect_engine() {
 engine="$(detect_engine)"
 echo "[cpn] Building RPM inside ${image} using ${engine}..."
 
-# SELinux-friendly bind mount when available (:Z is ignored by Docker Desktop).
 mount_opts="rw"
 if [[ "$engine" == "podman" ]]; then
   mount_opts="rw,Z"
@@ -48,18 +46,16 @@ fi
   "$image" \
   bash -lc '
     set -euo pipefail
-    # AlmaLinux container images ship curl-minimal; requesting curl conflicts unless
-    # --allowerasing is used. Prefer keeping curl-minimal and installing the rest.
+    # AlmaLinux images may ship curl-minimal; --allowerasing avoids a curl conflict.
     dnf -y install --allowerasing \
       ca-certificates gcc gcc-c++ make openssl-devel \
       rpm-build rpmdevtools git which hostname
     dnf clean all
 
-    # Node 22 (Vite 6 / React 19 in installer-ui).
+    # Node 22 for the embedded Vite/React installer UI.
     if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null | tr -d v | cut -d. -f1)" -lt 20 ]]; then
       curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
       dnf -y install nodejs
-      # NodeSource repos can leave the toolchain incomplete; reassert gcc.
       dnf -y install gcc gcc-c++ make
     fi
 
