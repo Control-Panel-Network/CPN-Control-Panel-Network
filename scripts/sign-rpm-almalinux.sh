@@ -37,9 +37,10 @@ chmod 700 "$work"
 
 printf '%s\n' "$GPG_PRIVATE_KEY" >"$work/private.asc"
 chmod 600 "$work/private.asc"
-printf '%s' "${GPG_PASSPHRASE:-}" >"$work/passphrase"
+# Exact passphrase bytes only (no trailing newline); strip CR from GitHub secret paste.
+printf '%s' "${GPG_PASSPHRASE:-}" | tr -d '\r\n' >"$work/passphrase"
 chmod 600 "$work/passphrase"
-printf '%s\n' "${GPG_KEY_ID:-}" >"$work/key_id"
+printf '%s\n' "${GPG_KEY_ID:-}" | tr -d '\r' >"$work/key_id"
 
 idx=0
 for rpm in "$@"; do
@@ -64,12 +65,12 @@ done
     if [[ -z "$KEY_ID" ]]; then
       KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: "/^fpr:/ {print \$10; exit}")"
     fi
-    PASS="$(cat /work/passphrase)"
+    # Prefer passphrase-file so special characters never break rpmmacros quoting.
     cat >"$HOME/.rpmmacros" <<EOF
 %_gpg_name $KEY_ID
 %__gpg /usr/bin/gpg
 %_gpg_path $GNUPGHOME
-%__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase "$PASS" --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+%__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file /work/passphrase --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
 EOF
     shopt -s nullglob
     for rpm in /work/rpms/*.rpm; do

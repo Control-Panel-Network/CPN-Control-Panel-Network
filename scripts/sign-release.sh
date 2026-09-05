@@ -43,9 +43,14 @@ if [[ -z "$SIGN_USER" ]]; then
   SIGN_USER="$KEY_ID"
 fi
 
+PASS_FILE="$GNUPGHOME/passphrase"
+# Strip CR/LF so GitHub secret paste cannot break pinentry loopback.
+printf '%s' "${GPG_PASSPHRASE:-}" | tr -d '\r\n' >"$PASS_FILE"
+chmod 600 "$PASS_FILE"
+
 gpg_sign_args=(--batch --yes --detach-sign --armor --local-user "$SIGN_USER")
-if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
-  gpg_sign_args+=(--pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+if [[ -s "$PASS_FILE" ]]; then
+  gpg_sign_args+=(--pinentry-mode loopback --passphrase-file "$PASS_FILE")
 fi
 
 sign_detached() {
@@ -67,12 +72,12 @@ rpm_embed_sign() {
     echo "rpmsign not available; skipping embedded RPM signature for $rpm"
     return 0
   fi
-  # rpmmacros for non-interactive signing
+  # Prefer passphrase-file so special characters never break rpmmacros quoting.
   cat >"$GNUPGHOME/rpmmacros" <<EOF
 %_gpg_name $SIGN_USER
 %__gpg $(command -v gpg)
 %_gpg_path $GNUPGHOME
-%__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+%__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file $PASS_FILE --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
 EOF
   HOME="$GNUPGHOME" rpmsign --addsign "$rpm"
   echo "Embedded RPM signature: $rpm"
