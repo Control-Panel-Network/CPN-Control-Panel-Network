@@ -60,6 +60,23 @@ export function ServerSelectionScreen({
     { id: 'nginx', name: 'Nginx', description: t.serverNginxDesc },
     { id: 'caddy', name: 'Caddy', description: t.serverCaddyDesc },
   ];
+  const databases: Array<{ id: DatabaseEngine; name: string; description: string }> = [
+    {
+      id: 'mariadb',
+      name: t.databaseMariadb,
+      description: locale === 'es' ? 'Compatible con MySQL y recomendado para la mayoría de instalaciones.' : locale === 'nb' ? 'MySQL-kompatibel og anbefalt for de fleste installasjoner.' : 'MySQL-compatible and recommended for most installations.',
+    },
+    {
+      id: 'mysql',
+      name: t.databaseMysql,
+      description: locale === 'es' ? 'Elige MySQL cuando tu aplicación requiera específicamente este motor.' : locale === 'nb' ? 'Velg MySQL når programmet ditt spesifikt krever denne motoren.' : 'Choose MySQL when your application specifically requires this engine.',
+    },
+    {
+      id: 'none',
+      name: t.databaseNone,
+      description: locale === 'es' ? 'No instalar una base de datos local ahora.' : locale === 'nb' ? 'Ikke installer en lokal database nå.' : 'Do not install a local database now.',
+    },
+  ];
 
   const parsedPort = Number(portDraft.trim());
   const portChanging =
@@ -216,40 +233,25 @@ export function ServerSelectionScreen({
         })}
       </div>}
 
-      {step === 'database' && <div className="w-full max-w-xl mt-10 rounded-lg border border-[#e0e0e0] bg-white p-5 text-left">
-        <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{t.databaseTitle}</h2>
-        <p className="text-[13px] leading-[1.45] text-[#5f5e60] mb-4">{t.databaseHint}</p>
-        <fieldset>
-          <legend className="sr-only">{t.databaseTitle}</legend>
-          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
-            <input
-              type="radio"
-              name="cpn-database"
-              checked={database === 'mariadb'}
-              onChange={() => onDatabaseChange('mariadb')}
-            />
-            <span>{t.databaseMariadb}</span>
-          </label>
-          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
-            <input
-              type="radio"
-              name="cpn-database"
-              checked={database === 'mysql'}
-              onChange={() => onDatabaseChange('mysql')}
-            />
-            <span>{t.databaseMysql}</span>
-          </label>
-          <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-3">
-            <input
-              type="radio"
-              name="cpn-database"
-              checked={database === 'none'}
-              onChange={() => onDatabaseChange('none')}
-            />
-            <span>{t.databaseNone}</span>
-          </label>
-        </fieldset>
-        <label className="phpmyadmin-option">
+      {step === 'database' && <div className="w-full max-w-5xl">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {databases.map((option) => {
+            const selected = database === option.id;
+            return <article
+              key={option.id}
+              onClick={() => onDatabaseChange(option.id)}
+              className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
+            >
+              <div className="database-card-mark" aria-hidden="true">{option.id === 'none' ? '—' : 'DB'}</div>
+              <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{option.name}</h2>
+              <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-8 flex-1">{option.description}</p>
+              <button type="button" className={`selection-button ${selected ? 'selection-button-active' : ''}`} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDatabaseChange(option.id); }}>
+                {t.selectLabel}
+              </button>
+            </article>;
+          })}
+        </div>
+        {database !== 'none' && <label className="phpmyadmin-option mx-auto mt-6 max-w-5xl">
           <input
             type="checkbox"
             checked={installPhpmyadmin}
@@ -257,7 +259,7 @@ export function ServerSelectionScreen({
           />
           <span>{locale === 'es' ? 'Instalar phpMyAdmin' : locale === 'nb' ? 'Installer phpMyAdmin' : 'Install phpMyAdmin'}</span>
           <span className="default-badge">{locale === 'es' ? 'Recomendado · activado por defecto' : locale === 'nb' ? 'Anbefalt · aktivert som standard' : 'Recommended · enabled by default'}</span>
-        </label>
+        </label>}
       </div>}
 
       {step === 'server' && <button type="button" onClick={onOpenCompare} className="compare-link mt-8">

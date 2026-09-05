@@ -11,6 +11,7 @@
 .setup-steps [aria-current="step"] { color:#0071e3; font-weight:650; }
 .phpmyadmin-option { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#1a1c1d; font-size:14px; }
 .default-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; background:#e7f1ff; color:#0059b3; font-size:11px; font-weight:650; }
+.database-card-mark { display:grid; place-items:center; width:48px; height:48px; margin:0 0 24px; border-radius:12px; background:#e7f1ff; color:#0066cc; font-size:13px; font-weight:750; letter-spacing:.04em; }
 :root[data-theme="dark"] .phpmyadmin-option { color:var(--installer-ink); }
 button:focus-visible, input:focus-visible { outline:2px solid #0071e3; outline-offset:3px; }
 :root[data-theme="dark"] body, :root[data-theme="dark"] main { background:var(--installer-bg); color:var(--installer-ink); }
