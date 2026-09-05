@@ -4,7 +4,7 @@ version = "0.2.2-alpha.7"
 edition = "2024"
 description = "Instalador web local para CPN Server Panel"
 license = "GPL-3.0-only"
-repository = "https://github.com/KraoESPfan1n/CPN-Control-Panel-Network"
+repository = "https://github.com/Control-Panel-Network/CPN-Control-Panel-Network"
 
 [lib]
 name = "cpn_installer"

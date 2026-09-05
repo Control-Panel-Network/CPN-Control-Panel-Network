@@ -18,7 +18,7 @@ pub enum PackageFamily {
 /// How far CPN claims support for a detected guest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportStatus {
-    /// Primary install path is implemented (dnf or apt recipes).
+    /// Primary install path is implemented and covered by CPN smoke evidence.
     Supported,
     /// Detected and allowed; recipes share the family path but need more lab proof,
     /// or Windows Phase A (UI + bootstrap without Linux package parity).
@@ -60,15 +60,13 @@ impl GuestOs {
         self.family == PackageFamily::Windows
     }
 
-    /// Debian/Ubuntu suite name for LiteSpeed apt sources (when applicable).
+    /// Debian/Ubuntu suite name for LiteSpeed apt sources on installable guests.
     pub fn apt_codename(&self) -> Option<&'static str> {
         match (self.id.as_str(), self.major) {
             ("ubuntu", 24) => Some("noble"),
             ("ubuntu", 22) => Some("jammy"),
-            ("ubuntu", 20) => Some("focal"),
             ("debian", 13) => Some("trixie"),
             ("debian", 12) => Some("bookworm"),
-            ("debian", 11) => Some("bullseye"),
             _ => None,
         }
     }
@@ -132,35 +130,29 @@ fn classify(id: &str, major: u32, version_id: &str) -> (PackageFamily, SupportSt
     };
 
     match id {
-        // Status tiers track verification evidence (see to-do/OS-SUPPORT-MATRIX.md).
-        // Supported rows must have recipe path + smoke evidence (lab VM and/or docker matrix).
+        // "Supported" requires both a recipe path and CPN smoke evidence.
         "almalinux" if matches!(major, 9 | 10) => {
             (PackageFamily::Dnf, SupportStatus::Supported, label)
         }
         "almalinux" if major == 8 => (PackageFamily::Dnf, SupportStatus::Partial, label),
         "rocky" if major == 9 => (PackageFamily::Dnf, SupportStatus::Supported, label),
-        "rocky" if major == 8 => (PackageFamily::Dnf, SupportStatus::Partial, label),
-        "rhel" if matches!(major, 8 | 9) => (PackageFamily::Dnf, SupportStatus::Partial, label),
-        "cloudlinux" if major == 8 => (PackageFamily::Dnf, SupportStatus::Partial, label),
-        "centos" if major == 9 => (PackageFamily::Dnf, SupportStatus::Partial, label),
-        "ubuntu" if matches!(major, 20 | 22 | 24) => {
-            // 20.04 remains Partial: older PHP/repos and thinner lab evidence.
-            let status = if matches!(major, 22 | 24) {
-                SupportStatus::Supported
-            } else {
-                SupportStatus::Partial
-            };
-            (PackageFamily::Apt, status, label)
-        }
-        "debian" if (11..=13).contains(&major) => {
-            (PackageFamily::Apt, SupportStatus::Partial, label)
-        }
-        // openEuler uses dnf; package names may diverge, so Partial until lab proof.
-        "openeuler" if (20..=24).contains(&major) => {
+        "rocky" if matches!(major, 8 | 10) => (PackageFamily::Dnf, SupportStatus::Partial, label),
+        "rhel" if (8..=10).contains(&major) => (PackageFamily::Dnf, SupportStatus::Partial, label),
+        "cloudlinux" if (8..=10).contains(&major) => {
             (PackageFamily::Dnf, SupportStatus::Partial, label)
         }
-        "debian" => (PackageFamily::Apt, SupportStatus::NotYet, label),
+        "centos" if matches!(major, 9 | 10) => (PackageFamily::Dnf, SupportStatus::Partial, label),
+        "ubuntu" if matches!(major, 22 | 24) => {
+            (PackageFamily::Apt, SupportStatus::Supported, label)
+        }
+        // Ubuntu 20.04 is outside standard support and is not an upstream OLS target anymore.
+        "ubuntu" if major == 20 => (PackageFamily::Apt, SupportStatus::NotYet, label),
+        "debian" if matches!(major, 12 | 13) => (PackageFamily::Apt, SupportStatus::Partial, label),
+        // Debian 11 LTS ended on 2026-08-31. Keep detection but refuse new installs.
+        "debian" if major == 11 => (PackageFamily::Apt, SupportStatus::NotYet, label),
+        // openEuler package compatibility has not been validated against CPN's third-party repos.
         "openeuler" => (PackageFamily::Dnf, SupportStatus::NotYet, label),
+        "ubuntu" | "debian" => (PackageFamily::Apt, SupportStatus::NotYet, label),
         id if id.contains("rhel")
             || id.contains("centos")
             || id.contains("rocky")
@@ -324,13 +316,11 @@ pub fn detect_guest_os() -> Result<GuestOs, String> {
 }
 
 fn supported_list_message() -> &'static str {
-    "Supported Linux guests: Ubuntu 24.04/22.04/20.04; AlmaLinux 10/9/8; Rocky Linux 9/8; \
-     RHEL 9/8; CloudLinux 8; CentOS Stream 9; Debian 11/12/13 (partial); \
-     openEuler 20-24 (partial). \
-     Windows Server 2016 and later: Phase A (installer UI + account bootstrap; partial). \
-     Windows Server 2012 / 2012 R2: not supported (modern Rust / MSVC toolchain). \
-     Hosts/hypervisors (not install targets): VirtualBox, Hyper-V. \
-     See to-do/OS-SUPPORT-MATRIX.md and to-do/WINDOWS-SERVER-INSTALL.md"
+    "Installable Linux guests: Ubuntu 24.04/22.04; AlmaLinux 10/9/8; Rocky Linux 10/9/8; \
+     RHEL 10/9/8; CloudLinux 10/9/8; CentOS Stream 10/9; Debian 12/13 (partial). \
+     Ubuntu 20.04, Debian 11, and openEuler are recognized but not accepted for new installs. \
+     Windows Server 2016 and later: Phase A only (installer UI + account bootstrap; partial). \
+     See README.md for the current support tiers and release packages."
 }
 
 /// Refuse install with a clear message unless the guest is Supported or Partial.
@@ -341,7 +331,7 @@ pub fn require_installable_guest() -> Result<GuestOs, String> {
     }
     match guest.support {
         SupportStatus::NotYet => Err(format!(
-            "{} is recognized but not yet an installable CPN target. {}",
+            "{} is recognized but not currently an installable CPN target. {}",
             guest.label,
             supported_list_message()
         )),
@@ -357,9 +347,8 @@ pub fn require_installable_guest() -> Result<GuestOs, String> {
 pub fn windows_linux_recipe_blocked_message(feature: &str) -> String {
     format!(
         "{feature} uses Linux package recipes (dnf/apt) and is not available on Windows Server. \
-         Phase A supports the installer UI, Windows service, and account bootstrap under \
-         %ProgramData%\\CPN. IIS / reverse-proxy helpers are Phase B. \
-         See to-do/WINDOWS-SERVER-INSTALL.md"
+         Windows Phase A supports the installer UI, Windows service, and account bootstrap under \
+         %ProgramData%\\CPN; Linux web/mail package parity is not implemented."
     )
 }
 
@@ -395,18 +384,20 @@ mod tests {
     }
 
     #[test]
-    fn detects_rocky_9_and_ubuntu() {
+    fn detects_rocky_and_supported_ubuntu() {
         let rocky = detect_from_os_release("ID=rocky\nVERSION_ID=\"9.5\"\n").unwrap();
         assert_eq!(rocky.support, SupportStatus::Supported);
         assert!(rocky.uses_dnf());
 
-        let rocky8 = detect_from_os_release("ID=rocky\nVERSION_ID=\"8.10\"\n").unwrap();
-        assert_eq!(rocky8.support, SupportStatus::Partial);
+        for version in ["8.10", "10.0"] {
+            let rocky =
+                detect_from_os_release(&format!("ID=rocky\nVERSION_ID=\"{version}\"\n")).unwrap();
+            assert_eq!(rocky.support, SupportStatus::Partial);
+            assert!(rocky.is_installable());
+        }
 
         let jammy = detect_from_os_release("ID=ubuntu\nVERSION_ID=\"22.04\"\n").unwrap();
-        assert_eq!(jammy.major, 22);
         assert_eq!(jammy.support, SupportStatus::Supported);
-        assert!(jammy.uses_apt());
         assert_eq!(jammy.apt_codename(), Some("jammy"));
 
         let noble = detect_from_os_release("ID=ubuntu\nVERSION_ID=\"24.04\"\n").unwrap();
@@ -415,25 +406,45 @@ mod tests {
     }
 
     #[test]
-    fn detects_rhel_cloudlinux_centos_debian_openeuler() {
-        let rhel = detect_from_os_release("ID=rhel\nVERSION_ID=\"9.4\"\n").unwrap();
-        assert_eq!(rhel.support, SupportStatus::Partial);
+    fn legacy_apt_targets_are_recognized_but_refused() {
+        let focal = detect_from_os_release("ID=ubuntu\nVERSION_ID=\"20.04\"\n").unwrap();
+        assert_eq!(focal.support, SupportStatus::NotYet);
+        assert!(!focal.is_installable());
+        assert_eq!(focal.apt_codename(), None);
 
-        let cl = detect_from_os_release("ID=cloudlinux\nVERSION_ID=\"8.9\"\n").unwrap();
-        assert_eq!(cl.support, SupportStatus::Partial);
+        let bullseye = detect_from_os_release("ID=debian\nVERSION_ID=\"11\"\n").unwrap();
+        assert_eq!(bullseye.support, SupportStatus::NotYet);
+        assert!(!bullseye.is_installable());
+        assert_eq!(bullseye.apt_codename(), None);
+    }
 
-        let centos = detect_from_os_release("ID=centos\nVERSION_ID=\"9\"\n").unwrap();
-        assert_eq!(centos.support, SupportStatus::Partial);
+    #[test]
+    fn detects_partial_enterprise_linux_and_debian() {
+        for release in [
+            "ID=rhel\nVERSION_ID=\"10.0\"\n",
+            "ID=cloudlinux\nVERSION_ID=\"9.0\"\n",
+            "ID=centos\nVERSION_ID=\"10\"\n",
+        ] {
+            let guest = detect_from_os_release(release).unwrap();
+            assert_eq!(guest.support, SupportStatus::Partial);
+            assert!(guest.is_installable());
+        }
 
-        let debian = detect_from_os_release("ID=debian\nVERSION_ID=\"12\"\n").unwrap();
-        assert_eq!(debian.support, SupportStatus::Partial);
-        assert!(debian.is_installable());
-        assert_eq!(debian.apt_codename(), Some("bookworm"));
+        for (version, codename) in [("12", "bookworm"), ("13", "trixie")] {
+            let debian =
+                detect_from_os_release(&format!("ID=debian\nVERSION_ID=\"{version}\"\n")).unwrap();
+            assert_eq!(debian.support, SupportStatus::Partial);
+            assert!(debian.is_installable());
+            assert_eq!(debian.apt_codename(), Some(codename));
+        }
+    }
 
+    #[test]
+    fn openeuler_is_detected_but_not_installable() {
         let euler = detect_from_os_release("ID=openeuler\nVERSION_ID=\"22.03\"\n").unwrap();
-        assert_eq!(euler.support, SupportStatus::Partial);
+        assert_eq!(euler.support, SupportStatus::NotYet);
         assert!(euler.uses_dnf());
-        assert!(euler.is_installable());
+        assert!(!euler.is_installable());
     }
 
     #[test]

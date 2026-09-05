@@ -161,6 +161,56 @@ pub async fn inspect(port: u16) -> EnvironmentInfo {
     }
 }
 
+#[cfg(not(windows))]
+fn installer_firewall_marker(port: u16) -> std::path::PathBuf {
+    crate::paths::join_data(format!("installer-firewall-{port}.owner"))
+}
+
+#[cfg(not(windows))]
+fn read_firewall_owner(port: u16) -> Option<String> {
+    fs::read_to_string(installer_firewall_marker(port))
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(not(windows))]
+fn write_firewall_owner(port: u16, owner: &str) -> Result<(), String> {
+    let path = installer_firewall_marker(port);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create firewall marker directory: {error}"))?;
+    }
+    fs::write(&path, format!("{owner}\n"))
+        .map_err(|error| format!("Could not record CPN firewall ownership: {error}"))
+}
+
+#[cfg(not(windows))]
+fn clear_firewall_owner(port: u16) {
+    let _ = fs::remove_file(installer_firewall_marker(port));
+}
+
+#[cfg(not(windows))]
+fn ufw_status_allows_port(status: &str, port: u16) -> bool {
+    let target = format!("{port}/tcp");
+    status.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with(&target)
+            && trimmed.split_whitespace().any(|part| {
+                part.eq_ignore_ascii_case("ALLOW") || part.eq_ignore_ascii_case("ALLOW IN")
+            })
+    })
+}
+
+#[cfg(not(windows))]
+async fn ufw_port_allowed(port: u16) -> bool {
+    Command::new("ufw")
+        .arg("status")
+        .output()
+        .await
+        .is_ok_and(|result| ufw_status_allows_port(&String::from_utf8_lossy(&result.stdout), port))
+}
+
 pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -174,7 +224,19 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
         let port = format!("{}/tcp", environment.port);
         match environment.firewall.as_deref() {
             Some("firewalld") => {
-                // Temporary runtime rule only (issue #1). Do not add --permanent.
+                let already_open = Command::new("firewall-cmd")
+                    .args(["--query-port", port.as_str()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .await
+                    .map(|status| status.success())
+                    .unwrap_or(false);
+                if already_open {
+                    // An existing rule without our marker belongs to the operator.
+                    return Ok(());
+                }
+
                 let status = Command::new("firewall-cmd")
                     .args(["--add-port", port.as_str()])
                     .stdout(Stdio::null())
@@ -185,8 +247,12 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
                 if !status.success() {
                     return Err("firewalld no permitió abrir el puerto del instalador".into());
                 }
+                write_firewall_owner(environment.port, "firewalld")?;
             }
             Some("ufw") => {
+                if ufw_port_allowed(environment.port).await {
+                    return Ok(());
+                }
                 let status = Command::new("ufw")
                     .args(["allow", port.as_str()])
                     .stdout(Stdio::null())
@@ -197,6 +263,7 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
                 if !status.success() {
                     return Err("ufw no permitió abrir el puerto del instalador".into());
                 }
+                write_firewall_owner(environment.port, "ufw")?;
             }
             _ => {}
         }
@@ -213,32 +280,56 @@ pub async fn close_installer_port(environment: &EnvironmentInfo) -> Result<(), S
     #[cfg(not(windows))]
     {
         let port = format!("{}/tcp", environment.port);
-        match environment.firewall.as_deref() {
-            Some("firewalld") => {
-                let status = Command::new("firewall-cmd")
-                    .args(["--remove-port", port.as_str()])
+        let Some(owner) = read_firewall_owner(environment.port) else {
+            // No ownership marker means the rule was pre-existing or no rule was added.
+            return Ok(());
+        };
+
+        match owner.as_str() {
+            "firewalld" => {
+                let still_open = Command::new("firewall-cmd")
+                    .args(["--query-port", port.as_str()])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
                     .await
-                    .map_err(|error| error.to_string())?;
-                if !status.success() {
-                    return Err("firewalld no pudo cerrar el puerto del instalador".into());
+                    .map(|status| status.success())
+                    .unwrap_or(false);
+                if still_open {
+                    let status = Command::new("firewall-cmd")
+                        .args(["--remove-port", port.as_str()])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    if !status.success() {
+                        return Err("firewalld no pudo cerrar el puerto del instalador".into());
+                    }
                 }
+                clear_firewall_owner(environment.port);
             }
-            Some("ufw") => {
-                let status = Command::new("ufw")
-                    .args(["delete", "allow", port.as_str()])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status()
-                    .await
-                    .map_err(|error| error.to_string())?;
-                if !status.success() {
-                    return Err("ufw no pudo cerrar el puerto del instalador".into());
+            "ufw" => {
+                if ufw_port_allowed(environment.port).await {
+                    let status = Command::new("ufw")
+                        .args(["delete", "allow", port.as_str()])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    if !status.success() {
+                        return Err("ufw no pudo cerrar el puerto del instalador".into());
+                    }
                 }
+                clear_firewall_owner(environment.port);
             }
-            _ => {}
+            _ => {
+                return Err(format!(
+                    "Unknown CPN firewall ownership marker for port {}: {owner}",
+                    environment.port
+                ));
+            }
         }
         Ok(())
     }
@@ -248,6 +339,9 @@ pub async fn close_installer_port(environment: &EnvironmentInfo) -> Result<(), S
 mod tests {
     use super::virt_is_container;
 
+    #[cfg(not(windows))]
+    use super::ufw_status_allows_port;
+
     #[test]
     fn detects_common_container_virt_kinds() {
         assert!(virt_is_container("docker"));
@@ -255,5 +349,13 @@ mod tests {
         assert!(virt_is_container("container-other"));
         assert!(!virt_is_container("kvm"));
         assert!(!virt_is_container("none"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn detects_existing_ufw_rule_without_matching_other_ports() {
+        let status = "Status: active\n\nTo                         Action      From\n--                         ------      ----\n2087/tcp                   ALLOW       Anywhere\n2087/tcp (v6)              ALLOW       Anywhere (v6)\n";
+        assert!(ufw_status_allows_port(status, 2087));
+        assert!(!ufw_status_allows_port(status, 2088));
     }
 }

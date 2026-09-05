@@ -1,6 +1,5 @@
-# CPN installer runtime image (AlmaLinux 9 or 10 + systemd).
-# Privileged mode and cgroup mounts are required at run time.
-# See to-do/DOCKER-INSTALL.md and scripts/docker-run.sh.
+# CPN installer runtime image (AlmaLinux + systemd) for development/smoke testing.
+# Privileged mode and cgroup mounts are required at run time; see scripts/docker-run.sh.
 
 ARG ALMA_VERSION=9
 FROM almalinux:${ALMA_VERSION}
@@ -26,15 +25,13 @@ RUN dnf -y update \
   && rm -f /lib/systemd/system/anaconda.target.wants/* \
   && systemctl set-default multi-user.target
 
-# Build context must include a single RPM named cpn-installer.rpm
-# (scripts/docker-run.sh copies the built RPM into place before docker build).
+# Build context must include a single RPM named cpn-installer.rpm.
+# scripts/docker-run.sh stages the built RPM before docker build.
 COPY cpn-installer.rpm /tmp/cpn-installer.rpm
 RUN dnf -y install /tmp/cpn-installer.rpm \
   && rm -f /tmp/cpn-installer.rpm \
-  && dnf clean all
-
-COPY packaging/cpn-installer.service /etc/systemd/system/cpn-installer.service
-RUN systemctl enable cpn-installer.service
+  && dnf clean all \
+  && systemctl enable cpn-installer.service
 
 EXPOSE 2087
 STOPSIGNAL SIGRTMIN+3
