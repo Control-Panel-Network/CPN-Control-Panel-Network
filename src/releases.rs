@@ -1,5 +1,6 @@
 //! GitHub Releases lookup for CPN installer packages.
 
+use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::process::Stdio;
@@ -15,6 +16,12 @@ pub struct ReleaseAsset {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativePackageKind {
+    Rpm,
+    Deb,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CpnRelease {
     pub tag_name: String,
@@ -25,6 +32,7 @@ pub struct CpnRelease {
     pub draft: bool,
     pub html_url: String,
     pub assets: Vec<ReleaseAsset>,
+    /// Legacy/UI summary field. Maintenance code must use compatible_package_asset().
     pub rpm_asset: Option<ReleaseAsset>,
     pub binary_asset: Option<ReleaseAsset>,
     pub checksums_asset: Option<ReleaseAsset>,
@@ -150,20 +158,55 @@ fn pick_named_asset(assets: &[serde_json::Value], exact_name: &str) -> Option<Re
 }
 
 fn pick_binary_asset(assets: &[serde_json::Value]) -> Option<ReleaseAsset> {
-    assets.iter().find_map(|asset| {
-        let name = asset.get("name")?.as_str()?.to_string();
-        let lower = name.to_ascii_lowercase();
-        let is_binary = lower == "cpn-installer"
-            || (lower.starts_with("cpn-installer")
-                && !lower.ends_with(".rpm")
-                && !lower.ends_with(".sha256")
-                && !lower.ends_with(".sig")
-                && !lower.ends_with(".txt"));
-        if !is_binary {
-            return None;
-        }
-        asset_from_json(asset)
-    })
+    // Release now includes RPM, DEB, ZIP, signatures and SBOM assets. Only the
+    // exact extensionless Linux binary is a valid raw-binary maintenance fallback.
+    pick_named_asset(assets, "cpn-installer")
+}
+
+fn release_arch_names() -> Option<(&'static str, &'static str)> {
+    match std::env::consts::ARCH {
+        "x86_64" => Some(("x86_64", "amd64")),
+        "aarch64" => Some(("aarch64", "arm64")),
+        _ => None,
+    }
+}
+
+fn rpm_name_matches(name: &str, major: u32, rpm_arch: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("cpn-installer-")
+        && lower.ends_with(&format!(".{rpm_arch}.rpm"))
+        && lower.contains(&format!(".el{major}."))
+}
+
+fn deb_name_matches(name: &str, deb_arch: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("cpn-installer_") && lower.ends_with(&format!("_{deb_arch}.deb"))
+}
+
+/// Pick only a native package compatible with the detected Linux guest.
+///
+/// This prevents EL10 from consuming an EL8/EL9 RPM simply because GitHub
+/// returned that asset first, and prevents apt-family guests from selecting RPMs.
+pub fn compatible_package_asset(
+    release: &CpnRelease,
+    guest: &GuestOs,
+) -> Option<(ReleaseAsset, NativePackageKind)> {
+    let (rpm_arch, deb_arch) = release_arch_names()?;
+    match guest.family {
+        PackageFamily::Dnf => release
+            .assets
+            .iter()
+            .find(|asset| rpm_name_matches(&asset.name, guest.major, rpm_arch))
+            .cloned()
+            .map(|asset| (asset, NativePackageKind::Rpm)),
+        PackageFamily::Apt => release
+            .assets
+            .iter()
+            .find(|asset| deb_name_matches(&asset.name, deb_arch))
+            .cloned()
+            .map(|asset| (asset, NativePackageKind::Deb)),
+        PackageFamily::Windows => None,
+    }
 }
 
 fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
@@ -298,7 +341,7 @@ pub async fn version_check(running_version: &str, installed_version: &str) -> Ve
 
 #[cfg(test)]
 mod tests {
-    use super::{compare_versions, normalize_version};
+    use super::{compare_versions, deb_name_matches, normalize_version, rpm_name_matches};
     use std::cmp::Ordering;
 
     #[test]
@@ -313,5 +356,27 @@ mod tests {
         assert_eq!(compare_versions("0.2.0", "0.2.0"), Ordering::Equal);
         assert_eq!(compare_versions("0.2.10", "0.2.9"), Ordering::Greater);
         assert_eq!(compare_versions("v1.0.0", "0.9.9"), Ordering::Greater);
+    }
+
+    #[test]
+    fn package_names_are_major_and_arch_specific() {
+        assert!(rpm_name_matches(
+            "cpn-installer-0.2.2-0.alpha7.el10.x86_64.rpm",
+            10,
+            "x86_64"
+        ));
+        assert!(!rpm_name_matches(
+            "cpn-installer-0.2.2-0.alpha7.el9.x86_64.rpm",
+            10,
+            "x86_64"
+        ));
+        assert!(deb_name_matches(
+            "cpn-installer_0.2.2~alpha.7_amd64.deb",
+            "amd64"
+        ));
+        assert!(!deb_name_matches(
+            "cpn-installer_0.2.2~alpha.7_arm64.deb",
+            "amd64"
+        ));
     }
 }
