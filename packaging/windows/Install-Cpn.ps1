@@ -5,10 +5,13 @@
 
 .DESCRIPTION
   Copies cpn-installer.exe and cpn.exe into Program Files\CPN, creates
-  C:\ProgramData\CPN, opens TCP 2087 in Windows Firewall (optional), and
-  registers a delayed-auto service that runs the installer UI.
+  C:\ProgramData\CPN, and registers a delayed-auto service that runs the
+  installer UI.
 
-  Supported: Windows Server 2016 and later (build >= 14393).
+  A Windows Firewall inbound rule is created only when -AllowRemote is used.
+  The default loopback-only install does not need an inbound firewall rule.
+
+  Supported: Windows Server 2016 and later (build >= 14393), Phase A only.
   Not supported: Windows Server 2012 / 2012 R2 (modern Rust toolchain).
 
 .PARAMETER SourceDir
@@ -18,10 +21,10 @@
   Listen port (default 2087).
 
 .PARAMETER AllowRemote
-  Bind 0.0.0.0 instead of 127.0.0.1.
+  Bind 0.0.0.0 instead of 127.0.0.1. This exposes the HTTP installer to the network.
 
 .PARAMETER SkipFirewall
-  Do not create a Windows Firewall inbound rule.
+  Do not create the CPN Windows Firewall inbound rule even with -AllowRemote.
 #>
 [CmdletBinding()]
 param(
@@ -73,8 +76,8 @@ if ($build -gt 0 -and $build -lt 14393) {
     throw @"
 Windows Server 2012 / 2012 R2 (build $build) is not supported.
 CPN Phase A requires Windows Server 2016 or later (CurrentBuild >= 14393).
-Use a Linux guest under Hyper-V for full dnf/apt recipes, or upgrade the host OS.
-See to-do/WINDOWS-SERVER-INSTALL.md
+Use a supported Linux guest under Hyper-V for the full web/mail package path, or upgrade the host OS.
+See README.md for the current support tiers.
 "@
 }
 
@@ -84,7 +87,7 @@ if (-not (Test-Path -LiteralPath $installerSrc)) {
     throw "Missing binary: $installerSrc"
 }
 if (-not (Test-Path -LiteralPath $cliSrc)) {
-    Write-Warning "cpn.exe not found in $SourceDir; installing installer binary only."
+    throw "Missing binary: $cliSrc"
 }
 
 $installRoot = Join-Path $env:ProgramFiles 'CPN'
@@ -93,25 +96,23 @@ New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
 
 Copy-Item -LiteralPath $installerSrc -Destination (Join-Path $installRoot 'cpn-installer.exe') -Force
-if (Test-Path -LiteralPath $cliSrc) {
-    Copy-Item -LiteralPath $cliSrc -Destination (Join-Path $installRoot 'cpn.exe') -Force
-}
+Copy-Item -LiteralPath $cliSrc -Destination (Join-Path $installRoot 'cpn.exe') -Force
 
 $portFile = Join-Path $dataRoot 'listen_port'
 Set-Content -LiteralPath $portFile -Value "$Port" -Encoding ascii
 
 $exe = Join-Path $installRoot 'cpn-installer.exe'
-$args = @("--port", "$Port")
+$args = @('--port', "$Port")
 if ($AllowRemote) {
     $args += '--allow-remote'
 }
-# sc.exe Create binary path must be quoted when it contains spaces.
+# sc.exe create binary path must quote paths containing spaces.
 $binPath = "`"$exe`" $($args -join ' ')"
 
 $serviceName = 'CPNInstaller'
 $existing = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($existing) {
-    Write-Host "Stopping existing service $serviceName..."
+    Write-Host "Updating existing service $serviceName..."
     if ($existing.Status -eq 'Running') {
         Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
     }
@@ -124,24 +125,36 @@ sc.exe create $serviceName binPath= $binPath start= delayed-auto DisplayName= "C
 sc.exe description $serviceName "CPN Control Panel Network installer UI (Phase A)" | Out-Null
 sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
 
-if (-not $SkipFirewall) {
-    $ruleName = "CPN Installer TCP $Port"
-    Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+$ruleName = "CPN Installer TCP $Port"
+$cpnRules = Get-NetFirewallRule -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -like 'CPN Installer TCP *' }
+
+# Remove only CPN-named rules left by a previous CPN Windows install. A loopback
+# install should not leave a host-wide inbound exception behind.
+$cpnRules | ForEach-Object {
+    Remove-NetFirewallRule -Name $_.Name -ErrorAction SilentlyContinue
+}
+
+if ($AllowRemote -and -not $SkipFirewall) {
     New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port | Out-Null
-    Write-Host "Firewall rule added: $ruleName"
+    Write-Host "Firewall rule added for remote mode: $ruleName"
+} elseif ($AllowRemote -and $SkipFirewall) {
+    Write-Warning 'Remote bind enabled but CPN did not create a Windows Firewall rule (-SkipFirewall).'
+} else {
+    Write-Host 'Loopback-only mode: no inbound Windows Firewall rule is required.'
 }
 
 Start-Service -Name $serviceName
-Write-Host ""
-Write-Host "CPN Phase A installed."
+Write-Host ''
+Write-Host 'CPN Phase A installed.'
 Write-Host "  Binaries: $installRoot"
 Write-Host "  Data:     $dataRoot"
 Write-Host "  Service:  $serviceName (port $Port)"
 if ($AllowRemote) {
-    Write-Host "  Bind:     0.0.0.0 (AllowRemote)"
+    Write-Host '  Bind:     0.0.0.0 (HTTP; restrict this port to trusted networks)'
 } else {
-    Write-Host "  Bind:     127.0.0.1 (use -AllowRemote for LAN access)"
+    Write-Host '  Bind:     127.0.0.1 (recommended; use SSH/tunnel equivalent for remote access)'
 }
-Write-Host ""
-Write-Host "Open the installer UI, complete account bootstrap, then see to-do/WINDOWS-SERVER-INSTALL.md"
-Write-Host "for IIS notes. Linux web/mail recipes are not available on Windows."
+Write-Host ''
+Write-Host 'Complete account bootstrap in the installer UI.'
+Write-Host 'Windows support is Phase A only; Linux web/mail package recipes are not available on Windows.'
