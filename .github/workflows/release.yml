@@ -21,12 +21,90 @@ env:
   CPN_RELEASE_FINGERPRINT: FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
 
 jobs:
+  windows-package:
+    name: Build Windows Phase A package
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Install OpenSSL
+        shell: pwsh
+        run: |
+          choco install openssl -y --no-progress
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL",
+            "C:\Program Files (x86)\OpenSSL-Win64"
+          )
+          $dir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $dir) { throw "OpenSSL install directory not found" }
+          $libCandidates = @(
+            (Join-Path $dir "lib\VC\x64\MD"),
+            (Join-Path $dir "lib\VC\x64\MT"),
+            (Join-Path $dir "lib")
+          )
+          $libDir = $libCandidates | Where-Object { Test-Path (Join-Path $_ "libssl.lib") } | Select-Object -First 1
+          if (-not $libDir) {
+            $hit = Get-ChildItem -Path $dir -Recurse -Filter "libssl.lib" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($hit) { $libDir = $hit.Directory.FullName }
+          }
+          if (-not $libDir) { throw "OpenSSL libssl.lib not found under $dir" }
+          "OPENSSL_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "OPENSSL_LIB_DIR=$libDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build embedded installer UI
+        working-directory: installer-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Windows binaries
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Stage Windows release zip
+        shell: pwsh
+        run: |
+          $stage = "dist/windows"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/cpn-installer.exe $stage/
+          Copy-Item target/x86_64-pc-windows-msvc/release/cpn.exe $stage/
+          Copy-Item packaging/windows/Install-Cpn.ps1 $stage/
+          Copy-Item packaging/windows/Uninstall-Cpn.ps1 $stage/
+          Compress-Archive -Path "$stage/*" -DestinationPath dist/cpn-windows-x86_64.zip -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpn-windows-release
+          path: dist/cpn-windows-x86_64.zip
+
   release:
     name: Build packages, checksums and provenance
+    needs: windows-package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Download Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: cpn-windows-release
+          path: dist
 
       - name: Install Rust (pinned)
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -141,12 +219,12 @@ jobs:
         run: |
           chmod +x scripts/publish-checksums.sh
           shopt -s nullglob
-          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/build-environment.txt)
+          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/*.zip dist/build-environment.txt)
           ./scripts/publish-checksums.sh "${files[@]}"
           test -f dist/SHA256SUMS
           cat dist/SHA256SUMS
 
-      - name: Detached-sign checksum manifest, binaries and DEB
+      - name: Detached-sign checksum manifest and portable artifacts
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -164,8 +242,8 @@ jobs:
             exit 0
           fi
           shopt -s nullglob
-          debs=(dist/*.deb)
-          ./scripts/sign-release.sh dist/SHA256SUMS dist/cpn-installer dist/cpn "${debs[@]}"
+          portable=(dist/*.deb dist/*.zip)
+          ./scripts/sign-release.sh dist/SHA256SUMS dist/cpn-installer dist/cpn "${portable[@]}"
           test -f dist/SHA256SUMS.asc
 
       - name: Optional cosign blob signatures
@@ -190,7 +268,7 @@ jobs:
           ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
           chmod +x scripts/publish-checksums.sh
           shopt -s nullglob
-          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/cpn-installer.cdx.json dist/build-environment.txt)
+          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/*.zip dist/cpn-installer.cdx.json dist/build-environment.txt)
           ./scripts/publish-checksums.sh "${files[@]}"
 
       - name: Re-sign SHA256SUMS after SBOM refresh
@@ -227,6 +305,7 @@ jobs:
             dist/SHA256SUMS
             dist/*.rpm
             dist/*.deb
+            dist/*.zip
             dist/cpn-installer.cdx.json
             dist/build-environment.txt
             dist/RPM-GPG-KEY-CPN
@@ -252,7 +331,8 @@ jobs:
             - EL8: `cpn-installer-*.el8.*.rpm`
             - EL9: `cpn-installer-*.el9.*.rpm`
             - EL10: `cpn-installer-*.el10.*.rpm`
-            - Ubuntu 22.04/24.04 and compatible tested apt guests: `cpn-installer_*.deb`
+            - Ubuntu 22.04/24.04 and tested compatible apt guests: `cpn-installer_*.deb`
+            - Windows Server 2016+ Phase A: `cpn-windows-x86_64.zip`
 
             ```bash
             sudo dnf install ./cpn-installer-*.rpm
@@ -262,7 +342,9 @@ jobs:
             sudo cpn-installer
             ```
 
-            ## Verify before running as root
+            Windows: extract the ZIP and run `Install-Cpn.ps1` from an elevated PowerShell prompt. Windows remains Phase A only; Linux web/mail package recipes are not available there.
+
+            ## Verify before running as administrator/root
 
             Release signing fingerprint:
 
