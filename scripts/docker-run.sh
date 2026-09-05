@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and run the CPN installer in a privileged AlmaLinux + systemd container.
-# Pattern matches tests/docker-matrix.sh (privileged, cgroup host, systemd PID 1).
+# This is a maintainer/smoke-test path, not the normal end-user installer.
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,8 +12,8 @@ container_engine="${CPN_CONTAINER_ENGINE:-}"
 rpm_path="${CPN_RPM_PATH:-}"
 skip_build_rpm="${CPN_SKIP_BUILD_RPM:-0}"
 
-if [[ "$alma_version" != "9" && "$alma_version" != "10" ]]; then
-  echo "CPN_ALMA_VERSION must be 9 or 10 (got: ${alma_version})." >&2
+if [[ "$alma_version" != "8" && "$alma_version" != "9" && "$alma_version" != "10" ]]; then
+  echo "CPN_ALMA_VERSION must be 8, 9, or 10 (got: ${alma_version})." >&2
   exit 1
 fi
 
@@ -35,20 +35,25 @@ detect_engine() {
 }
 
 resolve_rpm() {
-  if [[ -n "$rpm_path" && -f "$rpm_path" ]]; then
+  if [[ -n "$rpm_path" ]]; then
+    if [[ ! -f "$rpm_path" ]]; then
+      echo "CPN_RPM_PATH does not exist: $rpm_path" >&2
+      return 1
+    fi
     echo "$rpm_path"
     return
   fi
+
   shopt -s nullglob
   local candidates=(
-    "$project_dir"/target/rpmbuild/RPMS/x86_64/cpn-installer-*.rpm
-    "$project_dir"/target/rpmbuild/RPMS/aarch64/cpn-installer-*.rpm
-    "$project_dir"/cpn-installer.rpm
+    "$project_dir"/target/rpmbuild/RPMS/x86_64/cpn-installer-*.el"$alma_version".*.rpm
+    "$project_dir"/target/rpmbuild/RPMS/aarch64/cpn-installer-*.el"$alma_version".*.rpm
+    "$project_dir"/target/rpmbuild/RPMS/*/cpn-installer-*.el"$alma_version".*.rpm
   )
   if ((${#candidates[@]} == 0)); then
     return 1
   fi
-  # Prefer newest by mtime.
+
   local newest=""
   local newest_mtime=0
   local candidate mtime
@@ -67,14 +72,14 @@ cd "$project_dir"
 
 if ! rpm_path="$(resolve_rpm)"; then
   if [[ "$skip_build_rpm" == "1" ]]; then
-    echo "No cpn-installer RPM found and CPN_SKIP_BUILD_RPM=1." >&2
+    echo "No EL${alma_version} cpn-installer RPM found and CPN_SKIP_BUILD_RPM=1." >&2
     exit 1
   fi
-  echo "[cpn] No RPM found; building inside AlmaLinux ${alma_version}..."
+  echo "[cpn] No EL${alma_version} RPM found; building inside AlmaLinux ${alma_version}..."
   CPN_ALMA_VERSION="$alma_version" CPN_CONTAINER_ENGINE="$engine" \
     bash "$project_dir/scripts/docker-build-rpm.sh"
   rpm_path="$(resolve_rpm)" || {
-    echo "RPM still missing after docker-build-rpm.sh." >&2
+    echo "EL${alma_version} RPM still missing after docker-build-rpm.sh." >&2
     exit 1
   }
 fi
@@ -92,7 +97,6 @@ echo "[cpn] Building image ${image_tag} (AlmaLinux ${alma_version})..."
 "$engine" rm -f "$name" >/dev/null 2>&1 || true
 
 echo "[cpn] Starting privileged systemd container ${name} on port ${port}..."
-# Warning: privileged is required for systemd, dnf installs, and service management.
 "$engine" run -d \
   --privileged \
   --cgroupns=host \
