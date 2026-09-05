@@ -6,10 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Default listen port is 2087. Override with --port, Environment=CPN_LISTEN_PORT=, or
-# a preference saved under /var/lib/cpn/listen_port. Optional panel hostname and
-# port migration live in /var/lib/cpn/panel_hostname and port_migration (see
-# to-do/PANEL-PORT-SUBDOMAIN.md). Bind is 127.0.0.1 unless --allow-remote.
+# Default listen port is 2087. Override with --port, Environment=CPN_LISTEN_PORT=,
+# or a preference saved under /var/lib/cpn/listen_port. Optional panel hostname
+# and port migration preferences are stored under /var/lib/cpn. Bind is
+# 127.0.0.1 unless --allow-remote is explicitly requested.
 ExecStart=/usr/bin/cpn-installer
 Restart=on-failure
 RestartSec=3
