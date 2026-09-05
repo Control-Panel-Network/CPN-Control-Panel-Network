@@ -76,6 +76,11 @@ if ! gpg --batch --yes --pinentry-mode loopback --passphrase-file /work/passphra
   exit 1
 fi
 echo "GPG preflight unlock OK"
+# The RPM database is separate from GNUPGHOME. Import the exact signing public
+# key before verification so `rpm --checksig` validates the signature instead
+# of failing with an untrusted-key status on a fresh AlmaLinux container.
+gpg --batch --export --armor "$KEY_ID" >/tmp/cpn-rpm-signing.pub
+rpm --import /tmp/cpn-rpm-signing.pub
 cat >"$HOME/.rpmmacros" <<EOF
 %_gpg_name $KEY_ID
 %__gpg /usr/bin/gpg
