@@ -4,6 +4,7 @@ use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::{
     command, prepare_caddy_apt_command, prepare_caddy_repository,
     prepare_openlitespeed_apt_command, prepare_openlitespeed_repository, server_recipes,
+    web_server_present,
 };
 use crate::installer::{AppState, finish, run_command};
 use crate::model::ServerEngine;
@@ -35,26 +36,43 @@ fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
             || (!diagnostics.is_empty() && diagnostics.iter().all(|line| line.contains("[WARN]"))))
 }
 
-async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, String> {
-    let wrapper = std::path::Path::new("/etc/systemd/system/openlitespeed.service");
-    if wrapper.exists() {
-        let _ = std::fs::remove_file(wrapper);
+fn bind_ols_admin_to_loopback(contents: &str) -> (String, bool) {
+    let mut changed = false;
+    let mut output = String::with_capacity(contents.len());
+    for line in contents.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("address") && trimmed.contains("*:7080") {
+            let indent_len = line.len().saturating_sub(trimmed.len());
+            output.push_str(&line[..indent_len]);
+            output.push_str("address                 127.0.0.1:7080");
+            changed = true;
+        } else {
+            output.push_str(line);
+        }
+        output.push('\n');
     }
-    std::fs::create_dir_all("/var/www/cpn/html")
-        .map_err(|error| format!("No se pudo crear el document root CPN: {error}"))?;
-    std::fs::write(
-        "/var/www/cpn/html/index.html",
+    if !contents.ends_with('\n') && !output.is_empty() {
+        output.pop();
+    }
+    (output, changed)
+}
+
+async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, String> {
+    // Do not delete /etc/systemd/system/openlitespeed.service. A unit in /etc is
+    // administrator-owned state; CPN only enables the vendor lsws/lshttpd unit it finds.
+    install_journal::write_file_tracked(
+        "server",
+        std::path::Path::new("/var/www/cpn/html/index.html"),
         "<!doctype html><html><head><title>CPN</title></head><body><h1>CPN OpenLiteSpeed</h1></body></html>\n",
-    )
-    .map_err(|error| error.to_string())?;
-    let vh_dir = "/usr/local/lsws/conf/vhosts/CPN";
-    std::fs::create_dir_all(vh_dir)
-        .map_err(|error| format!("No se pudo crear vhost CPN: {error}"))?;
-    std::fs::write(
-        format!("{vh_dir}/vhconf.conf"),
+    )?;
+
+    let vhconf = "/usr/local/lsws/conf/vhosts/CPN/vhconf.conf";
+    install_journal::write_file_tracked(
+        "server",
+        std::path::Path::new(vhconf),
         "docRoot                   $VH_ROOT/html/\nenableGzip                1\nindex  {\n  useServer               0\n  indexFiles              index.html, index.php\n}\n",
-    )
-    .map_err(|error| error.to_string())?;
+    )?;
+
     run_command(
         state,
         command(
@@ -66,8 +84,10 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         ),
     )
     .await?;
+
     let httpd = "/usr/local/lsws/conf/httpd_config.conf";
-    let mut conf = std::fs::read_to_string(httpd).unwrap_or_default();
+    let mut conf = std::fs::read_to_string(httpd)
+        .map_err(|error| format!("No se pudo leer {httpd}: {error}"))?;
     let mut changed = false;
     if !conf.contains("virtualHost CPN") {
         conf.push_str("\nvirtualHost CPN {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPN/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n");
@@ -78,28 +98,49 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         changed = true;
     }
     if changed {
-        std::fs::write(httpd, conf).map_err(|error| error.to_string())?;
+        install_journal::write_file_tracked(
+            "server",
+            std::path::Path::new(httpd),
+            &conf,
+        )?;
+    } else {
+        install_journal::record(
+            "server",
+            JournalAction::Note,
+            httpd,
+            None,
+            Some("OpenLiteSpeed CPN vhost/listener already configured".into()),
+        )?;
     }
+
     let admin = "/usr/local/lsws/admin/conf/admin_config.conf";
     if std::path::Path::new(admin).exists() {
-        let _ = Command::new("sed")
-            .args([
-                "-i",
-                "s#address[[:space:]]\\+\\*:7080#address                 127.0.0.1:7080#",
-                admin,
-            ])
-            .status()
-            .await;
+        let original = std::fs::read_to_string(admin)
+            .map_err(|error| format!("No se pudo leer {admin}: {error}"))?;
+        let (updated, admin_changed) = bind_ols_admin_to_loopback(&original);
+        if admin_changed {
+            install_journal::write_file_tracked(
+                "server",
+                std::path::Path::new(admin),
+                &updated,
+            )?;
+        }
     }
+
     let vendor_unit = "/usr/local/lsws/admin/misc/lshttpd.service";
     if !std::path::Path::new("/usr/lib/systemd/system/lsws.service").exists()
         && !std::path::Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
         && std::path::Path::new(vendor_unit).exists()
     {
-        std::fs::copy(vendor_unit, "/usr/lib/systemd/system/lshttpd.service").map_err(|error| {
-            format!("No se pudo registrar la unidad vendor de OpenLiteSpeed: {error}")
-        })?;
+        let contents = std::fs::read_to_string(vendor_unit)
+            .map_err(|error| format!("No se pudo leer la unidad vendor de OpenLiteSpeed: {error}"))?;
+        install_journal::write_file_tracked(
+            "server",
+            std::path::Path::new("/usr/lib/systemd/system/lshttpd.service"),
+            &contents,
+        )?;
     }
+
     let unit = detect_lsws_unit().await?;
     let validation = Command::new("/usr/local/lsws/bin/openlitespeed")
         .arg("-t")
@@ -118,6 +159,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
             validation_output.trim()
         ));
     }
+
     run_command(
         state,
         command(
@@ -140,7 +182,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         ),
     )
     .await?;
-    // The RPM may start OpenLiteSpeed before CPN writes its listener. A real
+    // The package may start OpenLiteSpeed before CPN writes its listener. A real
     // restart is required; `enable --now` is a no-op for an active service.
     run_command(
         state,
@@ -154,36 +196,6 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
     )
     .await?;
     Ok(unit)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::openlitespeed_config_is_valid;
-
-    #[test]
-    fn openlitespeed_validation_accepts_success_and_warning_only_exit() {
-        assert!(openlitespeed_config_is_valid(
-            true,
-            "[OK] configuration valid"
-        ));
-        assert!(openlitespeed_config_is_valid(
-            false,
-            "[WARN] module unavailable"
-        ));
-    }
-
-    #[test]
-    fn openlitespeed_validation_rejects_errors_and_unknown_failures() {
-        assert!(!openlitespeed_config_is_valid(
-            false,
-            "[ERROR] listener conflict"
-        ));
-        assert!(!openlitespeed_config_is_valid(
-            false,
-            "configuration failed"
-        ));
-        assert!(!openlitespeed_config_is_valid(false, ""));
-    }
 }
 
 fn server_service(server: ServerEngine) -> &'static str {
@@ -200,6 +212,24 @@ fn server_url(server: ServerEngine) -> &'static str {
             "http://127.0.0.1/"
         }
     }
+}
+
+fn ufw_status_allows_port(status: &str, port: &str) -> bool {
+    status.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with(port)
+            && trimmed
+                .split_whitespace()
+                .any(|part| part.eq_ignore_ascii_case("ALLOW"))
+    })
+}
+
+async fn ufw_port_allowed(port: &str) -> bool {
+    Command::new("ufw")
+        .arg("status")
+        .output()
+        .await
+        .is_ok_and(|result| ufw_status_allows_port(&String::from_utf8_lossy(&result.stdout), port))
 }
 
 async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Result<bool, String> {
@@ -254,6 +284,12 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
             let mut ok = true;
             let mut journal = String::new();
             for port in ["80/tcp", "443/tcp"] {
+                if ufw_port_allowed(port).await {
+                    journal.push_str(&format!(
+                        "ufw {port} already; created=false; owner=preexisting\n"
+                    ));
+                    continue;
+                }
                 let status = Command::new("ufw")
                     .args(["allow", port])
                     .stdout(Stdio::null())
@@ -281,7 +317,7 @@ async fn open_service_ports(environment: &crate::model::EnvironmentInfo) -> Resu
     }
 }
 
-/// Remove only firewall rules CPN recorded as created (issue #21).
+/// Remove only firewall rules CPN recorded as created.
 pub async fn cleanup_service_ports() -> Result<(), String> {
     let path = crate::paths::default_data_dir().join("firewall-journal.txt");
     let Ok(raw) = std::fs::read_to_string(&path) else {
@@ -317,6 +353,7 @@ pub async fn cleanup_service_ports() -> Result<(), String> {
                 .await;
         }
     }
+    let _ = std::fs::remove_file(path);
     Ok(())
 }
 
@@ -340,7 +377,10 @@ pub async fn install_with_database(
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
         }
-        state.progress("configuring", 0, "Configurando el repositorio verificado").await;
+
+        state
+            .progress("configuring", 0, "Revisando el sistema y los repositorios")
+            .await;
         let guest = require_installable_guest()?;
         state.log(
             format!(
@@ -354,23 +394,49 @@ pub async fn install_with_database(
                 "Web server install (Nginx / Caddy / OpenLiteSpeed)",
             ));
         }
-        if matches!(server, ServerEngine::Caddy) {
+
+        let server_preexisting = web_server_present(server);
+        if server_preexisting {
+            state.log(
+                format!(
+                    "{} ya está instalado; CPN reutilizará la instalación existente y continuará con activación/configuración.",
+                    server.label()
+                ),
+                "info",
+            );
+        }
+
+        if matches!(server, ServerEngine::Caddy) && !server_preexisting {
             prepare_caddy_repository(&guest)?;
-            install_journal::record(
-                "server",
-                JournalAction::WroteRepo,
-                "/etc/yum.repos.d/caddy.repo",
-                None,
-                Some("caddy repo".into()),
-            )?;
             if guest.uses_apt() {
                 run_command(&state, prepare_caddy_apt_command()).await?;
             }
         }
-        if matches!(server, ServerEngine::Openlitespeed) {
+
+        if matches!(server, ServerEngine::Openlitespeed) && !server_preexisting {
             if matches!(guest.id.as_str(), "almalinux" | "rocky" | "centos") {
-                run_command(&state, command("dnf", vec!["install", "-y", "epel-release", "dnf-plugins-core"], "Configurando las dependencias de OpenLiteSpeed", "configuring", 0)).await?;
-                run_command(&state, command("dnf", vec!["config-manager", "--set-enabled", "crb"], "Habilitando CRB para las dependencias de PHP", "configuring", 0)).await?;
+                run_command(
+                    &state,
+                    command(
+                        "dnf",
+                        vec!["install", "-y", "epel-release", "dnf-plugins-core"],
+                        "Configurando las dependencias de OpenLiteSpeed",
+                        "configuring",
+                        0,
+                    ),
+                )
+                .await?;
+                run_command(
+                    &state,
+                    command(
+                        "dnf",
+                        vec!["config-manager", "--set-enabled", "crb"],
+                        "Habilitando CRB para las dependencias de PHP",
+                        "configuring",
+                        0,
+                    ),
+                )
+                .await?;
                 // lsphp83-gd requires libgd.so.103 from remi-safe (gd3php).
                 let repository = match guest.major {
                     9 => Some("https://rpms.remirepo.net/enterprise/remi-release-9.rpm"),
@@ -378,40 +444,51 @@ pub async fn install_with_database(
                     _ => None,
                 };
                 if let Some(repository) = repository {
-                    run_command(&state, command("dnf", vec!["install", "-y", repository], "Configurando Remi para las dependencias de PHP", "configuring", 0)).await?;
+                    run_command(
+                        &state,
+                        command(
+                            "dnf",
+                            vec!["install", "-y", repository],
+                            "Configurando Remi para las dependencias de PHP",
+                            "configuring",
+                            0,
+                        ),
+                    )
+                    .await?;
                 }
             }
             prepare_openlitespeed_repository(&guest)?;
-            let repo_path = if guest.uses_apt() {
-                "/etc/apt/sources.list.d/lst_debian_repo.list"
-            } else {
-                "/etc/yum.repos.d/litespeed.repo"
-            };
-            install_journal::record(
-                "server",
-                JournalAction::WroteRepo,
-                repo_path,
-                None,
-                Some("litespeed repo".into()),
-            )?;
             if guest.uses_apt() {
                 run_command(&state, prepare_openlitespeed_apt_command()).await?;
             }
         }
+
         for item in server_recipes(&guest, server) {
             run_command(&state, item).await?;
         }
-        install_journal::record(
-            "server",
-            JournalAction::InstalledPackage,
-            server.label(),
-            None,
-            Some("web server packages".into()),
-        )?;
+        if server_preexisting {
+            install_journal::record(
+                "server",
+                JournalAction::Note,
+                server.label(),
+                None,
+                Some("adopted pre-existing web server; package install skipped".into()),
+            )?;
+        } else {
+            install_journal::record(
+                "server",
+                JournalAction::InstalledPackage,
+                server.label(),
+                None,
+                Some("web server package installed by this CPN run".into()),
+            )?;
+        }
+
         let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
             ols_unit = Some(configure_openlitespeed(&state).await?);
         }
+
         state
             .progress("testing", 90, "Comprobando que el servicio está activo")
             .await;
@@ -440,6 +517,7 @@ pub async fn install_with_database(
             ),
         };
         run_command(&state, service_check).await?;
+
         if matches!(server, ServerEngine::Openlitespeed) {
             let status = Command::new("bash")
                 .args([
@@ -475,8 +553,9 @@ pub async fn install_with_database(
                     96,
                 ),
             )
-                .await?;
+            .await?;
         }
+
         let environment = state
             .status
             .read()
@@ -484,12 +563,12 @@ pub async fn install_with_database(
             .environment
             .clone();
         if let Some(environment) = environment {
-            let opened = open_service_ports(&environment).await?;
+            let configured = open_service_ports(&environment).await?;
             let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
-            status.external_ports_configured = opened;
-            if opened {
+            status.external_ports_configured = configured;
+            if configured {
                 status.access_note = Some(
-                    "Host firewall opened http/https successfully (firewall-journal.txt)."
+                    "Host firewall allows http/https; only CPN-owned additions are recorded for cleanup."
                         .into(),
                 );
             } else {
@@ -503,10 +582,7 @@ pub async fn install_with_database(
             .progress(
                 "installing",
                 97,
-                format!(
-                    "Installing database defaults ({})",
-                    database.label()
-                ),
+                format!("Installing database defaults ({})", database.label()),
             )
             .await;
         match tokio::task::spawn_blocking(move || {
@@ -538,4 +614,53 @@ pub async fn install_with_database(
     }
     .await;
     finish(&state, result, server.label(), true, false).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        bind_ols_admin_to_loopback, openlitespeed_config_is_valid, ufw_status_allows_port,
+    };
+
+    #[test]
+    fn openlitespeed_validation_accepts_success_and_warning_only_exit() {
+        assert!(openlitespeed_config_is_valid(
+            true,
+            "[OK] configuration valid"
+        ));
+        assert!(openlitespeed_config_is_valid(
+            false,
+            "[WARN] module unavailable"
+        ));
+    }
+
+    #[test]
+    fn openlitespeed_validation_rejects_errors_and_unknown_failures() {
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "[ERROR] listener conflict"
+        ));
+        assert!(!openlitespeed_config_is_valid(
+            false,
+            "configuration failed"
+        ));
+        assert!(!openlitespeed_config_is_valid(false, ""));
+    }
+
+    #[test]
+    fn openlitespeed_admin_bind_preserves_other_lines() {
+        let input = "listener WebAdmin {\n  address                 *:7080\n  secure                  0\n}\n";
+        let (output, changed) = bind_ols_admin_to_loopback(input);
+        assert!(changed);
+        assert!(output.contains("127.0.0.1:7080"));
+        assert!(output.contains("secure                  0"));
+    }
+
+    #[test]
+    fn ufw_preexisting_rule_detection_is_port_specific() {
+        let status = "Status: active\n80/tcp ALLOW Anywhere\n443/tcp ALLOW Anywhere\n";
+        assert!(ufw_status_allows_port(status, "80/tcp"));
+        assert!(ufw_status_allows_port(status, "443/tcp"));
+        assert!(!ufw_status_allows_port(status, "8080/tcp"));
+    }
 }
