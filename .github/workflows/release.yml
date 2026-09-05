@@ -170,7 +170,10 @@ jobs:
       - name: Generate SBOM
         run: |
           cargo install cargo-cyclonedx --locked
-          cargo cyclonedx -f json -o dist/cpn-installer.cdx.json
+          # cargo-cyclonedx writes next to Cargo.toml; use its supported
+          # filename override and then stage the result for the release.
+          cargo cyclonedx -f json --override-filename cpn-installer.cdx
+          mv cpn-installer.cdx.json dist/cpn-installer.cdx.json
           test -s dist/cpn-installer.cdx.json
           ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
           chmod +x scripts/publish-checksums.sh

@@ -1,6 +1,6 @@
 [package]
 name = "cpn-installer"
-version = "0.2.2-alpha.4"
+version = "0.2.2-alpha.5"
 edition = "2024"
 description = "Instalador web local para CPN Server Panel"
 license = "GPL-3.0-only"
