@@ -196,9 +196,9 @@ fn ufw_status_allows_port(status: &str, port: u16) -> bool {
     status.lines().any(|line| {
         let trimmed = line.trim();
         trimmed.starts_with(&target)
-            && trimmed
-                .split_whitespace()
-                .any(|part| part.eq_ignore_ascii_case("ALLOW") || part.eq_ignore_ascii_case("ALLOW IN"))
+            && trimmed.split_whitespace().any(|part| {
+                part.eq_ignore_ascii_case("ALLOW") || part.eq_ignore_ascii_case("ALLOW IN")
+            })
     })
 }
 
