@@ -61,7 +61,7 @@ CPN is a Linux web installer that prepares server components on CyberPanel-align
 - Prefer a dedicated test VPS or VM while CPN is unfinished.
 - Close or restrict port `2087` when you are done with an install session.
 - Stop the installer process when finished so the temporary UI is no longer reachable.
-- Before installing a downloaded RPM or binary as root, verify `SHA256SUMS` and signatures. See [`to-do/RELEASE-SIGNING.md`](to-do/RELEASE-SIGNING.md). Official fingerprint: `EA5B57B1230FFA37F4426A873EC7121204EB5515` (`packaging/RPM-GPG-KEY-CPN`).
+- Before installing a downloaded RPM or binary as root, verify `SHA256SUMS` and signatures. See [`to-do/RELEASE-SIGNING.md`](to-do/RELEASE-SIGNING.md). Official fingerprint: `FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5` (`packaging/RPM-GPG-KEY-CPN`).
 
 ## Incident response (lightweight checklist)
 

@@ -52,6 +52,7 @@ PASS_FILE="$GNUPGHOME/passphrase"
 # Strip CR/LF so GitHub secret paste cannot break pinentry loopback.
 printf '%s' "${GPG_PASSPHRASE:-}" | tr -d '\r\n' >"$PASS_FILE"
 chmod 600 "$PASS_FILE"
+echo "GPG passphrase length for detached sign: $(wc -c <"$PASS_FILE")"
 
 gpg_sign_args=(--batch --yes --detach-sign --armor --local-user "$SIGN_USER")
 if [[ -s "$PASS_FILE" ]]; then
