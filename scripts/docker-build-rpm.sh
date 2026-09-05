@@ -52,13 +52,34 @@ fi
       rpm-build rpmdevtools git which hostname
     dnf clean all
 
-    # Node 22 for the embedded Vite/React installer UI.
-    if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null | tr -d v | cut -d. -f1)" -lt 20 ]]; then
-      curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
-      dnf -y install nodejs
-      dnf -y install gcc gcc-c++ make
+    node_major() {
+      node -v 2>/dev/null | tr -d v | cut -d. -f1
+    }
+
+    # Prefer the distribution Node.js first. EL10 currently ships Node 22 in AppStream,
+    # which avoids relying on a third-party repository that may lag a new EL major.
+    if ! command -v node >/dev/null 2>&1 || [[ "$(node_major)" -lt 20 ]]; then
+      dnf -y install nodejs npm || true
     fi
 
+    # EL8/9 may still expose an older AppStream Node. Use NodeSource only as a fallback.
+    if ! command -v node >/dev/null 2>&1 || [[ "$(node_major)" -lt 20 ]]; then
+      if [[ "${CPN_ALMA_VERSION}" == "10" ]]; then
+        echo "EL10 did not provide Node.js >=20 from configured distro repositories." >&2
+        exit 1
+      fi
+      dnf -y remove nodejs npm >/dev/null 2>&1 || true
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+      dnf -y install nodejs
+    fi
+
+    if [[ "$(node_major)" -lt 20 ]]; then
+      echo "Node.js >=20 is required to build installer-ui; got $(node -v 2>/dev/null || echo missing)." >&2
+      exit 1
+    fi
+
+    # Reassert the native compiler after repository/package transitions.
+    dnf -y install gcc gcc-c++ make
     if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
       echo "gcc/cc missing after package install" >&2
       exit 1
