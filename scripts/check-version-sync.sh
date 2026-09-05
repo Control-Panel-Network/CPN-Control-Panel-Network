@@ -15,7 +15,8 @@ expected_rpm_release="1%{?dist}"
 if [[ "$cargo_version" == *-* ]]; then
   expected_rpm_version="${cargo_version%%-*}"
   pre="${cargo_version#*-}"
-  expected_rpm_release="0.1.${pre}%{?dist}"
+  pre_compact="${pre//./}"
+  expected_rpm_release="0.${pre_compact}%{?dist}"
 fi
 
 spec_version="$(awk '/^Version:/ { print $2; exit }' "$project_dir/packaging/cpn-installer.spec")"

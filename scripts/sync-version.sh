@@ -16,7 +16,10 @@ if [[ "$cargo_version" == *-* ]]; then
   rpm_version="${cargo_version%%-*}"
   pre="${cargo_version#*-}"
   # Keep prereleases sortable before the final "1" release of the same Version.
-  rpm_release="0.1.${pre}%{?dist}"
+  # Compact prerelease so Name-Version-Release stays under RPM's 31-char NVR limit.
+  # Example: 0.2.2-alpha.1 -> Version 0.2.2, Release 0.alpha1%{?dist}
+  pre_compact="${pre//./}"
+  rpm_release="0.${pre_compact}%{?dist}"
 fi
 
 spec="$project_dir/packaging/cpn-installer.spec"

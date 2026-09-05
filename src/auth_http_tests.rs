@@ -1,7 +1,8 @@
 //! Actix HTTP coverage for panel login and dashboard ACL (issue #8).
 
 use crate::account::{
-    PanelBootstrap, default_password_policy, hash_password, with_test_data_dir, write_account_file,
+    PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
+    with_test_data_dir, write_account_file,
 };
 use crate::auth_api::{dashboard_page, login_submit};
 use crate::http_helpers::build_allowed_hosts;
@@ -9,6 +10,7 @@ use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
 use crate::panel_session::SESSION_COOKIE;
 use actix_web::{App, http::StatusCode, web};
+use rand::Rng;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tokio::sync::broadcast;
@@ -27,8 +29,8 @@ fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
     web::Data::new(Arc::new(AppState {
         status: std::sync::RwLock::new(status),
         events,
-        token: "install-token-for-tests-0123456789".into(),
-        session_id: "session-id-for-tests-0123456789ab".into(),
+        token: format!("install-token-{}", rand::rng().random::<u64>()),
+        session_id: format!("session-id-{}", rand::rng().random::<u64>()),
         bind_port: 2087,
         allow_remote: false,
         allowed_hosts: build_allowed_hosts(2087, &[]),
@@ -38,13 +40,13 @@ fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
 }
 
 fn write_admin_account(password: &str) {
-    let salt = "aabbccddeeff00112233445566778899";
+    let salt = new_password_salt();
     let boot = PanelBootstrap {
         schema_version: 1,
         username: "Admin".into(),
         recovery_email: "admin@example.com".into(),
-        password_hash: hash_password(password, salt),
-        password_salt: salt.into(),
+        password_hash: hash_password(password, &salt),
+        password_salt: salt,
         password_policy: default_password_policy(),
         language: "en".into(),
         created_at_unix: 1,
@@ -60,13 +62,30 @@ fn runtime() -> tokio::runtime::Runtime {
         .expect("tokio runtime")
 }
 
+fn ephemeral_session_secret() -> String {
+    format!("sess-{}", rand::rng().random::<u128>())
+}
+
+fn unique_wrong_password(valid: &str) -> String {
+    let policy = default_password_policy();
+    for _ in 0..32 {
+        let candidate = generate_password(&policy);
+        if candidate != valid {
+            return candidate;
+        }
+    }
+    format!("{}-x{}", valid, rand::rng().random::<u32>())
+}
+
 #[test]
 fn login_valid_sets_session_and_redirects() {
     with_test_data_dir(|| {
+        let password = generate_password(&default_password_policy());
+        let session_secret = ephemeral_session_secret();
         unsafe {
-            std::env::set_var("CPN_PANEL_SESSION_SECRET", "unit-test-session-secret");
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
         }
-        write_admin_account("Secret1!");
+        write_admin_account(&password);
         runtime().block_on(async {
             let app = actix_web::test::init_service(
                 App::new()
@@ -78,7 +97,7 @@ fn login_valid_sets_session_and_redirects() {
                 .uri("/login")
                 .set_form(&[
                     ("username", "Admin"),
-                    ("password", "Secret1!"),
+                    ("password", password.as_str()),
                     ("remember_me", "0"),
                 ])
                 .to_request();
@@ -110,10 +129,13 @@ fn login_valid_sets_session_and_redirects() {
 #[test]
 fn login_invalid_returns_401_without_session_cookie() {
     with_test_data_dir(|| {
+        let password = generate_password(&default_password_policy());
+        let wrong = unique_wrong_password(&password);
+        let session_secret = ephemeral_session_secret();
         unsafe {
-            std::env::set_var("CPN_PANEL_SESSION_SECRET", "unit-test-session-secret");
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
         }
-        write_admin_account("Secret1!");
+        write_admin_account(&password);
         runtime().block_on(async {
             let app = actix_web::test::init_service(
                 App::new()
@@ -125,7 +147,7 @@ fn login_invalid_returns_401_without_session_cookie() {
                 .uri("/login")
                 .set_form(&[
                     ("username", "Admin"),
-                    ("password", "WrongPass1!"),
+                    ("password", wrong.as_str()),
                     ("remember_me", "0"),
                 ])
                 .to_request();
