@@ -152,7 +152,10 @@ fn server_package_recipe(guest: &GuestOs, server: ServerEngine) -> CommandSpec {
         ),
         PackageFamily::Windows => command(
             "cmd",
-            vec!["/C", "echo Windows Phase A has no web-server package recipes"],
+            vec![
+                "/C",
+                "echo Windows Phase A has no web-server package recipes",
+            ],
             "Windows web-server install is not available",
             "failed",
             0,
@@ -220,7 +223,9 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 Path::new("/etc/yum.repos.d/litespeed.repo"),
                 &repository,
             )
-            .map_err(|error| format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}"))
+            .map_err(|error| {
+                format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")
+            })
         }
         PackageFamily::Apt => {
             let codename = guest.apt_codename().ok_or_else(|| {
@@ -238,7 +243,9 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 Path::new("/etc/apt/sources.list.d/lst_debian_repo.list"),
                 &repository,
             )
-            .map_err(|error| format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}"))
+            .map_err(|error| {
+                format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}")
+            })
         }
         PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
             "OpenLiteSpeed repository setup",
