@@ -179,7 +179,7 @@ It checks that Nginx and Caddy respond over HTTP, and that SnappyMail, Roundcube
 
 Do not publish the temporary token that appears in the installer URL. CPN makes system changes and should only be run on a dedicated test machine during this stage.
 
-Official release packages are GPG-signed. Before installing a downloaded RPM or binary as root, verify checksums and signatures (`SHA256SUMS`, `SHA256SUMS.asc`, `rpm --checksig`). Fingerprint: `EA5B57B1230FFA37F4426A873EC7121204EB5515`. Public key: [`packaging/RPM-GPG-KEY-CPN`](packaging/RPM-GPG-KEY-CPN). Full steps: [`to-do/RELEASE-SIGNING.md`](to-do/RELEASE-SIGNING.md).
+Official release packages are GPG-signed. Before installing a downloaded RPM or binary as root, verify checksums and signatures (`SHA256SUMS`, `SHA256SUMS.asc`, `rpm --checksig`). Fingerprint: `FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5`. Public key: [`packaging/RPM-GPG-KEY-CPN`](packaging/RPM-GPG-KEY-CPN). Full steps: [`to-do/RELEASE-SIGNING.md`](to-do/RELEASE-SIGNING.md).
 
 See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
 

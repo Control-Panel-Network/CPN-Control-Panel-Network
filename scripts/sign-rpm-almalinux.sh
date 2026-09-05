@@ -41,6 +41,7 @@ chmod 600 "$work/private.asc"
 printf '%s' "${GPG_PASSPHRASE:-}" | tr -d '\r\n' >"$work/passphrase"
 chmod 600 "$work/passphrase"
 printf '%s\n' "${GPG_KEY_ID:-}" | tr -d '\r' >"$work/key_id"
+echo "GPG passphrase length for rpmsign: $(wc -c <"$work/passphrase")"
 
 idx=0
 for rpm in "$@"; do
@@ -49,47 +50,51 @@ for rpm in "$@"; do
   idx=$((idx + 1))
 done
 
-"$engine" run --rm \
-  -e CPN_REQUIRE_RPMSIGN="${CPN_REQUIRE_RPMSIGN:-1}" \
-  -v "$work:/work:rw" \
-  -w /work \
-  almalinux:9 \
-  bash -lc '
-    set -euo pipefail
-    dnf -y install --setopt=install_weak_deps=False gnupg2 rpm-sign rpm-build >/dev/null
-    export GNUPGHOME=/work/gnupg
-    mkdir -p "$GNUPGHOME"
-    chmod 700 "$GNUPGHOME"
-    # Required for non-interactive CI: without this, loopback passphrase looks like "Bad passphrase".
-    printf '%s\n' 'allow-loopback-pinentry' >"$GNUPGHOME/gpg-agent.conf"
-    printf '%s\n' 'pinentry-mode loopback' >"$GNUPGHOME/gpg.conf"
-    gpg --batch --import /work/private.asc
-    gpgconf --kill gpg-agent >/dev/null 2>&1 || true
-    KEY_ID="$(tr -d "\r\n" </work/key_id)"
-    if [[ -z "$KEY_ID" ]]; then
-      KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: "/^fpr:/ {print \$10; exit}")"
-    fi
-    # Preflight unlock before rpmsign (clearer failure than rpm macros).
-    echo preflight > /work/preflight.txt
-    if ! gpg --batch --yes --pinentry-mode loopback --passphrase-file /work/passphrase \
-      --local-user "$KEY_ID" --detach-sign --armor --output /work/preflight.txt.asc /work/preflight.txt; then
-      echo "GPG passphrase unlock failed inside AlmaLinux container (check GPG_PASSPHRASE secret)." >&2
-      exit 1
-    fi
-    # Prefer passphrase-file so special characters never break rpmmacros quoting.
-    cat >"$HOME/.rpmmacros" <<EOF
+# Heredoc file avoids nested single-quote breakage inside bash -lc '...'.
+cat >"$work/sign-inside.sh" <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+dnf -y install --setopt=install_weak_deps=False gnupg2 rpm-sign rpm-build >/dev/null
+export GNUPGHOME=/work/gnupg
+mkdir -p "$GNUPGHOME"
+chmod 700 "$GNUPGHOME"
+# Required for non-interactive CI: without this, loopback passphrase looks like "Bad passphrase".
+printf '%s\n' 'allow-loopback-pinentry' >"$GNUPGHOME/gpg-agent.conf"
+printf '%s\n' 'pinentry-mode loopback' >"$GNUPGHOME/gpg.conf"
+gpg --batch --import /work/private.asc
+gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+KEY_ID="$(tr -d '\r\n' </work/key_id)"
+if [[ -z "$KEY_ID" ]]; then
+  KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+fi
+echo preflight > /work/preflight.txt
+if ! gpg --batch --yes --pinentry-mode loopback --passphrase-file /work/passphrase \
+  --local-user "$KEY_ID" --detach-sign --armor --output /work/preflight.txt.asc /work/preflight.txt; then
+  echo "GPG passphrase unlock failed inside AlmaLinux container (check GPG_PASSPHRASE secret)." >&2
+  exit 1
+fi
+echo "GPG preflight unlock OK"
+cat >"$HOME/.rpmmacros" <<EOF
 %_gpg_name $KEY_ID
 %__gpg /usr/bin/gpg
 %_gpg_path $GNUPGHOME
 %__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file /work/passphrase --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
 EOF
-    shopt -s nullglob
-    for rpm in /work/rpms/*.rpm; do
-      rpmsign --addsign "$rpm"
-      rpm --checksig "$rpm"
-      echo "rpmsign OK: $(basename "$rpm")"
-    done
-  '
+shopt -s nullglob
+for rpm in /work/rpms/*.rpm; do
+  rpmsign --addsign "$rpm"
+  rpm --checksig "$rpm"
+  echo "rpmsign OK: $(basename "$rpm")"
+done
+EOS
+chmod 700 "$work/sign-inside.sh"
+
+"$engine" run --rm \
+  -e CPN_REQUIRE_RPMSIGN="${CPN_REQUIRE_RPMSIGN:-1}" \
+  -v "$work:/work:rw" \
+  -w /work \
+  almalinux:9 \
+  bash /work/sign-inside.sh
 
 # Copy signed RPMs back over the originals (match by basename suffix after NNN-).
 for signed in "$work"/rpms/*.rpm; do

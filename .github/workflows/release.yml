@@ -19,7 +19,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   # Official signing identity fingerprint (public; matches packaging/RPM-GPG-KEY-CPN).
-  CPN_RELEASE_FINGERPRINT: EA5B57B1230FFA37F4426A873EC7121204EB5515
+  CPN_RELEASE_FINGERPRINT: FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
 
 jobs:
   release:
@@ -237,7 +237,7 @@ jobs:
             Release signing fingerprint (must match `packaging/RPM-GPG-KEY-CPN`):
 
             ```
-            EA5B57B1230FFA37F4426A873EC7121204EB5515
+            FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
             ```
 
             ```bash
