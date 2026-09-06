@@ -71,32 +71,21 @@ pub async fn configure_webmail_runtime(
         ),
     )
     .await?;
-    // enable --now does not reload an already-running master; reload so the new pool socket appears.
-    let reload = Command::new("systemctl")
-        .args(["reload", "php-fpm"])
-        .status()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !reload.success() {
-        run_command(
-            state,
-            command(
-                "systemctl",
-                vec!["restart", "php-fpm"],
-                "Reiniciando PHP-FPM para cargar el pool webmail",
-                "installing",
-                85,
-            ),
-        )
-        .await?;
-    }
-    // Confirm the pool socket exists before the reverse proxy health check.
-    if !Path::new("/run/php-fpm/cpn-webmail.sock").exists() {
-        return Err(
-            "PHP-FPM pool cpn-webmail did not create /run/php-fpm/cpn-webmail.sock after reload"
-                .into(),
-        );
-    }
+    // A package upgrade can leave a running master from the previous PHP version.
+    // Reload may report success without loading the new pool, so always restart and
+    // wait briefly for the ondemand pool to create its listener.
+    run_command(
+        state,
+        command(
+            "systemctl",
+            vec!["restart", "php-fpm"],
+            "Reiniciando PHP-FPM para cargar el pool webmail",
+            "installing",
+            85,
+        ),
+    )
+    .await?;
+    run_command(state, command("bash", vec!["-c", "for attempt in $(seq 1 15); do test -S /run/php-fpm/cpn-webmail.sock && exit 0; sleep 1; done; php-fpm -t 2>&1 || true; systemctl status php-fpm --no-pager 2>&1 || true; exit 1"], "Esperando el socket PHP-FPM de webmail", "testing", 86)).await.map_err(|_| "PHP-FPM no creó /run/php-fpm/cpn-webmail.sock; revisa installation.log para el diagnóstico de configuración.".to_string())?;
     install_journal::record(STAGE, JournalAction::EnabledService, "php-fpm", None, None)?;
 
     // Reload frontends after config write (idempotent).
