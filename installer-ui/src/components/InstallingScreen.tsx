@@ -16,9 +16,18 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
   const downloading = phase === 'downloading';
   const installing = phase === 'installing';
   const testing = phase === 'testing';
+  const failedStep = failed
+    ? status.progress >= 90
+      ? 'testing'
+      : status.progress >= 80
+        ? 'installing'
+        : status.progress > 0
+          ? 'downloading'
+          : 'configuring'
+    : null;
   const downloadDone =
-    installing || testing || phase === 'completed' || (failed && status.progress > 15);
-  const installDone = testing || phase === 'completed';
+    installing || testing || phase === 'completed' || failedStep === 'installing' || failedStep === 'testing';
+  const installDone = testing || phase === 'completed' || failedStep === 'testing';
   const labelClass = (active: boolean, done = false) =>
     `text-[17px] ${active ? 'font-semibold text-[#1a1c1d]' : done ? 'font-normal text-[#1a1c1d]' : 'font-normal text-[#7a7a7a]'}`;
 
@@ -31,13 +40,13 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
 
         <div className="flex flex-col gap-8">
           <div className="flex items-center gap-[17px]">
-            <StepIcon state={phase === 'configuring' ? 'active' : failed && status.progress === 0 ? 'error' : 'done'} />
-            <span className={labelClass(phase === 'configuring', phase !== 'configuring')}>{locale === 'es' ? 'Configurando' : locale === 'nb' ? 'Konfigurerer' : 'Configuring'}</span>
+            <StepIcon state={phase === 'configuring' ? 'active' : failedStep === 'configuring' ? 'error' : 'done'} />
+            <span className={labelClass(phase === 'configuring', phase !== 'configuring' && failedStep !== 'configuring')}>{locale === 'es' ? 'Configurando' : locale === 'nb' ? 'Konfigurerer' : 'Configuring'}</span>
           </div>
           <div className="flex items-center gap-[17px]">
             <StepIcon
               state={
-                downloading ? 'active' : downloadDone ? 'done' : failed ? 'error' : 'pending'
+                downloading ? 'active' : failedStep === 'downloading' ? 'error' : downloadDone ? 'done' : 'pending'
               }
             />
             <span className={labelClass(downloading, downloadDone)}>
@@ -54,7 +63,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
                   ? 'active'
                   : installDone
                     ? 'done'
-                    : failed && downloadDone
+                    : failedStep === 'installing'
                       ? 'error'
                       : 'pending'
               }
@@ -75,7 +84,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
                   ? 'active'
                   : phase === 'completed'
                     ? 'done'
-                    : failed && installDone
+                    : failedStep === 'testing'
                       ? 'error'
                       : 'pending'
               }
@@ -96,7 +105,12 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
             {locale === 'es' ? 'Esto puede tomar un rato…' : locale === 'nb' ? 'Dette kan ta en stund…' : 'This may take a while…'}
           </p>
         )}
-        {failed && <p className="mt-3 whitespace-pre-wrap break-words text-[14px] text-[#c2413b]">{status.error}</p>}
+        {failed && <div className="mt-3">
+          <p className="whitespace-pre-wrap break-words text-[14px] text-[#c2413b]">{status.error}</p>
+          <a className="issue-link" href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/issues" target="_blank" rel="noreferrer">
+            {locale === 'es' ? 'Abrir issue en GitHub' : locale === 'nb' ? 'Åpne issue på GitHub' : 'Open GitHub issue'}
+          </a>
+        </div>}
       </div>
     </section>
   );

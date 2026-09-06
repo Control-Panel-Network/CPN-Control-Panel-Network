@@ -191,6 +191,26 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
     Ok(unit)
 }
 
+/// Wait for the CPN listener without flooding the operator transcript with one
+/// curl error per retry.  On failure, emit the useful OLS/socket diagnostics to
+/// `installation.log` through `run_command`.
+async fn verify_openlitespeed_vhost(state: &AppState) -> Result<(), String> {
+    run_command(
+        state,
+        command(
+            "bash",
+            vec![
+                "-c",
+                "for attempt in $(seq 1 30); do if curl --fail --silent --max-time 2 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'; then exit 0; fi; sleep 1; done; echo 'OpenLiteSpeed did not return CPN content on 127.0.0.1:80.' >&2; echo 'Listening TCP sockets:' >&2; (ss -ltnp 2>&1 || netstat -ltn 2>&1 || true) >&2; echo 'OpenLiteSpeed error log tail:' >&2; tail -n 80 /usr/local/lsws/logs/error.log 2>&1 || true; exit 1",
+            ],
+            "Comprobando el vhost CPN de OpenLiteSpeed en :80",
+            "testing",
+            96,
+        ),
+    )
+    .await
+}
+
 fn server_service(server: ServerEngine) -> &'static str {
     match server {
         ServerEngine::Nginx => "nginx",
@@ -523,19 +543,31 @@ pub async fn install_with_database(
         run_command(&state, service_check).await?;
 
         if matches!(server, ServerEngine::Openlitespeed) {
-            let status = Command::new("bash")
-                .args([
-                    "-c",
-                    "set -o pipefail; for attempt in {1..15}; do if curl --fail --silent --show-error --max-time 2 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'; then exit 0; fi; sleep 1; done; exit 1",
-                ])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .kill_on_drop(true)
-                .status()
-                .await
-                .map_err(|error| error.to_string())?;
-            if !status.success() {
-                return Err("OpenLiteSpeed no sirvió el vhost CPN en :80".into());
+            // OLS packages can report the systemd unit active before the forked
+            // listener is ready. Give it a bounded first window, then use its
+            // native controller once and make the second failure diagnosable.
+            if verify_openlitespeed_vhost(&state).await.is_err() {
+                state.log(
+                    "OpenLiteSpeed no respondió tras systemctl; reintentando con lswsctrl.",
+                    "info",
+                );
+                run_command(
+                    &state,
+                    command(
+                        "bash",
+                        vec![
+                            "-c",
+                            "/usr/local/lsws/bin/lswsctrl restart || /usr/local/lsws/bin/lswsctrl start",
+                        ],
+                        "Reintentando OpenLiteSpeed con su controlador nativo",
+                        "testing",
+                        94,
+                    ),
+                )
+                .await?;
+                verify_openlitespeed_vhost(&state)
+                    .await
+                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log para el estado del listener y el error log de OpenLiteSpeed.".to_string())?;
             }
         } else {
             run_command(

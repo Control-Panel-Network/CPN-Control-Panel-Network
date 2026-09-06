@@ -36,7 +36,7 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
   const nextTheme = themeModes[(themeIndex + 1) % themeModes.length];
   const appearanceLabel = `${locale === 'es' ? 'Apariencia' : locale === 'nb' ? 'Utseende' : 'Appearance'}: ${names[themeIndex]}. ${locale === 'es' ? 'Cambiar a' : locale === 'nb' ? 'Bytt til' : 'Switch to'} ${names[(themeIndex + 1) % names.length]}`;
   return <div ref={root} className={`appearance-toolbar ${className}`} onKeyDown={(event) => { if (event.key === 'Escape') { setMenu(null); root.current?.querySelector<HTMLButtonElement>('button')?.focus(); } }}>
-    <button type="button" aria-label={t.languageLabel} aria-expanded={menu === 'language'} onClick={() => setMenu(menu === 'language' ? null : 'language')}><Globe2 size={18} /><span>{locale.toUpperCase()}</span></button>
+    <button type="button" aria-label={t.languageLabel} aria-expanded={menu === 'language'} onClick={() => setMenu(menu === 'language' ? null : 'language')}><Globe2 size={18} /><span key={locale} className="locale-code">{locale.toUpperCase()}</span></button>
     <button type="button" aria-label={appearanceLabel} title={appearanceLabel} onClick={() => { setTheme(nextTheme); setMenu(null); }}><ThemeIcon size={18} /></button>
     {menu && <div className="appearance-popover">
       {locales.map((code) => <button key={code} type="button" aria-pressed={locale === code} onClick={() => { setLocale(code); setMenu(null); }}>{LABELS[code]}{locale === code && <Check size={16} />}</button>)}

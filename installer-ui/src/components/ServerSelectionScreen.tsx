@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CircleHelp, Database, LockKeyhole } from 'lucide-react';
+import { siMariadb } from 'simple-icons';
 import type { DatabaseEngine, ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
 import { useI18n } from '../i18n';
@@ -243,7 +244,7 @@ export function ServerSelectionScreen({
               className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
             >
               <div className="database-card-mark" aria-hidden="true">
-                {option.id === 'none' ? <LockKeyhole size={22} strokeWidth={2} /> : <Database size={23} strokeWidth={2} />}
+                {option.id === 'none' ? <LockKeyhole size={22} strokeWidth={2} /> : option.id === 'mariadb' ? <svg width="27" height="27" viewBox="0 0 24 24"><path fill="currentColor" d={siMariadb.path} /></svg> : <Database size={23} strokeWidth={2} />}
               </div>
               <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{option.name}</h2>
               <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-8 flex-1">{option.description}</p>

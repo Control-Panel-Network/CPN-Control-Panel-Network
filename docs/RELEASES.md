@@ -11,7 +11,7 @@ Current release paths include:
 - Windows Server Phase A: `cpn-windows-x86_64.zip`.
 - checksum/signature/provenance files used to verify the release.
 
-Always match the package to the operating-system family, Enterprise Linux major version, and architecture. Do not install an EL9 RPM on EL10 merely because it is the newest RPM in the release.
+Always match the package to the operating-system family, Enterprise Linux major version, and architecture. The suffix is strict: AlmaLinux 9/RHEL 9/Rocky 9 require `...el9.x86_64.rpm`; EL10 requires `...el10.x86_64.rpm`. Do not install an EL9 RPM on EL10, or an EL10 RPM on EL9, merely because it is the newest RPM in the release.
 
 If a release does not contain an asset for your target OS and architecture, treat that target as unavailable for that release.
 
