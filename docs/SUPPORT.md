@@ -10,9 +10,9 @@ CPN is still alpha software. Support tiers describe how much validation a platfo
 | Rocky Linux 9 | Supported | RPM / dnf | Automated Rocky smoke path |
 | Ubuntu 22.04 / 24.04 | Supported | DEB / apt | Primary apt targets |
 | AlmaLinux 8 | Partial | dnf recipes | Maintenance-era EL8; no native release RPM while its OpenSSL 1.1 toolchain cannot build CPN's WebAuthn dependency |
-| Rocky Linux 8 / 10 | Partial | RPM / dnf | Shared EL recipes; less CPN smoke evidence |
-| RHEL 8 / 9 / 10 | Partial | RPM / dnf | Requires working RHEL subscriptions/repos |
-| CloudLinux 8 / 9 / 10 | Partial | RPM / dnf | Shared EL recipes; no public CPN lab matrix |
+| Rocky Linux 8 / 10 | Partial | RPM / dnf | EL8 uses recipes only; EL10 has a native RPM; less CPN smoke evidence |
+| RHEL 8 / 9 / 10 | Partial | RPM / dnf | EL8 uses recipes only; EL9/10 use matching RPMs and require working subscriptions/repos |
+| CloudLinux 8 / 9 / 10 | Partial | RPM / dnf | EL8 uses recipes only; EL9/10 share RPM recipes; no public CPN lab matrix |
 | CentOS Stream 9 / 10 | Partial | RPM / dnf | Shared EL recipes |
 | Debian 12 / 13 | Partial | DEB / apt | Implemented apt path; matrix coverage is being expanded |
 | Windows Server 2016+ | Partial | Windows ZIP | Phase A only; no Linux web/mail package parity |
