@@ -43,17 +43,16 @@ fi
     set -euo pipefail
     apt-get update -y
     apt-get install -y ca-certificates curl build-essential pkg-config libssl-dev \
-      git dpkg-dev nodejs npm
+      git dpkg-dev
     if ! command -v rustc >/dev/null 2>&1; then
       curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     fi
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
-    # Prefer Node 22 when available for Vite 6 / React 19.
-    if ! command -v node >/dev/null 2>&1 || [[ "$(node -v 2>/dev/null | tr -d v | cut -d. -f1)" -lt 20 ]]; then
-      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-      apt-get install -y nodejs
-    fi
+    # Install Node 22 directly. Installing Jammy nodejs/npm first pulls libnode-dev,
+    # whose headers conflict with the NodeSource package.
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
     ./scripts/build-deb.sh
   '
 
