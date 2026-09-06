@@ -295,6 +295,7 @@ function AppShell() {
               selectedMail={selectedMail}
               onSelectMail={setSelectedMail}
               onContinue={beginMailInstall}
+              onSkip={() => setScreen(status.account?.configured ? 'complete' : 'account')}
             />
           )}
           {screen === 'account' && (

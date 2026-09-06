@@ -7,6 +7,7 @@ interface Props {
   selectedMail: MailSystem | null;
   onSelectMail: (mail: MailSystem) => void;
   onContinue: () => void;
+  onSkip: () => void;
 }
 
 function MailIcon({ mail }: { mail: MailSystem }) {
@@ -32,8 +33,8 @@ function MailIcon({ mail }: { mail: MailSystem }) {
   );
 }
 
-export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: Props) {
-  const { t } = useI18n();
+export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue, onSkip }: Props) {
+  const { t, locale } = useI18n();
   const options: Array<{ id: MailSystem; name: string; description: string; legacy?: boolean }> = [
     {
       id: 'snappymail',
@@ -104,6 +105,9 @@ export function MailSelectionScreen({ selectedMail, onSelectMail, onContinue }: 
           className="primary-button min-w-52"
         >
           {t.continueLabel} <ArrowRight size={18} />
+        </button>
+        <button type="button" onClick={onSkip} className="text-sm text-[#5f5e60] underline underline-offset-4">
+          {locale === 'es' ? 'Omitir correo por ahora' : 'Skip mail for now'}
         </button>
         <p className="text-sm text-[#667085]">{t.nothingInstallsYet}</p>
       </div>
