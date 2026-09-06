@@ -92,9 +92,77 @@ jobs:
           name: cpn-windows-release
           path: dist/cpn-windows-x86_64.zip
 
+  rpm-package:
+    name: Build RPM EL${{ matrix.major }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        major: [9, 10]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify tag matches Cargo.toml
+        run: |
+          chmod +x scripts/check-version-sync.sh
+          ./scripts/check-version-sync.sh
+
+      - name: Build RPM
+        run: |
+          chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh scripts/sync-version.sh
+          CPN_ALMA_VERSION="${{ matrix.major }}" ./scripts/docker-build-rpm.sh
+          shopt -s nullglob
+          rpms=(target/rpmbuild/RPMS/*/*.el${{ matrix.major }}.*.rpm)
+          if ((${#rpms[@]} != 1)); then
+            echo "Expected one EL${{ matrix.major }} RPM; found ${#rpms[@]}" >&2
+            printf '%s\n' "${rpms[@]}" >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "${rpms[0]}" dist/
+
+      - name: Upload RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpn-rpm-el${{ matrix.major }}
+          path: dist/*.rpm
+
+  deb-package:
+    name: Build apt-family DEB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify tag matches Cargo.toml
+        run: |
+          chmod +x scripts/check-version-sync.sh
+          ./scripts/check-version-sync.sh
+
+      - name: Build DEB on Ubuntu 22.04 baseline
+        run: |
+          chmod +x scripts/docker-build-deb.sh scripts/build-deb.sh scripts/sync-version.sh
+          CPN_BUILD_IMAGE=ubuntu:22.04 CPN_UBUNTU_VERSION=22.04 ./scripts/docker-build-deb.sh
+          shopt -s nullglob
+          debs=(target/deb/*.deb)
+          if ((${#debs[@]} != 1)); then
+            echo "Expected one DEB; found ${#debs[@]}" >&2
+            printf '%s\n' "${debs[@]}" >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "${debs[0]}" dist/
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpn-deb-release
+          path: dist/*.deb
+
   release:
     name: Build packages, checksums and provenance
-    needs: windows-package
+    needs: [windows-package, rpm-package, deb-package]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -104,6 +172,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cpn-windows-release
+          path: dist
+
+      - name: Download RPM packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cpn-rpm-el*
+          path: dist
+          merge-multiple: true
+
+      - name: Download DEB package
+        uses: actions/download-artifact@v4
+        with:
+          name: cpn-deb-release
           path: dist
 
       - name: Install Rust (pinned)
@@ -152,35 +233,6 @@ jobs:
           cp target/release/cpn-installer dist/cpn-installer
           cp target/release/cpn dist/cpn
           chmod +x dist/cpn-installer dist/cpn
-
-      - name: Build RPMs for EL 9 and 10
-        run: |
-          chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh scripts/sync-version.sh
-          ./scripts/sync-version.sh
-          for major in 9 10; do
-            echo "Building EL${major} RPM"
-            CPN_ALMA_VERSION="$major" ./scripts/docker-build-rpm.sh
-          done
-          shopt -s nullglob
-          rpms=(target/rpmbuild/RPMS/*/*.rpm)
-          if ((${#rpms[@]} < 2)); then
-            echo "Expected EL9/EL10 RPM builds; found ${#rpms[@]} package(s)" >&2
-            printf '%s\n' "${rpms[@]}" >&2
-            exit 1
-          fi
-          cp "${rpms[@]}" dist/
-
-      - name: Build apt-family DEB on Ubuntu 22.04 baseline
-        run: |
-          chmod +x scripts/docker-build-deb.sh scripts/build-deb.sh scripts/sync-version.sh
-          CPN_BUILD_IMAGE=ubuntu:22.04 CPN_UBUNTU_VERSION=22.04 ./scripts/docker-build-deb.sh
-          shopt -s nullglob
-          debs=(target/deb/*.deb)
-          if ((${#debs[@]} == 0)); then
-            echo "DEB build produced no packages" >&2
-            exit 1
-          fi
-          cp "${debs[@]}" dist/
 
       - name: Install GPG tools on runner
         run: |
