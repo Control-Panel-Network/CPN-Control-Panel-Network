@@ -57,6 +57,13 @@ fn bind_ols_admin_to_loopback(contents: &str) -> (String, bool) {
     (output, changed)
 }
 
+fn openlitespeed_restart_command() -> &'static str {
+    // The vendor unit uses `KillMode=none`, so `systemctl restart` can start a
+    // second daemon while the previous one still owns the admin listener. Stop
+    // it first and wait for that listener to be released before starting it.
+    "systemctl stop \"$1\"; for attempt in $(seq 1 30); do if ! ss -ltn | grep -qE '[:.]7080[[:space:]]'; then systemctl start \"$1\"; exit $?; fi; sleep 1; done; echo 'OpenLiteSpeed admin listener on :7080 was not released after stop.' >&2; exit 1"
+}
+
 async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, String> {
     // Do not delete /etc/systemd/system/openlitespeed.service. A unit in /etc is
     // administrator-owned state; CPN only enables the vendor lsws/lshttpd unit it finds.
@@ -175,13 +182,20 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         ),
     )
     .await?;
-    // The package may start OpenLiteSpeed before CPN writes its listener. A real
-    // restart is required; `enable --now` is a no-op for an active service.
+    // The package may start OpenLiteSpeed before CPN writes its listener.
+    // Its vendor unit has KillMode=none, so a direct restart races with the
+    // previous daemon still holding :7080. Stop, wait for the listener, then
+    // start to guarantee that the CPN configuration can bind both listeners.
     run_command(
         state,
         command(
-            "systemctl",
-            vec!["restart", unit],
+            "bash",
+            vec![
+                "-c",
+                openlitespeed_restart_command(),
+                "cpn-ols-restart",
+                unit,
+            ],
             "Reiniciando OpenLiteSpeed con el vhost CPN",
             "installing",
             84,
@@ -655,7 +669,8 @@ pub async fn install_with_database(
 #[cfg(test)]
 mod tests {
     use super::{
-        bind_ols_admin_to_loopback, openlitespeed_config_is_valid, ufw_status_allows_port,
+        bind_ols_admin_to_loopback, openlitespeed_config_is_valid, openlitespeed_restart_command,
+        ufw_status_allows_port,
     };
 
     #[test]
@@ -690,6 +705,15 @@ mod tests {
         assert!(changed);
         assert!(output.contains("127.0.0.1:7080"));
         assert!(output.contains("secure                  0"));
+    }
+
+    #[test]
+    fn openlitespeed_restart_waits_for_admin_listener_before_starting() {
+        let command = openlitespeed_restart_command();
+        assert!(command.starts_with("systemctl stop \"$1\";"));
+        assert!(command.contains("ss -ltn"));
+        assert!(command.contains("systemctl start \"$1\""));
+        assert!(!command.contains("systemctl restart"));
     }
 
     #[test]
