@@ -42,7 +42,9 @@ cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 # Debian's '~' sorts before the empty string, so 0.2.2~alpha.7 upgrades cleanly
 # to 0.2.2. A raw Cargo hyphen would be interpreted as a Debian revision and can
 # produce surprising ordering against the final release.
-deb_version="${cargo_version/-/~}"
+# Escape `~`: unquoted Bash parameter-expansion replacements perform tilde
+# expansion, which would turn 0.2.2-alpha.9 into 0.2.2/rootalpha.9.
+deb_version="${cargo_version/-/\~}"
 arch="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 pkg_root="$out_dir/cpn-installer_${deb_version}_$arch"
 rm -rf "$pkg_root"
