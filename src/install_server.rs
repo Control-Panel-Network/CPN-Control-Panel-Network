@@ -493,6 +493,17 @@ pub async fn install_with_database(
                         ),
                     )
                     .await?;
+                    run_command(
+                        &state,
+                        command(
+                            "dnf",
+                            vec!["--setopt=lock_timeout=60", "install", "-y", "gd3php"],
+                            "Instalando libgd para OpenLiteSpeed",
+                            "configuring",
+                            0,
+                        ),
+                    )
+                    .await?;
                 }
             }
             prepare_openlitespeed_repository(&guest)?;
