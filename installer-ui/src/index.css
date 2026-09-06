@@ -9,9 +9,16 @@
 .appearance-popover button { width:100%; justify-content:space-between; }
 .setup-steps { display:flex; flex-wrap:wrap; gap:16px; margin:0 0 32px; color:var(--installer-muted); font-size:12px; }
 .setup-steps [aria-current="step"] { color:#0071e3; font-weight:650; }
-.phpmyadmin-option { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#1a1c1d; font-size:14px; }
+.phpmyadmin-option { display:flex; align-items:center; justify-content:center; width:fit-content; flex-wrap:wrap; gap:8px; color:#1a1c1d; font-size:14px; transition:opacity .24s ease, filter .24s ease, transform .24s ease; }
+.phpmyadmin-option-disabled { opacity:.42; filter:grayscale(.5); pointer-events:none; transform:translateY(2px); }
+.phpmyadmin-switch { position:relative; width:38px; height:22px; flex:0 0 auto; border:0; border-radius:999px; padding:2px; background:#b6bfcb; cursor:pointer; transition:background .18s ease; }
+.phpmyadmin-switch span { display:block; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0003; transform:translateX(0); transition:transform .18s ease; }
+.phpmyadmin-switch-on { background:#0066cc; }
+.phpmyadmin-switch-on span { transform:translateX(16px); }
+.phpmyadmin-switch:disabled { cursor:not-allowed; }
 .default-badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; background:#e7f1ff; color:#0059b3; font-size:11px; font-weight:650; }
-.database-card-mark { display:grid; place-items:center; width:48px; height:48px; margin:0 0 24px; border-radius:12px; background:#e7f1ff; color:#0066cc; font-size:13px; font-weight:750; letter-spacing:.04em; }
+.database-card-mark { display:grid; place-items:center; width:48px; height:48px; margin:0 0 24px; border-radius:12px; background:#e7f1ff; color:#0066cc; }
+.install-wait-note { margin:8px 0 0; color:#667085; font-size:13px; line-height:1.4; }
 :root[data-theme="dark"] .phpmyadmin-option { color:var(--installer-ink); }
 button:focus-visible, input:focus-visible { outline:2px solid #0071e3; outline-offset:3px; }
 :root[data-theme="dark"] body, :root[data-theme="dark"] main { background:var(--installer-bg); color:var(--installer-ink); }

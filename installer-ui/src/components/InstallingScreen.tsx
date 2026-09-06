@@ -91,6 +91,11 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         <p className="mt-10 text-[14px] text-[#7a7a7a] min-h-5" aria-live="polite">
           {status.message || t.installingSubtitle}
         </p>
+        {phase === 'configuring' && (
+          <p className="install-wait-note" aria-live="polite">
+            {locale === 'es' ? 'Esto puede tomar un rato…' : locale === 'nb' ? 'Dette kan ta en stund…' : 'This may take a while…'}
+          </p>
+        )}
         {failed && <p className="mt-3 whitespace-pre-wrap break-words text-[14px] text-[#c2413b]">{status.error}</p>}
       </div>
     </section>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, CircleHelp } from 'lucide-react';
+import { ArrowRight, CircleHelp, Database, LockKeyhole } from 'lucide-react';
 import type { DatabaseEngine, ServerEngine } from '../types';
 import { ServerBrandIcon } from './ServerBrandIcon';
 import { useI18n } from '../i18n';
@@ -242,7 +242,9 @@ export function ServerSelectionScreen({
               onClick={() => onDatabaseChange(option.id)}
               className={`utility-card bg-white border rounded-lg p-6 flex flex-col cursor-pointer transition-all ${selected ? 'border-[#0066cc] ring-2 ring-[#0066cc]/20' : 'border-[#e0e0e0] hover:border-[#c1c6d5]'}`}
             >
-              <div className="database-card-mark" aria-hidden="true">{option.id === 'none' ? '—' : 'DB'}</div>
+              <div className="database-card-mark" aria-hidden="true">
+                {option.id === 'none' ? <LockKeyhole size={22} strokeWidth={2} /> : <Database size={23} strokeWidth={2} />}
+              </div>
               <h2 className="text-[17px] font-semibold text-[#1a1c1d] mb-1">{option.name}</h2>
               <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-8 flex-1">{option.description}</p>
               <button type="button" className={`selection-button ${selected ? 'selection-button-active' : ''}`} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDatabaseChange(option.id); }}>
@@ -251,15 +253,21 @@ export function ServerSelectionScreen({
             </article>;
           })}
         </div>
-        {database !== 'none' && <label className="phpmyadmin-option mx-auto mt-6 max-w-5xl">
-          <input
-            type="checkbox"
-            checked={installPhpmyadmin}
-            onChange={(event) => onPhpmyadminChange(event.target.checked)}
-          />
+        <div className={`phpmyadmin-option mx-auto mt-6 ${database === 'none' ? 'phpmyadmin-option-disabled' : ''}`} aria-disabled={database === 'none'}>
+          <button
+            type="button"
+            className={`phpmyadmin-switch ${installPhpmyadmin ? 'phpmyadmin-switch-on' : ''}`}
+            role="switch"
+            aria-checked={installPhpmyadmin}
+            aria-label={locale === 'es' ? 'Instalar phpMyAdmin' : locale === 'nb' ? 'Installer phpMyAdmin' : 'Install phpMyAdmin'}
+            disabled={database === 'none'}
+            onClick={() => onPhpmyadminChange(!installPhpmyadmin)}
+          >
+            <span aria-hidden="true" />
+          </button>
           <span>{locale === 'es' ? 'Instalar phpMyAdmin' : locale === 'nb' ? 'Installer phpMyAdmin' : 'Install phpMyAdmin'}</span>
           <span className="default-badge">{locale === 'es' ? 'Recomendado · activado por defecto' : locale === 'nb' ? 'Anbefalt · aktivert som standard' : 'Recommended · enabled by default'}</span>
-        </label>}
+        </div>
       </div>}
 
       {step === 'server' && <button type="button" onClick={onOpenCompare} className="compare-link mt-8">

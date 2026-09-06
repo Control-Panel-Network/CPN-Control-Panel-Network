@@ -412,7 +412,13 @@ pub async fn install_with_database(
                     &state,
                     command(
                         "dnf",
-                        vec!["install", "-y", "epel-release", "dnf-plugins-core"],
+                        vec![
+                            "--setopt=lock_timeout=60",
+                            "install",
+                            "-y",
+                            "epel-release",
+                            "dnf-plugins-core",
+                        ],
                         "Configurando las dependencias de OpenLiteSpeed",
                         "configuring",
                         0,
@@ -423,7 +429,12 @@ pub async fn install_with_database(
                     &state,
                     command(
                         "dnf",
-                        vec!["config-manager", "--set-enabled", "crb"],
+                        vec![
+                            "--setopt=lock_timeout=60",
+                            "config-manager",
+                            "--set-enabled",
+                            "crb",
+                        ],
                         "Habilitando CRB para las dependencias de PHP",
                         "configuring",
                         0,
@@ -441,7 +452,7 @@ pub async fn install_with_database(
                         &state,
                         command(
                             "dnf",
-                            vec!["install", "-y", repository],
+                            vec!["--setopt=lock_timeout=60", "install", "-y", repository],
                             "Configurando Remi para las dependencias de PHP",
                             "configuring",
                             0,

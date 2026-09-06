@@ -9,8 +9,13 @@ use crate::install_webmail_runtime::webmail_health_url;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
-use std::process::Stdio;
-use std::sync::RwLock;
+use std::{
+    fs::{self, OpenOptions},
+    io::Write,
+    process::Stdio,
+    sync::{Mutex, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
@@ -19,6 +24,36 @@ use tokio::{
 
 /// Matrix-friendly status snapshot path (readable even if HTTP workers stall).
 pub const STATUS_SNAPSHOT_PATH: &str = "/tmp/cpn-installer-status.json";
+/// Persistent installer transcript. This is deliberately separate from the
+/// rollback journal: it contains operator-facing command output and progress.
+pub const INSTALLATION_LOG_FILE: &str = "installation.log";
+
+static INSTALLATION_LOG_LOCK: Mutex<()> = Mutex::new(());
+
+pub fn installation_log_path() -> std::path::PathBuf {
+    crate::paths::join_data(INSTALLATION_LOG_FILE)
+}
+
+fn append_installation_log(level: &str, line: &str) {
+    let Ok(_guard) = INSTALLATION_LOG_LOCK.lock() else {
+        return;
+    };
+    let path = installation_log_path();
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "[{timestamp}] [{level}] {line}");
+        let _ = file.flush();
+    }
+}
 
 pub struct AppState {
     pub status: RwLock<InstallerStatus>,
@@ -83,14 +118,22 @@ impl AppState {
     }
 
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
+        let message = message.into();
         let snapshot = {
             let mut status = self.status.write().unwrap_or_else(|e| e.into_inner());
             status.phase = phase;
             status.progress = progress;
-            status.message = message.into();
+            status.message = message;
             status.error = None;
             status.clone()
         };
+        append_installation_log(
+            "progress",
+            &format!(
+                "phase={} progress={} message={}",
+                snapshot.phase, snapshot.progress, snapshot.message
+            ),
+        );
         persist_status_snapshot(&snapshot);
         let _ = self
             .events
@@ -98,10 +141,9 @@ impl AppState {
     }
 
     pub fn log(&self, line: impl Into<String>, level: &'static str) {
-        let _ = self.events.send(InstallerEvent::Log {
-            line: line.into(),
-            level,
-        });
+        let line = line.into();
+        append_installation_log(level, &line);
+        let _ = self.events.send(InstallerEvent::Log { line, level });
     }
 }
 
@@ -174,7 +216,15 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
             .progress(spec.phase, spec.progress, spec.description)
             .await;
     }
-    state.log(format!("> {}", spec.description), "info");
+    state.log(
+        format!(
+            "> {}: {} {}",
+            spec.description,
+            spec.program,
+            spec.args.join(" ")
+        ),
+        "info",
+    );
     let mut command = Command::new(spec.program);
     command
         .args(&spec.args)
@@ -217,6 +267,9 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let mut out_lines = BufReader::new(stdout).lines();
         let mut err_lines = BufReader::new(stderr).lines();
         let (mut out_done, mut err_done, mut transaction) = (false, false, false);
+        let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(20));
+        heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        heartbeat.tick().await;
         let mut diagnostic = std::collections::VecDeque::with_capacity(12);
         while !out_done || !err_done {
             if state.cancel_requested() {
@@ -245,7 +298,14 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                     }
                     Ok(None) | Err(_) => err_done = true,
                 },
-                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+                _ = heartbeat.tick() => {
+                    let (phase, progress) = {
+                        let status = state.status.read().unwrap_or_else(|e| e.into_inner());
+                        (status.phase, status.progress)
+                    };
+                    state.log(format!("{} sigue ejecutándose; esperando salida del sistema de paquetes", description), "info");
+                    state.progress(phase, progress, format!("{} — aún en curso", description)).await;
+                }
             }
         }
         if state.cancel_requested() {
