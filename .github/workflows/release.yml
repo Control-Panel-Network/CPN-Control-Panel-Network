@@ -153,18 +153,18 @@ jobs:
           cp target/release/cpn dist/cpn
           chmod +x dist/cpn-installer dist/cpn
 
-      - name: Build RPMs for EL 8, 9 and 10
+      - name: Build RPMs for EL 9 and 10
         run: |
           chmod +x scripts/docker-build-rpm.sh scripts/build-rpm.sh scripts/sync-version.sh
           ./scripts/sync-version.sh
-          for major in 8 9 10; do
+          for major in 9 10; do
             echo "Building EL${major} RPM"
             CPN_ALMA_VERSION="$major" ./scripts/docker-build-rpm.sh
           done
           shopt -s nullglob
           rpms=(target/rpmbuild/RPMS/*/*.rpm)
-          if ((${#rpms[@]} < 3)); then
-            echo "Expected EL8/EL9/EL10 RPM builds; found ${#rpms[@]} package(s)" >&2
+          if ((${#rpms[@]} < 2)); then
+            echo "Expected EL9/EL10 RPM builds; found ${#rpms[@]} package(s)" >&2
             printf '%s\n' "${rpms[@]}" >&2
             exit 1
           fi
@@ -328,7 +328,6 @@ jobs:
 
             Download the native package for the guest OS instead of building CPN from source:
 
-            - EL8: `cpn-installer-*.el8.*.rpm`
             - EL9: `cpn-installer-*.el9.*.rpm`
             - EL10: `cpn-installer-*.el10.*.rpm`
             - Ubuntu 22.04/24.04 and tested compatible apt guests: `cpn-installer_*.deb`
