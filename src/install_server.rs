@@ -493,12 +493,20 @@ pub async fn install_with_database(
                         ),
                     )
                     .await?;
+                    // `gd3php` is published by remi-safe for some EL releases,
+                    // but not every supported major.  Never turn an absent
+                    // optional provider into an installer failure: when it is
+                    // present install it before OpenLiteSpeed; otherwise let
+                    // DNF resolve the server's actual dependency set.
                     run_command(
                         &state,
                         command(
-                            "dnf",
-                            vec!["--setopt=lock_timeout=60", "install", "-y", "gd3php"],
-                            "Instalando libgd para OpenLiteSpeed",
+                            "bash",
+                            vec![
+                                "-c",
+                                "if dnf -q --disablerepo='*' --enablerepo=remi-safe list available gd3php >/dev/null 2>&1; then dnf --setopt=lock_timeout=60 --enablerepo=remi-safe install -y gd3php; else echo 'gd3php is not available from remi-safe for this guest; continuing with OpenLiteSpeed dependency resolution.'; fi",
+                            ],
+                            "Comprobando libgd para OpenLiteSpeed",
                             "configuring",
                             0,
                         ),
