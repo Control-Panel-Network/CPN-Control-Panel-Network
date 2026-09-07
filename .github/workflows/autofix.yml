@@ -1,0 +1,41 @@
+name: AutoFix CI
+
+# autofix.ci writes only to pull-request branches through its GitHub App.  Keep
+# the normal CI check authoritative; this workflow merely returns safe Rust
+# formatting fixes to the contributor instead of failing on `cargo fmt --check`.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  rustfmt:
+    name: Rust format autofix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install Rust formatter
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Apply Rust formatting
+        run: cargo fmt
+
+      - name: Commit safe formatting fixes
+        uses: autofix-ci/action@v1
+        with:
+          fail-fast: false
+          commit-message: "ci: autofix Rust formatting"
+          comment: "autofix.ci aplicó formato Rust seguro."
