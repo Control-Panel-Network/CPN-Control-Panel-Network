@@ -4,7 +4,7 @@ use crate::account::{
     PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
     with_test_data_dir, write_account_file,
 };
-use crate::auth_api::{dashboard_page, login_submit};
+use crate::auth_api::{dashboard_page, login_page, login_submit};
 use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
@@ -189,5 +189,34 @@ fn dashboard_without_session_redirects_to_login() {
             .and_then(|value| value.to_str().ok())
             .unwrap_or("");
         assert_eq!(location, "/login");
+    });
+}
+
+#[test]
+fn login_and_dashboard_accept_head() {
+    with_test_data_dir(|| {
+        write_admin_account(&generate_password(&default_password_policy()));
+        runtime().block_on(async {
+            let app = actix_web::test::init_service(
+                App::new()
+                    .app_data(test_state("completed"))
+                    .service(login_page)
+                    .service(dashboard_page),
+            )
+            .await;
+            let login_head = actix_web::test::TestRequest::default()
+                .method(actix_web::http::Method::HEAD)
+                .uri("/login")
+                .to_request();
+            let login_resp = actix_web::test::call_service(&app, login_head).await;
+            assert_eq!(login_resp.status(), StatusCode::OK);
+
+            let dash_head = actix_web::test::TestRequest::default()
+                .method(actix_web::http::Method::HEAD)
+                .uri("/dashboard")
+                .to_request();
+            let dash_resp = actix_web::test::call_service(&app, dash_head).await;
+            assert_eq!(dash_resp.status(), StatusCode::SEE_OTHER);
+        });
     });
 }

@@ -304,7 +304,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                         (status.phase, status.progress)
                     };
                     state.log(format!("{} sigue ejecutándose; esperando salida del sistema de paquetes", description), "info");
-                    state.progress(phase, progress, format!("{} — aún en curso", description)).await;
+                    state.progress(phase, progress, format!("{} - aún en curso", description)).await;
                 }
             }
         }

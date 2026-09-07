@@ -63,7 +63,7 @@ fn maybe_upgrade_password_hash(
     let _ = write_account_file(path, boot);
 }
 
-#[get("/login")]
+#[actix_web::route("/login", method = "GET", method = "HEAD")]
 pub async fn login_page(
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
@@ -269,7 +269,7 @@ fn panel_html_response(
         .finish()
 }
 
-#[get("/dashboard")]
+#[actix_web::route("/dashboard", method = "GET", method = "HEAD")]
 pub async fn dashboard_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -445,6 +445,7 @@ pub async fn account_setup(
             let login_url = panel_login_url_for(&current, &state.token);
             current.panel_login_url = Some(login_url.clone());
             current.smtp = Some(smtp_status_public());
+            crate::paths::clear_installer_bootstrap_token();
 
             let mut setup_email_sent = false;
             let mut setup_email_error: Option<String> = None;

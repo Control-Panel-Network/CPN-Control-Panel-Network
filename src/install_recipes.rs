@@ -374,7 +374,8 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
             vec![
                 "-c",
                 "php -v >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);' \
-|| dnf module enable -y php:8.2",
+|| (dnf -y module reset php \
+&& dnf -y module enable php:8.2)",
             ],
             "Preparando PHP 8.2",
             "downloading",

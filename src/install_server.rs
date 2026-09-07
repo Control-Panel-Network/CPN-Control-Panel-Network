@@ -23,6 +23,76 @@ async fn detect_lsws_unit() -> Result<&'static str, String> {
     Err("No se encontró la unidad systemd vendor de OpenLiteSpeed (lsws/lshttpd)".into())
 }
 
+/// Stop and disable other HTTP stacks that commonly hold :80/:443 so the
+/// selected engine can bind its public listeners on a clean AlmaLinux lab image
+/// (nginx is often enabled by default).
+async fn stop_conflicting_http_services(
+    state: &AppState,
+    selected: ServerEngine,
+) -> Result<(), String> {
+    let conflicts: &[&str] = match selected {
+        ServerEngine::Openlitespeed => &["nginx", "httpd", "apache2", "caddy"],
+        ServerEngine::Nginx => &["httpd", "apache2", "lshttpd", "lsws", "caddy"],
+        ServerEngine::Caddy => &["nginx", "httpd", "apache2", "lshttpd", "lsws"],
+    };
+    for unit in conflicts {
+        let unit_path_lib = format!("/usr/lib/systemd/system/{unit}.service");
+        let unit_path_etc = format!("/etc/systemd/system/{unit}.service");
+        if !std::path::Path::new(&unit_path_lib).exists()
+            && !std::path::Path::new(&unit_path_etc).exists()
+        {
+            continue;
+        }
+        let active = Command::new("systemctl")
+            .args(["is-active", "--quiet", unit])
+            .status()
+            .await
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if !active {
+            continue;
+        }
+        state
+            .progress(
+                "configuring",
+                2,
+                format!("Liberando :80/:443 deteniendo el servicio conflictivo {unit}"),
+            )
+            .await;
+        let stop_status = Command::new("systemctl")
+            .args(["stop", unit])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .status()
+            .await
+            .map_err(|error| format!("No se pudo detener {unit}: {error}"))?;
+        if !stop_status.success() {
+            return Err(format!(
+                "systemctl stop {unit} falló (código {:?}); libera :80/:443 manualmente e inténtalo de nuevo",
+                stop_status.code()
+            ));
+        }
+        // Best-effort disable so a reboot does not steal :80 again.
+        let _ = Command::new("systemctl")
+            .args(["disable", unit])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+        install_journal::record(
+            "server",
+            JournalAction::Note,
+            unit,
+            None,
+            Some(format!(
+                "stopped conflicting HTTP service before installing {}",
+                selected.label()
+            )),
+        )?;
+    }
+    Ok(())
+}
+
 fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
     let diagnostics = output
         .lines()
@@ -541,6 +611,8 @@ pub async fn install_with_database(
             )?;
         }
 
+        stop_conflicting_http_services(&state, server).await?;
+
         let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
             ols_unit = Some(configure_openlitespeed(&state).await?);
@@ -600,7 +672,7 @@ pub async fn install_with_database(
                 .await?;
                 verify_openlitespeed_vhost(&state)
                     .await
-                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log para el estado del listener y el error log de OpenLiteSpeed.".to_string())?;
+                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log, comprueba que nginx/httpd no ocupen el puerto, y el error log de OpenLiteSpeed.".to_string())?;
             }
         } else {
             run_command(

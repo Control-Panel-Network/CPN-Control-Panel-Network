@@ -98,6 +98,38 @@ pub fn legacy_panel_backups_dir() -> PathBuf {
     default_data_dir().join("backups")
 }
 
+/// Root-only bootstrap token for `--allow-remote` labs (not printed in logs).
+pub const INSTALLER_BOOTSTRAP_TOKEN_FILE: &str = "installer-bootstrap.token";
+
+pub fn installer_bootstrap_token_path() -> PathBuf {
+    join_data(INSTALLER_BOOTSTRAP_TOKEN_FILE)
+}
+
+/// Persist the installer bootstrap token with mode 0600 on Unix.
+///
+/// `--allow-remote` deliberately omits the full token from stdout. Operators
+/// (and NAT VirtualBox labs) read it from this path over SSH instead.
+pub fn write_installer_bootstrap_token(token: &str) -> Result<PathBuf, String> {
+    use std::fs;
+    let dir = default_data_dir();
+    fs::create_dir_all(&dir).map_err(|error| format!("create data dir: {error}"))?;
+    let path = installer_bootstrap_token_path();
+    let tmp = path.with_extension("token.tmp");
+    fs::write(&tmp, token.as_bytes()).map_err(|error| format!("write token: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("chmod token: {error}"))?;
+    }
+    fs::rename(&tmp, &path).map_err(|error| format!("rename token: {error}"))?;
+    Ok(path)
+}
+
+pub fn clear_installer_bootstrap_token() {
+    let _ = std::fs::remove_file(installer_bootstrap_token_path());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +143,11 @@ mod tests {
         } else {
             assert_eq!(dir, UNIX_DATA_DIR);
         }
+    }
+
+    #[test]
+    fn bootstrap_token_path_is_under_data_dir() {
+        let path = installer_bootstrap_token_path();
+        assert!(path.ends_with(INSTALLER_BOOTSTRAP_TOKEN_FILE));
     }
 }

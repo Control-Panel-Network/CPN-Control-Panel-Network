@@ -1,4 +1,6 @@
-use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
+use actix_web::{
+    App, HttpRequest, HttpResponse, HttpServer, Responder, http::Method, post, route, web,
+};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
@@ -110,7 +112,7 @@ fn serve_index_html() -> HttpResponse {
     }
 }
 
-#[get("/")]
+#[route("/", method = "GET", method = "HEAD")]
 async fn root_page(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -179,7 +181,7 @@ async fn bootstrap_session(
         .json(serde_json::json!({"ok": true}))
 }
 
-#[get("/api/status")]
+#[route("/api/status", method = "GET", method = "HEAD")]
 async fn api_status(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -211,7 +213,7 @@ async fn api_status(
     status_response(&request, &payload)
 }
 
-#[get("/status")]
+#[route("/status", method = "GET", method = "HEAD")]
 async fn status_page(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -533,6 +535,19 @@ fn allow_remote_listen() -> bool {
         || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
 }
 
+/// Ignore SIGHUP so SSH disconnect / closed PTY does not kill a long-running
+/// installer (common VirtualBox lab failure when starting without systemd).
+#[cfg(unix)]
+fn ignore_sighup() {
+    // SAFETY: SIG_IGN is a valid disposition; we only change SIGHUP handling.
+    unsafe {
+        libc::signal(libc::SIGHUP, libc::SIG_IGN);
+    }
+}
+
+#[cfg(not(unix))]
+fn ignore_sighup() {}
+
 fn apply_startup_network_flags(args: &[String], listen_port: u16) {
     let mut hostname: Option<String> = None;
     let mut policy: Option<OldPortPolicy> = None;
@@ -612,6 +627,8 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    ignore_sighup();
+
     let listen_port = match resolve_listen_port(&args) {
         Ok(port) => port,
         Err(error) => {
@@ -661,6 +678,7 @@ async fn main() -> std::io::Result<()> {
     } else {
         "ready"
     };
+    let has_bootstrap_account = bootstrap_account.is_some();
     let message = if maintenance.existing_install {
         format!(
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",
@@ -717,6 +735,21 @@ async fn main() -> std::io::Result<()> {
         active_child_pids: std::sync::Mutex::new(Vec::new()),
     });
     println!("✓ El instalador web está listo para empezar:");
+    if phase == "completed" && has_bootstrap_account {
+        cpn_installer::paths::clear_installer_bootstrap_token();
+    } else {
+        match cpn_installer::paths::write_installer_bootstrap_token(&token) {
+            Ok(path) => {
+                if remote {
+                    println!("  Bootstrap token file (mode 0600): {}", path.display());
+                    println!("  Read once with: sudo cat {}", path.display());
+                }
+            }
+            Err(error) => {
+                eprintln!("cpn-installer: could not persist bootstrap token file: {error}");
+            }
+        }
+    }
     if remote {
         println!("  Modo --allow-remote: escucha en 0.0.0.0:{listen_port} (HTTP sin TLS).");
         println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
@@ -951,7 +984,13 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
-            .route("/{path:.*}", web::get().to(static_asset))
+            .route(
+                "/{path:.*}",
+                web::route()
+                    .method(Method::GET)
+                    .method(Method::HEAD)
+                    .to(static_asset),
+            )
     })
     .keep_alive(actix_web::http::KeepAlive::Disabled)
     // GHA matrix guests often expose 1 CPU. One Actix worker + sync install

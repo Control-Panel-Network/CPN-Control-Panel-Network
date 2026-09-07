@@ -37,7 +37,17 @@ export function CompleteScreen({
   autoOpen?: boolean;
 }) {
   const { t } = useI18n();
-  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  // Bootstrap token is stripped from the URL after first load; fall back to sessionStorage.
+  const token = useMemo(() => {
+    const fromUrl =
+      new URLSearchParams(window.location.search).get("token") ?? "";
+    if (fromUrl) return fromUrl;
+    try {
+      return sessionStorage.getItem("cpn_install_token") ?? "";
+    } catch {
+      return "";
+    }
+  }, []);
   const opened = useRef(false);
   const serverName = serverLabel(server);
   const mailName = mailLabel(mail);

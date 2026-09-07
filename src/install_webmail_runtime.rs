@@ -4,7 +4,7 @@ use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::command;
 use crate::installer::{AppState, run_command};
 use crate::model::ServerEngine;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 const STAGE: &str = "webmail_runtime";
@@ -307,6 +307,8 @@ fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
 fn configure_ols_proxy(docroot: &str) -> Result<(), String> {
     let vh_dir = "/usr/local/lsws/conf/vhosts/CPNWebmail";
     std::fs::create_dir_all(vh_dir).map_err(|error| error.to_string())?;
+    // Absolute UDS path requires three slashes after uds: (uds:///run/...).
+    // autoStart 0: PHP-FPM is managed by systemd, not by OpenLiteSpeed.
     let vhconf = format!(
         "docRoot                   {docroot}/\n\
          enableGzip                1\n\
@@ -316,14 +318,25 @@ fn configure_ols_proxy(docroot: &str) -> Result<(), String> {
          }}\n\
          extprocessor cpnphp {{\n\
            type                    fcgi\n\
-           address                 uds://run/php-fpm/cpn-webmail.sock\n\
+           address                 uds:///run/php-fpm/cpn-webmail.sock\n\
            maxConns                8\n\
            initTimeout             60\n\
            retryTimeout            0\n\
+           persistConn             1\n\
            respBuffer              0\n\
+           autoStart               0\n\
          }}\n\
          scriptHandler  {{\n\
-           add                     lsapi:cpnphp php\n\
+           add                     fcgi:cpnphp php\n\
+         }}\n\
+         context / {{\n\
+           type                    NULL\n\
+           location                {docroot}/\n\
+           allowBrowse             1\n\
+           rewrite  {{\n\
+             enable                1\n\
+           }}\n\
+           addDefaultCharset       off\n\
          }}\n\
          rewrite  {{\n\
            enable                  1\n\
@@ -332,13 +345,14 @@ RewriteRule ^(.*)$ - [E=HTTP_AUTHORIZATION:%{{HTTP:Authorization}}]\n\
 END_rules\n\
          }}\n"
     );
-    // OLS scriptHandler with fcgi: use fcgi type in add line when supported.
-    let vhconf = vhconf.replace("lsapi:cpnphp", "fcgi:cpnphp");
-    install_journal::write_file_tracked(
-        STAGE,
-        Path::new(&format!("{vh_dir}/vhconf.conf")),
-        &vhconf,
-    )?;
+    let vhconf_path_buf = PathBuf::from(format!("{vh_dir}/vhconf.conf"));
+    install_journal::write_file_tracked(STAGE, &vhconf_path_buf, &vhconf)?;
+    // OpenLiteSpeed renames invalid vhconf.conf to vhconf.conf0; surface that early.
+    if !vhconf_path_buf.exists() {
+        return Err(format!(
+            "OpenLiteSpeed rejected {vh_dir}/vhconf.conf (file missing after write)"
+        ));
+    }
 
     let httpd = "/usr/local/lsws/conf/httpd_config.conf";
     let mut conf = std::fs::read_to_string(httpd).unwrap_or_default();
@@ -355,8 +369,9 @@ END_rules\n\
 pub fn verify_code_not_writable_by_service(docroot: &str) -> Result<(), String> {
     let script = format!(
         "set -euo pipefail\n\
-         # Code files must be root-owned and not group/world writable.\n\
-         bad=$(find '{docroot}' -type f -name '*.php' ! -user root -print -quit 2>/dev/null || true)\n\
+         # Application PHP under the docroot must be root-owned. Runtime dirs\n\
+         # (data/temp/logs) are owned by the service user and may contain stubs.\n\
+         bad=$(find '{docroot}' \\( -path '{docroot}/data' -o -path '{docroot}/temp' -o -path '{docroot}/logs' \\) -prune -o -type f -name '*.php' ! -user root -print -quit 2>/dev/null || true)\n\
          if [ -n \"$bad\" ]; then echo \"php not root-owned: $bad\"; exit 1; fi\n\
          # Service user must not own the application tree root.\n\
          owner=$(stat -c '%U' /opt/cpn-webmail)\n\
