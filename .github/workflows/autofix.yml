@@ -1,4 +1,4 @@
-name: AutoFix CI
+name: autofix.ci
 
 # autofix.ci writes only to pull-request branches through its GitHub App. Keep
 # the normal CI check authoritative; this job returns safe formatting and lint
