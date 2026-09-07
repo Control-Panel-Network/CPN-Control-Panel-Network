@@ -1,29 +1,30 @@
 export type ScreenType =
-  | 'preparing'
-  | 'maintenance'
-  | 'selection'
-  | 'installing'
-  | 'mail'
-  | 'account'
-  | 'complete';
+  | "preparing"
+  | "maintenance"
+  | "selection"
+  | "installing"
+  | "mail"
+  | "account"
+  | "complete";
 
-export type ServerEngine = 'openlitespeed' | 'nginx' | 'caddy';
-export type MailSystem = 'snappymail' | 'roundcube' | 'thunderbird';
-export type DatabaseEngine = 'mariadb' | 'mysql' | 'none';
+export type ServerEngine = "openlitespeed" | "nginx" | "caddy";
+export type MailSystem = "snappymail" | "roundcube" | "thunderbird";
+export type DatabaseEngine = "mariadb" | "mysql" | "none";
 
 export type InstallerPhase =
-  | 'configuring'
-  | 'preparing'
-  | 'maintenance'
-  | 'ready'
-  | 'downloading'
-  | 'installing'
-  | 'testing'
-  | 'completed'
-  | 'failed'
-  | 'account';
+  | "configuring"
+  | "preparing"
+  | "maintenance"
+  | "ready"
+  | "downloading"
+  | "installing"
+  | "testing"
+  | "completed"
+  | "failed"
+  | "account";
 
-export type MaintenanceAction = 'upgrade' | 'downgrade' | 'repair' | 'config_only';
+export type MaintenanceAction =
+  "upgrade" | "downgrade" | "repair" | "config_only";
 
 export interface EnvironmentInfo {
   is_vps: boolean;
@@ -123,16 +124,21 @@ export interface InstallerStatus {
   mail_backend_ready?: boolean;
   external_ports_configured?: boolean;
   access_note?: string | null;
-  mail_releases?: Array<{ id: string; label: string; version: string; released_on: string }>;
+  mail_releases?: Array<{
+    id: string;
+    label: string;
+    version: string;
+    released_on: string;
+  }>;
   maintenance?: MaintenanceInfo | null;
 }
 
 export type InstallerEvent =
-  | { type: 'snapshot'; status: InstallerStatus }
-  | { type: 'progress'; status: InstallerStatus }
-  | { type: 'log'; line: string; level: 'info' | 'success' | 'error' }
-  | { type: 'completed'; status: InstallerStatus }
-  | { type: 'error'; status: InstallerStatus };
+  | { type: "snapshot"; status: InstallerStatus }
+  | { type: "progress"; status: InstallerStatus }
+  | { type: "log"; line: string; level: "info" | "success" | "error" }
+  | { type: "completed"; status: InstallerStatus }
+  | { type: "error"; status: InstallerStatus };
 
 export interface AccountSetupResponse {
   account: AccountPublic;

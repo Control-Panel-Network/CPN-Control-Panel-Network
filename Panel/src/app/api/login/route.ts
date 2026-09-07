@@ -41,7 +41,10 @@ export async function POST(request: NextRequest) {
 
   const token = createSessionToken(boot.username);
   const secure = request.nextUrl.protocol === "https:";
-  const response = NextResponse.redirect(new URL("/dashboard", request.url), 303);
+  const response = NextResponse.redirect(
+    new URL("/dashboard", request.url),
+    303,
+  );
   response.headers.append("Set-Cookie", sessionCookieValue(token, secure));
   return response;
 }

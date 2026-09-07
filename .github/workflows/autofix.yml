@@ -1,9 +1,11 @@
 name: AutoFix CI
 
-# autofix.ci writes only to pull-request branches through its GitHub App.  Keep
-# the normal CI check authoritative; this workflow merely returns safe Rust
-# formatting fixes to the contributor instead of failing on `cargo fmt --check`.
+# autofix.ci writes only to pull-request branches through its GitHub App. Keep
+# the normal CI check authoritative; this job returns safe formatting and lint
+# fixes to contributors instead of writing directly to the protected base branch.
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -11,18 +13,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: autofix-${{ github.event.pull_request.number }}
+  group: autofix-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  rustfmt:
-    name: Rust format autofix
+  autofix:
+    name: Safe Rust and frontend autofix
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Rust formatter
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
@@ -32,10 +35,56 @@ jobs:
 
       - name: Apply Rust formatting
         run: cargo fmt
+        continue-on-error: true
 
-      - name: Commit safe formatting fixes
-        uses: autofix-ci/action@v1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            installer-ui/package-lock.json
+            Panel/package-lock.json
+
+      - name: Install installer UI dependencies
+        working-directory: installer-ui
+        run: npm ci
+
+      - name: Apply installer UI formatting
+        working-directory: installer-ui
+        run: npm run format
+        continue-on-error: true
+
+      - name: Check installer UI TypeScript
+        working-directory: installer-ui
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Install CPN panel dependencies
+        working-directory: Panel
+        run: npm ci
+
+      - name: Apply CPN panel lint fixes
+        working-directory: Panel
+        run: npm run lint:fix
+        continue-on-error: true
+
+      - name: Apply CPN panel formatting
+        working-directory: Panel
+        run: npm run format
+        continue-on-error: true
+
+      - name: Check CPN panel lint and TypeScript
+        working-directory: Panel
+        run: |
+          npm run lint
+          npm run typecheck
+        continue-on-error: true
+
+      - name: Commit safe Rust and frontend fixes
+        if: github.event_name == 'pull_request'
+        uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27 # v1.3.2
         with:
           fail-fast: false
-          commit-message: "ci: autofix Rust formatting"
-          comment: "autofix.ci aplicó formato Rust seguro."
+          commit-message: "ci: autofix safe Rust and frontend formatting"
+          comment: "autofix.ci aplicó formato Rust y correcciones seguras de los paneles."

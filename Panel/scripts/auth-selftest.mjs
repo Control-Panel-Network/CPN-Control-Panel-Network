@@ -25,7 +25,11 @@ function verifySessionToken(token, secret) {
   if (parts.length !== 3) return null;
   const [username, expRaw, sig] = parts;
   const exp = Number(expRaw);
-  if (!username || !Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) {
+  if (
+    !username ||
+    !Number.isFinite(exp) ||
+    exp < Math.floor(Date.now() / 1000)
+  ) {
     return null;
   }
   const payload = `${username}|${exp}`;

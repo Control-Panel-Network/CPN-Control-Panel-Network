@@ -66,7 +66,11 @@ function sessionSecret(): string {
 
 function saltMaterial(saltHex: string): Buffer {
   const trimmed = saltHex.trim();
-  if (trimmed.length > 0 && trimmed.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(trimmed)) {
+  if (
+    trimmed.length > 0 &&
+    trimmed.length % 2 === 0 &&
+    /^[0-9a-fA-F]+$/.test(trimmed)
+  ) {
     return Buffer.from(trimmed, "hex");
   }
   return Buffer.from(saltHex, "utf8");
@@ -119,7 +123,10 @@ export function verifyPassword(
 
 export async function loadBootstrap(): Promise<PanelBootstrap | null> {
   try {
-    const raw = await fs.readFile(/*turbopackIgnore: true*/ bootstrapPath(), "utf8");
+    const raw = await fs.readFile(
+      /*turbopackIgnore: true*/ bootstrapPath(),
+      "utf8",
+    );
     return JSON.parse(raw) as PanelBootstrap;
   } catch {
     return null;
@@ -166,7 +173,11 @@ export function verifySessionToken(token: string): string | null {
     if (parts.length !== 3) return null;
     const [username, expRaw, sig] = parts;
     const exp = Number(expRaw);
-    if (!username || !Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) {
+    if (
+      !username ||
+      !Number.isFinite(exp) ||
+      exp < Math.floor(Date.now() / 1000)
+    ) {
       return null;
     }
     const payload = `${username}|${exp}`;
@@ -198,9 +209,7 @@ export function clearSessionCookie(secure: boolean): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`;
 }
 
-export function readSessionCookie(
-  cookieHeader: string | null,
-): string | null {
+export function readSessionCookie(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(";")) {
     const trimmed = part.trim();

@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "format": "npx --yes prettier@3.9.6 --write src scripts next.config.ts postcss.config.mjs eslint.config.mjs tsconfig.json",
+    "format:check": "npx --yes prettier@3.9.6 --check src scripts next.config.ts postcss.config.mjs eslint.config.mjs tsconfig.json",
     "typecheck": "next typegen && tsc --noEmit",
     "auth-selftest": "node scripts/auth-selftest.mjs"
   },

@@ -1,7 +1,13 @@
 "use client";
 
 import { Bell } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 
 export type PanelNotice = {
@@ -36,7 +42,10 @@ function computeNotifyPos(btn: HTMLElement): NotifyPos {
   if (left < VIEWPORT_PAD) {
     left = VIEWPORT_PAD;
   }
-  const bottom = Math.max(VIEWPORT_PAD, window.innerHeight - rect.top + POPOVER_GAP);
+  const bottom = Math.max(
+    VIEWPORT_PAD,
+    window.innerHeight - rect.top + POPOVER_GAP,
+  );
   return { bottom, left, width };
 }
 
@@ -50,7 +59,11 @@ export function NotificationsPopover({
 }: NotificationsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<NotifyPos | null>(null);
-  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
+  const mounted = useSyncExternalStore(
+    subscribeMounted,
+    () => true,
+    () => false,
+  );
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const unread = notices.filter((item) => !item.read).length;
@@ -124,7 +137,10 @@ export function NotificationsPopover({
             ) : (
               <ul className="notify-list">
                 {notices.map((item) => (
-                  <li key={item.id} className={item.read ? undefined : "unread"}>
+                  <li
+                    key={item.id}
+                    className={item.read ? undefined : "unread"}
+                  >
                     <strong>{item.title}</strong>
                     {item.body ? <span>{item.body}</span> : null}
                   </li>

@@ -6,19 +6,19 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import en from './locales/en';
-import es from './locales/es';
-import nb from './locales/nb';
+} from "react";
+import en from "./locales/en";
+import es from "./locales/es";
+import nb from "./locales/nb";
 import {
   normalizeLocale,
   type LocaleCode,
   type LocaleMessages,
   SUPPORTED_LOCALES,
-} from './types';
+} from "./types";
 
 const CATALOG: Record<LocaleCode, LocaleMessages> = { en, es, nb };
-const STORAGE_KEY = 'cpn-installer-locale';
+const STORAGE_KEY = "cpn-installer-locale";
 
 function readStoredLocale(): LocaleCode {
   try {
@@ -27,7 +27,9 @@ function readStoredLocale(): LocaleCode {
   } catch {
     // Fall back to the browser when storage is unavailable.
   }
-  const preferred = navigator.languages.find((language) => /^(es|en|nb|nn|no)(-|$)/i.test(language));
+  const preferred = navigator.languages.find((language) =>
+    /^(es|en|nb|nn|no)(-|$)/i.test(language),
+  );
   return normalizeLocale(preferred || navigator.language);
 }
 
@@ -52,7 +54,9 @@ export function I18nProvider({
   const [locale, setLocaleState] = useState<LocaleCode>(() =>
     normalizeLocale(initialLocale ?? readStoredLocale()),
   );
-  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback(
     (next: LocaleCode) => {
@@ -84,7 +88,7 @@ export function I18nProvider({
 export function useI18n(): I18nContextValue {
   const value = useContext(I18nContext);
   if (!value) {
-    throw new Error('useI18n must be used inside I18nProvider');
+    throw new Error("useI18n must be used inside I18nProvider");
   }
   return value;
 }
@@ -92,7 +96,10 @@ export function useI18n(): I18nContextValue {
 /** Compatibility alias used by older screens. */
 export const useLocale = useI18n;
 
-export function formatMessage(template: string, vars: Record<string, string>): string {
+export function formatMessage(
+  template: string,
+  vars: Record<string, string>,
+): string {
   return Object.entries(vars).reduce(
     (text, [key, value]) => text.replaceAll(`{${key}}`, value),
     template,

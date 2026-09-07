@@ -1,7 +1,7 @@
-import { Check, X } from 'lucide-react';
-import type { ServerEngine } from '../types';
-import { useI18n } from '../i18n';
-import { ServerBrandIcon } from './ServerBrandIcon';
+import { Check, X } from "lucide-react";
+import type { ServerEngine } from "../types";
+import { useI18n } from "../i18n";
+import { ServerBrandIcon } from "./ServerBrandIcon";
 
 interface Props {
   isOpen: boolean;
@@ -10,25 +10,39 @@ interface Props {
   onSelectServer: (server: ServerEngine) => void;
 }
 
-const optionIds: ServerEngine[] = ['openlitespeed', 'nginx', 'caddy'];
+const optionIds: ServerEngine[] = ["openlitespeed", "nginx", "caddy"];
 const optionNames: Record<ServerEngine, string> = {
-  openlitespeed: 'OpenLiteSpeed',
-  nginx: 'Nginx',
-  caddy: 'Caddy',
+  openlitespeed: "OpenLiteSpeed",
+  nginx: "Nginx",
+  caddy: "Caddy",
 };
 
-export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }: Props) {
+export function CompareModal({
+  isOpen,
+  selectedServer,
+  onClose,
+  onSelectServer,
+}: Props) {
   const { t } = useI18n();
   if (!isOpen) return null;
 
   const metaFor = (id: ServerEngine) => {
-    if (id === 'openlitespeed') {
-      return { description: t.compareOpenlitespeedDesc, features: t.compareOpenlitespeedFeatures };
+    if (id === "openlitespeed") {
+      return {
+        description: t.compareOpenlitespeedDesc,
+        features: t.compareOpenlitespeedFeatures,
+      };
     }
-    if (id === 'nginx') {
-      return { description: t.compareNginxDesc, features: t.compareNginxFeatures };
+    if (id === "nginx") {
+      return {
+        description: t.compareNginxDesc,
+        features: t.compareNginxFeatures,
+      };
     }
-    return { description: t.compareCaddyDesc, features: t.compareCaddyFeatures };
+    return {
+      description: t.compareCaddyDesc,
+      features: t.compareCaddyFeatures,
+    };
   };
 
   return (
@@ -45,7 +59,12 @@ export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }
             <h2 className="text-[21px] font-semibold">{t.compareTitle}</h2>
             <p className="text-sm text-[#5f5e60]">{t.compareIntro}</p>
           </div>
-          <button type="button" onClick={onClose} className="icon-button" aria-label={t.closeLabel}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="icon-button"
+            aria-label={t.closeLabel}
+          >
             <X size={20} />
           </button>
         </header>
@@ -54,12 +73,17 @@ export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }
             const selected = selectedServer === id;
             const meta = metaFor(id);
             return (
-              <article key={id} className={`compare-card ${selected ? 'compare-card-active' : ''}`}>
+              <article
+                key={id}
+                className={`compare-card ${selected ? "compare-card-active" : ""}`}
+              >
                 <div className="h-11 flex items-center">
                   <ServerBrandIcon server={id} />
                 </div>
                 <h3 className="font-semibold mt-3">{optionNames[id]}</h3>
-                <p className="text-xs leading-5 text-[#5f5e60] mt-2">{meta.description}</p>
+                <p className="text-xs leading-5 text-[#5f5e60] mt-2">
+                  {meta.description}
+                </p>
                 <ul className="text-[13px] space-y-2 my-5 flex-1">
                   {meta.features.map((feature) => (
                     <li key={feature} className="flex gap-2">
@@ -74,7 +98,7 @@ export function CompareModal({ isOpen, selectedServer, onClose, onSelectServer }
                     onSelectServer(id);
                     onClose();
                   }}
-                  className={`selection-button ${selected ? 'selection-button-active' : ''}`}
+                  className={`selection-button ${selected ? "selection-button-active" : ""}`}
                   aria-pressed={selected}
                 >
                   {t.selectLabel}

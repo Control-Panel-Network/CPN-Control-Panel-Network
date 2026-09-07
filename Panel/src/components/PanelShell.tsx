@@ -23,10 +23,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import {
-  NotificationsPopover,
-  type PanelNotice,
-} from "./NotificationsPopover";
+import { NotificationsPopover, type PanelNotice } from "./NotificationsPopover";
 
 type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
 
@@ -103,7 +100,12 @@ const hosting: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
   { label: "Websites", href: "/websites", icon: Globe2, id: "websites" },
   { label: "Email", href: "/email", icon: Mail, id: "email" },
-  { label: "Databases & FTP", href: "/databases", icon: Database, id: "databases" },
+  {
+    label: "Databases & FTP",
+    href: "/databases",
+    icon: Database,
+    id: "databases",
+  },
   { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
   { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
   { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
@@ -337,7 +339,10 @@ export function PanelShell({
         </nav>
         <div className="sidebar-footer">
           <div className="sidebar-footer-actions">
-            <NotificationsPopover notices={notices} onMarkAllRead={markAllRead} />
+            <NotificationsPopover
+              notices={notices}
+              onMarkAllRead={markAllRead}
+            />
             <Link
               href="/account/users/profile"
               className="footer-icon-btn"
@@ -353,10 +358,14 @@ export function PanelShell({
               className="theme-toggle footer-icon-btn"
               aria-pressed={colorMode === "dark"}
               aria-label={
-                colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"
+                colorMode === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
               }
               title={
-                colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"
+                colorMode === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
               }
               onClick={toggleColorMode}
             >

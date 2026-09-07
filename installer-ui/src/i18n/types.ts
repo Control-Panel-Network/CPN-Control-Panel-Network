@@ -1,13 +1,14 @@
-export type LocaleCode = 'en' | 'es' | 'nb';
+export type LocaleCode = "en" | "es" | "nb";
 
-export const SUPPORTED_LOCALES: LocaleCode[] = ['es', 'en', 'nb'];
+export const SUPPORTED_LOCALES: LocaleCode[] = ["es", "en", "nb"];
 
 export function normalizeLocale(raw: string | null | undefined): LocaleCode {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (value.startsWith('en')) return 'en';
-  if (value.startsWith('nb') || value === 'no' || value.startsWith('nn')) return 'nb';
-  if (value.startsWith('es')) return 'es';
-  return 'es';
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value.startsWith("en")) return "en";
+  if (value.startsWith("nb") || value === "no" || value.startsWith("nn"))
+    return "nb";
+  if (value.startsWith("es")) return "es";
+  return "es";
 }
 
 export interface LocaleMessages {

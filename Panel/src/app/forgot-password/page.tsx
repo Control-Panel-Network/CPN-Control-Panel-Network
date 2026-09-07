@@ -15,7 +15,11 @@ export default function ForgotPasswordPage() {
           message will be sent when mail delivery is configured.
         </p>
 
-        <form className="login-form" method="post" action="/api/forgot-password">
+        <form
+          className="login-form"
+          method="post"
+          action="/api/forgot-password"
+        >
           <label htmlFor="account">Username/Email</label>
           <div className="input-shell">
             <Mail size={19} aria-hidden="true" />

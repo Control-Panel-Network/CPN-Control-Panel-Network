@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "format": "npx --yes prettier@3.9.6 --write src vite.config.ts tsconfig.json",
+    "format:check": "npx --yes prettier@3.9.6 --check src vite.config.ts tsconfig.json",
     "bundle": "vite build"
   },
   "dependencies": {

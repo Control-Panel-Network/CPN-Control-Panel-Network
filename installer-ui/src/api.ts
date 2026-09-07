@@ -5,20 +5,20 @@ import type {
   MailSystem,
   PasswordPolicy,
   ServerEngine,
-} from './types';
+} from "./types";
 
-const TOKEN_STORAGE_KEY = 'cpn_install_token';
+const TOKEN_STORAGE_KEY = "cpn_install_token";
 
 function readTokenFromUrl(): string {
-  return new URLSearchParams(window.location.search).get('token') ?? '';
+  return new URLSearchParams(window.location.search).get("token") ?? "";
 }
 
 function stripTokenFromUrl(): void {
   const url = new URL(window.location.href);
-  if (!url.searchParams.has('token')) {
+  if (!url.searchParams.has("token")) {
     return;
   }
-  url.searchParams.delete('token');
+  url.searchParams.delete("token");
   const next = `${url.pathname}${url.search}${url.hash}`;
   window.history.replaceState({}, document.title, next);
 }
@@ -36,9 +36,9 @@ function resolveAccessToken(): string {
     return fromUrl;
   }
   try {
-    return sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? '';
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -47,10 +47,10 @@ let sessionBootstrapped = false;
 
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
-  headers.set('Accept', 'application/json');
+  headers.set("Accept", "application/json");
   if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-    headers.set('X-CPN-Token', accessToken);
+    headers.set("Authorization", `Bearer ${accessToken}`);
+    headers.set("X-CPN-Token", accessToken);
   }
   return headers;
 }
@@ -61,10 +61,10 @@ async function ensureInstallSession(): Promise<void> {
   }
   sessionBootstrapped = true;
   try {
-    await fetch('/api/session', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+    await fetch("/api/session", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ token: accessToken }),
     });
   } catch {
@@ -72,34 +72,41 @@ async function ensureInstallSession(): Promise<void> {
   }
 }
 
-async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
   await ensureInstallSession();
   const headers = authHeaders(init.headers);
   return fetch(path, {
     ...init,
-    credentials: 'same-origin',
+    credentials: "same-origin",
     headers,
   });
 }
 
-async function readError(response: Response, fallback: string): Promise<string> {
+async function readError(
+  response: Response,
+  fallback: string,
+): Promise<string> {
   const payload = await response.json().catch(() => null);
   return payload?.error ?? fallback;
 }
 
 export async function getStatus(): Promise<InstallerStatus> {
-  const response = await apiFetch('/api/status');
-  if (!response.ok) throw new Error('status_fetch_failed');
+  const response = await apiFetch("/api/status");
+  if (!response.ok) throw new Error("status_fetch_failed");
   return response.json();
 }
 
 export async function setLanguage(language: string): Promise<InstallerStatus> {
-  const response = await apiFetch('/api/language', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/language", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language }),
   });
-  if (!response.ok) throw new Error(await readError(response, 'language_failed'));
+  if (!response.ok)
+    throw new Error(await readError(response, "language_failed"));
   return response.json();
 }
 
@@ -114,7 +121,7 @@ export interface ListenPortResponse {
 export async function setListenPort(
   port: number,
   options?: {
-    old_port_policy?: 'redirect_1m' | 'redirect_3m' | 'deny';
+    old_port_policy?: "redirect_1m" | "redirect_3m" | "deny";
     panel_hostname?: string;
   },
 ): Promise<ListenPortResponse> {
@@ -125,12 +132,13 @@ export async function setListenPort(
   if (options?.panel_hostname !== undefined) {
     body.panel_hostname = options.panel_hostname;
   }
-  const response = await apiFetch('/api/listen-port', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/listen-port", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await readError(response, 'listen_port_failed'));
+  if (!response.ok)
+    throw new Error(await readError(response, "listen_port_failed"));
   return response.json();
 }
 
@@ -147,7 +155,7 @@ export async function setupAccount(payload: {
   smtp?: {
     host: string;
     port?: number;
-    tls_mode?: 'starttls' | 'tls' | 'none';
+    tls_mode?: "starttls" | "tls" | "none";
     from_address: string;
     username?: string;
     password?: string;
@@ -155,68 +163,76 @@ export async function setupAccount(payload: {
   send_username_email?: boolean;
   include_password_in_email?: boolean;
 }): Promise<AccountSetupResponse> {
-  const response = await apiFetch('/api/account/setup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/account/setup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await readError(response, 'account_failed'));
+  if (!response.ok)
+    throw new Error(await readError(response, "account_failed"));
   return response.json();
 }
 
 export async function startMailInstall(mail: MailSystem): Promise<void> {
-  const response = await apiFetch('/api/install/mail', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/install/mail", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mail }),
   });
   if (!response.ok) {
-    throw new Error(await readError(response, 'mail_install_failed'));
+    throw new Error(await readError(response, "mail_install_failed"));
   }
 }
 
 export async function startServerInstall(
   server: ServerEngine,
-  options?: { database?: import('./types').DatabaseEngine; install_phpmyadmin?: boolean },
+  options?: {
+    database?: import("./types").DatabaseEngine;
+    install_phpmyadmin?: boolean;
+  },
 ): Promise<void> {
-  const response = await apiFetch('/api/install/server', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/install/server", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       server,
-      database: options?.database ?? 'mariadb',
+      database: options?.database ?? "mariadb",
       install_phpmyadmin: options?.install_phpmyadmin ?? true,
     }),
   });
   if (!response.ok) {
-    throw new Error(await readError(response, 'server_install_failed'));
+    throw new Error(await readError(response, "server_install_failed"));
   }
 }
 
 export async function startMaintenance(payload: {
-  action: import('./types').MaintenanceAction;
+  action: import("./types").MaintenanceAction;
   version?: string;
   confirm_downgrade?: boolean;
   reset_data?: boolean;
 }): Promise<void> {
-  const response = await apiFetch('/api/maintenance', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await apiFetch("/api/maintenance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error(await readError(response, 'maintenance_failed'));
+    throw new Error(await readError(response, "maintenance_failed"));
   }
 }
 
-export function connectInstallerEvents(onEvent: (event: InstallerEvent) => void) {
+export function connectInstallerEvents(
+  onEvent: (event: InstallerEvent) => void,
+) {
   void ensureInstallSession();
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   // Prefer cookie session after /api/session; keep Bearer via short-lived storage only.
   // Do not put the install token back into the WebSocket URL (issue #1).
-  const socket = new WebSocket(`${protocol}//${window.location.host}/api/events`);
+  const socket = new WebSocket(
+    `${protocol}//${window.location.host}/api/events`,
+  );
 
-  socket.addEventListener('message', (message) => {
+  socket.addEventListener("message", (message) => {
     try {
       onEvent(JSON.parse(message.data) as InstallerEvent);
     } catch {
@@ -229,8 +245,8 @@ export function connectInstallerEvents(onEvent: (event: InstallerEvent) => void)
 
 export function resolvePanelLoginUrl(status: InstallerStatus): string {
   if (status.panel_login_url) return status.panel_login_url;
-  const path = status.panel_login_path || '/login';
-  if (path.startsWith('http')) return path;
+  const path = status.panel_login_path || "/login";
+  if (path.startsWith("http")) return path;
   // Panel login must not carry the installer root token (issue #1 / #8).
   return path;
 }

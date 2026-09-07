@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { PreparingScreen } from './components/PreparingScreen';
-import { MaintenanceScreen } from './components/MaintenanceScreen';
-import { ServerSelectionScreen } from './components/ServerSelectionScreen';
-import { InstallingScreen } from './components/InstallingScreen';
-import { MailSelectionScreen } from './components/MailSelectionScreen';
-import { CompleteScreen } from './components/CompleteScreen';
-import { CompareModal } from './components/CompareModal';
-import { AccountSetupScreen } from './components/AccountSetupScreen';
-import { LanguageSelector } from './i18n/LanguageSelector';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { PreparingScreen } from "./components/PreparingScreen";
+import { MaintenanceScreen } from "./components/MaintenanceScreen";
+import { ServerSelectionScreen } from "./components/ServerSelectionScreen";
+import { InstallingScreen } from "./components/InstallingScreen";
+import { MailSelectionScreen } from "./components/MailSelectionScreen";
+import { CompleteScreen } from "./components/CompleteScreen";
+import { CompareModal } from "./components/CompareModal";
+import { AccountSetupScreen } from "./components/AccountSetupScreen";
+import { LanguageSelector } from "./i18n/LanguageSelector";
 import {
   connectInstallerEvents,
   getStatus,
@@ -18,8 +18,8 @@ import {
   startMailInstall,
   startMaintenance,
   startServerInstall,
-} from './api';
-import { I18nProvider, useI18n } from './i18n';
+} from "./api";
+import { I18nProvider, useI18n } from "./i18n";
 import type {
   DatabaseEngine,
   InstallerEvent,
@@ -29,7 +29,7 @@ import type {
   PasswordPolicy,
   ScreenType,
   ServerEngine,
-} from './types';
+} from "./types";
 
 const DEFAULT_POLICY: PasswordPolicy = {
   min_length: 8,
@@ -39,27 +39,29 @@ const DEFAULT_POLICY: PasswordPolicy = {
 };
 
 const INITIAL_STATUS: InstallerStatus = {
-  phase: 'preparing',
+  phase: "preparing",
   progress: 0,
-  message: '',
+  message: "",
   selected_server: null,
   selected_mail: null,
   environment: null,
   error: null,
-  language: 'en',
+  language: "en",
   account: null,
   password_policy: DEFAULT_POLICY,
-  panel_login_path: '/login',
+  panel_login_path: "/login",
   panel_login_url: null,
   server_ready: false,
 };
 
 function AppShell() {
   const { t, locale } = useI18n();
-  const [screen, setScreen] = useState<ScreenType>('preparing');
-  const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(null);
+  const [screen, setScreen] = useState<ScreenType>("preparing");
+  const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(
+    null,
+  );
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
-  const [database, setDatabase] = useState<DatabaseEngine>('mariadb');
+  const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -68,81 +70,102 @@ function AppShell() {
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
 
-  const applyStatusScreen = useCallback((next: InstallerStatus, delayComplete = false) => {
-    setStatus(next);
-    setSelectedServer(next.selected_server);
-    setSelectedMail(next.selected_mail);
+  const applyStatusScreen = useCallback(
+    (next: InstallerStatus, delayComplete = false) => {
+      setStatus(next);
+      setSelectedServer(next.selected_server);
+      setSelectedMail(next.selected_mail);
 
-    if (next.phase === 'maintenance') {
-      setScreen('maintenance');
-      setMaintenanceBusy(false);
-      return;
-    }
-    if (next.phase === 'ready') {
-      setScreen('selection');
-      return;
-    }
-    if (['configuring', 'downloading', 'installing', 'testing', 'failed'].includes(next.phase)) {
-      setScreen('installing');
-      return;
-    }
-    if (next.phase === 'completed' || next.phase === 'account') {
-      const go = () => {
-        if (!next.selected_mail && !next.server_ready) {
-          setScreen('selection');
-          return;
-        }
-        if (!next.selected_mail) {
-          setScreen('mail');
-          return;
-        }
-        if (!next.account?.configured) {
-          setScreen('account');
-          return;
-        }
-        setScreen('complete');
-      };
-      if (delayComplete) {
-        window.clearTimeout(completionTimer.current);
-        completionTimer.current = window.setTimeout(go, 1200);
-      } else {
-        go();
+      if (next.phase === "maintenance") {
+        setScreen("maintenance");
+        setMaintenanceBusy(false);
+        return;
       }
-    }
-  }, []);
+      if (next.phase === "ready") {
+        setScreen("selection");
+        return;
+      }
+      if (
+        [
+          "configuring",
+          "downloading",
+          "installing",
+          "testing",
+          "failed",
+        ].includes(next.phase)
+      ) {
+        setScreen("installing");
+        return;
+      }
+      if (next.phase === "completed" || next.phase === "account") {
+        const go = () => {
+          if (!next.selected_mail && !next.server_ready) {
+            setScreen("selection");
+            return;
+          }
+          if (!next.selected_mail) {
+            setScreen("mail");
+            return;
+          }
+          if (!next.account?.configured) {
+            setScreen("account");
+            return;
+          }
+          setScreen("complete");
+        };
+        if (delayComplete) {
+          window.clearTimeout(completionTimer.current);
+          completionTimer.current = window.setTimeout(go, 1200);
+        } else {
+          go();
+        }
+      }
+    },
+    [],
+  );
 
-  const handleEvent = useCallback((event: InstallerEvent) => {
-    if (event.type === 'snapshot' || event.type === 'progress') {
-      applyStatusScreen(event.status, false);
-      return;
-    }
-    if (event.type === 'completed') {
-      applyStatusScreen(event.status, true);
-      return;
-    }
-    if (event.type === 'error') {
-      setMaintenanceBusy(false);
-      applyStatusScreen(event.status, false);
-    }
-  }, [applyStatusScreen]);
+  const handleEvent = useCallback(
+    (event: InstallerEvent) => {
+      if (event.type === "snapshot" || event.type === "progress") {
+        applyStatusScreen(event.status, false);
+        return;
+      }
+      if (event.type === "completed") {
+        applyStatusScreen(event.status, true);
+        return;
+      }
+      if (event.type === "error") {
+        setMaintenanceBusy(false);
+        applyStatusScreen(event.status, false);
+      }
+    },
+    [applyStatusScreen],
+  );
 
   useEffect(() => {
     let disposed = false;
     let socket: WebSocket | undefined;
     const connect = () => {
       socket = connectInstallerEvents(handleEvent);
-      socket.addEventListener('close', () => {
-        if (!disposed) reconnectTimer.current = window.setTimeout(connect, 1500);
+      socket.addEventListener("close", () => {
+        if (!disposed)
+          reconnectTimer.current = window.setTimeout(connect, 1500);
       });
     };
-    getStatus().then((next) => {
-      if (disposed) return;
-      applyStatusScreen(next, false);
-    }).catch(() => {
-      if (disposed) return;
-      setStatus((current) => ({ ...current, phase: 'failed', error: t.statusFetchError }));
-      setScreen('installing');
-    });
+    getStatus()
+      .then((next) => {
+        if (disposed) return;
+        applyStatusScreen(next, false);
+      })
+      .catch(() => {
+        if (disposed) return;
+        setStatus((current) => ({
+          ...current,
+          phase: "failed",
+          error: t.statusFetchError,
+        }));
+        setScreen("installing");
+      });
     connect();
     return () => {
       disposed = true;
@@ -155,16 +178,15 @@ function AppShell() {
   }, [handleEvent, applyStatusScreen]);
 
   useEffect(() => {
-    void setLanguage(locale)
-      .catch(() => undefined);
+    void setLanguage(locale).catch(() => undefined);
   }, [locale]);
 
   const beginServerInstall = async () => {
     if (!selectedServer) return;
-    setScreen('installing');
+    setScreen("installing");
     setStatus((current) => ({
       ...current,
-      phase: 'configuring',
+      phase: "configuring",
       progress: 0,
       error: null,
       selected_server: selectedServer,
@@ -178,7 +200,7 @@ function AppShell() {
     } catch (error) {
       setStatus((current) => ({
         ...current,
-        phase: 'failed',
+        phase: "failed",
         error: error instanceof Error ? error.message : t.unknownError,
       }));
     }
@@ -186,10 +208,10 @@ function AppShell() {
 
   const beginMailInstall = async () => {
     if (!selectedMail) return;
-    setScreen('installing');
+    setScreen("installing");
     setStatus((current) => ({
       ...current,
-      phase: 'downloading',
+      phase: "downloading",
       progress: 0,
       error: null,
       selected_mail: selectedMail,
@@ -199,7 +221,7 @@ function AppShell() {
     } catch (error) {
       setStatus((current) => ({
         ...current,
-        phase: 'failed',
+        phase: "failed",
         error: error instanceof Error ? error.message : t.unknownError,
       }));
     }
@@ -212,8 +234,8 @@ function AppShell() {
   ) => {
     setMaintenanceBusy(true);
     setMaintenanceError(null);
-    if (action !== 'config_only') {
-      setScreen('installing');
+    if (action !== "config_only") {
+      setScreen("installing");
     }
     try {
       await startMaintenance({
@@ -228,16 +250,16 @@ function AppShell() {
       setMaintenanceError(message);
       setStatus((current) => ({
         ...current,
-        phase: action === 'config_only' ? 'maintenance' : 'failed',
+        phase: action === "config_only" ? "maintenance" : "failed",
         error: message,
       }));
-      if (action === 'config_only') setScreen('maintenance');
+      if (action === "config_only") setScreen("maintenance");
     }
   };
 
   const handleNetworkChange = async (input: {
     port: number;
-    oldPortPolicy?: 'redirect_1m' | 'redirect_3m' | 'deny';
+    oldPortPolicy?: "redirect_1m" | "redirect_3m" | "deny";
     panelHostname?: string;
   }): Promise<string | null> => {
     const result = await setListenPort(input.port, {
@@ -246,7 +268,10 @@ function AppShell() {
     });
     setStatus(result.status);
     if (result.restart_required) {
-      return t.listenPortRestartHint.replace('{port}', String(result.preferred_listen_port));
+      return t.listenPortRestartHint.replace(
+        "{port}",
+        String(result.preferred_listen_port),
+      );
     }
     return result.message || t.listenPortSaved;
   };
@@ -262,11 +287,11 @@ function AppShell() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.45, ease: 'easeInOut' }}
+          transition={{ duration: 0.45, ease: "easeInOut" }}
           className="min-h-screen"
         >
-          {screen === 'preparing' && <PreparingScreen status={status} />}
-          {screen === 'maintenance' && status.maintenance && (
+          {screen === "preparing" && <PreparingScreen status={status} />}
+          {screen === "maintenance" && status.maintenance && (
             <MaintenanceScreen
               info={status.maintenance}
               busy={maintenanceBusy}
@@ -274,10 +299,12 @@ function AppShell() {
               onAction={beginMaintenance}
             />
           )}
-          {screen === 'selection' && (
+          {screen === "selection" && (
             <ServerSelectionScreen
               selectedServer={selectedServer}
-              listenPort={status.listen_port ?? status.environment?.port ?? 2087}
+              listenPort={
+                status.listen_port ?? status.environment?.port ?? 2087
+              }
               panelHostname={status.panel_hostname}
               database={database}
               installPhpmyadmin={installPhpmyadmin}
@@ -289,26 +316,28 @@ function AppShell() {
               onOpenCompare={() => setCompareOpen(true)}
             />
           )}
-          {screen === 'installing' && <InstallingScreen status={status} />}
-          {screen === 'mail' && (
+          {screen === "installing" && <InstallingScreen status={status} />}
+          {screen === "mail" && (
             <MailSelectionScreen
               selectedMail={selectedMail}
               onSelectMail={setSelectedMail}
               onContinue={beginMailInstall}
-              onSkip={() => setScreen(status.account?.configured ? 'complete' : 'account')}
+              onSkip={() =>
+                setScreen(status.account?.configured ? "complete" : "account")
+              }
             />
           )}
-          {screen === 'account' && (
+          {screen === "account" && (
             <AccountSetupScreen
               initialPolicy={status.password_policy ?? DEFAULT_POLICY}
               language={locale}
               onCompleted={(nextStatus) => {
                 if (nextStatus) setStatus(nextStatus);
-                setScreen('complete');
+                setScreen("complete");
               }}
             />
           )}
-          {screen === 'complete' && (
+          {screen === "complete" && (
             <CompleteScreen
               server={status.selected_server}
               mail={status.selected_mail}

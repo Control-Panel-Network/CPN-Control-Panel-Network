@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
-import { ArrowRight, KeyRound, RefreshCw } from 'lucide-react';
-import { setupAccount } from '../api';
-import { useI18n } from '../i18n';
-import type { PasswordPolicy } from '../types';
+import { useMemo, useState } from "react";
+import { ArrowRight, KeyRound, RefreshCw } from "lucide-react";
+import { setupAccount } from "../api";
+import { useI18n } from "../i18n";
+import type { PasswordPolicy } from "../types";
 
 interface Props {
   initialPolicy: PasswordPolicy;
@@ -10,26 +10,30 @@ interface Props {
   onCompleted: (generatedPassword?: string | null) => void;
 }
 
-type TlsMode = 'starttls' | 'tls' | 'none';
+type TlsMode = "starttls" | "tls" | "none";
 
-export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Props) {
+export function AccountSetupScreen({
+  initialPolicy,
+  language,
+  onCompleted,
+}: Props) {
   const { t, locale } = useI18n();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [generate, setGenerate] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [policy, setPolicy] = useState<PasswordPolicy>(initialPolicy);
   const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [smtpEnabled, setSmtpEnabled] = useState(false);
-  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState(587);
-  const [smtpTls, setSmtpTls] = useState<TlsMode>('starttls');
-  const [smtpFrom, setSmtpFrom] = useState('');
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpTls, setSmtpTls] = useState<TlsMode>("starttls");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
   const [sendUsernameEmail, setSendUsernameEmail] = useState(false);
   const [includePasswordInEmail, setIncludePasswordInEmail] = useState(false);
 
@@ -87,7 +91,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
     <section className="min-h-screen px-6 py-12 flex flex-col items-center">
       <div className="w-full max-w-xl">
         <p className="eyebrow">{t.accountEyebrow}</p>
-        <h1 className="text-[34px] leading-[1.2] font-semibold tracking-tight mt-2">{t.accountTitle}</h1>
+        <h1 className="text-[34px] leading-[1.2] font-semibold tracking-tight mt-2">
+          {t.accountTitle}
+        </h1>
         <p className="text-[17px] text-[#5f5e60] mt-3">{t.accountIntro}</p>
 
         <div className="panel mt-8 p-6 space-y-5">
@@ -107,17 +113,25 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
             <div className="flex flex-wrap gap-2 mb-3">
               <button
                 type="button"
-                className={!generate ? 'language-chip language-chip-active' : 'language-chip'}
+                className={
+                  !generate
+                    ? "language-chip language-chip-active"
+                    : "language-chip"
+                }
                 onClick={() => setGenerate(false)}
               >
                 {t.useOwnPassword}
               </button>
               <button
                 type="button"
-                className={generate ? 'language-chip language-chip-active' : 'language-chip'}
+                className={
+                  generate
+                    ? "language-chip language-chip-active"
+                    : "language-chip"
+                }
                 onClick={() => {
                   setGenerate(true);
-                  setPassword('');
+                  setPassword("");
                 }}
               >
                 <RefreshCw size={14} /> {t.generatePassword}
@@ -157,7 +171,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
           </label>
 
           <fieldset className="border border-[#e5e8ec] rounded-2xl p-4 space-y-3">
-            <legend className="px-1 text-sm font-semibold">{t.smtpOptionalTitle}</legend>
+            <legend className="px-1 text-sm font-semibold">
+              {t.smtpOptionalTitle}
+            </legend>
             <p className="text-sm text-[#5f5e60]">{t.smtpOptionalHint}</p>
             <label className="flex items-center justify-between gap-4 py-1">
               <span>{t.smtpEnableLabel}</span>
@@ -176,7 +192,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
             {smtpEnabled && (
               <>
                 <label className="block">
-                  <span className="text-sm font-semibold">{t.smtpHostLabel}</span>
+                  <span className="text-sm font-semibold">
+                    {t.smtpHostLabel}
+                  </span>
                   <input
                     className="field-input mt-2"
                     value={smtpHost}
@@ -187,22 +205,30 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
-                    <span className="text-sm font-semibold">{t.smtpPortLabel}</span>
+                    <span className="text-sm font-semibold">
+                      {t.smtpPortLabel}
+                    </span>
                     <input
                       className="field-input mt-2"
                       type="number"
                       min={1}
                       max={65535}
                       value={smtpPort}
-                      onChange={(event) => setSmtpPort(Number(event.target.value) || 587)}
+                      onChange={(event) =>
+                        setSmtpPort(Number(event.target.value) || 587)
+                      }
                     />
                   </label>
                   <label className="block">
-                    <span className="text-sm font-semibold">{t.smtpTlsLabel}</span>
+                    <span className="text-sm font-semibold">
+                      {t.smtpTlsLabel}
+                    </span>
                     <select
                       className="field-input mt-2"
                       value={smtpTls}
-                      onChange={(event) => setSmtpTls(event.target.value as TlsMode)}
+                      onChange={(event) =>
+                        setSmtpTls(event.target.value as TlsMode)
+                      }
                     >
                       <option value="starttls">{t.smtpTlsStarttls}</option>
                       <option value="tls">{t.smtpTlsTls}</option>
@@ -211,7 +237,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                   </label>
                 </div>
                 <label className="block">
-                  <span className="text-sm font-semibold">{t.smtpFromLabel}</span>
+                  <span className="text-sm font-semibold">
+                    {t.smtpFromLabel}
+                  </span>
                   <input
                     className="field-input mt-2"
                     type="email"
@@ -222,7 +250,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-semibold">{t.smtpUserLabel}</span>
+                  <span className="text-sm font-semibold">
+                    {t.smtpUserLabel}
+                  </span>
                   <input
                     className="field-input mt-2"
                     value={smtpUser}
@@ -231,7 +261,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-semibold">{t.smtpPasswordLabel}</span>
+                  <span className="text-sm font-semibold">
+                    {t.smtpPasswordLabel}
+                  </span>
                   <input
                     className="field-input mt-2"
                     type="password"
@@ -248,19 +280,25 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                   <input
                     type="checkbox"
                     checked={sendUsernameEmail}
-                    onChange={(event) => setSendUsernameEmail(event.target.checked)}
+                    onChange={(event) =>
+                      setSendUsernameEmail(event.target.checked)
+                    }
                   />
                 </label>
                 <label className="flex items-start justify-between gap-4 py-1">
                   <span>
                     <span className="block">{t.smtpIncludePasswordLabel}</span>
-                    <span className="field-hint">{t.smtpIncludePasswordHint}</span>
+                    <span className="field-hint">
+                      {t.smtpIncludePasswordHint}
+                    </span>
                   </span>
                   <input
                     type="checkbox"
                     checked={includePasswordInEmail}
                     disabled={!sendUsernameEmail}
-                    onChange={(event) => setIncludePasswordInEmail(event.target.checked)}
+                    onChange={(event) =>
+                      setIncludePasswordInEmail(event.target.checked)
+                    }
                   />
                 </label>
               </>
@@ -268,7 +306,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
           </fieldset>
 
           <fieldset className="border border-[#e5e8ec] rounded-2xl p-4">
-            <legend className="px-1 text-sm font-semibold">{t.policyTitle}</legend>
+            <legend className="px-1 text-sm font-semibold">
+              {t.policyTitle}
+            </legend>
             <label className="flex items-center justify-between gap-4 py-2">
               <span>{t.policyMinLength}</span>
               <input
@@ -278,7 +318,10 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                 max={128}
                 value={policy.min_length}
                 onChange={(event) =>
-                  setPolicy({ ...policy, min_length: Number(event.target.value) || 8 })
+                  setPolicy({
+                    ...policy,
+                    min_length: Number(event.target.value) || 8,
+                  })
                 }
               />
             </label>
@@ -288,7 +331,10 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                 type="checkbox"
                 checked={policy.require_special}
                 onChange={(event) =>
-                  setPolicy({ ...policy, require_special: event.target.checked })
+                  setPolicy({
+                    ...policy,
+                    require_special: event.target.checked,
+                  })
                 }
               />
             </label>
@@ -298,7 +344,10 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
                 type="checkbox"
                 checked={policy.require_uppercase}
                 onChange={(event) =>
-                  setPolicy({ ...policy, require_uppercase: event.target.checked })
+                  setPolicy({
+                    ...policy,
+                    require_uppercase: event.target.checked,
+                  })
                 }
               />
             </label>
@@ -316,7 +365,9 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
 
           {generatedPreview && (
             <div className="generated-box">
-              <p className="text-sm font-semibold mb-2">{t.generatedPasswordNote}</p>
+              <p className="text-sm font-semibold mb-2">
+                {t.generatedPasswordNote}
+              </p>
               <code className="break-all">{generatedPreview}</code>
               <button
                 type="button"
@@ -341,7 +392,11 @@ export function AccountSetupScreen({ initialPolicy, language, onCompleted }: Pro
               void submit();
             }}
           >
-            {busy ? t.accountSaving : generatedPreview ? t.continueLabel : t.saveAccount}{' '}
+            {busy
+              ? t.accountSaving
+              : generatedPreview
+                ? t.continueLabel
+                : t.saveAccount}{" "}
             <ArrowRight size={18} />
           </button>
         </div>
