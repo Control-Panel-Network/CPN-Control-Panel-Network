@@ -10,3 +10,5 @@
 *.log
 /var/lib/cpn/
 panel-bootstrap.json
+
+to-do/
