@@ -2,6 +2,7 @@
 
 use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::command;
+use crate::install_webmail_proxy::{caddy_webmail_snippet, nginx_webmail_conf, ols_webmail_vhconf};
 use crate::installer::{AppState, run_command};
 use crate::model::ServerEngine;
 use std::path::{Path, PathBuf};
@@ -12,9 +13,15 @@ const FPM_POOL: &str = "/etc/php-fpm.d/cpn-webmail.conf";
 const NGINX_CONF: &str = "/etc/nginx/conf.d/cpn-webmail.conf";
 const CADDY_SNIPPET: &str = "/etc/caddy/Caddyfile.d/cpn-webmail.caddy";
 const WEBMAIL_URL: &str = "http://127.0.0.1:8080/";
+/// SnappyMail application data outside the HTTP docroot.
+pub const SNAPPYMAIL_DATA_DIR: &str = "/var/lib/cpn-webmail/snappymail/";
 
 pub fn webmail_health_url() -> &'static str {
     WEBMAIL_URL
+}
+
+fn is_snappymail_docroot(docroot: &str) -> bool {
+    docroot.contains("snappymail")
 }
 
 /// Ensure service user exists, then configure PHP-FPM + selected engine proxy.
@@ -26,6 +33,9 @@ pub async fn configure_webmail_runtime(
     install_journal::ensure_journal_dirs()?;
     ensure_webmail_user(state).await?;
     reset_current_link(Path::new(docroot))?;
+    if is_snappymail_docroot(docroot) {
+        configure_snappymail_external_data(docroot)?;
+    }
     write_php_fpm_pool(docroot)?;
     harden_permissions(docroot).await?;
     // Stop legacy php -S unit if present from older installs.
@@ -44,12 +54,16 @@ pub async fn configure_webmail_runtime(
         )?;
     }
 
-    // Allow reverse-proxy listen port through SELinux when tools are present.
     let _ = Command::new("bash")
         .args([
             "-c",
             "command -v semanage >/dev/null 2>&1 && \
-             (semanage port -a -t http_port_t -p tcp 8080 || semanage port -m -t http_port_t -p tcp 8080 || true)",
+             (semanage port -a -t http_port_t -p tcp 8080 || semanage port -m -t http_port_t -p tcp 8080 || true); \
+             if [ -d /var/lib/cpn-webmail ]; then \
+               (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
+                semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
+               restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true; \
+             fi",
         ])
         .status()
         .await;
@@ -71,9 +85,6 @@ pub async fn configure_webmail_runtime(
         ),
     )
     .await?;
-    // A package upgrade can leave a running master from the previous PHP version.
-    // Reload may report success without loading the new pool, so always restart and
-    // wait briefly for the ondemand pool to create its listener.
     run_command(
         state,
         command(
@@ -88,7 +99,6 @@ pub async fn configure_webmail_runtime(
     run_command(state, command("bash", vec!["-c", "for attempt in $(seq 1 15); do test -S /run/php-fpm/cpn-webmail.sock && exit 0; sleep 1; done; php-fpm -t 2>&1 || true; systemctl status php-fpm --no-pager 2>&1 || true; exit 1"], "Esperando el socket PHP-FPM de webmail", "testing", 86)).await.map_err(|_| "PHP-FPM no creó /run/php-fpm/cpn-webmail.sock; revisa installation.log para el diagnóstico de configuración.".to_string())?;
     install_journal::record(STAGE, JournalAction::EnabledService, "php-fpm", None, None)?;
 
-    // Reload frontends after config write (idempotent).
     match engine {
         ServerEngine::Nginx => {
             run_command(
@@ -134,6 +144,31 @@ pub async fn configure_webmail_runtime(
     }
 
     verify_code_not_writable_by_service(docroot)?;
+    Ok(())
+}
+
+fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
+    std::fs::create_dir_all(SNAPPYMAIL_DATA_DIR).map_err(|error| error.to_string())?;
+    // Prefer include.php APP_DATA_FOLDER_PATH (official SnappyMail hardening).
+    let include = format!(
+        "<?php\n\
+         // Managed by CPN: keep application data outside the HTTP docroot.\n\
+         define('APP_DATA_FOLDER_PATH', '{SNAPPYMAIL_DATA_DIR}');\n"
+    );
+    let include_path = Path::new(docroot).join("include.php");
+    install_journal::write_file_tracked(STAGE, &include_path, &include)?;
+    // Remove any in-docroot data tree so it cannot be served.
+    let web_data = Path::new(docroot).join("data");
+    if web_data.exists() {
+        let _ = std::fs::remove_dir_all(&web_data);
+    }
+    install_journal::record(
+        STAGE,
+        JournalAction::Note,
+        SNAPPYMAIL_DATA_DIR,
+        None,
+        Some("SnappyMail APP_DATA_FOLDER_PATH outside docroot".into()),
+    )?;
     Ok(())
 }
 
@@ -186,7 +221,11 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
 }
 
 fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
-    // Unix socket under /run/php-fpm (SELinux-friendly). Mode 0666 lets nginx/caddy/ols connect.
+    let open_basedir = if is_snappymail_docroot(docroot) {
+        "/opt/cpn-webmail:/var/lib/cpn-webmail:/tmp"
+    } else {
+        "/opt/cpn-webmail:/tmp"
+    };
     let pool = format!(
         "[cpn-webmail]\n\
          user = cpn-webmail\n\
@@ -200,7 +239,7 @@ fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
          pm.process_idle_timeout = 10s\n\
          chdir = {docroot}\n\
          security.limit_extensions = .php\n\
-         php_admin_value[open_basedir] = /opt/cpn-webmail:/tmp\n\
+         php_admin_value[open_basedir] = {open_basedir}\n\
          php_admin_flag[allow_url_fopen] = off\n"
     );
     install_journal::write_file_tracked(STAGE, Path::new(FPM_POOL), &pool)?;
@@ -211,16 +250,27 @@ fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
 }
 
 async fn harden_permissions(docroot: &str) -> Result<(), String> {
+    let snappy = if is_snappymail_docroot(docroot) {
+        format!(
+            "mkdir -p {SNAPPYMAIL_DATA_DIR} && \
+             chown -R cpn-webmail:cpn-webmail /var/lib/cpn-webmail && \
+             find /var/lib/cpn-webmail -type d -exec chmod 750 {{}} + && \
+             find /var/lib/cpn-webmail -type f -exec chmod 640 {{}} + && \
+             rm -rf {docroot}/data {docroot}/temp {docroot}/logs 2>/dev/null || true"
+        )
+    } else {
+        format!(
+            "mkdir -p {docroot}/data {docroot}/temp {docroot}/logs \
+               /opt/cpn-webmail/roundcube/temp /opt/cpn-webmail/roundcube/logs && \
+             chown -R cpn-webmail:cpn-webmail {docroot}/data {docroot}/temp {docroot}/logs \
+               /opt/cpn-webmail/roundcube/temp /opt/cpn-webmail/roundcube/logs 2>/dev/null || true"
+        )
+    };
     let script = format!(
         "chown -R root:root /opt/cpn-webmail && \
          find /opt/cpn-webmail -type d -exec chmod 755 {{}} + && \
          find /opt/cpn-webmail -type f -exec chmod 644 {{}} + && \
-         mkdir -p {docroot}/data {docroot}/temp {docroot}/logs \
-           /opt/cpn-webmail/roundcube/temp /opt/cpn-webmail/roundcube/logs \
-           /opt/cpn-webmail/snappymail/data && \
-         chown -R cpn-webmail:cpn-webmail {docroot}/data {docroot}/temp {docroot}/logs \
-           /opt/cpn-webmail/roundcube/temp /opt/cpn-webmail/roundcube/logs \
-           /opt/cpn-webmail/snappymail/data 2>/dev/null || true && \
+         {snappy} && \
          if [ -f /opt/cpn-webmail/roundcube/db.sqlite ]; then \
            chown cpn-webmail:cpn-webmail /opt/cpn-webmail/roundcube/db.sqlite; \
            chmod 0600 /opt/cpn-webmail/roundcube/db.sqlite; \
@@ -245,47 +295,27 @@ async fn harden_permissions(docroot: &str) -> Result<(), String> {
         JournalAction::Note,
         "/opt/cpn-webmail",
         None,
-        Some("root-owned code; writable data/temp/logs only".into()),
+        Some("root-owned code; writable runtime data outside or denied under docroot".into()),
     )?;
     Ok(())
 }
 
 fn configure_nginx_proxy(docroot: &str) -> Result<(), String> {
-    let conf = format!(
-        "# Managed by CPN (issue #6)\n\
-         server {{\n\
-           listen 127.0.0.1:8080;\n\
-           server_name localhost;\n\
-           root {docroot};\n\
-           index index.php index.html;\n\
-           location / {{\n\
-             try_files $uri $uri/ /index.php?$query_string;\n\
-           }}\n\
-           location ~ \\.php$ {{\n\
-             include fastcgi_params;\n\
-             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
-             fastcgi_pass unix:/run/php-fpm/cpn-webmail.sock;\n\
-           }}\n\
-           location ~ /(\\.|config|temp|logs|data) {{\n\
-             deny all;\n\
-           }}\n\
-         }}\n"
-    );
-    install_journal::write_file_tracked(STAGE, Path::new(NGINX_CONF), &conf)?;
+    install_journal::write_file_tracked(
+        STAGE,
+        Path::new(NGINX_CONF),
+        &nginx_webmail_conf(docroot),
+    )?;
     Ok(())
 }
 
 fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
     std::fs::create_dir_all("/etc/caddy/Caddyfile.d").map_err(|error| error.to_string())?;
-    let snippet = format!(
-        "# Managed by CPN (issue #6)\n\
-         http://127.0.0.1:8080 {{\n\
-           root * {docroot}\n\
-           php_fastcgi unix//run/php-fpm/cpn-webmail.sock\n\
-           file_server\n\
-         }}\n"
-    );
-    install_journal::write_file_tracked(STAGE, Path::new(CADDY_SNIPPET), &snippet)?;
+    install_journal::write_file_tracked(
+        STAGE,
+        Path::new(CADDY_SNIPPET),
+        &caddy_webmail_snippet(docroot),
+    )?;
 
     let main = Path::new("/etc/caddy/Caddyfile");
     let import_line = "import /etc/caddy/Caddyfile.d/*.caddy\n";
@@ -307,47 +337,8 @@ fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
 fn configure_ols_proxy(docroot: &str) -> Result<(), String> {
     let vh_dir = "/usr/local/lsws/conf/vhosts/CPNWebmail";
     std::fs::create_dir_all(vh_dir).map_err(|error| error.to_string())?;
-    // Absolute UDS path requires three slashes after uds: (uds:///run/...).
-    // autoStart 0: PHP-FPM is managed by systemd, not by OpenLiteSpeed.
-    let vhconf = format!(
-        "docRoot                   {docroot}/\n\
-         enableGzip                1\n\
-         index  {{\n\
-           useServer               0\n\
-           indexFiles              index.php, index.html\n\
-         }}\n\
-         extprocessor cpnphp {{\n\
-           type                    fcgi\n\
-           address                 uds:///run/php-fpm/cpn-webmail.sock\n\
-           maxConns                8\n\
-           initTimeout             60\n\
-           retryTimeout            0\n\
-           persistConn             1\n\
-           respBuffer              0\n\
-           autoStart               0\n\
-         }}\n\
-         scriptHandler  {{\n\
-           add                     fcgi:cpnphp php\n\
-         }}\n\
-         context / {{\n\
-           type                    NULL\n\
-           location                {docroot}/\n\
-           allowBrowse             1\n\
-           rewrite  {{\n\
-             enable                1\n\
-           }}\n\
-           addDefaultCharset       off\n\
-         }}\n\
-         rewrite  {{\n\
-           enable                  1\n\
-           rules                   <<<END_rules\n\
-RewriteRule ^(.*)$ - [E=HTTP_AUTHORIZATION:%{{HTTP:Authorization}}]\n\
-END_rules\n\
-         }}\n"
-    );
     let vhconf_path_buf = PathBuf::from(format!("{vh_dir}/vhconf.conf"));
-    install_journal::write_file_tracked(STAGE, &vhconf_path_buf, &vhconf)?;
-    // OpenLiteSpeed renames invalid vhconf.conf to vhconf.conf0; surface that early.
+    install_journal::write_file_tracked(STAGE, &vhconf_path_buf, &ols_webmail_vhconf(docroot))?;
     if !vhconf_path_buf.exists() {
         return Err(format!(
             "OpenLiteSpeed rejected {vh_dir}/vhconf.conf (file missing after write)"
@@ -367,22 +358,27 @@ END_rules\n\
 
 /// Fail if PHP/code paths under docroot are writable by cpn-webmail.
 pub fn verify_code_not_writable_by_service(docroot: &str) -> Result<(), String> {
+    let runtime_check = if is_snappymail_docroot(docroot) {
+        format!(
+            "su -s /bin/bash cpn-webmail -c \"test -w '{SNAPPYMAIL_DATA_DIR}'\" || {{ echo 'snappy data not writable'; exit 1; }}\n\
+             if [ -e '{docroot}/data' ]; then echo 'docroot data must not exist for SnappyMail'; exit 1; fi\n"
+        )
+    } else {
+        format!(
+            "for d in '{docroot}/data' '{docroot}/temp' '{docroot}/logs'; do\n\
+               if [ -d \"$d\" ]; then\n\
+                 su -s /bin/bash cpn-webmail -c \"test -w '$d'\" || {{ echo \"not writable: $d\"; exit 1; }}\n\
+               fi\n\
+             done\n"
+        )
+    };
     let script = format!(
         "set -euo pipefail\n\
-         # Application PHP under the docroot must be root-owned. Runtime dirs\n\
-         # (data/temp/logs) are owned by the service user and may contain stubs.\n\
          bad=$(find '{docroot}' \\( -path '{docroot}/data' -o -path '{docroot}/temp' -o -path '{docroot}/logs' \\) -prune -o -type f -name '*.php' ! -user root -print -quit 2>/dev/null || true)\n\
          if [ -n \"$bad\" ]; then echo \"php not root-owned: $bad\"; exit 1; fi\n\
-         # Service user must not own the application tree root.\n\
          owner=$(stat -c '%U' /opt/cpn-webmail)\n\
          if [ \"$owner\" = \"cpn-webmail\" ]; then echo '/opt/cpn-webmail owned by service user'; exit 1; fi\n\
-         # Writable runtime dirs must exist for the service user.\n\
-         for d in '{docroot}/data' '{docroot}/temp' '{docroot}/logs'; do\n\
-           if [ -d \"$d\" ]; then\n\
-             su -s /bin/bash cpn-webmail -c \"test -w '$d'\" || {{ echo \"not writable: $d\"; exit 1; }}\n\
-           fi\n\
-         done\n\
-         # Service user must not be able to write a random PHP file in docroot.\n\
+         {runtime_check}\
          if su -s /bin/bash cpn-webmail -c \"touch '{docroot}/.__cpn_perm_probe.php'\" 2>/dev/null; then\n\
            rm -f '{docroot}/.__cpn_perm_probe.php'\n\
            echo 'service user can write PHP into docroot'; exit 1\n\
@@ -404,7 +400,7 @@ pub fn verify_code_not_writable_by_service(docroot: &str) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::webmail_health_url;
+    use super::*;
 
     #[test]
     fn health_url_is_loopback_8080() {

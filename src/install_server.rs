@@ -1,5 +1,6 @@
 //! Web server install stage (Nginx / Caddy / OpenLiteSpeed).
 
+use crate::install_http_ports::{restore_http_units, stop_conflicting_http_services};
 use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::{
     command, prepare_caddy_apt_command, prepare_caddy_repository,
@@ -21,76 +22,6 @@ async fn detect_lsws_unit() -> Result<&'static str, String> {
         }
     }
     Err("No se encontró la unidad systemd vendor de OpenLiteSpeed (lsws/lshttpd)".into())
-}
-
-/// Stop and disable other HTTP stacks that commonly hold :80/:443 so the
-/// selected engine can bind its public listeners on a clean AlmaLinux lab image
-/// (nginx is often enabled by default).
-async fn stop_conflicting_http_services(
-    state: &AppState,
-    selected: ServerEngine,
-) -> Result<(), String> {
-    let conflicts: &[&str] = match selected {
-        ServerEngine::Openlitespeed => &["nginx", "httpd", "apache2", "caddy"],
-        ServerEngine::Nginx => &["httpd", "apache2", "lshttpd", "lsws", "caddy"],
-        ServerEngine::Caddy => &["nginx", "httpd", "apache2", "lshttpd", "lsws"],
-    };
-    for unit in conflicts {
-        let unit_path_lib = format!("/usr/lib/systemd/system/{unit}.service");
-        let unit_path_etc = format!("/etc/systemd/system/{unit}.service");
-        if !std::path::Path::new(&unit_path_lib).exists()
-            && !std::path::Path::new(&unit_path_etc).exists()
-        {
-            continue;
-        }
-        let active = Command::new("systemctl")
-            .args(["is-active", "--quiet", unit])
-            .status()
-            .await
-            .map(|status| status.success())
-            .unwrap_or(false);
-        if !active {
-            continue;
-        }
-        state
-            .progress(
-                "configuring",
-                2,
-                format!("Liberando :80/:443 deteniendo el servicio conflictivo {unit}"),
-            )
-            .await;
-        let stop_status = Command::new("systemctl")
-            .args(["stop", unit])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .status()
-            .await
-            .map_err(|error| format!("No se pudo detener {unit}: {error}"))?;
-        if !stop_status.success() {
-            return Err(format!(
-                "systemctl stop {unit} falló (código {:?}); libera :80/:443 manualmente e inténtalo de nuevo",
-                stop_status.code()
-            ));
-        }
-        // Best-effort disable so a reboot does not steal :80 again.
-        let _ = Command::new("systemctl")
-            .args(["disable", unit])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await;
-        install_journal::record(
-            "server",
-            JournalAction::Note,
-            unit,
-            None,
-            Some(format!(
-                "stopped conflicting HTTP service before installing {}",
-                selected.label()
-            )),
-        )?;
-    }
-    Ok(())
 }
 
 fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
@@ -611,7 +542,7 @@ pub async fn install_with_database(
             )?;
         }
 
-        stop_conflicting_http_services(&state, server).await?;
+        let _http_priors = stop_conflicting_http_services(&state, server).await?;
 
         let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
@@ -754,6 +685,33 @@ pub async fn install_with_database(
         Ok::<_, String>(())
     }
     .await;
+    if result.is_err() {
+        // Best-effort restore of units stopped/disabled for :80/:443 (prior state in journal).
+        if let Ok(entries) = install_journal::load_journal() {
+            let mut priors = Vec::new();
+            for entry in entries.into_iter().rev() {
+                if entry.stage != "server" {
+                    continue;
+                }
+                let Some(detail) = entry.detail.as_deref() else {
+                    continue;
+                };
+                if !detail.starts_with("http-port-conflict ") {
+                    continue;
+                }
+                let was_active = detail.contains("prior_active=true");
+                let was_enabled = detail.contains("prior_enabled=true");
+                priors.push(crate::install_http_ports::UnitPriorState {
+                    unit: entry.path,
+                    was_active,
+                    was_enabled,
+                });
+            }
+            if !priors.is_empty() {
+                restore_http_units(&priors).await;
+            }
+        }
+    }
     finish(&state, result, server.label(), true, false).await;
 }
 

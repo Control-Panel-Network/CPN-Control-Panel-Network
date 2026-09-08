@@ -3,6 +3,9 @@ Description=CPN Control Panel Network web installer
 Documentation=https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
 After=network-online.target
 Wants=network-online.target
+# Restart-storm protection (unit-level; ignored under [Service]).
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -14,9 +17,6 @@ Type=simple
 ExecStart=/usr/bin/cpn-installer
 Restart=on-failure
 RestartSec=3
-# Avoid restart storms when the listen port is already bound.
-StartLimitIntervalSec=60
-StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed

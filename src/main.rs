@@ -738,15 +738,21 @@ async fn main() -> std::io::Result<()> {
     if phase == "completed" && has_bootstrap_account {
         cpn_installer::paths::clear_installer_bootstrap_token();
     } else {
-        match cpn_installer::paths::write_installer_bootstrap_token(&token) {
-            Ok(path) => {
+        match cpn_installer::paths::persist_bootstrap_token_for_startup(&token, remote) {
+            Ok(Some(path)) => {
                 if remote {
                     println!("  Bootstrap token file (mode 0600): {}", path.display());
                     println!("  Read once with: sudo cat {}", path.display());
                 }
             }
+            Ok(None) => {
+                eprintln!(
+                    "cpn-installer: could not persist bootstrap token file (continuing; token is printed for local bind)"
+                );
+            }
             Err(error) => {
-                eprintln!("cpn-installer: could not persist bootstrap token file: {error}");
+                eprintln!("cpn-installer: {error}");
+                std::process::exit(1);
             }
         }
     }

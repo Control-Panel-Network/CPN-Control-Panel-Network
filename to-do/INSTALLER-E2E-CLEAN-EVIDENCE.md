@@ -1,6 +1,6 @@
 # Clean install evidence (AL9 VirtualBox)
 
-Date: 07/09/2026
+Date: 08/09/2026
 Branch: `fix/installer-e2e-clean`
 Guest: CPN-AlmaLinux-9 only (AL10 not started)
 No snapshot available; clean wipe used instead.
@@ -12,7 +12,7 @@ No snapshot available; clean wipe used instead.
 3. Build fix-branch RPM via `./scripts/build-rpm.sh` (setsid + ignore SIGHUP)
 4. Later iteration: `cargo build --release --locked` and copy binaries to `/usr/bin`
 5. Start: `sudo cpn-installer --allow-remote --port 2087`
-6. Bootstrap token from root-only file: `/var/lib/cpn/installer-bootstrap.token` (mode 0600)
+6. Bootstrap token from root-only file: `/var/lib/cpn/installer-bootstrap.token` (mode 0600, exclusive create)
 7. API path: server (OpenLiteSpeed + MariaDB + phpMyAdmin) -> mail (SnappyMail) -> `/api/account/setup`
 8. Post-install curls for `/`, `/login`, `/dashboard`, HEAD probes
 
@@ -33,6 +33,19 @@ No snapshot available; clean wipe used instead.
 | Host NAT `/login` | 200 |
 | OLS `:80` CPN vhost | 200 `CPN OpenLiteSpeed` |
 
-## Known gap for review
+## Krao review follow-ups (08/09/2026)
 
-- SnappyMail UI may still show "Permission denied" for its data folder after a 200 health response. SELinux / data-dir mode may need a follow-up.
+| Item | Change |
+| --- | --- |
+| systemd StartLimit* | Moved to `[Unit]`; `scripts/verify-systemd-unit.sh` + CI |
+| `--allow-remote` token | Abort startup if persist fails; unit tests for failure path |
+| Bootstrap token 0600 | Exclusive `create_new` + mode 0600 + atomic rename; symlink/clobber tests |
+| SnappyMail data | `APP_DATA_FOLDER_PATH=/var/lib/cpn-webmail/snappymail/`; deny rules on nginx/Caddy/OLS; HTTP UI + path denial check |
+| `:80/:443` conflicts | Stop only confirmed listeners; disable enabled reclaimers; journal prior state + restore on failed install |
+
+## SnappyMail security/functional assertions (installer)
+
+- UI body must not match permission / Error 202 / data-folder errors
+- UI body must look like SnappyMail (login markers)
+- HTTP fetches of `/data`, `/temp`, `/logs` must not return 200/301/302
+- Application data lives under `/var/lib/cpn-webmail/` (outside docroot) with SELinux fcontext best-effort

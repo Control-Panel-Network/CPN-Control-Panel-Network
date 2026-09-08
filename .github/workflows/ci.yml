@@ -235,3 +235,9 @@ jobs:
           scripts/sign-cosign.sh
           tests/docker-matrix.sh
           tests/webmail-permissions.sh
+          scripts/verify-systemd-unit.sh
+
+      - name: Verificar unidad systemd (StartLimit en [Unit])
+        run: |
+          chmod +x scripts/verify-systemd-unit.sh
+          ./scripts/verify-systemd-unit.sh
