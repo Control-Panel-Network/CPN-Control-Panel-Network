@@ -2,7 +2,7 @@
 
 use crate::panel_icons::{hub_icon_html, nav_icon_html};
 use crate::panel_ops_ssl_le::ssl_status_for_domain;
-use crate::sites::list_sites;
+use crate::sites::{list_sites, site_home_from_record};
 use crate::website_preview::{preview_mode_url, ssl_material_present};
 
 fn html_escape(value: &str) -> String {
@@ -11,6 +11,24 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// Short SSL label for the dashboard site jumper (Active / None / Pending / …).
+fn dash_ssl_label(domain: &str) -> String {
+    let row = ssl_status_for_domain(domain);
+    if row.provider == "none" || row.provider_label.eq_ignore_ascii_case("None") {
+        return "None".into();
+    }
+    if row.has_cert || ssl_material_present(domain) {
+        return format!("Active ({})", row.provider_label);
+    }
+    if !row.last_error.trim().is_empty() {
+        return format!("{} · error", row.provider_label);
+    }
+    if row.needs_issue {
+        return format!("{} · pending", row.provider_label);
+    }
+    format!("{} · no cert", row.provider_label)
 }
 
 struct ToolLink {
@@ -165,13 +183,17 @@ pub fn dashboard_tools_styles() -> &'static str {
 .dash-sites h2 { margin: 0 0 6px; font-size: 16px; letter-spacing: -.01em; }
 .dash-sites .muted { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 .dash-sites-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; }
-.dash-sites-row label { display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:700; min-width:min(100%,280px); flex:1; }
+.dash-sites-row label { display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:700; min-width:min(100%,280px); flex:1; color:var(--ink,#1d1d1f); }
 .dash-sites-row input[type=search], .dash-sites-row select {
   min-height:40px; padding:8px 12px; border-radius:10px; border:1px solid var(--hairline,#d0d5dd);
-  background:transparent; color:inherit; font:inherit;
+  background:var(--canvas,#fff); color:var(--ink,#1d1d1f); font:inherit; color-scheme:light;
 }
-.dash-sites-meta { margin-top:12px; display:grid; gap:6px; font-size:13px; color:var(--muted); }
-.dash-sites-meta strong { color:inherit; font-weight:700; }
+.dash-sites-row select option {
+  background:#ffffff; color:#111827;
+}
+.dash-sites-meta { margin-top:12px; display:grid; gap:6px; font-size:13px; color:var(--ink,#1d1d1f); }
+.dash-sites-meta strong { color:var(--ink,#1d1d1f); font-weight:700; }
+.dash-sites-meta[hidden], .dash-sites-actions[hidden] { display:none !important; }
 .dash-sites-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .dash-sites-actions a {
   display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:999px;
@@ -216,6 +238,17 @@ pub fn dashboard_tools_styles() -> &'static str {
 [data-color-mode="dark"] .dash-tool-group {
   background:#1c212b; border-color:#2a3140;
 }
+[data-color-mode="dark"] .dash-sites-row label { color:#e8edf5; }
+[data-color-mode="dark"] .dash-sites .muted { color:#b7c0cc; }
+[data-color-mode="dark"] .dash-sites-row input[type=search],
+[data-color-mode="dark"] .dash-sites-row select {
+  background:#12151c; border-color:#3b4558; color:#f3f6fb; color-scheme:dark;
+}
+[data-color-mode="dark"] .dash-sites-row select option {
+  background:#12151c; color:#f3f6fb;
+}
+[data-color-mode="dark"] .dash-sites-meta,
+[data-color-mode="dark"] .dash-sites-meta strong { color:#e8edf5; }
 [data-color-mode="dark"] .dash-tool-link:hover { background:rgba(147,197,253,.08); }
 "#
 }
@@ -231,26 +264,20 @@ pub fn dashboard_sites_panel() -> String {
     for (i, site) in sites.iter().enumerate() {
         let d = html_escape(&site.domain);
         options.push_str(&format!(r#"<option value="{d}">{d}</option>"#, d = d));
-        let row = ssl_status_for_domain(&site.domain);
-        let ssl = if ssl_material_present(&site.domain) {
-            format!("{} · material on disk", row.provider_label)
-        } else {
-            format!("{} · no cert files", row.provider_label)
-        };
+        let ssl = dash_ssl_label(&site.domain);
         let preview = preview_mode_url(&site.domain)
             .unwrap_or_else(|_| format!("/websites/manage?domain={}", site.domain));
         if i > 0 {
             meta_json.push(',');
         }
-        let home = site
-            .docroot
-            .trim()
-            .trim_end_matches("/public_html")
-            .trim_end_matches("\\public_html");
+        let home = site_home_from_record(site)
+            .to_string_lossy()
+            .trim_end_matches(['/', '\\'])
+            .replace('\\', "/");
         let home = if home.is_empty() {
             format!("/home/{}", site.domain)
         } else {
-            home.to_string()
+            home
         };
         meta_json.push_str(&format!(
             r#""{dom}":{{"home":{home},"ssl":{ssl},"preview":{prev},"manage":{manage}}}"#,
@@ -310,18 +337,18 @@ pub fn dashboard_sites_panel() -> String {
     var d = sel.value;
     var info = meta[d];
     if (!info) {{
-      box.hidden = true; actions.hidden = true; return;
+      box.hidden = true; actions.hidden = true;
+      document.getElementById('dash-site-home').textContent = '-';
+      document.getElementById('dash-site-ssl').textContent = '-';
+      return;
     }}
     box.hidden = false; actions.hidden = false;
-    document.getElementById('dash-site-home').textContent = info.home;
-    document.getElementById('dash-site-ssl').textContent = info.ssl;
+    document.getElementById('dash-site-home').textContent = info.home || '-';
+    document.getElementById('dash-site-ssl').textContent = info.ssl || '-';
     document.getElementById('dash-site-manage').href = info.manage;
     document.getElementById('dash-site-preview').href = info.preview;
   }}
-  sel.addEventListener('change', function() {{
-    sync();
-    if (sel.value) {{ window.location.href = '/websites/manage?domain=' + encodeURIComponent(sel.value); }}
-  }});
+  sel.addEventListener('change', sync);
   if (filter) filter.addEventListener('input', applyFilter);
   sync();
 }})();

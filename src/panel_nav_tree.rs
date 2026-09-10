@@ -326,11 +326,11 @@ fn flat_link(id: &str, href: &str, label: &str, active: &str) -> String {
     } else {
         r#" class="nav-tile""#
     };
+    // Leaf links have no children: never render an expand chevron.
     format!(
-        r#"<a{class} href="{href}">{icon}<span>{label}</span>{chevron}</a>"#,
+        r#"<a{class} href="{href}">{icon}<span>{label}</span></a>"#,
         icon = nav_icon_html(id),
         label = html_escape(label),
-        chevron = chevron_svg(),
     )
 }
 
@@ -581,6 +581,32 @@ mod tests {
         assert!(
             html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\"")
         );
+    }
+
+    #[test]
+    fn leaf_links_have_no_expand_chevron() {
+        let html = nav_links_html("dashboard", "admin");
+        // Dashboard and Apps are leaf NavEntry::Link items.
+        assert!(html.contains("href=\"/dashboard\""));
+        assert!(html.contains(">Dashboard</span></a>") || html.contains(">Dashboard</span>"));
+        let dash_idx = html
+            .find("href=\"/dashboard\"")
+            .expect("dashboard link");
+        let dash_snip = &html[dash_idx..dash_idx + 180.min(html.len() - dash_idx)];
+        assert!(
+            !dash_snip.contains("nav-chevron"),
+            "Dashboard leaf must not render chevron: {dash_snip}"
+        );
+        if let Some(apps_idx) = html.find("href=\"/apps\"") {
+            let apps_snip = &html[apps_idx..apps_idx + 160.min(html.len() - apps_idx)];
+            assert!(
+                !apps_snip.contains("nav-chevron"),
+                "Apps leaf must not render chevron: {apps_snip}"
+            );
+        }
+        // Groups still get a chevron on the summary parent.
+        assert!(html.contains("nav-chevron"));
+        assert!(html.contains("data-nav-group=\"websites\""));
     }
 
     #[test]

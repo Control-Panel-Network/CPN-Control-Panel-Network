@@ -1,7 +1,8 @@
 //! Cloudflare DNS API client (curl). Prefer API Token (Bearer). Never log tokens.
 
 use crate::panel_ops_cloudflare::{
-    CloudflareAuthType, CloudflareSettings, load_cloudflare, normalize_record_type,
+    CloudflareAuthType, CloudflareSettings, load_cloudflare, looks_like_global_api_key,
+    normalize_record_type, sanitize_cloudflare_secret,
 };
 use crate::panel_ops_dns::{list_zones, read_zone};
 use serde::Deserialize;
@@ -9,6 +10,7 @@ use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 
 const CF_API: &str = "https://api.cloudflare.com/client/v4";
+const CF_USER_AGENT: &str = "CPN-Panel/1.0 (+https://github.com/Control-Panel-Network/CPN-Control-Panel-Network)";
 
 #[derive(Debug, Clone)]
 pub struct CfDnsRecord {
@@ -30,21 +32,35 @@ struct CfEnvelope {
 
 #[derive(Debug, Deserialize)]
 struct CfError {
+    code: Option<i64>,
     message: Option<String>,
+    #[serde(default)]
+    error_chain: Option<Vec<CfError>>,
 }
 
 fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
-    let token = settings.api_token.trim();
+    let token = sanitize_cloudflare_secret(&settings.api_token);
     if token.is_empty() {
         return Err("Cloudflare API token is not configured".into());
     }
-    let mut headers = vec!["Content-Type: application/json".to_string()];
-    match settings.auth_type {
+    let mut auth_type = settings.auth_type;
+    let email = settings.email.trim();
+    // Global API Key sent as Bearer yields CF 6003/6111 "Invalid request headers".
+    if auth_type == CloudflareAuthType::ApiToken && looks_like_global_api_key(&token) {
+        if email.is_empty() {
+            return Err(
+                "Stored secret looks like a Global API Key, but auth is set to API Token. Open API Settings, choose Global API Key, enter the Cloudflare account email, or replace the secret with a scoped API Token."
+                    .into(),
+            );
+        }
+        auth_type = CloudflareAuthType::GlobalKey;
+    }
+    let mut headers = vec![format!("User-Agent: {CF_USER_AGENT}")];
+    match auth_type {
         CloudflareAuthType::ApiToken => {
             headers.push(format!("Authorization: Bearer {token}"));
         }
         CloudflareAuthType::GlobalKey => {
-            let email = settings.email.trim();
             if email.is_empty() {
                 return Err("Cloudflare email is required for Global API Key auth".into());
             }
@@ -55,9 +71,45 @@ fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
     Ok(headers)
 }
 
+fn flatten_cf_errors(errors: Vec<CfError>) -> String {
+    let mut parts = Vec::new();
+    let mut stack = errors;
+    while let Some(err) = stack.pop() {
+        if let Some(msg) = err.message {
+            let msg = msg.trim();
+            if !msg.is_empty() {
+                parts.push(msg.to_string());
+            }
+        }
+        if let Some(chain) = err.error_chain {
+            stack.extend(chain);
+        }
+        let _ = err.code;
+    }
+    parts.join("; ")
+}
+
+fn map_cf_api_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("invalid format for authorization header")
+        || (lower.contains("invalid request headers") && lower.contains("authorization"))
+    {
+        return "Invalid Authorization header. Use a scoped API Token with Bearer auth, or Global API Key with account email (X-Auth-Email / X-Auth-Key). A Global API Key cannot be sent as Bearer.".into();
+    }
+    if raw.trim().is_empty() {
+        "Cloudflare API reported failure".into()
+    } else {
+        format!("Cloudflare API: {raw}")
+    }
+}
+
 pub(crate) fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, String> {
     let settings = load_cloudflare();
-    let headers = auth_headers(&settings)?;
+    let mut headers = auth_headers(&settings)?;
+    // Only send Content-Type when a JSON body is present (GET/DELETE stay header-clean).
+    if body.is_some() {
+        headers.push("Content-Type: application/json".to_string());
+    }
     let mut cmd = Command::new("curl");
     cmd.args([
         "--fail-with-body",
@@ -97,18 +149,8 @@ pub(crate) fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<V
         )
     })?;
     if !env.success {
-        let msg = env
-            .errors
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|e| e.message)
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(if msg.is_empty() {
-            "Cloudflare API reported failure".into()
-        } else {
-            format!("Cloudflare API: {msg}")
-        });
+        let msg = flatten_cf_errors(env.errors.unwrap_or_default());
+        return Err(map_cf_api_error(&msg));
     }
     Ok(env.result.unwrap_or(Value::Null))
 }

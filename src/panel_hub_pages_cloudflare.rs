@@ -40,7 +40,18 @@ fn tab_bar(active: &str) -> String {
 .cf-table th, .cf-table td {{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--border,#333); vertical-align:middle; }}
 .cf-add-row {{ display:flex; flex-wrap:wrap; gap:8px; align-items:end; margin:12px 0; }}
 .cf-add-row label {{ display:flex; flex-direction:column; gap:4px; font-size:12px; }}
-.cf-add-row input, .cf-add-row select {{ min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border,#444); background:transparent; color:inherit; }}
+.cf-add-row input, .cf-add-row select {{ min-width:120px; padding:8px; border-radius:6px; border:1px solid var(--border,#444); background:var(--canvas,#fff); color:var(--ink,#1d1d1f); color-scheme:light; }}
+.stack-form select, .stack-form input {{ background:var(--canvas,#fff); color:var(--ink,#1d1d1f); }}
+[data-color-mode="dark"] .cf-add-row input,
+[data-color-mode="dark"] .cf-add-row select,
+[data-color-mode="dark"] .stack-form select,
+[data-color-mode="dark"] .stack-form input {{
+  background:#12151c; border-color:#3b4558; color:#f3f6fb; color-scheme:dark;
+}}
+[data-color-mode="dark"] .cf-add-row select option,
+[data-color-mode="dark"] .stack-form select option {{
+  background:#12151c; color:#f3f6fb;
+}}
 </style>"#
     )
 }
