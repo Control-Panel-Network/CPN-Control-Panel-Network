@@ -459,8 +459,16 @@ pub fn tab_files(site: &SiteRecord) -> String {
         "open_basedir",
         "PHP open_basedir hint for this docroot",
     ));
-    tiles.push_str(&tile("/ftp/create", "Create SFTP Acct", "Jailed OpenSSH SFTP"));
-    tiles.push_str(&tile("/ftp/delete", "Delete SFTP Acct", "Remove jailed user"));
+    tiles.push_str(&tile(
+        "/ftp/create",
+        "Create SFTP Acct",
+        "Jailed OpenSSH SFTP",
+    ));
+    tiles.push_str(&tile(
+        "/ftp/delete",
+        "Delete SFTP Acct",
+        "Remove jailed user",
+    ));
     tiles.push_str("</div>");
 
     let basedir = format!(

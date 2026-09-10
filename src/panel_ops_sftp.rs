@@ -68,15 +68,17 @@ pub fn detect_sftp_stack() -> SftpStackStatus {
         if sshd_active {
             return SftpStackStatus {
                 stack: "OpenSSH".into(),
-                detail: "sshd is running. Use Reset SFTP to install the CPN jail Match block and group."
-                    .into(),
+                detail:
+                    "sshd is running. Use Reset SFTP to install the CPN jail Match block and group."
+                        .into(),
                 ready: false,
             };
         }
         SftpStackStatus {
             stack: "Not detected".into(),
-            detail: "OpenSSH sshd is not active. Install and start openssh-server, then Reset SFTP."
-                .into(),
+            detail:
+                "OpenSSH sshd is not active. Install and start openssh-server, then Reset SFTP."
+                    .into(),
             ready: false,
         }
     }
@@ -150,7 +152,11 @@ fn user_exists(username: &str) -> bool {
 fn set_owner(path: &Path, username: &str) -> Result<(), String> {
     run_checked(
         "chown",
-        &["-R", &format!("{username}:{SFTP_GROUP}"), &path.display().to_string()],
+        &[
+            "-R",
+            &format!("{username}:{SFTP_GROUP}"),
+            &path.display().to_string(),
+        ],
         "chown writable tree",
     )
 }
@@ -393,11 +399,10 @@ pub fn delete_jailed_sftp_account(username_raw: &str) -> Result<String, String> 
     #[cfg(unix)]
     {
         let username = validate_username(username_raw)?;
-        if !list_ftp_accounts()
-            .iter()
-            .any(|a| a.username == username)
-        {
-            return Err(format!("SFTP account `{username}` is not in the CPN registry"));
+        if !list_ftp_accounts().iter().any(|a| a.username == username) {
+            return Err(format!(
+                "SFTP account `{username}` is not in the CPN registry"
+            ));
         }
         if user_exists(&username) {
             // Do not remove site files; only the system user.
@@ -417,14 +422,15 @@ pub fn reset_sftp_password(username_raw: &str, password: &str) -> Result<String,
     #[cfg(unix)]
     {
         let username = validate_username(username_raw)?;
-        if !list_ftp_accounts()
-            .iter()
-            .any(|a| a.username == username)
-        {
-            return Err(format!("SFTP account `{username}` is not in the CPN registry"));
+        if !list_ftp_accounts().iter().any(|a| a.username == username) {
+            return Err(format!(
+                "SFTP account `{username}` is not in the CPN registry"
+            ));
         }
         if !user_exists(&username) {
-            return Err(format!("System user `{username}` is missing; recreate the account"));
+            return Err(format!(
+                "System user `{username}` is missing; recreate the account"
+            ));
         }
         set_password(&username, password)?;
         Ok(format!("Password updated for `{username}`"))

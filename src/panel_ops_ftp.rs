@@ -1,4 +1,4 @@
-﻿//! FTP stack detection (prefers CPN OpenSSH jailed SFTP).
+//! FTP stack detection (prefers CPN OpenSSH jailed SFTP).
 
 use crate::panel_ops_sftp::detect_sftp_stack;
 use std::process::Command;
@@ -28,8 +28,9 @@ pub fn detect_ftp() -> FtpStatus {
     if pure == "active" {
         return FtpStatus {
             stack: "Pure-FTPd".into(),
-            detail: "Pure-FTPd is active. Prefer CPN jailed SFTP (Reset SFTP) for chrooted site access."
-                .into(),
+            detail:
+                "Pure-FTPd is active. Prefer CPN jailed SFTP (Reset SFTP) for chrooted site access."
+                    .into(),
             ready: true,
         };
     }

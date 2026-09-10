@@ -284,10 +284,7 @@ pub async fn ftp_reset(
 }
 
 #[post("/ftp/reset")]
-pub async fn ftp_reset_post(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
+pub async fn ftp_reset_post(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
