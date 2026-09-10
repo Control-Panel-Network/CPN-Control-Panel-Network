@@ -21,7 +21,7 @@ path = "src/bin/cpn.rs"
 [dependencies]
 actix-web = "4"
 actix-ws = "0.3"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 base64 = "0.23.1"
 clap = { version = "4", features = ["derive"] }
 data-encoding = "2"

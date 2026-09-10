@@ -185,9 +185,9 @@ fn encrypt_secret(plain: &str) -> Result<(String, String), String> {
     let key = load_or_create_mfa_key()?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|err| format!("AES key error: {err}"))?;
     let nonce_bytes: [u8; 12] = rand::rng().random();
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     let ciphertext = cipher
-        .encrypt(nonce, plain.as_bytes())
+        .encrypt(&nonce, plain.as_bytes())
         .map_err(|_| "Could not encrypt TOTP secret".to_string())?;
     Ok((B64.encode(ciphertext), B64.encode(nonce_bytes)))
 }
@@ -201,12 +201,13 @@ fn decrypt_secret(enc_b64: &str, nonce_b64: &str) -> Result<String, String> {
     let nonce_bytes = B64
         .decode(nonce_b64.as_bytes())
         .map_err(|_| "Corrupt TOTP nonce".to_string())?;
-    if nonce_bytes.len() != 12 {
-        return Err("Corrupt TOTP nonce length".into());
-    }
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce_arr: [u8; 12] = nonce_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| "Corrupt TOTP nonce length".to_string())?;
+    let nonce = Nonce::from(nonce_arr);
     let plain = cipher
-        .decrypt(nonce, ciphertext.as_ref())
+        .decrypt(&nonce, ciphertext.as_ref())
         .map_err(|_| "Could not decrypt TOTP secret".to_string())?;
     String::from_utf8(plain).map_err(|_| "Invalid TOTP secret encoding".into())
 }
