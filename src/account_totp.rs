@@ -1,7 +1,7 @@
 //! TOTP (RFC 6238) helpers and otpauth QR SVG (no network calls).
 
 use data_encoding::BASE32_NOPAD;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use qrcode::QrCode;
 use qrcode::render::svg;
 use rand::Rng;
