@@ -578,7 +578,9 @@ mod tests {
         assert!(html.contains("nav-child-btn"));
         assert!(html.contains(" open"));
         assert!(html.contains("Plugin Store") || html.contains("Plugins"));
-        assert!(html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\""));
+        assert!(
+            html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\"")
+        );
     }
 
     #[test]

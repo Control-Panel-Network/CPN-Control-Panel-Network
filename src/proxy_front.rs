@@ -6,7 +6,7 @@
 //! as origin while Nginx fronts public traffic when this option is enabled.
 
 use crate::paths;
-use crate::sites::{SiteRecord, load_site, list_sites, normalize_domain};
+use crate::sites::{SiteRecord, list_sites, load_site, normalize_domain};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -63,7 +63,8 @@ pub fn nginx_stub_dir() -> PathBuf {
 
 fn write_mode600(path: &Path, raw: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
     }
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -158,7 +159,12 @@ pub fn ensure_site_internal_ip(domain_raw: &str) -> Result<Option<String>, Strin
     }
     let domain = normalize_domain(domain_raw)?;
     let mut site = load_site(&domain)?;
-    if let Some(existing) = site.internal_ip.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+    if let Some(existing) = site
+        .internal_ip
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         return Ok(Some(existing.to_string()));
     }
     let used: Vec<Ipv4Addr> = list_sites()?
@@ -173,7 +179,12 @@ pub fn ensure_site_internal_ip(domain_raw: &str) -> Result<Option<String>, Strin
 }
 
 fn write_site_nginx_stub(site: &SiteRecord) -> Result<(), String> {
-    let Some(ip) = site.internal_ip.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+    let Some(ip) = site
+        .internal_ip
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    else {
         return Ok(());
     };
     let dir = nginx_stub_dir().join("conf.d");
@@ -238,10 +249,7 @@ mod tests {
 
     #[test]
     fn pool_skips_used_addresses() {
-        let used = vec![
-            Ipv4Addr::new(10, 66, 0, 10),
-            Ipv4Addr::new(10, 66, 0, 11),
-        ];
+        let used = vec![Ipv4Addr::new(10, 66, 0, 10), Ipv4Addr::new(10, 66, 0, 11)];
         assert_eq!(
             next_free_internal_ip(&used).unwrap(),
             Ipv4Addr::new(10, 66, 0, 12)
