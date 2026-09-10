@@ -68,7 +68,6 @@ button { font:inherit; cursor:pointer; }
   border-radius:8px; color:var(--ink); font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
-.sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
 .nav-icon {
   width:28px; height:28px; flex:0 0 28px; border-radius:8px;
 }
@@ -245,98 +244,15 @@ code { font-size:.9em; word-break:break-word; }
 "#
 }
 
-fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> String {
-    let mut class = String::new();
-    if id == active {
-        class.push_str("active");
-    }
-    if child {
-        if !class.is_empty() {
-            class.push(' ');
-        }
-        class.push_str("nav-child");
-    }
-    let class_attr = if class.is_empty() {
-        String::new()
-    } else {
-        format!(r#" class="{class}""#)
-    };
-    format!(
-        r#"<a{class_attr} href="{href}">{icon}<span>{label}</span></a>"#,
-        icon = crate::panel_icons::nav_icon_html(id),
-    )
-}
-
-fn nav_links(active: &str, username: &str) -> String {
-    let hosting = [
-        ("dashboard", "/dashboard", "Dashboard"),
-        ("websites", "/websites", "Websites"),
-        ("email", "/email", "Email"),
-        ("databases", "/databases", "Databases & FTP"),
-        ("backups", "/backups", "Backups"),
-        ("apps", "/apps", "Apps"),
-    ];
-    let mut parts = Vec::new();
-    parts.push(r#"<div class="nav-section">Hosting</div>"#.to_string());
-    for (id, href, label) in hosting {
-        parts.push(nav_link(id, href, label, active, false));
-    }
-    parts.push(r#"<div class="nav-section">Account</div>"#.to_string());
-    parts.push(nav_link(
-        "users",
-        "/account/users",
-        "Users & Plans",
-        active,
-        false,
-    ));
-    parts.push(nav_link("packages", "/packages", "Packages", active, false));
-    parts.push(r#"<div class="nav-section">Administration</div>"#.to_string());
-    for (id, href, label) in [
-        ("server", "/server", "Server"),
-        ("security", "/security", "Security"),
-        ("settings", "/settings", "Settings"),
-    ] {
-        parts.push(nav_link(id, href, label, active, false));
-    }
-    parts.push(r#"<div class="nav-section">Plugins</div>"#.to_string());
-    parts.push(nav_link(
-        "plugins",
-        "/plugins",
-        "Installed / Store",
-        active,
-        false,
-    ));
-    let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
-    let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
-    domains.sort_unstable();
-    domains.dedup();
-    let need_domain_hint = domains.len() > 1;
-    for link in &plugin_links {
-        let label = if need_domain_hint {
-            format!("{} ({})", link.name, link.domain)
-        } else {
-            link.name.clone()
-        };
-        let id = format!("plugin-{}-{}", link.domain, link.id);
-        parts.push(nav_link(
-            &id,
-            &link.href,
-            &html_escape(&label),
-            active,
-            true,
-        ));
-    }
-    parts.join("\n          ")
-}
-
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
-    let nav = nav_links(active, username);
+    let nav = crate::panel_nav_tree::nav_links_html(active, username);
     let header = crate::panel_sidebar::sidebar_header_html(username);
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}",
         panel_styles(),
+        crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
         crate::panel_footer_chrome::sidebar_footer_styles(),
@@ -347,8 +263,9 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}{}",
+        "{}{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
+        crate::panel_nav_tree::nav_tree_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script(),
         crate::panel_footer_chrome::notifications_popover_script()

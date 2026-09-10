@@ -82,6 +82,7 @@ pub mod panel_icons;
 pub(crate) mod panel_icons_svg;
 pub mod panel_mail_routes;
 pub mod panel_nav_chrome;
+pub mod panel_nav_tree;
 pub mod panel_network;
 pub mod panel_notifications;
 pub mod panel_notifications_routes;

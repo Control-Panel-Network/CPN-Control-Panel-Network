@@ -89,8 +89,18 @@ pub fn tab_overview(site: &SiteRecord) -> String {
         detail = html_escape(&snap.detail),
         cpu = html_escape(&cpu_label),
         mem = html_escape(&mem_label),
-        cpu_svg = sparkline_svg(snap.cpu_pct, "#3b82f6"),
-        mem_svg = sparkline_svg(snap.mem_pct, "#12b76a"),
+        cpu_svg = sparkline_svg(
+            snap.cpu_pct,
+            crate::panel_dashboard::gauge_stroke_for_usage(
+                snap.cpu_pct.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
+            ),
+        ),
+        mem_svg = sparkline_svg(
+            snap.mem_pct,
+            crate::panel_dashboard::gauge_stroke_for_usage(
+                snap.mem_pct.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
+            ),
+        ),
     );
 
     let home = site_home_from_record(site);

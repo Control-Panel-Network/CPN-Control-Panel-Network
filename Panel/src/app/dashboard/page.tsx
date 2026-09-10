@@ -101,7 +101,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       <div className="resource-grid">
         <ResourceGauge label="CPU Usage" value={45} detail="4 cores" />
         <ResourceGauge label="RAM Usage" value={72} detail="11.5 / 16 GB" />
-        <ResourceGauge label="Disk Usage" value={28} detail="140 / 500 GB" />
+        <ResourceGauge label="Disk Usage" value={90} detail="450 / 500 GB" />
       </div>
       <div className="dashboard-lower-grid">
         <article className="status-card">
