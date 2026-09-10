@@ -13,7 +13,7 @@ fn panel_styles() -> &'static str {
 :root {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
   --muted:#6e6e73; --hairline:#e0e0e0; --blue:#0066cc; --blue-focus:#0071e3; --green:#18864b;
-  --sidebar-width:256px;
+  --sidebar-width:292px;
 }
 * { box-sizing:border-box; }
 /* Fixed shell: sidebar stays put; main column scrolls. Avoid overflow-x on html/body (breaks sticky). */
@@ -50,7 +50,7 @@ button { font:inherit; cursor:pointer; }
 .server-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
 .server-summary span { color:var(--muted); font-size:12px; }
 .sidebar nav {
-  flex:1 1 auto; min-height:0; display:grid; gap:4px; align-content:start;
+  flex:1 1 auto; min-height:0; display:block;
   overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin;
   scrollbar-color:rgba(110,110,115,.55) transparent;
@@ -72,10 +72,7 @@ button { font:inherit; cursor:pointer; }
   width:28px; height:28px; flex:0 0 28px; border-radius:8px;
 }
 .nav-icon svg { width:16px; height:16px; }
-.nav-section {
-  margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
-  letter-spacing:.08em; text-transform:uppercase;
-}
+/* Section labels: panel_nav_tree::nav_tree_styles */
 /* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
 .logout {
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;

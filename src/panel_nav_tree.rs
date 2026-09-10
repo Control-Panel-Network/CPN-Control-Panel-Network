@@ -288,19 +288,20 @@ const ADMINISTRATION: &[NavEntry] = &[
 ];
 
 fn chevron_svg() -> &'static str {
-    r#"<svg class="nav-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>"#
+    r#"<svg class="nav-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>"#
 }
 
 fn flat_link(id: &str, href: &str, label: &str, active: &str) -> String {
     let class = if id == active {
-        r#" class="active""#
+        r#" class="nav-tile active""#
     } else {
-        ""
+        r#" class="nav-tile""#
     };
     format!(
-        r#"<a{class} href="{href}">{icon}<span>{label}</span></a>"#,
+        r#"<a{class} href="{href}">{icon}<span>{label}</span>{chevron}</a>"#,
         icon = nav_icon_html(id),
         label = html_escape(label),
+        chevron = chevron_svg(),
     )
 }
 
@@ -334,7 +335,7 @@ fn group_block(id: &str, href: &str, label: &str, children: &[NavChild], active:
     }
     format!(
         r#"<details class="nav-group" data-nav-group="{id}"{open}>
-  <summary class="nav-parent{parent_active}">
+  <summary class="nav-parent nav-tile{parent_active}">
     {icon}<span>{label}</span>{chevron}
   </summary>
   <div class="nav-children">
@@ -357,6 +358,7 @@ fn render_section(title: &str, entries: &[NavEntry], active: &str) -> Vec<String
         r#"<div class="nav-section">{}</div>"#,
         html_escape(title)
     ));
+    parts.push(r#"<div class="nav-tile-grid">"#.to_string());
     for entry in entries {
         match *entry {
             NavEntry::Link { id, href, label } => {
@@ -372,6 +374,7 @@ fn render_section(title: &str, entries: &[NavEntry], active: &str) -> Vec<String
             }
         }
     }
+    parts.push(r#"</div>"#.to_string());
     parts
 }
 
@@ -384,11 +387,12 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
 
     parts.push(r#"<div class="nav-section">Plugins</div>"#.to_string());
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
+    parts.push(r#"<div class="nav-tile-grid">"#.to_string());
     if plugin_links.is_empty() {
         parts.push(flat_link(
             "plugins",
             "/plugins",
-            "Installed / Store",
+            "Plugin Store",
             active,
         ));
     } else {
@@ -421,7 +425,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         };
         parts.push(format!(
             r#"<details class="nav-group" data-nav-group="plugins"{open}>
-  <summary class="nav-parent{parent_active}">
+  <summary class="nav-parent nav-tile{parent_active}">
     {icon}<span>Plugins</span>{chevron}
   </summary>
   <div class="nav-children">
@@ -435,54 +439,104 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
             children = child_html.join("\n    "),
         ));
     }
+    parts.push(r#"</div>"#.to_string());
 
     parts.join("\n          ")
 }
 
-/// CSS for expandable parents and stacked child button rows.
+/// CSS for multi-column tile grid, expandable parents, and child buttons.
 pub fn nav_tree_styles() -> &'static str {
     r#"
-.nav-group { margin:0; border:0; }
+.nav-tile-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+  margin:0 0 10px;
+  align-content:start;
+}
+.nav-section {
+  grid-column:1 / -1;
+  margin:14px 4px 8px;
+  color:var(--muted); font-size:11px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+}
+.sidebar nav > .nav-section:first-child { margin-top:4px; }
+.nav-group { margin:0; border:0; min-width:0; }
+.nav-group[open] { grid-column:1 / -1; }
 .nav-group > summary {
   list-style:none; cursor:pointer;
 }
 .nav-group > summary::-webkit-details-marker { display:none; }
-.nav-parent {
-  display:flex; align-items:center; gap:10px; min-height:44px; padding:0 13px;
-  border-radius:8px; color:var(--ink); font-size:15px; user-select:none;
+.sidebar nav a.nav-tile,
+.nav-parent.nav-tile {
+  display:flex; align-items:center; gap:8px; min-height:52px; min-width:0;
+  padding:8px 10px; border-radius:12px; color:var(--ink);
+  font-size:12.5px; font-weight:600; line-height:1.2; user-select:none;
+  background:#fff; border:1px solid var(--hairline);
+  box-shadow:0 1px 2px rgba(29,29,31,.05);
 }
-.nav-parent:hover { background:rgba(0,0,0,.04); }
-.nav-parent-active { background:#e7f1ff; color:var(--blue); font-weight:600; }
-.nav-parent .nav-chevron {
-  margin-left:auto; flex:0 0 auto; transition:transform .18s ease;
+.sidebar nav a.nav-tile span,
+.nav-parent.nav-tile span {
+  flex:1 1 auto; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.nav-group[open] > .nav-parent .nav-chevron { transform:rotate(180deg); }
+.sidebar nav a.nav-tile:hover,
+.nav-parent.nav-tile:hover {
+  border-color:#c9d8ef; background:#f8fbff; color:var(--blue);
+}
+.sidebar nav a.nav-tile.active,
+.nav-parent-active {
+  border-color:#9ec2f0; background:#e7f1ff; color:var(--blue);
+}
+.nav-parent .nav-chevron,
+.sidebar nav a.nav-tile .nav-chevron {
+  margin-left:auto; flex:0 0 auto; color:var(--muted);
+  transition:transform .18s ease;
+}
+.nav-group[open] > .nav-parent .nav-chevron { transform:rotate(90deg); color:var(--blue); }
 .nav-children {
-  display:flex; flex-direction:column; gap:6px;
-  margin:4px 0 8px; padding:0 4px 2px 8px;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:6px;
+  margin:8px 0 2px;
+  padding:0;
 }
 .nav-child-btn {
-  display:flex; align-items:center; min-height:40px; padding:8px 14px;
+  display:flex; align-items:center; min-height:40px; min-width:0; padding:8px 12px;
   border-radius:10px; background:#fff; border:1px solid var(--hairline);
-  color:var(--ink); font-size:13.5px; font-weight:500; box-shadow:0 1px 2px rgba(29,29,31,.04);
+  color:var(--ink); font-size:12.5px; font-weight:500;
+  box-shadow:0 1px 2px rgba(29,29,31,.04);
+}
+.nav-child-btn span {
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .nav-child-btn:hover { border-color:#c9d8ef; background:#f8fbff; color:var(--blue); }
 .nav-child-btn.active {
   border-color:#9ec2f0; background:#e7f1ff; color:var(--blue); font-weight:600;
 }
 .sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
-[data-color-mode="dark"] .nav-parent:hover { background:rgba(255,255,255,.06); }
-[data-color-mode="dark"] .nav-parent-active { background:rgba(59,130,246,.18); color:#93c5fd; }
+@media (max-width: 359.98px) {
+  .nav-tile-grid,
+  .nav-children { grid-template-columns:1fr; }
+}
+[data-color-mode="dark"] .sidebar nav a.nav-tile,
+[data-color-mode="dark"] .nav-parent.nav-tile,
 [data-color-mode="dark"] .nav-child-btn {
   background:#1c212b; border-color:#2a3140; color:#e5e7eb;
   box-shadow:none;
 }
+[data-color-mode="dark"] .sidebar nav a.nav-tile:hover,
+[data-color-mode="dark"] .nav-parent.nav-tile:hover,
 [data-color-mode="dark"] .nav-child-btn:hover {
   background:#232a36; border-color:#3b82f6; color:#93c5fd;
 }
+[data-color-mode="dark"] .sidebar nav a.nav-tile.active,
+[data-color-mode="dark"] .nav-parent-active,
 [data-color-mode="dark"] .nav-child-btn.active {
   background:rgba(59,130,246,.2); border-color:#3b82f6; color:#93c5fd;
 }
+[data-color-mode="dark"] .nav-parent .nav-chevron,
+[data-color-mode="dark"] .sidebar nav a.nav-tile .nav-chevron { color:#9ca3af; }
 "#
 }
 
@@ -523,12 +577,15 @@ mod tests {
     fn nested_users_group_renders_child_buttons() {
         let html = nav_links_html("users", "admin");
         assert!(html.contains("nav-group"));
+        assert!(html.contains("nav-tile-grid"));
+        assert!(html.contains("nav-tile"));
         assert!(html.contains("View Profile"));
         assert!(html.contains("Create New User"));
         assert!(html.contains("List Users"));
         assert!(html.contains("/account/users/profile"));
         assert!(html.contains("nav-child-btn"));
         assert!(html.contains(" open"));
+        assert!(html.contains("Plugin Store") || html.contains("Plugins"));
     }
 
     #[test]
@@ -537,5 +594,7 @@ mod tests {
         assert!(css.contains(".nav-child-btn"));
         assert!(css.contains(".nav-children"));
         assert!(css.contains(".nav-chevron"));
+        assert!(css.contains("grid-template-columns:repeat(2"));
+        assert!(css.contains(".nav-tile-grid"));
     }
 }
