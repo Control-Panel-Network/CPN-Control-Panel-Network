@@ -1,9 +1,11 @@
-//! Manage dashboard tab bodies (Overview, Domains, Logs, Config, SSL, Files, Apps).
+//! Manage dashboard tab bodies (Overview, Domains, Logs, Config, Files, Apps).
+//! SSL tab: `panel_website_manage_ssl`.
+
+pub use crate::panel_website_manage_ssl::tab_ssl;
 
 use crate::panel_ops_db::list_databases;
 use crate::panel_ops_ftp::detect_ftp;
 use crate::panel_ops_php::detect_php;
-use crate::panel_ops_ssl_le::ssl_status_for_domain;
 use crate::panel_website_logs::log_panel_html;
 use crate::panel_website_manage_ui::{html_escape, resource_card, section, ssl_status_card, tile};
 use crate::panel_website_resources::{
@@ -13,7 +15,6 @@ use crate::service_detect::detect_web_server_label;
 use crate::sites::{
     SiteRecord, is_legacy_docroot, list_sites, resolve_parent_domain, site_home_from_record,
 };
-use crate::website_preview::ssl_material_present;
 use std::path::{Path, PathBuf};
 
 fn child_sites(parent: &str) -> Vec<SiteRecord> {
@@ -329,126 +330,6 @@ pub fn tab_config(site: &SiteRecord) -> String {
         vhost = vhost_block,
         rewrite = rewrite_block,
         ssh = ssh,
-    )
-}
-
-pub fn tab_ssl(site: &SiteRecord) -> String {
-    let domain_q = html_escape(&site.domain);
-    let row = ssl_status_for_domain(&site.domain);
-    let has = ssl_material_present(&site.domain);
-    let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
-    tiles.push_str(&tile(
-        &format!("/websites/manage?domain={domain_q}&tab=ssl#provider"),
-        "SSL provider",
-        &row.provider_label,
-    ));
-    tiles.push_str(&tile(
-        "/security/ssl",
-        "Manage SSL (all sites)",
-        "Per-domain providers; no account-wide rewrite",
-    ));
-    tiles.push_str(&tile(
-        &format!("/websites/manage?domain={domain_q}&tab=ssl#manual"),
-        "Custom upload",
-        "PEM cert + key (no auto-renew)",
-    ));
-    tiles.push_str("</div>");
-
-    let mut opts = String::new();
-    for p in crate::panel_ops_ssl_provider::SslProvider::all() {
-        let sel = if p.as_str() == row.provider {
-            " selected"
-        } else {
-            ""
-        };
-        opts.push_str(&format!(
-            r#"<option value="{v}"{sel}>{l}</option>"#,
-            v = p.as_str(),
-            l = html_escape(p.label()),
-            sel = sel,
-        ));
-    }
-    let inc = if site.ssl.include_subdomains_on_cert {
-        " checked"
-    } else {
-        ""
-    };
-    let provider_form = format!(
-        r#"<div id="provider"><h3>Provider for {domain} only</h3>
-<p class="manage-muted">Changing this domain does not rewrite siblings. Subdomains inherit parent provider only at creation time.</p>
-<form method="post" action="/security/ssl/provider" class="stack-form" style="max-width:480px;">
-  <input type="hidden" name="domain" value="{domain}">
-  <input type="hidden" name="return" value="/websites/manage?domain={domain_q}&amp;tab=ssl">
-  <label for="provider">SSL provider</label>
-  <select id="provider" name="provider">{opts}</select>
-  <label><input type="checkbox" name="include_subdomains" value="1"{inc}> Include matching subdomains on one SAN cert</label>
-  <button type="submit" class="manage-btn primary">Save provider</button>
-</form>
-<p class="manage-muted">Status: {cert}. Shared owner: {shared}.</p>{err}</div>"#,
-        domain = html_escape(&site.domain),
-        domain_q = domain_q,
-        opts = opts,
-        inc = inc,
-        cert = if has {
-            "certificate material on disk"
-        } else {
-            "no certificate files found"
-        },
-        shared = html_escape(row.shared_cert_owner.as_deref().unwrap_or("-")),
-        err = if row.last_error.is_empty() {
-            String::new()
-        } else {
-            format!(
-                r#"<p class="panel-notice error" role="status">{}</p>"#,
-                html_escape(&row.last_error)
-            )
-        },
-    );
-
-    let issue = if row.auto_issue {
-        format!(
-            r#"<div id="issue"><h3>Issue / Renew</h3>
-<form method="post" action="/security/ssl/issue">
-  <input type="hidden" name="domain" value="{domain}">
-  <input type="hidden" name="return" value="/websites/manage?domain={domain_q}&amp;tab=ssl">
-  <button type="submit" class="manage-btn primary">Issue / Renew ({label})</button>
-</form>
-<p class="manage-muted">certbot available: {cb}. Honest errors on rate limits or missing public DNS.</p></div>"#,
-            domain = html_escape(&site.domain),
-            domain_q = domain_q,
-            label = html_escape(&row.provider_label),
-            cb = if row.certbot { "yes" } else { "no" },
-        )
-    } else {
-        format!(
-            r#"<div id="issue"><h3>Issue / Renew</h3>
-<p class="manage-muted">Provider <strong>{}</strong> does not auto-issue. Choose Let's Encrypt, ZeroSSL, or Cloudflare CA, or upload Custom SSL.</p></div>"#,
-            html_escape(&row.provider_label)
-        )
-    };
-
-    let manual = format!(
-        r#"<div id="manual"><h3>Custom SSL upload</h3>
-<p class="manage-muted">Uploading sets this domain to Custom and leaves any shared SAN. Keys stored under <code>/var/lib/cpn/ssl/{domain}/</code> mode 600.</p>
-<form method="post" action="/security/ssl/upload" class="stack-form" style="max-width:640px;">
-  <input type="hidden" name="domain" value="{domain}">
-  <input type="hidden" name="return" value="/websites/manage?domain={domain_q}&amp;tab=ssl">
-  <label for="cert_pem">Certificate PEM (fullchain)</label>
-  <textarea id="cert_pem" name="cert_pem" rows="6" style="width:100%;font:inherit;" required></textarea>
-  <label for="key_pem">Private key PEM</label>
-  <textarea id="key_pem" name="key_pem" rows="6" style="width:100%;font:inherit;" required></textarea>
-  <button type="submit" class="manage-btn primary">Upload custom SSL</button>
-</form></div>"#,
-        domain = html_escape(&site.domain),
-        domain_q = domain_q,
-    );
-
-    format!(
-        "{tiles}{provider}{issue}{manual}",
-        tiles = section("SSL", &tiles),
-        provider = provider_form,
-        issue = issue,
-        manual = manual,
     )
 }
 

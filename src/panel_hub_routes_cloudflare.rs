@@ -9,12 +9,13 @@ use crate::panel_ops_cloudflare_api::{
     create_dns_record, delete_dns_record, list_dns_records, set_proxy,
     sync_local_zone_to_cloudflare,
 };
+use crate::panel_ops_cloudflare_verify::verify_cloudflare_connection;
 use crate::panel_ops_ssl_le::{
     issue_le_for_all_without_custom, issue_lets_encrypt, renew_lets_encrypt_all,
-    restore_lets_encrypt, set_custom_ssl, set_domain_provider, set_include_subdomains,
-    upload_custom_ssl,
+    restore_lets_encrypt, set_coverage_mode, set_custom_ssl, set_domain_provider,
+    set_include_subdomains, upload_custom_ssl,
 };
-use crate::panel_ops_ssl_provider::{SslProvider, save_ssl_defaults};
+use crate::panel_ops_ssl_provider::{SslCoverageMode, SslProvider, save_ssl_defaults};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -97,6 +98,26 @@ pub async fn cloudflare_settings_post(
     let sync = form.sync_local.trim() == "1" || form.sync_local.eq_ignore_ascii_case("enable");
     match save_cloudflare_settings(&form.auth_type, &form.email, &form.api_token, sync) {
         Ok(msg) => redirect_notice("/dns/cloudflare?tab=api", Some(&msg), None),
+        Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
+    }
+}
+
+#[post("/dns/cloudflare/test")]
+pub async fn cloudflare_test_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
+        return resp;
+    }
+    match verify_cloudflare_connection() {
+        Ok(result) if result.ok => {
+            redirect_notice("/dns/cloudflare?tab=api", Some(&result.message), None)
+        }
+        Ok(result) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&result.message)),
         Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
     }
 }
@@ -355,6 +376,8 @@ pub struct SslProviderForm {
     pub domain: String,
     pub provider: String,
     #[serde(default)]
+    pub coverage_mode: Option<String>,
+    #[serde(default)]
     pub include_subdomains: Option<String>,
     #[serde(default)]
     pub r#return: Option<String>,
@@ -377,15 +400,35 @@ pub async fn security_ssl_provider(
         Ok(p) => p,
         Err(err) => return redirect_notice(&back, None, Some(&err)),
     };
-    let include = form
+    let coverage = if let Some(raw) = form.coverage_mode.as_deref() {
+        match SslCoverageMode::parse(raw) {
+            Ok(m) => m,
+            Err(err) => return redirect_notice(&back, None, Some(&err)),
+        }
+    } else if form
         .include_subdomains
         .as_deref()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("on"))
-        .unwrap_or(false);
+        .unwrap_or(false)
+    {
+        SslCoverageMode::San
+    } else {
+        SslCoverageMode::Wildcard
+    };
     match set_domain_provider(&form.domain, provider) {
         Ok(msg) => {
-            let _ = set_include_subdomains(&form.domain, include);
-            redirect_notice(&back, Some(&msg), None)
+            let cov_msg = set_coverage_mode(&form.domain, coverage)
+                .unwrap_or_else(|_| format!("coverage {}", coverage.label()));
+            // Keep legacy flag in sync for older readers.
+            let _ = set_include_subdomains(
+                &form.domain,
+                matches!(coverage, SslCoverageMode::San),
+            );
+            redirect_notice(
+                &back,
+                Some(&format!("{msg}. {cov_msg}")),
+                None,
+            )
         }
         Err(err) => redirect_notice(&back, None, Some(&err)),
     }

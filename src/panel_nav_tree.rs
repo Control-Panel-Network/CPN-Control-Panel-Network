@@ -471,8 +471,8 @@ pub fn nav_tree_styles() -> &'static str {
   background:#fff; border:1px solid var(--hairline);
   box-shadow:0 1px 2px rgba(29,29,31,.05);
 }
-.sidebar nav a.nav-tile span,
-.nav-parent.nav-tile span {
+.sidebar nav a.nav-tile > span:not(.nav-icon),
+.nav-parent.nav-tile > span:not(.nav-icon) {
   flex:1 1 auto; min-width:0;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }

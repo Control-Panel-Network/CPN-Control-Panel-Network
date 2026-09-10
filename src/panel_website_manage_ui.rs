@@ -98,9 +98,7 @@ pub fn manage_styles() -> &'static str {
   color:inherit; text-decoration:none;
 }
 .site-manage .manage-tile:hover { border-color:#3b82f6; }
-.site-manage .manage-tile-icon {
-  width:40px; height:40px; flex:0 0 40px; border-radius:12px;
-}
+/* Size/centering for .manage-tile-icon comes from panel_icons::icon_tone_styles */
 .site-manage .manage-tile strong { display:block; font-size:14px; }
 .site-manage .manage-tile span { display:block; color:var(--m-muted); font-size:12px; margin-top:2px; }
 .site-manage .manage-muted { color:var(--m-muted); font-size:13px; }

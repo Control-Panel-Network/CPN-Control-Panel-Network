@@ -68,10 +68,7 @@ button { font:inherit; cursor:pointer; }
   border-radius:8px; color:var(--ink); font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
-.nav-icon {
-  width:28px; height:28px; flex:0 0 28px; border-radius:8px;
-}
-.nav-icon svg { width:16px; height:16px; }
+/* Size/centering for .nav-icon comes from panel_icons::icon_tone_styles */
 /* Section labels: panel_nav_tree::nav_tree_styles */
 /* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
 .logout {
@@ -249,13 +246,14 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
         crate::panel_footer_chrome::sidebar_footer_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
+        crate::panel_dashboard_tools::dashboard_tools_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );

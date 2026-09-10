@@ -38,6 +38,15 @@ pub struct CloudflareSettings {
     pub api_token: String,
     pub sync_local: bool,
     pub updated_at_unix: u64,
+    /// Last Test connection result (never stores secrets).
+    #[serde(default)]
+    pub last_verify_ok: Option<bool>,
+    #[serde(default)]
+    pub last_verify_at_unix: Option<u64>,
+    #[serde(default)]
+    pub last_verify_message: Option<String>,
+    #[serde(default)]
+    pub last_zone_count: Option<u32>,
 }
 
 impl Default for CloudflareSettings {
@@ -49,6 +58,10 @@ impl Default for CloudflareSettings {
             api_token: String::new(),
             sync_local: true,
             updated_at_unix: 0,
+            last_verify_ok: None,
+            last_verify_at_unix: None,
+            last_verify_message: None,
+            last_zone_count: None,
         }
     }
 }
@@ -61,6 +74,10 @@ pub struct CloudflarePublic {
     pub email: String,
     pub token_masked: String,
     pub sync_local: bool,
+    pub last_verify_ok: Option<bool>,
+    pub last_verify_at_unix: Option<u64>,
+    pub last_verify_message: Option<String>,
+    pub last_zone_count: Option<u32>,
 }
 
 fn now_unix() -> u64 {
@@ -105,7 +122,49 @@ pub fn cloudflare_public() -> CloudflarePublic {
             String::new()
         },
         sync_local: s.sync_local,
+        last_verify_ok: s.last_verify_ok,
+        last_verify_at_unix: s.last_verify_at_unix,
+        last_verify_message: s.last_verify_message,
+        last_zone_count: s.last_zone_count,
     }
+}
+
+/// Persist a Test connection outcome without touching the secret token.
+pub fn record_cloudflare_verify(
+    ok: bool,
+    message: &str,
+    zone_count: Option<u32>,
+) -> Result<(), String> {
+    let mut current = load_cloudflare();
+    if current.api_token.trim().is_empty() {
+        return Err("Cloudflare API token is not configured".into());
+    }
+    let msg = message.trim().chars().take(240).collect::<String>();
+    current.last_verify_ok = Some(ok);
+    current.last_verify_at_unix = Some(now_unix());
+    current.last_verify_message = if msg.is_empty() { None } else { Some(msg) };
+    current.last_zone_count = zone_count;
+    persist_cloudflare(&current)
+}
+
+/// Format unix seconds as `dd/mm/yyyy HH:MM` for operator UI.
+pub fn format_verify_time(ts: u64) -> String {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        let output = Command::new("date")
+            .args(["-d", &format!("@{ts}"), "+%d/%m/%Y %H:%M"])
+            .output();
+        if let Ok(out) = output
+            && out.status.success()
+        {
+            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !text.is_empty() {
+                return text;
+            }
+        }
+    }
+    format!("{ts} (unix)")
 }
 
 pub fn cloudflare_configured() -> bool {

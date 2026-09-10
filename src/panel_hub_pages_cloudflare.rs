@@ -2,8 +2,11 @@
 //! hosting panels; CPN branding only (never CyberPanel).
 
 use crate::panel_hubs::feature_shell;
-use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public};
+use crate::panel_ops_cloudflare::{
+    RECORD_TYPES, cloudflare_public, format_verify_time,
+};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
+use crate::panel_ops_cloudflare_verify::list_accessible_zones;
 use crate::sites::list_sites;
 
 fn html_escape(value: &str) -> String {
@@ -51,6 +54,12 @@ fn domain_options(selected: &str) -> String {
         .into_iter()
         .map(|s| s.domain)
         .collect();
+    // Merge Cloudflare zones so Manage DNS can load zones even before a local site exists.
+    if let Ok(cf_zones) = list_accessible_zones(100) {
+        for z in cf_zones {
+            domains.push(z);
+        }
+    }
     domains.sort();
     domains.dedup();
     for d in domains {
@@ -232,9 +241,47 @@ fn api_body() -> String {
     } else {
         r#"<p class="muted">No Cloudflare API token stored yet. Create a token with Zone DNS Edit permissions.</p>"#.into()
     };
+    let status_banner = match (
+        pubv.configured,
+        pubv.last_verify_ok,
+        pubv.last_verify_at_unix,
+        pubv.last_verify_message.as_deref(),
+        pubv.last_zone_count,
+    ) {
+        (false, _, _, _, _) => {
+            r#"<p class="panel-notice" role="status">API not configured. Save a token, then use <strong>Test connection</strong>.</p>"#.to_string()
+        }
+        (true, Some(true), Some(ts), msg, zones) => {
+            let when = format_verify_time(ts);
+            let zones_txt = zones
+                .map(|n| format!("{n} zone(s)"))
+                .unwrap_or_else(|| "zones checked".into());
+            let detail = msg.unwrap_or("Token valid");
+            format!(
+                r#"<p class="panel-notice success" role="status"><strong>Connection valid</strong> · {zones} · last verified {when}<br><span class="muted">{detail}</span></p>"#,
+                zones = html_escape(&zones_txt),
+                when = html_escape(&when),
+                detail = html_escape(detail),
+            )
+        }
+        (true, Some(false), Some(ts), msg, _) => {
+            let when = format_verify_time(ts);
+            let detail = msg.unwrap_or("Token invalid or zone list failed");
+            format!(
+                r#"<p class="panel-notice error" role="status"><strong>Connection invalid</strong> · last checked {when}<br><span class="muted">{detail}</span></p>"#,
+                when = html_escape(&when),
+                detail = html_escape(detail),
+            )
+        }
+        (true, _, _, _, _) => {
+            r#"<p class="panel-notice" role="status">Token is saved. Click <strong>Test connection</strong> to verify with Cloudflare (<code>/user/tokens/verify</code> + zone list) without opening Manage DNS.</p>"#.to_string()
+        }
+    };
+    let test_disabled = if pubv.configured { "" } else { " disabled" };
     format!(
         r#"{tabs}
 <h3>Cloudflare API Configuration</h3>
+{status_banner}
 {configured}
 <form method="post" action="/dns/cloudflare/settings" class="stack-form" style="max-width:520px;">
   <label for="auth_type">Authentication type</label>
@@ -252,16 +299,23 @@ fn api_body() -> String {
     <option value="1"{sync_en}>Enable</option>
     <option value="0"{sync_dis}>Disable</option>
   </select>
-  <button type="submit" class="btn-primary">Save Configuration</button>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+    <button type="submit" class="btn-primary">Save Configuration</button>
+  </div>
 </form>
-<p class="muted">Stored at <code>/var/lib/cpn/cloudflare.json</code> (mode 600). Tokens are never logged or shown in full.</p>"#,
+<form method="post" action="/dns/cloudflare/test" style="margin-top:12px;">
+  <button type="submit" class="btn-secondary"{test_disabled}>Test connection</button>
+</form>
+<p class="muted">Test connection calls Cloudflare token verify (API Token) or account check (Global Key), then lists accessible zones. Tokens are never shown in full. Stored at <code>/var/lib/cpn/cloudflare.json</code> (mode 600).</p>"#,
         tabs = tab_bar("api"),
+        status_banner = status_banner,
         configured = configured,
         email = html_escape(&pubv.email),
         tok_sel = tok_sel,
         key_sel = key_sel,
         sync_en = sync_en,
         sync_dis = sync_dis,
+        test_disabled = test_disabled,
     )
 }
 

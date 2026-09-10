@@ -155,6 +155,7 @@ pub fn panel_dashboard_html(username: &str) -> String {
           <p>Signed in as {user}.</p>
         </div>
       </div>
+      {sites}
       <div class="resource-grid">
         <article class="resource-card">
           <h2 title="Average CPU usage since boot">CPU Usage</h2>
@@ -178,6 +179,7 @@ pub fn panel_dashboard_html(username: &str) -> String {
           </div>
         </article>
       </div>
+      {tools}
       <div class="dashboard-lower-grid">
         <article class="status-card">
           <div class="status-card-heading">
@@ -200,6 +202,8 @@ pub fn panel_dashboard_html(username: &str) -> String {
         </article>
       </div>"#,
         user = user,
+        sites = crate::panel_dashboard_tools::dashboard_sites_panel(),
+        tools = crate::panel_dashboard_tools::dashboard_tool_groups(),
         cpu_pct = cpu_pct,
         ram_pct = ram_pct,
         disk_pct = disk_pct,

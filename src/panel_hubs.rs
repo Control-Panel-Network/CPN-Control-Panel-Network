@@ -68,7 +68,11 @@ pub fn breadcrumb(parts: &[(&str, Option<&str>)]) -> String {
 
 pub fn hub_tiles_grid(section_title: &str, tiles: &[HubTile<'_>]) -> String {
     let mut out = format!(
-        r#"<h2 class="hub-section-title">{title}</h2>
+        r#"<details class="hub-tool-group" open>
+      <summary class="hub-tool-summary">
+        <span class="hub-section-title hub-tool-summary-title">{title}</span>
+        <svg class="hub-tool-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </summary>
       <div class="hub-tile-grid">"#,
         title = html_escape(section_title),
     );
@@ -94,7 +98,7 @@ pub fn hub_tiles_grid(section_title: &str, tiles: &[HubTile<'_>]) -> String {
             badge = badge,
         ));
     }
-    out.push_str("</div>");
+    out.push_str("</div></details>");
     out
 }
 
@@ -161,9 +165,7 @@ pub fn hub_styles() -> &'static str {
   color:inherit; transition:border-color 120ms ease, box-shadow 120ms ease;
 }
 .hub-tile:hover { border-color:#b6d0f7; box-shadow:0 6px 18px rgba(0,102,204,.08); }
-.hub-tile-icon {
-  width:40px; height:40px; flex:0 0 40px; border-radius:12px;
-}
+/* Size/centering for .hub-tile-icon comes from panel_icons::icon_tone_styles */
 .hub-tile-copy { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
 .hub-tile-copy strong { font-size:15px; letter-spacing:-.01em; }
 .hub-tile-copy span { color:var(--muted); font-size:12px; line-height:1.35; }
@@ -173,6 +175,22 @@ pub fn hub_styles() -> &'static str {
 }
 .hub-badge.live { background:#ecfdf3; color:#067647; }
 .hub-badge.scaffold { background:#f2f4f7; color:#475467; }
+.hub-tool-group {
+  max-width:1200px; margin:16px auto; border:1px solid var(--hairline); border-radius:14px;
+  background:var(--canvas); overflow:hidden;
+}
+.hub-tool-summary {
+  list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px;
+  min-height:48px; padding:8px 14px; user-select:none;
+}
+.hub-tool-summary::-webkit-details-marker { display:none; }
+.hub-tool-summary-title {
+  margin:0; max-width:none; flex:1; letter-spacing:.06em;
+}
+.hub-tool-chevron { margin-left:auto; color:var(--muted); transition:transform .18s ease; }
+.hub-tool-group[open] > .hub-tool-summary .hub-tool-chevron { transform:rotate(90deg); }
+.hub-tool-group .hub-tile-grid { margin:0; padding:0 12px 14px; border-top:1px solid var(--hairline); }
+[data-color-mode="dark"] .hub-tool-group { background:#1c212b; border-color:#2a3140; }
 @media (max-width:679.98px) {
   .hub-tile-grid { grid-template-columns:1fr; }
   .hub-tile { min-height:76px; }

@@ -4,9 +4,9 @@
 //! domains set to None or Custom. Shared SAN certs only include children that
 //! share the same auto provider and when the owner opts in.
 
-use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_ssl_provider::{
-    SiteSslSettings, SslProvider, custom_cert_paths, san_member_domains, ssl_material_dir,
+    SiteSslSettings, SslCoverageMode, SslProvider, custom_cert_paths, names_for_coverage,
+    ssl_material_dir,
 };
 use crate::paths;
 use crate::sites::{SiteModify, SiteRecord, list_sites, load_site, modify_site, normalize_domain};
@@ -24,6 +24,7 @@ pub struct SslStatusRow {
     pub certbot: bool,
     pub auto_issue: bool,
     pub include_subdomains_on_cert: bool,
+    pub coverage_mode: String,
     pub shared_cert_owner: Option<String>,
     pub last_error: String,
     pub needs_issue: bool,
@@ -53,7 +54,7 @@ pub fn cloudflare_dns_plugin_available() -> bool {
             .unwrap_or(false)
 }
 
-fn child_provider_pairs(parent: &str) -> Vec<(String, SslProvider)> {
+pub(crate) fn child_provider_pairs(parent: &str) -> Vec<(String, SslProvider)> {
     list_sites()
         .unwrap_or_default()
         .into_iter()
@@ -87,6 +88,7 @@ pub fn ssl_status_for_domain(domain: &str) -> SslStatusRow {
         certbot,
         auto_issue: ssl.provider.supports_auto_issue(),
         include_subdomains_on_cert: ssl.include_subdomains_on_cert,
+        coverage_mode: effective_coverage(&ssl).as_str().to_string(),
         shared_cert_owner: ssl.shared_cert_owner,
         last_error: ssl.last_error,
         needs_issue,
@@ -101,7 +103,7 @@ pub fn ssl_status_all_sites() -> Vec<SslStatusRow> {
         .collect()
 }
 
-fn persist_ssl_error(domain: &str, err: &str) -> Result<(), String> {
+pub(crate) fn persist_ssl_error(domain: &str, err: &str) -> Result<(), String> {
     let site = load_site(domain)?;
     let mut ssl = site.ssl;
     ssl.last_error = err.to_string();
@@ -115,7 +117,7 @@ fn persist_ssl_error(domain: &str, err: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn persist_ssl_ok(domain: &str, ssl: SiteSslSettings) -> Result<(), String> {
+pub(crate) fn persist_ssl_ok(domain: &str, ssl: SiteSslSettings) -> Result<(), String> {
     modify_site(
         domain,
         SiteModify {
@@ -148,13 +150,37 @@ pub fn set_include_subdomains(domain: &str, include: bool) -> Result<String, Str
     let domain = normalize_domain(domain)?;
     let mut site = load_site(&domain)?;
     site.ssl.include_subdomains_on_cert = include;
+    if include {
+        site.ssl.coverage_mode = SslCoverageMode::San;
+    }
     persist_ssl_ok(&domain, site.ssl)?;
     Ok(format!(
         "`{domain}` include-subdomains-on-cert set to {include}"
     ))
 }
 
-fn write_cloudflare_ini() -> Result<std::path::PathBuf, String> {
+/// Set certificate coverage: Wildcard (default) or SAN (listed panel subdomains).
+pub fn set_coverage_mode(domain: &str, mode: SslCoverageMode) -> Result<String, String> {
+    let domain = normalize_domain(domain)?;
+    let mut site = load_site(&domain)?;
+    site.ssl.coverage_mode = mode;
+    site.ssl.include_subdomains_on_cert = matches!(mode, SslCoverageMode::San);
+    persist_ssl_ok(&domain, site.ssl)?;
+    Ok(format!(
+        "`{domain}` certificate coverage set to {}",
+        mode.label()
+    ))
+}
+
+/// Legacy sites may only have `include_subdomains_on_cert`; treat that as SAN.
+pub fn effective_coverage(ssl: &SiteSslSettings) -> SslCoverageMode {
+    if ssl.include_subdomains_on_cert && ssl.coverage_mode == SslCoverageMode::Wildcard {
+        return SslCoverageMode::San;
+    }
+    ssl.coverage_mode
+}
+
+pub(crate) fn write_cloudflare_ini() -> Result<std::path::PathBuf, String> {
     let settings = crate::panel_ops_cloudflare::load_cloudflare();
     if settings.api_token.trim().is_empty() {
         return Err(
@@ -201,7 +227,7 @@ pub fn load_zerossl_eab() -> Option<ZeroSslEab> {
     serde_json::from_str(&raw).ok()
 }
 
-fn run_certbot(args: &[&str]) -> Result<String, String> {
+pub(crate) fn run_certbot(args: &[&str]) -> Result<String, String> {
     if !certbot_available() {
         return Err("certbot was not found on PATH. Install ACME certbot, then retry.".into());
     }
@@ -229,145 +255,16 @@ fn run_certbot(args: &[&str]) -> Result<String, String> {
     Ok(combined)
 }
 
-fn names_for_issue(site: &SiteRecord) -> Vec<String> {
+pub(crate) fn names_for_issue(site: &SiteRecord) -> Vec<String> {
     let kids = child_provider_pairs(&site.domain);
-    san_member_domains(
+    let coverage = effective_coverage(&site.ssl);
+    names_for_coverage(
         &site.domain,
         site.ssl.provider,
-        site.ssl.include_subdomains_on_cert,
+        coverage,
+        true, // SAN mode always includes matching same-provider children
         &kids,
     )
-}
-
-/// Issue or renew according to the domain's own provider setting.
-pub fn issue_or_renew(domain: &str) -> Result<String, String> {
-    let domain = normalize_domain(domain)?;
-    let site = load_site(&domain)?;
-    match site.ssl.provider {
-        SslProvider::None => Err(format!(
-            "`{domain}` SSL provider is None: CPN will not issue, install, or auto-renew"
-        )),
-        SslProvider::Custom => Err(format!(
-            "`{domain}` uses Custom SSL. Upload cert/key (no auto-renew) or switch provider first"
-        )),
-        SslProvider::LetsEncrypt => issue_acme(&site, "letsencrypt"),
-        SslProvider::ZeroSsl => issue_acme(&site, "zerossl"),
-        SslProvider::CloudflareCa => issue_cloudflare_ca(&site),
-    }
-}
-
-fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String, String> {
-    let domain = site.domain.clone();
-    let names = names_for_issue(site);
-    let mut args: Vec<String> = vec![
-        "certonly".into(),
-        "--non-interactive".into(),
-        "--agree-tos".into(),
-        "--register-unsafely-without-email".into(),
-    ];
-    if server_kind == "zerossl" {
-        // Prefer ZeroSSL ACME directory when EAB is configured; otherwise honest error.
-        let Some(eab) = load_zerossl_eab() else {
-            return Err(
-                "ZeroSSL requires EAB credentials in /var/lib/cpn/ssl/zerossl-eab.json (kid + hmac_key). Not stored in the repo."
-                    .into(),
-            );
-        };
-        if eab.kid.trim().is_empty() || eab.hmac_key.trim().is_empty() {
-            return Err("ZeroSSL EAB kid/hmac_key are empty".into());
-        }
-        args.push("--server".into());
-        args.push("https://acme.zerossl.com/v2/DV90".into());
-        args.push("--eab-kid".into());
-        args.push(eab.kid.trim().to_string());
-        args.push("--eab-hmac-key".into());
-        args.push(eab.hmac_key.trim().to_string());
-    }
-    let use_dns = cloudflare_configured() && cloudflare_dns_plugin_available();
-    if use_dns {
-        let ini = write_cloudflare_ini()?;
-        args.push("--dns-cloudflare".into());
-        args.push("--dns-cloudflare-credentials".into());
-        args.push(ini.display().to_string());
-    } else {
-        if !Path::new(&site.docroot).is_dir() {
-            return Err(format!(
-                "Docroot `{}` missing; cannot use webroot. Configure Cloudflare DNS-01 or create the docroot.",
-                site.docroot
-            ));
-        }
-        args.push("--webroot".into());
-        args.push("-w".into());
-        args.push(site.docroot.clone());
-    }
-    for n in &names {
-        args.push("-d".into());
-        args.push(n.clone());
-    }
-    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    match run_certbot(&arg_refs) {
-        Ok(_) => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|v| v.as_secs())
-                .unwrap_or(0);
-            for n in &names {
-                if let Ok(mut s) = load_site(n) {
-                    s.ssl.last_issue_unix = now;
-                    s.ssl.last_error.clear();
-                    if n != &domain {
-                        s.ssl.shared_cert_owner = Some(domain.clone());
-                    } else {
-                        s.ssl.shared_cert_owner = None;
-                    }
-                    let _ = persist_ssl_ok(n, s.ssl);
-                }
-            }
-            let method = if use_dns { "DNS-01" } else { "webroot" };
-            let origin = if cloudflare_configured() && site.ssl.install_origin_cert {
-                " Origin cert kept for Cloudflare proxy when enabled."
-            } else {
-                ""
-            };
-            Ok(format!(
-                "{} certificate issued for {} via {method}.{origin}",
-                if server_kind == "zerossl" {
-                    "ZeroSSL"
-                } else {
-                    "Let's Encrypt"
-                },
-                names.join(", ")
-            ))
-        }
-        Err(e) => {
-            let _ = persist_ssl_error(&domain, &e);
-            Err(e)
-        }
-    }
-}
-
-fn issue_cloudflare_ca(site: &SiteRecord) -> Result<String, String> {
-    let domain = site.domain.clone();
-    if !cloudflare_configured() {
-        return Err("Cloudflare CA requires an API token under Cloudflare DNS API Settings".into());
-    }
-    // Origin CA via API is a follow-on; for now require certbot DNS-01 against LE is NOT used.
-    // Honest path: attempt Cloudflare Origin CA CSR flow is not fully wired; report clearly.
-    let settings = crate::panel_ops_cloudflare::load_cloudflare();
-    if settings.api_token.trim().is_empty() {
-        return Err("Cloudflare API token is empty".into());
-    }
-    // Prefer DNS-01 ACME when plugin present (Cloudflare can still terminate edge TLS;
-    // origin material from ACME serves as installable origin cert).
-    if cloudflare_dns_plugin_available() {
-        let msg = issue_acme(site, "letsencrypt")?;
-        return Ok(format!(
-            "Cloudflare CA path: installed origin-compatible cert via DNS-01. {msg} Note: dedicated Cloudflare Origin CA API issuance can be added when CSR upload is wired."
-        ));
-    }
-    let err = "Cloudflare CA: install certbot-dns-cloudflare or upload a Cloudflare Origin CA cert as Custom SSL. Token is present but Origin CA auto-issue is not fully wired yet.".to_string();
-    let _ = persist_ssl_error(&domain, &err);
-    Err(err)
 }
 
 pub fn upload_custom_ssl(domain: &str, cert_pem: &str, key_pem: &str) -> Result<String, String> {
@@ -448,7 +345,7 @@ pub fn issue_all_needing_auto() -> Result<String, String> {
             skip += 1;
             continue;
         }
-        match issue_or_renew(&row.domain) {
+        match crate::panel_ops_ssl_issue::issue_or_renew(&row.domain) {
             Ok(_) => ok += 1,
             Err(e) => fail.push(format!("{}: {e}", row.domain)),
         }
@@ -475,7 +372,7 @@ pub fn issue_all_needing_auto() -> Result<String, String> {
 
 // Compatibility aliases used by earlier Cloudflare DNS + LE routes/UI.
 pub fn issue_lets_encrypt(domain: &str) -> Result<String, String> {
-    issue_or_renew(domain)
+    crate::panel_ops_ssl_issue::issue_or_renew(domain)
 }
 pub fn issue_le_for_all_without_custom() -> Result<String, String> {
     issue_all_needing_auto()
@@ -508,7 +405,7 @@ mod tests {
                 Some(SslProvider::None),
             )
             .unwrap();
-            let err = issue_or_renew("cpn-lab-test.example").unwrap_err();
+            let err = crate::panel_ops_ssl_issue::issue_or_renew("cpn-lab-test.example").unwrap_err();
             assert!(err.contains("None"));
         });
     }

@@ -184,10 +184,34 @@ pub fn manage_icon_html(href: &str) -> String {
 pub fn icon_tone_styles() -> &'static str {
     r#"
 .hub-tile-icon, .manage-tile-icon, .nav-icon {
-  display:inline-grid; place-items:center; color:#2563eb;
-  background:#eef4ff; border:1px solid #d7e6ff;
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  line-height:0;
+  flex:0 0 auto !important;
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+  padding:0;
+  margin:0;
+  vertical-align:middle;
+  color:#2563eb;
+  background:#eef4ff;
+  border:1px solid #d7e6ff;
 }
-.hub-tile-icon svg, .manage-tile-icon svg, .nav-icon svg { display:block; }
+.hub-tile-icon svg, .manage-tile-icon svg, .nav-icon svg {
+  display:block;
+  flex:0 0 auto;
+  margin:0;
+  padding:0;
+  max-width:100%;
+  max-height:100%;
+}
+.nav-icon { width:28px; height:28px; border-radius:8px; }
+.nav-icon svg { width:16px; height:16px; }
+.hub-tile-icon, .manage-tile-icon { width:40px; height:40px; border-radius:12px; }
+.hub-tile-icon svg, .manage-tile-icon svg { width:22px; height:22px; }
 .hub-tile-icon.tone-green, .manage-tile-icon.tone-green, .nav-icon.tone-green { color:#067647; background:#ecfdf3; border-color:#abefc6; }
 .hub-tile-icon.tone-amber, .manage-tile-icon.tone-amber, .nav-icon.tone-amber { color:#b54708; background:#fffaeb; border-color:#fedf89; }
 .hub-tile-icon.tone-violet, .manage-tile-icon.tone-violet, .nav-icon.tone-violet { color:#6941c6; background:#f4f3ff; border-color:#d9d6fe; }

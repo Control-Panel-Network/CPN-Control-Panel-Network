@@ -55,7 +55,7 @@ fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
     Ok(headers)
 }
 
-fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, String> {
+pub(crate) fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, String> {
     let settings = load_cloudflare();
     let headers = auth_headers(&settings)?;
     let mut cmd = Command::new("curl");
