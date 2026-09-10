@@ -10,8 +10,8 @@ Please also read:
 
 ## Branch target
 
-- Default branch: **`main`**.
-- Open pull requests against `main`.
+- Default branch: **`stable`**.
+- Open pull requests against `stable`.
 - Prefer a short-lived topic branch such as `feature/...` or `fix/...`.
 
 ## Prerequisites
@@ -125,7 +125,7 @@ The manual `OS matrix` workflow exercises additional distro versions. If you cha
 ## Pull request process
 
 1. Push the topic branch.
-2. Open a pull request targeting `main`.
+2. Open a pull request targeting `stable`.
 3. Explain behavior changes and validation performed.
 4. Ensure CI passes: Rust format/check/test/clippy, frontend checks, and script syntax.
 5. For distro/package changes, include the relevant OS-matrix result when practical.

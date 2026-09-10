@@ -5,7 +5,7 @@ name: autofix.ci
 # fixes to contributors instead of writing directly to the protected base branch.
 on:
   push:
-    branches: [main]
+    branches: [stable]
   pull_request:
     types: [opened, synchronize, reopened]
 

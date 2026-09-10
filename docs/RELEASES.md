@@ -2,6 +2,30 @@
 
 Official CPN releases are published through GitHub Releases. End users should install those native artifacts instead of building packages from source.
 
+## Bootstrap one-liners
+
+Preferred end-user path (detects OS, downloads the matching asset, verifies checksums/GPG, installs or upgrades the package):
+
+```bash
+# Install
+sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
+
+# Upgrade (existing cpn-installer install)
+sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
+```
+
+Script sources:
+
+- https://cpn.newstargeted.com/install.sh (News Targeted host; mirrors `scripts/install.sh`)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh (GitHub fallback)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/preUpgrade.sh
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh
+
+The default production branch is `stable`. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
+
+Manual download and verification steps below remain valid when you prefer not to use the bootstrap scripts.
+
 ## Release assets
 
 Current release paths include:
@@ -44,7 +68,7 @@ A failed checksum or signature verification should be treated as a failed instal
 
 ## Maintainer build scripts
 
-Files under `scripts/` and package definitions under `packaging/` are development/release-maintainer tooling. They are not part of the normal end-user installation process.
+Most files under `scripts/` and package definitions under `packaging/` are development/release-maintainer tooling. The end-user bootstrap entry points are `scripts/install.sh` and `scripts/upgrade.sh` only.
 
 For source builds and release-development prerequisites, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 

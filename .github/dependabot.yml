@@ -6,6 +6,7 @@ version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
+    target-branch: stable
     schedule:
       interval: weekly
       day: monday
@@ -16,6 +17,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /installer-ui
+    target-branch: stable
     schedule:
       interval: weekly
       day: monday
@@ -26,6 +28,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /Panel
+    target-branch: stable
     schedule:
       interval: weekly
       day: monday
@@ -36,6 +39,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    target-branch: stable
     schedule:
       interval: weekly
       day: monday

@@ -1,7 +1,7 @@
 name: OS matrix
 
 # Privileged systemd containers. Not run on untrusted PRs.
-# Trigger manually or on main pushes after merge.
+# Trigger manually or on stable pushes after merge.
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
           - mail
         default: extended
   push:
-    branches: [main]
+    branches: [stable]
     paths:
       - "src/os_support.rs"
       - "src/install_recipes.rs"
