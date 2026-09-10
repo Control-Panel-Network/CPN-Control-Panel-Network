@@ -1,4 +1,4 @@
-﻿//! Routes: Cloudflare DNS (`/dns/cloudflare`).
+//! Routes: Cloudflare DNS (`/dns/cloudflare`).
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
@@ -6,8 +6,8 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_cloudflare::cloudflare_dns_page;
 use crate::panel_ops_cloudflare::save_cloudflare_settings;
 use crate::panel_ops_cloudflare_api::{
-    create_dns_record, delete_dns_record, list_dns_records, set_proxy, sync_local_zone_to_cloudflare,
-    update_dns_record,
+    create_dns_record, delete_dns_record, list_dns_records, set_proxy,
+    sync_local_zone_to_cloudflare, update_dns_record,
 };
 use crate::panel_ops_cloudflare_verify::verify_cloudflare_connection;
 use crate::panel_pages::panel_shell;
@@ -38,7 +38,9 @@ fn manage_back(domain: &str, filter_type: Option<&str>) -> String {
         "/dns/cloudflare?tab=manage&domain={}",
         urlencoding_path(domain)
     );
-    if let Some(ft) = filter_type.map(str::trim).filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("all"))
+    if let Some(ft) = filter_type
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("all"))
     {
         back.push_str("&type=");
         back.push_str(&urlencoding_path(ft));

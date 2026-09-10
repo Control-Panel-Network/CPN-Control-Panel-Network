@@ -78,8 +78,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
                 on = proxied_sel_on,
             )
         } else {
-            r#"<input type="hidden" name="proxied" value="0"><span class="muted">n/a</span>"#
-                .into()
+            r#"<input type="hidden" name="proxied" value="0"><span class="muted">n/a</span>"#.into()
         };
         let pri_edit = if matches!(r.record_type.as_str(), "MX" | "SRV") {
             format!(

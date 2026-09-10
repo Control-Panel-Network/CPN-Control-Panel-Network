@@ -284,7 +284,9 @@ pub fn validate_record_content(record_type: &str, content: &str) -> Result<(), S
     match record_type {
         "A" => {
             if content.parse::<std::net::Ipv4Addr>().is_err() {
-                return Err("A records require a valid IPv4 address (for example 192.0.2.1)".into());
+                return Err(
+                    "A records require a valid IPv4 address (for example 192.0.2.1)".into(),
+                );
             }
         }
         "AAAA" => {
