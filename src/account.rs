@@ -202,7 +202,7 @@ fn hash_password_legacy_sha256(password: &str, salt_hex: &str) -> String {
     hasher.update(salt_hex.as_bytes());
     hasher.update(b"|");
     hasher.update(password.as_bytes());
-    hex_encode(&hasher.finalize())
+    hex_encode(hasher.finalize().as_slice())
 }
 
 fn salt_material(salt_hex: &str) -> Vec<u8> {

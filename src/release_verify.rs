@@ -32,7 +32,11 @@ fn sha256_hex(path: &Path) -> Result<String, String> {
         .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 
 /// Parse GNU `sha256sum` lines (`<hash>  <filename>` or `<hash> *<filename>`).
