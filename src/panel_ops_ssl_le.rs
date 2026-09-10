@@ -405,7 +405,8 @@ mod tests {
                 Some(SslProvider::None),
             )
             .unwrap();
-            let err = crate::panel_ops_ssl_issue::issue_or_renew("cpn-lab-test.example").unwrap_err();
+            let err =
+                crate::panel_ops_ssl_issue::issue_or_renew("cpn-lab-test.example").unwrap_err();
             assert!(err.contains("None"));
         });
     }

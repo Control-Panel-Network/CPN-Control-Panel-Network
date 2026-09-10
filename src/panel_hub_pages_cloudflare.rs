@@ -2,9 +2,7 @@
 //! hosting panels; CPN branding only (never CyberPanel).
 
 use crate::panel_hubs::feature_shell;
-use crate::panel_ops_cloudflare::{
-    RECORD_TYPES, cloudflare_public, format_verify_time,
-};
+use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public, format_verify_time};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
 use crate::panel_ops_cloudflare_verify::list_accessible_zones;
 use crate::sites::list_sites;

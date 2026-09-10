@@ -53,8 +53,8 @@ pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String,
         args.push("--eab-hmac-key".into());
         args.push(eab.hmac_key.trim().to_string());
     }
-    let needs_dns = matches!(coverage, SslCoverageMode::Wildcard)
-        || names.iter().any(|n| n.starts_with("*."));
+    let needs_dns =
+        matches!(coverage, SslCoverageMode::Wildcard) || names.iter().any(|n| n.starts_with("*."));
     let dns_ready = cloudflare_configured() && cloudflare_dns_plugin_available();
     let use_dns = if needs_dns {
         if !cloudflare_configured() {
@@ -168,5 +168,3 @@ fn issue_cloudflare_ca(site: &SiteRecord) -> Result<String, String> {
     let _ = persist_ssl_error(&domain, &err);
     Err(err)
 }
-
-

@@ -420,15 +420,8 @@ pub async fn security_ssl_provider(
             let cov_msg = set_coverage_mode(&form.domain, coverage)
                 .unwrap_or_else(|_| format!("coverage {}", coverage.label()));
             // Keep legacy flag in sync for older readers.
-            let _ = set_include_subdomains(
-                &form.domain,
-                matches!(coverage, SslCoverageMode::San),
-            );
-            redirect_notice(
-                &back,
-                Some(&format!("{msg}. {cov_msg}")),
-                None,
-            )
+            let _ = set_include_subdomains(&form.domain, matches!(coverage, SslCoverageMode::San));
+            redirect_notice(&back, Some(&format!("{msg}. {cov_msg}")), None)
         }
         Err(err) => redirect_notice(&back, None, Some(&err)),
     }

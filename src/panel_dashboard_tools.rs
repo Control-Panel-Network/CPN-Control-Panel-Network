@@ -1,7 +1,7 @@
 //! Dashboard Sites switcher + collapsible Tools groups (CPN-branded).
 
-use crate::panel_ops_ssl_le::ssl_status_for_domain;
 use crate::panel_icons::{hub_icon_html, nav_icon_html};
+use crate::panel_ops_ssl_le::ssl_status_for_domain;
 use crate::sites::list_sites;
 use crate::website_preview::{preview_mode_url, ssl_material_present};
 
@@ -230,19 +230,15 @@ pub fn dashboard_sites_panel() -> String {
     let mut meta_json = String::from("{");
     for (i, site) in sites.iter().enumerate() {
         let d = html_escape(&site.domain);
-        options.push_str(&format!(
-            r#"<option value="{d}">{d}</option>"#,
-            d = d
-        ));
+        options.push_str(&format!(r#"<option value="{d}">{d}</option>"#, d = d));
         let row = ssl_status_for_domain(&site.domain);
         let ssl = if ssl_material_present(&site.domain) {
             format!("{} · material on disk", row.provider_label)
         } else {
             format!("{} · no cert files", row.provider_label)
         };
-        let preview = preview_mode_url(&site.domain).unwrap_or_else(|_| {
-            format!("/websites/manage?domain={}", site.domain)
-        });
+        let preview = preview_mode_url(&site.domain)
+            .unwrap_or_else(|_| format!("/websites/manage?domain={}", site.domain));
         if i > 0 {
             meta_json.push(',');
         }
@@ -262,11 +258,8 @@ pub fn dashboard_sites_panel() -> String {
             home = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into()),
             ssl = serde_json::to_string(&ssl).unwrap_or_else(|_| "\"\"".into()),
             prev = serde_json::to_string(&preview).unwrap_or_else(|_| "\"\"".into()),
-            manage = serde_json::to_string(&format!(
-                "/websites/manage?domain={}",
-                site.domain
-            ))
-            .unwrap_or_else(|_| "\"\"".into()),
+            manage = serde_json::to_string(&format!("/websites/manage?domain={}", site.domain))
+                .unwrap_or_else(|_| "\"\"".into()),
         ));
     }
     meta_json.push('}');
