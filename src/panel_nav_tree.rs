@@ -292,7 +292,11 @@ fn chevron_svg() -> &'static str {
 }
 
 fn flat_link(id: &str, href: &str, label: &str, active: &str) -> String {
-    let class = if id == active { r#" class="active""# } else { "" };
+    let class = if id == active {
+        r#" class="active""#
+    } else {
+        ""
+    };
     format!(
         r#"<a{class} href="{href}">{icon}<span>{label}</span></a>"#,
         icon = nav_icon_html(id),
@@ -308,13 +312,7 @@ fn child_button(label: &str, href: &str) -> String {
     )
 }
 
-fn group_block(
-    id: &str,
-    href: &str,
-    label: &str,
-    children: &[NavChild],
-    active: &str,
-) -> String {
+fn group_block(id: &str, href: &str, label: &str, children: &[NavChild], active: &str) -> String {
     let open = if id == active { " open" } else { "" };
     let parent_active = if id == active {
         " nav-parent-active"
