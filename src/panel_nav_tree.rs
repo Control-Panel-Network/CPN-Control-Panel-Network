@@ -389,12 +389,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
     parts.push(r#"<div class="nav-tile-grid">"#.to_string());
     if plugin_links.is_empty() {
-        parts.push(flat_link(
-            "plugins",
-            "/plugins",
-            "Plugin Store",
-            active,
-        ));
+        parts.push(flat_link("plugins", "/plugins", "Plugin Store", active));
     } else {
         let mut child_html = vec![child_button("Installed / Store", "/plugins")];
         let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
