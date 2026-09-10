@@ -3,7 +3,7 @@
 > [!WARNING]
 > **CPN is under active development and is not ready for production servers.** Use a test VPS or VM and keep backups of any machine you modify.
 
-[![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
+[![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 CPN is a Rust-based web installer and server-control project. The installer embeds its React UI, reports real progress over WebSockets, and prepares web, database, mail, and panel components on supported Linux guests. Windows Server currently has a limited Phase A path.
@@ -22,7 +22,7 @@ Notes:
 - Supported package targets today: EL9/EL10 RPM and Ubuntu/Debian `.deb` (see [Platform Support](docs/SUPPORT.md)).
 - Unknown or refused OS versions fail closed (no install).
 - CPN is WIP: prefer a disposable test machine.
-- GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh` (also on `main` under `scripts/install.sh`).
+- GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` should serve or mirror that install script at `/install.sh` (HTTPS).
 
 After the package install:

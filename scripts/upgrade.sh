@@ -12,7 +12,7 @@ CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
-RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/main/packaging/RPM-GPG-KEY-CPN"
+RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
 
 die() { echo "CPN upgrade error: $*" >&2; exit 1; }
 info() { echo "CPN: $*"; }

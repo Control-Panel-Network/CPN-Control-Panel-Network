@@ -2,11 +2,11 @@
 
 ## Supported versions
 
-Security fixes are applied on the default branch (`main`) and released when practical. Prefer the latest release or `main` when testing.
+Security fixes are applied on the default branch (`stable`) and released when practical. Prefer the latest release or `stable` when testing.
 
 | Version | Supported |
 |---|---|
-| Latest release / `main` | Yes |
+| Latest release / `stable` | Yes |
 | Older releases | Best effort |
 
 CPN is experimental and not ready for production servers. Treat security reports seriously, but expect limited support windows while the project is unfinished.

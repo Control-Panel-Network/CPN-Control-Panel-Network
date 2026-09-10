@@ -22,7 +22,7 @@ Script sources:
 - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/preUpgrade.sh
 - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh
 
-The `stable` branch tracks the published bootstrap scripts. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
+The default production branch is `stable`. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
 
 Manual download and verification steps below remain valid when you prefer not to use the bootstrap scripts.
 
