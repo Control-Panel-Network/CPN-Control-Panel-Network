@@ -418,7 +418,7 @@ pub async fn install_with_database(
             match tokio::task::spawn_blocking(|| {
                 crate::proxy_front::set_proxy_front_from_install(true)?;
                 let mut notes = Vec::new();
-                crate::proxy_front::maybe_install_nginx_packages(&|line| notes.push(line))?;
+                crate::proxy_front::maybe_install_nginx_packages(&mut |line| notes.push(line))?;
                 Ok::<Vec<String>, String>(notes)
             })
             .await

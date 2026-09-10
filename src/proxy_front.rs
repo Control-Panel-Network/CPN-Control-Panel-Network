@@ -196,7 +196,7 @@ fn write_site_nginx_stub(site: &SiteRecord) -> Result<(), String> {
 }
 
 /// Best-effort package install for nginx when proxy front is enabled (Linux).
-pub fn maybe_install_nginx_packages(log: &dyn Fn(String)) -> Result<(), String> {
+pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), String> {
     let settings = load_proxy_front();
     if !settings.enabled || !settings.install_nginx {
         return Ok(());
