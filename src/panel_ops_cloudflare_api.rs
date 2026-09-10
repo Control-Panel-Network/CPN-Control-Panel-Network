@@ -2,7 +2,7 @@
 
 use crate::panel_ops_cloudflare::{
     CloudflareAuthType, CloudflareSettings, load_cloudflare, looks_like_global_api_key,
-    normalize_record_type, sanitize_cloudflare_secret,
+    normalize_record_type, sanitize_cloudflare_secret, validate_record_content,
 };
 use crate::panel_ops_dns::{list_zones, read_zone};
 use serde::Deserialize;
@@ -248,6 +248,7 @@ pub fn create_dns_record(
     if name.is_empty() || content.is_empty() {
         return Err("Name and value are required".into());
     }
+    validate_record_content(&rtype, content)?;
     let ttl = if ttl == 0 { 1 } else { ttl };
     let mut body = json!({
         "type": rtype,
@@ -267,6 +268,63 @@ pub fn create_dns_record(
     let url = format!("{CF_API}/zones/{zone_id}/dns_records");
     let _ = curl_json("POST", &url, Some(&payload))?;
     Ok(format!("Added {rtype} record `{name}`"))
+}
+
+/// PATCH an existing Cloudflare DNS record (name, TTL, content, priority, proxy).
+pub fn update_dns_record(
+    domain: &str,
+    record_id: &str,
+    name: &str,
+    content: &str,
+    ttl: u32,
+    priority: Option<u16>,
+    proxied: bool,
+) -> Result<String, String> {
+    let record_id = record_id.trim();
+    if record_id.is_empty()
+        || !record_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("Invalid record id".into());
+    }
+    let name = name.trim();
+    let content = content.trim();
+    if name.is_empty() || content.is_empty() {
+        return Err("Name and value are required".into());
+    }
+    let zone_id = resolve_zone_id(domain)?;
+    let url = format!("{CF_API}/zones/{zone_id}/dns_records/{record_id}");
+    let existing = curl_json("GET", &url, None)?;
+    let rtype = existing
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    if rtype.is_empty() {
+        return Err("Could not read existing record type".into());
+    }
+    validate_record_content(&rtype, content)?;
+    let ttl = if ttl == 0 { 1 } else { ttl };
+    let mut patch = json!({
+        "type": rtype,
+        "name": name,
+        "content": content,
+        "ttl": ttl,
+    });
+    if matches!(rtype.as_str(), "A" | "AAAA" | "CNAME") {
+        patch["proxied"] = json!(proxied);
+    }
+    if matches!(rtype.as_str(), "MX" | "SRV") {
+        if let Some(p) = priority {
+            patch["priority"] = json!(p);
+        } else if let Some(p) = existing.get("priority").and_then(|v| v.as_u64()) {
+            patch["priority"] = json!(p);
+        }
+    }
+    let payload = serde_json::to_string(&patch).map_err(|e| e.to_string())?;
+    let _ = curl_json("PATCH", &url, Some(&payload))?;
+    Ok(format!("Updated {rtype} record `{name}`"))
 }
 
 pub fn delete_dns_record(domain: &str, record_id: &str) -> Result<String, String> {

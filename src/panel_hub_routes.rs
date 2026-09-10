@@ -3,6 +3,7 @@
 pub use crate::panel_hub_routes_account::*;
 pub use crate::panel_hub_routes_backups::*;
 pub use crate::panel_hub_routes_cloudflare::*;
+pub use crate::panel_hub_routes_ssl_actions::*;
 pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_email::*;
 pub use crate::panel_hub_routes_passkeys::*;

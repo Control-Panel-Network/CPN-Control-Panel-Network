@@ -27,6 +27,7 @@ use cpn_installer::panel_hub_routes::{
     backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
     backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
     cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
+    cloudflare_update_post,
     databases_all_route, databases_create_get, databases_create_post, databases_delete_get,
     databases_delete_post, databases_manager_route, databases_phpmyadmin_route,
     email_accounts_route, email_catchall_route, email_catchall_save, email_create_route,
@@ -890,6 +891,7 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_test_post)
             .service(cloudflare_sync_post)
             .service(cloudflare_add_post)
+            .service(cloudflare_update_post)
             .service(cloudflare_delete_post)
             .service(cloudflare_proxy_post)
             .service(settings_page)

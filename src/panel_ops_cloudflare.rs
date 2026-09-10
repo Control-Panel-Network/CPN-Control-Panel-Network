@@ -275,6 +275,36 @@ pub fn normalize_record_type(raw: &str) -> Result<String, String> {
     }
 }
 
+/// Validate record content for common types before calling Cloudflare.
+pub fn validate_record_content(record_type: &str, content: &str) -> Result<(), String> {
+    let content = content.trim();
+    if content.is_empty() {
+        return Err("Value is required".into());
+    }
+    match record_type {
+        "A" => {
+            if content.parse::<std::net::Ipv4Addr>().is_err() {
+                return Err("A records require a valid IPv4 address (for example 192.0.2.1)".into());
+            }
+        }
+        "AAAA" => {
+            if content.parse::<std::net::Ipv4Addr>().is_ok() {
+                return Err(
+                    "AAAA records require an IPv6 address, not IPv4 (for example 2001:db8::1)"
+                        .into(),
+                );
+            }
+            if content.parse::<std::net::Ipv6Addr>().is_err() {
+                return Err(
+                    "AAAA records require a valid IPv6 address (for example 2001:db8::1)".into(),
+                );
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,6 +330,15 @@ mod tests {
         assert!(!looks_like_global_api_key(
             "QAht_not_a_global_key_value_xxxxxx"
         ));
+    }
+
+    #[test]
+    #[test]
+    fn aaaa_rejects_ipv4_and_accepts_ipv6() {
+        assert!(validate_record_content("AAAA", "192.168.1.1").is_err());
+        assert!(validate_record_content("AAAA", "2001:db8::1").is_ok());
+        assert!(validate_record_content("A", "192.168.1.1").is_ok());
+        assert!(validate_record_content("A", "2001:db8::1").is_err());
     }
 
     #[test]
