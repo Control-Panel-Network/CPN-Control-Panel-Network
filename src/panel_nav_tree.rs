@@ -589,9 +589,7 @@ mod tests {
         // Dashboard and Apps are leaf NavEntry::Link items.
         assert!(html.contains("href=\"/dashboard\""));
         assert!(html.contains(">Dashboard</span></a>") || html.contains(">Dashboard</span>"));
-        let dash_idx = html
-            .find("href=\"/dashboard\"")
-            .expect("dashboard link");
+        let dash_idx = html.find("href=\"/dashboard\"").expect("dashboard link");
         let dash_snip = &html[dash_idx..dash_idx + 180.min(html.len() - dash_idx)];
         assert!(
             !dash_snip.contains("nav-chevron"),

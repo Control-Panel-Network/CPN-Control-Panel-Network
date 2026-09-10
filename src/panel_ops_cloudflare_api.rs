@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 
 const CF_API: &str = "https://api.cloudflare.com/client/v4";
-const CF_USER_AGENT: &str = "CPN-Panel/1.0 (+https://github.com/Control-Panel-Network/CPN-Control-Panel-Network)";
+const CF_USER_AGENT: &str =
+    "CPN-Panel/1.0 (+https://github.com/Control-Panel-Network/CPN-Control-Panel-Network)";
 
 #[derive(Debug, Clone)]
 pub struct CfDnsRecord {

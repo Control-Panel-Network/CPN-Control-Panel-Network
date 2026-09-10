@@ -297,7 +297,9 @@ mod tests {
         assert!(looks_like_global_api_key(
             "0123456789abcdef0123456789abcdef0123456"
         ));
-        assert!(!looks_like_global_api_key("QAht_not_a_global_key_value_xxxxxx"));
+        assert!(!looks_like_global_api_key(
+            "QAht_not_a_global_key_value_xxxxxx"
+        ));
     }
 
     #[test]
