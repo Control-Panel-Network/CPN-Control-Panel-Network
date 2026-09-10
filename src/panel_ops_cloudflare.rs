@@ -326,7 +326,11 @@ mod tests {
             "abcd1234"
         );
         assert_eq!(sanitize_cloudflare_secret("\"tok_value\""), "tok_value");
+        // Global API Keys are exactly 37 hex characters.
         assert!(looks_like_global_api_key(
+            "0123456789abcdef0123456789abcdef01234"
+        ));
+        assert!(!looks_like_global_api_key(
             "0123456789abcdef0123456789abcdef0123456"
         ));
         assert!(!looks_like_global_api_key(
@@ -334,7 +338,6 @@ mod tests {
         ));
     }
 
-    #[test]
     #[test]
     fn aaaa_rejects_ipv4_and_accepts_ipv6() {
         assert!(validate_record_content("AAAA", "192.168.1.1").is_err());
@@ -349,7 +352,7 @@ mod tests {
             let err = save_cloudflare_settings(
                 "api_token",
                 "",
-                "0123456789abcdef0123456789abcdef0123456",
+                "0123456789abcdef0123456789abcdef01234",
                 true,
             )
             .unwrap_err();

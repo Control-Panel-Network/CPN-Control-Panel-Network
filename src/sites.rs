@@ -517,7 +517,9 @@ mod tests {
     use crate::account::DATA_DIR_TEST_LOCK;
 
     fn with_temp_data<T>(f: impl FnOnce() -> T) -> T {
-        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = std::env::temp_dir().join(format!("cpn-sites-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
