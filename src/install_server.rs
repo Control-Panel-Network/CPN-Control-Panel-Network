@@ -425,7 +425,7 @@ pub async fn install_with_database(
             {
                 Ok(Ok(notes)) => {
                     state.log(
-                        "Proxy front enabled: unique internal IPs + Nginx stubs; origin public routing relaxed.".into(),
+                        "Proxy front enabled: unique internal IPs + Nginx stubs; origin public routing relaxed.",
                         "info",
                     );
                     for note in notes {
