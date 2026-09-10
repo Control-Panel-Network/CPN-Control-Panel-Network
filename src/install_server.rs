@@ -386,7 +386,14 @@ pub async fn cleanup_service_ports() -> Result<(), String> {
 }
 
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
-    install_with_database(state, server, crate::model::DatabaseEngine::Mariadb, true).await;
+    install_with_database(
+        state,
+        server,
+        crate::model::DatabaseEngine::Mariadb,
+        true,
+        false,
+    )
+    .await;
 }
 
 /// Web server install plus optional MariaDB/MySQL + phpMyAdmin defaults.
@@ -395,6 +402,7 @@ pub async fn install_with_database(
     server: ServerEngine,
     database: crate::model::DatabaseEngine,
     install_phpmyadmin: bool,
+    enable_proxy_front: bool,
 ) {
     let result = async {
         let _run = install_journal::begin_install_run("server")?;
@@ -404,6 +412,35 @@ pub async fn install_with_database(
             .map_err(|error| format!("preflight join failed: {error}"))??;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
+        }
+
+        if enable_proxy_front {
+            match tokio::task::spawn_blocking(|| {
+                crate::proxy_front::set_proxy_front_from_install(true)?;
+                let mut notes = Vec::new();
+                crate::proxy_front::maybe_install_nginx_packages(&|line| notes.push(line))?;
+                Ok::<Vec<String>, String>(notes)
+            })
+            .await
+            {
+                Ok(Ok(notes)) => {
+                    state.log(
+                        "Proxy front enabled: unique internal IPs + Nginx stubs; origin public routing relaxed.".into(),
+                        "info",
+                    );
+                    for note in notes {
+                        state.log(note, "info");
+                    }
+                }
+                Ok(Err(error)) => {
+                    state.log(format!("Proxy front setup warning: {error}"), "error");
+                }
+                Err(error) => {
+                    state.log(format!("Proxy front join failed: {error}"), "error");
+                }
+            }
+        } else {
+            let _ = crate::proxy_front::set_proxy_front_from_install(false);
         }
 
         state

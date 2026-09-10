@@ -131,6 +131,7 @@ pub mod plugins_catalog;
 pub mod plugins_settings;
 pub mod port_redirect;
 pub mod postfix_fallback;
+pub mod proxy_front;
 pub mod release_verify;
 pub mod releases;
 pub mod resource_accounts;

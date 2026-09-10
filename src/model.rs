@@ -282,6 +282,9 @@ pub struct InstallRequest {
     /// Install phpMyAdmin packages (default true). Ignored only when false.
     #[serde(default = "default_install_phpmyadmin")]
     pub install_phpmyadmin: bool,
+    /// Optional Nginx front + unique internal IP per domain (OLS origin may relax public :80/:443).
+    #[serde(default)]
+    pub enable_proxy_front: bool,
 }
 
 #[derive(Debug, Deserialize)]

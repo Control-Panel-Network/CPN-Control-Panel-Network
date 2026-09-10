@@ -63,6 +63,7 @@ function AppShell() {
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
   const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
+  const [enableProxyFront, setEnableProxyFront] = useState(false);
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
@@ -196,6 +197,7 @@ function AppShell() {
       await startServerInstall(selectedServer, {
         database,
         install_phpmyadmin: installPhpmyadmin,
+        enable_proxy_front: enableProxyFront,
       });
     } catch (error) {
       setStatus((current) => ({
@@ -308,9 +310,11 @@ function AppShell() {
               panelHostname={status.panel_hostname}
               database={database}
               installPhpmyadmin={installPhpmyadmin}
+              enableProxyFront={enableProxyFront}
               onSelectServer={setSelectedServer}
               onDatabaseChange={setDatabase}
               onPhpmyadminChange={setInstallPhpmyadmin}
+              onProxyFrontChange={setEnableProxyFront}
               onNetworkChange={handleNetworkChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}

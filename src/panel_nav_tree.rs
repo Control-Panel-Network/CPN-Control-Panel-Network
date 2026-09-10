@@ -227,6 +227,17 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
     },
 ];
 
+const PLUGINS_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "Installed",
+        href: "/plugins",
+    },
+    NavChild {
+        label: "Plugin Store",
+        href: "/plugins?view=store",
+    },
+];
+
 const HOSTING: &[NavEntry] = &[
     NavEntry::Link {
         id: "dashboard",
@@ -261,6 +272,12 @@ const HOSTING: &[NavEntry] = &[
         id: "apps",
         href: "/apps",
         label: "Apps",
+    },
+    NavEntry::Group {
+        id: "plugins",
+        href: "/plugins",
+        label: "Plugins",
+        children: PLUGINS_CHILDREN,
     },
 ];
 
@@ -397,13 +414,12 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
     parts.extend(render_section("Account", ACCOUNT, active));
     parts.extend(render_section("Administration", ADMINISTRATION, active));
 
-    parts.push(r#"<div class="nav-section">Plugins</div>"#.to_string());
+    // Installed plugin shortcuts (Hosting already has Plugins + Plugin Store).
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
-    parts.push(r#"<div class="nav-tile-grid">"#.to_string());
-    if plugin_links.is_empty() {
-        parts.push(flat_link("plugins", "/plugins", "Plugin Store", active));
-    } else {
-        let mut child_html = vec![child_button("Installed / Store", "/plugins")];
+    if !plugin_links.is_empty() {
+        parts.push(r#"<div class="nav-section">Installed plugins</div>"#.to_string());
+        parts.push(r#"<div class="nav-tile-grid">"#.to_string());
+        let mut child_html = Vec::new();
         let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
         domains.sort_unstable();
         domains.dedup();
@@ -420,33 +436,9 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
                 label = html_escape(&label),
             ));
         }
-        let open = if active == "plugins" || active.starts_with("plugin-") {
-            " open"
-        } else {
-            ""
-        };
-        let parent_active = if active == "plugins" || active.starts_with("plugin-") {
-            " nav-parent-active"
-        } else {
-            ""
-        };
-        parts.push(format!(
-            r#"<details class="nav-group" data-nav-group="plugins"{open}>
-  <summary class="nav-parent nav-tile{parent_active}">
-    {icon}<span>Plugins</span>{chevron}
-  </summary>
-  <div class="nav-children">
-    {children}
-  </div>
-</details>"#,
-            open = open,
-            parent_active = parent_active,
-            icon = nav_icon_html("plugins"),
-            chevron = chevron_svg(),
-            children = child_html.join("\n    "),
-        ));
+        parts.push(child_html.join("\n          "));
+        parts.push(r#"</div>"#.to_string());
     }
-    parts.push(r#"</div>"#.to_string());
 
     parts.join("\n          ")
 }
@@ -586,6 +578,7 @@ mod tests {
         assert!(html.contains("nav-child-btn"));
         assert!(html.contains(" open"));
         assert!(html.contains("Plugin Store") || html.contains("Plugins"));
+        assert!(html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\""));
     }
 
     #[test]

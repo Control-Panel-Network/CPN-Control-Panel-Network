@@ -140,6 +140,7 @@ mod tests {
             updated_at_unix: 0,
             vhost_wired: false,
             ssl: Default::default(),
+            internal_ip: None,
         }
     }
 

@@ -189,6 +189,7 @@ export async function startServerInstall(
   options?: {
     database?: import("./types").DatabaseEngine;
     install_phpmyadmin?: boolean;
+    enable_proxy_front?: boolean;
   },
 ): Promise<void> {
   const response = await apiFetch("/api/install/server", {
@@ -198,6 +199,7 @@ export async function startServerInstall(
       server,
       database: options?.database ?? "mariadb",
       install_phpmyadmin: options?.install_phpmyadmin ?? true,
+      enable_proxy_front: options?.enable_proxy_front ?? false,
     }),
   });
   if (!response.ok) {

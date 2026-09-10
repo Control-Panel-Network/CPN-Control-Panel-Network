@@ -116,12 +116,19 @@ pub fn tab_overview(site: &SiteRecord) -> String {
         ""
     };
     let meta = format!(
-        r#"<p class="manage-muted">Owner: <strong>{owner}</strong> · Docroot: <code>{docroot}</code> · Home: <code>{home}</code> · Engine: {engine} · Stack: {stack}</p>{legacy}"#,
+        r#"<p class="manage-muted">Owner: <strong>{owner}</strong> · Docroot: <code>{docroot}</code> · Home: <code>{home}</code> · Engine: {engine} · Stack: {stack}{internal}</p>{legacy}"#,
         owner = html_escape(&site.owner),
         docroot = html_escape(&site.docroot),
         home = html_escape(&home.display().to_string()),
         engine = html_escape(engine),
         stack = html_escape(&stack),
+        internal = site
+            .internal_ip
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|ip| format!(" · Internal IP: <code>{}</code>", html_escape(ip)))
+            .unwrap_or_default(),
         legacy = legacy,
     );
 
@@ -525,6 +532,7 @@ mod tests {
             updated_at_unix: 0,
             vhost_wired: false,
             ssl: Default::default(),
+            internal_ip: None,
         }
     }
 
