@@ -126,7 +126,12 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
     let mut parts = Vec::new();
     parts.extend(render_section("Hosting", HOSTING, active, feats));
     parts.extend(render_section("Account", ACCOUNT, active, feats));
-    parts.extend(render_section("Administration", ADMINISTRATION, active, feats));
+    parts.extend(render_section(
+        "Administration",
+        ADMINISTRATION,
+        active,
+        feats,
+    ));
 
     // Installed plugin shortcuts (Hosting already has Plugins + Plugin Store).
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
