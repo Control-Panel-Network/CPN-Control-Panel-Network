@@ -76,7 +76,7 @@ use cpn_installer::panel_routes::{
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
-    panel_design_restore, panel_design_save,
+    panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -833,6 +833,8 @@ async fn main() -> std::io::Result<()> {
             .service(panel_design_save)
             .service(panel_design_preset)
             .service(panel_design_restore)
+            .service(panel_themes_catalog)
+            .service(panel_themes_apply)
             .service(email_page)
             .service(email_account_create)
             .service(email_account_enable)

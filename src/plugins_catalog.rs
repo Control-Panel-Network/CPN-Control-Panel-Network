@@ -1,6 +1,6 @@
 //! CPN plugin catalog fetch/cache and legacy `meta.xml` adapters.
 //!
-//! Catalog archive: https://github.com/master3395/cyberpanel-plugins
+//! Catalog archive: https://github.com/Control-Panel-Network/CPN-Plugins
 
 use crate::account::{data_dir, now_unix};
 use crate::plugins::{CatalogEntry, catalog_repo_slug, normalize_plugin_id, sanitize_user_text};
@@ -14,7 +14,7 @@ use std::{
 
 pub(crate) const CATALOG_CACHE_SECS: u64 = 3600;
 pub(crate) const CATALOG_TARBALL: &str =
-    "https://codeload.github.com/master3395/cyberpanel-plugins/tar.gz/refs/heads/main";
+    "https://codeload.github.com/Control-Panel-Network/CPN-Plugins/tar.gz/refs/heads/main";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CatalogCache {

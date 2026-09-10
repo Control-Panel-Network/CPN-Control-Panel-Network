@@ -193,7 +193,7 @@ pub fn design_settings_panel(username: &str) -> String {
   background:var(--canvas); color:inherit; font:inherit; cursor:pointer;
 }}
 .manage-btn.primary {{ background:var(--blue); color:#fff; border-color:transparent; }}
-.manage-muted {{ color:var(--muted); font-size:13px; line-height:1.45; margin:0; }}
+.manage-muted {{ color:var(--ink); opacity:.88; font-size:13px; line-height:1.45; margin:0; }}
 </style>
 <script>
 (function () {{

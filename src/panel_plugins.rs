@@ -62,10 +62,10 @@ fn view_tabs(active: &str, domain: &str) -> String {
         .plugin-tab {{
           display:inline-flex; align-items:center; min-height:40px; padding:0 16px;
           border-radius:999px; border:1px solid var(--hairline); background:var(--canvas);
-          color:var(--muted); font-size:14px; font-weight:600;
+          color:var(--ink); font-size:14px; font-weight:600;
         }}
-        .plugin-tab.active {{ background:#e7f1ff; color:var(--blue); border-color:#c9ddf7; }}
-        .plugin-stats {{ display:flex; flex-wrap:wrap; gap:16px; margin:0 0 14px; font-size:14px; }}
+        .plugin-tab.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
+        .plugin-stats {{ display:flex; flex-wrap:wrap; gap:16px; margin:0 0 14px; font-size:14px; color:var(--ink); }}
         .plugin-stats strong {{ color:var(--ink); }}
         .plugin-grid {{
           display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:14px;
@@ -73,24 +73,28 @@ fn view_tabs(active: &str, domain: &str) -> String {
         .plugin-card {{
           display:flex; flex-direction:column; gap:10px; padding:18px;
           border:1px solid var(--hairline); border-radius:16px; background:var(--canvas);
+          color:var(--ink);
         }}
-        .plugin-card h3 {{ margin:0; font-size:17px; letter-spacing:-.02em; }}
+        .plugin-card h3 {{ margin:0; font-size:17px; letter-spacing:-.02em; color:var(--ink); }}
+        .plugin-card .plugin-desc {{ margin:0; color:var(--ink); opacity:.88; font-size:14px; line-height:1.45; }}
+        .plugin-card .plugin-meta {{ margin:0; color:var(--ink); opacity:.8; font-size:13px; }}
         .plugin-badges {{ display:flex; flex-wrap:wrap; gap:6px; }}
         .plugin-badge {{
           display:inline-flex; align-items:center; min-height:24px; padding:0 8px;
           border-radius:999px; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
-          background:#f2f4f7; color:#475467;
+          background:#eef2f6; color:#0f172a;
         }}
-        .plugin-badge.free {{ background:#ecfdf3; color:#067647; }}
-        .plugin-badge.paid {{ background:#f4ebff; color:#6941c6; }}
-        .plugin-badge.cat {{ background:#eff8ff; color:#175cd3; }}
+        .plugin-badge.free {{ background:#dcfce7; color:#14532d; }}
+        .plugin-badge.paid {{ background:#ede9fe; color:#4c1d95; }}
+        .plugin-badge.cat {{ background:#dbeafe; color:#1e3a8a; }}
+        .plugin-badge.installed {{ background:#dbeafe; color:#1e3a8a; }}
         .plugin-actions {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; }}
         .btn-secondary, .btn-warn {{
           display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 14px;
           border:0; border-radius:999px; font-weight:700; cursor:pointer; font:inherit; text-decoration:none;
         }}
-        .btn-secondary {{ background:#f2f4f7; color:#344054; }}
-        .btn-warn {{ background:#fffaeb; color:#b54708; }}
+        .btn-secondary {{ background:#e2e8f0; color:#0f172a; }}
+        .btn-warn {{ background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; }}
         .plugin-search-row {{
           display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0 10px; max-width:none;
         }}
@@ -99,37 +103,52 @@ fn view_tabs(active: &str, domain: &str) -> String {
           clip:rect(0,0,0,0); white-space:nowrap; border:0;
         }}
         .plugin-search {{
-          flex:1 1 240px; min-width:180px; max-width:480px; box-sizing:border-box; border:1px solid #d0d5dd;
-          border-radius:10px; padding:10px 12px; font:inherit; margin:0;
+          flex:1 1 240px; min-width:180px; max-width:480px; box-sizing:border-box; border:1px solid #94a3b8;
+          border-radius:10px; padding:10px 12px; font:inherit; margin:0; color:var(--ink); background:var(--canvas);
         }}
         .plugin-search-row .btn-primary,
         .plugin-search-row .btn-secondary {{ min-height:40px; }}
-        .plugin-store-meta {{ margin:8px 0 0; font-size:.88rem; color:var(--muted); max-width:none; }}
-        .plugin-store-meta a {{ color:var(--blue); }}
-        .plugin-count {{ margin:0 0 8px; font-size:.9rem; color:var(--ink); font-weight:600; }}
+        .plugin-store-meta {{ margin:8px 0 0; font-size:.92rem; color:var(--ink); max-width:none; }}
+        .plugin-store-meta a {{ color:var(--blue); font-weight:600; }}
+        .plugin-risk-notice {{
+          margin:12px 0 0; padding:12px 14px; border-radius:12px;
+          border:1px solid #1d4ed8; background:#eff6ff; color:#0f172a; font-weight:600; line-height:1.45;
+        }}
+        .plugin-count {{ margin:0 0 8px; font-size:.95rem; color:var(--ink); font-weight:700; }}
         .category-pills {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }}
         .category-pills a {{
           display:inline-flex; align-items:center; min-height:34px; padding:0 12px; border-radius:999px;
-          border:1px solid var(--hairline); background:var(--canvas); font-size:13px; color:var(--muted);
+          border:1px solid var(--hairline); background:var(--canvas); font-size:13px; color:var(--ink); font-weight:600;
         }}
-        .category-pills a.active {{ background:#e7f1ff; color:var(--blue); font-weight:600; }}
-        .plugin-store-table.table-wrap {{ margin-top:8px; }}
-        .plugin-store-table .data-table thead th {{
-          position:sticky; top:0; z-index:1; background:var(--canvas);
-        }}
+        .category-pills a.active {{ background:#1d4ed8; color:#ffffff; border-color:#1d4ed8; }}
         .plugin-links {{ display:flex; gap:12px; font-size:13px; }}
-        .plugin-links a {{ color:var(--blue); }}
+        .plugin-links a {{ color:var(--blue); font-weight:600; }}
         .domain-picker {{ display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:0 0 10px; }}
         .domain-picker select {{
-          min-width:220px; border:1px solid #d0d5dd; border-radius:10px; padding:10px 12px; font:inherit;
+          min-width:220px; border:1px solid #94a3b8; border-radius:10px; padding:10px 12px; font:inherit;
+          color:var(--ink); background:var(--canvas);
         }}
-        [data-color-mode="dark"] .plugin-search {{
-          background:#1a1d26; border-color:#2a2f3a; color:var(--ink);
+        [data-color-mode="dark"] .plugin-tab {{ color:#e2e8f0; background:#1a1d26; }}
+        [data-color-mode="dark"] .plugin-tab.active {{ background:rgba(59,130,246,.25); color:#bfdbfe; border-color:#60a5fa; }}
+        [data-color-mode="dark"] .plugin-search,
+        [data-color-mode="dark"] .domain-picker select {{
+          background:#1a1d26; border-color:#475569; color:#f1f5f9;
         }}
+        [data-color-mode="dark"] .category-pills a {{ color:#e2e8f0; }}
         [data-color-mode="dark"] .category-pills a.active {{
-          background:rgba(59,130,246,.18); color:var(--blue);
+          background:#2563eb; color:#ffffff; border-color:#60a5fa;
         }}
-        [data-color-mode="dark"] .btn-secondary {{ background:#2a2f3a; color:#e4e7ec; }}
+        [data-color-mode="dark"] .btn-secondary {{ background:#334155; color:#f8fafc; }}
+        [data-color-mode="dark"] .btn-warn {{ background:#7f1d1d; color:#fef2f2; border-color:#f87171; }}
+        [data-color-mode="dark"] .plugin-badge {{ background:#334155; color:#f8fafc; }}
+        [data-color-mode="dark"] .plugin-badge.free {{ background:rgba(22,163,74,.28); color:#bbf7d0; }}
+        [data-color-mode="dark"] .plugin-badge.paid {{ background:rgba(124,58,237,.28); color:#ddd6fe; }}
+        [data-color-mode="dark"] .plugin-badge.cat,
+        [data-color-mode="dark"] .plugin-badge.installed {{ background:rgba(37,99,235,.3); color:#bfdbfe; }}
+        [data-color-mode="dark"] .plugin-risk-notice {{
+          background:#0b1220; border-color:#60a5fa; color:#e2e8f0;
+        }}
+        [data-color-mode="dark"] .plugin-card {{ color:#f1f5f9; }}
       </style>"#
     )
 }
@@ -279,8 +298,8 @@ fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> S
             <span class="plugin-badge">v{ver}</span>
             {pricing}
           </div>
-          <p class="muted">{desc}</p>
-          <p class="muted">Status: Installed · Active: {active}</p>
+          <p class="plugin-desc">{desc}</p>
+          <p class="plugin-meta">Status: Installed · Active: {active}</p>
           <div class="plugin-actions">
             <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
             {toggle}
@@ -348,14 +367,11 @@ fn store_rows(
     if filtered.is_empty() {
         return r#"<p class="empty-state">No plugins match this search.</p>"#.into();
     }
-    let mut rows = String::from(
-        r#"<div class="table-wrap plugin-store-table"><table class="data-table">
-      <thead><tr><th>Plugin</th><th>Category</th><th>Version</th><th>Pricing</th><th>Action</th></tr></thead><tbody>"#,
-    );
+    let mut cards = String::from(r#"<div class="plugin-grid">"#);
     for entry in filtered {
         let installed = installed_ids.iter().any(|id| id == &entry.id);
         let action = if installed {
-            r#"<span class="plugin-badge free">Installed</span>"#.to_string()
+            r#"<span class="plugin-badge installed">Installed</span>"#.to_string()
         } else {
             format!(
                 r#"<form method="post" action="/plugins/install" class="inline-form">
@@ -367,24 +383,29 @@ fn store_rows(
                 domain = html_escape(domain),
             )
         };
-        rows.push_str(&format!(
-            r#"<tr>
-          <td><strong>{name}</strong><div class="muted">{desc}</div></td>
-          <td><span class="plugin-badge cat">{cat}</span></td>
-          <td>{ver}</td>
-          <td>{pricing}</td>
-          <td>{action}</td>
-        </tr>"#,
+        cards.push_str(&format!(
+            r#"<article class="plugin-card">
+          <h3>{name}</h3>
+          <div class="plugin-badges">
+            <span class="plugin-badge cat">{cat}</span>
+            <span class="plugin-badge">v{ver}</span>
+            {pricing}
+          </div>
+          <p class="plugin-desc">{desc}</p>
+          <p class="plugin-meta">Author: {author}</p>
+          <div class="plugin-actions">{action}</div>
+        </article>"#,
             name = html_escape(&entry.name),
             desc = html_escape(&entry.description),
             cat = html_escape(&entry.category),
             ver = html_escape(&entry.version),
             pricing = badge_pricing(&entry.pricing),
+            author = html_escape(&entry.author),
             action = action,
         ));
     }
-    rows.push_str("</tbody></table></div>");
-    rows
+    cards.push_str("</div>");
+    cards
 }
 
 fn category_pills(entries: &[CatalogEntry], active: &str, domain: &str) -> String {
@@ -542,7 +563,8 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
       <article class="section-card">
         <h2>Plugin Store</h2>
         {picker}
-        <p class="plugin-store-meta">Install into <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache} Use at your own risk (third-party).</p>
+        <p class="plugin-store-meta">Install into <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
+        <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install.</p>
         {body}
       </article>"#,
             heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),

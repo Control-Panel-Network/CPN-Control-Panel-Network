@@ -1,8 +1,8 @@
 //! CPN plugin registry: install under `/home/<domain>/plugins/<plugin-id>/`.
 //!
-//! Catalog source: https://github.com/master3395/cyberpanel-plugins (community plugin
-//! archive). Internal adapters may map legacy `meta.xml` fields; user-facing copy is
-//! always CPN-branded.
+//! Catalog source: https://github.com/Control-Panel-Network/CPN-Plugins
+//! (org-owned community archive). Internal adapters may map legacy `meta.xml` fields;
+//! user-facing copy is always CPN-branded.
 //!
 //! Legacy installs under `$CPN_DATA_DIR/plugins/` are migrated into a chosen domain
 //! home on first use (`migrate_legacy_plugins`).
@@ -18,7 +18,7 @@ use std::{
 };
 
 const SCHEMA_VERSION: u32 = 1;
-const CATALOG_REPO: &str = "master3395/cyberpanel-plugins";
+const CATALOG_REPO: &str = "Control-Panel-Network/CPN-Plugins";
 const SKIP_DIRS: &[&str] = &[".github", "docs", "scripts", "to-do", "test"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ pub fn plugins_install_path_display(domain: Option<&str>) -> String {
 }
 
 pub fn catalog_repo_url() -> &'static str {
-    "https://github.com/master3395/cyberpanel-plugins"
+    "https://github.com/Control-Panel-Network/CPN-Plugins"
 }
 
 pub fn catalog_repo_slug() -> &'static str {
