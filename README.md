@@ -13,7 +13,7 @@ CPN is a Rust-based web installer and server-control project. The installer embe
 Primary path for Linux guests: run the official CPN bootstrap script as **root**. It detects AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian, downloads the matching package from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases), verifies `SHA256SUMS` and GPG when those assets exist, installs the package, then prints how to start `cpn-installer`.
 
 ```bash
-sh <(curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/install.sh || wget -qO- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/install.sh)
+sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
 ```
 
 Notes:
@@ -22,6 +22,8 @@ Notes:
 - Supported package targets today: EL9/EL10 RPM and Ubuntu/Debian `.deb` (see [Platform Support](docs/SUPPORT.md)).
 - Unknown or refused OS versions fail closed (no install).
 - CPN is WIP: prefer a disposable test machine.
+- GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh` (also on `main` under `scripts/install.sh`).
+- `cpn.newstargeted.com` should serve or mirror that install script at `/install.sh` (HTTPS).
 
 After the package install:
 
@@ -92,14 +94,14 @@ The default Windows mode binds only to loopback and does not create an inbound f
 Windows support is currently Phase A and does not yet provide feature parity with the Linux web/mail installation path.
 
 > [!NOTE]
-> If the newest release does not include an artifact for your OS and architecture, treat that target as unavailable for that release. Maintainer helpers under `scripts/` (build/sign/docker) are separate from `scripts/install.sh` / `scripts/upgrade.sh`.
+> If the newest release does not include an artifact for your OS and architecture, treat that target as unavailable for that release. Maintainer helpers under `scripts/` (build/sign/docker) are separate from the end-user bootstrap scripts (`install.sh`, `preUpgrade.sh`, `upgrade.sh`).
 
 ## Upgrading CPN
 
 On a host that already has `cpn-installer` installed, upgrade the package from GitHub Releases (same OS detection and verification as install):
 
 ```bash
-sh <(curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh || wget -qO- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh)
+sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
 ```
 
 After the package upgrade, run installer maintenance when the panel stack was previously installed:
@@ -108,7 +110,7 @@ After the package upgrade, run installer maintenance when the panel stack was pr
 sudo cpn-installer --upgrade
 ```
 
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v0.2.2-alpha.17` before the one-liner (or export it in the same shell).
+Pin a specific tag when needed: `CPN_RELEASE_TAG=v0.2.2-alpha.17` before the one-liner (or export it in the same shell). Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
 
 ## After installation
 

@@ -1,25 +1,30 @@
-#!/usr/bin/env bash
-# CPN Control Panel Network: install the latest matching release package.
+﻿#!/usr/bin/env bash
+# CPN Control Panel Network: upgrade the installed cpn-installer package from GitHub Releases.
 # Official one-liner (run as root):
-#   sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
-# GitHub raw fallback:
-#   https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh
+#   sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
 #
-# Env:
-#   CPN_RELEASE_TAG     pin a tag (example: v0.2.2-alpha.17); default: newest non-draft release
-#   CPN_GITHUB_REPO     owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
-#   CPN_REQUIRE_GPG     1 (default) require SHA256SUMS.asc + matching fingerprint
-#   CPN_ALLOW_UNSIGNED  1 allow missing GPG assets (lab only; not for production)
+# This file is the upgrade bootstrap. A copy also lives at repo-root preUpgrade.sh for the
+# stable branch raw URL (.../stable/preUpgrade.sh).
+#
+# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [[ -n "${SCRIPT_DIR}" && -f "${SCRIPT_DIR}/upgrade.sh" ]]; then
+  # Local clone / packaged tree: reuse upgrade.sh implementation.
+  # shellcheck disable=SC1091
+  exec bash "${SCRIPT_DIR}/upgrade.sh" "$@"
+fi
+
+# When curled as a standalone file (no sibling upgrade.sh), continue with embedded logic below.
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
 CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
-RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/main/packaging/RPM-GPG-KEY-CPN"
+RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
 
-die() { echo "CPN install error: $*" >&2; exit 1; }
+die() { echo "CPN preUpgrade error: $*" >&2; exit 1; }
 info() { echo "CPN: $*"; }
 
 require_root() {
@@ -55,12 +60,12 @@ download_text() {
   if have_cmd curl; then
     curl -fsSL --proto '=https' --tlsv1.2 --max-time 60 \
       -H "Accept: application/vnd.github+json" \
-      -H "User-Agent: CPN-install.sh" \
+      -H "User-Agent: CPN-preUpgrade.sh" \
       "$url"
   elif have_cmd wget; then
     wget -qO- --https-only \
       --header="Accept: application/vnd.github+json" \
-      --header="User-Agent: CPN-install.sh" \
+      --header="User-Agent: CPN-preUpgrade.sh" \
       "$url"
   else
     die "curl or wget is required"
@@ -75,6 +80,12 @@ sha256_file() {
     shasum -a 256 "$path" | awk '{print $1}'
   else
     die "sha256sum or shasum is required"
+  fi
+}
+
+require_existing_install() {
+  if ! have_cmd cpn-installer && [[ ! -x /usr/bin/cpn-installer ]]; then
+    die "cpn-installer is not installed. Use the CPN install one-liner for a new install."
   fi
 }
 
@@ -130,18 +141,11 @@ detect_guest() {
   if [[ "$FAMILY" == "dnf" ]]; then
     [[ "$EL_MAJOR" =~ ^[0-9]+$ ]] || die "could not parse Enterprise Linux major from VERSION_ID=${version_id}"
     if [[ "$EL_MAJOR" -lt 9 ]]; then
-      die "EL${EL_MAJOR} has no native CPN release RPM (OpenSSL / WebAuthn constraint). Use AlmaLinux/Rocky/RHEL 9 or 10, or Ubuntu/Debian."
+      die "EL${EL_MAJOR} has no native CPN release RPM. Upgrade the guest OS or install from a supported release asset."
     fi
     if [[ "$EL_MAJOR" -gt 10 ]]; then
       die "unsupported Enterprise Linux major: ${EL_MAJOR}"
     fi
-  fi
-
-  if [[ "$id" == "ubuntu" && "$major" -lt 22 ]]; then
-    die "Ubuntu ${version_id} is refused for new CPN installs (use 22.04 or 24.04)"
-  fi
-  if [[ "$id" == "debian" && "$major" -lt 12 ]]; then
-    die "Debian ${version_id} is refused for new CPN installs (use 12 or newer)"
   fi
 }
 
@@ -155,8 +159,7 @@ pick_release_json() {
   fi
   body="$(download_text "${API_BASE}/releases?per_page=30")" \
     || die "could not list GitHub Releases"
-  if have_cmd python3; then
-    json="$(printf '%s' "$body" | python3 -c '
+  json="$(printf '%s' "$body" | python3 -c '
 import json,sys
 items=json.load(sys.stdin)
 for item in items:
@@ -167,10 +170,7 @@ for item in items:
 else:
     sys.exit(2)
 ')" || die "no non-draft GitHub release found"
-    printf '%s' "$json"
-    return
-  fi
-  die "python3 is required to select the latest GitHub release (or set CPN_RELEASE_TAG)"
+  printf '%s' "$json"
 }
 
 asset_url_by_name() {
@@ -251,21 +251,20 @@ verify_gpg_sums() {
   info "GPG OK: SHA256SUMS.asc (fingerprint $CPN_EXPECTED_FPR)"
 }
 
-install_package() {
+upgrade_package() {
   local artifact="$1"
   case "$FAMILY" in
     dnf)
       if have_cmd dnf; then
-        dnf install -y "$artifact"
+        dnf upgrade -y "$artifact" || dnf install -y "$artifact"
       elif have_cmd yum; then
-        yum install -y "$artifact"
+        yum upgrade -y "$artifact" || yum install -y "$artifact"
       else
         die "dnf or yum is required"
       fi
       ;;
     apt)
       if have_cmd apt-get; then
-        apt-get update -y >/dev/null || true
         apt-get install -y "$artifact"
       else
         die "apt-get is required"
@@ -278,27 +277,27 @@ install_package() {
 print_next_steps() {
   cat <<'EOF'
 
-CPN package install finished.
+CPN package upgrade finished.
 
-Start the installer:
+If this host already completed a panel install, run maintenance:
+  sudo cpn-installer --upgrade
+
+To open the installer UI again:
   sudo cpn-installer
 
-Default listen address: 127.0.0.1:2087
-Remote access (SSH tunnel recommended):
-  ssh -L 2087:127.0.0.1:2087 root@your-server
-
-CPN is under active development. Prefer a test VPS/VM and keep backups.
+Keep backups before upgrading production-like hosts. CPN is still under active development.
 EOF
 }
 
 main() {
   require_root
   have_cmd python3 || die "python3 is required"
+  require_existing_install
   detect_guest
   info "detected ${DIST_LABEL} (${FAMILY}, arch ${PKG_ARCH}/${DEB_ARCH})"
 
   local work release_json tag pkg_name pkg_url sums_url asc_url key_url
-  work="$(mktemp -d /var/tmp/cpn-install.XXXXXX)"
+  work="$(mktemp -d /var/tmp/cpn-upgrade.XXXXXX)"
   chmod 700 "$work"
   # shellcheck disable=SC2064
   trap "rm -rf '$work'" EXIT
@@ -314,7 +313,7 @@ main() {
     || die "missing download URL for $pkg_name"
   sums_url="$(asset_url_by_name "$release_json" "SHA256SUMS")" \
     || die "release $tag is missing SHA256SUMS"
-  asc_url="$(asset_url_by_name "$release_json" "SHA256SUMS.asc" || true)"
+  asc_url="$(asset_url_by_name "$release_json" "SHA256SUMS.asc" 2>/dev/null || true)"
 
   download "$pkg_url" "$work/$pkg_name"
   download "$sums_url" "$work/SHA256SUMS"
@@ -336,15 +335,10 @@ main() {
     if have_cmd rpmkeys; then
       rpmkeys --import "$work/RPM-GPG-KEY-CPN" >/dev/null 2>&1 || true
     fi
-    if ! rpm --checksig "$work/$pkg_name" >/dev/null 2>&1; then
-      info "warning: rpm --checksig did not fully validate $pkg_name; SHA256SUMS + GPG still applied"
-    else
-      info "RPM signature check OK"
-    fi
   fi
 
-  info "installing $pkg_name"
-  install_package "$work/$pkg_name"
+  info "upgrading with $pkg_name"
+  upgrade_package "$work/$pkg_name"
   print_next_steps
 }
 

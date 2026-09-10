@@ -8,16 +8,21 @@ Preferred end-user path (detects OS, downloads the matching asset, verifies chec
 
 ```bash
 # Install
-sh <(curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/install.sh || wget -qO- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/install.sh)
+sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
 
 # Upgrade (existing cpn-installer install)
-sh <(curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh || wget -qO- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh)
+sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
 ```
 
-Script sources (stable raw URLs on `main`):
+Script sources:
 
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/install.sh
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh
+- https://cpn.newstargeted.com/install.sh (News Targeted host; mirrors `scripts/install.sh`)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh (GitHub fallback)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/preUpgrade.sh
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh
+
+The `stable` branch tracks the published bootstrap scripts. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
 
 Manual download and verification steps below remain valid when you prefer not to use the bootstrap scripts.
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: upgrade the installed cpn-installer package from GitHub Releases.
 # Official one-liner (run as root):
-#   sh <(curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh || wget -qO- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/main/scripts/upgrade.sh)
+#   sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
+# Alias: scripts/preUpgrade.sh (same behavior).
 #
 # Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
