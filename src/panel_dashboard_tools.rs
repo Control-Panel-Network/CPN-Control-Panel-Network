@@ -1,6 +1,6 @@
 //! Dashboard Sites switcher + collapsible Tools groups (CPN-branded).
 
-use crate::panel_icons::{hub_icon_html, nav_icon_html};
+use crate::panel_icons::nav_icon_html;
 use crate::panel_ops_ssl_le::ssl_status_for_domain;
 use crate::sites::{list_sites, site_home_from_record};
 use crate::website_preview::{preview_mode_url, ssl_material_present};
