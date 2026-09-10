@@ -451,34 +451,31 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
     parts.join("\n          ")
 }
 
-/// CSS for multi-column tile grid, expandable parents, and child buttons.
+/// CSS for single-column nav tiles, expandable parents, and stacked child buttons.
 pub fn nav_tree_styles() -> &'static str {
     r#"
 .nav-tile-grid {
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0, 1fr));
+  display:flex;
+  flex-direction:column;
   gap:8px;
   margin:0 0 10px;
-  align-content:start;
 }
 .nav-section {
-  grid-column:1 / -1;
   margin:14px 4px 8px;
   color:var(--muted); font-size:11px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase;
 }
 .sidebar nav > .nav-section:first-child { margin-top:4px; }
-.nav-group { margin:0; border:0; min-width:0; }
-.nav-group[open] { grid-column:1 / -1; }
+.nav-group { margin:0; border:0; min-width:0; width:100%; }
 .nav-group > summary {
   list-style:none; cursor:pointer;
 }
 .nav-group > summary::-webkit-details-marker { display:none; }
 .sidebar nav a.nav-tile,
 .nav-parent.nav-tile {
-  display:flex; align-items:center; gap:8px; min-height:52px; min-width:0;
-  padding:8px 10px; border-radius:12px; color:var(--ink);
-  font-size:12.5px; font-weight:600; line-height:1.2; user-select:none;
+  display:flex; align-items:center; gap:10px; min-height:44px; width:100%; min-width:0;
+  padding:8px 12px; border-radius:10px; color:var(--ink);
+  font-size:14px; font-weight:600; line-height:1.25; user-select:none;
   background:#fff; border:1px solid var(--hairline);
   box-shadow:0 1px 2px rgba(29,29,31,.05);
 }
@@ -502,16 +499,16 @@ pub fn nav_tree_styles() -> &'static str {
 }
 .nav-group[open] > .nav-parent .nav-chevron { transform:rotate(90deg); color:var(--blue); }
 .nav-children {
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0, 1fr));
+  display:flex;
+  flex-direction:column;
   gap:6px;
   margin:8px 0 2px;
-  padding:0;
+  padding:0 0 0 8px;
 }
 .nav-child-btn {
-  display:flex; align-items:center; min-height:40px; min-width:0; padding:8px 12px;
+  display:flex; align-items:center; min-height:40px; width:100%; min-width:0; padding:8px 12px;
   border-radius:10px; background:#fff; border:1px solid var(--hairline);
-  color:var(--ink); font-size:12.5px; font-weight:500;
+  color:var(--ink); font-size:13px; font-weight:500;
   box-shadow:0 1px 2px rgba(29,29,31,.04);
 }
 .nav-child-btn span {
@@ -522,10 +519,6 @@ pub fn nav_tree_styles() -> &'static str {
   border-color:#9ec2f0; background:#e7f1ff; color:var(--blue); font-weight:600;
 }
 .sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
-@media (max-width: 359.98px) {
-  .nav-tile-grid,
-  .nav-children { grid-template-columns:1fr; }
-}
 [data-color-mode="dark"] .sidebar nav a.nav-tile,
 [data-color-mode="dark"] .nav-parent.nav-tile,
 [data-color-mode="dark"] .nav-child-btn {
@@ -601,7 +594,8 @@ mod tests {
         assert!(css.contains(".nav-child-btn"));
         assert!(css.contains(".nav-children"));
         assert!(css.contains(".nav-chevron"));
-        assert!(css.contains("grid-template-columns:repeat(2"));
+        assert!(css.contains("flex-direction:column"));
         assert!(css.contains(".nav-tile-grid"));
+        assert!(!css.contains("grid-template-columns:repeat(2"));
     }
 }

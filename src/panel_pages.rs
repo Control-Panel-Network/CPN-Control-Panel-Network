@@ -210,8 +210,10 @@ code { font-size:.9em; word-break:break-word; }
     display:flex; height:58px; margin:0 -16px 28px; padding:0 12px 0 8px; align-items:center;
     justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
     background:rgba(250,250,252,.94); border-bottom:1px solid var(--hairline);
+    color:var(--ink);
   }
-  .mobile-header strong { flex:1; font-size:16px; }
+  .mobile-header strong { flex:1; font-size:16px; color:inherit; }
+  .mobile-header .logout { color:var(--muted); }
   .resource-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dashboard-lower-grid { grid-template-columns:1fr; }
 }

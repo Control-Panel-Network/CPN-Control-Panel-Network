@@ -32,8 +32,22 @@ body.sidebar-collapsed .mobile-header {
   height:58px; margin:0 -20px 28px; padding:0 12px 0 8px; display:flex; align-items:center;
   justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
   background:rgba(250,250,252,.94); border-bottom:1px solid var(--hairline);
+  color:var(--ink);
 }
-body.sidebar-collapsed .mobile-header strong { flex:1; font-size:16px; }
+body.sidebar-collapsed .mobile-header strong { flex:1; font-size:16px; color:inherit; }
+body.sidebar-collapsed .mobile-header .logout { color:var(--muted); }
+[data-color-mode="dark"] body.sidebar-collapsed .mobile-header,
+html[data-color-mode="dark"] body.sidebar-collapsed .mobile-header {
+  background:#161922; border-bottom-color:#2a2f3a; color:#f2f4f7;
+}
+[data-color-mode="dark"] body.sidebar-collapsed .mobile-header .logout,
+html[data-color-mode="dark"] body.sidebar-collapsed .mobile-header .logout {
+  color:#d0d5dd;
+}
+[data-color-mode="dark"] body.sidebar-collapsed .mobile-header .logout:hover,
+html[data-color-mode="dark"] body.sidebar-collapsed .mobile-header .logout:hover {
+  color:#f2f4f7;
+}
 [data-color-mode="dark"] .sidebar-collapse-btn:hover { background:rgba(255,255,255,.08); }
 "#
 }

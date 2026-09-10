@@ -335,8 +335,20 @@ pub fn color_mode_styles() -> &'static str {
 [data-color-mode="dark"] .sidebar nav a.active {
   background:rgba(59,130,246,.18); color:var(--blue);
 }
-[data-color-mode="dark"] .mobile-header {
-  background:rgba(22,25,34,.94); border-bottom-color:var(--hairline);
+[data-color-mode="dark"] .mobile-header,
+html[data-color-mode="dark"] .mobile-header,
+[data-color-mode="dark"] body .mobile-header {
+  background:#161922; border-bottom-color:#2a2f3a; color:#f2f4f7;
+}
+[data-color-mode="dark"] .mobile-header strong,
+[data-color-mode="dark"] .mobile-header .icon-btn {
+  color:#f2f4f7;
+}
+[data-color-mode="dark"] .mobile-header .logout {
+  color:#d0d5dd;
+}
+[data-color-mode="dark"] .mobile-header .logout:hover {
+  color:#f2f4f7;
 }
 [data-color-mode="dark"] .gauge-track { stroke:#2a2f3a; }
 [data-color-mode="dark"] .status-card li,
