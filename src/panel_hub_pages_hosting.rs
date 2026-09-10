@@ -23,23 +23,35 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn email_hub_main() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
         "Email",
         "Mailboxes, forwarding, DKIM, and deliverability tools for this CPN host.",
     );
     for (title, tiles) in email_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }
 
 pub fn databases_ftp_hub_main() -> String {
-    let mut body = section_heading(
-        "Databases & FTP",
-        "MariaDB databases, phpMyAdmin, and FTP accounts for hosted sites.",
-    );
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
+    let blurb = if feats.phpmyadmin {
+        "MariaDB databases, phpMyAdmin, and FTP accounts for hosted sites."
+    } else {
+        "MariaDB databases and FTP accounts for hosted sites."
+    };
+    let mut body = section_heading("Databases & FTP", blurb);
     for (title, tiles) in databases_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }

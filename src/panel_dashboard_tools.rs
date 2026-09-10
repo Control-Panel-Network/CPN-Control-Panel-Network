@@ -360,11 +360,20 @@ pub fn dashboard_sites_panel() -> String {
 }
 
 pub fn dashboard_tool_groups() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut out = String::from(
         r#"<h2 class="hub-section-title">Tools</h2>
 <div class="dash-tool-groups">"#,
     );
     for (i, group) in TOOL_GROUPS.iter().enumerate() {
+        let tools: Vec<&ToolLink> = group
+            .tools
+            .iter()
+            .filter(|tool| feats.allows_href(tool.href))
+            .collect();
+        if tools.is_empty() {
+            continue;
+        }
         let open = if i < 2 { " open" } else { "" };
         out.push_str(&format!(
             r#"<details class="dash-tool-group"{open}>
@@ -375,7 +384,7 @@ pub fn dashboard_tool_groups() -> String {
             title = html_escape(group.title),
             chev = chevron(),
         ));
-        for tool in group.tools {
+        for tool in tools {
             out.push_str(&format!(
                 r#"<a class="dash-tool-link" href="{href}">{icon}<span>{label}</span></a>"#,
                 href = html_escape(tool.href),
