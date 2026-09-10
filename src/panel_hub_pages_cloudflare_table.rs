@@ -86,7 +86,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
                 v = html_escape(&pri_val),
             )
         } else {
-            r#"<input type="hidden" name="priority" value=""><span class="muted">-</span>"#.into()
+            r#"<span class="muted">-</span>"#.into()
         };
         let hidden = if !filter_type.is_empty()
             && !filter_type.eq_ignore_ascii_case("all")

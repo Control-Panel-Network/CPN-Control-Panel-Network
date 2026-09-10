@@ -168,10 +168,17 @@ pub struct CfAddForm {
     pub name: String,
     pub content: String,
     pub ttl: Option<u32>,
-    pub priority: Option<u16>,
+    #[serde(default)]
+    pub priority: Option<String>,
     pub proxied: Option<String>,
     #[serde(default)]
     pub filter_type: Option<String>,
+}
+
+fn parse_optional_u16(raw: Option<&str>) -> Option<u16> {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u16>().ok())
 }
 
 #[post("/dns/cloudflare/add")]
@@ -198,7 +205,7 @@ pub async fn cloudflare_add_post(
         &form.name,
         &form.content,
         form.ttl.unwrap_or(3600),
-        form.priority,
+        parse_optional_u16(form.priority.as_deref()),
         proxied,
     ) {
         Ok(msg) => redirect_notice(&back, Some(&msg), None),
@@ -240,7 +247,8 @@ pub struct CfUpdateForm {
     pub name: String,
     pub content: String,
     pub ttl: Option<u32>,
-    pub priority: Option<u16>,
+    #[serde(default)]
+    pub priority: Option<String>,
     pub proxied: Option<String>,
     #[serde(default)]
     pub filter_type: Option<String>,
@@ -270,7 +278,7 @@ pub async fn cloudflare_update_post(
         &form.name,
         &form.content,
         form.ttl.unwrap_or(1),
-        form.priority,
+        parse_optional_u16(form.priority.as_deref()),
         proxied,
     ) {
         Ok(msg) => redirect_notice(&back, Some(&msg), None),
