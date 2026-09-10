@@ -1,5 +1,6 @@
-﻿//! FTP stack detection and account stubs.
+﻿//! FTP stack detection (prefers CPN OpenSSH jailed SFTP).
 
+use crate::panel_ops_sftp::detect_sftp_stack;
 use std::process::Command;
 
 #[derive(Debug, Clone)]
@@ -10,6 +11,14 @@ pub struct FtpStatus {
 }
 
 pub fn detect_ftp() -> FtpStatus {
+    let sftp = detect_sftp_stack();
+    if sftp.ready {
+        return FtpStatus {
+            stack: sftp.stack,
+            detail: sftp.detail,
+            ready: true,
+        };
+    }
     let pure = Command::new("systemctl")
         .args(["is-active", "pure-ftpd"])
         .output()
@@ -19,29 +28,27 @@ pub fn detect_ftp() -> FtpStatus {
     if pure == "active" {
         return FtpStatus {
             stack: "Pure-FTPd".into(),
-            detail: "Pure-FTPd is active. Account CRUD wiring is next; use system tools for now."
+            detail: "Pure-FTPd is active. Prefer CPN jailed SFTP (Reset SFTP) for chrooted site access."
                 .into(),
             ready: true,
         };
     }
     let vs = Command::new("systemctl")
-        .args(["is-active", "vsftpd"])
+        .args(["is-active", "sshd"])
         .output()
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
-    if vs == "active" {
+    if vs == "active" || sftp.stack == "OpenSSH" {
         return FtpStatus {
-            stack: "vsftpd".into(),
-            detail: "vsftpd is active. Account CRUD wiring is next; use system tools for now."
-                .into(),
-            ready: true,
+            stack: sftp.stack,
+            detail: sftp.detail,
+            ready: false,
         };
     }
     FtpStatus {
-        stack: "Not detected".into(),
-        detail: "No Pure-FTPd or vsftpd service detected. Install an FTP stack to enable accounts."
-            .into(),
+        stack: sftp.stack,
+        detail: sftp.detail,
         ready: false,
     }
 }

@@ -33,7 +33,8 @@ use cpn_installer::panel_hub_routes::{
     email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
     email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_password,
     email_pattern_fwd, email_plus, email_queue, email_rspamd, email_spamassassin,
-    email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset,
+    email_webmail_route, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
+    ftp_delete_post, ftp_reset, ftp_reset_password_post, ftp_reset_post,
     passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_register_finish,
     passkey_register_start, security_fail2ban, security_firewall, security_malware,
     security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
@@ -963,8 +964,12 @@ async fn main() -> std::io::Result<()> {
             .service(databases_phpmyadmin_route)
             .service(ftp_accounts_route)
             .service(ftp_create)
+            .service(ftp_create_post)
             .service(ftp_delete)
+            .service(ftp_delete_post)
             .service(ftp_reset)
+            .service(ftp_reset_post)
+            .service(ftp_reset_password_post)
             .service(plugins_page)
             .service(plugins_settings_page)
             .service(plugins_settings_save)

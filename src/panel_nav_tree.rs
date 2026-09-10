@@ -90,6 +90,18 @@ const DATABASES_CHILDREN: &[NavChild] = &[
         label: "FTP Accounts",
         href: "/ftp/accounts",
     },
+    NavChild {
+        label: "Create SFTP Account",
+        href: "/ftp/create",
+    },
+    NavChild {
+        label: "Delete SFTP Account",
+        href: "/ftp/delete",
+    },
+    NavChild {
+        label: "Reset SFTP",
+        href: "/ftp/reset",
+    },
 ];
 
 const BACKUPS_CHILDREN: &[NavChild] = &[

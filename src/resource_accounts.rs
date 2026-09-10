@@ -203,6 +203,25 @@ pub fn create_ftp_account(
     Ok(record)
 }
 
+pub fn delete_ftp_account(username_raw: &str) -> Result<(), String> {
+    let username = username_raw.trim().to_ascii_lowercase();
+    if username.is_empty() {
+        return Err("FTP username is required".into());
+    }
+    let mut file = load_ftp_file();
+    let before = file.accounts.len();
+    file.accounts
+        .retain(|a| !a.username.eq_ignore_ascii_case(&username));
+    if file.accounts.len() == before {
+        return Err(format!("FTP account `{username}` not found"));
+    }
+    file.schema_version = SCHEMA_VERSION;
+    let raw = serde_json::to_string_pretty(&file)
+        .map_err(|e| format!("Could not serialize FTP accounts: {e}"))?;
+    write_json(&ftp_path(), &raw)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +236,8 @@ mod tests {
             let ftp = create_ftp_account("admin", "siteftp", "example.com").unwrap();
             assert_eq!(ftp.username, "siteftp");
             assert_eq!(list_ftp_accounts().len(), 1);
+            delete_ftp_account("siteftp").unwrap();
+            assert!(list_ftp_accounts().is_empty());
             assert!(create_database("admin", "app_db", "").is_err());
         });
     }
