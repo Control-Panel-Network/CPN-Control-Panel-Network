@@ -60,8 +60,7 @@ pub fn verify_cloudflare_connection() -> Result<CloudflareVerifyResult, String> 
         return Err("Cloudflare API token is not configured".into());
     }
 
-    let mut token_status = "unknown".to_string();
-    match settings.auth_type {
+    let token_status = match settings.auth_type {
         CloudflareAuthType::ApiToken => {
             let url = format!("{CF_API}/user/tokens/verify");
             match curl_json("GET", &url, None) {
@@ -70,18 +69,18 @@ pub fn verify_cloudflare_connection() -> Result<CloudflareVerifyResult, String> 
                         .get("status")
                         .and_then(|v| v.as_str())
                         .unwrap_or("active");
-                    token_status = status.to_string();
                     if status != "active" {
                         let msg = format!("Token status: {status}");
                         let _ = record_cloudflare_verify(false, &msg, None);
                         return Ok(CloudflareVerifyResult {
                             ok: false,
-                            token_status,
+                            token_status: status.to_string(),
                             zone_count: 0,
                             zone_names: vec![],
                             message: msg,
                         });
                     }
+                    status.to_string()
                 }
                 Err(err) => {
                     let msg = format!("Token verify failed: {err}");
@@ -99,9 +98,7 @@ pub fn verify_cloudflare_connection() -> Result<CloudflareVerifyResult, String> 
         CloudflareAuthType::GlobalKey => {
             let url = format!("{CF_API}/user");
             match curl_json("GET", &url, None) {
-                Ok(_) => {
-                    token_status = "valid".into();
-                }
+                Ok(_) => "valid".into(),
                 Err(err) => {
                     let msg = format!("Global API Key check failed: {err}");
                     let _ = record_cloudflare_verify(false, &msg, None);
@@ -115,7 +112,7 @@ pub fn verify_cloudflare_connection() -> Result<CloudflareVerifyResult, String> 
                 }
             }
         }
-    }
+    };
 
     match list_accessible_zones(100) {
         Ok(zones) => {

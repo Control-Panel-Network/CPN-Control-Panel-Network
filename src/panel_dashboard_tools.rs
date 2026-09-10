@@ -376,9 +376,10 @@ pub fn dashboard_tool_groups() -> String {
         }
         let open = if i < 2 { " open" } else { "" };
         out.push_str(&format!(
-            r#"<details class="dash-tool-group"{open}>
+            r#"<details class="dash-tool-group" id="dash-tools-{id}"{open}>
   <summary>{icon}<span>{title}</span>{chev}</summary>
   <div class="dash-tool-grid">"#,
+            id = html_escape(group.id),
             open = open,
             icon = nav_icon_html(group.icon_id),
             title = html_escape(group.title),
@@ -388,7 +389,7 @@ pub fn dashboard_tool_groups() -> String {
             out.push_str(&format!(
                 r#"<a class="dash-tool-link" href="{href}">{icon}<span>{label}</span></a>"#,
                 href = html_escape(tool.href),
-                icon = hub_icon_html(tool.href),
+                icon = nav_icon_html(tool.icon_id),
                 label = html_escape(tool.label),
             ));
         }
