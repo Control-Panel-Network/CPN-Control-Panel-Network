@@ -280,7 +280,7 @@ pub fn dashboard_sites_panel() -> String {
             home
         };
         meta_json.push_str(&format!(
-            r#""{dom}":{{"home":{home},"ssl":{ssl},"preview":{prev},"manage":{manage}}}"#,
+            r#"{dom}:{{"home":{home},"ssl":{ssl},"preview":{prev},"manage":{manage}}}"#,
             dom = serde_json::to_string(&site.domain).unwrap_or_else(|_| "\"\"".into()),
             home = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into()),
             ssl = serde_json::to_string(&ssl).unwrap_or_else(|_| "\"\"".into()),
