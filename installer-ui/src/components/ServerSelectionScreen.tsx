@@ -13,9 +13,11 @@ interface Props {
   panelHostname?: string | null;
   database: DatabaseEngine;
   installPhpmyadmin: boolean;
+  enableProxyFront: boolean;
   onSelectServer: (server: ServerEngine) => void;
   onDatabaseChange: (database: DatabaseEngine) => void;
   onPhpmyadminChange: (enabled: boolean) => void;
+  onProxyFrontChange: (enabled: boolean) => void;
   onNetworkChange: (input: {
     port: number;
     oldPortPolicy?: OldPortPolicy;
@@ -31,9 +33,11 @@ export function ServerSelectionScreen({
   panelHostname,
   database,
   installPhpmyadmin,
+  enableProxyFront,
   onSelectServer,
   onDatabaseChange,
   onPhpmyadminChange,
+  onProxyFrontChange,
   onNetworkChange,
   onContinue,
   onOpenCompare,
@@ -398,6 +402,38 @@ export function ServerSelectionScreen({
                 : locale === "nb"
                   ? "Anbefalt · aktivert som standard"
                   : "Recommended · enabled by default"}
+            </span>
+          </div>
+          <div className="phpmyadmin-option mx-auto mt-4">
+            <button
+              type="button"
+              className={`phpmyadmin-switch ${enableProxyFront ? "phpmyadmin-switch-on" : ""}`}
+              role="switch"
+              aria-checked={enableProxyFront}
+              aria-label={
+                locale === "es"
+                  ? "Nginx frontal y Proxy Manager (IP interna única)"
+                  : locale === "nb"
+                    ? "Nginx-front og Proxy Manager (unik intern-IP)"
+                    : "Nginx front and Proxy Manager (unique internal IP)"
+              }
+              onClick={() => onProxyFrontChange(!enableProxyFront)}
+            >
+              <span aria-hidden="true" />
+            </button>
+            <span>
+              {locale === "es"
+                ? "Nginx frontal + IP interna única por dominio"
+                : locale === "nb"
+                  ? "Nginx-front + unik intern-IP per domene"
+                  : "Nginx front + unique internal IP per domain"}
+            </span>
+            <span className="default-badge">
+              {locale === "es"
+                ? "Opcional · relaja el enrutado público de OLS"
+                : locale === "nb"
+                  ? "Valgfritt · slapper av OLS offentlig ruting"
+                  : "Optional · relaxes OLS public routing"}
             </span>
           </div>
         </div>

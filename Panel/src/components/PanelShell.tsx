@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   AppWindow,
+  ChevronDown,
   Database,
   Gauge,
   Globe2,
@@ -25,7 +26,14 @@ import {
 } from "lucide-react";
 import { NotificationsPopover, type PanelNotice } from "./NotificationsPopover";
 
-type NavItem = { label: string; href: string; icon: typeof Gauge; id: string };
+type NavChild = { label: string; href: string };
+type NavItem = {
+  label: string;
+  href: string;
+  icon: typeof Gauge;
+  id: string;
+  children?: NavChild[];
+};
 
 const STORAGE_KEY = "cpn-sidebar-collapsed";
 const COLOR_MODE_KEY = "cpn-color-mode";
@@ -98,28 +106,102 @@ const NARROW_MQ = "(max-width: 1023.98px)";
 
 const hosting: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge, id: "dashboard" },
-  { label: "Websites", href: "/websites", icon: Globe2, id: "websites" },
-  { label: "Email", href: "/email", icon: Mail, id: "email" },
+  {
+    label: "Websites",
+    href: "/websites",
+    icon: Globe2,
+    id: "websites",
+    children: [
+      { label: "List Websites", href: "/websites" },
+      { label: "Create Website", href: "/websites" },
+    ],
+  },
+  {
+    label: "Email",
+    href: "/email",
+    icon: Mail,
+    id: "email",
+    children: [
+      { label: "Email Accounts", href: "/email/accounts" },
+      { label: "Create Email", href: "/email/create" },
+      { label: "Webmail", href: "/email/webmail" },
+    ],
+  },
   {
     label: "Databases & FTP",
     href: "/databases",
     icon: Database,
     id: "databases",
+    children: [
+      { label: "All Databases", href: "/databases/all" },
+      { label: "MariaDB Manager", href: "/databases/manager" },
+      { label: "FTP Accounts", href: "/ftp/accounts" },
+    ],
   },
-  { label: "Backups", href: "/backups", icon: HardDrive, id: "backups" },
+  {
+    label: "Backups",
+    href: "/backups",
+    icon: HardDrive,
+    id: "backups",
+    children: [
+      { label: "Create Backup", href: "/backups/create" },
+      { label: "Restore Backup", href: "/backups/restore" },
+    ],
+  },
   { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
   { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
 ];
 
 const account: NavItem[] = [
-  { label: "Users & Plans", href: "/account/users", icon: Users, id: "users" },
+  {
+    label: "Users & Plans",
+    href: "/account/users",
+    icon: Users,
+    id: "users",
+    children: [
+      { label: "View Profile", href: "/account/users/profile" },
+      { label: "Create New User", href: "/account/users/create" },
+      { label: "List Users", href: "/account/users/list" },
+      { label: "Modify User", href: "/account/users/modify" },
+    ],
+  },
   { label: "Packages", href: "/packages", icon: Package, id: "packages" },
 ];
 
 const administration: NavItem[] = [
-  { label: "Server", href: "/server", icon: Server, id: "server" },
-  { label: "Security", href: "/security", icon: Shield, id: "security" },
-  { label: "Settings", href: "/settings", icon: Settings, id: "settings" },
+  {
+    label: "Server",
+    href: "/server",
+    icon: Server,
+    id: "server",
+    children: [
+      { label: "Services Status", href: "/server/services" },
+      { label: "Top Processes", href: "/server/processes" },
+      { label: "DNS Zones", href: "/server/dns/zones" },
+    ],
+  },
+  {
+    label: "Security",
+    href: "/security",
+    icon: Shield,
+    id: "security",
+    children: [
+      { label: "Firewall", href: "/security/firewall" },
+      { label: "Secure SSH", href: "/security/ssh" },
+      { label: "Manage SSL", href: "/security/ssl" },
+    ],
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    id: "settings",
+    children: [
+      { label: "Design", href: "/settings/design" },
+      { label: "Change Port", href: "/settings/port" },
+      { label: "Version Management", href: "/settings/version" },
+    ],
+  },
 ];
 
 type PanelShellProps = {
@@ -128,6 +210,56 @@ type PanelShellProps = {
   signedInLabel: string;
   children: React.ReactNode;
 };
+
+function NavExpandable({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: string;
+  onNavigate: () => void;
+}) {
+  const Icon = item.icon;
+  const open = item.id === active;
+  if (!item.children?.length) {
+    return (
+      <Link
+        href={item.href}
+        className={item.id === active ? "active" : undefined}
+        onClick={onNavigate}
+      >
+        <Icon size={20} strokeWidth={1.8} />
+        {item.label}
+      </Link>
+    );
+  }
+  return (
+    <details className="nav-group" open={open || undefined}>
+      <summary
+        className={
+          item.id === active ? "nav-parent nav-parent-active" : "nav-parent"
+        }
+      >
+        <Icon size={20} strokeWidth={1.8} />
+        <span>{item.label}</span>
+        <ChevronDown className="nav-chevron" size={16} aria-hidden="true" />
+      </summary>
+      <div className="nav-children">
+        {item.children.map((child) => (
+          <Link
+            key={`${child.href}-${child.label}`}
+            href={child.href}
+            className="nav-child-btn"
+            onClick={onNavigate}
+          >
+            <span>{child.label}</span>
+          </Link>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 function NavGroup({
   title,
@@ -143,16 +275,13 @@ function NavGroup({
   return (
     <>
       <div className="nav-section">{title}</div>
-      {items.map(({ label, href, icon: Icon, id }) => (
-        <Link
-          key={id}
-          href={href}
-          className={id === active ? "active" : undefined}
-          onClick={onNavigate}
-        >
-          <Icon size={20} strokeWidth={1.8} />
-          {label}
-        </Link>
+      {items.map((item) => (
+        <NavExpandable
+          key={item.id}
+          item={item}
+          active={active}
+          onNavigate={onNavigate}
+        />
       ))}
     </>
   );

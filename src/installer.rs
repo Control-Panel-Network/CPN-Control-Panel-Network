@@ -5,7 +5,7 @@ use crate::install_recipes::{
     php_module_enable_command, pkg_install,
 };
 use crate::install_webmail::install_webmail;
-use crate::install_webmail_runtime::webmail_health_url;
+use crate::install_webmail_health::verify_webmail_http_surface;
 use crate::manifest::{self, ManifestSource};
 use crate::model::{InstallerEvent, InstallerStatus, MailSystem};
 use crate::os_support::require_installable_guest;
@@ -304,7 +304,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                         (status.phase, status.progress)
                     };
                     state.log(format!("{} sigue ejecutándose; esperando salida del sistema de paquetes", description), "info");
-                    state.progress(phase, progress, format!("{} — aún en curso", description)).await;
+                    state.progress(phase, progress, format!("{} - aún en curso", description)).await;
                 }
             }
         }
@@ -555,31 +555,18 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 ),
             )
             .await?;
-            run_command(
-                &state,
-                command(
-                    "curl",
-                    vec![
-                        "--fail",
-                        "--silent",
-                        "--show-error",
-                        "--retry",
-                        "10",
-                        "--retry-connrefused",
-                        "--retry-delay",
-                        "1",
-                        "--max-time",
-                        "15",
-                        "--output",
-                        "/dev/null",
-                        webmail_health_url(),
-                    ],
-                    "Comprobando la respuesta HTTP del webmail",
+            state
+                .progress(
                     "testing",
                     97,
-                ),
-            )
-            .await?;
+                    format!("Validando UI HTTP y denegación de data/temp/logs ({})", mail.label()),
+                )
+                .await;
+            // Keep blocking work off the Actix worker (curl + body checks).
+            let mail_key = mail.label().to_string();
+            tokio::task::spawn_blocking(move || verify_webmail_http_surface(&mail_key))
+                .await
+                .map_err(|error| format!("webmail health join failed: {error}"))??;
             // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
             verify_imap_smtp_listeners().await?;
             {

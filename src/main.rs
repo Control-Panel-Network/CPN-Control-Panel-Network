@@ -1,4 +1,6 @@
-use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, web};
+use actix_web::{
+    App, HttpRequest, HttpResponse, HttpServer, Responder, http::Method, post, route, web,
+};
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
@@ -24,14 +26,15 @@ use cpn_installer::panel_hub_routes::{
     backups_create_route, backups_destinations_route, backups_destinations_save,
     backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
     backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
-    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, databases_all_route,
-    databases_create_get, databases_create_post, databases_delete_get, databases_delete_post,
-    databases_manager_route, databases_phpmyadmin_route, email_accounts_route,
-    email_catchall_route, email_catchall_save, email_create_route, email_debugger,
-    email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
-    email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_password,
-    email_pattern_fwd, email_plus, email_queue, email_rspamd, email_spamassassin,
-    email_webmail_route, ftp_accounts_route, ftp_create, ftp_delete, ftp_reset,
+    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
+    cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
+    databases_delete_get, databases_delete_post, databases_manager_route,
+    databases_phpmyadmin_route, email_accounts_route, email_catchall_route, email_catchall_save,
+    email_create_route, email_debugger, email_delivery_route, email_dkim_ensure, email_dkim_route,
+    email_forwarding_route, email_forwarding_save, email_limits, email_mailscanner,
+    email_marketing, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
+    email_spamassassin, email_webmail_route, ftp_accounts_route, ftp_create, ftp_create_post,
+    ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post, ftp_reset_post,
     passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_register_finish,
     passkey_register_start, security_fail2ban, security_firewall, security_malware,
     security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
@@ -73,7 +76,7 @@ use cpn_installer::panel_routes::{
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
-    panel_design_restore, panel_design_save,
+    panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -110,7 +113,7 @@ fn serve_index_html() -> HttpResponse {
     }
 }
 
-#[get("/")]
+#[route("/", method = "GET", method = "HEAD")]
 async fn root_page(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -179,7 +182,7 @@ async fn bootstrap_session(
         .json(serde_json::json!({"ok": true}))
 }
 
-#[get("/api/status")]
+#[route("/api/status", method = "GET", method = "HEAD")]
 async fn api_status(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -211,7 +214,7 @@ async fn api_status(
     status_response(&request, &payload)
 }
 
-#[get("/status")]
+#[route("/status", method = "GET", method = "HEAD")]
 async fn status_page(
     request: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -384,6 +387,7 @@ async fn start_install(
     let server = request.server;
     let database = request.database;
     let install_phpmyadmin = request.install_phpmyadmin;
+    let enable_proxy_front = request.enable_proxy_front;
     let _ = std::thread::Builder::new()
         .name("cpn-install-server".into())
         .spawn(move || {
@@ -401,6 +405,7 @@ async fn start_install(
                 server,
                 database,
                 install_phpmyadmin,
+                enable_proxy_front,
             ));
         });
     HttpResponse::Accepted().finish()
@@ -533,6 +538,19 @@ fn allow_remote_listen() -> bool {
         || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
 }
 
+/// Ignore SIGHUP so SSH disconnect / closed PTY does not kill a long-running
+/// installer (common VirtualBox lab failure when starting without systemd).
+#[cfg(unix)]
+fn ignore_sighup() {
+    // SAFETY: SIG_IGN is a valid disposition; we only change SIGHUP handling.
+    unsafe {
+        libc::signal(libc::SIGHUP, libc::SIG_IGN);
+    }
+}
+
+#[cfg(not(unix))]
+fn ignore_sighup() {}
+
 fn apply_startup_network_flags(args: &[String], listen_port: u16) {
     let mut hostname: Option<String> = None;
     let mut policy: Option<OldPortPolicy> = None;
@@ -612,6 +630,8 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    ignore_sighup();
+
     let listen_port = match resolve_listen_port(&args) {
         Ok(port) => port,
         Err(error) => {
@@ -661,6 +681,7 @@ async fn main() -> std::io::Result<()> {
     } else {
         "ready"
     };
+    let has_bootstrap_account = bootstrap_account.is_some();
     let message = if maintenance.existing_install {
         format!(
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",
@@ -717,6 +738,27 @@ async fn main() -> std::io::Result<()> {
         active_child_pids: std::sync::Mutex::new(Vec::new()),
     });
     println!("✓ El instalador web está listo para empezar:");
+    if phase == "completed" && has_bootstrap_account {
+        cpn_installer::paths::clear_installer_bootstrap_token();
+    } else {
+        match cpn_installer::paths::persist_bootstrap_token_for_startup(&token, remote) {
+            Ok(Some(path)) => {
+                if remote {
+                    println!("  Bootstrap token file (mode 0600): {}", path.display());
+                    println!("  Read once with: sudo cat {}", path.display());
+                }
+            }
+            Ok(None) => {
+                eprintln!(
+                    "cpn-installer: could not persist bootstrap token file (continuing; token is printed for local bind)"
+                );
+            }
+            Err(error) => {
+                eprintln!("cpn-installer: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
     if remote {
         println!("  Modo --allow-remote: escucha en 0.0.0.0:{listen_port} (HTTP sin TLS).");
         println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
@@ -791,6 +833,8 @@ async fn main() -> std::io::Result<()> {
             .service(panel_design_save)
             .service(panel_design_preset)
             .service(panel_design_restore)
+            .service(panel_themes_catalog)
+            .service(panel_themes_apply)
             .service(email_page)
             .service(email_account_create)
             .service(email_account_enable)
@@ -843,8 +887,10 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_dns_get)
             .service(server_cloudflare_redirect)
             .service(cloudflare_settings_post)
+            .service(cloudflare_test_post)
             .service(cloudflare_sync_post)
             .service(cloudflare_add_post)
+            .service(cloudflare_update_post)
             .service(cloudflare_delete_post)
             .service(cloudflare_proxy_post)
             .service(settings_page)
@@ -924,8 +970,12 @@ async fn main() -> std::io::Result<()> {
             .service(databases_phpmyadmin_route)
             .service(ftp_accounts_route)
             .service(ftp_create)
+            .service(ftp_create_post)
             .service(ftp_delete)
+            .service(ftp_delete_post)
             .service(ftp_reset)
+            .service(ftp_reset_post)
+            .service(ftp_reset_password_post)
             .service(plugins_page)
             .service(plugins_settings_page)
             .service(plugins_settings_save)
@@ -951,7 +1001,13 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
-            .route("/{path:.*}", web::get().to(static_asset))
+            .route(
+                "/{path:.*}",
+                web::route()
+                    .method(Method::GET)
+                    .method(Method::HEAD)
+                    .to(static_asset),
+            )
     })
     .keep_alive(actix_web::http::KeepAlive::Disabled)
     // GHA matrix guests often expose 1 CPU. One Actix worker + sync install

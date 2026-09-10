@@ -2,9 +2,12 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_ftp::{
+    ftp_accounts_page, ftp_create_page, ftp_delete_page, ftp_reset_page,
+};
 use crate::panel_hub_pages_hosting::{
     databases_all_page, databases_create_page, databases_delete_page, databases_manager_page,
-    ftp_accounts_page, phpmyadmin_page, run_create_database, run_drop_database, scaffold_feature,
+    phpmyadmin_page, run_create_database, run_drop_database,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -146,6 +149,7 @@ pub async fn databases_phpmyadmin_route(
 pub async fn ftp_accounts_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
@@ -153,46 +157,162 @@ pub async fn ftp_accounts_route(
     html_ok(panel_shell(
         &user,
         "databases",
-        "FTP Accounts",
-        &ftp_accounts_page(),
+        "SFTP Accounts",
+        &ftp_accounts_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
 }
 
-macro_rules! ftp_scaffold {
-    ($name:ident, $path:literal, $title:literal, $sub:literal, $detail:literal) => {
-        #[get($path)]
-        pub async fn $name(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-            let Some(user) = require_panel_user(&state, &http) else {
-                return login_redirect();
-            };
-            html_ok(panel_shell(
-                &user,
-                "databases",
-                $title,
-                &scaffold_feature("Databases & FTP", "/databases", $title, $sub, $detail),
-            ))
-        }
-    };
+#[derive(Debug, serde::Deserialize)]
+pub struct FtpCreateForm {
+    #[serde(default)]
+    domain: String,
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    password: String,
 }
 
-ftp_scaffold!(
-    ftp_create,
-    "/ftp/create",
-    "Create FTP Account",
-    "Add an FTP user",
-    "FTP account creation is not wired yet."
-);
-ftp_scaffold!(
-    ftp_delete,
-    "/ftp/delete",
-    "Delete FTP Account",
-    "Remove an FTP user",
-    "FTP account deletion is not wired yet."
-);
-ftp_scaffold!(
-    ftp_reset,
-    "/ftp/reset",
-    "Reset FTP",
-    "Reset configuration",
-    "FTP reset is not wired yet."
-);
+#[get("/ftp/create")]
+pub async fn ftp_create(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "databases",
+        "Create SFTP Account",
+        &ftp_create_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[post("/ftp/create")]
+pub async fn ftp_create_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<FtpCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match crate::panel_ops_sftp::create_jailed_sftp_account(
+        &user,
+        &form.username,
+        &form.domain,
+        &form.password,
+    ) {
+        Ok(acct) => redirect_notice(
+            "/ftp/accounts",
+            Some(&format!(
+                "Created jailed SFTP user `{}` for `{}`. Password was set (not shown again).",
+                acct.username, acct.domain
+            )),
+            None,
+        ),
+        Err(err) => redirect_notice("/ftp/create", None, Some(&err)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct FtpUserForm {
+    #[serde(default)]
+    username: String,
+}
+
+#[get("/ftp/delete")]
+pub async fn ftp_delete(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "databases",
+        "Delete SFTP Account",
+        &ftp_delete_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[post("/ftp/delete")]
+pub async fn ftp_delete_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<FtpUserForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match crate::panel_ops_sftp::delete_jailed_sftp_account(&form.username) {
+        Ok(msg) => redirect_notice("/ftp/accounts", Some(&msg), None),
+        Err(err) => redirect_notice("/ftp/delete", None, Some(&err)),
+    }
+}
+
+#[get("/ftp/reset")]
+pub async fn ftp_reset(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "databases",
+        "Reset SFTP",
+        &ftp_reset_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[post("/ftp/reset")]
+pub async fn ftp_reset_post(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match crate::panel_ops_sftp::ensure_sftp_stack() {
+        Ok(msg) => redirect_notice("/ftp/reset", Some(&msg), None),
+        Err(err) => redirect_notice("/ftp/reset", None, Some(&err)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct FtpPasswordForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    password: String,
+}
+
+#[post("/ftp/reset-password")]
+pub async fn ftp_reset_password_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<FtpPasswordForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match crate::panel_ops_sftp::reset_sftp_password(&form.username, &form.password) {
+        Ok(msg) => redirect_notice("/ftp/reset", Some(&msg), None),
+        Err(err) => redirect_notice("/ftp/reset", None, Some(&err)),
+    }
+}

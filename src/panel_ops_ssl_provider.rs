@@ -81,12 +81,52 @@ impl SslProvider {
     }
 }
 
+/// How ACME certificates cover names under this domain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SslCoverageMode {
+    /// Apex + `*.domain` (unlimited subdomains). Requires DNS-01 for Let's Encrypt / ZeroSSL.
+    #[default]
+    Wildcard,
+    /// Listed FQDNs on one multi-name (SAN) certificate (panel sites that share the provider).
+    San,
+}
+
+impl SslCoverageMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Wildcard => "wildcard",
+            Self::San => "san",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Wildcard => "Wildcard",
+            Self::San => "SAN",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Result<Self, String> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "wildcard" | "wild" | "*" => Ok(Self::Wildcard),
+            "san" | "multi" | "names" | "include_subdomains" => Ok(Self::San),
+            other => Err(format!(
+                "Unknown SSL coverage mode '{other}' (use wildcard|san)"
+            )),
+        }
+    }
+}
+
 /// Per-domain SSL settings embedded on `SiteRecord` (schema >= 2).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SiteSslSettings {
     pub provider: SslProvider,
-    /// When true on an apex (or cert owner), issue one SAN cert covering listed children
-    /// that share the same provider and are not Custom/None.
+    /// Certificate name coverage: Wildcard (default) or SAN (listed panel subdomains).
+    #[serde(default)]
+    pub coverage_mode: SslCoverageMode,
+    /// When coverage is SAN: include matching children that share the same provider.
+    /// Kept for compatibility; Wildcard mode ignores this flag for name selection.
     #[serde(default)]
     pub include_subdomains_on_cert: bool,
     /// If this domain is covered by another domain's shared cert, that owner FQDN.
@@ -111,6 +151,7 @@ impl Default for SiteSslSettings {
     fn default() -> Self {
         Self {
             provider: SslProvider::LetsEncrypt,
+            coverage_mode: SslCoverageMode::Wildcard,
             include_subdomains_on_cert: false,
             shared_cert_owner: None,
             last_issue_unix: 0,
@@ -221,7 +262,7 @@ pub fn initial_provider_for_new_site(
     load_ssl_defaults().default_provider
 }
 
-/// Domains that can share one SAN cert with `owner` (same provider, not Custom/None, opt-in).
+/// Domains that can share one SAN cert with `owner` (same provider, not Custom/None).
 pub fn san_member_domains(
     owner_domain: &str,
     owner_provider: SslProvider,
@@ -238,6 +279,28 @@ pub fn san_member_domains(
         }
     }
     names
+}
+
+/// Names to request from ACME for the chosen coverage mode.
+pub fn names_for_coverage(
+    owner_domain: &str,
+    owner_provider: SslProvider,
+    coverage: SslCoverageMode,
+    include_subdomains_on_san: bool,
+    children: &[(String, SslProvider)],
+) -> Vec<String> {
+    match coverage {
+        SslCoverageMode::Wildcard => {
+            let apex = owner_domain.trim().to_ascii_lowercase();
+            vec![apex.clone(), format!("*.{apex}")]
+        }
+        SslCoverageMode::San => san_member_domains(
+            owner_domain,
+            owner_provider,
+            include_subdomains_on_san,
+            children,
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -308,6 +371,36 @@ mod tests {
         );
         let solo = san_member_domains("example.com", SslProvider::LetsEncrypt, false, &kids);
         assert_eq!(solo, vec!["example.com".to_string()]);
+    }
+
+    #[test]
+    fn coverage_names_wildcard_and_san() {
+        let kids = vec![
+            ("a.example.com".into(), SslProvider::LetsEncrypt),
+            ("b.example.com".into(), SslProvider::Custom),
+        ];
+        let wild = names_for_coverage(
+            "example.com",
+            SslProvider::LetsEncrypt,
+            SslCoverageMode::Wildcard,
+            true,
+            &kids,
+        );
+        assert_eq!(
+            wild,
+            vec!["example.com".to_string(), "*.example.com".to_string()]
+        );
+        let san = names_for_coverage(
+            "example.com",
+            SslProvider::LetsEncrypt,
+            SslCoverageMode::San,
+            true,
+            &kids,
+        );
+        assert_eq!(
+            san,
+            vec!["example.com".to_string(), "a.example.com".to_string()]
+        );
     }
 
     #[test]

@@ -40,7 +40,7 @@ fn policy_blurb() -> String {
   <li><span>Challenge</span><strong>{dns01}</strong></li>
 </ul>
 <p class="muted">Each domain and subdomain has its own SSL provider. None skips issue/renew.
-Custom is upload-only (no auto-renew). SAN/shared certs: enable "include subdomains" on the apex when children share the same auto provider; a child on Custom/None leaves the shared cert.</p>"#,
+Custom is upload-only (no auto-renew). Coverage: <strong>Wildcard</strong> (default) issues apex + <code>*.domain</code> via DNS-01 when Cloudflare is configured; <strong>SAN</strong> lists matching panel subdomains on one multi-name cert.</p>"#,
         def = html_escape(defaults.default_provider.label()),
         certbot = html_escape(certbot),
         cf = html_escape(cf),

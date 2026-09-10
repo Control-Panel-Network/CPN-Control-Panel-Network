@@ -7,7 +7,6 @@ use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
 use crate::panel_ops_db::{create_database, drop_database, list_databases};
-use crate::panel_ops_ftp::detect_ftp;
 use crate::panel_ops_mail_extra::{
     CatchAll, MailForward, dkim_status, ensure_dkim_dir, load_catchall, load_forwards,
     mail_stack_note, save_catchall, save_forwards,
@@ -24,23 +23,35 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn email_hub_main() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
         "Email",
         "Mailboxes, forwarding, DKIM, and deliverability tools for this CPN host.",
     );
     for (title, tiles) in email_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }
 
 pub fn databases_ftp_hub_main() -> String {
-    let mut body = section_heading(
-        "Databases & FTP",
-        "MariaDB databases, phpMyAdmin, and FTP accounts for hosted sites.",
-    );
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
+    let blurb = if feats.phpmyadmin {
+        "MariaDB databases, phpMyAdmin, and FTP accounts for hosted sites."
+    } else {
+        "MariaDB databases and FTP accounts for hosted sites."
+    };
+    let mut body = section_heading("Databases & FTP", blurb);
     for (title, tiles) in databases_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }
@@ -438,27 +449,6 @@ pub fn phpmyadmin_page() -> String {
     )
 }
 
-pub fn ftp_accounts_page() -> String {
-    let status = detect_ftp();
-    let kv = status_kv(&[("Stack", &status.stack)]);
-    let extra = if status.ready {
-        format!("<p>{}</p>", html_escape(&status.detail))
-    } else {
-        not_configured_body(
-            &status.detail,
-            "Install Pure-FTPd or vsftpd, then return here.",
-        )
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Databases & FTP", Some("/databases")),
-            ("FTP Accounts", None),
-        ],
-        "FTP Accounts",
-        "View FTP users.",
-        &format!("{kv}{extra}"),
-        None,
-        None,
-    )
-}
+pub use crate::panel_hub_pages_ftp::{
+    ftp_accounts_page, ftp_create_page, ftp_delete_page, ftp_reset_page,
+};

@@ -258,7 +258,7 @@ mod tests {
                 enabled: true,
                 installed_at_unix: 1,
                 source: "test".into(),
-                catalog_repo: "master3395/cyberpanel-plugins".into(),
+                catalog_repo: "Control-Panel-Network/CPN-Plugins".into(),
                 domain: "example.com".into(),
             };
             let raw = serde_json::to_string_pretty(&serde_json::json!({

@@ -59,6 +59,9 @@ pub struct SiteRecord {
     /// Per-domain SSL provider and renewal state (never account-wide).
     #[serde(default)]
     pub ssl: SiteSslSettings,
+    /// Unique internal IPv4 when Nginx front / proxy-front mode is enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub internal_ip: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -406,7 +409,35 @@ pub fn create_site_with_ssl(
         updated_at_unix: now,
         vhost_wired: false,
         ssl: SiteSslSettings::with_provider(provider),
+        internal_ip: None,
     };
+    persist_site(&path, &site)?;
+    // Optional unique internal IP when Nginx front mode is enabled.
+    if crate::proxy_front::proxy_front_enabled() {
+        let _ = crate::proxy_front::ensure_site_internal_ip(&domain);
+        if let Ok(updated) = load_site(&domain) {
+            return Ok(updated);
+        }
+    }
+    Ok(site)
+}
+
+/// Update only the unique internal IP field for a site (proxy-front mode).
+pub fn update_site_internal_ip(
+    domain_raw: &str,
+    internal_ip: Option<String>,
+) -> Result<SiteRecord, String> {
+    let domain = normalize_domain(domain_raw)?;
+    let path = site_path(&domain);
+    if !path.is_file() {
+        return Err(format!("Site `{domain}` not found"));
+    }
+    let mut site = load_site_at(&path)?;
+    site.internal_ip = internal_ip
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    site.schema_version = SCHEMA_VERSION;
+    site.updated_at_unix = now_unix();
     persist_site(&path, &site)?;
     Ok(site)
 }
@@ -486,7 +517,9 @@ mod tests {
     use crate::account::DATA_DIR_TEST_LOCK;
 
     fn with_temp_data<T>(f: impl FnOnce() -> T) -> T {
-        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = std::env::temp_dir().join(format!("cpn-sites-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

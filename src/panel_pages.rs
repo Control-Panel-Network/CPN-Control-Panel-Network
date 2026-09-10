@@ -13,7 +13,7 @@ fn panel_styles() -> &'static str {
 :root {
   --canvas:#fff; --surface:#f5f5f7; --surface-soft:#fafafc; --ink:#1d1d1f;
   --muted:#6e6e73; --hairline:#e0e0e0; --blue:#0066cc; --blue-focus:#0071e3; --green:#18864b;
-  --sidebar-width:256px;
+  --sidebar-width:292px;
 }
 * { box-sizing:border-box; }
 /* Fixed shell: sidebar stays put; main column scrolls. Avoid overflow-x on html/body (breaks sticky). */
@@ -50,7 +50,7 @@ button { font:inherit; cursor:pointer; }
 .server-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:13px; }
 .server-summary span { color:var(--muted); font-size:12px; }
 .sidebar nav {
-  flex:1 1 auto; min-height:0; display:grid; gap:4px; align-content:start;
+  flex:1 1 auto; min-height:0; display:block;
   overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-width:thin;
   scrollbar-color:rgba(110,110,115,.55) transparent;
@@ -68,15 +68,8 @@ button { font:inherit; cursor:pointer; }
   border-radius:8px; color:var(--ink); font-size:15px;
 }
 .sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
-.sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
-.nav-icon {
-  width:28px; height:28px; flex:0 0 28px; border-radius:8px;
-}
-.nav-icon svg { width:16px; height:16px; }
-.nav-section {
-  margin:14px 10px 6px; color:var(--muted); font-size:11px; font-weight:700;
-  letter-spacing:.08em; text-transform:uppercase;
-}
+/* Size/centering for .nav-icon comes from panel_icons::icon_tone_styles */
+/* Section labels: panel_nav_tree::nav_tree_styles */
 /* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
 .logout {
   margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
@@ -214,8 +207,10 @@ code { font-size:.9em; word-break:break-word; }
     display:flex; height:58px; margin:0 -16px 28px; padding:0 12px 0 8px; align-items:center;
     justify-content:space-between; gap:12px; position:sticky; top:0; z-index:30;
     background:rgba(250,250,252,.94); border-bottom:1px solid var(--hairline);
+    color:var(--ink);
   }
-  .mobile-header strong { flex:1; font-size:16px; }
+  .mobile-header strong { flex:1; font-size:16px; color:inherit; }
+  .mobile-header .logout { color:var(--muted); }
   .resource-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dashboard-lower-grid { grid-template-columns:1fr; }
 }
@@ -245,110 +240,29 @@ code { font-size:.9em; word-break:break-word; }
 "#
 }
 
-fn nav_link(id: &str, href: &str, label: &str, active: &str, child: bool) -> String {
-    let mut class = String::new();
-    if id == active {
-        class.push_str("active");
-    }
-    if child {
-        if !class.is_empty() {
-            class.push(' ');
-        }
-        class.push_str("nav-child");
-    }
-    let class_attr = if class.is_empty() {
-        String::new()
-    } else {
-        format!(r#" class="{class}""#)
-    };
-    format!(
-        r#"<a{class_attr} href="{href}">{icon}<span>{label}</span></a>"#,
-        icon = crate::panel_icons::nav_icon_html(id),
-    )
-}
-
-fn nav_links(active: &str, username: &str) -> String {
-    let hosting = [
-        ("dashboard", "/dashboard", "Dashboard"),
-        ("websites", "/websites", "Websites"),
-        ("email", "/email", "Email"),
-        ("databases", "/databases", "Databases & FTP"),
-        ("backups", "/backups", "Backups"),
-        ("apps", "/apps", "Apps"),
-    ];
-    let mut parts = Vec::new();
-    parts.push(r#"<div class="nav-section">Hosting</div>"#.to_string());
-    for (id, href, label) in hosting {
-        parts.push(nav_link(id, href, label, active, false));
-    }
-    parts.push(r#"<div class="nav-section">Account</div>"#.to_string());
-    parts.push(nav_link(
-        "users",
-        "/account/users",
-        "Users & Plans",
-        active,
-        false,
-    ));
-    parts.push(nav_link("packages", "/packages", "Packages", active, false));
-    parts.push(r#"<div class="nav-section">Administration</div>"#.to_string());
-    for (id, href, label) in [
-        ("server", "/server", "Server"),
-        ("security", "/security", "Security"),
-        ("settings", "/settings", "Settings"),
-    ] {
-        parts.push(nav_link(id, href, label, active, false));
-    }
-    parts.push(r#"<div class="nav-section">Plugins</div>"#.to_string());
-    parts.push(nav_link(
-        "plugins",
-        "/plugins",
-        "Installed / Store",
-        active,
-        false,
-    ));
-    let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
-    let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
-    domains.sort_unstable();
-    domains.dedup();
-    let need_domain_hint = domains.len() > 1;
-    for link in &plugin_links {
-        let label = if need_domain_hint {
-            format!("{} ({})", link.name, link.domain)
-        } else {
-            link.name.clone()
-        };
-        let id = format!("plugin-{}-{}", link.domain, link.id);
-        parts.push(nav_link(
-            &id,
-            &link.href,
-            &html_escape(&label),
-            active,
-            true,
-        ));
-    }
-    parts.join("\n          ")
-}
-
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
-    let nav = nav_links(active, username);
+    let nav = crate::panel_nav_tree::nav_links_html(active, username);
     let header = crate::panel_sidebar::sidebar_header_html(username);
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}",
         panel_styles(),
+        crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
         crate::panel_footer_chrome::sidebar_footer_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
+        crate::panel_dashboard_tools::dashboard_tools_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}{}",
+        "{}{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
+        crate::panel_nav_tree::nav_tree_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script(),
         crate::panel_footer_chrome::notifications_popover_script()

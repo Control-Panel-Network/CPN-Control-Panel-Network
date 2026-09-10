@@ -1,5 +1,6 @@
 //! Web server install stage (Nginx / Caddy / OpenLiteSpeed).
 
+use crate::install_http_ports::{restore_http_units, stop_conflicting_http_services};
 use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::{
     command, prepare_caddy_apt_command, prepare_caddy_repository,
@@ -385,7 +386,14 @@ pub async fn cleanup_service_ports() -> Result<(), String> {
 }
 
 pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
-    install_with_database(state, server, crate::model::DatabaseEngine::Mariadb, true).await;
+    install_with_database(
+        state,
+        server,
+        crate::model::DatabaseEngine::Mariadb,
+        true,
+        false,
+    )
+    .await;
 }
 
 /// Web server install plus optional MariaDB/MySQL + phpMyAdmin defaults.
@@ -394,6 +402,7 @@ pub async fn install_with_database(
     server: ServerEngine,
     database: crate::model::DatabaseEngine,
     install_phpmyadmin: bool,
+    enable_proxy_front: bool,
 ) {
     let result = async {
         let _run = install_journal::begin_install_run("server")?;
@@ -403,6 +412,35 @@ pub async fn install_with_database(
             .map_err(|error| format!("preflight join failed: {error}"))??;
         for note in report.notes {
             state.log(format!("preflight: {note}"), "info");
+        }
+
+        if enable_proxy_front {
+            match tokio::task::spawn_blocking(|| {
+                crate::proxy_front::set_proxy_front_from_install(true)?;
+                let mut notes = Vec::new();
+                crate::proxy_front::maybe_install_nginx_packages(&mut |line| notes.push(line))?;
+                Ok::<Vec<String>, String>(notes)
+            })
+            .await
+            {
+                Ok(Ok(notes)) => {
+                    state.log(
+                        "Proxy front enabled: unique internal IPs + Nginx stubs; origin public routing relaxed.",
+                        "info",
+                    );
+                    for note in notes {
+                        state.log(note, "info");
+                    }
+                }
+                Ok(Err(error)) => {
+                    state.log(format!("Proxy front setup warning: {error}"), "error");
+                }
+                Err(error) => {
+                    state.log(format!("Proxy front join failed: {error}"), "error");
+                }
+            }
+        } else {
+            let _ = crate::proxy_front::set_proxy_front_from_install(false);
         }
 
         state
@@ -541,6 +579,8 @@ pub async fn install_with_database(
             )?;
         }
 
+        let _http_priors = stop_conflicting_http_services(&state, server).await?;
+
         let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
             ols_unit = Some(configure_openlitespeed(&state).await?);
@@ -600,7 +640,7 @@ pub async fn install_with_database(
                 .await?;
                 verify_openlitespeed_vhost(&state)
                     .await
-                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log para el estado del listener y el error log de OpenLiteSpeed.".to_string())?;
+                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log, comprueba que nginx/httpd no ocupen el puerto, y el error log de OpenLiteSpeed.".to_string())?;
             }
         } else {
             run_command(
@@ -682,6 +722,33 @@ pub async fn install_with_database(
         Ok::<_, String>(())
     }
     .await;
+    if result.is_err() {
+        // Best-effort restore of units stopped/disabled for :80/:443 (prior state in journal).
+        if let Ok(entries) = install_journal::load_journal() {
+            let mut priors = Vec::new();
+            for entry in entries.into_iter().rev() {
+                if entry.stage != "server" {
+                    continue;
+                }
+                let Some(detail) = entry.detail.as_deref() else {
+                    continue;
+                };
+                if !detail.starts_with("http-port-conflict ") {
+                    continue;
+                }
+                let was_active = detail.contains("prior_active=true");
+                let was_enabled = detail.contains("prior_enabled=true");
+                priors.push(crate::install_http_ports::UnitPriorState {
+                    unit: entry.path,
+                    was_active,
+                    was_enabled,
+                });
+            }
+            if !priors.is_empty() {
+                restore_http_units(&priors).await;
+            }
+        }
+    }
     finish(&state, result, server.label(), true, false).await;
 }
 

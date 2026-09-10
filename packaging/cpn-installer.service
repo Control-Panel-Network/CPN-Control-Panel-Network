@@ -3,6 +3,9 @@ Description=CPN Control Panel Network web installer
 Documentation=https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
 After=network-online.target
 Wants=network-online.target
+# Restart-storm protection (unit-level; ignored under [Service]).
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -10,11 +13,14 @@ Type=simple
 # or a preference saved under /var/lib/cpn/listen_port. Optional panel hostname
 # and port migration preferences are stored under /var/lib/cpn. Bind is
 # 127.0.0.1 unless --allow-remote is explicitly requested.
+# The binary ignores SIGHUP so closed SSH PTYs do not stop the service.
 ExecStart=/usr/bin/cpn-installer
 Restart=on-failure
 RestartSec=3
 StandardOutput=journal
 StandardError=journal
+KillMode=mixed
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target

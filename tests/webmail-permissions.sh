@@ -45,4 +45,29 @@ if ! systemctl is-active --quiet php-fpm; then
   exit 1
 fi
 
+# SnappyMail: data must live outside the HTTP docroot when include.php is present.
+if [[ -f "$DOCROOT/include.php" ]] && grep -q "APP_DATA_FOLDER_PATH" "$DOCROOT/include.php"; then
+  if [[ -e "$DOCROOT/data" ]]; then
+    echo "SnappyMail docroot must not contain a data/ tree when APP_DATA_FOLDER_PATH is set" >&2
+    exit 1
+  fi
+  if [[ ! -d /var/lib/cpn-webmail/snappymail ]]; then
+    echo "missing /var/lib/cpn-webmail/snappymail for SnappyMail data" >&2
+    exit 1
+  fi
+fi
+
+# Optional live HTTP denial checks when the loopback proxy is up.
+if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8080/ 2>/dev/null; then
+  for path in data temp logs; do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:8080/${path}" || true)"
+    case "$code" in
+      200|301|302)
+        echo "sensitive path /${path} returned ${code}" >&2
+        exit 1
+        ;;
+    esac
+  done
+fi
+
 echo "[OK] webmail permissions and php-fpm runtime"

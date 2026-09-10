@@ -1,7 +1,8 @@
 //! Cloudflare DNS API client (curl). Prefer API Token (Bearer). Never log tokens.
 
 use crate::panel_ops_cloudflare::{
-    CloudflareAuthType, CloudflareSettings, load_cloudflare, normalize_record_type,
+    CloudflareAuthType, CloudflareSettings, load_cloudflare, looks_like_global_api_key,
+    normalize_record_type, sanitize_cloudflare_secret, validate_record_content,
 };
 use crate::panel_ops_dns::{list_zones, read_zone};
 use serde::Deserialize;
@@ -9,6 +10,8 @@ use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 
 const CF_API: &str = "https://api.cloudflare.com/client/v4";
+const CF_USER_AGENT: &str =
+    "CPN-Panel/1.0 (+https://github.com/Control-Panel-Network/CPN-Control-Panel-Network)";
 
 #[derive(Debug, Clone)]
 pub struct CfDnsRecord {
@@ -30,21 +33,35 @@ struct CfEnvelope {
 
 #[derive(Debug, Deserialize)]
 struct CfError {
+    code: Option<i64>,
     message: Option<String>,
+    #[serde(default)]
+    error_chain: Option<Vec<CfError>>,
 }
 
 fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
-    let token = settings.api_token.trim();
+    let token = sanitize_cloudflare_secret(&settings.api_token);
     if token.is_empty() {
         return Err("Cloudflare API token is not configured".into());
     }
-    let mut headers = vec!["Content-Type: application/json".to_string()];
-    match settings.auth_type {
+    let mut auth_type = settings.auth_type;
+    let email = settings.email.trim();
+    // Global API Key sent as Bearer yields CF 6003/6111 "Invalid request headers".
+    if auth_type == CloudflareAuthType::ApiToken && looks_like_global_api_key(&token) {
+        if email.is_empty() {
+            return Err(
+                "Stored secret looks like a Global API Key, but auth is set to API Token. Open API Settings, choose Global API Key, enter the Cloudflare account email, or replace the secret with a scoped API Token."
+                    .into(),
+            );
+        }
+        auth_type = CloudflareAuthType::GlobalKey;
+    }
+    let mut headers = vec![format!("User-Agent: {CF_USER_AGENT}")];
+    match auth_type {
         CloudflareAuthType::ApiToken => {
             headers.push(format!("Authorization: Bearer {token}"));
         }
         CloudflareAuthType::GlobalKey => {
-            let email = settings.email.trim();
             if email.is_empty() {
                 return Err("Cloudflare email is required for Global API Key auth".into());
             }
@@ -55,9 +72,45 @@ fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
     Ok(headers)
 }
 
-fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, String> {
+fn flatten_cf_errors(errors: Vec<CfError>) -> String {
+    let mut parts = Vec::new();
+    let mut stack = errors;
+    while let Some(err) = stack.pop() {
+        if let Some(msg) = err.message {
+            let msg = msg.trim();
+            if !msg.is_empty() {
+                parts.push(msg.to_string());
+            }
+        }
+        if let Some(chain) = err.error_chain {
+            stack.extend(chain);
+        }
+        let _ = err.code;
+    }
+    parts.join("; ")
+}
+
+fn map_cf_api_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("invalid format for authorization header")
+        || (lower.contains("invalid request headers") && lower.contains("authorization"))
+    {
+        return "Invalid Authorization header. Use a scoped API Token with Bearer auth, or Global API Key with account email (X-Auth-Email / X-Auth-Key). A Global API Key cannot be sent as Bearer.".into();
+    }
+    if raw.trim().is_empty() {
+        "Cloudflare API reported failure".into()
+    } else {
+        format!("Cloudflare API: {raw}")
+    }
+}
+
+pub(crate) fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, String> {
     let settings = load_cloudflare();
-    let headers = auth_headers(&settings)?;
+    let mut headers = auth_headers(&settings)?;
+    // Only send Content-Type when a JSON body is present (GET/DELETE stay header-clean).
+    if body.is_some() {
+        headers.push("Content-Type: application/json".to_string());
+    }
     let mut cmd = Command::new("curl");
     cmd.args([
         "--fail-with-body",
@@ -97,18 +150,8 @@ fn curl_json(method: &str, url: &str, body: Option<&str>) -> Result<Value, Strin
         )
     })?;
     if !env.success {
-        let msg = env
-            .errors
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|e| e.message)
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(if msg.is_empty() {
-            "Cloudflare API reported failure".into()
-        } else {
-            format!("Cloudflare API: {msg}")
-        });
+        let msg = flatten_cf_errors(env.errors.unwrap_or_default());
+        return Err(map_cf_api_error(&msg));
     }
     Ok(env.result.unwrap_or(Value::Null))
 }
@@ -205,6 +248,7 @@ pub fn create_dns_record(
     if name.is_empty() || content.is_empty() {
         return Err("Name and value are required".into());
     }
+    validate_record_content(&rtype, content)?;
     let ttl = if ttl == 0 { 1 } else { ttl };
     let mut body = json!({
         "type": rtype,
@@ -224,6 +268,63 @@ pub fn create_dns_record(
     let url = format!("{CF_API}/zones/{zone_id}/dns_records");
     let _ = curl_json("POST", &url, Some(&payload))?;
     Ok(format!("Added {rtype} record `{name}`"))
+}
+
+/// PATCH an existing Cloudflare DNS record (name, TTL, content, priority, proxy).
+pub fn update_dns_record(
+    domain: &str,
+    record_id: &str,
+    name: &str,
+    content: &str,
+    ttl: u32,
+    priority: Option<u16>,
+    proxied: bool,
+) -> Result<String, String> {
+    let record_id = record_id.trim();
+    if record_id.is_empty()
+        || !record_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("Invalid record id".into());
+    }
+    let name = name.trim();
+    let content = content.trim();
+    if name.is_empty() || content.is_empty() {
+        return Err("Name and value are required".into());
+    }
+    let zone_id = resolve_zone_id(domain)?;
+    let url = format!("{CF_API}/zones/{zone_id}/dns_records/{record_id}");
+    let existing = curl_json("GET", &url, None)?;
+    let rtype = existing
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    if rtype.is_empty() {
+        return Err("Could not read existing record type".into());
+    }
+    validate_record_content(&rtype, content)?;
+    let ttl = if ttl == 0 { 1 } else { ttl };
+    let mut patch = json!({
+        "type": rtype,
+        "name": name,
+        "content": content,
+        "ttl": ttl,
+    });
+    if matches!(rtype.as_str(), "A" | "AAAA" | "CNAME") {
+        patch["proxied"] = json!(proxied);
+    }
+    if matches!(rtype.as_str(), "MX" | "SRV") {
+        if let Some(p) = priority {
+            patch["priority"] = json!(p);
+        } else if let Some(p) = existing.get("priority").and_then(|v| v.as_u64()) {
+            patch["priority"] = json!(p);
+        }
+    }
+    let payload = serde_json::to_string(&patch).map_err(|e| e.to_string())?;
+    let _ = curl_json("PATCH", &url, Some(&payload))?;
+    Ok(format!("Updated {rtype} record `{name}`"))
 }
 
 pub fn delete_dns_record(domain: &str, record_id: &str) -> Result<String, String> {

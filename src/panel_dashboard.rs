@@ -85,8 +85,15 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn gauge_stroke_for_usage(_percent: u8) -> &'static str {
-    "#0066cc"
+/// Traffic-light stroke: green under 60%, orange 60-84%, red 85% and above.
+pub(crate) fn gauge_stroke_for_usage(percent: u8) -> &'static str {
+    if percent >= 85 {
+        "#d92d20"
+    } else if percent >= 60 {
+        "#f79009"
+    } else {
+        "#12b76a"
+    }
 }
 
 fn gauge_svg(value: u8) -> String {
@@ -111,13 +118,16 @@ pub fn panel_dashboard_html(username: &str) -> String {
         (ram_value, ram_detail),
         (disk_value, disk_detail),
     ] = host_gauges();
-    let label = |v: Option<u8>| v.map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+    let label = |v: Option<u8>| v.map(|n| n.to_string()).unwrap_or_else(|| "n/a".into());
     let cpu_pct = label(cpu_value);
     let ram_pct = label(ram_value);
     let disk_pct = label(disk_value);
     let cpu = gauge_svg(cpu_value.unwrap_or(0));
     let ram = gauge_svg(ram_value.unwrap_or(0));
     let disk = gauge_svg(disk_value.unwrap_or(0));
+    let cpu_tone = gauge_stroke_for_usage(cpu_value.unwrap_or(0));
+    let ram_tone = gauge_stroke_for_usage(ram_value.unwrap_or(0));
+    let disk_tone = gauge_stroke_for_usage(disk_value.unwrap_or(0));
 
     let db = crate::service_detect::detect_database();
     let db_label = crate::service_detect::database_health_label(&db);
@@ -145,29 +155,31 @@ pub fn panel_dashboard_html(username: &str) -> String {
           <p>Signed in as {user}.</p>
         </div>
       </div>
+      {sites}
       <div class="resource-grid">
         <article class="resource-card">
           <h2 title="Average CPU usage since boot">CPU Usage</h2>
           <div class="gauge" role="img" aria-label="CPU Usage: {cpu_pct}%">
             {cpu}
-            <div class="gauge-copy"><strong>{cpu_pct}%</strong><span>{cpu_detail}</span></div>
+            <div class="gauge-copy"><strong style="color:{cpu_tone}">{cpu_pct}%</strong><span>{cpu_detail}</span></div>
           </div>
         </article>
         <article class="resource-card">
           <h2>RAM Usage</h2>
           <div class="gauge" role="img" aria-label="RAM Usage: {ram_pct}%">
             {ram}
-            <div class="gauge-copy"><strong>{ram_pct}%</strong><span>{ram_detail}</span></div>
+            <div class="gauge-copy"><strong style="color:{ram_tone}">{ram_pct}%</strong><span>{ram_detail}</span></div>
           </div>
         </article>
         <article class="resource-card">
           <h2>Disk Usage</h2>
           <div class="gauge" role="img" aria-label="Disk Usage: {disk_pct}%">
             {disk}
-            <div class="gauge-copy"><strong>{disk_pct}%</strong><span>{disk_detail}</span></div>
+            <div class="gauge-copy"><strong style="color:{disk_tone}">{disk_pct}%</strong><span>{disk_detail}</span></div>
           </div>
         </article>
       </div>
+      {tools}
       <div class="dashboard-lower-grid">
         <article class="status-card">
           <div class="status-card-heading">
@@ -190,12 +202,17 @@ pub fn panel_dashboard_html(username: &str) -> String {
         </article>
       </div>"#,
         user = user,
+        sites = crate::panel_dashboard_tools::dashboard_sites_panel(),
+        tools = crate::panel_dashboard_tools::dashboard_tool_groups(),
         cpu_pct = cpu_pct,
         ram_pct = ram_pct,
         disk_pct = disk_pct,
         cpu = cpu,
         ram = ram,
         disk = disk,
+        cpu_tone = cpu_tone,
+        ram_tone = ram_tone,
+        disk_tone = disk_tone,
         health_heading = html_escape(health_heading),
         web = html_escape(&web_label),
         db = html_escape(&db_label),
@@ -205,4 +222,19 @@ pub fn panel_dashboard_html(username: &str) -> String {
         mail_cls = status_class(&mail_label),
     );
     panel_shell(username, "dashboard", "Dashboard", &main)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gauge_stroke_for_usage;
+
+    #[test]
+    fn gauge_thresholds_green_orange_red() {
+        assert_eq!(gauge_stroke_for_usage(0), "#12b76a");
+        assert_eq!(gauge_stroke_for_usage(59), "#12b76a");
+        assert_eq!(gauge_stroke_for_usage(60), "#f79009");
+        assert_eq!(gauge_stroke_for_usage(84), "#f79009");
+        assert_eq!(gauge_stroke_for_usage(85), "#d92d20");
+        assert_eq!(gauge_stroke_for_usage(100), "#d92d20");
+    }
 }
