@@ -87,4 +87,4 @@ The matching public key is stored at `packaging/RPM-GPG-KEY-CPN` and included in
 - Require MFA on GitHub accounts with write access.
 - Keep protected branches and required checks enabled when collaborators are added.
 - Never commit installer tokens, private keys, production credentials, or signing secrets.
-- Prefer HTTPS repositories and signed native packages; do not introduce `curl | bash` install paths for managed server software when a verifiable repository configuration can be used instead.
+- Prefer HTTPS repositories and signed native packages. The official `scripts/install.sh` / `scripts/upgrade.sh` one-liners download only HTTPS release assets and refuse install when `SHA256SUMS` (and GPG when `SHA256SUMS.asc` is present) do not verify. A future yum/apt repository remains the long-term goal.
