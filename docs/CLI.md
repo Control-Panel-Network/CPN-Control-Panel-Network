@@ -19,12 +19,38 @@ Top-level groups:
 
 | Group | Purpose |
 |---|---|
+| `panel` | Live login URL, panel status, MOTD install helper |
+| `info` | Alias for `cpn panel status` |
 | `account` | Panel/operator account management |
 | `site` | Website records |
-| `network` | Listen port, hostname, and port migration |
+| `network` | Listen port, hostname, public URL, and port migration |
 | `plugin` | Per-site plugin management |
 | `app` | Host applications and services |
 | `package` | Hosting packages and account assignments |
+
+## Panel URL and status
+
+Login URLs are resolved **live** from the same preference files the panel UI writes (`$CPN_DATA_DIR/listen_port`, `panel_public_url`, `panel_hostname`), with a world-readable mirror under `/etc/cpn/` so non-root SSH sessions can read them. Changing the listen port in Settings updates the next SSH MOTD and `cpn panel url` without reinstalling.
+
+```bash
+cpn panel url
+cpn panel url --raw
+cpn panel status
+cpn info
+sudo cpn panel install-motd
+```
+
+Example (`cpn panel url`):
+
+```text
+Login URL     : http://127.0.0.1:2089/login
+Local login   : http://127.0.0.1:2087/login
+Listen port   : 2087
+Public URL    : http://127.0.0.1:2089
+Lab tip       : Windows host may use the public URL when NAT forwards the guest port
+```
+
+Resolution order for the primary login URL: `panel_public_url` if set, else `https://<panel_hostname>/login` if set, else `http://127.0.0.1:<listen_port>/login`.
 
 ## Accounts
 
@@ -205,13 +231,14 @@ Installer progress titles, wait heartbeats, and engine errors are English by def
 
 ## SSH login MOTD and panel-ready banner
 
-After a successful install (web or `--cli`), CPN installs `/etc/profile.d/cpn-motd.sh` (also under `/usr/lib/cpn/cpn-motd.sh`) and **enables/starts** `cpn-installer.service` so the panel stays up after SSH disconnect and across reboot.
+After a successful install (web or `--cli`), CPN installs `/etc/profile.d/cpn-motd.sh` (also under `/usr/lib/cpn/cpn-motd.sh`) and **enables/starts** `cpn-installer.service` so the panel stays up after SSH disconnect and across reboot. Reinstall the script anytime with `sudo cpn panel install-motd`.
 
-Interactive SSH logins show an English CPN banner with:
+Interactive SSH logins show a cool English CPN ASCII banner with:
 
-- Panel version and login URL(s) (`https://<hostname>/login` when configured, else `http://127.0.0.1:<port>/login`)
-- `systemctl` start/status hints for `cpn-installer.service`
-- VirtualBox NAT tip when no hostname is set (example host forward `2089` -> guest listen port => `http://127.0.0.1:2089/login` on the host)
+- "This server has installed CPN", panel version, and service active state
+- **Live** login URL(s) via `cpn panel url --motd` on every login (reads current listen port / public URL / hostname; not a static `/etc/motd` baked at install)
+- `systemctl` / `cpn-installer --web` / `--cli` start hints, plus `cpn panel url` anytime
+- VirtualBox NAT tip when no hostname/public URL is set (example host forward `2089` -> guest listen port => `http://127.0.0.1:2089/login` on the host)
 - Host facts: time, load average, CPU (load-based), RAM, disk on `/`, uptime
 - Optional last login / recent auth-fail counts when system logs allow
 

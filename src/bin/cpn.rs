@@ -13,6 +13,7 @@ use cpn_installer::cli_common::{
 };
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
+use cpn_installer::cli_panel::{PanelCommands, run_panel};
 use cpn_installer::cli_plugins;
 use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::panel_ops_ssl_provider::SslProvider;
@@ -40,6 +41,16 @@ enum Commands {
     Version,
     /// List top-level command groups
     List,
+    /// Live panel login URL, status, and MOTD helpers (no secrets)
+    Panel {
+        #[command(subcommand)]
+        command: PanelCommands,
+    },
+    /// Alias for `cpn panel status` (version, service, live login URL)
+    Info {
+        #[arg(long)]
+        raw: bool,
+    },
     /// Panel / operator accounts
     Account {
         #[command(subcommand)]
@@ -211,6 +222,8 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         Commands::List => {
+            println!("panel    Live login URL, panel status, and MOTD install helper");
+            println!("info     Alias for: cpn panel status");
             println!("account  Manage panel / operator accounts");
             println!(
                 "site     Manage website records under {}/sites",
@@ -225,6 +238,10 @@ fn run() -> Result<(), String> {
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
+        }
+        Commands::Panel { command } => run_panel(command, require_root_for_mutation),
+        Commands::Info { raw } => {
+            run_panel(PanelCommands::Status { raw }, require_root_for_mutation)
         }
         Commands::Account { command } => match command {
             AccountCommands::List => {

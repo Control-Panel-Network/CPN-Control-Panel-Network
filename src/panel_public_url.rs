@@ -103,7 +103,9 @@ pub fn load_panel_public_url() -> Option<String> {
 
 pub fn save_panel_public_url(url: &str) -> Result<(), String> {
     let url = validate_panel_public_url(url)?;
-    write_mode_600(&public_url_path(), format!("{url}\n").as_bytes())
+    write_mode_600(&public_url_path(), format!("{url}\n").as_bytes())?;
+    crate::panel_login_facts::sync_public_login_facts();
+    Ok(())
 }
 
 pub fn clear_panel_public_url() -> Result<(), String> {
@@ -112,6 +114,7 @@ pub fn clear_panel_public_url() -> Result<(), String> {
         fs::remove_file(&path)
             .map_err(|error| format!("Could not clear panel public URL: {error}"))?;
     }
+    crate::panel_login_facts::sync_public_login_facts();
     Ok(())
 }
 

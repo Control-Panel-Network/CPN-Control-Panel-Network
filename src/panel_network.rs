@@ -187,7 +187,9 @@ pub fn load_panel_hostname() -> Option<String> {
 
 pub fn save_panel_hostname(hostname: &str) -> Result<(), String> {
     let hostname = validate_panel_hostname(hostname)?;
-    write_mode_600(&hostname_path(), format!("{hostname}\n").as_bytes())
+    write_mode_600(&hostname_path(), format!("{hostname}\n").as_bytes())?;
+    crate::panel_login_facts::sync_public_login_facts();
+    Ok(())
 }
 
 pub fn clear_panel_hostname() -> Result<(), String> {
@@ -196,6 +198,7 @@ pub fn clear_panel_hostname() -> Result<(), String> {
         fs::remove_file(&path)
             .map_err(|error| format!("Could not clear panel hostname: {error}"))?;
     }
+    crate::panel_login_facts::sync_public_login_facts();
     Ok(())
 }
 
