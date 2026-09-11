@@ -10,7 +10,9 @@ use crate::release_verify::{
     maybe_check_rpm_sig, verify_gpg_enabled, verify_gpg_sums, verify_release_enabled,
     verify_sha256_file,
 };
-use crate::releases::{self, CpnRelease, compare_versions, normalize_version};
+use crate::releases::{
+    self, CpnRelease, compare_versions, is_retag_migration, normalize_version,
+};
 use rand::{Rng, distr::Alphanumeric};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
@@ -171,97 +173,6 @@ async fn verify_downloaded_artifact(
     Ok(())
 }
 
-async fn rpm_query_nevra(path: &str) -> Option<String> {
-    let output = Command::new("rpm")
-        .args([
-            "-qp",
-            "--queryformat",
-            "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}",
-            path,
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if nevra.is_empty() { None } else { Some(nevra) }
-}
-
-async fn rpm_nevra_installed(nevra: &str) -> bool {
-    Command::new("rpm")
-        .args(["-q", nevra])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-async fn install_rpm(path: &str, force: bool) -> Result<(), String> {
-    let mut args = vec!["install", "-y"];
-    if force {
-        args.push("--setopt=install_weak_deps=False");
-        // reinstall/replace broken packages when repairing
-        args.push("--allowerasing");
-    }
-    args.push(path);
-    let status = Command::new("dnf")
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .status()
-        .await
-        .map_err(|error| format!("dnf install failed: {error}"))?;
-    if status.success() {
-        return Ok(());
-    }
-    // Bootstrap `upgrade.sh` may already have installed this exact NEVRA before
-    // `cpn-installer --upgrade` runs. Treat same-package as success unless repairing.
-    if !force
-        && let Some(nevra) = rpm_query_nevra(path).await
-        && rpm_nevra_installed(&nevra).await
-    {
-        return Ok(());
-    }
-    // Fallback for older hosts / repair of same NEVRA.
-    let mut rpm_args = vec!["-Uvh"];
-    if force {
-        rpm_args.push("--force");
-    }
-    rpm_args.push(path);
-    let status = Command::new("rpm")
-        .args(&rpm_args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .status()
-        .await
-        .map_err(|error| format!("rpm upgrade failed: {error}"))?;
-    if !status.success() {
-        return Err("Package install failed (dnf/rpm)".into());
-    }
-    Ok(())
-}
-
-async fn install_binary(path: &str) -> Result<(), String> {
-    let dest = installer_bin();
-    std::fs::copy(path, dest).map_err(|error| format!("Could not replace {dest}: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755));
-    }
-    Ok(())
-}
-
 async fn resolve_target_release(
     action: MaintenanceAction,
     requested: Option<&str>,
@@ -295,6 +206,7 @@ async fn apply_release(
     state: &AppState,
     release: &CpnRelease,
     force: bool,
+    allow_oldpackage: bool,
 ) -> Result<ManifestSource, String> {
     if let Some(rpm) = &release.rpm_asset {
         state
@@ -306,7 +218,7 @@ async fn apply_release(
         state
             .progress("installing", 60, "Installing RPM package")
             .await;
-        install_rpm(&path, force).await?;
+        crate::upgrade_pkg::install_rpm(&path, force, allow_oldpackage).await?;
         let _ = std::fs::remove_file(&path);
         return Ok(ManifestSource::Rpm);
     }
@@ -320,7 +232,7 @@ async fn apply_release(
         state
             .progress("installing", 60, "Replacing cpn-installer binary")
             .await;
-        install_binary(&path).await?;
+        crate::upgrade_pkg::install_binary(&path, installer_bin()).await?;
         let _ = std::fs::remove_file(&path);
         return Ok(ManifestSource::Binary);
     }
@@ -394,9 +306,13 @@ pub async fn run_maintenance(
     let release =
         resolve_target_release(request.action, request.version.as_deref(), &installed).await?;
 
+    let retag = matches!(request.action, MaintenanceAction::Upgrade)
+        && is_retag_migration(&installed, &release.version);
+
     if matches!(request.action, MaintenanceAction::Upgrade)
         && compare_versions(&release.version, &installed) == Ordering::Less
         && !request.confirm_downgrade
+        && !retag
     {
         return Err(format!(
             "Target {} is older than installed {installed}. Use downgrade with confirmation.",
@@ -404,7 +320,18 @@ pub async fn run_maintenance(
         ));
     }
 
+    if retag {
+        state.log(
+            format!(
+                "Retag migration: replacing retired CPN {installed} with {} (rpm --oldpackage)",
+                release.version
+            ),
+            "info",
+        );
+    }
+
     let force = matches!(request.action, MaintenanceAction::Repair)
+        || retag
         || compare_versions(&release.version, &installed) != Ordering::Greater;
 
     state.log(
@@ -429,7 +356,7 @@ pub async fn run_maintenance(
         Vec::new()
     };
 
-    let source = apply_release(&state, &release, force).await?;
+    let source = apply_release(&state, &release, force, retag).await?;
 
     let status_snapshot = state
         .status

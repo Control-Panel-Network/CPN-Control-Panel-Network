@@ -88,6 +88,22 @@ pub fn compare_versions(left: &str, right: &str) -> Ordering {
     Ordering::Equal
 }
 
+/// Retired CPN package identities that were retagged on GitHub as `0.2.x-alpha.*`.
+/// RPM/semver still treat `1.0.0`/`1.0.1` as newer than `0.2.6`, which blocks upgrades.
+pub fn is_retired_cpn_1_0_identity(version: &str) -> bool {
+    matches!(normalize_version(version).as_str(), "1.0.0" | "1.0.1")
+}
+
+/// Current alpha product line after the 1.0.x retag (`0.2.x`, including prerelease tags).
+pub fn is_active_0_2_line(version: &str) -> bool {
+    normalize_version(version).starts_with("0.2.")
+}
+
+/// Official upgrade may replace leftover `1.0.0`/`1.0.1` installs with published `0.2.x`.
+pub fn is_retag_migration(installed: &str, target: &str) -> bool {
+    is_retired_cpn_1_0_identity(installed) && is_active_0_2_line(target)
+}
+
 async fn curl_json(url: &str) -> Result<String, String> {
     let output = Command::new("curl")
         .args([
@@ -338,7 +354,10 @@ pub async fn version_check(running_version: &str, installed_version: &str) -> Ve
 
 #[cfg(test)]
 mod tests {
-    use super::{compare_versions, deb_name_matches, normalize_version, rpm_name_matches};
+    use super::{
+        compare_versions, deb_name_matches, is_active_0_2_line, is_retired_cpn_1_0_identity,
+        is_retag_migration, normalize_version, rpm_name_matches,
+    };
     use std::cmp::Ordering;
 
     #[test]
@@ -353,6 +372,18 @@ mod tests {
         assert_eq!(compare_versions("0.2.0", "0.2.0"), Ordering::Equal);
         assert_eq!(compare_versions("0.2.10", "0.2.9"), Ordering::Greater);
         assert_eq!(compare_versions("v1.0.0", "0.9.9"), Ordering::Greater);
+    }
+
+    #[test]
+    fn detects_retired_1_0_retag_migration() {
+        assert!(is_retired_cpn_1_0_identity("1.0.0"));
+        assert!(is_retired_cpn_1_0_identity("v1.0.1"));
+        assert!(!is_retired_cpn_1_0_identity("1.0.2"));
+        assert!(!is_retired_cpn_1_0_identity("0.2.6-alpha.21"));
+        assert!(is_active_0_2_line("0.2.6-alpha.22"));
+        assert!(is_retag_migration("1.0.0", "0.2.6-alpha.21"));
+        assert!(!is_retag_migration("0.2.5-alpha.19", "0.2.6-alpha.21"));
+        assert!(!is_retag_migration("1.0.0", "1.0.1"));
     }
 
     #[test]

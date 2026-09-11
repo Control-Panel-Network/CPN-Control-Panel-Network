@@ -138,6 +138,7 @@ Notes:
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
   Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
   Without --bypass, Docker stacks are left running as-is; with --bypass, only CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 are refreshed.
+  Leftover package identity 1.0.0/1.0.1 (retired GitHub retags) may be replaced by official --upgrade / upgrade.sh onto current 0.2.x-alpha (rpm --oldpackage; not a hostile downgrade).
   systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
 "
     );

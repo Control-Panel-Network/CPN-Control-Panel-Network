@@ -4,12 +4,14 @@
 #   sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
 #
 # Env:
-#   CPN_RELEASE_TAG          pin a tag (example: v0.2.4-alpha.19); default: newest non-draft release
+#   CPN_RELEASE_TAG          pin a Release tag (example: v0.2.6-alpha.22); default: newest non-draft release
+#   CPN_BRANCH / CPN_REF     pin a git branch or tag name; resolves to a matching Release tag for packages
 #   CPN_STABLE_ONLY          1 to skip GitHub prereleases (future stable line); default includes alphas
 #   CPN_INCLUDE_PRERELEASE   legacy alias: 0 with CPN_STABLE_ONLY unset still includes prereleases
 #   CPN_GITHUB_REPO          owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
 #   CPN_REQUIRE_GPG          1 (default) require SHA256SUMS.asc + matching fingerprint
 #   CPN_ALLOW_UNSIGNED       1 allow missing GPG assets (lab only; not for production)
+# CLI: -b|--branch|--ref REF  same as CPN_BRANCH (example: bash <(curl -fsSL .../install.sh) -b 1.0.0-dev)
 set -euo pipefail
 
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
@@ -17,6 +19,8 @@ CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
 CPN_STABLE_ONLY="${CPN_STABLE_ONLY:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
+CPN_REF_ARG="${CPN_REF_ARG:-}"
+CPN_BOOTSTRAP_LIB_REF="${CPN_BOOTSTRAP_LIB_REF:-stable}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
 RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
 
@@ -35,6 +39,48 @@ require_https_url() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+# Peek -b so shared lib can load from the same git ref.
+cpn_peek_ref_arg() {
+  local -a args=("$@")
+  local i
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[$i]}" in
+      -b|--branch|--ref)
+        if ((i + 1 < ${#args[@]})); then
+          CPN_BOOTSTRAP_LIB_REF="${args[$((i + 1))]}"
+          CPN_REF_ARG="${args[$((i + 1))]}"
+          export CPN_BOOTSTRAP_LIB_REF CPN_REF_ARG
+        fi
+        ;;
+    esac
+  done
+}
+
+cpn_source_bootstrap_lib() {
+  local ref="${CPN_BOOTSTRAP_LIB_REF:-stable}"
+  local here candidate url
+  here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+  for candidate in \
+    "${here}/cpn-bootstrap-lib.sh" \
+    "./scripts/cpn-bootstrap-lib.sh" \
+    "./cpn-bootstrap-lib.sh"; do
+    if [[ -n "$candidate" && -f "$candidate" ]]; then
+      # shellcheck disable=SC1090
+      . "$candidate"
+      return 0
+    fi
+  done
+  for url in \
+    "https://cpn.newstargeted.com/cpn-bootstrap-lib.sh" \
+    "https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/${ref}/scripts/cpn-bootstrap-lib.sh" \
+    "https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/scripts/cpn-bootstrap-lib.sh"; do
+    if have_cmd curl && . <(curl -fsSL --proto '=https' --tlsv1.2 --max-time 30 "$url"); then
+      return 0
+    fi
+  done
+  die "could not load cpn-bootstrap-lib.sh (host or GitHub raw)"
+}
 
 download() {
   local url="$1" dest="$2"
@@ -280,6 +326,9 @@ verify_gpg_sums() {
 
 install_package() {
   local artifact="$1"
+  if cpn_try_retag_package "$artifact" "$FAMILY"; then
+    return 0
+  fi
   case "$FAMILY" in
     dnf)
       if have_cmd dnf; then
@@ -322,10 +371,14 @@ EOF
 }
 
 main() {
+  cpn_peek_ref_arg "$@"
+  cpn_source_bootstrap_lib
+  cpn_parse_bootstrap_args install -- "$@"
   require_root
   have_cmd python3 || die "python3 is required"
   detect_guest
   info "detected ${DIST_LABEL} (${FAMILY}, arch ${PKG_ARCH}/${DEB_ARCH})"
+  cpn_apply_git_ref_pin
 
   local work release_json tag pkg_name pkg_url sums_url asc_url key_url
   work="$(mktemp -d /var/tmp/cpn-install.XXXXXX)"
