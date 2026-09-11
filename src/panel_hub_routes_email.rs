@@ -2,10 +2,17 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_email_auth::{
+    email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
+    save_bimi_form, save_mta_sts_form,
+};
 use crate::panel_hub_pages_hosting::{
     add_catchall, add_forward, email_accounts_page, email_catchall_page,
     email_create_redirect_hint, email_delivery_page, email_dkim_page, email_forwarding_page,
-    email_webmail_page, ensure_dkim, scaffold_feature,
+    ensure_dkim,
+};
+use crate::panel_hub_pages_webmail::{
+    apply_regenerate_path, apply_webmail_settings_form, email_webmail_app_page, email_webmail_page,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -169,21 +176,76 @@ pub async fn email_dkim_ensure(http: HttpRequest, state: web::Data<Arc<AppState>
 pub async fn email_webmail_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let status = state
-        .status
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
     html_ok(panel_shell(
         &user,
         "email",
         "Webmail",
-        &email_webmail_page(status.selected_mail, status.mail_client_ready),
+        &email_webmail_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
+}
+
+#[get("/email/webmail/app")]
+pub async fn email_webmail_app_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "email",
+        "Internal Webmail",
+        &email_webmail_app_page(),
+    ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct WebmailSettingsForm {
+    #[serde(default)]
+    auto_login_account: String,
+    #[serde(default)]
+    public_path: String,
+    #[serde(default)]
+    internal_embed: Option<String>,
+}
+
+#[post("/email/webmail/settings")]
+pub async fn email_webmail_settings_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<WebmailSettingsForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let embed = form.internal_embed.as_deref() == Some("1");
+    match apply_webmail_settings_form(&form.auto_login_account, &form.public_path, embed) {
+        Ok(msg) => redirect_notice("/email/webmail", Some(&msg), None),
+        Err(err) => redirect_notice("/email/webmail", None, Some(&err)),
+    }
+}
+
+#[post("/email/webmail/regenerate-path")]
+pub async fn email_webmail_regenerate_path(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match apply_regenerate_path() {
+        Ok(msg) => redirect_notice("/email/webmail", Some(&msg), None),
+        Err(err) => redirect_notice("/email/webmail", None, Some(&err)),
+    }
 }
 
 #[get("/email/delivery")]
@@ -202,90 +264,175 @@ pub async fn email_delivery_route(
     ))
 }
 
-macro_rules! email_scaffold {
-    ($name:ident, $path:literal, $title:literal, $sub:literal, $detail:literal) => {
-        #[get($path)]
-        pub async fn $name(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-            let Some(user) = require_panel_user(&state, &http) else {
-                return login_redirect();
-            };
-            html_ok(panel_shell(
-                &user,
-                "email",
-                $title,
-                &scaffold_feature("Email", "/email", $title, $sub, $detail),
-            ))
-        }
+#[get("/email/mta-sts")]
+pub async fn email_mta_sts_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
     };
+    html_ok(panel_shell(
+        &user,
+        "email",
+        "MTA-STS",
+        &email_mta_sts_page(
+            query.get("domain").map(String::as_str).unwrap_or(""),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
 }
 
-email_scaffold!(
-    email_pattern_fwd,
-    "/email/pattern-forwarding",
-    "Pattern Forwarding",
-    "Rule-based forwarding",
-    "Pattern rules are not wired yet."
-);
-email_scaffold!(
-    email_limits,
-    "/email/limits",
-    "Email Limits",
-    "Sending limits",
-    "Per-mailbox send limits are not configured yet."
-);
-email_scaffold!(
-    email_password,
-    "/email/password",
-    "Change Password",
-    "Reset mailbox password",
-    "Mailbox password reset UI is not wired yet."
-);
-email_scaffold!(
-    email_debugger,
-    "/email/debugger",
-    "Email Debugger",
-    "Diagnose mail issues",
-    "Mail debugger is not configured yet."
-);
-email_scaffold!(
-    email_queue,
-    "/email/queue",
-    "Mail Queue",
-    "Inspect the queue",
-    "Mail queue inspection is not configured yet."
-);
-email_scaffold!(
-    email_spamassassin,
-    "/email/spamassassin",
-    "SpamAssassin",
-    "Spam filtering",
-    "SpamAssassin is not installed or not configured."
-);
-email_scaffold!(
-    email_rspamd,
-    "/email/rspamd",
-    "Rspamd",
-    "Spam filtering",
-    "Rspamd is not installed or not configured."
-);
-email_scaffold!(
-    email_mailscanner,
-    "/email/mailscanner",
-    "MailScanner",
-    "Mail scanning",
-    "MailScanner is not installed or not configured."
-);
-email_scaffold!(
-    email_marketing,
-    "/email/marketing",
-    "Email Marketing",
-    "Campaigns and lists",
-    "Email marketing is not configured yet."
-);
-email_scaffold!(
-    email_plus,
-    "/email/plus-addressing",
-    "Plus-Addressing",
-    "user+tag addressing",
-    "Plus-addressing controls are not configured yet."
-);
+#[derive(Debug, serde::Deserialize)]
+pub struct MtaStsForm {
+    #[serde(default)]
+    domain: String,
+    #[serde(default)]
+    enabled: Option<String>,
+    #[serde(default)]
+    mode: String,
+    #[serde(default)]
+    max_age: String,
+    #[serde(default)]
+    mx: String,
+}
+
+#[post("/email/mta-sts/save")]
+pub async fn email_mta_sts_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<MtaStsForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let enabled = form.enabled.as_deref() == Some("1");
+    match save_mta_sts_form(&form.domain, enabled, &form.mode, &form.max_age, &form.mx) {
+        Ok(msg) => redirect_notice(
+            &format!("/email/mta-sts?domain={}", urlencoding_simple(&form.domain)),
+            Some(&msg),
+            None,
+        ),
+        Err(err) => redirect_notice(
+            &format!("/email/mta-sts?domain={}", urlencoding_simple(&form.domain)),
+            None,
+            Some(&err),
+        ),
+    }
+}
+
+#[post("/email/mta-sts/push-cloudflare")]
+pub async fn email_mta_sts_push_cf(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = form.get("domain").map(String::as_str).unwrap_or("");
+    match push_mta_sts_cloudflare(domain) {
+        Ok(msg) => redirect_notice(
+            &format!("/email/mta-sts?domain={}", urlencoding_simple(domain)),
+            Some(&msg),
+            None,
+        ),
+        Err(err) => redirect_notice(
+            &format!("/email/mta-sts?domain={}", urlencoding_simple(domain)),
+            None,
+            Some(&err),
+        ),
+    }
+}
+
+#[get("/email/bimi")]
+pub async fn email_bimi_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "email",
+        "BIMI",
+        &email_bimi_page(
+            query.get("domain").map(String::as_str).unwrap_or(""),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct BimiForm {
+    #[serde(default)]
+    domain: String,
+    #[serde(default)]
+    enabled: Option<String>,
+    #[serde(default)]
+    logo_svg_url: String,
+    #[serde(default)]
+    authority_url: String,
+}
+
+#[post("/email/bimi/save")]
+pub async fn email_bimi_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<BimiForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let enabled = form.enabled.as_deref() == Some("1");
+    match save_bimi_form(
+        &form.domain,
+        enabled,
+        &form.logo_svg_url,
+        &form.authority_url,
+    ) {
+        Ok(msg) => redirect_notice(
+            &format!("/email/bimi?domain={}", urlencoding_simple(&form.domain)),
+            Some(&msg),
+            None,
+        ),
+        Err(err) => redirect_notice(
+            &format!("/email/bimi?domain={}", urlencoding_simple(&form.domain)),
+            None,
+            Some(&err),
+        ),
+    }
+}
+
+#[post("/email/bimi/push-cloudflare")]
+pub async fn email_bimi_push_cf(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let domain = form.get("domain").map(String::as_str).unwrap_or("");
+    match push_bimi_cloudflare(domain) {
+        Ok(msg) => redirect_notice(
+            &format!("/email/bimi?domain={}", urlencoding_simple(domain)),
+            Some(&msg),
+            None,
+        ),
+        Err(err) => redirect_notice(
+            &format!("/email/bimi?domain={}", urlencoding_simple(domain)),
+            None,
+            Some(&err),
+        ),
+    }
+}
+
+fn urlencoding_simple(value: &str) -> String {
+    crate::panel_hub_http::urlencoding_simple(value)
+}

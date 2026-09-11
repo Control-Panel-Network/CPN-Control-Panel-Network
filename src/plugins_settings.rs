@@ -39,6 +39,8 @@ pub struct SidebarPluginLink {
     pub name: String,
     pub domain: String,
     pub href: String,
+    /// When true, render under Email instead of "Installed plugins".
+    pub email_category: bool,
 }
 
 fn settings_path(domain: &str, plugin_id: &str) -> Result<PathBuf, String> {
@@ -86,8 +88,61 @@ fn load_manifest_extras(domain: &str, plugin_id: &str) -> ManifestExtras {
     })
 }
 
+/// Built-in settings for known webmail plugins when the catalog manifest is sparse.
+pub fn builtin_webmail_settings_fields(plugin_id: &str) -> Vec<PluginSettingField> {
+    let id = plugin_id.trim();
+    let is_snappy = id.eq_ignore_ascii_case("snappymailWebmail")
+        || id.eq_ignore_ascii_case("snappymailAdmin");
+    let is_roundcube = id.eq_ignore_ascii_case("roundcubeWebmail");
+    if !is_snappy && !is_roundcube {
+        return Vec::new();
+    }
+    vec![
+        PluginSettingField {
+            key: "auto_login_account".into(),
+            label: "Auto-login account (email)".into(),
+            field_type: "text".into(),
+            default: String::new(),
+        },
+        PluginSettingField {
+            key: "internal_webmail".into(),
+            label: "Enable internal webmail embed (Email > Webmail)".into(),
+            field_type: "checkbox".into(),
+            default: String::new(),
+        },
+        PluginSettingField {
+            key: "public_path".into(),
+            label: "Webmail URL path (example: /snappymail)".into(),
+            field_type: "text".into(),
+            default: if is_roundcube {
+                "/roundcube".into()
+            } else {
+                "/snappymail".into()
+            },
+        },
+    ]
+}
+
+pub fn is_webmail_plugin_id(plugin_id: &str) -> bool {
+    let id = plugin_id.trim();
+    id.eq_ignore_ascii_case("snappymailWebmail")
+        || id.eq_ignore_ascii_case("snappymailAdmin")
+        || id.eq_ignore_ascii_case("roundcubeWebmail")
+}
+
 pub fn declared_settings_fields(domain: &str, plugin_id: &str) -> Vec<PluginSettingField> {
-    load_manifest_extras(domain, plugin_id).settings_fields
+    let mut fields = load_manifest_extras(domain, plugin_id).settings_fields;
+    if fields.is_empty() {
+        fields = builtin_webmail_settings_fields(plugin_id);
+    } else {
+        // Ensure webmail builtins exist even when the manifest declares a subset.
+        for builtin in builtin_webmail_settings_fields(plugin_id) {
+            if !fields.iter().any(|f| f.key == builtin.key) {
+                fields.push(builtin);
+            }
+        }
+    }
+    fields
 }
 
 pub fn manifest_has_dashboard(domain: &str, plugin_id: &str) -> bool {
@@ -179,16 +234,21 @@ pub fn sidebar_plugin_links(username: &str) -> Vec<SidebarPluginLink> {
             if !settings.show_in_sidebar {
                 continue;
             }
-            let href = format!(
-                "/plugins/dashboard?domain={}&id={}",
-                urlencoding_simple(&site.domain),
-                urlencoding_simple(&item.manifest.id)
-            );
+            let href = if is_webmail_plugin_id(&item.manifest.id) {
+                "/email/webmail".to_string()
+            } else {
+                format!(
+                    "/plugins/dashboard?domain={}&id={}",
+                    urlencoding_simple(&site.domain),
+                    urlencoding_simple(&item.manifest.id)
+                )
+            };
             out.push(SidebarPluginLink {
                 id: item.manifest.id.clone(),
                 name: item.manifest.name.clone(),
                 domain: site.domain.clone(),
                 href,
+                email_category: is_webmail_plugin_id(&item.manifest.id),
             });
         }
     }
