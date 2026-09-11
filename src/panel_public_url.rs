@@ -65,6 +65,7 @@ pub fn validate_panel_public_url(raw: &str) -> Result<String, String> {
                 .into(),
         );
     };
+    let rest = rest.trim_end_matches('/');
     if rest.is_empty() || rest.starts_with('/') {
         return Err("Panel public URL needs a host after the scheme".into());
     }
