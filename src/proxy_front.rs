@@ -231,8 +231,7 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
                 .args(["disable", "--now", "nginx"])
                 .status();
             log(
-                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired)."
-                    .into(),
+                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired).".into(),
             );
             return Ok(());
         }
@@ -245,8 +244,7 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
                 .args(["disable", "--now", "nginx"])
                 .status();
             log(
-                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired)."
-                    .into(),
+                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired).".into(),
             );
             return Ok(());
         }

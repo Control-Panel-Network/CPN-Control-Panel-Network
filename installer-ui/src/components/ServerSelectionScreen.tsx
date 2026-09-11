@@ -281,8 +281,8 @@ export function ServerSelectionScreen({
               Installation log detail
             </legend>
             <p className="text-[13px] text-[#5f5e60] mt-1 mb-2">
-              Minimal shows high-level progress only. Full streams package-manager
-              output. Failures always show clearly.
+              Minimal shows high-level progress only. Full streams
+              package-manager output. Failures always show clearly.
             </p>
             <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
               <input

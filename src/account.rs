@@ -130,9 +130,7 @@ pub fn validate_recovery_email(raw: &str) -> Result<String, String> {
         return Err("Enter a recovery email".into());
     }
     if email.chars().count() > MAX_EMAIL_CHARS {
-        return Err(format!(
-            "Email cannot exceed {MAX_EMAIL_CHARS} characters"
-        ));
+        return Err(format!("Email cannot exceed {MAX_EMAIL_CHARS} characters"));
     }
     if has_control_chars(email) {
         return Err("Email cannot include control characters".into());

@@ -132,9 +132,8 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         && !std::path::Path::new("/usr/lib/systemd/system/lshttpd.service").exists()
         && std::path::Path::new(vendor_unit).exists()
     {
-        let contents = std::fs::read_to_string(vendor_unit).map_err(|error| {
-            format!("Failed to read OpenLiteSpeed vendor unit: {error}")
-        })?;
+        let contents = std::fs::read_to_string(vendor_unit)
+            .map_err(|error| format!("Failed to read OpenLiteSpeed vendor unit: {error}"))?;
         install_journal::write_file_tracked(
             "server",
             std::path::Path::new("/usr/lib/systemd/system/lshttpd.service"),

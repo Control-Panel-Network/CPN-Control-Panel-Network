@@ -223,9 +223,7 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 Path::new("/etc/yum.repos.d/litespeed.repo"),
                 &repository,
             )
-            .map_err(|error| {
-                format!("Failed to configure the OpenLiteSpeed repository: {error}")
-            })
+            .map_err(|error| format!("Failed to configure the OpenLiteSpeed repository: {error}"))
         }
         PackageFamily::Apt => {
             let codename = guest.apt_codename().ok_or_else(|| {

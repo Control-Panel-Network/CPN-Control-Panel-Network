@@ -308,9 +308,8 @@ pub fn detect_guest_os() -> Result<GuestOs, String> {
     }
     #[cfg(not(windows))]
     {
-        let release = std::fs::read_to_string("/etc/os-release").map_err(|_| {
-            "Could not identify the operating system (/etc/os-release)".to_string()
-        })?;
+        let release = std::fs::read_to_string("/etc/os-release")
+            .map_err(|_| "Could not identify the operating system (/etc/os-release)".to_string())?;
         detect_from_os_release(&release)
     }
 }
