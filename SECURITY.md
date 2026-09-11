@@ -9,7 +9,7 @@ Security fixes are applied on the default branch (`stable`) and released when pr
 | Latest release / `stable` | Yes |
 | Older releases | Best effort |
 
-CPN **1.0.0** is the first stable-tagged release. Treat security reports seriously. Prefer a test host for first installs and review [SUPPORT.md](docs/SUPPORT.md) before important deployments.
+CPN **1.0.1** is the current stable-tagged release (after 1.0.0). Treat security reports seriously. Prefer a test host for first installs and review [SUPPORT.md](docs/SUPPORT.md) before important deployments.
 
 ## Reporting a vulnerability
 

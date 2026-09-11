@@ -1,7 +1,7 @@
 # CPN - Control Panel Network
 
 > [!WARNING]
-> **CPN 1.0.0 is the first stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
+> **CPN 1.0.1 is the current stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.0** (see [Changelog](docs/CHANGELOG.md)).
+- Current stable release: **v1.0.1** (see [Changelog](docs/CHANGELOG.md)).
 
 After the package install:
 

@@ -243,6 +243,99 @@ pub fn forgot_password_ack_html() -> String {
     )
 }
 
+pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    let error_block = match error {
+        Some(message) if !message.is_empty() => format!(
+            r#"<p class="error" id="i18n-reset-error" role="alert">{msg}</p>"#,
+            msg = html_escape(message)
+        ),
+        _ => r#"<p class="error" id="i18n-reset-error" role="alert" hidden></p>"#.into(),
+    };
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset password · CPN Panel</title>
+  <style>{styles}</style>
+</head>
+<body data-page="reset-password"{error_attr}>
+  <main>
+    <section class="card">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1 id="i18n-title">Choose a new password</h1>
+      <p class="hint" id="i18n-reset-intro"></p>
+      {error_block}
+      <form method="post" action="/reset-password" autocomplete="on">
+        <input type="hidden" name="token" value="{token}">
+        <label for="password" id="i18n-reset-password">New password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required>
+        <label for="password_confirm" id="i18n-reset-confirm">Confirm password</label>
+        <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required>
+        <button id="i18n-reset-submit" type="submit">Save new password</button>
+      </form>
+      <p><a id="i18n-forgot-back" href="/login">Back to sign in</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        locale = initial_locale,
+        styles = shared_auth_styles(),
+        token = html_escape(token),
+        error_block = error_block,
+        error_attr = if error.is_some() {
+            r#" data-reset-error="1""#
+        } else {
+            ""
+        },
+        script = PANEL_I18N_SCRIPT,
+    )
+}
+
+pub fn reset_password_invalid_html(message: &str) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset password · CPN Panel</title>
+  <style>{styles}</style>
+</head>
+<body data-page="reset-invalid">
+  <main>
+    <section class="card">
+      <div id="cpn-lang-host" class="lang-host"></div>
+      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1 id="i18n-title">Reset link unavailable</h1>
+      <p class="error" role="alert">{msg}</p>
+      <p class="hint" id="i18n-reset-invalid-hint"></p>
+      <p><a id="i18n-forgot-back" href="/forgot-password">Request a new reset</a></p>
+    </section>
+  </main>
+  {script}
+</body>
+</html>"#,
+        locale = initial_locale,
+        styles = shared_auth_styles(),
+        msg = html_escape(message),
+        script = PANEL_I18N_SCRIPT,
+    )
+}
+
 pub fn installer_token_required_html() -> String {
     format!(
         r#"<!DOCTYPE html>

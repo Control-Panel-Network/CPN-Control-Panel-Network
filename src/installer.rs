@@ -884,7 +884,10 @@ mod tests {
             result
                 .as_ref()
                 .err()
-                .map(|msg| msg.contains("cancelada"))
+                .map(|msg| {
+                    let lower = msg.to_ascii_lowercase();
+                    lower.contains("cancelled") || lower.contains("cancelada")
+                })
                 .unwrap_or(false),
             "expected cancel error, got {result:?}"
         );
