@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.24] - 12/09/2026
 
-Email webmail UX (SnappyMail/Roundcube), internal embed, and MTA-STS/BIMI DNS helpers (Cargo `0.2.6-alpha.24`).
+Email webmail UX (SnappyMail/Roundcube), MTA-STS/BIMI DNS helpers, and harder same-NEVRA RPM apply (Cargo `0.2.6-alpha.24`).
 
 ### Added
 
@@ -20,6 +20,10 @@ Email webmail UX (SnappyMail/Roundcube), internal embed, and MTA-STS/BIMI DNS he
 ### Changed
 
 - Install manifest preserve list includes `webmail-panel.json` and `email-auth/`.
+
+### Fixed
+
+- `install_rpm` checks installed NEVRA before dnf, and falls back to `rpm -Uvh --force` so same-tip maintenance after package upgrade no longer fails with Package install failed (dnf/rpm).
 
 ## [0.2.6-alpha.23] - 12/09/2026
 

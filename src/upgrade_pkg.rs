@@ -36,11 +36,47 @@ async fn rpm_nevra_installed(nevra: &str) -> bool {
         .unwrap_or(false)
 }
 
+async fn rpm_cpn_installed_nevra() -> Option<String> {
+    let output = Command::new("rpm")
+        .args([
+            "-q",
+            "--qf",
+            "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}",
+            "cpn-installer",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if nevra.is_empty() || nevra.contains("not installed") {
+        None
+    } else {
+        Some(nevra)
+    }
+}
+
 /// Install or replace the `cpn-installer` RPM.
 ///
 /// When `allow_oldpackage` is true (retired `1.0.0`/`1.0.1` -> `0.2.x` retag),
 /// uses `rpm -Uvh --oldpackage` with erase+install fallback.
 pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Result<(), String> {
+    if let Some(file_nevra) = rpm_query_nevra(path).await {
+        if rpm_nevra_installed(&file_nevra).await {
+            return Ok(());
+        }
+        if let Some(installed) = rpm_cpn_installed_nevra().await {
+            if installed == file_nevra {
+                return Ok(());
+            }
+        }
+    }
+
     if allow_oldpackage {
         let status = Command::new("rpm")
             .args(["-Uvh", "--oldpackage", path])
@@ -94,20 +130,13 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
-    // Already at this exact NEVRA (bootstrap upgrade.sh may have installed it first,
-    // or tip re-run). Treat as success for both normal and force/repair paths.
-    if let Some(nevra) = rpm_query_nevra(path).await
-        && rpm_nevra_installed(&nevra).await
-    {
-        return Ok(());
+    if let Some(file_nevra) = rpm_query_nevra(path).await {
+        if rpm_nevra_installed(&file_nevra).await {
+            return Ok(());
+        }
     }
-    let mut rpm_args = vec!["-Uvh"];
-    if force {
-        rpm_args.push("--force");
-    }
-    rpm_args.push(path);
     let status = Command::new("rpm")
-        .args(&rpm_args)
+        .args(["-Uvh", "--force", path])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
