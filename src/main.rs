@@ -527,6 +527,8 @@ async fn websocket(
     Ok(response)
 }
 
+/// Kept for direct route wiring; `panel_catch_all` calls `static_asset_for` after webmail proxy checks.
+#[allow(dead_code)]
 async fn static_asset(path: web::Path<String>) -> impl Responder {
     static_asset_for(&path.into_inner())
 }
