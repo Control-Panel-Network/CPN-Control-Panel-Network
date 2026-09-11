@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: upgrade the installed cpn-installer package from GitHub Releases.
-# Official one-liner (run as root):
-#   sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
-#
-# This file is the upgrade bootstrap. A copy also lives at repo-root preUpgrade.sh for the
-# stable branch raw URL (.../stable/preUpgrade.sh).
+# Preferred one-liner (run as root; News Targeted host, then GitHub raw fallback):
+#   sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+# This file is the GitHub-curled bootstrap alias (repo-root / scripts). Prefer /upgrade.sh on cpn.newstargeted.com.
 #
 # Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
