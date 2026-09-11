@@ -7,22 +7,23 @@ Official CPN releases are published through GitHub Releases. End users should in
 Preferred end-user path (detects OS, downloads the matching asset, verifies checksums/GPG, installs or upgrades the package):
 
 ```bash
-# Install
-sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
+# Install (News Targeted host, then GitHub raw)
+sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
 
 # Upgrade (existing cpn-installer install)
-sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
+sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
 ```
 
 Script sources:
 
-- https://cpn.newstargeted.com/install.sh (News Targeted host; mirrors `scripts/install.sh`)
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh (GitHub fallback)
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/preUpgrade.sh
-- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh
+- https://cpn.newstargeted.com/install.sh (primary; mirrors `scripts/install.sh`)
+- https://cpn.newstargeted.com/upgrade.sh (primary; mirrors `scripts/upgrade.sh`)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh (fallback)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh (fallback)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh (GitHub alias)
+- https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/preUpgrade.sh (GitHub alias)
 
-The default production branch is `stable`. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
+Use `curl -fsSL` (or wget) so a down or non-200 host fails and the next URL in the `||` chain runs. The default production branch is `stable`. Keep `preUpgrade.sh` at the repo root on `stable` so the GitHub alias resolves.
 
 Bootstrap scripts pick the newest **non-draft** GitHub Release by default (**prereleases / alphas included**). Current published tip is **v0.2.4-alpha.19**. Pin with `CPN_RELEASE_TAG=<tag>` when needed. Set `CPN_STABLE_ONLY=1` to skip prereleases once a non-prerelease Latest exists.
 

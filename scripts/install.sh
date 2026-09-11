@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: install the latest matching release package.
-# Official one-liner (run as root):
-#   sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
-# GitHub raw fallback:
-#   https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh
+# Official one-liner (run as root; News Targeted host, then GitHub raw fallback):
+#   sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
 #
 # Env:
 #   CPN_RELEASE_TAG          pin a tag (example: v0.2.4-alpha.19); default: newest non-draft release

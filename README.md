@@ -13,7 +13,7 @@ CPN is a Rust-based web installer and server-control project. The installer embe
 Primary path for Linux guests: run the official CPN bootstrap script as **root**. It detects AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian, downloads the matching package from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases), verifies `SHA256SUMS` and GPG when those assets exist, installs the package, then prints how to start `cpn-installer`.
 
 ```bash
-sh <(curl https://cpn.newstargeted.com/install.sh || wget -O - https://cpn.newstargeted.com/install.sh)
+sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
 ```
 
 Notes:
@@ -22,8 +22,7 @@ Notes:
 - Supported package targets today: EL9/EL10 RPM and Ubuntu/Debian `.deb` (see [Platform Support](docs/SUPPORT.md)).
 - Unknown or refused OS versions fail closed (no install).
 - Prefer a disposable test machine for first installs.
-- GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
-- `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
+- The one-liner tries `cpn.newstargeted.com` first, then GitHub raw (`stable/scripts/install.sh`) if the site is down. `-fsSL` makes curl fail on HTTP errors so the fallback runs.
 - Current published alpha: **v0.2.4-alpha.19** (see [Changelog](docs/CHANGELOG.md)). Former `v1.0.0` / `v1.0.1` tags were renamed to `v0.2.3-alpha.19` / `v0.2.4-alpha.19` and removed. Bootstrap one-liners pick the newest non-draft release (**including prereleases**) unless you pin `CPN_RELEASE_TAG` or set `CPN_STABLE_ONLY=1`.
 
 After the package install:
@@ -117,8 +116,13 @@ Windows support is currently Phase A and does not yet provide feature parity wit
 On a host that already has `cpn-installer` installed, upgrade the package from GitHub Releases (same OS detection and verification as install):
 
 ```bash
-sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
+sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
 ```
+
+Notes:
+
+- Root (or `sudo`) is required.
+- Same host-then-GitHub fallback as install (`/upgrade.sh`, then `stable/scripts/upgrade.sh`). Repo-root `preUpgrade.sh` remains a GitHub alias.
 
 After the package upgrade, run installer maintenance when the panel stack was previously installed:
 

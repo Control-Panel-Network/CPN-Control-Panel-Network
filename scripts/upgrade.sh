@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: upgrade the installed cpn-installer package from GitHub Releases.
-# Official one-liner (run as root):
-#   sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
-# Alias: scripts/preUpgrade.sh (same behavior).
+# Official one-liner (run as root; News Targeted host, then GitHub raw fallback):
+#   sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+# Alias bootstrap when curled from GitHub alone: repo-root / scripts preUpgrade.sh
 #
 # Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
@@ -76,7 +76,7 @@ sha256_file() {
 
 require_existing_install() {
   if ! have_cmd cpn-installer && [[ ! -x /usr/bin/cpn-installer ]]; then
-    die "cpn-installer is not installed. Use scripts/install.sh for a new install."
+    die "cpn-installer is not installed. Use https://cpn.newstargeted.com/install.sh (GitHub raw fallback available) for a new install."
   fi
 }
 

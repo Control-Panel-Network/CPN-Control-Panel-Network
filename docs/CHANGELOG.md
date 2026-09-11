@@ -23,6 +23,7 @@ Password-reset MIME / DNS reachability fix line (Cargo `0.2.5-alpha.19`). Not pu
 ### Changed
 
 - Bootstrap scripts and in-panel upgrade default to the newest **non-draft** GitHub Release including **alphas**. Optional `CPN_STABLE_ONLY=1` skips prereleases when a future non-prerelease Latest exists.
+- Official install/upgrade one-liners use `cpn.newstargeted.com` first, then GitHub raw (`stable/scripts/install.sh` / `upgrade.sh`) when the site is down (`curl -fsSL` / wget chain). Prefer `/upgrade.sh` in user-facing copy; `preUpgrade.sh` remains a GitHub alias.
 
 ## [0.2.4-alpha.19] - 11/09/2026
 
