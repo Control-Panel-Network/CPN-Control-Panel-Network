@@ -760,7 +760,7 @@ async fn main() -> std::io::Result<()> {
         allowed_hosts,
         cancel_requested: AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
-        install_log_detail: std::sync::Mutex::new(crate::installer::InstallLogDetail::Full),
+        install_log_detail: std::sync::Mutex::new(cpn_installer::installer::InstallLogDetail::Full),
     });
     println!("✓ The web installer is ready:");
     if phase == "completed" && has_bootstrap_account {
