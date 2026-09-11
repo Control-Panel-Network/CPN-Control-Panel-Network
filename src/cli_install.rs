@@ -1,7 +1,7 @@
 //! Interactive SSH/CLI installer front-end (alternative to the web UI).
 
 use crate::account::{default_password_policy, setup_account};
-use crate::cli_common::{is_root, require_root_for_mutation};
+use crate::cli_common::{is_root, print_generated, require_root_for_mutation};
 use crate::installer::AppState;
 use crate::listen_port::{self, DEFAULT_PORT};
 use crate::model::{
@@ -429,13 +429,13 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         "en",
     ) {
         Ok(result) => {
+            // Avoid cleartext username/email/password on stdout (CodeQL cleartext-logging).
+            let _ = result.public;
             println!("\nFirst account ready.");
-            println!("  Username: {}", result.public.username);
-            println!("  Recovery email: {}", result.public.recovery_email);
-            if let Some(generated) = result.generated_password {
-                println!("\nGenerated password (shown once):\n{generated}");
-                println!("Store it securely. It will not be printed again.");
+            if let Err(error) = print_generated(result.generated_password) {
+                return fail(error);
             }
+            println!("If a password file was written, store it securely, then delete it.");
         }
         Err(error) => return fail(format!("account setup failed: {error}")),
     }
