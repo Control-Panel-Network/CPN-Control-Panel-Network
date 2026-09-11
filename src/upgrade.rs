@@ -225,12 +225,11 @@ async fn install_rpm(path: &str, force: bool) -> Result<(), String> {
     }
     // Bootstrap `upgrade.sh` may already have installed this exact NEVRA before
     // `cpn-installer --upgrade` runs. Treat same-package as success unless repairing.
-    if !force {
-        if let Some(nevra) = rpm_query_nevra(path).await {
-            if rpm_nevra_installed(&nevra).await {
-                return Ok(());
-            }
-        }
+    if !force
+        && let Some(nevra) = rpm_query_nevra(path).await
+        && rpm_nevra_installed(&nevra).await
+    {
+        return Ok(());
     }
     // Fallback for older hosts / repair of same NEVRA.
     let mut rpm_args = vec!["-Uvh"];
