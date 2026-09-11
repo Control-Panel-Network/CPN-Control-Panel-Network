@@ -153,7 +153,7 @@ mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
     use crate::listen_port::save_preferred_listen_port;
-    use crate::panel_network::{clear_panel_hostname, save_panel_hostname};
+    use crate::panel_network::clear_panel_hostname;
     use crate::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 
     #[test]

@@ -4,7 +4,7 @@
 # Login URL(s) are resolved LIVE each login via `cpn panel url --motd`
 # (reads /var/lib/cpn/listen_port, panel_public_url, panel_hostname).
 # Safe for AlmaLinux / RHEL-family and Debian/Ubuntu login shells.
-# Never prints passwords or tokens. Product branding: CPN only (not CyberPanel).
+# Never prints passwords or tokens. Product branding: CPN / Control Panel Network only.
 
 # Only interactive shells (skip scp/sftp/non-TTY).
 case $- in
