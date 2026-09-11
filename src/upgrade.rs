@@ -10,9 +10,7 @@ use crate::release_verify::{
     maybe_check_rpm_sig, verify_gpg_enabled, verify_gpg_sums, verify_release_enabled,
     verify_sha256_file,
 };
-use crate::releases::{
-    self, CpnRelease, compare_versions, is_retag_migration, normalize_version,
-};
+use crate::releases::{self, CpnRelease, compare_versions, is_retag_migration, normalize_version};
 use rand::{Rng, distr::Alphanumeric};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};

@@ -253,7 +253,8 @@ fn resolve_package_version(
             rpm_ver
         }
         (Some(manifest_ver), None)
-            if is_retired_cpn_1_0_identity(&manifest_ver) && is_active_0_2_line(running_version) =>
+            if is_retired_cpn_1_0_identity(&manifest_ver)
+                && is_active_0_2_line(running_version) =>
         {
             // No RPM query (binary-only host): prefer running over phantom 1.0.x manifest.
             running_version.to_string()
@@ -321,9 +322,7 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     // (HTTP 409) before transitions allowed maintenance.
     let detected = has_manifest || has_bootstrap;
 
-    let from_manifest = manifest
-        .as_ref()
-        .map(|item| item.package_version.clone());
+    let from_manifest = manifest.as_ref().map(|item| item.package_version.clone());
     let package_version = resolve_package_version(from_manifest, rpm_version, running_version);
     let release_tag = manifest
         .as_ref()

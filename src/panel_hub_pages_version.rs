@@ -427,7 +427,6 @@ pub fn version_management_page(can_manage: bool) -> String {
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +442,4 @@ mod tests {
         assert!(!html.contains('\u{2013}'));
         assert!(!html.to_lowercase().contains("cyberpanel"));
     }
-
 }

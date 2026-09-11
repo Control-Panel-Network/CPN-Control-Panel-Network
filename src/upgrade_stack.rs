@@ -53,7 +53,10 @@ fn upgrade_named_packages(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Result<String
             .status()
             .map_err(|error| format!("Could not start apt-get upgrade: {error}"))?;
         if !status.success() {
-            return Err(format!("apt-get --only-upgrade {} failed", present.join(" ")));
+            return Err(format!(
+                "apt-get --only-upgrade {} failed",
+                present.join(" ")
+            ));
         }
         Ok(format!("upgraded {}", present.join(", ")))
     }
@@ -96,10 +99,7 @@ pub fn refresh_managed_stack() -> Vec<String> {
             .into(),
     );
 
-    match upgrade_named_packages(
-        &["mariadb-server", "MariaDB-server"],
-        &["mariadb-server"],
-    ) {
+    match upgrade_named_packages(&["mariadb-server", "MariaDB-server"], &["mariadb-server"]) {
         Ok(msg) => notes.push(format!("MariaDB: {msg}")),
         Err(error) => notes.push(format!("MariaDB: {error} (continuing)")),
     }
@@ -117,8 +117,22 @@ pub fn refresh_managed_stack() -> Vec<String> {
     }
 
     match upgrade_named_packages(
-        &["php", "php-fpm", "php-cli", "php-mysqlnd", "php-gd", "php-xml"],
-        &["php", "php-fpm", "php-cli", "php-mysql", "php-gd", "php-xml"],
+        &[
+            "php",
+            "php-fpm",
+            "php-cli",
+            "php-mysqlnd",
+            "php-gd",
+            "php-xml",
+        ],
+        &[
+            "php",
+            "php-fpm",
+            "php-cli",
+            "php-mysql",
+            "php-gd",
+            "php-xml",
+        ],
     ) {
         Ok(msg) => notes.push(format!("PHP: {msg}")),
         Err(error) => notes.push(format!("PHP: {error} (continuing)")),
