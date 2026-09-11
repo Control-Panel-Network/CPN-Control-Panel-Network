@@ -463,11 +463,7 @@ pub async fn run_maintenance(
     for path in &cleanup.removed {
         state.log(format!("cleanup removed: {path}"), "info");
     }
-    for note in cleanup
-        .notes
-        .iter()
-        .chain(cleanup.skipped_preserved.iter())
-    {
+    for note in cleanup.notes.iter().chain(cleanup.skipped_preserved.iter()) {
         state.log(note.clone(), "info");
     }
 
@@ -506,10 +502,7 @@ pub async fn run_maintenance(
         state
             .progress("verifying", 96, "Verifying services after upgrade")
             .await;
-        match crate::upgrade_verify::verify_after_upgrade(
-            request.bypass_docker,
-            &docker_before,
-        ) {
+        match crate::upgrade_verify::verify_after_upgrade(request.bypass_docker, &docker_before) {
             Ok(report) => {
                 for line in report.summary_lines() {
                     state.log(line, "info");
