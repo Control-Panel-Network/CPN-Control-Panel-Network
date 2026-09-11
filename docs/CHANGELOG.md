@@ -5,6 +5,14 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.25] - 12/09/2026
+
+Treat same Version-Release tip RPM as already installed during maintenance (Cargo `0.2.6-alpha.25`).
+
+### Fixed
+
+- Compare RPM Version-Release before/after dnf so tip re-runs after `upgrade.sh` succeed even when NEVRA string compares fail.
+
 ## [0.2.6-alpha.24] - 12/09/2026
 
 Harden RPM apply when bootstrap `upgrade.sh` already installed the tip NEVRA (Cargo `0.2.6-alpha.24`).
