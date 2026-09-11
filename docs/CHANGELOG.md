@@ -5,6 +5,14 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.24] - 12/09/2026
+
+Harden RPM apply when bootstrap `upgrade.sh` already installed the tip NEVRA (Cargo `0.2.6-alpha.24`).
+
+### Fixed
+
+- `install_rpm` checks installed NEVRA before dnf, and falls back to `rpm -Uvh --force` so same-tip maintenance after package upgrade no longer fails with Package install failed (dnf/rpm).
+
 ## [0.2.6-alpha.23] - 12/09/2026
 
 Same-NEVRA success during forced same-version upgrade after bootstrap `upgrade.sh` (Cargo `0.2.6-alpha.23`).
