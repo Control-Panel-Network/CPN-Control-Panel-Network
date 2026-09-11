@@ -33,10 +33,9 @@ struct ForgotPasswordForm {
 }
 
 fn client_key_from_request(http: &HttpRequest) -> Option<String> {
-    http.connection_info()
-        .realip_remote_addr()
-        .map(|value| value.to_string())
-        .or_else(|| http.peer_addr().map(|addr| addr.ip().to_string()))
+    // Use the peer socket address only (not X-Forwarded-For) so rate-limit keys
+    // are not derived from attacker-controlled header text (CodeQL allocation/log).
+    http.peer_addr().map(|addr| addr.ip().to_string())
 }
 
 fn panel_base_url_for(status: &InstallerStatus) -> String {

@@ -289,7 +289,7 @@ pub fn invalidate_tokens_for_user(username: &str) {
 mod tests {
     use super::*;
     use crate::account::{
-        PanelBootstrap, default_password_policy, hash_password, new_password_salt,
+        PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
         with_test_data_dir, write_account_file,
     };
     use crate::account_mgmt::reset_account_password;
@@ -312,7 +312,8 @@ mod tests {
     #[test]
     fn create_peek_consume_and_reject_reuse() {
         with_test_data_dir(|| {
-            write_admin("Passw0rd!");
+            let password = generate_password(&default_password_policy());
+            write_admin(&password);
             let raw = create_reset_token("Admin").expect("create");
             assert_eq!(peek_reset_token(&raw).as_deref(), Some("Admin"));
             let user = consume_reset_token(&raw).expect("consume");
@@ -325,7 +326,8 @@ mod tests {
     #[test]
     fn find_by_email_and_username() {
         with_test_data_dir(|| {
-            write_admin("Passw0rd!");
+            let password = generate_password(&default_password_policy());
+            write_admin(&password);
             let by_user = find_account_for_reset("admin").expect("user");
             assert_eq!(by_user.0, "Admin");
             let by_email = find_account_for_reset("ADMIN@example.com").expect("email");
@@ -337,7 +339,8 @@ mod tests {
     #[test]
     fn expired_token_rejected() {
         with_test_data_dir(|| {
-            write_admin("Passw0rd!");
+            let password = generate_password(&default_password_policy());
+            write_admin(&password);
             let raw = create_reset_token("Admin").expect("create");
             // Force expiry by rewriting store.
             {
@@ -355,13 +358,15 @@ mod tests {
     #[test]
     fn reset_password_via_token_path() {
         with_test_data_dir(|| {
-            write_admin("Passw0rd!");
+            let old_password = generate_password(&default_password_policy());
+            write_admin(&old_password);
             let raw = create_reset_token("Admin").expect("create");
             let user = consume_reset_token(&raw).expect("consume");
-            reset_account_password(&user, Some("N3w-Pass!"), false).expect("reset");
+            let new_password = generate_password(&default_password_policy());
+            reset_account_password(&user, Some(&new_password), false).expect("reset");
             let (boot, _) = find_account("Admin").unwrap();
             assert!(crate::account::verify_password(
-                "N3w-Pass!",
+                &new_password,
                 &boot.password_salt,
                 &boot.password_hash
             ));
