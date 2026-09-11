@@ -4,12 +4,13 @@
 #   sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/preUpgrade.sh)
 # Alias: scripts/preUpgrade.sh (same behavior).
 #
-# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_INCLUDE_PRERELEASE, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
+# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
 
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
 CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
+CPN_STABLE_ONLY="${CPN_STABLE_ONLY:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
 RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
@@ -152,7 +153,9 @@ pick_release_json() {
   json="$(printf '%s' "$body" | python3 -c '
 import json,sys,os
 items=json.load(sys.stdin)
-include_pre=os.environ.get("CPN_INCLUDE_PRERELEASE","0").strip()=="1"
+stable_only=os.environ.get("CPN_STABLE_ONLY","0").strip()=="1"
+include_pre_legacy=os.environ.get("CPN_INCLUDE_PRERELEASE","1").strip()
+include_pre = (not stable_only) and include_pre_legacy != "0"
 for item in items:
     if item.get("draft"):
         continue
@@ -162,7 +165,7 @@ for item in items:
     break
 else:
     sys.exit(2)
-')" || die "no matching GitHub release found (stable skips prereleases; set CPN_RELEASE_TAG or CPN_INCLUDE_PRERELEASE=1)"
+')" || die "no matching GitHub release found (set CPN_RELEASE_TAG, or unset CPN_STABLE_ONLY to allow alphas)"
   printf '%s' "$json"
 }
 

@@ -1,7 +1,7 @@
 # CPN - Control Panel Network
 
 > [!WARNING]
-> **CPN 1.0.1 is the current stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
+> **CPN is alpha-only for now** (newest published cut: **v0.2.4-alpha.19**). There is no stable 1.x line yet. Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.2** (see [Changelog](docs/CHANGELOG.md)).
+- Current published alpha: **v0.2.4-alpha.19** (see [Changelog](docs/CHANGELOG.md)). Former `v1.0.0` / `v1.0.1` tags were renamed to `v0.2.3-alpha.19` / `v0.2.4-alpha.19` and removed. Bootstrap one-liners pick the newest non-draft release (**including prereleases**) unless you pin `CPN_RELEASE_TAG` or set `CPN_STABLE_ONLY=1`.
 
 After the package install:
 
@@ -126,7 +126,7 @@ After the package upgrade, run installer maintenance when the panel stack was pr
 sudo cpn-installer --upgrade
 ```
 
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.2` before the one-liner (or export it in the same shell). Default install/upgrade selection uses the newest **non-prerelease** GitHub Release. Optional `CPN_INCLUDE_PRERELEASE=1` includes GitHub prereleases when selecting Latest. Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
+Pin a specific tag when needed: `CPN_RELEASE_TAG=v0.2.4-alpha.19` before the one-liner (or export it in the same shell). Default install/upgrade selection uses the newest **non-draft** GitHub Release (**alphas included**). Set `CPN_STABLE_ONLY=1` only when a future non-prerelease Latest exists and you want to skip alphas. Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
 
 ## After installation
 

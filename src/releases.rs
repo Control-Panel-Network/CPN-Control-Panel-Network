@@ -298,10 +298,7 @@ pub async fn version_check(running_version: &str, installed_version: &str) -> Ve
     let source = package_source_label();
     match list_releases(20).await {
         Ok(releases) => {
-            let latest = releases
-                .iter()
-                .find(|release| !release.prerelease)
-                .or_else(|| releases.first());
+            let latest = releases.first();
             let latest_version = latest.map(|item| item.version.clone());
             let latest_tag = latest.map(|item| item.tag_name.clone());
             let update_available = latest_version

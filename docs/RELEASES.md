@@ -24,7 +24,7 @@ Script sources:
 
 The default production branch is `stable`. Keep `preUpgrade.sh` at the repo root on `stable` so the upgrade one-liner resolves.
 
-Bootstrap scripts pick the newest **non-draft, non-prerelease** GitHub Release by default (stable Latest is **v1.0.0**). Prereleases such as `v1.0.1` and `v1.0.2-alpha.1` are skipped unless you set `CPN_RELEASE_TAG=<tag>` or `CPN_INCLUDE_PRERELEASE=1`.
+Bootstrap scripts pick the newest **non-draft** GitHub Release by default (**prereleases / alphas included**). Current published tip is **v0.2.4-alpha.19**. Pin with `CPN_RELEASE_TAG=<tag>` when needed. Set `CPN_STABLE_ONLY=1` to skip prereleases once a non-prerelease Latest exists.
 
 Manual download and verification steps below remain valid when you prefer not to use the bootstrap scripts.
 

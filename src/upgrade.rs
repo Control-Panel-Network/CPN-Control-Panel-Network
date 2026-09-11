@@ -232,10 +232,9 @@ async fn resolve_target_release(
                 releases::find_release(version).await
             } else {
                 let list = releases::list_releases(20).await?;
-                list.iter()
-                    .find(|release| !release.prerelease)
+                // Alpha-only period: prefer newest non-draft release (including prereleases).
+                list.first()
                     .cloned()
-                    .or_else(|| list.first().cloned())
                     .ok_or_else(|| {
                         "No GitHub release found. Publish a release with RPM/binary assets, or set CPN_GITHUB_REPO.".into()
                     })

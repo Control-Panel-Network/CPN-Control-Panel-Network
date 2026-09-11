@@ -5,7 +5,9 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - 11/09/2026
+## [0.2.5-alpha.19] - unreleased (branch tip)
+
+Password-reset MIME / DNS reachability fix line (Cargo `0.2.5-alpha.19`). Not published as a GitHub Release yet; next cut after `v0.2.4-alpha.19`.
 
 ### Fixed
 
@@ -17,9 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Persist optional external panel base URL: `cpn network set-public-url --url http://127.0.0.1:2089` / `clear-public-url`, installer network step, CLI install prompt, and Settings Change Port form. Stored under `/var/lib/cpn/panel_public_url` (mode 600).
-- Optional `CPN_INCLUDE_PRERELEASE=1` for bootstrap scripts when you want the newest GitHub prerelease without pinning a tag (stable one-liners still prefer non-prerelease Latest).
 
-## [1.0.1] - 11/09/2026
+### Changed
+
+- Bootstrap scripts and in-panel upgrade default to the newest **non-draft** GitHub Release including **alphas**. Optional `CPN_STABLE_ONLY=1` skips prereleases when a future non-prerelease Latest exists.
+
+## [0.2.4-alpha.19] - 11/09/2026
+
+Renamed from former **`v1.0.1`** (tag and release removed). Same signed artifacts; package filenames inside the release still say `1.0.1` so SHA256SUMS / GPG stay valid. GitHub prerelease only (no stable Latest).
 
 ### Fixed
 
@@ -52,9 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Long package-manager waits keep progress messaging that reads as in-progress, not failed/hung.
 - README and CLI docs describe Web UI vs SSH/CLI invocation.
 
-## [1.0.0] - 11/09/2026
+## [0.2.3-alpha.19] - 11/09/2026
 
-First stable release after the `0.2.x` alpha line. Install and upgrade from signed GitHub Release packages (EL9/EL10 RPM, Ubuntu/Debian `.deb`, Windows Phase A zip). Prefer a disposable test host; keep backups.
+Renamed from former **`v1.0.0`** (tag and release removed). Same signed artifacts; package filenames inside the release still say `1.0.0` so SHA256SUMS / GPG stay valid. GitHub prerelease only (no stable Latest).
+
+First post-`0.2.2` alpha packaging cut after the `0.2.x` line. Install and upgrade from signed GitHub Release packages (EL9/EL10 RPM, Ubuntu/Debian `.deb`, Windows Phase A zip). Prefer a disposable test host; keep backups.
 
 ### Highlights
 
@@ -71,7 +80,7 @@ First stable release after the `0.2.x` alpha line. Install and upgrade from sign
 - Account security: TOTP 2FA and Passkeys (WebAuthn); MFA material stored per install under `/var/lib/cpn/mfa/`.
 - Default panel port **2087** (Cloudflare-friendly), choosable at install and changeable later.
 
-### Install and packaging (0.2.x → 1.0.0)
+### Install and packaging (0.2.x → 0.2.3-alpha.19)
 
 - Bootstrap scripts detect AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian and refuse unsupported OS versions closed.
 - Manual RPM/DEB/Windows zip install paths documented in the README and [RELEASES.md](RELEASES.md).
@@ -101,7 +110,7 @@ sh <(curl https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Pa
 sudo cpn-installer --upgrade
 ```
 
-Pin this release with `CPN_RELEASE_TAG=v1.0.0` if another tag is temporarily newest.
+Pin with `CPN_RELEASE_TAG=v0.2.3-alpha.19` or `CPN_RELEASE_TAG=v0.2.4-alpha.19` when you need a specific cut.
 
 ## [0.2.2] alphas (summary)
 
@@ -116,7 +125,7 @@ Pre-1.0 development line (`v0.2.2-alpha.1` … `v0.2.2-alpha.18`). Notable theme
 
 For per-tag PR lists, see the corresponding [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases) notes.
 
-[1.0.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.2
-[1.0.1]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.1
-[1.0.0]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.0
+[0.2.5-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...HEAD
+[0.2.4-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.4-alpha.19
+[0.2.3-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.3-alpha.19
 [0.2.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases?q=0.2.2-alpha

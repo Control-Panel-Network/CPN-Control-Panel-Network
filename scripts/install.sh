@@ -6,8 +6,9 @@
 #   https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh
 #
 # Env:
-#   CPN_RELEASE_TAG          pin a tag (example: v1.0.0); default: newest non-draft, non-prerelease
-#   CPN_INCLUDE_PRERELEASE   1 to allow the newest prerelease when CPN_RELEASE_TAG is unset
+#   CPN_RELEASE_TAG          pin a tag (example: v0.2.4-alpha.19); default: newest non-draft release
+#   CPN_STABLE_ONLY          1 to skip GitHub prereleases (future stable line); default includes alphas
+#   CPN_INCLUDE_PRERELEASE   legacy alias: 0 with CPN_STABLE_ONLY unset still includes prereleases
 #   CPN_GITHUB_REPO          owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
 #   CPN_REQUIRE_GPG          1 (default) require SHA256SUMS.asc + matching fingerprint
 #   CPN_ALLOW_UNSIGNED       1 allow missing GPG assets (lab only; not for production)
@@ -16,6 +17,7 @@ set -euo pipefail
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
 CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
+CPN_STABLE_ONLY="${CPN_STABLE_ONLY:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
 RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
@@ -160,7 +162,10 @@ pick_release_json() {
     json="$(printf '%s' "$body" | python3 -c '
 import json,sys,os
 items=json.load(sys.stdin)
-include_pre=os.environ.get("CPN_INCLUDE_PRERELEASE","0").strip()=="1"
+# Alpha-only period: include prereleases by default. Set CPN_STABLE_ONLY=1 to skip them.
+stable_only=os.environ.get("CPN_STABLE_ONLY","0").strip()=="1"
+include_pre_legacy=os.environ.get("CPN_INCLUDE_PRERELEASE","1").strip()
+include_pre = (not stable_only) and include_pre_legacy != "0"
 for item in items:
     if item.get("draft"):
         continue
@@ -170,7 +175,7 @@ for item in items:
     break
 else:
     sys.exit(2)
-')" || die "no matching GitHub release found (stable skips prereleases; set CPN_RELEASE_TAG or CPN_INCLUDE_PRERELEASE=1)"
+')" || die "no matching GitHub release found (set CPN_RELEASE_TAG, or unset CPN_STABLE_ONLY to allow alphas)"
     printf '%s' "$json"
     return
   fi
