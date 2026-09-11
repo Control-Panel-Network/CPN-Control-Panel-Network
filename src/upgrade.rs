@@ -420,6 +420,16 @@ pub async fn run_maintenance(
         .await;
 
     maybe_reset_data(request.reset_data)?;
+
+    let docker_before = if matches!(
+        request.action,
+        MaintenanceAction::Upgrade | MaintenanceAction::Repair
+    ) {
+        crate::upgrade_verify::snapshot_cpn_docker_running()
+    } else {
+        Vec::new()
+    };
+
     let source = apply_release(&state, &release, force).await?;
 
     let status_snapshot = state
@@ -447,6 +457,34 @@ pub async fn run_maintenance(
     }
 
     state
+        .progress("testing", 88, "Cleaning stale CPN packaging/staging")
+        .await;
+    let cleanup = crate::upgrade_cleanup::cleanup_stale_packaging();
+    for path in &cleanup.removed {
+        state.log(format!("cleanup removed: {path}"), "info");
+    }
+    for note in cleanup
+        .notes
+        .iter()
+        .chain(cleanup.skipped_preserved.iter())
+    {
+        state.log(note.clone(), "info");
+    }
+
+    if matches!(request.action, MaintenanceAction::Upgrade) && request.bypass_docker {
+        state
+            .progress("installing", 90, "Refreshing CPN-managed Docker (--bypass)")
+            .await;
+        for note in crate::upgrade_verify::maybe_refresh_cpn_docker(true) {
+            state.log(note, "info");
+        }
+    } else if matches!(request.action, MaintenanceAction::Upgrade) {
+        for note in crate::upgrade_verify::maybe_refresh_cpn_docker(false) {
+            state.log(note, "info");
+        }
+    }
+
+    state
         .progress("testing", 92, "Verifying installer binary")
         .await;
     let version_ok = Command::new(installer_bin())
@@ -459,6 +497,29 @@ pub async fn run_maintenance(
         .unwrap_or(false);
     if !version_ok {
         return Err("Post-maintenance version check failed".into());
+    }
+
+    if matches!(
+        request.action,
+        MaintenanceAction::Upgrade | MaintenanceAction::Repair
+    ) {
+        state
+            .progress("verifying", 96, "Verifying services after upgrade")
+            .await;
+        match crate::upgrade_verify::verify_after_upgrade(
+            request.bypass_docker,
+            &docker_before,
+        ) {
+            Ok(report) => {
+                for line in report.summary_lines() {
+                    state.log(line, "info");
+                }
+            }
+            Err(error) => {
+                state.log(error.clone(), "error");
+                return Err(error);
+            }
+        }
     }
 
     let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());

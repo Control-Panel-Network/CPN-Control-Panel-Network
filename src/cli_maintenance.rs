@@ -16,6 +16,8 @@ pub enum CliMode {
     VersionCheck,
     Upgrade {
         version: Option<String>,
+        /// Refresh CPN-managed Docker stacks only (`--bypass` / CPN_UPGRADE_BYPASS=1).
+        bypass_docker: bool,
     },
     Repair {
         version: Option<String>,
@@ -75,8 +77,11 @@ pub fn parse_cli(args: &[String]) -> Option<CliMode> {
         });
     }
     if args.iter().any(|arg| arg == "--upgrade") {
+        let bypass_docker = args.iter().any(|arg| arg == "--bypass")
+            || std::env::var("CPN_UPGRADE_BYPASS").ok().as_deref() == Some("1");
         return Some(CliMode::Upgrade {
             version: version_flag("--version-target").or_else(|| version_flag("--to")),
+            bypass_docker,
         });
     }
     if args.iter().any(|arg| arg == "--repair") {
@@ -113,10 +118,11 @@ Usage:
   cpn-installer --old-port-policy <MODE>  redirect_1m | redirect_3m | deny (with --port)
   cpn-installer --version
   cpn-installer --version-check
-  cpn-installer --upgrade [--to X.Y.Z]
+  cpn-installer --upgrade [--to X.Y.Z] [--bypass]
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
   cpn-installer --allow-remote  Bind 0.0.0.0 for the web UI (HTTP without TLS; operator opt-in)
+  cpn-installer --bypass        With --upgrade: refresh CPN-managed Docker compose/stacks only (preserves volumes; never touches unlabeled user containers)
   cpn-installer --ensure-database-defaults [--database mariadb|mysql|none] [--skip-phpmyadmin]
                                  Install MariaDB (default) + phpMyAdmin on Linux without the UI
 
@@ -130,6 +136,8 @@ Notes:
   Repair overwrites only core packaged files listed in install-manifest.json under the CPN data directory.
   Accounts, bootstrap state, SMTP secrets, and other CPN data are preserved unless --reset-data is explicitly requested.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
+  Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
+  Without --bypass, Docker stacks are left running as-is; with --bypass, only CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 are refreshed.
   systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
 "
     );
@@ -178,7 +186,10 @@ pub async fn run_cli(mode: CliMode) -> i32 {
             }));
             if check.error.is_some() { 2 } else { 0 }
         }
-        CliMode::Upgrade { version } => {
+        CliMode::Upgrade {
+            version,
+            bypass_docker,
+        } => {
             let state = make_state().await;
             let request = MaintenanceRequest {
                 action: MaintenanceAction::Upgrade,
@@ -186,6 +197,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 confirm_downgrade: false,
                 reset_data: false,
                 confirm_execute: true,
+                bypass_docker,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,
@@ -215,6 +227,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 confirm_downgrade: true,
                 reset_data,
                 confirm_execute: true,
+                bypass_docker: false,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,
@@ -244,6 +257,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 confirm_downgrade: true,
                 reset_data,
                 confirm_execute: true,
+                bypass_docker: false,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,
