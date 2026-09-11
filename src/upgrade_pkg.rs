@@ -1,7 +1,25 @@
 //! RPM/binary package apply helpers for upgrade/repair/retag.
 
-use std::process::Stdio;
+use std::process::{Output, Stdio};
 use tokio::process::Command;
+
+fn cmd_failure_detail(tool: &str, output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let raw = if !stderr.trim().is_empty() {
+        stderr.trim()
+    } else {
+        stdout.trim()
+    };
+    // Collapse whitespace so the Version Management UI stays readable.
+    let flat: String = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let short: String = flat.chars().take(420).collect();
+    if short.is_empty() {
+        format!("Package install failed ({tool})")
+    } else {
+        format!("Package install failed ({tool}): {short}")
+    }
+}
 
 async fn rpm_query_nevra(path: &str) -> Option<String> {
     let output = Command::new("rpm")
@@ -21,7 +39,11 @@ async fn rpm_query_nevra(path: &str) -> Option<String> {
         return None;
     }
     let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if nevra.is_empty() { None } else { Some(nevra) }
+    if nevra.is_empty() {
+        None
+    } else {
+        Some(nevra)
+    }
 }
 
 async fn rpm_nevra_installed(nevra: &str) -> bool {
@@ -49,7 +71,11 @@ async fn rpm_query_vr(path: &str) -> Option<String> {
         return None;
     }
     let vr = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if vr.is_empty() { None } else { Some(vr) }
+    if vr.is_empty() {
+        None
+    } else {
+        Some(vr)
+    }
 }
 
 async fn rpm_installed_vr() -> Option<String> {
@@ -89,15 +115,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     }
 
     if allow_oldpackage {
-        let status = Command::new("rpm")
+        let output = Command::new("rpm")
             .args(["-Uvh", "--oldpackage", path])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .status()
+            .output()
             .await
             .map_err(|error| format!("rpm --oldpackage failed: {error}"))?;
-        if status.success() {
+        if output.status.success() {
             return Ok(());
         }
         let _ = Command::new("rpm")
@@ -107,15 +133,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
             .stderr(Stdio::null())
             .status()
             .await;
-        let status = Command::new("rpm")
+        let output = Command::new("rpm")
             .args(["-Uvh", path])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .status()
+            .output()
             .await
             .map_err(|error| format!("rpm reinstall after erase failed: {error}"))?;
-        if status.success() {
+        if output.status.success() {
             return Ok(());
         }
         if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
@@ -123,10 +149,10 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         {
             return Ok(());
         }
-        return Err(
-            "Package install failed (retag 1.0.x -> 0.2.x; rpm --oldpackage / erase+install)"
-                .into(),
-        );
+        return Err(format!(
+            "{} (retag 1.0.x -> 0.2.x; rpm --oldpackage / erase+install)",
+            cmd_failure_detail("rpm", &output)
+        ));
     }
 
     let mut args = vec!["install", "-y"];
@@ -135,15 +161,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         args.push("--allowerasing");
     }
     args.push(path);
-    let status = Command::new("dnf")
+    let dnf_output = Command::new("dnf")
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .status()
+        .output()
         .await
         .map_err(|error| format!("dnf install failed: {error}"))?;
-    if status.success() {
+    if dnf_output.status.success() {
         return Ok(());
     }
     if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
@@ -156,15 +182,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     {
         return Ok(());
     }
-    let status = Command::new("rpm")
+    let rpm_output = Command::new("rpm")
         .args(["-Uvh", "--force", path])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .status()
+        .output()
         .await
         .map_err(|error| format!("rpm upgrade failed: {error}"))?;
-    if status.success() {
+    if rpm_output.status.success() {
         return Ok(());
     }
     if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
@@ -172,7 +198,14 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     {
         return Ok(());
     }
-    Err("Package install failed (dnf/rpm)".into())
+    // Prefer dnf's message (usually the real conflict); fall back to rpm.
+    let dnf_err = cmd_failure_detail("dnf", &dnf_output);
+    let rpm_err = cmd_failure_detail("rpm", &rpm_output);
+    if dnf_err.contains(':') {
+        Err(format!("{dnf_err}; also {rpm_err}"))
+    } else {
+        Err(rpm_err)
+    }
 }
 
 pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {
