@@ -197,9 +197,7 @@ pub fn email_accounts_main(
 
     let mail = selected_mail
         .map(|value| value.label())
-        .or_else(|| {
-            crate::panel_webmail::detect_webmail_client().map(|m| m.label())
-        })
+        .or_else(|| crate::panel_webmail::detect_webmail_client().map(|m| m.label()))
         .unwrap_or("Not selected");
     let client_ready = if mail_client_ready || crate::panel_webmail::webmail_ready() {
         "Ready"
@@ -236,8 +234,7 @@ pub fn email_accounts_main(
             && matches!(
                 selected_mail,
                 Some(crate::model::MailSystem::Snappymail | crate::model::MailSystem::Roundcube)
-            ))
-    {
+            )) {
         let open = crate::panel_webmail::webmail_open_path()
             .unwrap_or_else(|| webmail_health_url().to_string());
         let label = crate::panel_webmail::webmail_label();

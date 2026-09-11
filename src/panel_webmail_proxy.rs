@@ -111,7 +111,9 @@ fn forward_http(
         cmd.args(["--data-binary", "@-"]);
     }
     cmd.arg(target);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("curl missing or failed to start: {e}"))?;
@@ -151,10 +153,12 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
         .nth(1)
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(502);
-    let status =
-        StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
+    let status = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut builder = HttpResponse::build(status);
-    let mount = load_webmail_config().public_path.trim_end_matches('/').to_string();
+    let mount = load_webmail_config()
+        .public_path
+        .trim_end_matches('/')
+        .to_string();
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
             let name = name.trim();
@@ -229,10 +233,7 @@ mod tests {
             rewrite_location("/index.php", "/snappymail"),
             "/snappymail/index.php"
         );
-        assert_eq!(
-            rewrite_location("http://127.0.0.1:8080/a", "/wm"),
-            "/wm/a"
-        );
+        assert_eq!(rewrite_location("http://127.0.0.1:8080/a", "/wm"), "/wm/a");
     }
 
     #[test]

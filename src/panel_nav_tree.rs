@@ -127,13 +127,7 @@ fn render_section(
                     &[]
                 };
                 parts.push(group_block(
-                    id,
-                    href,
-                    label,
-                    children,
-                    active,
-                    feats,
-                    extras,
+                    id, href, label, children, active, feats, extras,
                 ));
             }
         }
@@ -177,13 +171,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         feats,
         &email_plugin_children,
     ));
-    parts.extend(render_section(
-        "Account",
-        ACCOUNT,
-        active,
-        feats,
-        &[],
-    ));
+    parts.extend(render_section("Account", ACCOUNT, active, feats, &[]));
     parts.extend(render_section(
         "Administration",
         ADMINISTRATION,

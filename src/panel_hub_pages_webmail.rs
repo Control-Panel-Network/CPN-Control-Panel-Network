@@ -2,8 +2,8 @@
 
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_webmail::{
-    load_webmail_config, regenerate_webmail_path, save_webmail_config, webmail_admin_path,
-    webmail_health_hint, webmail_label, webmail_open_path, webmail_ready, WebmailPanelConfig,
+    WebmailPanelConfig, load_webmail_config, regenerate_webmail_path, save_webmail_config,
+    webmail_admin_path, webmail_health_hint, webmail_label, webmail_open_path, webmail_ready,
 };
 
 fn html_escape(value: &str) -> String {

@@ -195,7 +195,10 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
                 hash
             );
         } else {
-            url = format!("{url}{sep}Email={}", urlencoding_form(&cfg.auto_login_account));
+            url = format!(
+                "{url}{sep}Email={}",
+                urlencoding_form(&cfg.auto_login_account)
+            );
         }
     }
     Some(url)
@@ -316,7 +319,10 @@ mod tests {
             let next = regenerate_webmail_path().unwrap();
             assert!(next.public_path.starts_with('/'));
             assert_ne!(next.public_path, "/snappymail");
-            assert!(path_matches_webmail_mount(&format!("{}/index.php", next.public_path)));
+            assert!(path_matches_webmail_mount(&format!(
+                "{}/index.php",
+                next.public_path
+            )));
             assert_eq!(
                 strip_webmail_mount(&format!("{}/index.php", next.public_path)).as_deref(),
                 Some("/index.php")

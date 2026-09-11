@@ -2,9 +2,7 @@
 
 use crate::account::data_dir;
 use crate::panel_ops_cloudflare::cloudflare_configured;
-use crate::panel_ops_cloudflare_api::{
-    create_dns_record, list_dns_records, update_dns_record,
-};
+use crate::panel_ops_cloudflare_api::{create_dns_record, list_dns_records, update_dns_record};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -65,7 +63,9 @@ fn auth_root() -> PathBuf {
 }
 
 fn mta_sts_path(domain: &str) -> PathBuf {
-    auth_root().join(sanitize_domain(domain)).join("mta-sts.json")
+    auth_root()
+        .join(sanitize_domain(domain))
+        .join("mta-sts.json")
 }
 
 fn bimi_path(domain: &str) -> PathBuf {
@@ -185,10 +185,7 @@ pub fn render_mta_sts_policy(settings: &MtaStsSettings) -> String {
 
 pub fn mta_sts_dns_records(settings: &MtaStsSettings) -> Vec<DnsRecordPlan> {
     let domain = settings.domain.trim_end_matches('.');
-    let id = format!(
-        "v=STSv1; id={}",
-        chrono_like_id()
-    );
+    let id = format!("v=STSv1; id={}", chrono_like_id());
     vec![
         DnsRecordPlan {
             record_type: "TXT".into(),
@@ -235,9 +232,7 @@ pub fn save_bimi(settings: &BimiSettings) -> Result<(), String> {
     if settings.enabled && logo.is_empty() {
         return Err("BIMI requires an HTTPS SVG logo URL".into());
     }
-    if !logo.is_empty()
-        && !logo.to_ascii_lowercase().starts_with("https://")
-    {
+    if !logo.is_empty() && !logo.to_ascii_lowercase().starts_with("https://") {
         return Err("BIMI logo URL must use https://".into());
     }
     let mut next = settings.clone();
@@ -248,7 +243,8 @@ pub fn save_bimi(settings: &BimiSettings) -> Result<(), String> {
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create email-auth dir: {e}"))?;
     let raw = serde_json::to_string_pretty(&next)
         .map_err(|e| format!("Could not serialize BIMI settings: {e}"))?;
-    fs::write(bimi_path(&domain), raw).map_err(|e| format!("Could not write BIMI settings: {e}"))?;
+    fs::write(bimi_path(&domain), raw)
+        .map_err(|e| format!("Could not write BIMI settings: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -287,7 +283,10 @@ fn chrono_like_id() -> String {
 }
 
 /// Add-only / upsert TXT or CNAME by name+type. Never deletes unrelated records.
-pub fn push_dns_plans_to_cloudflare(domain: &str, plans: &[DnsRecordPlan]) -> Result<String, String> {
+pub fn push_dns_plans_to_cloudflare(
+    domain: &str,
+    plans: &[DnsRecordPlan],
+) -> Result<String, String> {
     if !cloudflare_configured() {
         return Err(
             "Cloudflare API token is not configured. Open Cloudflare DNS > API Settings, or copy the records manually."

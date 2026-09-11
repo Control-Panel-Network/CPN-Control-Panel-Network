@@ -91,8 +91,8 @@ fn load_manifest_extras(domain: &str, plugin_id: &str) -> ManifestExtras {
 /// Built-in settings for known webmail plugins when the catalog manifest is sparse.
 pub fn builtin_webmail_settings_fields(plugin_id: &str) -> Vec<PluginSettingField> {
     let id = plugin_id.trim();
-    let is_snappy = id.eq_ignore_ascii_case("snappymailWebmail")
-        || id.eq_ignore_ascii_case("snappymailAdmin");
+    let is_snappy =
+        id.eq_ignore_ascii_case("snappymailWebmail") || id.eq_ignore_ascii_case("snappymailAdmin");
     let is_roundcube = id.eq_ignore_ascii_case("roundcubeWebmail");
     if !is_snappy && !is_roundcube {
         return Vec::new();

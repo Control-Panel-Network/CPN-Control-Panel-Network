@@ -3,9 +3,9 @@
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_email_auth::{
-    bimi_dns_records, load_bimi, load_mta_sts, mta_sts_dns_records, policy_file_path_display,
-    push_dns_plans_to_cloudflare, render_mta_sts_policy, save_bimi, save_mta_sts, BimiSettings,
-    DnsRecordPlan, MtaStsSettings,
+    BimiSettings, DnsRecordPlan, MtaStsSettings, bimi_dns_records, load_bimi, load_mta_sts,
+    mta_sts_dns_records, policy_file_path_display, push_dns_plans_to_cloudflare,
+    render_mta_sts_policy, save_bimi, save_mta_sts,
 };
 use crate::sites::list_sites;
 
@@ -78,11 +78,7 @@ fn dns_table(records: &[DnsRecordPlan]) -> String {
     )
 }
 
-pub fn email_mta_sts_page(
-    domain: &str,
-    notice: Option<&str>,
-    error: Option<&str>,
-) -> String {
+pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let settings = if domain.trim().is_empty() {
         let first = list_sites()
             .unwrap_or_default()
@@ -107,11 +103,7 @@ pub fn email_mta_sts_page(
         .iter()
         .map(|m| {
             let sel = if settings.mode == *m { " selected" } else { "" };
-            format!(
-                r#"<option value="{m}"{sel}>{m}</option>"#,
-                m = m,
-                sel = sel
-            )
+            format!(r#"<option value="{m}"{sel}>{m}</option>"#, m = m, sel = sel)
         })
         .collect::<String>();
     let body = format!(
