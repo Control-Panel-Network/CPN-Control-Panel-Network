@@ -5,6 +5,24 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.23] - 12/09/2026
+
+Version Management searchable release picker, clear phantom `1.0.0` installed identity when RPM is already `0.2.x`, and optional MariaDB/OLS/PHP package refresh on upgrade (Cargo `0.2.6-alpha.23`).
+
+### Added
+
+- Version Management release field is a **searchable** typeahead (filter tags as you type); Upgrade to latest / Apply / Repair unchanged.
+- Upgrade/repair may refresh already-installed CPN-managed host packages (MariaDB, OpenLiteSpeed, PHP/php-fpm) via `dnf upgrade` / `apt-get --only-upgrade`, then restart active units and health-check. Databases and docroots are never dropped. Documented in [INSTALL.md](INSTALL.md).
+
+### Fixed
+
+- RPM installed identity maps `Version`+`Release` back to Cargo prerelease (example: `0.2.6` + `0.alpha21.el9` -> `0.2.6-alpha.21`) so "Installed package" matches Running.
+- Stale `install-manifest.json` claiming `1.0.0`/`1.0.1` is reconciled when the live RPM is already on `0.2.x` (Version Management / `--version-check` / upgrade path).
+
+### Notes
+
+- Retag migration for hosts whose RPM is still literally `1.0.0`/`1.0.1` remains `rpm --oldpackage` via official upgrade (unchanged from alpha.22).
+
 ## [0.2.6-alpha.22] - 12/09/2026
 
 Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `0.2.x-alpha` via official upgrade, plus `-b`/`--ref` pin for bootstrap scripts (Cargo `0.2.6-alpha.22`).

@@ -3,7 +3,7 @@
 use crate::auth_api::panel_user_from_request;
 use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
-use crate::manifest::detect_existing_install;
+use crate::manifest::{detect_existing_install, reconcile_stale_package_identity};
 use crate::model::{MaintenanceAction, MaintenanceInfo, MaintenanceRequest, TokenQuery};
 use crate::panel_admin::is_panel_admin;
 use crate::releases;
@@ -51,6 +51,8 @@ fn busy_phase(phase: &str) -> bool {
 }
 
 pub async fn load_maintenance_info() -> MaintenanceInfo {
+    // Clear phantom 1.0.0/1.0.1 manifest when live RPM (or binary-only tip) is already 0.2.x.
+    let _ = reconcile_stale_package_identity(VERSION);
     let existing = detect_existing_install(VERSION);
     let check = releases::version_check(VERSION, &existing.package_version).await;
     let plan = Some(build_plan(

@@ -1,7 +1,7 @@
 //! CLI flags for version-check / upgrade / repair / downgrade (no web UI).
 
 use crate::installer::AppState;
-use crate::manifest::detect_existing_install;
+use crate::manifest::{detect_existing_install, reconcile_stale_package_identity};
 use crate::model::{MaintenanceAction, MaintenanceRequest};
 use crate::releases;
 use crate::upgrade::{build_plan, run_maintenance};
@@ -137,8 +137,10 @@ Notes:
   Accounts, bootstrap state, SMTP secrets, and other CPN data are preserved unless --reset-data is explicitly requested.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
   Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
+  Upgrade may refresh already-installed CPN-managed packages (MariaDB, OpenLiteSpeed, PHP) via dnf/apt; databases and docroots are never dropped.
   Without --bypass, Docker stacks are left running as-is; with --bypass, only CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 are refreshed.
   Leftover package identity 1.0.0/1.0.1 (retired GitHub retags) may be replaced by official --upgrade / upgrade.sh onto current 0.2.x-alpha (rpm --oldpackage; not a hostile downgrade).
+  Version Management and --version-check reconcile a stale 1.0.x install-manifest when the live RPM is already on 0.2.x.
   systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
 "
     );
@@ -179,11 +181,13 @@ pub async fn run_cli(mode: CliMode) -> i32 {
             0
         }
         CliMode::VersionCheck => {
+            let reconcile_note = reconcile_stale_package_identity(VERSION);
             let existing = detect_existing_install(VERSION);
             let check = releases::version_check(VERSION, &existing.package_version).await;
             print_json(&serde_json::json!({
                 "existing": existing,
                 "check": check,
+                "reconcile": reconcile_note,
             }));
             if check.error.is_some() { 2 } else { 0 }
         }
