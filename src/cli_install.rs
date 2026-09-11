@@ -9,8 +9,8 @@ use crate::model::{
 };
 use crate::panel_network::save_panel_hostname;
 use std::io::{self, IsTerminal, Write};
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::broadcast;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -174,8 +174,8 @@ fn prompt_account(
     } else {
         eprint!("Password: ");
         let _ = io::stderr().flush();
-        let value = rpassword::read_password()
-            .map_err(|e| format!("Failed to read password: {e}"))?;
+        let value =
+            rpassword::read_password().map_err(|e| format!("Failed to read password: {e}"))?;
         if value.is_empty() {
             return Err("Password was empty".into());
         }

@@ -117,12 +117,16 @@ pub fn print_installer_help(version: &str) {
     println!("  --panel-hostname <HOST>    Persist panel subdomain (https://HOST without port)");
     println!("  --old-port-policy <MODE>   When --port differs from the saved/bound port:");
     println!("                             redirect_1m | redirect_3m | deny");
-    println!("  --allow-remote             Bind 0.0.0.0 for web UI (HTTP without TLS; lab/operator opt-in)");
+    println!(
+        "  --allow-remote             Bind 0.0.0.0 for web UI (HTTP without TLS; lab/operator opt-in)"
+    );
     println!("  --listen-all               Alias of --allow-remote");
     println!("  -h, --help                 Show this help");
     println!("  -V, --version              Show version");
     println!();
-    println!("Language defaults to English. On a TTY without --web/--cli, you are prompted to choose.");
+    println!(
+        "Language defaults to English. On a TTY without --web/--cli, you are prompted to choose."
+    );
     println!("Ports 1-65535 are accepted. Prefer >1024 unless running as root.");
     println!(
         "Default {DEFAULT_PORT} matches the cPanel WHM HTTPS port family (Cloudflare-friendly)."

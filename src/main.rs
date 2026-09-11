@@ -362,9 +362,8 @@ async fn start_install(
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
-        return HttpResponse::BadRequest().json(
-            serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}),
-        );
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_server(&current, request.force_reinstall) {
@@ -426,9 +425,8 @@ async fn start_mail_install(
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
-        return HttpResponse::BadRequest().json(
-            serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}),
-        );
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
