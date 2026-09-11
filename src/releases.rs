@@ -147,7 +147,6 @@ pub fn cargo_version_from_rpm(version: &str, release: &str) -> String {
     version
 }
 
-
 fn pick_rpm_asset(assets: &[serde_json::Value]) -> Option<ReleaseAsset> {
     assets.iter().find_map(|asset| {
         let name = asset.get("name")?.as_str()?.to_string();

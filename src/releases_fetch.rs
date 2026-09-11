@@ -235,10 +235,7 @@ pub async fn list_releases_cached(
     }
 
     if response.status < 200 || response.status >= 300 {
-        let msg = format!(
-            "GitHub Releases request failed (HTTP {})",
-            response.status
-        );
+        let msg = format!("GitHub Releases request failed (HTTP {})", response.status);
         if let Some(cache) = existing.as_ref() {
             if !cache.releases.is_empty() && cache.repo == repo {
                 let age = age_secs(cache);
@@ -362,5 +359,3 @@ pub async fn version_check_with_options(
         },
     }
 }
-
-
