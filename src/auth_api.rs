@@ -1,4 +1,4 @@
-﻿//! Login, panel dashboard, logout, and first-account setup HTTP handlers.
+//! Login, panel dashboard, logout, and first-account setup HTTP handlers.
 //! Forgot/reset password live in `auth_password_reset_api`.
 
 use crate::account::{
