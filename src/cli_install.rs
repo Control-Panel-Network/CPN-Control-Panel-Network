@@ -383,7 +383,9 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     }
 
     println!("\nOptional external panel URL for emails and browsers (NAT labs, reverse proxies).");
-    println!("Leave empty to skip. Example for VirtualBox host forward 2089: http://127.0.0.1:2089");
+    println!(
+        "Leave empty to skip. Example for VirtualBox host forward 2089: http://127.0.0.1:2089"
+    );
     let public_url = match read_line("Panel public URL: ") {
         Ok(v) => v,
         Err(e) => return fail(e),

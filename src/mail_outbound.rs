@@ -245,9 +245,9 @@ mod tests {
     fn plain_message_does_not_qp_mangle_token_equals() {
         let from: Mailbox = "cpn@localhost".parse().unwrap();
         let to: Mailbox = "user@example.com".parse().unwrap();
-        let body =
-            "Open:\r\nhttp://127.0.0.1:2089/reset-password?token=9a09f70300845dd9bd32b\r\n";
-        let email = build_plain_message(from, to, "CPN panel password reset request", body).unwrap();
+        let body = "Open:\r\nhttp://127.0.0.1:2089/reset-password?token=9a09f70300845dd9bd32b\r\n";
+        let email =
+            build_plain_message(from, to, "CPN panel password reset request", body).unwrap();
         let raw = String::from_utf8_lossy(&email.formatted());
         assert!(
             raw.contains("token=9a09f70300845dd9bd32b"),

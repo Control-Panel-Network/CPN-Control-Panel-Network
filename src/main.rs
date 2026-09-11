@@ -59,7 +59,6 @@ use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
 };
-use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_notifications_routes::{
     panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
 };
@@ -67,6 +66,7 @@ use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
 };
+use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
     apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
     backups_run, databases_create, databases_ftp_create, databases_install_mariadb, databases_page,

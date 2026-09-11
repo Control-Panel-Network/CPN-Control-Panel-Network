@@ -455,7 +455,10 @@ mod tests {
     #[test]
     fn public_base_defaults_to_loopback() {
         with_test_data_dir(|| {
-            assert_eq!(public_base_url(2087, Some("10.0.2.15")), "http://127.0.0.1:2087");
+            assert_eq!(
+                public_base_url(2087, Some("10.0.2.15")),
+                "http://127.0.0.1:2087"
+            );
         });
     }
 
