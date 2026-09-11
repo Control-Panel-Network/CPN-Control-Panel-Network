@@ -142,8 +142,7 @@ fn activate_nginx_for_phpmyadmin() -> Result<(), String> {
             return Ok(());
         }
         return Err(
-            "Nginx reload/restart failed; left unit as-is (check /etc/nginx and :8081)."
-                .into(),
+            "Nginx reload/restart failed; left unit as-is (check /etc/nginx and :8081).".into(),
         );
     }
 
@@ -300,7 +299,9 @@ mod tests {
 
     #[test]
     fn ols_and_caddy_skip_nginx_listener() {
-        assert!(!should_wire_nginx_listener(Some(ServerEngine::Openlitespeed)));
+        assert!(!should_wire_nginx_listener(Some(
+            ServerEngine::Openlitespeed
+        )));
         assert!(!should_wire_nginx_listener(Some(ServerEngine::Caddy)));
         assert!(should_wire_nginx_listener(Some(ServerEngine::Nginx)));
     }
