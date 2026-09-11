@@ -5,6 +5,14 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.23] - 12/09/2026
+
+Same-NEVRA success during forced same-version upgrade after bootstrap `upgrade.sh` (Cargo `0.2.6-alpha.23`).
+
+### Fixed
+
+- `cpn-installer --upgrade` treats an already-installed tip RPM as success even when the same-version path sets `force` (previously only non-force runs skipped reinstall).
+
 ## [0.2.6-alpha.22] - 12/09/2026
 
 Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `0.2.x-alpha` via official upgrade, plus `-b`/`--ref` pin for bootstrap scripts (Cargo `0.2.6-alpha.22`).

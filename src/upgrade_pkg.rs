@@ -94,9 +94,9 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
-    // Bootstrap `upgrade.sh` may already have installed this exact NEVRA.
-    if !force
-        && let Some(nevra) = rpm_query_nevra(path).await
+    // Already at this exact NEVRA (bootstrap upgrade.sh may have installed it first,
+    // or tip re-run). Treat as success for both normal and force/repair paths.
+    if let Some(nevra) = rpm_query_nevra(path).await
         && rpm_nevra_installed(&nevra).await
     {
         return Ok(());
