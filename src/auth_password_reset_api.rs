@@ -17,7 +17,7 @@ use crate::model::InstallerStatus;
 use crate::panel_session::{
     clear_mfa_pending_cookie_header, create_session_token, session_cookie_header, session_secret,
 };
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, post, web};
 use std::sync::Arc;
 
 #[derive(Debug, serde::Deserialize)]
@@ -65,7 +65,7 @@ fn request_secure(http: &HttpRequest) -> bool {
     crate::panel_session::request_https_from_headers(http)
 }
 
-#[get("/forgot-password")]
+#[actix_web::route("/forgot-password", method = "GET", method = "HEAD")]
 pub async fn forgot_password_page() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -132,7 +132,7 @@ struct ResetPasswordForm {
     password_confirm: String,
 }
 
-#[get("/reset-password")]
+#[actix_web::route("/reset-password", method = "GET", method = "HEAD")]
 pub async fn reset_password_page(query: web::Query<ResetPasswordQuery>) -> HttpResponse {
     let token = query.token.trim();
     if token.is_empty() || peek_reset_token(token).is_none() {
