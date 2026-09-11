@@ -18,19 +18,18 @@ import {
 } from "./types";
 
 const CATALOG: Record<LocaleCode, LocaleMessages> = { en, es, nb };
-const STORAGE_KEY = "cpn-installer-locale";
+/** v2: do not inherit older keys that may have stored browser-detected Spanish. */
+const STORAGE_KEY = "cpn-installer-locale-v2";
 
 function readStoredLocale(): LocaleCode {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored) return normalizeLocale(stored);
   } catch {
-    // Fall back to the browser when storage is unavailable.
+    // Storage may be unavailable in locked-down browsers.
   }
-  const preferred = navigator.languages.find((language) =>
-    /^(es|en|nb|nn|no)(-|$)/i.test(language),
-  );
-  return normalizeLocale(preferred || navigator.language);
+  // English by default. Do not follow OS/browser locale (guest LANG often es_*).
+  return "en";
 }
 
 interface I18nContextValue {

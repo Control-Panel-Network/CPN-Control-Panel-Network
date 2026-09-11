@@ -32,23 +32,34 @@ After the package install:
 sudo cpn-installer
 ```
 
-Default listen address is `127.0.0.1:2087`. For a remote server, use SSH port forwarding:
+On an interactive SSH session, the installer asks whether to use the **Web UI** or **SSH/CLI** wizard (English by default). You can skip the prompt:
+
+```bash
+# Web UI (browser; default listen 127.0.0.1:2087)
+sudo cpn-installer --web
+
+# SSH/CLI (answer install questions in the terminal)
+sudo cpn-installer --cli
+```
+
+Default web listen address is `127.0.0.1:2087`. For a remote server, use SSH port forwarding:
 
 ```bash
 ssh -L 2087:127.0.0.1:2087 root@your-server
 ```
 
-Then open the URL printed by `cpn-installer` in a local browser.
+Then open the URL printed by `cpn-installer --web` in a local browser.
 
 > [!IMPORTANT]
 > Do not publish or share the temporary installer token printed in the console URL.
 
-Optional remote HTTP bind (trusted networks only; installer UI is HTTP, not TLS):
+Optional remote HTTP bind for the web UI (trusted networks only; installer UI is HTTP, not TLS):
 
 ```bash
-sudo cpn-installer --allow-remote
+sudo cpn-installer --web --allow-remote
 ```
 
+Installer UI language defaults to **English** (not the guest OS locale). Use the language selector in the web UI for Spanish or Norwegian.
 ### Manual package install
 
 If you prefer to download artifacts yourself, install from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases). End users do **not** need Rust, Node.js, Docker, `rpmbuild`, or a clone of this repository.

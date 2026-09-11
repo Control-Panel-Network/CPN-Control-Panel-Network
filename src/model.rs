@@ -228,7 +228,7 @@ impl Default for InstallerStatus {
         Self {
             phase: "preparing",
             progress: 0,
-            message: "Estamos preparando todo...".into(),
+            message: "Preparing the installer...".into(),
             selected_server: None,
             selected_mail: None,
             environment: None,

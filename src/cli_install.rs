@@ -1,0 +1,487 @@
+//! Interactive SSH/CLI installer front-end (alternative to the web UI).
+
+use crate::account::{default_password_policy, setup_account};
+use crate::cli_common::{is_root, require_root_for_mutation};
+use crate::installer::AppState;
+use crate::listen_port::{self, DEFAULT_PORT};
+use crate::model::{
+    DatabaseEngine, InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ServerEngine,
+};
+use crate::panel_network::save_panel_hostname;
+use std::io::{self, IsTerminal, Write};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use tokio::sync::broadcast;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// How the installer presents itself for a fresh/guided install session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallFrontend {
+    Web,
+    Cli,
+}
+
+/// Resolve web vs SSH/CLI from flags, or prompt when stdin is a TTY.
+pub fn resolve_install_frontend(args: &[String]) -> Result<InstallFrontend, String> {
+    let wants_cli = args
+        .iter()
+        .any(|arg| arg == "--cli" || arg == "--ssh" || arg == "--ssh-cli");
+    let wants_web = args.iter().any(|arg| arg == "--web" || arg == "--ui");
+    if wants_cli && wants_web {
+        return Err("Use either --cli (SSH/CLI) or --web (UI), not both.".into());
+    }
+    if wants_cli {
+        return Ok(InstallFrontend::Cli);
+    }
+    if wants_web {
+        return Ok(InstallFrontend::Web);
+    }
+    // systemd / pipes: keep web. Interactive TTY: ask.
+    if stdin_is_tty() && stderr_is_tty() {
+        prompt_frontend_choice()
+    } else {
+        Ok(InstallFrontend::Web)
+    }
+}
+
+fn stdin_is_tty() -> bool {
+    io::stdin().is_terminal()
+}
+fn stderr_is_tty() -> bool {
+    io::stderr().is_terminal()
+}
+
+fn prompt_frontend_choice() -> Result<InstallFrontend, String> {
+    println!("CPN Installer {VERSION}\n");
+    println!("How do you want to install?");
+    println!("  1) Web UI   (open a browser; default for remote SSH tunnels)");
+    println!("  2) SSH/CLI  (answer questions in this terminal)\n");
+    eprint!("Enter choice [1/2] (default: 1): ");
+    let _ = io::stderr().flush();
+    let mut line = String::new();
+    io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| format!("Failed to read install mode: {e}"))?;
+    match line.trim() {
+        "" | "1" | "web" | "ui" | "w" => Ok(InstallFrontend::Web),
+        "2" | "cli" | "ssh" | "c" | "s" => Ok(InstallFrontend::Cli),
+        other => Err(format!(
+            "Unknown choice `{other}`. Use 1 (Web UI) or 2 (SSH/CLI), or pass --web / --cli."
+        )),
+    }
+}
+
+fn read_line(prompt: &str) -> Result<String, String> {
+    eprint!("{prompt}");
+    let _ = io::stderr().flush();
+    let mut line = String::new();
+    io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| format!("Failed to read input: {e}"))?;
+    Ok(line.trim().to_string())
+}
+
+fn prompt_choice(prompt: &str, default: &str) -> Result<String, String> {
+    let raw = read_line(&format!("{prompt} [{default}]: "))?;
+    Ok(if raw.is_empty() {
+        default.to_string()
+    } else {
+        raw
+    })
+}
+
+fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool, String> {
+    let hint = if default_yes { "Y/n" } else { "y/N" };
+    let raw = read_line(&format!("{prompt} [{hint}]: "))?;
+    if raw.is_empty() {
+        return Ok(default_yes);
+    }
+    match raw.to_ascii_lowercase().as_str() {
+        "y" | "yes" => Ok(true),
+        "n" | "no" => Ok(false),
+        other => Err(format!("Expected yes/no, got `{other}`")),
+    }
+}
+
+fn prompt_server() -> Result<ServerEngine, String> {
+    println!("\nWeb server engine:");
+    println!("  1) OpenLiteSpeed  (recommended for WordPress / LSCache)");
+    println!("  2) Nginx");
+    println!("  3) Caddy");
+    match prompt_choice("Select web server", "1")?.as_str() {
+        "1" | "ols" | "openlitespeed" => Ok(ServerEngine::Openlitespeed),
+        "2" | "nginx" => Ok(ServerEngine::Nginx),
+        "3" | "caddy" => Ok(ServerEngine::Caddy),
+        other => Err(format!(
+            "Unknown server `{other}`. Use 1 (OpenLiteSpeed), 2 (Nginx), or 3 (Caddy)."
+        )),
+    }
+}
+
+fn prompt_database() -> Result<DatabaseEngine, String> {
+    println!("\nDatabase defaults (installed with the web server):");
+    println!("  1) MariaDB   (default)");
+    println!("  2) MySQL");
+    println!("  3) None      (skip local database packages)");
+    match prompt_choice("Select database", "1")?.as_str() {
+        "1" | "mariadb" | "maria" => Ok(DatabaseEngine::Mariadb),
+        "2" | "mysql" => Ok(DatabaseEngine::Mysql),
+        "3" | "none" | "skip" => Ok(DatabaseEngine::None),
+        other => Err(format!(
+            "Unknown database `{other}`. Use 1 (MariaDB), 2 (MySQL), or 3 (none)."
+        )),
+    }
+}
+
+fn prompt_mail() -> Result<Option<MailSystem>, String> {
+    println!("\nMail / webmail (optional; can skip):");
+    println!("  1) Skip");
+    println!("  2) SnappyMail");
+    println!("  3) Roundcube");
+    println!("  4) Thunderbird (desktop client package only)");
+    match prompt_choice("Select mail option", "1")?.as_str() {
+        "1" | "skip" | "none" | "n" => Ok(None),
+        "2" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
+        "3" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
+        "4" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
+        other => Err(format!(
+            "Unknown mail option `{other}`. Use 1 (skip), 2, 3, or 4."
+        )),
+    }
+}
+
+fn prompt_port(default: u16) -> Result<u16, String> {
+    println!("\nPanel listen port (saved preference; default {DEFAULT_PORT}).");
+    let raw = prompt_choice("Panel port", &default.to_string())?;
+    let port: u16 = raw
+        .parse()
+        .map_err(|_| format!("Invalid port `{raw}` (use 1-65535)"))?;
+    if port == 0 {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    Ok(port)
+}
+
+fn prompt_account(
+    _policy: &PasswordPolicy,
+) -> Result<(String, Option<String>, bool, String), String> {
+    println!("\nFirst panel account (English UI default; change language later in the panel).");
+    let username = prompt_choice("Username (empty = admin)", "")?;
+    let generate = prompt_yes_no("Generate a strong password", true)?;
+    let password = if generate {
+        None
+    } else {
+        eprint!("Password: ");
+        let _ = io::stderr().flush();
+        let value = rpassword::read_password()
+            .map_err(|e| format!("Failed to read password: {e}"))?;
+        if value.is_empty() {
+            return Err("Password was empty".into());
+        }
+        eprint!("Confirm password: ");
+        let _ = io::stderr().flush();
+        let confirm = rpassword::read_password()
+            .map_err(|e| format!("Failed to read password confirmation: {e}"))?;
+        if confirm != value {
+            return Err("Passwords do not match".into());
+        }
+        Some(value)
+    };
+    let email = read_line("Recovery email: ")?;
+    if email.trim().is_empty() {
+        return Err("Recovery email is required".into());
+    }
+    Ok((username, password, generate, email.trim().to_string()))
+}
+
+fn make_cli_state(bind_port: u16) -> Arc<AppState> {
+    let (events, _) = broadcast::channel(256);
+    Arc::new(AppState {
+        status: std::sync::RwLock::new(InstallerStatus {
+            phase: "ready",
+            progress: 0,
+            message: "Ready for SSH/CLI install".into(),
+            language: "en".into(),
+            listen_port: bind_port,
+            ..InstallerStatus::default()
+        }),
+        events,
+        token: "cli".into(),
+        session_id: "clisessionid0000000000000001".into(),
+        bind_port,
+        allow_remote: false,
+        allowed_hosts: crate::http_helpers::build_allowed_hosts(bind_port, &[]),
+        cancel_requested: AtomicBool::new(false),
+        active_child_pids: std::sync::Mutex::new(Vec::new()),
+    })
+}
+
+async fn pump_events(mut rx: broadcast::Receiver<InstallerEvent>) {
+    while let Ok(event) = rx.recv().await {
+        match event {
+            InstallerEvent::Log { line, level } => println!("[{level}] {line}"),
+            InstallerEvent::Progress { status } => {
+                println!(
+                    "[{}%] {}: {}",
+                    status.progress, status.phase, status.message
+                );
+            }
+            InstallerEvent::Completed { status } => {
+                println!("[done] {}", status.message);
+                break;
+            }
+            InstallerEvent::Error { status } => {
+                if let Some(error) = status.error {
+                    eprintln!("[error] {error}");
+                } else {
+                    eprintln!("[error] {}", status.message);
+                }
+                break;
+            }
+            InstallerEvent::Snapshot { .. } => {}
+        }
+    }
+}
+
+fn status_failed(state: &AppState) -> Option<String> {
+    let status = state.status.read().unwrap_or_else(|e| e.into_inner());
+    if status.phase == "failed" || status.error.is_some() {
+        Some(
+            status
+                .error
+                .clone()
+                .unwrap_or_else(|| status.message.clone()),
+        )
+    } else {
+        None
+    }
+}
+
+fn fail(error: String) -> i32 {
+    eprintln!("error: {error}");
+    1
+}
+
+/// Run the full interactive SSH/CLI install wizard.
+pub async fn run_interactive_cli(_args: &[String]) -> i32 {
+    if !stdin_is_tty() {
+        eprintln!(
+            "error: --cli requires an interactive terminal. Re-run over SSH with a TTY, or use --web."
+        );
+        return 2;
+    }
+    if let Err(error) = require_root_for_mutation() {
+        return fail(error);
+    }
+    if !is_root() {
+        eprintln!("warning: not running as root; package installs may fail.");
+    }
+
+    println!("\nCPN Server Panel · SSH/CLI Installer {VERSION}");
+    println!("Language: English (default). You can change language later in the panel.\n");
+
+    let server = match prompt_server() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    let database = match prompt_database() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    let install_phpmyadmin = if matches!(database, DatabaseEngine::None) {
+        false
+    } else {
+        match prompt_yes_no("Install phpMyAdmin", true) {
+            Ok(v) => v,
+            Err(e) => return fail(e),
+        }
+    };
+    let enable_proxy_front = match prompt_yes_no(
+        "Enable Nginx proxy-front (advanced; unique internal IPs per domain)",
+        false,
+    ) {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+
+    let preferred = listen_port::load_preferred_listen_port().unwrap_or(DEFAULT_PORT);
+    let port = match prompt_port(preferred) {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    if let Err(error) = listen_port::save_preferred_listen_port(port) {
+        eprintln!("warning: could not save preferred port: {error}");
+    } else {
+        println!("Saved preferred panel port: {port}");
+    }
+
+    println!("\nOptional panel hostname (DNS name for HTTPS login without a port).");
+    println!("Leave empty to skip. Example: panel.example.com");
+    let hostname = match read_line("Panel hostname: ") {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    if !hostname.is_empty() {
+        if let Err(error) = save_panel_hostname(&hostname) {
+            eprintln!("warning: could not save panel hostname: {error}");
+        } else {
+            println!("Saved panel hostname: {hostname}");
+        }
+    }
+
+    let mail = match prompt_mail() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    let policy = default_password_policy();
+    let (username, password, generate, email) = match prompt_account(&policy) {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+
+    println!("\nSummary");
+    println!("  Web server : {}", server.label());
+    println!("  Database   : {}", database.label());
+    println!(
+        "  phpMyAdmin : {}",
+        if install_phpmyadmin { "yes" } else { "no" }
+    );
+    println!(
+        "  Proxy front: {}",
+        if enable_proxy_front { "yes" } else { "no" }
+    );
+    println!("  Panel port : {port}");
+    if !hostname.is_empty() {
+        println!("  Hostname   : {hostname}");
+    }
+    println!(
+        "  Mail       : {}",
+        mail.map(|m| m.label()).unwrap_or("skipped")
+    );
+    println!(
+        "  Account    : {}",
+        if username.is_empty() {
+            "admin"
+        } else {
+            username.as_str()
+        }
+    );
+    println!();
+    match prompt_yes_no("Start installation now", true) {
+        Ok(true) => {}
+        Ok(false) => {
+            println!("Aborted.");
+            return 0;
+        }
+        Err(e) => return fail(e),
+    }
+
+    let state = make_cli_state(port);
+    let rx = state.events.subscribe();
+    let pump = tokio::spawn(pump_events(rx));
+    {
+        let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+        current.selected_server = Some(server);
+        current.phase = "configuring";
+        current.progress = 0;
+        current.error = None;
+    }
+
+    println!("\nInstalling web stack ({})...", server.label());
+    crate::installer::install_with_database(
+        state.clone(),
+        server,
+        database,
+        install_phpmyadmin,
+        enable_proxy_front,
+    )
+    .await;
+    let _ = pump.await;
+    if let Some(error) = status_failed(&state) {
+        return fail(format!("web server install failed: {error}"));
+    }
+
+    if let Some(mail) = mail {
+        let rx = state.events.subscribe();
+        let pump = tokio::spawn(pump_events(rx));
+        {
+            let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+            current.selected_mail = Some(mail);
+            current.phase = "downloading";
+            current.progress = 0;
+            current.error = None;
+        }
+        println!("\nInstalling mail ({})...", mail.label());
+        crate::installer::install_mail(state.clone(), mail).await;
+        let _ = pump.await;
+        if let Some(error) = status_failed(&state) {
+            return fail(format!("mail install failed: {error}"));
+        }
+    }
+
+    match setup_account(
+        &username,
+        password.as_deref(),
+        generate,
+        &email,
+        policy,
+        "en",
+    ) {
+        Ok(result) => {
+            println!("\nFirst account ready.");
+            println!("  Username: {}", result.public.username);
+            println!("  Recovery email: {}", result.public.recovery_email);
+            if let Some(generated) = result.generated_password {
+                println!("\nGenerated password (shown once):\n{generated}");
+                println!("Store it securely. It will not be printed again.");
+            }
+        }
+        Err(error) => return fail(format!("account setup failed: {error}")),
+    }
+
+    println!("\nInstallation finished.");
+    println!("Start or reopen the panel with: sudo cpn-installer --web");
+    println!("Default local URL: http://127.0.0.1:{port}/login");
+    if !hostname.is_empty() {
+        println!("Hostname login (after DNS + TLS proxy): https://{hostname}/login");
+    }
+    println!("Keep using English unless you change language in the panel.");
+    0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags_select_cli_or_web() {
+        let cli = resolve_install_frontend(&[
+            "cpn-installer".into(),
+            "--cli".into(),
+            "--port".into(),
+            "2089".into(),
+        ])
+        .unwrap();
+        assert_eq!(cli, InstallFrontend::Cli);
+
+        let web = resolve_install_frontend(&["cpn-installer".into(), "--web".into()]).unwrap();
+        assert_eq!(web, InstallFrontend::Web);
+
+        let ssh = resolve_install_frontend(&["cpn-installer".into(), "--ssh".into()]).unwrap();
+        assert_eq!(ssh, InstallFrontend::Cli);
+
+        assert!(
+            resolve_install_frontend(&["cpn-installer".into(), "--cli".into(), "--web".into()])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn non_tty_without_flags_defaults_web() {
+        if !stdin_is_tty() {
+            let mode = resolve_install_frontend(&["cpn-installer".into()]).unwrap();
+            assert_eq!(mode, InstallFrontend::Web);
+        }
+    }
+}

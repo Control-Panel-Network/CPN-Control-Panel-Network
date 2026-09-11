@@ -19,6 +19,7 @@ pub mod auth_pages;
 pub mod backups;
 pub mod cli_apps;
 pub mod cli_common;
+pub mod cli_install;
 pub mod cli_maintenance;
 pub mod cli_network;
 pub mod cli_packages;

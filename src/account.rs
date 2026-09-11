@@ -412,7 +412,7 @@ pub fn setup_account(
             .map(str::trim)
             .filter(|value| !value.is_empty())
         else {
-            return Err("Indica una contraseña o genera una automáticamente".into());
+            return Err("Provide a password or generate one automatically".into());
         };
         password_meets_policy(password, &policy)?;
         (password.to_string(), None)

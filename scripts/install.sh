@@ -280,11 +280,14 @@ print_next_steps() {
 
 CPN package install finished.
 
-Start the installer:
+Start the installer (English by default):
   sudo cpn-installer
+  # or explicitly:
+  sudo cpn-installer --cli    # SSH/CLI questions in this terminal
+  sudo cpn-installer --web    # Web UI (browser)
 
-Default listen address: 127.0.0.1:2087
-Remote access (SSH tunnel recommended):
+Default web listen address: 127.0.0.1:2087
+Remote access for the web UI (SSH tunnel recommended):
   ssh -L 2087:127.0.0.1:2087 root@your-server
 
 CPN is under active development. Prefer a test VPS/VM and keep backups.

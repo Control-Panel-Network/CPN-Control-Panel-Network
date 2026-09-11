@@ -164,11 +164,13 @@ sudo cpn package delete --id <package-id> --yes
 
 ## `cpn-installer`
 
-The installer serves the temporary web setup UI. Its default bind is `127.0.0.1:2087`.
+The installer can run as a temporary **web UI** or as an interactive **SSH/CLI** wizard. Language defaults to **English** (independent of guest `LANG` / browser locale).
 
 ```bash
-sudo cpn-installer
-sudo cpn-installer --port 9443
+sudo cpn-installer                 # TTY: choose Web UI or SSH/CLI; non-TTY: Web UI
+sudo cpn-installer --web          # Web UI explicitly
+sudo cpn-installer --cli          # SSH/CLI wizard (interactive terminal required)
+sudo cpn-installer --port 9443    # Web UI listen port (with --web or after choosing Web UI)
 sudo cpn-installer --panel-hostname panel.example.com
 ```
 
@@ -176,10 +178,12 @@ Options:
 
 | Option | Meaning |
 |---|---|
-| `--port <PORT>` | Listen port; default is `2087` |
+| `--web` / `--ui` | Start the web installer UI |
+| `--cli` / `--ssh` | Interactive SSH/CLI installer (no browser) |
+| `--port <PORT>` | Web UI listen port; default is `2087` |
 | `--panel-hostname <HOST>` | Persist the public panel hostname/subdomain |
 | `--old-port-policy <MODE>` | Port-change behavior: `redirect_1m`, `redirect_3m`, or `deny` |
-| `--allow-remote` | Bind `0.0.0.0`; HTTP without TLS |
+| `--allow-remote` | Bind `0.0.0.0` for the web UI; HTTP without TLS |
 | `--listen-all` | Alias for `--allow-remote` |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
@@ -193,4 +197,6 @@ Port resolution order is:
 
 `CPN_ALLOW_REMOTE=1` is the environment-variable equivalent of `--allow-remote`.
 
-For remote installation, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
+For remote installation with the web UI, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
+
+The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). Advanced web-only UI options remain available via `--web`.

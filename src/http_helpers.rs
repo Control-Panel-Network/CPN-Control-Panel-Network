@@ -284,7 +284,7 @@ pub fn normalize_language(raw: &str) -> Result<String, String> {
         "en" | "en-us" | "en-gb" => Ok("en".into()),
         "es" | "es-es" | "es-mx" => Ok("es".into()),
         "nb" | "nb-no" | "no" | "nn" => Ok("nb".into()),
-        _ => Err("Idioma no soportado (usa en, es o nb)".into()),
+        _ => Err("Unsupported language (use en, es, or nb)".into()),
     }
 }
 

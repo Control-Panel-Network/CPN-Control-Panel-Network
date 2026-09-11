@@ -21,12 +21,12 @@ pub fn can_start_server(
 ) -> Result<(), TransitionDenied> {
     if busy(status.phase) {
         return Err(TransitionDenied {
-            message: "Ya hay una instalacion en curso",
+            message: "An installation is already in progress",
         });
     }
     if status.server_ready && !force_reinstall {
         return Err(TransitionDenied {
-            message: "El servidor web ya esta instalado. Envia force_reinstall=true o usa repair/upgrade.",
+            message: "The web server is already installed. Send force_reinstall=true or use repair/upgrade.",
         });
     }
     if !matches!(
@@ -34,7 +34,7 @@ pub fn can_start_server(
         "ready" | "completed" | "failed" | "maintenance"
     ) {
         return Err(TransitionDenied {
-            message: "Transicion no valida para instalar el servidor",
+            message: "Invalid state transition for web server install",
         });
     }
     Ok(())
@@ -47,17 +47,17 @@ pub fn can_start_mail(
 ) -> Result<(), TransitionDenied> {
     if busy(status.phase) {
         return Err(TransitionDenied {
-            message: "Ya hay una instalacion en curso",
+            message: "An installation is already in progress",
         });
     }
     if !status.server_ready {
         return Err(TransitionDenied {
-            message: "Instala y verifica el servidor web antes del correo",
+            message: "Install and verify the web server before mail",
         });
     }
     if status.selected_mail.is_some() && status.phase == "completed" && !force_reinstall {
         return Err(TransitionDenied {
-            message: "El correo ya esta instalado. Envia force_reinstall=true para cambiar de receta.",
+            message: "Mail is already installed. Send force_reinstall=true to change the recipe.",
         });
     }
     if !matches!(
@@ -65,7 +65,7 @@ pub fn can_start_mail(
         "completed" | "failed" | "maintenance" | "ready"
     ) {
         return Err(TransitionDenied {
-            message: "Transicion no valida para instalar el correo",
+            message: "Invalid state transition for mail install",
         });
     }
     Ok(())
