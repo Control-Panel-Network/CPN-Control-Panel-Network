@@ -134,9 +134,7 @@ pub async fn list_releases_cached(
                 soft_error: None,
             });
         }
-        if force_network
-            && let Some(wait) = seconds_until_next_check(cache)
-        {
+        if force_network && let Some(wait) = seconds_until_next_check(cache) {
             let age = age_secs(cache);
             let mut releases = cache.releases.clone();
             releases.truncate(limit.max(1));
