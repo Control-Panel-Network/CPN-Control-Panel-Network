@@ -24,10 +24,7 @@ pub struct VerifyReport {
 
 impl VerifyReport {
     pub fn failed_required(&self) -> Vec<&VerifyCheck> {
-        self.checks
-            .iter()
-            .filter(|c| c.required && !c.ok)
-            .collect()
+        self.checks.iter().filter(|c| c.required && !c.ok).collect()
     }
 
     pub fn ok(&self) -> bool {
@@ -221,7 +218,10 @@ pub fn maybe_refresh_cpn_docker(bypass: bool) -> Vec<String> {
         if up.map(|s| s.success()).unwrap_or(false) {
             notes.push(format!("bypass: compose up ok for {}", dir.display()));
         } else {
-            notes.push(format!("bypass FAIL: compose up failed for {}", dir.display()));
+            notes.push(format!(
+                "bypass FAIL: compose up failed for {}",
+                dir.display()
+            ));
         }
     }
 
@@ -368,13 +368,7 @@ pub fn verify_after_upgrade(
             || service_detect::systemd_unit_active("mariadb")
             || service_detect::systemd_unit_active("mysql")
             || service_detect::systemd_unit_active("mysqld");
-        push(
-            &mut report,
-            "database",
-            ok,
-            db.detail.clone(),
-            true,
-        );
+        push(&mut report, "database", ok, db.detail.clone(), true);
     } else {
         push(
             &mut report,
@@ -448,12 +442,12 @@ pub fn verify_after_upgrade(
         let mut missing = Vec::new();
         for id in previously_running_docker_ids {
             if !now.iter().any(|n| n == id)
-                && !cpn_managed_container_ids()
-                    .iter()
-                    .any(|line| line.starts_with(id) && {
+                && !cpn_managed_container_ids().iter().any(|line| {
+                    line.starts_with(id) && {
                         let lower = line.to_lowercase();
                         lower.contains("up ") || lower.contains("running")
-                    })
+                    }
+                })
             {
                 missing.push(id.clone());
             }

@@ -51,9 +51,7 @@ pub struct CleanupReport {
 fn is_preserved(path: &Path) -> bool {
     let text = path.to_string_lossy();
     preserve_path_prefixes().iter().any(|prefix| {
-        text == *prefix
-            || text.starts_with(&format!("{prefix}/"))
-            || text.starts_with(prefix)
+        text == *prefix || text.starts_with(&format!("{prefix}/")) || text.starts_with(prefix)
     })
 }
 
@@ -74,10 +72,9 @@ fn remove_path(path: &Path, report: &mut CleanupReport) {
     };
     match result {
         Ok(()) => report.removed.push(path.display().to_string()),
-        Err(error) => report.notes.push(format!(
-            "could not remove {}: {error}",
-            path.display()
-        )),
+        Err(error) => report
+            .notes
+            .push(format!("could not remove {}: {error}", path.display())),
     }
 }
 
@@ -127,9 +124,10 @@ fn clean_obsolete_webmail_code_trees(report: &mut CleanupReport) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if keep.iter().any(|k| *k == name) {
-            report
-                .skipped_preserved
-                .push(format!("kept live webmail tree: {}", entry.path().display()));
+            report.skipped_preserved.push(format!(
+                "kept live webmail tree: {}",
+                entry.path().display()
+            ));
             continue;
         }
         // Only remove clearly superseded extract/staging names.
