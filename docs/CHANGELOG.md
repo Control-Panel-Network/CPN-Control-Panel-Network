@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.25] - 12/09/2026
 
-Treat same Version-Release tip RPM as already installed during maintenance (Cargo `0.2.6-alpha.25`).
+Webmail UX + MTA-STS/BIMI (from alpha.24 line) plus same Version-Release tip RPM accept during maintenance (Cargo `0.2.6-alpha.25`).
 
 ### Fixed
 
@@ -15,7 +15,19 @@ Treat same Version-Release tip RPM as already installed during maintenance (Carg
 
 ## [0.2.6-alpha.24] - 12/09/2026
 
-Harden RPM apply when bootstrap `upgrade.sh` already installed the tip NEVRA (Cargo `0.2.6-alpha.24`).
+Email webmail UX (SnappyMail/Roundcube), MTA-STS/BIMI DNS helpers, and harder same-NEVRA RPM apply (Cargo `0.2.6-alpha.24`).
+
+### Added
+
+- **Email > Webmail**: detect installed SnappyMail/Roundcube on disk (fixes false "Not configured yet" after panel restart). Open client, Admin Panel, regenerate public path, auto-login Email prefill (best-effort), and optional internal iframe at `/email/webmail/app`.
+- Panel reverse-proxy for the configured webmail mount (default `/snappymail` or `/roundcube`) to loopback PHP-FPM `127.0.0.1:8080`.
+- Built-in settings fields for `snappymailWebmail` / `snappymailAdmin` / `roundcubeWebmail` plugins (auto-login, internal embed, public path) plus Open / Admin / Regenerate actions.
+- Sidebar: active webmail plugins with Show in sidebar appear under **Email** (not only Installed plugins).
+- **Email > MTA-STS** and **Email > BIMI**: policy storage, recommended DNS, copy-friendly UI, optional Cloudflare add/update push (no unrelated deletes). Honest notes that receivers/MTA and brand indicators matter more than SnappyMail/Roundcube logo support.
+
+### Changed
+
+- Install manifest preserve list includes `webmail-panel.json` and `email-auth/`.
 
 ### Fixed
 

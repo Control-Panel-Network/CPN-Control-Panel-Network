@@ -500,6 +500,18 @@ pub fn email_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/email/webmail",
                     live: true,
                 },
+                HubTile {
+                    title: "MTA-STS",
+                    subtitle: "Mail TLS policy DNS",
+                    href: "/email/mta-sts",
+                    live: true,
+                },
+                HubTile {
+                    title: "BIMI",
+                    subtitle: "Brand logo DNS",
+                    href: "/email/bimi",
+                    live: true,
+                },
             ],
         ),
         (

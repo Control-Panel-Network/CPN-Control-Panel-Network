@@ -197,8 +197,9 @@ pub fn email_accounts_main(
 
     let mail = selected_mail
         .map(|value| value.label())
+        .or_else(|| crate::panel_webmail::detect_webmail_client().map(|m| m.label()))
         .unwrap_or("Not selected");
-    let client_ready = if mail_client_ready {
+    let client_ready = if mail_client_ready || crate::panel_webmail::webmail_ready() {
         "Ready"
     } else {
         "Not installed"
@@ -228,21 +229,28 @@ pub fn email_accounts_main(
     } else {
         "Postfix not detected"
     };
-    let webmail = if mail_client_ready
-        && matches!(
-            selected_mail,
-            Some(crate::model::MailSystem::Snappymail | crate::model::MailSystem::Roundcube)
-        ) {
+    let webmail = if crate::panel_webmail::webmail_ready()
+        || (mail_client_ready
+            && matches!(
+                selected_mail,
+                Some(crate::model::MailSystem::Snappymail | crate::model::MailSystem::Roundcube)
+            )) {
+        let open = crate::panel_webmail::webmail_open_path()
+            .unwrap_or_else(|| webmail_health_url().to_string());
+        let label = crate::panel_webmail::webmail_label();
         format!(
-            r#"<p><a class="btn-primary" href="{url}" target="_blank" rel="noopener noreferrer">Open webmail</a></p>
-        <p class="muted">Local health URL: <code>{url}</code></p>"#,
-            url = html_escape(webmail_health_url()),
+            r#"<p><a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open {label}</a>
+        <a class="btn-secondary" href="/email/webmail">Webmail settings</a></p>
+        <p class="muted">Panel path opens through CPN; backend health URL: <code>{health}</code></p>"#,
+            open = html_escape(&open),
+            label = html_escape(label),
+            health = html_escape(webmail_health_url()),
         )
     } else if matches!(selected_mail, Some(crate::model::MailSystem::Thunderbird)) {
         "<p class=\"muted\">Thunderbird is a desktop client only. No local webmail URL is provisioned.</p>"
             .into()
     } else {
-        "<p class=\"muted\">Install a webmail stack from the installer mail stage to enable a local webmail link.</p>"
+        "<p class=\"muted\">Install SnappyMail or Roundcube (installer mail stage) to enable Open Webmail.</p>"
             .into()
     };
 

@@ -1,7 +1,6 @@
 //! Hub HTML for Email and Databases & FTP.
 
 use crate::http_helpers::smtp_status_public;
-use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_hub_defs::{databases_hub_sections, email_hub_sections};
 use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
@@ -238,38 +237,12 @@ pub fn ensure_dkim() -> Result<String, String> {
     Ok(format!("DKIM directory ready at {}", dir.display()))
 }
 
+/// Deprecated wrapper: prefer `panel_hub_pages_webmail::email_webmail_page`.
 pub fn email_webmail_page(
-    selected_mail: Option<crate::model::MailSystem>,
-    mail_client_ready: bool,
+    _selected_mail: Option<crate::model::MailSystem>,
+    _mail_client_ready: bool,
 ) -> String {
-    let body = if mail_client_ready
-        && matches!(
-            selected_mail,
-            Some(crate::model::MailSystem::Snappymail | crate::model::MailSystem::Roundcube)
-        ) {
-        format!(
-            r#"<p><a class="btn-primary" href="{url}" target="_blank" rel="noopener noreferrer">Open webmail</a></p>
-            <p class="muted">Health URL: <code>{url}</code></p>"#,
-            url = html_escape(webmail_health_url()),
-        )
-    } else {
-        not_configured_body(
-            "Webmail client is not installed or not selected.",
-            "Install SnappyMail or Roundcube from the installer mail stage.",
-        )
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Email", Some("/email")),
-            ("Webmail", None),
-        ],
-        "Webmail",
-        "Open webmail.",
-        &body,
-        None,
-        None,
-    )
+    crate::panel_hub_pages_webmail::email_webmail_page(None, None)
 }
 
 pub fn email_delivery_page() -> String {

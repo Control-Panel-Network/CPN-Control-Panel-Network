@@ -21,11 +21,7 @@ async fn rpm_query_nevra(path: &str) -> Option<String> {
         return None;
     }
     let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if nevra.is_empty() {
-        None
-    } else {
-        Some(nevra)
-    }
+    if nevra.is_empty() { None } else { Some(nevra) }
 }
 
 async fn rpm_nevra_installed(nevra: &str) -> bool {
@@ -53,11 +49,7 @@ async fn rpm_query_vr(path: &str) -> Option<String> {
         return None;
     }
     let vr = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if vr.is_empty() {
-        None
-    } else {
-        Some(vr)
-    }
+    if vr.is_empty() { None } else { Some(vr) }
 }
 
 async fn rpm_installed_vr() -> Option<String> {
@@ -85,15 +77,15 @@ async fn rpm_installed_vr() -> Option<String> {
 /// When `allow_oldpackage` is true (retired `1.0.0`/`1.0.1` -> `0.2.x` retag),
 /// uses `rpm -Uvh --oldpackage` with erase+install fallback.
 pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Result<(), String> {
-    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await) {
-        if file_vr == inst_vr {
-            return Ok(());
-        }
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
     }
-    if let Some(file_nevra) = rpm_query_nevra(path).await {
-        if rpm_nevra_installed(&file_nevra).await {
-            return Ok(());
-        }
+    if let Some(file_nevra) = rpm_query_nevra(path).await
+        && rpm_nevra_installed(&file_nevra).await
+    {
+        return Ok(());
     }
 
     if allow_oldpackage {
@@ -126,12 +118,10 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         if status.success() {
             return Ok(());
         }
-        if let (Some(file_vr), Some(inst_vr)) =
-            (rpm_query_vr(path).await, rpm_installed_vr().await)
+        if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+            && file_vr == inst_vr
         {
-            if file_vr == inst_vr {
-                return Ok(());
-            }
+            return Ok(());
         }
         return Err(
             "Package install failed (retag 1.0.x -> 0.2.x; rpm --oldpackage / erase+install)"
@@ -156,15 +146,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
-    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await) {
-        if file_vr == inst_vr {
-            return Ok(());
-        }
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
     }
-    if let Some(file_nevra) = rpm_query_nevra(path).await {
-        if rpm_nevra_installed(&file_nevra).await {
-            return Ok(());
-        }
+    if let Some(file_nevra) = rpm_query_nevra(path).await
+        && rpm_nevra_installed(&file_nevra).await
+    {
+        return Ok(());
     }
     let status = Command::new("rpm")
         .args(["-Uvh", "--force", path])
@@ -177,10 +167,10 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
-    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await) {
-        if file_vr == inst_vr {
-            return Ok(());
-        }
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
     }
     Err("Package install failed (dnf/rpm)".into())
 }
