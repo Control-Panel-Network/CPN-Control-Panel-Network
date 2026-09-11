@@ -6,10 +6,11 @@
 #   https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh
 #
 # Env:
-#   CPN_RELEASE_TAG     pin a tag (example: v1.0.0); default: newest non-draft release
-#   CPN_GITHUB_REPO     owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
-#   CPN_REQUIRE_GPG     1 (default) require SHA256SUMS.asc + matching fingerprint
-#   CPN_ALLOW_UNSIGNED  1 allow missing GPG assets (lab only; not for production)
+#   CPN_RELEASE_TAG          pin a tag (example: v1.0.0); default: newest non-draft, non-prerelease
+#   CPN_INCLUDE_PRERELEASE   1 to allow the newest prerelease when CPN_RELEASE_TAG is unset
+#   CPN_GITHUB_REPO          owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
+#   CPN_REQUIRE_GPG          1 (default) require SHA256SUMS.asc + matching fingerprint
+#   CPN_ALLOW_UNSIGNED       1 allow missing GPG assets (lab only; not for production)
 set -euo pipefail
 
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
@@ -157,16 +158,19 @@ pick_release_json() {
     || die "could not list GitHub Releases"
   if have_cmd python3; then
     json="$(printf '%s' "$body" | python3 -c '
-import json,sys
+import json,sys,os
 items=json.load(sys.stdin)
+include_pre=os.environ.get("CPN_INCLUDE_PRERELEASE","0").strip()=="1"
 for item in items:
     if item.get("draft"):
+        continue
+    if item.get("prerelease") and not include_pre:
         continue
     print(json.dumps(item))
     break
 else:
     sys.exit(2)
-')" || die "no non-draft GitHub release found"
+')" || die "no matching GitHub release found (stable skips prereleases; set CPN_RELEASE_TAG or CPN_INCLUDE_PRERELEASE=1)"
     printf '%s' "$json"
     return
   fi

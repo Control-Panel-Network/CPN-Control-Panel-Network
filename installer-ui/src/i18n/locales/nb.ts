@@ -33,6 +33,10 @@ const nb: LocaleMessages = {
   panelHostnameHint:
     "Bruk et DNS-navn som panel.example.com for HTTPS-innlogging uten port i URL-en. Du må peke DNS til denne serveren og avslutte TLS på 443 med en reverse proxy til CPN-lytteporten.",
   panelHostnamePlaceholder: "panel.example.com",
+  panelPublicUrlLabel: "Ekstern panel-URL (valgfri)",
+  panelPublicUrlHint:
+    "Base-URL for nettleser og e-post for passordtilbakestilling (skjema + vert + valgfri port). For VirtualBox NAT, sett host-forward, for eksempel http://127.0.0.1:2089. Denne har prioritet over vertsnavnet.",
+  panelPublicUrlPlaceholder: "http://127.0.0.1:2089",
   networkSave: "Lagre nettverk",
   selectLabel: "Velg",
   compareLink: "Usikker på valget? Sammenlign funksjoner",

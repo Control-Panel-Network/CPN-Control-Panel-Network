@@ -17,11 +17,13 @@ fn html_escape(value: &str) -> String {
 pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str>) -> String {
     let preferred = preferred_listen_port_or_default();
     let summary = network_public(bind_port, None);
+    let public_url = summary.panel_public_url.as_deref().unwrap_or("");
     let form = format!(
         r#"<ul class="kv-list">
           <li><span>Current bind</span><strong>{bind}</strong></li>
           <li><span>Preferred</span><strong>{pref}</strong></li>
           <li><span>Public base</span><strong>{base}</strong></li>
+          <li><span>External URL</span><strong>{puburl}</strong></li>
         </ul>
         <form id="cpn-port-form" class="stack-form" style="max-width:420px;margin-top:16px;">
           <label for="port">New listen port</label>
@@ -32,6 +34,9 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
             <option value="redirect_3m">Redirect 3 months</option>
             <option value="deny">Deny old port</option>
           </select>
+          <label for="panel_public_url">External panel URL (emails / NAT)</label>
+          <input id="panel_public_url" name="panel_public_url" type="url" value="{puburl}" placeholder="http://127.0.0.1:2089">
+          <p class="muted">Optional. Prefer this over hostname for password-reset links when DNS is private or you use VirtualBox host port forwards.</p>
           <button type="submit" class="btn-primary">Save port</button>
         </form>
         <p id="cpn-port-status" class="muted" role="status"></p>
@@ -43,13 +48,14 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
             ev.preventDefault();
             var port = Number(document.getElementById("port").value);
             var policy = document.getElementById("old_port_policy").value;
+            var publicUrl = document.getElementById("panel_public_url").value;
             var status = document.getElementById("cpn-port-status");
             status.textContent = "Saving...";
             fetch("/api/listen-port", {{
               method: "POST",
               headers: {{ "Content-Type": "application/json" }},
               credentials: "same-origin",
-              body: JSON.stringify({{ port: port, old_port_policy: policy }})
+              body: JSON.stringify({{ port: port, old_port_policy: policy, panel_public_url: publicUrl }})
             }}).then(function(r){{ return r.json().then(function(j){{ return {{ok:r.ok, j:j}}; }}); }})
               .then(function(res){{
                 if (res.ok) {{
@@ -65,6 +71,7 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
         bind = bind_port,
         pref = preferred,
         base = html_escape(&summary.public_base_url),
+        puburl = html_escape(public_url),
     );
     feature_shell(
         &[

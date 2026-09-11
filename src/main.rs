@@ -66,6 +66,7 @@ use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
 };
+use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
     apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
     backups_run, databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
@@ -308,6 +309,18 @@ async fn set_listen_port(
                 return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
             }
         };
+
+    if let Some(ref public_url) = request.panel_public_url {
+        let trimmed = public_url.trim();
+        let result = if trimmed.is_empty() {
+            clear_panel_public_url()
+        } else {
+            save_panel_public_url(trimmed)
+        };
+        if let Err(error) = result {
+            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+        }
+    }
 
     let restart_required = preferred != state.bind_port;
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
@@ -730,6 +743,7 @@ async fn main() -> std::io::Result<()> {
         language: "en".into(),
         listen_port,
         panel_hostname: None,
+        panel_public_url: None,
         port_migration: None,
         public_base_url: None,
         account: bootstrap_account,

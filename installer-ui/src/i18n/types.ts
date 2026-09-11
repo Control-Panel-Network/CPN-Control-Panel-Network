@@ -41,6 +41,9 @@ export interface LocaleMessages {
   panelHostnameLabel: string;
   panelHostnameHint: string;
   panelHostnamePlaceholder: string;
+  panelPublicUrlLabel: string;
+  panelPublicUrlHint: string;
+  panelPublicUrlPlaceholder: string;
   networkSave: string;
   selectLabel: string;
   compareLink: string;

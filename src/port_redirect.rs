@@ -1,7 +1,7 @@
 //! Temporary HTTP redirect helper on the previous listen port during a migration window.
 //! Dual-listen: the main installer binds the new port; this task binds the old port only.
 
-use crate::panel_network::{PortMigration, load_panel_hostname, public_base_url};
+use crate::panel_network::{PortMigration, load_panel_hostname};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -24,6 +24,9 @@ fn request_path(buffer: &[u8]) -> String {
 }
 
 fn redirect_location(migration: &PortMigration, request_host: Option<&str>, path: &str) -> String {
+    // Prefer configured hostname (TLS on 443). Otherwise keep the request Host and swap the port
+    // so VirtualBox NAT / LAN redirects stay on the same address the browser used.
+    // Do not route through public_base_url (external URL / loopback) for this hop.
     let base = if let Some(hostname) = load_panel_hostname() {
         format!("https://{hostname}")
     } else {
@@ -31,7 +34,13 @@ fn redirect_location(migration: &PortMigration, request_host: Option<&str>, path
             .and_then(|value| value.split(':').next())
             .filter(|value| !value.is_empty())
             .unwrap_or("127.0.0.1");
-        public_base_url(migration.new_port, Some(host))
+        if migration.new_port == 443 {
+            format!("https://{host}")
+        } else if migration.new_port == 80 {
+            format!("http://{host}")
+        } else {
+            format!("http://{host}:{}", migration.new_port)
+        }
     };
     let path = if path.starts_with('/') {
         path.to_string()

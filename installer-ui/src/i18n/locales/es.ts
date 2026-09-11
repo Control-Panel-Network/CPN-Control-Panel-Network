@@ -36,6 +36,10 @@ const es: LocaleMessages = {
   panelHostnameHint:
     "Usa un nombre DNS como panel.example.com para iniciar sesión por HTTPS sin puerto en la URL. Debes apuntar el DNS a este servidor y terminar TLS en 443 con un proxy inverso hacia el puerto de CPN.",
   panelHostnamePlaceholder: "panel.example.com",
+  panelPublicUrlLabel: "URL externa del panel (opcional)",
+  panelPublicUrlHint:
+    "URL base para el navegador y los correos de restablecimiento (esquema + host + puerto opcional). En VirtualBox NAT, usa el reenvio del host, por ejemplo http://127.0.0.1:2089. Tiene prioridad sobre el hostname.",
+  panelPublicUrlPlaceholder: "http://127.0.0.1:2089",
   networkSave: "Guardar red",
   selectLabel: "Seleccionar",
   compareLink: "¿No estás seguro de cuál elegir? Compara características",

@@ -200,10 +200,13 @@ pub struct InstallerStatus {
     /// Optional panel hostname / subdomain for HTTPS login without a port in the URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub panel_hostname: Option<String>,
+    /// Optional external base URL for emails/browsers (scheme+host[:port]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub panel_public_url: Option<String>,
     /// Public summary of an in-progress old-port migration (redirect or deny).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port_migration: Option<crate::panel_network::PortMigrationPublic>,
-    /// Suggested public base URL (hostname without port, or host:port).
+    /// Suggested public base URL (external URL, hostname, or loopback:port).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_base_url: Option<String>,
     pub account: Option<AccountPublic>,
@@ -236,6 +239,7 @@ impl Default for InstallerStatus {
             language: "en".into(),
             listen_port: crate::listen_port::DEFAULT_PORT,
             panel_hostname: None,
+            panel_public_url: None,
             port_migration: None,
             public_base_url: None,
             account: None,
@@ -332,6 +336,9 @@ pub struct ListenPortRequest {
     /// Set panel hostname/subdomain. Empty string clears it. Omit to leave unchanged.
     #[serde(default)]
     pub panel_hostname: Option<String>,
+    /// Set external panel base URL (scheme+host[:port]). Empty clears. Omit to leave unchanged.
+    #[serde(default)]
+    pub panel_public_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

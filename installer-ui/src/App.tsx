@@ -267,10 +267,12 @@ function AppShell() {
     port: number;
     oldPortPolicy?: "redirect_1m" | "redirect_3m" | "deny";
     panelHostname?: string;
+    panelPublicUrl?: string;
   }): Promise<string | null> => {
     const result = await setListenPort(input.port, {
       old_port_policy: input.oldPortPolicy,
       panel_hostname: input.panelHostname,
+      panel_public_url: input.panelPublicUrl,
     });
     setStatus(result.status);
     if (result.restart_required) {
@@ -312,6 +314,7 @@ function AppShell() {
                 status.listen_port ?? status.environment?.port ?? 2087
               }
               panelHostname={status.panel_hostname}
+              panelPublicUrl={status.panel_public_url}
               database={database}
               installPhpmyadmin={installPhpmyadmin}
               enableProxyFront={enableProxyFront}

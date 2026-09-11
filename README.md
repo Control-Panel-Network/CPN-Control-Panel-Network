@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.1** (see [Changelog](docs/CHANGELOG.md)).
+- Current stable release: **v1.0.2** (see [Changelog](docs/CHANGELOG.md)).
 
 After the package install:
 
@@ -126,7 +126,7 @@ After the package upgrade, run installer maintenance when the panel stack was pr
 sudo cpn-installer --upgrade
 ```
 
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.0` before the one-liner (or export it in the same shell). Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
+Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.2` before the one-liner (or export it in the same shell). Default install/upgrade selection uses the newest **non-prerelease** GitHub Release. Optional `CPN_INCLUDE_PRERELEASE=1` includes GitHub prereleases when selecting Latest. Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
 
 ## After installation
 
@@ -141,7 +141,7 @@ See the full **[CPN CLI and installer argument reference](docs/CLI.md)** for com
 
 ## Documentation
 
-- **[Changelog](docs/CHANGELOG.md)**: release history from the `0.2.x` alphas through **1.0.0**.
+- **[Changelog](docs/CHANGELOG.md)**: release history from the `0.2.x` alphas through **1.0.2**.
 - **[CLI Reference](docs/CLI.md)**: `cpn` commands, subcommands, arguments, and `cpn-installer` runtime flags.
 - **[Platform Support](docs/SUPPORT.md)**: supported/partial/refused systems, repeat installs, and behavior on hosts with existing software.
 - **[Releases and Verification](docs/RELEASES.md)**: release assets, package selection, checksums, GPG signatures, and provenance.

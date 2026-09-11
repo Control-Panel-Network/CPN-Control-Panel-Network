@@ -1,15 +1,18 @@
-//! `cpn network` subcommands (listen port, hostname, migration).
+//! `cpn network` subcommands (listen port, hostname, public URL, migration).
 
 use crate::panel_network::{
     OldPortPolicy, apply_network_change, clear_panel_hostname, clear_port_migration,
     load_panel_hostname, load_port_migration, network_public, preferred_listen_port_or_default,
     save_panel_hostname,
 };
+use crate::panel_public_url::{
+    clear_panel_public_url, load_panel_public_url, save_panel_public_url,
+};
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
 pub enum NetworkCommands {
-    /// Show listen port, hostname, and migration (no secrets)
+    /// Show listen port, hostname, public URL, and migration (no secrets)
     Show,
     /// Set preferred listen port and old-port policy when changing
     SetPort {
@@ -22,13 +25,20 @@ pub enum NetworkCommands {
         #[arg(long)]
         from_port: Option<u16>,
     },
-    /// Set panel hostname / subdomain (HTTPS without port in the public URL)
+    /// Set panel hostname / subdomain (HTTPS without a port in the public URL)
     SetHostname {
         #[arg(long)]
         hostname: String,
     },
-    /// Clear panel hostname (fall back to host:port URLs)
+    /// Clear panel hostname (fall back to public URL or loopback)
     ClearHostname,
+    /// Set external panel base URL for emails/browsers (example: http://127.0.0.1:2089)
+    SetPublicUrl {
+        #[arg(long)]
+        url: String,
+    },
+    /// Clear external panel public URL
+    ClearPublicUrl,
     /// Clear port migration record (stops future redirect helper starts)
     ClearMigration,
 }
@@ -46,6 +56,10 @@ pub fn run_network(
             println!(
                 "panel_hostname={}",
                 summary.panel_hostname.as_deref().unwrap_or("")
+            );
+            println!(
+                "panel_public_url={}",
+                summary.panel_public_url.as_deref().unwrap_or("")
             );
             println!("public_base_url={}", summary.public_base_url);
             if let Some(migration) = summary.port_migration {
@@ -106,6 +120,24 @@ pub fn run_network(
             require_root()?;
             clear_panel_hostname()?;
             println!("panel_hostname=");
+            Ok(())
+        }
+        NetworkCommands::SetPublicUrl { url } => {
+            require_root()?;
+            save_panel_public_url(&url)?;
+            println!(
+                "panel_public_url={}",
+                load_panel_public_url().unwrap_or_default()
+            );
+            println!(
+                "note: password-reset and login emails use this URL first (before hostname or loopback)"
+            );
+            Ok(())
+        }
+        NetworkCommands::ClearPublicUrl => {
+            require_root()?;
+            clear_panel_public_url()?;
+            println!("panel_public_url=");
             Ok(())
         }
         NetworkCommands::ClearMigration => {

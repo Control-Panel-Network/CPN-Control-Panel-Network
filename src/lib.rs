@@ -123,6 +123,7 @@ pub mod panel_pages;
 pub mod panel_plugin_settings;
 pub mod panel_plugins;
 pub mod panel_prefs;
+pub mod panel_public_url;
 pub mod panel_routes;
 pub mod panel_sections;
 pub mod panel_service;

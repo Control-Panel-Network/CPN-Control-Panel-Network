@@ -11,6 +11,7 @@ interface Props {
   selectedServer: ServerEngine | null;
   listenPort: number;
   panelHostname?: string | null;
+  panelPublicUrl?: string | null;
   database: DatabaseEngine;
   installPhpmyadmin: boolean;
   enableProxyFront: boolean;
@@ -24,6 +25,7 @@ interface Props {
     port: number;
     oldPortPolicy?: OldPortPolicy;
     panelHostname?: string;
+    panelPublicUrl?: string;
   }) => Promise<string | null>;
   onContinue: () => void;
   onOpenCompare: () => void;
@@ -33,6 +35,7 @@ export function ServerSelectionScreen({
   selectedServer,
   listenPort,
   panelHostname,
+  panelPublicUrl,
   database,
   installPhpmyadmin,
   enableProxyFront,
@@ -56,6 +59,7 @@ export function ServerSelectionScreen({
   const [step, setStep] = useState<"network" | "server" | "database">("server");
   const [portDraft, setPortDraft] = useState(String(listenPort || 2087));
   const [hostnameDraft, setHostnameDraft] = useState(panelHostname || "");
+  const [publicUrlDraft, setPublicUrlDraft] = useState(panelPublicUrl || "");
   const [oldPortPolicy, setOldPortPolicy] =
     useState<OldPortPolicy>("redirect_1m");
   const [portBusy, setPortBusy] = useState(false);
@@ -69,6 +73,9 @@ export function ServerSelectionScreen({
   useEffect(() => {
     setHostnameDraft(panelHostname || "");
   }, [panelHostname]);
+  useEffect(() => {
+    setPublicUrlDraft(panelPublicUrl || "");
+  }, [panelPublicUrl]);
 
   const servers: Array<{
     id: ServerEngine;
@@ -146,6 +153,7 @@ export function ServerSelectionScreen({
         port: parsed,
         oldPortPolicy: parsed !== listenPort ? oldPortPolicy : undefined,
         panelHostname: hostnameDraft.trim(),
+        panelPublicUrl: publicUrlDraft.trim(),
       });
       setPortMessage(message ?? t.listenPortSaved);
       onContinue();
@@ -273,6 +281,26 @@ export function ServerSelectionScreen({
             placeholder={t.panelHostnamePlaceholder}
             value={hostnameDraft}
             onChange={(event) => setHostnameDraft(event.target.value)}
+            className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full text-[15px]"
+          />
+
+          <label
+            className="block text-[15px] font-semibold text-[#1a1c1d] mt-5"
+            htmlFor="cpn-panel-public-url"
+          >
+            {t.panelPublicUrlLabel}
+          </label>
+          <p className="text-[13px] leading-[1.45] text-[#5f5e60] mt-1 mb-3">
+            {t.panelPublicUrlHint}
+          </p>
+          <input
+            id="cpn-panel-public-url"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            placeholder={t.panelPublicUrlPlaceholder}
+            value={publicUrlDraft}
+            onChange={(event) => setPublicUrlDraft(event.target.value)}
             className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full text-[15px]"
           />
 
