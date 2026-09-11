@@ -47,13 +47,13 @@ fn push(
     report: &mut VerifyReport,
     name: &str,
     ok: bool,
-    detail: impl Into<String>,
+    detail: impl AsRef<str>,
     required: bool,
 ) {
     report.checks.push(VerifyCheck {
         name: name.into(),
         ok,
-        detail: detail.into(),
+        detail: detail.as_ref().to_string(),
         required,
     });
 }
@@ -302,9 +302,9 @@ pub fn verify_after_upgrade(
             "panel.service",
             active,
             if active {
-                "cpn-installer.service is active".into()
+                "cpn-installer.service is active"
             } else {
-                "cpn-installer.service is not active after restart".into()
+                "cpn-installer.service is not active after restart"
             },
             true,
         );
