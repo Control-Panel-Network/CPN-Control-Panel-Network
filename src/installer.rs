@@ -726,8 +726,7 @@ pub(crate) async fn finish(
     match result {
         Ok(()) => {
             crate::motd::ensure_motd_installed();
-            let allow_remote = state.allow_remote
-                || crate::panel_service::allow_remote_requested();
+            let allow_remote = state.allow_remote || crate::panel_service::allow_remote_requested();
             crate::panel_service::ensure_panel_service_best_effort(
                 crate::panel_service::PanelServiceMode::EnablePreferRunning,
                 allow_remote,

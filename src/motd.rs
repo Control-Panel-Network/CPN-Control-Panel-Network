@@ -98,9 +98,7 @@ pub fn panel_ready_lines(version: &str, port: u16, hostname: Option<&str>) -> Ve
     if let Some(host) = hostname.map(str::trim).filter(|value| !value.is_empty()) {
         lines.push(format!("Hostname login: https://{host}/login"));
     } else {
-        lines.push(format!(
-            "Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"
-        ));
+        lines.push(format!("Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"));
         lines.push(format!(
             "VirtualBox NAT: if host maps 2089->guest {port}, open http://127.0.0.1:2089/login on the host"
         ));
