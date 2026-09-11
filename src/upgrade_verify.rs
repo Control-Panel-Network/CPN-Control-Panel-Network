@@ -43,13 +43,7 @@ impl VerifyReport {
     }
 }
 
-fn push(
-    report: &mut VerifyReport,
-    name: &str,
-    ok: bool,
-    detail: impl AsRef<str>,
-    required: bool,
-) {
+fn push(report: &mut VerifyReport, name: &str, ok: bool, detail: impl AsRef<str>, required: bool) {
     report.checks.push(VerifyCheck {
         name: name.into(),
         ok,
@@ -374,7 +368,7 @@ pub fn verify_after_upgrade(
             &mut report,
             "database",
             true,
-            "MariaDB/MySQL not detected; skipped".into(),
+            "MariaDB/MySQL not detected; skipped",
             false,
         );
     }
@@ -453,23 +447,24 @@ pub fn verify_after_upgrade(
             }
         }
         let ok = missing.is_empty();
+        let detail = if ok {
+            if bypass_docker {
+                "CPN-managed containers healthy after bypass refresh".to_string()
+            } else {
+                "previously running CPN-managed containers still running (user stacks untouched)"
+                    .to_string()
+            }
+        } else {
+            format!(
+                "CPN-managed containers no longer running: {}",
+                missing.join(", ")
+            )
+        };
         push(
             &mut report,
             "docker.cpn_managed",
             ok,
-            if ok {
-                if bypass_docker {
-                    "CPN-managed containers healthy after bypass refresh".into()
-                } else {
-                    "previously running CPN-managed containers still running (user stacks untouched)"
-                        .into()
-                }
-            } else {
-                format!(
-                    "CPN-managed containers no longer running: {}",
-                    missing.join(", ")
-                )
-            },
+            detail,
             !previously_running_docker_ids.is_empty(),
         );
     }
