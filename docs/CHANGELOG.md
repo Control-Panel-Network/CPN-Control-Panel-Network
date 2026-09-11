@@ -5,9 +5,42 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6-alpha.19] - unreleased (branch tip)
+## [0.2.6-alpha.21] - 11/09/2026
 
-Cool live SSH MOTD and `cpn panel url` (Cargo `0.2.6-alpha.19`). Includes prior tip work from `0.2.5-alpha.19` (password-reset MIME / public URL) until that cut ships.
+Safer upgrades: auto panel maintenance from `upgrade.sh`, allowlisted stale packaging cleanup, post-upgrade service verify, and opt-in Docker refresh via `--bypass` (Cargo `0.2.6-alpha.21`).
+
+### Added
+
+- After a successful package upgrade, `scripts/upgrade.sh` (and `preUpgrade.sh` when it delegates) **automatically runs** `cpn-installer --upgrade` when a panel install is detected (`/var/lib/cpn/install-manifest.json` or `panel-bootstrap.json`). Primary path no longer asks the operator to run maintenance by hand.
+- Post-upgrade **cleanup** of stale CPN packaging/staging only (`/var/tmp/cpn-upgrade-*`, `/var/tmp/cpn-gpg-*`, installer status temp, `.bak`/`.old` installer binaries, obsolete `/opt/cpn-webmail` extract dirs). Preserves websites, apps, Docker stacks/volumes, plugins, SSL, MFA, `/etc/cpn`, and `/var/lib/cpn` configs. When in doubt, keep; skipped preservations are logged.
+- Post-upgrade **verification** of panel service + `/login`, enabled web server units, MariaDB/MySQL when present, webmail/php-fpm when installed, and mail units when active. Required failures abort maintenance with a clear English error.
+- Opt-in Docker refresh: `cpn-installer --upgrade --bypass` or `CPN_UPGRADE_BYPASS=1` / `upgrade.sh --bypass`. Refreshes only CPN-managed compose under `/var/lib/cpn/docker` and containers labeled `com.cpn.managed=1`. Preserves volumes. Default: leave all Docker stacks as-is.
+
+### Changed
+
+- Install manifest default preserve list expanded (MFA, SSL, docker prefs, listen_port, panel URLs, `/etc/cpn`, `/home`).
+
+## [0.2.6-alpha.20] - 11/09/2026
+
+Version Management UI, empty-asset release skip, and same-NEVRA upgrade tolerance (Cargo `0.2.6-alpha.20`).
+
+### Added
+
+- **Version Management** (`/settings/version`): panel admins can list GitHub releases and run upgrade / downgrade / repair from the web UI with two-step confirm and a live progress bar (`GET /api/maintenance/status`). Panel session auth is accepted alongside the installer token for version-check and maintenance APIs (fixes HTTP 401 on the settings page).
+
+### Changed
+
+- `POST /api/maintenance` requires `confirm_execute: true` for upgrade/downgrade/repair (installer UI and CLI send it). Downgrade still requires `confirm_downgrade`.
+- Install/upgrade/preUpgrade release selection skips tags that have no matching package assets yet (for example a just-published prerelease while the Release workflow is still uploading), and falls through to the newest release that has `SHA256SUMS` plus an elN/arch RPM or arch `.deb`.
+
+### Fixed
+
+- `cpn-installer --upgrade` treats an already-installed same NEVRA RPM as success (bootstrap `upgrade.sh` may have installed the package before the installer binary runs).
+- CLI help docs note that `--help` is a flag on `cpn` / `cpn-installer`, not a bare shell command.
+
+## [0.2.6-alpha.19] - 11/09/2026
+
+Cool live SSH MOTD and `cpn panel url` (Cargo `0.2.6-alpha.19`). Includes prior tip work from `0.2.5-alpha.19` (password-reset MIME / public URL).
 
 ### Added
 
@@ -141,8 +174,10 @@ Pre-1.0 development line (`v0.2.2-alpha.1` … `v0.2.2-alpha.18`). Notable theme
 
 For per-tag PR lists, see the corresponding [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases) notes.
 
-[0.2.6-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...HEAD
-[0.2.5-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...HEAD
+[0.2.6-alpha.21]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.6-alpha.21
+[0.2.6-alpha.20]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.6-alpha.20
+[0.2.6-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.6-alpha.19
+[0.2.5-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...v0.2.6-alpha.19
 [0.2.4-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.4-alpha.19
 [0.2.3-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.3-alpha.19
 [0.2.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases?q=0.2.2-alpha

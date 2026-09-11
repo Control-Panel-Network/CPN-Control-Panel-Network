@@ -155,6 +155,14 @@ pub struct MaintenanceRequest {
     pub confirm_downgrade: bool,
     #[serde(default)]
     pub reset_data: bool,
+    /// Required by HTTP `/api/maintenance` so accidental single-click POSTs are rejected.
+    /// CLI and in-process callers should set this to true when intentional.
+    #[serde(default)]
+    pub confirm_execute: bool,
+    /// Opt-in: refresh CPN-managed Docker compose/stacks during upgrade (`--bypass`).
+    /// Default false: never rebuild/recreate user or CPN docker stacks automatically.
+    #[serde(default)]
+    pub bypass_docker: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

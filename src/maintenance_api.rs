@@ -1,15 +1,54 @@
 //! HTTP endpoints for installer maintenance (upgrade / repair / downgrade).
 
+use crate::auth_api::panel_user_from_request;
 use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
 use crate::manifest::detect_existing_install;
 use crate::model::{MaintenanceAction, MaintenanceInfo, MaintenanceRequest, TokenQuery};
+use crate::panel_admin::is_panel_admin;
 use crate::releases;
 use crate::upgrade::{build_plan, spawn_maintenance};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use std::sync::Arc;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn is_root() -> bool {
+    #[cfg(unix)]
+    {
+        unsafe { libc::geteuid() == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// Installer token/session, or signed-in panel admin.
+fn maintenance_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequest) -> bool {
+    if authorized_request(state, query, http) {
+        return true;
+    }
+    matches!(
+        panel_user_from_request(state, http),
+        Some(user) if is_panel_admin(&user)
+    )
+}
+
+/// Installer token/session, or any signed-in panel user (read-only version info).
+fn version_read_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequest) -> bool {
+    if authorized_request(state, query, http) {
+        return true;
+    }
+    panel_user_from_request(state, http).is_some()
+}
+
+fn busy_phase(phase: &str) -> bool {
+    matches!(
+        phase,
+        "configuring" | "downloading" | "installing" | "testing" | "verifying"
+    )
+}
 
 pub async fn load_maintenance_info() -> MaintenanceInfo {
     let existing = detect_existing_install(VERSION);
@@ -44,7 +83,7 @@ pub async fn api_version_check(
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized_request(&state, &query, &http) {
+    if !version_read_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     let info = load_maintenance_info().await;
@@ -59,13 +98,34 @@ pub async fn api_releases(
     state: web::Data<Arc<AppState>>,
     query: web::Query<TokenQuery>,
 ) -> HttpResponse {
-    if !authorized_request(&state, &query, &http) {
+    if !version_read_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
     match releases::list_releases(20).await {
         Ok(list) => HttpResponse::Ok().json(list),
         Err(error) => HttpResponse::BadGateway().json(serde_json::json!({ "error": error })),
     }
+}
+
+#[get("/api/maintenance/status")]
+pub async fn api_maintenance_status(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+) -> HttpResponse {
+    if !maintenance_authorized(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let status = state.status.read().unwrap_or_else(|e| e.into_inner());
+    let busy = busy_phase(status.phase);
+    HttpResponse::Ok().json(serde_json::json!({
+        "phase": status.phase,
+        "progress": status.progress,
+        "message": status.message,
+        "busy": busy,
+        "error": status.error,
+        "version": status.version,
+    }))
 }
 
 #[post("/api/maintenance")]
@@ -75,17 +135,26 @@ pub async fn start_maintenance(
     query: web::Query<TokenQuery>,
     request: web::Json<MaintenanceRequest>,
 ) -> impl Responder {
-    if !authorized_request(&state, &query, &http) {
+    if !maintenance_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    #[cfg(unix)]
-    if unsafe { libc::geteuid() } != 0 {
+    if !is_root() {
         return HttpResponse::BadRequest().json(serde_json::json!({
-            "error": "Run the installer as root (sudo cpn-installer)"
+            "error": "Package upgrade/downgrade requires root. Run cpn-installer.service as root, or use: sudo cpn-installer --upgrade"
+        }));
+    }
+    if !request.confirm_execute && !matches!(request.action, MaintenanceAction::ConfigOnly) {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "confirm_execute is required for upgrade, downgrade, and repair"
+        }));
+    }
+    if matches!(request.action, MaintenanceAction::Downgrade) && !request.confirm_downgrade {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "confirm_downgrade is required for downgrade"
         }));
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
-    if ["configuring", "downloading", "installing", "testing"].contains(&current.phase) {
+    if busy_phase(current.phase) {
         return HttpResponse::Conflict()
             .json(serde_json::json!({ "error": "An operation is already in progress" }));
     }

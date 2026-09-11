@@ -95,6 +95,17 @@ pub fn default_preserve_paths() -> Vec<String> {
         root.join("smtp.json").to_string_lossy().into_owned(),
         root.join("smtp").to_string_lossy().into_owned(),
         root.join("secrets").to_string_lossy().into_owned(),
+        root.join("mfa").to_string_lossy().into_owned(),
+        root.join("ssl").to_string_lossy().into_owned(),
+        root.join("docker").to_string_lossy().into_owned(),
+        root.join("listen_port").to_string_lossy().into_owned(),
+        root.join("panel_public_url").to_string_lossy().into_owned(),
+        root.join("panel_hostname").to_string_lossy().into_owned(),
+        root.join("allow_remote").to_string_lossy().into_owned(),
+        root.join("cloudflare.json").to_string_lossy().into_owned(),
+        "/etc/cpn".into(),
+        "/var/lib/cpn-webmail".into(),
+        "/home".into(),
     ]
 }
 
