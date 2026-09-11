@@ -147,12 +147,47 @@ pub fn build_setup_confirmation(
     }
 }
 
-pub fn build_password_reset_notice(login_url: &str) -> OutboundMessage {
+/// Password reset email with a one-time reset URL (preferred path).
+pub fn build_password_reset_email(reset_url: &str, login_url: &str) -> OutboundMessage {
     OutboundMessage {
         to: String::new(),
         subject: "CPN panel password reset request".into(),
         body: format!(
-            "A password reset was requested for your CPN panel account.\r\n\r\nIf you did not request this, you can ignore this message.\r\n\r\nSign in page: {login_url}\r\n\r\nA server operator can reset the account when mail delivery or operator access is available.\r\n"
+            "A password reset was requested for your CPN panel account.\r\n\r\n\
+Open this link to choose a new password (the link expires in about one hour and can be used only once):\r\n\
+{reset_url}\r\n\r\n\
+If you did not request this, you can ignore this message. Your password will stay unchanged.\r\n\r\n\
+Sign in page: {login_url}\r\n\r\n\
+If the link does not work, ask a server operator to reset the account with the CPN CLI.\r\n"
         ),
+    }
+}
+
+/// Legacy notice without a token (kept for callers that only have a login URL).
+pub fn build_password_reset_notice(login_url: &str) -> OutboundMessage {
+    build_password_reset_email(login_url, login_url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_reset_email_contains_token_url() {
+        let reset = "https://panel.example/reset-password?token=abc123deadbeef";
+        let login = "https://panel.example/login";
+        let msg = build_password_reset_email(reset, login);
+        assert_eq!(msg.subject, "CPN panel password reset request");
+        assert!(msg.body.contains(reset), "body must include reset URL");
+        assert!(msg.body.contains(login), "body must include login URL");
+        assert!(
+            msg.body.contains("expires") || msg.body.contains("once"),
+            "body should mention time/single-use"
+        );
+        assert!(
+            !msg.body
+                .contains("operator can reset the account when mail delivery"),
+            "must not be the old operator-only dead-end body"
+        );
     }
 }

@@ -115,11 +115,11 @@ pub fn normalize_username(raw: &str) -> Result<String, String> {
     }
     if username.chars().count() > MAX_USERNAME_CHARS {
         return Err(format!(
-            "El nombre de usuario no puede superar {MAX_USERNAME_CHARS} caracteres"
+            "Username cannot exceed {MAX_USERNAME_CHARS} characters"
         ));
     }
     if has_control_chars(username) {
-        return Err("El nombre de usuario no puede incluir caracteres de control".into());
+        return Err("Username cannot include control characters".into());
     }
     Ok(username.to_string())
 }
@@ -127,28 +127,26 @@ pub fn normalize_username(raw: &str) -> Result<String, String> {
 pub fn validate_recovery_email(raw: &str) -> Result<String, String> {
     let email = raw.trim();
     if email.is_empty() {
-        return Err("Indica un correo de recuperación".into());
+        return Err("Enter a recovery email".into());
     }
     if email.chars().count() > MAX_EMAIL_CHARS {
-        return Err(format!(
-            "El correo no puede superar {MAX_EMAIL_CHARS} caracteres"
-        ));
+        return Err(format!("Email cannot exceed {MAX_EMAIL_CHARS} characters"));
     }
     if has_control_chars(email) {
-        return Err("El correo no puede incluir caracteres de control".into());
+        return Err("Email cannot include control characters".into());
     }
     let Some((local, domain)) = email.split_once('@') else {
-        return Err("El correo de recuperación no es válido".into());
+        return Err("Recovery email is not valid".into());
     };
     if local.is_empty() || domain.is_empty() || !domain.contains('.') {
-        return Err("El correo de recuperación no es válido".into());
+        return Err("Recovery email is not valid".into());
     }
     Ok(email.to_string())
 }
 
 pub fn validate_policy(policy: &PasswordPolicy) -> Result<(), String> {
     if policy.min_length < 4 || policy.min_length > 128 {
-        return Err("La longitud mínima debe estar entre 4 y 128".into());
+        return Err("Minimum length must be between 4 and 128".into());
     }
     Ok(())
 }
@@ -159,28 +157,28 @@ fn is_special(ch: char) -> bool {
 
 pub fn password_meets_policy(password: &str, policy: &PasswordPolicy) -> Result<(), String> {
     if has_control_chars(password) {
-        return Err("La contraseña no puede incluir caracteres de control".into());
+        return Err("Password cannot include control characters".into());
     }
     let length = password.chars().count();
     if length > MAX_PASSWORD_CHARS {
         return Err(format!(
-            "La contraseña no puede superar {MAX_PASSWORD_CHARS} caracteres"
+            "Password cannot exceed {MAX_PASSWORD_CHARS} characters"
         ));
     }
     if length < policy.min_length as usize {
         return Err(format!(
-            "La contraseña debe tener al menos {} caracteres",
+            "Password must be at least {} characters",
             policy.min_length
         ));
     }
     if policy.require_uppercase && !password.chars().any(|ch| ch.is_uppercase()) {
-        return Err("La contraseña debe incluir al menos una mayúscula".into());
+        return Err("Password must include at least one uppercase letter".into());
     }
     if policy.require_number && !password.chars().any(|ch| ch.is_numeric()) {
-        return Err("La contraseña debe incluir al menos un número".into());
+        return Err("Password must include at least one number".into());
     }
     if policy.require_special && !password.chars().any(is_special) {
-        return Err("La contraseña debe incluir al menos un carácter especial".into());
+        return Err("Password must include at least one special character".into());
     }
     Ok(())
 }
@@ -352,10 +350,10 @@ pub fn generate_password(policy: &PasswordPolicy) -> String {
 fn persist_json_file(path: &Path, boot: &PanelBootstrap) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
-            .map_err(|error| format!("No se pudo crear {}: {error}", parent.display()))?;
+            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
     }
     let json = serde_json::to_string_pretty(boot)
-        .map_err(|error| format!("No se pudo serializar la cuenta inicial: {error}"))?;
+        .map_err(|error| format!("Failed to serialize the initial account: {error}"))?;
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -366,9 +364,9 @@ fn persist_json_file(path: &Path, boot: &PanelBootstrap) -> Result<(), String> {
     use std::io::Write;
     let mut file = options
         .open(path)
-        .map_err(|error| format!("No se pudo escribir {}: {error}", path.display()))?;
+        .map_err(|error| format!("Failed to write {}: {error}", path.display()))?;
     file.write_all(json.as_bytes())
-        .map_err(|error| format!("No se pudo guardar la cuenta inicial: {error}"))?;
+        .map_err(|error| format!("Failed to save the initial account: {error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -412,7 +410,7 @@ pub fn setup_account(
             .map(str::trim)
             .filter(|value| !value.is_empty())
         else {
-            return Err("Indica una contraseña o genera una automáticamente".into());
+            return Err("Provide a password or generate one automatically".into());
         };
         password_meets_policy(password, &policy)?;
         (password.to_string(), None)

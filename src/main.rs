@@ -3,11 +3,13 @@ use actix_web::{
 };
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
-    account_setup, api_logout_get, api_logout_post, dashboard_page, forgot_password_page,
-    forgot_password_submit, login_mfa_page, login_mfa_submit, login_page, login_submit, logout_get,
-    logout_post, panel_alias,
+    account_setup, api_logout_get, api_logout_post, dashboard_page, login_mfa_page,
+    login_mfa_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
+use cpn_installer::auth_password_reset_api::{
+    forgot_password_page, forgot_password_submit, reset_password_page, reset_password_submit,
+};
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
     install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
@@ -109,7 +111,7 @@ fn serve_index_html() -> HttpResponse {
             .content_type("text/html; charset=utf-8")
             .body(asset.data),
         None => HttpResponse::ServiceUnavailable()
-            .body("La interfaz web aún no está incluida en este binario"),
+            .body("The web interface is not embedded in this binary yet"),
     }
 }
 
@@ -166,7 +168,7 @@ async fn bootstrap_session(
         return HttpResponse::Unauthorized().json(serde_json::json!({"error": "invalid token"}));
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
     }
     // Avoid connection_info()/Host-derived allocs (CodeQL rust/uncontrolled-allocation-size).
     let secure = cpn_installer::panel_session::request_https_from_headers(&http);
@@ -249,7 +251,7 @@ async fn set_language(
         return HttpResponse::Unauthorized().finish();
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
     }
     let language = match normalize_language(&request.language) {
         Ok(value) => value,
@@ -274,7 +276,7 @@ async fn set_listen_port(
         return HttpResponse::Unauthorized().finish();
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
     }
     let port = match validate_listen_port(request.port) {
         Ok(value) => value,
@@ -358,13 +360,12 @@ async fn start_install(
         return HttpResponse::Unauthorized().finish();
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
-        return HttpResponse::BadRequest().json(
-            serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
-        );
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_server(&current, request.force_reinstall) {
@@ -382,6 +383,17 @@ async fn start_install(
     current.progress = 0;
     current.error = None;
     drop(current);
+    let detail = match request
+        .install_log_detail
+        .as_deref()
+        .unwrap_or("full")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "minimal" | "min" | "quiet" => cpn_installer::installer::InstallLogDetail::Minimal,
+        _ => cpn_installer::installer::InstallLogDetail::Full,
+    };
+    state.set_install_log_detail(detail);
     // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.
     let install_state = state.get_ref().clone();
     let server = request.server;
@@ -422,13 +434,12 @@ async fn start_mail_install(
         return HttpResponse::Unauthorized().finish();
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin no permitido"}));
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
     }
     #[cfg(unix)]
     if unsafe { libc::geteuid() } != 0 {
-        return HttpResponse::BadRequest().json(
-            serde_json::json!({"error": "Ejecuta el instalador como root (sudo cpn-installer)"}),
-        );
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
     }
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
@@ -529,13 +540,12 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
                 .body(asset.data)
         }
         None => HttpResponse::ServiceUnavailable()
-            .body("La interfaz web aún no está incluida en este binario"),
+            .body("The web interface is not embedded in this binary yet"),
     }
 }
 
 fn allow_remote_listen() -> bool {
-    env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
-        || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
+    cpn_installer::panel_service::allow_remote_requested()
 }
 
 /// Ignore SIGHUP so SSH disconnect / closed PTY does not kill a long-running
@@ -630,6 +640,21 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    let frontend = match cpn_installer::cli_install::resolve_install_frontend(&args) {
+        Ok(mode) => mode,
+        Err(error) => {
+            eprintln!("cpn-installer: {error}");
+            std::process::exit(2);
+        }
+    };
+    if frontend == cpn_installer::cli_install::InstallFrontend::Cli {
+        let code = cpn_installer::cli_install::run_interactive_cli(&args).await;
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
+
     ignore_sighup();
 
     let listen_port = match resolve_listen_port(&args) {
@@ -644,13 +669,14 @@ async fn main() -> std::io::Result<()> {
     #[cfg(unix)]
     if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
         eprintln!(
-            "Aviso: el puerto {listen_port} es privilegiado (<1024). Suele requerir root, o elige un puerto >1024 (por defecto {}).",
+            "Warning: port {listen_port} is privileged (<1024). Usually requires root, or choose a port >1024 (default {}).",
             cpn_installer::listen_port::DEFAULT_PORT
         );
     }
 
-    println!("\nCPN Server Panel · Instalador {VERSION}");
-    println!("Iniciando el instalador web...\n");
+    println!("\nCPN Server Panel · Installer {VERSION}");
+    println!("Starting the web installer (English by default)...\n");
+    cpn_installer::motd::ensure_motd_installed();
     let token: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)
@@ -664,9 +690,12 @@ async fn main() -> std::io::Result<()> {
     let environment = cpn_installer::environment::inspect(listen_port).await;
     let remote = allow_remote_listen();
     if remote {
+        if let Err(error) = cpn_installer::panel_service::save_allow_remote_preference(true) {
+            eprintln!("cpn-installer: could not save allow_remote preference: {error}");
+        }
         match cpn_installer::environment::open_installer_port(&environment).await {
             Ok(()) => {}
-            Err(error) => eprintln!("Aviso: {error}"),
+            Err(error) => eprintln!("Warning: {error}"),
         }
     }
     let mail_releases = cpn_installer::mail_releases::load_mail_releases().await;
@@ -688,7 +717,7 @@ async fn main() -> std::io::Result<()> {
             existing.package_version
         )
     } else {
-        "El sistema está listo para continuar".into()
+        "The system is ready to continue".into()
     };
     let mut initial = InstallerStatus {
         phase,
@@ -736,10 +765,17 @@ async fn main() -> std::io::Result<()> {
         allowed_hosts,
         cancel_requested: AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(cpn_installer::installer::InstallLogDetail::Full),
     });
-    println!("✓ El instalador web está listo para empezar:");
+    println!("✓ The web installer is ready:");
+    cpn_installer::motd::print_panel_ready_banner(
+        VERSION,
+        listen_port,
+        startup_hostname.as_deref(),
+    );
     if phase == "completed" && has_bootstrap_account {
         cpn_installer::paths::clear_installer_bootstrap_token();
+        println!("Panel account is already set up. Open the login URL above (no installer token).");
     } else {
         match cpn_installer::paths::persist_bootstrap_token_for_startup(&token, remote) {
             Ok(Some(path)) => {
@@ -759,25 +795,29 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
-    if remote {
-        println!("  Modo --allow-remote: escucha en 0.0.0.0:{listen_port} (HTTP sin TLS).");
-        println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
-        println!(
-            "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
-        );
-        println!(
-            "  Token fingerprint (last 4): ...{}",
-            &token[token.len().saturating_sub(4)..]
-        );
-        println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
-    } else {
-        println!("  http://127.0.0.1:{listen_port}/?token={token}");
-        println!(
-            "  Acceso remoto recomendado vía túnel SSH, por ejemplo:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
-        );
-        println!("  Para escuchar en todas las interfaces: --allow-remote o CPN_ALLOW_REMOTE=1");
+    if phase != "completed" || !has_bootstrap_account {
+        if remote {
+            println!(
+                "  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS)."
+            );
+            println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
+            println!(
+                "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
+            );
+            println!(
+                "  Token fingerprint (last 4): ...{}",
+                &token[token.len().saturating_sub(4)..]
+            );
+            println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
+        } else {
+            println!("  http://127.0.0.1:{listen_port}/?token={token}");
+            println!(
+                "  Recommended remote access via SSH tunnel, for example:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
+            );
+            println!("  To listen on all interfaces: --allow-remote or CPN_ALLOW_REMOTE=1");
+        }
     }
-    println!("  Puerto de escucha: {listen_port} (cambia con --port, CPN_LISTEN_PORT, o la UI)");
+    println!("  Listen port: {listen_port} (change with --port, CPN_LISTEN_PORT, or the UI)");
     if let Some(hostname) = startup_hostname.as_ref() {
         println!(
             "  Panel hostname: https://{hostname}/login (DNS + reverse proxy on 443 -> {listen_port})"
@@ -789,7 +829,8 @@ async fn main() -> std::io::Result<()> {
             migration.old_port, migration.new_port, migration.mode, migration.expires_at
         );
     }
-    println!("\nMantén esta ventana abierta hasta finalizar. Pulsa Ctrl+C para detener.\n");
+    println!("\nKeep this window open until you finish. Press Ctrl+C to stop.\n");
+    println!("Tip: use `sudo cpn-installer --cli` for an SSH/CLI install without the browser.\n");
     let hosts = listen_hosts();
     if let Some(migration) = active_redirect_migration(listen_port) {
         let redirect_hosts = hosts.clone();
@@ -991,6 +1032,8 @@ async fn main() -> std::io::Result<()> {
             .service(api_logout_post)
             .service(forgot_password_page)
             .service(forgot_password_submit)
+            .service(reset_password_page)
+            .service(reset_password_submit)
             .service(set_language)
             .service(set_listen_port)
             .service(bootstrap_session)

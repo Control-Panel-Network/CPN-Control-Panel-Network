@@ -22,13 +22,21 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       loginError: 'Invalid username or password.',
       forgotTitle: 'Forgot password',
       forgotDocumentTitle: 'Forgot password · CPN Panel',
-      forgotIntro: 'Enter your username or email. If a matching account exists, a reset message will be sent when SMTP or local Postfix mail delivery is available.',
+      forgotIntro: 'Enter your username or email. If a matching account exists, we email a one-time reset link when SMTP or local Postfix is available.',
       forgotAccount: 'Username/Email',
       forgotSubmit: 'Request reset',
-      forgotSmtp: 'Password reset email uses configured SMTP when present, otherwise local Postfix if it is running. If neither path works, ask a server operator to reset the account.',
+      forgotSmtp: 'Reset emails use configured SMTP when present, otherwise local Postfix if it is running. The message includes a time-limited link to set a new password. If mail cannot be delivered, a server operator can still reset the account with the CPN CLI.',
       forgotBack: 'Back to sign in',
       forgotAckTitle: 'Check your inbox',
-      forgotAckBody: 'If an account matches the details you entered, a reset message will be sent when mail delivery is available. For security, this page does not confirm whether an account exists.',
+      forgotAckBody: 'If an account matches the details you entered, a reset message with a one-time link will be sent when mail delivery is available. For security, this page does not confirm whether an account exists.',
+      resetTitle: 'Choose a new password',
+      resetDocumentTitle: 'Reset password · CPN Panel',
+      resetIntro: 'Enter and confirm a new password that meets the panel password policy.',
+      resetPassword: 'New password',
+      resetConfirm: 'Confirm password',
+      resetSubmit: 'Save new password',
+      resetInvalidTitle: 'Reset link unavailable',
+      resetInvalidHint: 'Request a new reset from the forgot password page.',
       authBlockedTitle: 'Open the installer URL with its token',
       authBlockedBody: 'Installation is not finished yet. Use the full URL printed in the installer console, including the ?token=... query parameter.',
       authBlockedLogin: 'If installation already finished, open panel login.'
@@ -46,13 +54,21 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       loginError: 'Usuario o contraseña no válidos.',
       forgotTitle: 'Contraseña olvidada',
       forgotDocumentTitle: 'Contraseña olvidada · CPN Panel',
-      forgotIntro: 'Introduce tu usuario o correo. Si existe una cuenta coincidente, se enviará un mensaje de restablecimiento cuando SMTP o Postfix local esté disponible.',
+      forgotIntro: 'Introduce tu usuario o correo. Si existe una cuenta coincidente, enviaremos un enlace de un solo uso cuando SMTP o Postfix local esté disponible.',
       forgotAccount: 'Usuario/Correo',
       forgotSubmit: 'Solicitar restablecimiento',
-      forgotSmtp: 'El correo de restablecimiento usa SMTP configurado si existe; si no, Postfix local cuando está en marcha. Si ninguna ruta funciona, pide a un operador del servidor que restablezca la cuenta.',
+      forgotSmtp: 'El correo de restablecimiento usa SMTP configurado si existe; si no, Postfix local cuando está en marcha. El mensaje incluye un enlace con tiempo limitado para elegir una nueva contraseña. Si el correo no se puede entregar, un operador puede restablecer la cuenta con la CLI de CPN.',
       forgotBack: 'Volver al inicio de sesión',
       forgotAckTitle: 'Revisa tu bandeja de entrada',
-      forgotAckBody: 'Si una cuenta coincide con los datos introducidos, se enviará un mensaje de restablecimiento cuando el correo esté disponible. Por seguridad, esta página no confirma si la cuenta existe.',
+      forgotAckBody: 'Si una cuenta coincide con los datos introducidos, se enviará un mensaje con un enlace de un solo uso cuando el correo esté disponible. Por seguridad, esta página no confirma si la cuenta existe.',
+      resetTitle: 'Elige una nueva contraseña',
+      resetDocumentTitle: 'Restablecer contraseña · CPN Panel',
+      resetIntro: 'Introduce y confirma una nueva contraseña que cumpla la política del panel.',
+      resetPassword: 'Nueva contraseña',
+      resetConfirm: 'Confirmar contraseña',
+      resetSubmit: 'Guardar nueva contraseña',
+      resetInvalidTitle: 'Enlace de restablecimiento no disponible',
+      resetInvalidHint: 'Solicita un nuevo restablecimiento desde la página de contraseña olvidada.',
       authBlockedTitle: 'Abre la URL del instalador con su token',
       authBlockedBody: 'La instalación aún no ha terminado. Usa la URL completa impresa en la consola del instalador, incluyendo el parámetro ?token=...',
       authBlockedLogin: 'Si la instalación ya terminó, abre el inicio de sesión del panel.'
@@ -70,13 +86,21 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       loginError: 'Ugyldig brukernavn eller passord.',
       forgotTitle: 'Glemt passord',
       forgotDocumentTitle: 'Glemt passord · CPN Panel',
-      forgotIntro: 'Skriv inn brukernavn eller e-post. Hvis en konto matcher, sendes en tilbakestillingsmelding når SMTP eller lokal Postfix er tilgjengelig.',
+      forgotIntro: 'Skriv inn brukernavn eller e-post. Hvis en konto matcher, sender vi en engangslenke når SMTP eller lokal Postfix er tilgjengelig.',
       forgotAccount: 'Brukernavn/E-post',
       forgotSubmit: 'Be om tilbakestilling',
-      forgotSmtp: 'E-post for tilbakestilling bruker konfigurert SMTP hvis den finnes, ellers lokal Postfix når den kjører. Hvis ingen rute fungerer, be en serveroperatør om å tilbakestille kontoen.',
+      forgotSmtp: 'E-post for tilbakestilling bruker konfigurert SMTP hvis den finnes, ellers lokal Postfix når den kjører. Meldingen inneholder en tidsbegrenset lenke for nytt passord. Hvis e-post ikke kan leveres, kan en serveroperatør fortsatt tilbakestille kontoen med CPN CLI.',
       forgotBack: 'Tilbake til innlogging',
       forgotAckTitle: 'Sjekk innboksen',
-      forgotAckBody: 'Hvis en konto matcher opplysningene du oppga, sendes en tilbakestillingsmelding når e-post er tilgjengelig. Av sikkerhetshensyn bekrefter ikke denne siden om kontoen finnes.',
+      forgotAckBody: 'Hvis en konto matcher opplysningene du oppga, sendes en melding med engangslenke når e-post er tilgjengelig. Av sikkerhetshensyn bekrefter ikke denne siden om kontoen finnes.',
+      resetTitle: 'Velg et nytt passord',
+      resetDocumentTitle: 'Tilbakestill passord · CPN Panel',
+      resetIntro: 'Skriv inn og bekreft et nytt passord som oppfyller panelets passordpolicy.',
+      resetPassword: 'Nytt passord',
+      resetConfirm: 'Bekreft passord',
+      resetSubmit: 'Lagre nytt passord',
+      resetInvalidTitle: 'Tilbakestillingslenke utilgjengelig',
+      resetInvalidHint: 'Be om en ny tilbakestilling fra glemt-passord-siden.',
       authBlockedTitle: 'Åpne installasjons-URL-en med token',
       authBlockedBody: 'Installasjonen er ikke ferdig ennå. Bruk hele URL-en som ble skrevet ut i installasjonskonsollen, inkludert ?token=...-parameteren.',
       authBlockedLogin: 'Hvis installasjonen allerede er ferdig, åpne panelinnlogging.'
@@ -149,6 +173,27 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       setText('i18n-forgot-submit', t.forgotSubmit);
       setText('i18n-forgot-smtp', t.forgotSmtp);
       setText('i18n-forgot-back', t.forgotBack);
+      return;
+    }
+
+    if (page === 'reset-password') {
+      document.title = t.resetDocumentTitle;
+      setText('i18n-brand', t.brand);
+      setText('i18n-title', t.resetTitle);
+      setText('i18n-reset-intro', t.resetIntro);
+      setText('i18n-reset-password', t.resetPassword);
+      setText('i18n-reset-confirm', t.resetConfirm);
+      setText('i18n-reset-submit', t.resetSubmit);
+      setText('i18n-forgot-back', t.forgotBack);
+      return;
+    }
+
+    if (page === 'reset-invalid') {
+      document.title = t.resetDocumentTitle;
+      setText('i18n-brand', t.brand);
+      setText('i18n-title', t.resetInvalidTitle);
+      setText('i18n-reset-invalid-hint', t.resetInvalidHint);
+      setText('i18n-forgot-back', t.forgotSubmit);
       return;
     }
 

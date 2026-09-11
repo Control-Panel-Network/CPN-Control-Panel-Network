@@ -1,7 +1,7 @@
 # CPN - Control Panel Network
 
 > [!WARNING]
-> **CPN 1.0.0 is the first stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
+> **CPN 1.0.1 is the current stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.0** (see [Changelog](docs/CHANGELOG.md)).
+- Current stable release: **v1.0.1** (see [Changelog](docs/CHANGELOG.md)).
 
 After the package install:
 
@@ -32,23 +32,38 @@ After the package install:
 sudo cpn-installer
 ```
 
-Default listen address is `127.0.0.1:2087`. For a remote server, use SSH port forwarding:
+On an interactive SSH session, the installer asks whether to use the **Web UI** or **SSH/CLI** wizard (English by default). You can skip the prompt:
+
+```bash
+# Web UI (browser; default listen 127.0.0.1:2087)
+sudo cpn-installer --web
+
+# SSH/CLI (answer install questions in the terminal)
+sudo cpn-installer --cli
+```
+
+Default web listen address is `127.0.0.1:2087`. For a remote server, use SSH port forwarding:
 
 ```bash
 ssh -L 2087:127.0.0.1:2087 root@your-server
 ```
 
-Then open the URL printed by `cpn-installer` in a local browser.
+Then open the URL printed by `cpn-installer --web` in a local browser.
+
+After a successful install, CPN enables and starts `cpn-installer.service` so `/login` remains available after you disconnect SSH and after reboot. Manage it with `systemctl status cpn-installer` / `systemctl restart cpn-installer`.
 
 > [!IMPORTANT]
 > Do not publish or share the temporary installer token printed in the console URL.
 
-Optional remote HTTP bind (trusted networks only; installer UI is HTTP, not TLS):
+Optional remote HTTP bind for the web UI (trusted networks only; installer UI is HTTP, not TLS). Needed for some VirtualBox NAT host port forwards when you are not using SSH `-L`:
 
 ```bash
-sudo cpn-installer --allow-remote
+sudo cpn-installer --web --allow-remote
 ```
 
+Example lab: AlmaLinux guest listen `2087`, host NAT forward `2089` -> `2087`, open `http://127.0.0.1:2089/login` on the host (with `--allow-remote` or SSH tunnel).
+
+Installer UI language defaults to **English** (not the guest OS locale). Use the language selector in the web UI for Spanish or Norwegian.
 ### Manual package install
 
 If you prefer to download artifacts yourself, install from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases). End users do **not** need Rust, Node.js, Docker, `rpmbuild`, or a clone of this repository.

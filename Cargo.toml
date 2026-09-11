@@ -1,8 +1,8 @@
 [package]
 name = "cpn-installer"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
-description = "Instalador web local para CPN Server Panel"
+description = "CPN Server Panel installer (web UI and SSH/CLI)"
 license = "GPL-3.0-only"
 repository = "https://github.com/Control-Panel-Network/CPN-Control-Panel-Network"
 

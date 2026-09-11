@@ -1,22 +1,18 @@
-//! Login, forgot-password, panel dashboard, logout, and first-account setup HTTP handlers.
+//! Login, panel dashboard, logout, and first-account setup HTTP handlers.
+//! Forgot/reset password live in `auth_password_reset_api`.
 
 use crate::account::{
     hash_password, password_hash_needs_upgrade, verify_password, write_account_file,
 };
 use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
-use crate::auth_pages::{
-    forgot_password_ack_html, forgot_password_html, installer_token_required_html,
-    panel_login_html, panel_mfa_html,
-};
+use crate::auth_pages::{installer_token_required_html, panel_login_html, panel_mfa_html};
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
     panel_login_url_for, smtp_status_public, token_matches,
 };
 use crate::installer::AppState;
-use crate::mail_outbound::{
-    build_password_reset_notice, build_setup_confirmation, send_mail, send_mail_with_settings,
-};
+use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
@@ -25,7 +21,8 @@ use crate::panel_session::{
     session_cookie_header, session_secret, verify_mfa_pending_token, verify_session_token,
 };
 use crate::postfix_fallback::ensure_postfix_default;
-use crate::smtp_settings::{identifier_matches_account, persist_smtp, validate_smtp_input};
+use crate::smtp_settings::persist_smtp;
+use crate::smtp_settings::validate_smtp_input;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -312,62 +309,6 @@ pub async fn api_logout_get(http: HttpRequest) -> HttpResponse {
 #[post("/api/logout")]
 pub async fn api_logout_post(http: HttpRequest) -> HttpResponse {
     logout_response(&http)
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct ForgotPasswordForm {
-    /// Preferred single field: username or email.
-    #[serde(default)]
-    account: String,
-    /// Legacy fields kept for older clients.
-    #[serde(default)]
-    username: String,
-    #[serde(default)]
-    email: String,
-}
-
-#[get("/forgot-password")]
-pub async fn forgot_password_page() -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(forgot_password_html())
-}
-
-#[post("/forgot-password")]
-pub async fn forgot_password_submit(
-    state: web::Data<Arc<AppState>>,
-    form: web::Form<ForgotPasswordForm>,
-) -> HttpResponse {
-    // Always return the same ack page: no account enumeration.
-    let identifier = {
-        let account = form.account.trim();
-        if !account.is_empty() {
-            account.to_string()
-        } else if !form.username.trim().is_empty() {
-            form.username.trim().to_string()
-        } else {
-            form.email.trim().to_string()
-        }
-    };
-
-    if let Some(boot) = crate::account::load_bootstrap()
-        && identifier_matches_account(&boot.username, &boot.recovery_email, &identifier)
-        && !boot.recovery_email.trim().is_empty()
-    {
-        let status = state
-            .status
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        let login_url = panel_login_url_for(&status, &state.token);
-        let mut message = build_password_reset_notice(&login_url);
-        message.to = boot.recovery_email.clone();
-        let _ = send_mail(&message);
-    }
-
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(forgot_password_ack_html())
 }
 
 #[post("/api/account/setup")]

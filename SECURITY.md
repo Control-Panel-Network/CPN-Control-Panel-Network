@@ -9,7 +9,7 @@ Security fixes are applied on the default branch (`stable`) and released when pr
 | Latest release / `stable` | Yes |
 | Older releases | Best effort |
 
-CPN **1.0.0** is the first stable-tagged release. Treat security reports seriously. Prefer a test host for first installs and review [SUPPORT.md](docs/SUPPORT.md) before important deployments.
+CPN **1.0.1** is the current stable-tagged release (after 1.0.0). Treat security reports seriously. Prefer a test host for first installs and review [SUPPORT.md](docs/SUPPORT.md) before important deployments.
 
 ## Reporting a vulnerability
 
@@ -35,7 +35,7 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 CPN is a privileged web installer that can install and configure system packages and services. Linux package paths currently cover supported/partial Enterprise Linux 8 to 10 targets, Ubuntu 22.04/24.04, and Debian 12/13; the exact support tiers are maintained in [README.md](README.md). Windows Server 2016+ is a limited Phase A path and does not have Linux package parity.
 
-A single Rust process serves the installer UI, streams progress over WebSockets, and performs privileged installation actions. By default it listens on `127.0.0.1:2087` and prints a temporary access token in the console URL. Use SSH port forwarding for remote access. `--allow-remote` / `CPN_ALLOW_REMOTE=1` binds to `0.0.0.0` and is an explicit operator opt-in to HTTP exposure without TLS.
+A single Rust process can run either the web installer UI (progress over WebSockets) or an interactive SSH/CLI wizard (`--cli`). Both paths perform privileged installation actions. The web UI defaults to `127.0.0.1:2087` and prints a temporary access token in the console URL. Use SSH port forwarding for remote browser access. `--allow-remote` / `CPN_ALLOW_REMOTE=1` binds to `0.0.0.0` and is an explicit operator opt-in to HTTP exposure without TLS. Prefer `--cli` over SSH when you want a terminal-only install without opening the temporary HTTP UI.
 
 ### Trust assumptions
 

@@ -64,6 +64,9 @@ function AppShell() {
   const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [enableProxyFront, setEnableProxyFront] = useState(false);
+  const [installLogDetail, setInstallLogDetail] = useState<"minimal" | "full">(
+    "minimal",
+  );
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
@@ -198,6 +201,7 @@ function AppShell() {
         database,
         install_phpmyadmin: installPhpmyadmin,
         enable_proxy_front: enableProxyFront,
+        install_log_detail: installLogDetail,
       });
     } catch (error) {
       setStatus((current) => ({
@@ -311,10 +315,12 @@ function AppShell() {
               database={database}
               installPhpmyadmin={installPhpmyadmin}
               enableProxyFront={enableProxyFront}
+              installLogDetail={installLogDetail}
               onSelectServer={setSelectedServer}
               onDatabaseChange={setDatabase}
               onPhpmyadminChange={setInstallPhpmyadmin}
               onProxyFrontChange={setEnableProxyFront}
+              onInstallLogDetailChange={setInstallLogDetail}
               onNetworkChange={handleNetworkChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}

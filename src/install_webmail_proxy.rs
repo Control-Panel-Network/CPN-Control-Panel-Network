@@ -8,6 +8,11 @@ pub fn nginx_webmail_conf(docroot: &str) -> String {
            server_name localhost;\n\
            root {docroot};\n\
            index index.php index.html;\n\
+           # Deny sensitive paths before try_files / PHP (bare /data and /data/).\n\
+           location ~ ^/(\\.|config|temp|logs|data)(/|$) {{\n\
+             deny all;\n\
+             return 403;\n\
+           }}\n\
            location / {{\n\
              try_files $uri $uri/ /index.php?$query_string;\n\
            }}\n\
@@ -15,9 +20,6 @@ pub fn nginx_webmail_conf(docroot: &str) -> String {
              include fastcgi_params;\n\
              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
              fastcgi_pass unix:/run/php-fpm/cpn-webmail.sock;\n\
-           }}\n\
-           location ~ /(\\.|config|temp|logs|data) {{\n\
-             deny all;\n\
            }}\n\
          }}\n"
     )
@@ -27,7 +29,7 @@ pub fn caddy_webmail_snippet(docroot: &str) -> String {
     format!(
         "# Managed by CPN (issue #6)\n\
          http://127.0.0.1:8080 {{\n\
-           @denied path /data/* /temp/* /logs/* /config/* /./*\n\
+           @denied path /data /data/* /temp /temp/* /logs /logs/* /config /config/* /.*\n\
            handle @denied {{\n\
              respond 403\n\
            }}\n\
@@ -39,6 +41,8 @@ pub fn caddy_webmail_snippet(docroot: &str) -> String {
 }
 
 pub fn ols_webmail_vhconf(docroot: &str) -> String {
+    // LiteSpeed may 301 /data -> /data/ before context match. Rewrite denies bare
+    // and slashed paths with 403 so health checks and browsers never follow a redirect.
     format!(
         "docRoot                   {docroot}/\n\
          enableGzip                1\n\
@@ -95,6 +99,7 @@ pub fn ols_webmail_vhconf(docroot: &str) -> String {
          rewrite  {{\n\
            enable                  1\n\
            rules                   <<<END_rules\n\
+RewriteRule ^/(data|temp|logs|config)(/.*)?$ - [F,L]\n\
 RewriteRule ^(.*)$ - [E=HTTP_AUTHORIZATION:%{{HTTP:Authorization}}]\n\
 END_rules\n\
          }}\n"
@@ -109,11 +114,12 @@ mod tests {
     #[test]
     fn frontend_configs_deny_sensitive_paths() {
         let nginx = nginx_webmail_conf("/opt/cpn-webmail/snappymail");
-        assert!(nginx.contains("deny all") && nginx.contains("temp|logs|data"));
+        assert!(nginx.contains("return 403") && nginx.contains("temp|logs|data"));
         let caddy = caddy_webmail_snippet("/opt/cpn-webmail/snappymail");
-        assert!(caddy.contains("respond 403") && caddy.contains("/data/*"));
+        assert!(caddy.contains("respond 403") && caddy.contains("/data /data/*"));
         let vh = ols_webmail_vhconf("/opt/cpn-webmail/snappymail");
         assert!(vh.contains("context /data/") && vh.contains("deny                  *"));
+        assert!(vh.contains("RewriteRule ^/(data|temp|logs|config)(/.*)?$ - [F,L]"));
         assert!(SNAPPYMAIL_DATA_DIR.starts_with("/var/lib/"));
     }
 }

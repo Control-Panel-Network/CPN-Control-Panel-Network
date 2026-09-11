@@ -245,7 +245,7 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
                     .await
                     .map_err(|error| error.to_string())?;
                 if !status.success() {
-                    return Err("firewalld no permitió abrir el puerto del instalador".into());
+                    return Err("firewalld did not allow opening the installer port".into());
                 }
                 write_firewall_owner(environment.port, "firewalld")?;
             }
@@ -261,7 +261,7 @@ pub async fn open_installer_port(environment: &EnvironmentInfo) -> Result<(), St
                     .await
                     .map_err(|error| error.to_string())?;
                 if !status.success() {
-                    return Err("ufw no permitió abrir el puerto del instalador".into());
+                    return Err("ufw did not allow opening the installer port".into());
                 }
                 write_firewall_owner(environment.port, "ufw")?;
             }

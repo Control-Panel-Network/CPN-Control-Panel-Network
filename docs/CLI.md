@@ -164,11 +164,13 @@ sudo cpn package delete --id <package-id> --yes
 
 ## `cpn-installer`
 
-The installer serves the temporary web setup UI. Its default bind is `127.0.0.1:2087`.
+The installer can run as a temporary **web UI** or as an interactive **SSH/CLI** wizard. Language defaults to **English** (independent of guest `LANG` / browser locale).
 
 ```bash
-sudo cpn-installer
-sudo cpn-installer --port 9443
+sudo cpn-installer                 # TTY: choose Web UI or SSH/CLI; non-TTY: Web UI
+sudo cpn-installer --web          # Web UI explicitly
+sudo cpn-installer --cli          # SSH/CLI wizard (interactive terminal required)
+sudo cpn-installer --port 9443    # Web UI listen port (with --web or after choosing Web UI)
 sudo cpn-installer --panel-hostname panel.example.com
 ```
 
@@ -176,10 +178,12 @@ Options:
 
 | Option | Meaning |
 |---|---|
-| `--port <PORT>` | Listen port; default is `2087` |
+| `--web` / `--ui` | Start the web installer UI |
+| `--cli` / `--ssh` | Interactive SSH/CLI installer (no browser) |
+| `--port <PORT>` | Web UI listen port; default is `2087` |
 | `--panel-hostname <HOST>` | Persist the public panel hostname/subdomain |
 | `--old-port-policy <MODE>` | Port-change behavior: `redirect_1m`, `redirect_3m`, or `deny` |
-| `--allow-remote` | Bind `0.0.0.0`; HTTP without TLS |
+| `--allow-remote` | Bind `0.0.0.0` for the web UI; HTTP without TLS |
 | `--listen-all` | Alias for `--allow-remote` |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
@@ -193,4 +197,26 @@ Port resolution order is:
 
 `CPN_ALLOW_REMOTE=1` is the environment-variable equivalent of `--allow-remote`.
 
-For remote installation, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
+For remote installation with the web UI, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
+
+The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). After the Summary confirmation it asks for **Minimal** or **Full detailed** logging for that run (Minimal = high-level progress; Full = stream dnf/apt output). Advanced web-only UI options remain available via `--web`.
+
+Installer progress titles, wait heartbeats, and engine errors are English by default (independent of guest `LANG`).
+
+## SSH login MOTD and panel-ready banner
+
+After a successful install (web or `--cli`), CPN installs `/etc/profile.d/cpn-motd.sh` (also under `/usr/lib/cpn/cpn-motd.sh`) and **enables/starts** `cpn-installer.service` so the panel stays up after SSH disconnect and across reboot.
+
+Interactive SSH logins show an English CPN banner with:
+
+- Panel version and login URL(s) (`https://<hostname>/login` when configured, else `http://127.0.0.1:<port>/login`)
+- `systemctl` start/status hints for `cpn-installer.service`
+- VirtualBox NAT tip when no hostname is set (example host forward `2089` -> guest listen port => `http://127.0.0.1:2089/login` on the host)
+- Host facts: time, load average, CPU (load-based), RAM, disk on `/`, uptime
+- Optional last login / recent auth-fail counts when system logs allow
+
+Starting the panel with `sudo cpn-installer --web` (including systemd `ExecStart=... --web`) prints a short English "panel ready" summary (URL, port, version). It never prints account passwords; generated passwords remain path-only via `generated_password_file=...`.
+
+When the installer/start used `--allow-remote` or `CPN_ALLOW_REMOTE=1`, that choice is persisted (`/var/lib/cpn/allow_remote` plus a systemd drop-in). Production default remains `127.0.0.1`. For VirtualBox NAT labs that need host port forwards without SSH `-L`, start or re-enable with `--allow-remote`.
+
+MOTD language is English for now (panel UI language can differ). There is no CyberPanel branding in these banners.

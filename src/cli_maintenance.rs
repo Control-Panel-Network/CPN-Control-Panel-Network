@@ -103,8 +103,12 @@ pub fn print_help() {
         "cpn-installer {VERSION}
 
 Usage:
-  cpn-installer                 Start the web installer UI
-  cpn-installer --port <PORT>   Listen port (default: 2087; also CPN_LISTEN_PORT)
+  cpn-installer                 Interactive: choose Web UI or SSH/CLI (TTY). Non-TTY defaults to Web UI.
+  cpn-installer --web           Start the web installer UI (English by default)
+  cpn-installer --ui            Alias for --web
+  cpn-installer --cli           Interactive SSH/CLI installer (questions in the terminal)
+  cpn-installer --ssh           Alias for --cli
+  cpn-installer --port <PORT>   Web UI listen port (default: 2087; also CPN_LISTEN_PORT)
   cpn-installer --panel-hostname <HOST>  Persist subdomain for HTTPS login without a port
   cpn-installer --old-port-policy <MODE>  redirect_1m | redirect_3m | deny (with --port)
   cpn-installer --version
@@ -112,12 +116,13 @@ Usage:
   cpn-installer --upgrade [--to X.Y.Z]
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
-  cpn-installer --allow-remote  Bind 0.0.0.0 (HTTP without TLS; operator opt-in)
+  cpn-installer --allow-remote  Bind 0.0.0.0 for the web UI (HTTP without TLS; operator opt-in)
   cpn-installer --ensure-database-defaults [--database mariadb|mysql|none] [--skip-phpmyadmin]
                                  Install MariaDB (default) + phpMyAdmin on Linux without the UI
 
 Notes:
-  Fresh web-server installs also install MariaDB + phpMyAdmin by default (override with API/UI or --database / --skip-phpmyadmin).
+  Installer language defaults to English (en). Choose es or nb in the web UI language selector if needed.
+  Fresh web-server installs also install MariaDB + phpMyAdmin by default (override with API/UI/CLI or --database / --skip-phpmyadmin).
   Default listen port is 2087 (Cloudflare-supported alternate HTTPS port; WHM HTTPS family). Lab installs may use another free port (for example 8787).
   Ports 1-65535 are accepted; prefer >1024 unless running as root.
   Preferred port, optional panel hostname, and port migration live under the CPN data directory (mode 0600 on Unix).
@@ -125,6 +130,7 @@ Notes:
   Repair overwrites only core packaged files listed in install-manifest.json under the CPN data directory.
   Accounts, bootstrap state, SMTP secrets, and other CPN data are preserved unless --reset-data is explicitly requested.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
+  systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
 "
     );
 }
@@ -149,6 +155,7 @@ async fn make_state() -> Arc<AppState> {
         allowed_hosts: crate::http_helpers::build_allowed_hosts(bind_port, &[]),
         cancel_requested: std::sync::atomic::AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(crate::installer::InstallLogDetail::Full),
     })
 }
 
@@ -246,7 +253,8 @@ pub async fn run_cli(mode: CliMode) -> i32 {
         CliMode::EnsureDatabaseDefaults {
             database,
             install_phpmyadmin,
-        } => match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin) {
+        } => match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin, None)
+        {
             Ok(notes) => {
                 for note in notes {
                     println!("{note}");

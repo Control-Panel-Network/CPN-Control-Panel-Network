@@ -37,7 +37,7 @@ impl EphemeralDownload {
             return Err(format!("Temp dir collision at {}", dir.display()));
         }
         std::fs::create_dir_all(&dir)
-            .map_err(|error| format!("No se pudo crear el directorio temporal: {error}"))?;
+            .map_err(|error| format!("Failed to create temporary directory: {error}"))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -56,7 +56,7 @@ impl EphemeralDownload {
             .open(&path)
             .map_err(|error| {
                 let _ = std::fs::remove_dir_all(&dir);
-                format!("No se pudo crear el archivo temporal de forma segura: {error}")
+                format!("Failed to create a secure temporary file: {error}")
             })?
             .write_all(b"")
             .map_err(|error| {
@@ -105,7 +105,7 @@ fn reject_if_symlink_clobber(path: &Path) -> Result<(), String> {
 }
 
 fn verify_sha256(path: &str, expected_hex: &str) -> Result<(), String> {
-    let bytes = std::fs::read(path).map_err(|error| format!("No se pudo leer {path}: {error}"))?;
+    let bytes = std::fs::read(path).map_err(|error| format!("Failed to read {path}: {error}"))?;
     let digest = Sha256::digest(&bytes);
     let actual = digest
         .iter()
@@ -128,7 +128,7 @@ async fn download(
     end: u8,
 ) -> Result<(), String> {
     state
-        .progress("downloading", start, format!("Descargando {label}"))
+        .progress("downloading", start, format!("Downloading {label}"))
         .await;
     let work = async {
         let mut child = Command::new("curl")
@@ -153,11 +153,11 @@ async fn download(
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("No se pudo descargar {label}: {error}"))?;
+            .map_err(|error| format!("Failed to download {label}: {error}"))?;
         let mut stderr = child
             .stderr
             .take()
-            .ok_or("No se pudo leer el progreso de la descarga")?;
+            .ok_or("Failed to read download progress")?;
         let mut buffer = [0_u8; 1024];
         let mut pending = String::new();
         loop {
@@ -184,7 +184,7 @@ async fn download(
                         .progress(
                             "downloading",
                             progress.min(end),
-                            format!("Descargando {label}"),
+                            format!("Downloading {label}"),
                         )
                         .await;
                 }
@@ -198,10 +198,10 @@ async fn download(
     };
     match tokio::time::timeout(std::time::Duration::from_secs(620), work).await {
         Ok(result) => result?,
-        Err(_) => return Err(format!("Tiempo de espera agotado descargando {label}")),
+        Err(_) => return Err(format!("Timed out downloading {label}")),
     }
     state
-        .progress("downloading", end, format!("{label} descargado"))
+        .progress("downloading", end, format!("{label} downloaded"))
         .await;
     Ok(())
 }
@@ -225,7 +225,7 @@ async fn extract_archive(
         .await
         .map_err(|error| format!("{description}: {error}"))?;
     if !status.success() {
-        return Err(format!("{description} falló"));
+        return Err(format!("{description} failed"));
     }
     Ok(())
 }
@@ -252,12 +252,12 @@ pub(crate) async fn install_webmail(
             )
             .await?;
             verify_sha256(&archive, SNAPPYMAIL_SHA256)?;
-            install_php_runtime(state, "PHP para SnappyMail").await?;
+            install_php_runtime(state, "PHP for SnappyMail").await?;
             extract_archive(
                 state,
                 "tar",
                 &["xzf", &archive, "-C", "/opt/cpn-webmail/snappymail"],
-                "Extrayendo SnappyMail",
+                "Extracting SnappyMail",
                 80,
             )
             .await?;
@@ -279,7 +279,7 @@ pub(crate) async fn install_webmail(
             )
             .await?;
             verify_sha256(&archive, ROUNDCUBE_SHA256)?;
-            install_php_runtime(state, "PHP para Roundcube").await?;
+            install_php_runtime(state, "PHP for Roundcube").await?;
             let pdo = Command::new("bash")
                 .args(["-c", "php -m | grep -qi pdo_sqlite"])
                 .kill_on_drop(true)
@@ -287,7 +287,7 @@ pub(crate) async fn install_webmail(
                 .await
                 .map_err(|error| error.to_string())?;
             if !pdo.success() {
-                return Err("Falta la extensión PHP pdo_sqlite requerida por Roundcube".into());
+                return Err("Missing required PHP extension pdo_sqlite for Roundcube".into());
             }
             extract_archive(
                 state,
@@ -299,7 +299,7 @@ pub(crate) async fn install_webmail(
                     "/opt/cpn-webmail/roundcube",
                     "--strip-components=1",
                 ],
-                "Extrayendo Roundcube",
+                "Extracting Roundcube",
                 80,
             )
             .await?;
@@ -330,7 +330,7 @@ pub(crate) async fn install_webmail(
             }
             let sql = "/opt/cpn-webmail/roundcube/SQL/sqlite.initial.sql";
             if !Path::new(sql).exists() {
-                return Err("No se encontró SQL/sqlite.initial.sql de Roundcube".into());
+                return Err("Roundcube SQL/sqlite.initial.sql not found".into());
             }
             let init = Command::new("php")
                 .args([
@@ -342,7 +342,7 @@ pub(crate) async fn install_webmail(
                 .await
                 .map_err(|error| error.to_string())?;
             if !init.success() {
-                return Err("No se pudo inicializar el esquema SQLite de Roundcube".into());
+                return Err("Failed to initialize Roundcube SQLite schema".into());
             }
             configure_webmail_runtime(state, "/opt/cpn-webmail/roundcube/public_html", engine)
                 .await?;

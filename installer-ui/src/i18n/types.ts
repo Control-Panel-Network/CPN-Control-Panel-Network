@@ -1,6 +1,7 @@
 export type LocaleCode = "en" | "es" | "nb";
 
-export const SUPPORTED_LOCALES: LocaleCode[] = ["es", "en", "nb"];
+/** Display order: English first (product default). */
+export const SUPPORTED_LOCALES: LocaleCode[] = ["en", "es", "nb"];
 
 export function normalizeLocale(raw: string | null | undefined): LocaleCode {
   const value = (raw ?? "").trim().toLowerCase();
@@ -8,7 +9,8 @@ export function normalizeLocale(raw: string | null | undefined): LocaleCode {
   if (value.startsWith("nb") || value === "no" || value.startsWith("nn"))
     return "nb";
   if (value.startsWith("es")) return "es";
-  return "es";
+  // Product default is English regardless of OS or browser locale.
+  return "en";
 }
 
 export interface LocaleMessages {

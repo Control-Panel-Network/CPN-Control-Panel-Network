@@ -55,6 +55,16 @@ fn append_installation_log(level: &str, line: &str) {
     }
 }
 
+/// How much package-manager output is mirrored to the operator UI/CLI.
+/// Full streams dnf/apt lines; Minimal keeps high-level progress only.
+/// Failures and `installation.log` always retain full detail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InstallLogDetail {
+    #[default]
+    Full,
+    Minimal,
+}
+
 pub struct AppState {
     pub status: RwLock<InstallerStatus>,
     pub events: broadcast::Sender<InstallerEvent>,
@@ -71,6 +81,8 @@ pub struct AppState {
     pub cancel_requested: std::sync::atomic::AtomicBool,
     /// Live child PIDs (process-group leaders) so cancel can reap them while running.
     pub active_child_pids: std::sync::Mutex<Vec<u32>>,
+    /// Operator choice for this install run (Full = verbose package logs).
+    pub install_log_detail: std::sync::Mutex<InstallLogDetail>,
 }
 
 /// Best-effort JSON snapshot for docker-matrix / lab probes (never blocks install).
@@ -101,6 +113,23 @@ impl AppState {
                 }
             }
         }
+    }
+
+    pub fn set_install_log_detail(&self, detail: InstallLogDetail) {
+        if let Ok(mut guard) = self.install_log_detail.lock() {
+            *guard = detail;
+        }
+    }
+
+    pub fn install_log_detail(&self) -> InstallLogDetail {
+        self.install_log_detail
+            .lock()
+            .map(|guard| *guard)
+            .unwrap_or(InstallLogDetail::Full)
+    }
+
+    pub fn install_log_is_full(&self) -> bool {
+        matches!(self.install_log_detail(), InstallLogDetail::Full)
     }
 
     fn register_child_pid(&self, pid: u32) {
@@ -145,6 +174,16 @@ impl AppState {
         append_installation_log(level, &line);
         let _ = self.events.send(InstallerEvent::Log { line, level });
     }
+
+    /// Always write to `installation.log`; mirror to UI/CLI only when Full
+    /// (errors always mirror so failures stay visible in Minimal mode).
+    pub fn log_command_output(&self, line: impl Into<String>, level: &'static str) {
+        let line = line.into();
+        append_installation_log(level, &line);
+        if level == "error" || self.install_log_is_full() {
+            let _ = self.events.send(InstallerEvent::Log { line, level });
+        }
+    }
 }
 
 fn fraction(line: &str) -> Option<(u32, u32)> {
@@ -170,7 +209,7 @@ async fn process_dnf_line(
             .progress(
                 "installing",
                 tracking.install_start,
-                format!("Instalando {}", tracking.label),
+                format!("Installing {}", tracking.label),
             )
             .await;
         return;
@@ -182,14 +221,14 @@ async fn process_dnf_line(
                 "installing",
                 tracking.install_start,
                 tracking.install_end,
-                "Instalando",
+                "Installing",
             )
         } else {
             (
                 "downloading",
                 tracking.download_start,
                 tracking.download_end,
-                "Descargando",
+                "Downloading",
             )
         };
         let progress = start + ((end - start) as f32 * ratio).round() as u8;
@@ -201,14 +240,14 @@ async fn process_dnf_line(
 
 pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(), String> {
     if state.cancel_requested() {
-        return Err("Instalacion cancelada por el operador".into());
+        return Err("Installation cancelled by the operator".into());
     }
     if let Some(tracking) = spec.dnf {
         state
             .progress(
                 "downloading",
                 tracking.download_start,
-                format!("Descargando {}", tracking.label),
+                format!("Downloading {}", tracking.label),
             )
             .await;
     } else {
@@ -248,7 +287,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     }
     let mut child = command
         .spawn()
-        .map_err(|error| format!("No se pudo ejecutar {}: {error}", spec.program))?;
+        .map_err(|error| format!("Failed to run {}: {error}", spec.program))?;
     let child_pid = child.id();
     if let Some(pid) = child_pid {
         state.register_child_pid(pid);
@@ -259,11 +298,11 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| "No se pudo leer la salida del proceso".to_string())?;
+            .ok_or_else(|| "Failed to read process stdout".to_string())?;
         let stderr = child
             .stderr
             .take()
-            .ok_or_else(|| "No se pudo leer el error del proceso".to_string())?;
+            .ok_or_else(|| "Failed to read process stderr".to_string())?;
         let mut out_lines = BufReader::new(stdout).lines();
         let mut err_lines = BufReader::new(stderr).lines();
         let (mut out_done, mut err_done, mut transaction) = (false, false, false);
@@ -273,14 +312,16 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let mut diagnostic = std::collections::VecDeque::with_capacity(12);
         while !out_done || !err_done {
             if state.cancel_requested() {
-                return Err("Instalacion cancelada por el operador".into());
+                return Err("Installation cancelled by the operator".into());
             }
             tokio::select! {
                 line = out_lines.next_line(), if !out_done => match line {
                     Ok(Some(line)) => {
                         if diagnostic.len() == 12 { diagnostic.pop_front(); }
                         diagnostic.push_back(line.clone());
-                        if !line.trim().is_empty() { state.log(&line, "info"); }
+                        if !line.trim().is_empty() {
+                            state.log_command_output(&line, "info");
+                        }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
                         }
@@ -291,7 +332,9 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                     Ok(Some(line)) => {
                         if diagnostic.len() == 12 { diagnostic.pop_front(); }
                         diagnostic.push_back(line.clone());
-                        if !line.trim().is_empty() { state.log(&line, "info"); }
+                        if !line.trim().is_empty() {
+                            state.log_command_output(&line, "info");
+                        }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
                         }
@@ -303,18 +346,22 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                         let status = state.status.read().unwrap_or_else(|e| e.into_inner());
                         (status.phase, status.progress)
                     };
-                    state.log(format!("{} sigue ejecutándose; esperando salida del sistema de paquetes", description), "info");
-                    state.progress(phase, progress, format!("{} - aún en curso", description)).await;
+                    // Heartbeats must look healthy, not failed: percent may stay low while dnf is quiet.
+                    let wait_msg = format!(
+                        "{description} still running (normal): waiting for package-manager output; this can take several minutes"
+                    );
+                    state.log(&wait_msg, "info");
+                    state.progress(phase, progress, wait_msg).await;
                 }
             }
         }
         if state.cancel_requested() {
-            return Err("Instalacion cancelada por el operador".into());
+            return Err("Installation cancelled by the operator".into());
         }
         let exit = child.wait().await.map_err(|error| error.to_string())?;
         if !exit.success() {
             return Err(format!(
-                "{description} terminó con código {}\n{}",
+                "{description} exited with code {}\n{}",
                 exit.code().unwrap_or(-1),
                 diagnostic.into_iter().collect::<Vec<_>>().join("\n")
             ));
@@ -335,10 +382,10 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         result = tokio::time::timeout(std::time::Duration::from_secs(1800), pump) => {
             match result {
                 Ok(inner) => inner,
-                Err(_) => Err(format!("Tiempo de espera agotado en: {description}")),
+                Err(_) => Err(format!("Timed out waiting for: {description}")),
             }
         }
-        _ = cancel_watch => Err("Instalacion cancelada por el operador".into()),
+        _ = cancel_watch => Err("Installation cancelled by the operator".into()),
     };
 
     if outcome.is_err() && child.try_wait().ok().flatten().is_none() {
@@ -475,7 +522,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
         let guest = require_installable_guest()?;
         state.log(
             format!(
-                "Sistema invitado detectado: {} ({})",
+                "Guest OS detected: {} ({})",
                 guest.label, guest.pretty_name
             ),
             "info",
@@ -493,7 +540,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                     &guest,
                     vec!["thunderbird"],
                     vec!["thunderbird"],
-                    "Instalando Thunderbird",
+                    "Installing Thunderbird",
                     DnfProgress {
                         download_start: 2,
                         download_end: 58,
@@ -505,14 +552,14 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             )
             .await?;
             state
-                .progress("testing", 92, "Comprobando Thunderbird")
+                .progress("testing", 92, "Checking Thunderbird")
                 .await;
             run_command(
                 &state,
                 command(
                     "thunderbird",
                     vec!["--version"],
-                    "Verificando la versión instalada",
+                    "Verifying the installed version",
                     "testing",
                     96,
                 ),
@@ -542,14 +589,14 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             crate::install_mail_backend::verify_mail_roundtrip(&state).await?;
             install_webmail(&state, mail, engine).await?;
             state
-                .progress("testing", 92, format!("Comprobando {}", mail.label()))
+                .progress("testing", 92, format!("Checking {}", mail.label()))
                 .await;
             run_command(
                 &state,
                 command(
                     "systemctl",
                     vec!["is-active", "--quiet", "php-fpm"],
-                    "Verificando PHP-FPM para webmail",
+                    "Verifying PHP-FPM for webmail",
                     "testing",
                     94,
                 ),
@@ -559,7 +606,7 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 .progress(
                     "testing",
                     97,
-                    format!("Validando UI HTTP y denegación de data/temp/logs ({})", mail.label()),
+                    format!("Validating HTTP UI and data/temp/logs denial ({})", mail.label()),
                 )
                 .await;
             // Keep blocking work off the Actix worker (curl + body checks).
@@ -618,7 +665,7 @@ pub(crate) async fn finish(
                     // external_ports_configured is set by open_service_ports success path.
                     if status.access_note.is_none() {
                         status.access_note = Some(
-                            "Servicio verificado en loopback. Comprueba acceso externo desde otra máquina si el firewall estaba activo."
+                            "Service verified on loopback. Check external access from another host if a firewall was active."
                                 .into(),
                         );
                     }
@@ -637,7 +684,7 @@ pub(crate) async fn finish(
                         "{label} installed without a verified IMAP/SMTP backend (unexpected state)."
                     );
                 } else {
-                    status.message = format!("{label} se instaló y verificó correctamente");
+                    status.message = format!("{label} installed and verified successfully");
                 }
                 install_journal::end_install_run();
                 if let Err(error) = manifest::record_install(
@@ -678,6 +725,12 @@ pub(crate) async fn finish(
 
     match result {
         Ok(()) => {
+            crate::motd::ensure_motd_installed();
+            let allow_remote = state.allow_remote || crate::panel_service::allow_remote_requested();
+            crate::panel_service::ensure_panel_service_best_effort(
+                crate::panel_service::PanelServiceMode::EnablePreferRunning,
+                allow_remote,
+            );
             let _ = state
                 .events
                 .send(InstallerEvent::Completed { status: snapshot });
@@ -705,7 +758,7 @@ pub(crate) async fn finish(
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, fraction};
+    use super::{AppState, InstallLogDetail, fraction};
     use crate::os_support::require_installable_guest;
     use std::sync::RwLock;
     use std::sync::atomic::AtomicBool;
@@ -736,6 +789,7 @@ mod tests {
             allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
             cancel_requested: AtomicBool::new(false),
             active_child_pids: std::sync::Mutex::new(Vec::new()),
+            install_log_detail: std::sync::Mutex::new(InstallLogDetail::Full),
         };
         assert!(!state.cancel_requested());
         state.request_cancel();
@@ -756,6 +810,7 @@ mod tests {
             allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
             cancel_requested: AtomicBool::new(false),
             active_child_pids: std::sync::Mutex::new(Vec::new()),
+            install_log_detail: std::sync::Mutex::new(InstallLogDetail::Full),
         };
         let error = super::run_command(
             &state,
@@ -770,7 +825,7 @@ mod tests {
         .await
         .unwrap_err();
         assert!(error.contains("missing dependency libgd.so.103"), "{error}");
-        assert!(error.contains("código 1"), "{error}");
+        assert!(error.contains("code 1"), "{error}");
         assert!(state.active_child_pids.lock().unwrap().is_empty());
     }
 
@@ -793,6 +848,7 @@ mod tests {
             allowed_hosts: crate::http_helpers::build_allowed_hosts(2087, &[]),
             cancel_requested: AtomicBool::new(false),
             active_child_pids: std::sync::Mutex::new(Vec::new()),
+            install_log_detail: std::sync::Mutex::new(InstallLogDetail::Full),
         });
         let worker = state.clone();
         let join = tokio::spawn(async move {
@@ -828,7 +884,10 @@ mod tests {
             result
                 .as_ref()
                 .err()
-                .map(|msg| msg.contains("cancelada"))
+                .map(|msg| {
+                    let lower = msg.to_ascii_lowercase();
+                    lower.contains("cancelled") || lower.contains("cancelada")
+                })
                 .unwrap_or(false),
             "expected cancel error, got {result:?}"
         );
