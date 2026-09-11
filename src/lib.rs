@@ -161,6 +161,7 @@ pub mod status_pages;
 pub mod themes_catalog;
 pub mod upgrade;
 pub mod upgrade_cleanup;
+pub mod upgrade_pkg;
 pub mod upgrade_verify;
 pub mod website_preview;
 pub mod website_preview_routes;

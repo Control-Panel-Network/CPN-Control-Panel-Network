@@ -5,6 +5,19 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.22] - 12/09/2026
+
+Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `0.2.x-alpha` via official upgrade (Cargo `0.2.6-alpha.22`).
+
+### Fixed
+
+- Official `upgrade.sh` / `cpn-installer --upgrade` treats installed `1.0.0` or `1.0.1` (GitHub retag leftovers) as a **retag migration** onto published `0.2.x`, not a hostile downgrade. Uses `rpm -Uvh --oldpackage` (erase+install fallback) or `apt-get --allow-downgrades`. Non-interactive; no extra confirmation beyond running the official upgrade path.
+- Stops DNF/RPM failures of the form "same or higher version already installed" when replacing those retired identities with tip `0.2.x-alpha` RPMs.
+
+### Notes
+
+- Docker opt-in remains `upgrade.sh --bypass` or `CPN_UPGRADE_BYPASS=1` (unchanged from alpha.21).
+
 ## [0.2.6-alpha.21] - 11/09/2026
 
 Safer upgrades: auto panel maintenance from `upgrade.sh`, allowlisted stale packaging cleanup, post-upgrade service verify, and opt-in Docker refresh via `--bypass` (Cargo `0.2.6-alpha.21`).

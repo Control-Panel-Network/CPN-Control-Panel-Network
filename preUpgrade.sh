@@ -281,8 +281,24 @@ verify_gpg_sums() {
 
 upgrade_package() {
   local artifact="$1"
+  local installed_ver=""
   case "$FAMILY" in
     dnf)
+      if have_cmd rpm; then
+        installed_ver="$(rpm -q --qf '%{VERSION}' cpn-installer 2>/dev/null || true)"
+      fi
+      # Leftover 1.0.0/1.0.1 package identity sorts newer than 0.2.x; force replace.
+      if [[ "$installed_ver" == "1.0.0" || "$installed_ver" == "1.0.1" ]]; then
+        info "retag migration: replacing retired CPN ${installed_ver} with current 0.2.x (rpm --oldpackage)"
+        if have_cmd rpm; then
+          if rpm -Uvh --oldpackage "$artifact"; then
+            return 0
+          fi
+          rpm -e --nodeps cpn-installer >/dev/null 2>&1 || true
+          rpm -Uvh "$artifact" && return 0
+        fi
+        die "could not replace retired CPN ${installed_ver} with $(basename "$artifact")"
+      fi
       if have_cmd dnf; then
         dnf upgrade -y "$artifact" || dnf install -y "$artifact"
       elif have_cmd yum; then
@@ -292,6 +308,18 @@ upgrade_package() {
       fi
       ;;
     apt)
+      if have_cmd dpkg-query; then
+        installed_ver="$(dpkg-query -W -f='${Version}' cpn-installer 2>/dev/null || true)"
+        installed_ver="${installed_ver%%-*}"
+        installed_ver="${installed_ver%%~*}"
+      fi
+      if [[ "$installed_ver" == "1.0.0" || "$installed_ver" == "1.0.1" ]]; then
+        info "retag migration: replacing retired CPN ${installed_ver} with current 0.2.x (apt allow-downgrades)"
+        if have_cmd apt-get; then
+          apt-get install -y --allow-downgrades "$artifact" && return 0
+        fi
+        die "could not replace retired CPN ${installed_ver} with $(basename "$artifact")"
+      fi
       if have_cmd apt-get; then
         apt-get install -y "$artifact"
       else
@@ -402,6 +430,8 @@ Usage: upgrade.sh [--bypass]
   --bypass   Pass through to cpn-installer --upgrade --bypass (CPN-managed Docker only)
 
 Env: CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, CPN_UPGRADE_BYPASS=1
+
+Note: leftover RPM/DEB identity 1.0.0 or 1.0.1 (retired retags) is replaced with current 0.2.x via rpm --oldpackage / apt --allow-downgrades during non-interactive upgrade.
 EOF
         exit 0
         ;;
