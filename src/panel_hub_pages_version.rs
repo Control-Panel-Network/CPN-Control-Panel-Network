@@ -244,8 +244,12 @@ pub fn version_management_page(can_manage: bool) -> String {
     if (latestEl) latestEl.textContent = info.latest_version || info.latest_tag || "-";
     if (info.check_error) {{
       statusEl.textContent = "Update check failed: " + info.check_error;
+    }} else if (info.rate_limited && info.cache_note) {{
+      statusEl.textContent = info.cache_note;
     }} else if (info.update_available) {{
       statusEl.textContent = "Update available: " + (info.latest_version || info.latest_tag || "newer release");
+    }} else if (info.cache_note) {{
+      statusEl.textContent = info.cache_note;
     }} else {{
       statusEl.textContent = "You are on the latest known release" +
         (info.latest_version ? (" (" + info.latest_version + ")") : "") + ".";
@@ -254,14 +258,17 @@ pub fn version_management_page(can_manage: bool) -> String {
     if (info.repo) lines.push("Repo: " + info.repo);
     if (info.source) lines.push("Source: " + info.source);
     if (info.latest_tag) lines.push("Latest tag: " + info.latest_tag);
+    if (info.from_cache) lines.push("Release list: cached" + (info.cache_age_secs != null ? (" (" + info.cache_age_secs + "s old)") : ""));
+    if (info.cache_note) lines.push(info.cache_note);
     detailsEl.innerHTML = lines.map(function (l) {{
       return "<p>" + esc(l) + "</p>";
     }}).join("");
     fillPicker(info);
   }}
-  function check() {{
-    statusEl.textContent = "Checking for updates...";
-    fetch("/api/version-check", {{
+  function check(forceRefresh) {{
+    statusEl.textContent = forceRefresh ? "Refreshing release list..." : "Checking for updates...";
+    var url = "/api/version-check" + (forceRefresh ? "?refresh=1" : "");
+    fetch(url, {{
       credentials: "same-origin",
       headers: {{ "Accept": "application/json" }}
     }}).then(function (res) {{
@@ -346,7 +353,7 @@ pub fn version_management_page(can_manage: bool) -> String {
       if (progressLabel) progressLabel.textContent = "Not started.";
     }});
   }}
-  if (btn) btn.addEventListener("click", check);
+  if (btn) btn.addEventListener("click", function () {{ check(true); }});
   if (canManage) {{
     var upLatest = document.getElementById("cpn-version-upgrade-latest");
     var applyBtn = document.getElementById("cpn-version-apply");
@@ -400,7 +407,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     }});
     if (confirmCancel) confirmCancel.addEventListener("click", clearConfirm);
   }}
-  check();
+  check(false);
 }})();
 </script>"#,
         running = running,
@@ -436,7 +443,7 @@ mod tests {
         let html = version_management_page(true);
         assert!(html.contains("cpn-version-search"));
         assert!(html.contains("Type to search tags"));
-        assert!(!html.contains("cpn-version-select"));
+        assert!(!html.contains("id=\"cpn-version-select\""));
         assert!(html.contains("Upgrade to latest"));
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));

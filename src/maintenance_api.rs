@@ -51,10 +51,16 @@ fn busy_phase(phase: &str) -> bool {
 }
 
 pub async fn load_maintenance_info() -> MaintenanceInfo {
+    load_maintenance_info_with_options(false).await
+}
+
+pub async fn load_maintenance_info_with_options(force_network: bool) -> MaintenanceInfo {
     // Clear phantom 1.0.0/1.0.1 manifest when live RPM (or binary-only tip) is already 0.2.x.
     let _ = reconcile_stale_package_identity(VERSION);
     let existing = detect_existing_install(VERSION);
-    let check = releases::version_check(VERSION, &existing.package_version).await;
+    let check =
+        releases::version_check_with_options(VERSION, &existing.package_version, force_network)
+            .await;
     let plan = Some(build_plan(
         MaintenanceAction::Repair,
         Some(&existing.package_version),
@@ -76,6 +82,11 @@ pub async fn load_maintenance_info() -> MaintenanceInfo {
         has_bootstrap: existing.has_bootstrap,
         plan,
         check_error: check.error,
+        from_cache: check.from_cache,
+        cache_age_secs: check.cache_age_secs,
+        rate_limited: check.rate_limited,
+        retry_after_secs: check.retry_after_secs,
+        cache_note: check.cache_note,
     }
 }
 
@@ -88,7 +99,19 @@ pub async fn api_version_check(
     if !version_read_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    let info = load_maintenance_info().await;
+    let force = http
+        .uri()
+        .query()
+        .map(|q| {
+            q.split('&').any(|part| {
+                part == "refresh=1"
+                    || part == "refresh=true"
+                    || part.starts_with("refresh=1")
+                    || part == "force=1"
+            })
+        })
+        .unwrap_or(false);
+    let info = load_maintenance_info_with_options(force).await;
     let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     status.maintenance = Some(info.clone());
     HttpResponse::Ok().json(info)
@@ -185,6 +208,11 @@ pub async fn start_maintenance(
             has_bootstrap: existing.has_bootstrap,
             plan: Some(plan.clone()),
             check_error: None,
+            from_cache: false,
+            cache_age_secs: None,
+            rate_limited: false,
+            retry_after_secs: None,
+            cache_note: None,
         });
     }
     current.phase = "downloading";

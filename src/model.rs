@@ -191,6 +191,16 @@ pub struct MaintenanceInfo {
     pub has_bootstrap: bool,
     pub plan: Option<MaintenancePlan>,
     pub check_error: Option<String>,
+    #[serde(default)]
+    pub from_cache: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_age_secs: Option<u64>,
+    #[serde(default)]
+    pub rate_limited: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_after_secs: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

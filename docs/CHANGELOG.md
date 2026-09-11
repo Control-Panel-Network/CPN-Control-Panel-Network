@@ -5,23 +5,26 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6-alpha.23] - 12/09/2026
+## [0.2.6-alpha.25] - 12/09/2026
 
-Version Management searchable release picker, clear phantom `1.0.0` installed identity when RPM is already `0.2.x`, and optional MariaDB/OLS/PHP package refresh on upgrade (Cargo `0.2.6-alpha.23`).
+GitHub Releases disk cache and rate limit for Version Management, plus searchable picker and stale package identity reconcile (Cargo `0.2.6-alpha.25`).
 
 ### Added
 
-- Version Management release field is a **searchable** typeahead (filter tags as you type); Upgrade to latest / Apply / Repair unchanged.
-- Upgrade/repair may refresh already-installed CPN-managed host packages (MariaDB, OpenLiteSpeed, PHP/php-fpm) via `dnf upgrade` / `apt-get --only-upgrade`, then restart active units and health-check. Databases and docroots are never dropped. Documented in [INSTALL.md](INSTALL.md).
+- Disk cache at `/var/lib/cpn/github-releases-cache.json` (TTL default **30 minutes**, `CPN_RELEASES_CACHE_TTL_SECS`). Manual "Check for updates" min interval **60 seconds** (`CPN_RELEASES_CHECK_MIN_INTERVAL_SECS`).
+- On GitHub HTTP 403/429 (or network failure): serve last good cache when present; English note such as "Checked recently; showing cached results" / try again in N seconds. No tight retry loop.
+- Optional higher API limits via `CPN_GITHUB_TOKEN` / `GITHUB_TOKEN` or `/var/lib/cpn/secrets/github-token` (never committed). ETag / If-None-Match supported.
+- Version Management searchable release typeahead; MariaDB/OLS/PHP refresh on upgrade when already installed (no database drops).
 
 ### Fixed
 
-- RPM installed identity maps `Version`+`Release` back to Cargo prerelease (example: `0.2.6` + `0.alpha21.el9` -> `0.2.6-alpha.21`) so "Installed package" matches Running.
-- Stale `install-manifest.json` claiming `1.0.0`/`1.0.1` is reconciled when the live RPM is already on `0.2.x` (Version Management / `--version-check` / upgrade path).
+- Phantom Installed package `1.0.0`/`1.0.1` when RPM is already `0.2.x` (manifest reconcile + RPM NVR to Cargo prerelease mapping).
+- Same-tip RPM NEVRA after bootstrap `upgrade.sh` (force/skip) from alpha.24.
 
 ### Notes
 
-- Retag migration for hosts whose RPM is still literally `1.0.0`/`1.0.1` remains `rpm --oldpackage` via official upgrade (unchanged from alpha.22).
+- Cache applies to Version Management, `--version-check`, and upgrade release discovery (`list_releases` / `find_release`).
+
 ## [0.2.6-alpha.24] - 12/09/2026
 
 Harden RPM apply when bootstrap `upgrade.sh` already installed the tip NEVRA (Cargo `0.2.6-alpha.24`).

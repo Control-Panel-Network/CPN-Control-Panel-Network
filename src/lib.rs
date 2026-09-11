@@ -153,6 +153,7 @@ pub mod postfix_fallback;
 pub mod proxy_front;
 pub mod release_verify;
 pub mod releases;
+pub mod releases_cache;
 pub mod resource_accounts;
 pub mod service_detect;
 pub mod site_acl;

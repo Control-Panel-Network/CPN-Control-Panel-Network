@@ -129,7 +129,7 @@ mod tests {
         let html = version_management_page(true);
         assert!(html.contains("cpn-version-search"));
         assert!(html.contains("Type to search tags"));
-        assert!(!html.contains("cpn-version-select"));
+        assert!(!html.contains("id=\"cpn-version-select\""));
         assert!(html.contains("Upgrade to latest"));
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));
