@@ -2,9 +2,12 @@
 //!
 //! English-only MOTD for interactive SSH logins. Never prints passwords or
 //! bootstrap tokens. Product branding is CPN / Control Panel Network only.
+//! Login URLs are resolved live each login (see `packaging/cpn-motd.sh` and
+//! `cpn panel url`), not baked as a static `/etc/motd` at install time.
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::panel_network::load_panel_hostname;
+use crate::panel_public_url::{load_panel_public_url, local_listen_base_url};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -88,22 +91,41 @@ pub fn ensure_motd_installed() {
 }
 
 /// Build short English "panel ready" lines (no secrets).
+/// Prefer live `panel_public_url`, then hostname, then loopback listen port.
 pub fn panel_ready_lines(version: &str, port: u16, hostname: Option<&str>) -> Vec<String> {
+    let port = if port == 0 { DEFAULT_PORT } else { port };
+    let public = load_panel_public_url();
+    let host = hostname
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(load_panel_hostname);
+    let local = local_listen_base_url(port);
     let mut lines = vec![
         "------------------------------------------------------------".into(),
         format!("CPN panel ready (v{version})"),
         format!("Listen port: {port}"),
-        format!("Local login: http://127.0.0.1:{port}/login"),
     ];
-    if let Some(host) = hostname.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(ref url) = public {
+        lines.push(format!("Login URL: {url}/login"));
+        if url.trim_end_matches('/') != local.trim_end_matches('/') {
+            lines.push(format!("Local login: {local}/login"));
+        }
+        lines.push(
+            "Lab tip: Windows host may use the public URL when NAT forwards the guest port".into(),
+        );
+    } else if let Some(ref host) = host {
         lines.push(format!("Hostname login: https://{host}/login"));
+        lines.push(format!("Local login: {local}/login"));
     } else {
+        lines.push(format!("Local login: {local}/login"));
         lines.push(format!("Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"));
         lines.push(format!(
             "VirtualBox NAT: if host maps 2089->guest {port}, open http://127.0.0.1:2089/login on the host"
         ));
     }
     lines.push("Panel service: systemctl status cpn-installer.service".into());
+    lines.push("Show URL anytime: cpn panel url".into());
     lines.push("Start again: sudo systemctl start cpn-installer.service".into());
     lines.push("Or foreground: sudo cpn-installer --web".into());
     lines.push("SSH/CLI mode: sudo cpn-installer --cli".into());
@@ -129,32 +151,61 @@ pub fn print_panel_ready_from_disk(version: &str, listen_port: u16) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::with_test_data_dir;
+    use crate::listen_port::save_preferred_listen_port;
+    use crate::panel_network::{clear_panel_hostname, save_panel_hostname};
+    use crate::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 
     #[test]
     fn panel_ready_includes_local_url_and_version() {
-        let lines = panel_ready_lines("1.0.0", 2087, None);
-        let joined = lines.join("\n");
-        assert!(joined.contains("v1.0.0"));
-        assert!(joined.contains("http://127.0.0.1:2087/login"));
-        assert!(joined.contains("cpn-installer.service"));
-        assert!(joined.contains("2089"));
-        assert!(!joined.to_lowercase().contains("cyberpanel"));
-        assert!(!joined.contains("password"));
+        with_test_data_dir(|| {
+            clear_panel_public_url().unwrap();
+            clear_panel_hostname().unwrap();
+            let lines = panel_ready_lines("1.0.0", 2087, None);
+            let joined = lines.join("\n");
+            assert!(joined.contains("v1.0.0"));
+            assert!(joined.contains("http://127.0.0.1:2087/login"));
+            assert!(joined.contains("cpn-installer.service"));
+            assert!(joined.contains("cpn panel url"));
+            assert!(joined.contains("2089"));
+            assert!(!joined.to_lowercase().contains("cyberpanel"));
+            assert!(!joined.contains("password"));
+        });
     }
 
     #[test]
     fn panel_ready_prefers_hostname_https() {
-        let lines = panel_ready_lines("1.0.0", 2089, Some("panel.example.com"));
-        let joined = lines.join("\n");
-        assert!(joined.contains("https://panel.example.com/login"));
-        assert!(joined.contains("http://127.0.0.1:2089/login"));
+        with_test_data_dir(|| {
+            clear_panel_public_url().unwrap();
+            let lines = panel_ready_lines("1.0.0", 2089, Some("panel.example.com"));
+            let joined = lines.join("\n");
+            assert!(joined.contains("https://panel.example.com/login"));
+            assert!(joined.contains("http://127.0.0.1:2089/login"));
+        });
     }
 
     #[test]
-    fn motd_script_is_cpn_branded() {
+    fn panel_ready_prefers_live_public_url() {
+        with_test_data_dir(|| {
+            save_preferred_listen_port(2087).unwrap();
+            save_panel_public_url("http://127.0.0.1:2089").unwrap();
+            let lines = panel_ready_lines("0.2.6", 2087, None);
+            let joined = lines.join("\n");
+            assert!(joined.contains("http://127.0.0.1:2089/login"));
+            assert!(joined.contains("http://127.0.0.1:2087/login"));
+            clear_panel_public_url().unwrap();
+        });
+    }
+
+    #[test]
+    fn motd_script_is_cpn_branded_and_live() {
         let lower = MOTD_SCRIPT.to_ascii_lowercase();
-        assert!(MOTD_SCRIPT.contains("CPN / Control Panel Network"));
+        assert!(MOTD_SCRIPT.contains("Control Panel Network"));
         assert!(MOTD_SCRIPT.contains("News Targeted"));
+        assert!(MOTD_SCRIPT.contains("cpn panel url --motd"));
+        assert!(MOTD_SCRIPT.contains("listen_port"));
+        assert!(MOTD_SCRIPT.contains("panel_public_url"));
+        assert!(MOTD_SCRIPT.contains("This server has installed CPN"));
         assert!(MOTD_SCRIPT.contains("cpn-installer.service"));
         assert!(!lower.contains("cyberpanel"));
         assert!(!lower.contains("enjoy your accelerated"));

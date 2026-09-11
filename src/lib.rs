@@ -25,6 +25,7 @@ pub mod cli_install;
 pub mod cli_maintenance;
 pub mod cli_network;
 pub mod cli_packages;
+pub mod cli_panel;
 pub mod cli_plugins;
 pub mod db_defaults;
 pub mod environment;

@@ -5,9 +5,23 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.5-alpha.19] - unreleased (branch tip)
+## [0.2.6-alpha.19] - unreleased (branch tip)
 
-Password-reset MIME / DNS reachability fix line (Cargo `0.2.5-alpha.19`). Not published as a GitHub Release yet; next cut after `v0.2.4-alpha.19`.
+Cool live SSH MOTD and `cpn panel url` (Cargo `0.2.6-alpha.19`). Includes prior tip work from `0.2.5-alpha.19` (password-reset MIME / public URL) until that cut ships.
+
+### Added
+
+- Cool CPN-branded interactive SSH MOTD (`/etc/profile.d/cpn-motd.sh`): ASCII banner, "This server has installed CPN", live login URL(s), start hints, load/CPU/RAM/disk/uptime. English only; no CyberPanel branding or passwords.
+- Operator commands: `cpn panel url`, `cpn panel status`, `cpn info` (status alias), and `cpn panel install-motd` (root). `--raw` for scripts; `--motd` for indented MOTD embedding.
+- MOTD resolves login URL(s) **live** on every interactive SSH login by calling `cpn panel url --motd` (fallback: read `/var/lib/cpn/listen_port`, `panel_public_url`, `panel_hostname`). Changing the panel port in the UI updates the next SSH banner without reinstall.
+
+### Changed
+
+- Panel-ready banner prefers live `panel_public_url`, then hostname, then loopback listen port, and points operators to `cpn panel url`.
+
+## [0.2.5-alpha.19] - unreleased (folded into 0.2.6 tip)
+
+Password-reset MIME / DNS reachability fix line (Cargo was `0.2.5-alpha.19`). Not published as a GitHub Release; carried into `0.2.6-alpha.19`.
 
 ### Fixed
 
@@ -125,6 +139,7 @@ Pre-1.0 development line (`v0.2.2-alpha.1` … `v0.2.2-alpha.18`). Notable theme
 
 For per-tag PR lists, see the corresponding [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases) notes.
 
+[0.2.6-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...HEAD
 [0.2.5-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/compare/v0.2.4-alpha.19...HEAD
 [0.2.4-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.4-alpha.19
 [0.2.3-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.3-alpha.19

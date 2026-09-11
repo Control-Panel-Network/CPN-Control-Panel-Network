@@ -1,7 +1,10 @@
 #!/bin/bash
 # CPN / Control Panel Network interactive login banner (English).
 # Installed to /etc/profile.d/cpn-motd.sh after a successful CPN install.
+# Login URL(s) are resolved LIVE each login via `cpn panel url --motd`
+# (reads /var/lib/cpn/listen_port, panel_public_url, panel_hostname).
 # Safe for AlmaLinux / RHEL-family and Debian/Ubuntu login shells.
+# Never prints passwords or tokens. Product branding: CPN only (not CyberPanel).
 
 # Only interactive shells (skip scp/sftp/non-TTY).
 case $- in
@@ -13,22 +16,30 @@ if [ ! -t 1 ]; then
 fi
 
 CPN_DATA_DIR="${CPN_DATA_DIR:-/var/lib/cpn}"
-CPN_PORT="2087"
-if [ -r "${CPN_DATA_DIR}/listen_port" ]; then
-  _cpn_port_raw="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/listen_port" 2>/dev/null || true)"
-  case "${_cpn_port_raw}" in
-    ''|*[!0-9]*) ;;
-    *) CPN_PORT="${_cpn_port_raw}" ;;
-  esac
-fi
 
-CPN_HOSTNAME=""
-if [ -r "${CPN_DATA_DIR}/panel_hostname" ]; then
-  CPN_HOSTNAME="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/panel_hostname" 2>/dev/null || true)"
+_cpn_color=0
+if [ -n "${TERM:-}" ] && [ "${TERM}" != "dumb" ] && command -v tput >/dev/null 2>&1; then
+  if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ] 2>/dev/null; then
+    _cpn_color=1
+  fi
+fi
+if [ "${_cpn_color}" -eq 1 ]; then
+  _C_CYAN="$(printf '\033[1;36m')"
+  _C_BLUE="$(printf '\033[1;34m')"
+  _C_RESET="$(printf '\033[0m')"
+  _C_DIM="$(printf '\033[2m')"
+else
+  _C_CYAN=""
+  _C_BLUE=""
+  _C_RESET=""
+  _C_DIM=""
 fi
 
 CPN_VERSION="unknown"
-if command -v cpn-installer >/dev/null 2>&1; then
+if command -v cpn >/dev/null 2>&1; then
+  CPN_VERSION="$(cpn version 2>/dev/null | awk '{print $NF; exit}')"
+  [ -z "${CPN_VERSION}" ] && CPN_VERSION="unknown"
+elif command -v cpn-installer >/dev/null 2>&1; then
   CPN_VERSION="$(cpn-installer --version 2>/dev/null | awk '{print $NF; exit}')"
   [ -z "${CPN_VERSION}" ] && CPN_VERSION="unknown"
 fi
@@ -74,7 +85,6 @@ if [ -n "${_cpn_df}" ]; then
   _cpn_disk="${_cpn_du_g} / ${_cpn_dt_g} GB (${_cpn_dp})"
 fi
 
-# Load relative to CPU count (fast; no sampling delay).
 _cpn_cpu="n/a"
 _cpn_nproc="$(nproc 2>/dev/null || echo 1)"
 _cpn_load1="$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "")"
@@ -87,23 +97,71 @@ if [ -n "${_cpn_load1}" ] && [ "${_cpn_nproc}" -gt 0 ] 2>/dev/null; then
   }')"
 fi
 
-echo ""
-echo "============================================================"
-echo "  CPN / Control Panel Network"
-echo "  News Targeted"
-echo "============================================================"
-echo "  Panel version : ${CPN_VERSION}"
-if [ -n "${CPN_HOSTNAME}" ]; then
-  echo "  Panel login   : https://${CPN_HOSTNAME}/login"
-  echo "  Local login   : http://127.0.0.1:${CPN_PORT}/login"
-else
-  echo "  Panel login   : http://127.0.0.1:${CPN_PORT}/login"
-  echo "  Lab tip       : ssh -L ${CPN_PORT}:127.0.0.1:${CPN_PORT} user@host"
-  echo "  VBox NAT tip  : host forward 2089->${CPN_PORT} => http://127.0.0.1:2089/login"
+_cpn_svc="unknown"
+if command -v systemctl >/dev/null 2>&1; then
+  _cpn_svc="$(systemctl is-active cpn-installer.service 2>/dev/null || echo unknown)"
 fi
-echo "  Start panel   : systemctl start cpn-installer.service"
-echo "  Panel status  : systemctl status cpn-installer.service"
+
+# Live login URLs: prefer operator CLI (same resolution as panel UI writes).
+_cpn_print_live_urls() {
+  if command -v cpn >/dev/null 2>&1; then
+    if cpn panel url --motd 2>/dev/null; then
+      return 0
+    fi
+  fi
+  # Fallback if `cpn` is missing: read the same preference files the panel writes.
+  _cpn_port="2087"
+  if [ -r "${CPN_DATA_DIR}/listen_port" ]; then
+    _cpn_port_raw="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/listen_port" 2>/dev/null || true)"
+    case "${_cpn_port_raw}" in
+      ''|*[!0-9]*) ;;
+      *) _cpn_port="${_cpn_port_raw}" ;;
+    esac
+  fi
+  _cpn_hostname=""
+  if [ -r "${CPN_DATA_DIR}/panel_hostname" ]; then
+    _cpn_hostname="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/panel_hostname" 2>/dev/null || true)"
+  fi
+  _cpn_public=""
+  if [ -r "${CPN_DATA_DIR}/panel_public_url" ]; then
+    _cpn_public="$(tr -d '\r\n' < "${CPN_DATA_DIR}/panel_public_url" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+    _cpn_public="${_cpn_public%/}"
+  fi
+  if [ -n "${_cpn_public}" ]; then
+    echo "  Login URL     : ${_cpn_public}/login"
+    echo "  Local login   : http://127.0.0.1:${_cpn_port}/login"
+    echo "  Listen port   : ${_cpn_port}"
+    echo "  Public URL    : ${_cpn_public}"
+    echo "  Lab tip       : Windows host may use the public URL when NAT forwards the guest port"
+  elif [ -n "${_cpn_hostname}" ]; then
+    echo "  Login URL     : https://${_cpn_hostname}/login"
+    echo "  Local login   : http://127.0.0.1:${_cpn_port}/login"
+    echo "  Listen port   : ${_cpn_port}"
+  else
+    echo "  Login URL     : http://127.0.0.1:${_cpn_port}/login"
+    echo "  Listen port   : ${_cpn_port}"
+    echo "  Lab tip       : ssh -L ${_cpn_port}:127.0.0.1:${_cpn_port} user@host"
+    echo "  VBox NAT tip  : host forward 2089->${_cpn_port} => http://127.0.0.1:2089/login"
+  fi
+}
+
+echo ""
+echo "${_C_CYAN}   ____ ____  _   ${_C_RESET}"
+echo "${_C_CYAN}  / ___|  _ \\| \\ | |${_C_RESET}"
+echo "${_C_BLUE} | |   | |_) |  \\| |${_C_RESET}"
+echo "${_C_BLUE} | |___|  __/| |\\  |${_C_RESET}"
+echo "${_C_CYAN}  \\____|_|   |_| \\_|${_C_RESET}"
+echo "${_C_DIM}  Control Panel Network  ·  News Targeted${_C_RESET}"
+echo "============================================================"
+echo "  This server has installed CPN"
+echo "  Panel version : ${CPN_VERSION}"
+echo "  Panel service : ${_cpn_svc}"
+_cpn_print_live_urls
+echo "  Start panel   : sudo systemctl start cpn-installer.service"
+echo "  Panel status  : cpn panel status   (or: systemctl status cpn-installer.service)"
+echo "  Show URL anytime: cpn panel url"
 echo "  CLI install   : sudo cpn-installer --cli"
+echo "  Web start     : sudo cpn-installer --web"
 echo "------------------------------------------------------------"
 echo "  Time          : ${_cpn_now}"
 echo "  Load average  : ${_cpn_load}"
