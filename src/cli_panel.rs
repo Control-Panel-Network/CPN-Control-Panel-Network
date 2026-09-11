@@ -2,7 +2,9 @@
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::motd::ensure_motd_installed;
-use crate::panel_network::{load_panel_hostname, preferred_listen_port_or_default, public_base_url};
+use crate::panel_network::{
+    load_panel_hostname, preferred_listen_port_or_default, public_base_url,
+};
 use crate::panel_public_url::{load_panel_public_url, local_listen_base_url};
 use crate::panel_service::UNIT_NAME;
 use clap::Subcommand;

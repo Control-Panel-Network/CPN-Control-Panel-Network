@@ -240,7 +240,9 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         Commands::Panel { command } => run_panel(command, require_root_for_mutation),
-        Commands::Info { raw } => run_panel(PanelCommands::Status { raw }, require_root_for_mutation),
+        Commands::Info { raw } => {
+            run_panel(PanelCommands::Status { raw }, require_root_for_mutation)
+        }
         Commands::Account { command } => match command {
             AccountCommands::List => {
                 let accounts = list_accounts()?;
