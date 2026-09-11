@@ -118,19 +118,19 @@ fn server_package_recipe(guest: &GuestOs, server: ServerEngine) -> CommandSpec {
         ServerEngine::Nginx => (
             "if command -v nginx >/dev/null 2>&1; then echo 'Nginx already installed; reusing existing binary'; else dnf install -y nginx; fi",
             "if command -v nginx >/dev/null 2>&1; then echo 'Nginx already installed; reusing existing binary'; else apt-get install -y nginx; fi",
-            "Asegurando Nginx",
+            "Ensuring Nginx",
             2,
         ),
         ServerEngine::Caddy => (
             "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; reusing existing binary'; else dnf install -y caddy; fi",
             "if command -v caddy >/dev/null 2>&1; then echo 'Caddy already installed; reusing existing binary'; else apt-get install -y caddy; fi",
-            "Asegurando Caddy",
+            "Ensuring Caddy",
             5,
         ),
         ServerEngine::Openlitespeed => (
             "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; reusing existing installation'; else dnf install -y openlitespeed; fi",
             "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; reusing existing installation'; else apt-get install -y openlitespeed; fi",
-            "Asegurando OpenLiteSpeed",
+            "Ensuring OpenLiteSpeed",
             5,
         ),
     };
@@ -171,7 +171,7 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
             command(
                 "systemctl",
                 vec!["enable", "--now", "nginx"],
-                "Activando Nginx",
+                "Enabling Nginx",
                 "installing",
                 84,
             ),
@@ -181,7 +181,7 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
             command(
                 "systemctl",
                 vec!["enable", "--now", "caddy"],
-                "Activando Caddy",
+                "Enabling Caddy",
                 "installing",
                 84,
             ),
@@ -224,7 +224,7 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 &repository,
             )
             .map_err(|error| {
-                format!("No se pudo configurar el repositorio de OpenLiteSpeed: {error}")
+                format!("Failed to configure the OpenLiteSpeed repository: {error}")
             })
         }
         PackageFamily::Apt => {
@@ -244,7 +244,7 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
                 &repository,
             )
             .map_err(|error| {
-                format!("No se pudo configurar el repositorio apt de OpenLiteSpeed: {error}")
+                format!("Failed to configure the OpenLiteSpeed apt repository: {error}")
             })
         }
         PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
@@ -265,7 +265,7 @@ apt-get update -y && apt-get install -y wget ca-certificates \
 && (test -s /etc/apt/trusted.gpg.d/lst_repo.gpg || wget -qO /etc/apt/trusted.gpg.d/lst_repo.gpg https://rpms.litespeedtech.com/debian/lst_repo.gpg) \
 && apt-get update -y",
         ],
-        "Preparando el repositorio apt de OpenLiteSpeed",
+        "Preparing the OpenLiteSpeed apt repository",
         "downloading",
         3,
     )
@@ -295,7 +295,7 @@ pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
                 Path::new("/etc/yum.repos.d/caddy.repo"),
                 &repository,
             )
-            .map_err(|error| format!("No se pudo configurar el repositorio de Caddy: {error}"))
+            .map_err(|error| format!("Failed to configure the Caddy repository: {error}"))
         }
         PackageFamily::Apt => Ok(()),
         PackageFamily::Windows => Err(crate::os_support::windows_linux_recipe_blocked_message(
@@ -316,7 +316,7 @@ apt-get update -y && apt-get install -y debian-keyring debian-archive-keyring ap
 && (test -s /etc/apt/sources.list.d/caddy-stable.list || (curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null)) \
 && apt-get update -y",
         ],
-        "Preparando el repositorio apt de Caddy",
+        "Preparing the Caddy apt repository",
         "downloading",
         3,
     )
@@ -365,7 +365,7 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
 && dnf -y module reset php \
 && dnf -y module enable php:remi-8.2)",
             ],
-            "Preparando PHP 8.2 (Remi en EL8)",
+            "Preparing PHP 8.2 (Remi on EL8)",
             "downloading",
             38,
         )),
@@ -377,7 +377,7 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
 || (dnf -y module reset php \
 && dnf -y module enable php:8.2)",
             ],
-            "Preparando PHP 8.2",
+            "Preparing PHP 8.2",
             "downloading",
             38,
         )),
@@ -388,7 +388,7 @@ pub(crate) fn php_install_command(guest: &GuestOs, label: &'static str) -> Comma
     match guest.family {
         PackageFamily::Apt => apt_install(
             PHP_PACKAGES_APT.to_vec(),
-            "Instalando PHP y sus extensiones",
+            "Installing PHP and extensions",
             40,
         ),
         PackageFamily::Dnf => {
@@ -396,7 +396,7 @@ pub(crate) fn php_install_command(guest: &GuestOs, label: &'static str) -> Comma
             args.extend(PHP_PACKAGES_DNF.iter().copied());
             dnf(
                 args,
-                "Instalando PHP y sus extensiones",
+                "Installing PHP and extensions",
                 DnfProgress {
                     download_start: 40,
                     download_end: 58,
@@ -420,7 +420,7 @@ pub(crate) fn apt_update_command() -> CommandSpec {
     command(
         "apt-get",
         vec!["update", "-y"],
-        "Actualizando índices apt",
+        "Updating apt indexes",
         "downloading",
         39,
     )

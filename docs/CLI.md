@@ -199,4 +199,6 @@ Port resolution order is:
 
 For remote installation with the web UI, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
 
-The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). Advanced web-only UI options remain available via `--web`.
+The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). After the Summary confirmation it asks for **Minimal** or **Full detailed** logging for that run (Minimal = high-level progress; Full = stream dnf/apt output). Advanced web-only UI options remain available via `--web`.
+
+Installer progress titles, wait heartbeats, and engine errors are English by default (independent of guest `LANG`).

@@ -139,10 +139,10 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
         {phase === "configuring" && (
           <p className="install-wait-note" aria-live="polite">
             {locale === "es"
-              ? "Esto puede tomar un rato…"
+              ? "Esto puede tomar un rato. Salida silenciosa del gestor de paquetes es normal."
               : locale === "nb"
-                ? "Dette kan ta en stund…"
-                : "This may take a while…"}
+                ? "Dette kan ta en stund. Stille pakkeutdata er normalt."
+                : "This may take a while. Quiet package-manager output is normal, not a hang."}
           </p>
         )}
         {failed && (

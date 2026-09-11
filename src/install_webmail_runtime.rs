@@ -38,9 +38,15 @@ pub async fn configure_webmail_runtime(
     }
     write_php_fpm_pool(docroot)?;
     harden_permissions(docroot).await?;
-    // Stop legacy php -S unit if present from older installs.
-    let _ = Command::new("systemctl")
-        .args(["disable", "--now", "cpn-webmail"])
+    // Stop legacy php -S unit only when the unit file exists (missing unit is not an error).
+    let _ = Command::new("bash")
+        .args([
+            "-c",
+            "if systemctl cat cpn-webmail >/dev/null 2>&1; then \
+               systemctl disable --now cpn-webmail >/dev/null 2>&1 || true; \
+               systemctl reset-failed cpn-webmail >/dev/null 2>&1 || true; \
+             fi",
+        ])
         .status()
         .await;
     if Path::new("/etc/systemd/system/cpn-webmail.service").exists() {
@@ -79,7 +85,7 @@ pub async fn configure_webmail_runtime(
         command(
             "systemctl",
             vec!["enable", "--now", "php-fpm"],
-            "Activando PHP-FPM para webmail",
+            "Enabling PHP-FPM for webmail",
             "installing",
             84,
         ),
@@ -90,13 +96,13 @@ pub async fn configure_webmail_runtime(
         command(
             "systemctl",
             vec!["restart", "php-fpm"],
-            "Reiniciando PHP-FPM para cargar el pool webmail",
+            "Restarting PHP-FPM to load the webmail pool",
             "installing",
             85,
         ),
     )
     .await?;
-    run_command(state, command("bash", vec!["-c", "for attempt in $(seq 1 15); do test -S /run/php-fpm/cpn-webmail.sock && exit 0; sleep 1; done; php-fpm -t 2>&1 || true; systemctl status php-fpm --no-pager 2>&1 || true; exit 1"], "Esperando el socket PHP-FPM de webmail", "testing", 86)).await.map_err(|_| "PHP-FPM no creó /run/php-fpm/cpn-webmail.sock; revisa installation.log para el diagnóstico de configuración.".to_string())?;
+    run_command(state, command("bash", vec!["-c", "for attempt in $(seq 1 15); do test -S /run/php-fpm/cpn-webmail.sock && exit 0; sleep 1; done; php-fpm -t 2>&1 || true; systemctl status php-fpm --no-pager 2>&1 || true; exit 1"], "Waiting for the webmail PHP-FPM socket", "testing", 86)).await.map_err(|_| "PHP-FPM did not create /run/php-fpm/cpn-webmail.sock; check installation.log for configuration diagnostics.".to_string())?;
     install_journal::record(STAGE, JournalAction::EnabledService, "php-fpm", None, None)?;
 
     match engine {
@@ -106,7 +112,7 @@ pub async fn configure_webmail_runtime(
                 command(
                     "systemctl",
                     vec!["reload", "nginx"],
-                    "Recargando Nginx (webmail)",
+                    "Reloading Nginx (webmail)",
                     "installing",
                     86,
                 ),
@@ -119,7 +125,7 @@ pub async fn configure_webmail_runtime(
                 command(
                     "systemctl",
                     vec!["reload", "caddy"],
-                    "Recargando Caddy (webmail)",
+                    "Reloading Caddy (webmail)",
                     "installing",
                     86,
                 ),
@@ -195,7 +201,7 @@ async fn ensure_webmail_user(state: &AppState) -> Result<(), String> {
                 "/sbin/nologin",
                 "cpn-webmail",
             ],
-            "Creando el usuario aislado del webmail",
+            "Creating the isolated webmail user",
             "installing",
             80,
         ),
@@ -211,7 +217,7 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::symlink;
-        symlink(target, current).map_err(|error| format!("No se pudo activar el webmail: {error}"))
+        symlink(target, current).map_err(|error| format!("Failed to activate webmail: {error}"))
     }
     #[cfg(not(unix))]
     {
@@ -288,7 +294,7 @@ async fn harden_permissions(docroot: &str) -> Result<(), String> {
         .await
         .map_err(|error| error.to_string())?;
     if !status.success() {
-        return Err("No se pudieron ajustar permisos del webmail".into());
+        return Err("Failed to harden webmail permissions".into());
     }
     install_journal::record(
         STAGE,

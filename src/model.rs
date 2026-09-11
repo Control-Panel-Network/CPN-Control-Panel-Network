@@ -285,6 +285,9 @@ pub struct InstallRequest {
     /// Optional Nginx front + unique internal IP per domain (OLS origin may relax public :80/:443).
     #[serde(default)]
     pub enable_proxy_front: bool,
+    /// `minimal` = high-level progress only; `full` = stream package-manager output (default).
+    #[serde(default)]
+    pub install_log_detail: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

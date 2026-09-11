@@ -113,7 +113,7 @@ fn major_from_version_id(version_id: &str) -> Result<u32, String> {
         .split('.')
         .next()
         .and_then(|part| part.parse().ok())
-        .ok_or_else(|| format!("VERSION_ID no válida: {version_id}"))
+        .ok_or_else(|| format!("Invalid VERSION_ID: {version_id}"))
 }
 
 fn classify(id: &str, major: u32, version_id: &str) -> (PackageFamily, SupportStatus, String) {
@@ -177,12 +177,12 @@ pub fn detect_from_os_release(contents: &str) -> Result<GuestOs, String> {
     let id = map
         .get("ID")
         .cloned()
-        .ok_or_else(|| "No se pudo leer ID en /etc/os-release".to_string())?
+        .ok_or_else(|| "Failed to read ID from /etc/os-release".to_string())?
         .to_lowercase();
     let version_id = map
         .get("VERSION_ID")
         .cloned()
-        .ok_or_else(|| "No se pudo leer VERSION_ID en /etc/os-release".to_string())?;
+        .ok_or_else(|| "Failed to read VERSION_ID from /etc/os-release".to_string())?;
     let pretty_name = map
         .get("PRETTY_NAME")
         .cloned()
@@ -309,7 +309,7 @@ pub fn detect_guest_os() -> Result<GuestOs, String> {
     #[cfg(not(windows))]
     {
         let release = std::fs::read_to_string("/etc/os-release").map_err(|_| {
-            "No se pudo identificar el sistema operativo (/etc/os-release)".to_string()
+            "Could not identify the operating system (/etc/os-release)".to_string()
         })?;
         detect_from_os_release(&release)
     }

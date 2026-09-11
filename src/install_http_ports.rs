@@ -162,7 +162,7 @@ pub async fn stop_conflicting_http_services(
                 .progress(
                     "configuring",
                     2,
-                    format!("Omitiendo {unit}: activo pero no es dueño de :80/:443"),
+                    format!("Skipping {unit}: active but not owning :80/:443"),
                 )
                 .await;
             continue;
@@ -186,7 +186,7 @@ pub async fn stop_conflicting_http_services(
                 .progress(
                     "configuring",
                     2,
-                    format!("Liberando :80/:443 deteniendo el servicio conflictivo {unit}"),
+                    format!("Freeing :80/:443 by stopping conflicting service {unit}"),
                 )
                 .await;
             let stop_status = Command::new("systemctl")
@@ -195,10 +195,10 @@ pub async fn stop_conflicting_http_services(
                 .stderr(Stdio::piped())
                 .status()
                 .await
-                .map_err(|error| format!("No se pudo detener {unit}: {error}"))?;
+                .map_err(|error| format!("Failed to stop {unit}: {error}"))?;
             if !stop_status.success() {
                 return Err(format!(
-                    "systemctl stop {unit} falló (código {:?}); libera :80/:443 manualmente e inténtalo de nuevo",
+                    "systemctl stop {unit} failed (exit {:?}); free :80/:443 manually and try again",
                     stop_status.code()
                 ));
             }
@@ -246,7 +246,7 @@ pub async fn stop_conflicting_http_services(
         .collect();
     if !foreign.is_empty() {
         return Err(format!(
-            "Puerto :80/:443 aún ocupado por unidad(es) no gestionada(s): {}. Detén el proceso o elige otro motor.",
+            "Port :80/:443 is still held by unmanaged unit(s): {}. Stop the process or choose a different web engine.",
             foreign.join(", ")
         ));
     }

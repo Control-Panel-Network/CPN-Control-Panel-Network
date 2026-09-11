@@ -226,6 +226,14 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
             .status();
         if dnf.map(|s| s.success()).unwrap_or(false) {
             log("Proxy front: nginx package installed or already present.".into());
+            // Stubs only in this slice: do not start nginx while OLS/origin still owns :80.
+            let _ = Command::new("systemctl")
+                .args(["disable", "--now", "nginx"])
+                .status();
+            log(
+                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired)."
+                    .into(),
+            );
             return Ok(());
         }
         let apt = Command::new("apt-get")
@@ -233,6 +241,13 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
             .status();
         if apt.map(|s| s.success()).unwrap_or(false) {
             log("Proxy front: nginx package installed or already present.".into());
+            let _ = Command::new("systemctl")
+                .args(["disable", "--now", "nginx"])
+                .status();
+            log(
+                "Proxy front: nginx left stopped (avoid :80 conflict until front is wired)."
+                    .into(),
+            );
             return Ok(());
         }
         log(

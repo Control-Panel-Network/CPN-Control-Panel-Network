@@ -21,7 +21,7 @@ async fn detect_lsws_unit() -> Result<&'static str, String> {
             return Ok(unit);
         }
     }
-    Err("No se encontró la unidad systemd vendor de OpenLiteSpeed (lsws/lshttpd)".into())
+    Err("OpenLiteSpeed vendor systemd unit not found (lsws/lshttpd)".into())
 }
 
 fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
@@ -86,7 +86,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         command(
             "chown",
             vec!["-R", "nobody:nobody", "/var/www/cpn"],
-            "Ajustando permisos para OpenLiteSpeed",
+            "Adjusting permissions for OpenLiteSpeed",
             "installing",
             81,
         ),
@@ -95,7 +95,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
 
     let httpd = "/usr/local/lsws/conf/httpd_config.conf";
     let mut conf = std::fs::read_to_string(httpd)
-        .map_err(|error| format!("No se pudo leer {httpd}: {error}"))?;
+        .map_err(|error| format!("Failed to read {httpd}: {error}"))?;
     let mut changed = false;
     if !conf.contains("virtualHost CPN") {
         conf.push_str("\nvirtualHost CPN {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPN/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n");
@@ -120,7 +120,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
     let admin = "/usr/local/lsws/admin/conf/admin_config.conf";
     if std::path::Path::new(admin).exists() {
         let original = std::fs::read_to_string(admin)
-            .map_err(|error| format!("No se pudo leer {admin}: {error}"))?;
+            .map_err(|error| format!("Failed to read {admin}: {error}"))?;
         let (updated, admin_changed) = bind_ols_admin_to_loopback(&original);
         if admin_changed {
             install_journal::write_file_tracked("server", std::path::Path::new(admin), &updated)?;
@@ -133,7 +133,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         && std::path::Path::new(vendor_unit).exists()
     {
         let contents = std::fs::read_to_string(vendor_unit).map_err(|error| {
-            format!("No se pudo leer la unidad vendor de OpenLiteSpeed: {error}")
+            format!("Failed to read OpenLiteSpeed vendor unit: {error}")
         })?;
         install_journal::write_file_tracked(
             "server",
@@ -148,7 +148,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         .env("LC_ALL", "C")
         .output()
         .await
-        .map_err(|error| format!("No se pudo validar OpenLiteSpeed: {error}"))?;
+        .map_err(|error| format!("Failed to validate OpenLiteSpeed: {error}"))?;
     let validation_output = format!(
         "{}{}",
         String::from_utf8_lossy(&validation.stdout),
@@ -156,7 +156,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
     );
     if !openlitespeed_config_is_valid(validation.status.success(), &validation_output) {
         return Err(format!(
-            "La configuración de OpenLiteSpeed no es válida:\n{}",
+            "OpenLiteSpeed configuration is invalid:\n{}",
             validation_output.trim()
         ));
     }
@@ -166,7 +166,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         command(
             "systemctl",
             vec!["daemon-reload"],
-            "Recargando systemd para OpenLiteSpeed",
+            "Reloading systemd for OpenLiteSpeed",
             "installing",
             80,
         ),
@@ -177,7 +177,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         command(
             "systemctl",
             vec!["enable", unit],
-            "Habilitando OpenLiteSpeed al arrancar",
+            "Enabling OpenLiteSpeed at boot",
             "installing",
             83,
         ),
@@ -197,7 +197,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
                 "cpn-ols-restart",
                 unit,
             ],
-            "Reiniciando OpenLiteSpeed con el vhost CPN",
+            "Restarting OpenLiteSpeed with the CPN vhost",
             "installing",
             84,
         ),
@@ -218,7 +218,7 @@ async fn verify_openlitespeed_vhost(state: &AppState) -> Result<(), String> {
                 "-c",
                 "for attempt in $(seq 1 30); do if curl --fail --silent --max-time 2 http://127.0.0.1/ | grep -qi 'CPN OpenLiteSpeed'; then exit 0; fi; sleep 1; done; echo 'OpenLiteSpeed did not return CPN content on 127.0.0.1:80.' >&2; echo 'Listening TCP sockets:' >&2; (ss -ltnp 2>&1 || netstat -ltn 2>&1 || true) >&2; echo 'OpenLiteSpeed error log tail:' >&2; tail -n 80 /usr/local/lsws/logs/error.log 2>&1 || true; exit 1",
             ],
-            "Comprobando el vhost CPN de OpenLiteSpeed en :80",
+            "Checking the CPN OpenLiteSpeed vhost on :80",
             "testing",
             96,
         ),
@@ -444,12 +444,12 @@ pub async fn install_with_database(
         }
 
         state
-            .progress("configuring", 0, "Revisando el sistema y los repositorios")
+            .progress("configuring", 0, "Checking the system and repositories")
             .await;
         let guest = require_installable_guest()?;
         state.log(
             format!(
-                "Sistema invitado detectado: {} ({})",
+                "Guest OS detected: {} ({})",
                 guest.label, guest.pretty_name
             ),
             "info",
@@ -464,7 +464,7 @@ pub async fn install_with_database(
         if server_preexisting {
             state.log(
                 format!(
-                    "{} ya está instalado; CPN reutilizará la instalación existente y continuará con activación/configuración.",
+                    "{} is already installed; CPN will reuse the existing install and continue with activation/configuration.",
                     server.label()
                 ),
                 "info",
@@ -491,7 +491,7 @@ pub async fn install_with_database(
                             "epel-release",
                             "dnf-plugins-core",
                         ],
-                        "Configurando las dependencias de OpenLiteSpeed",
+                        "Configuring OpenLiteSpeed dependencies",
                         "configuring",
                         0,
                     ),
@@ -507,7 +507,7 @@ pub async fn install_with_database(
                             "--set-enabled",
                             "crb",
                         ],
-                        "Habilitando CRB para las dependencias de PHP",
+                        "Enabling CRB for PHP dependencies",
                         "configuring",
                         0,
                     ),
@@ -525,7 +525,7 @@ pub async fn install_with_database(
                         command(
                             "dnf",
                             vec!["--setopt=lock_timeout=60", "install", "-y", repository],
-                            "Configurando Remi para las dependencias de PHP",
+                            "Configuring Remi for PHP dependencies",
                             "configuring",
                             0,
                         ),
@@ -544,7 +544,7 @@ pub async fn install_with_database(
                                 "-c",
                                 "if dnf -q --disablerepo='*' --enablerepo=remi-safe list available gd3php >/dev/null 2>&1; then dnf --setopt=lock_timeout=60 --enablerepo=remi-safe install -y gd3php; else echo 'gd3php is not available from remi-safe for this guest; continuing with OpenLiteSpeed dependency resolution.'; fi",
                             ],
-                            "Comprobando libgd para OpenLiteSpeed",
+                            "Checking libgd for OpenLiteSpeed",
                             "configuring",
                             0,
                         ),
@@ -587,28 +587,28 @@ pub async fn install_with_database(
         }
 
         state
-            .progress("testing", 90, "Comprobando que el servicio está activo")
+            .progress("testing", 90, "Checking that the service is active")
             .await;
         let service = ols_unit.unwrap_or_else(|| server_service(server));
         let service_check = match service {
             "lshttpd" => command(
                 "systemctl",
                 vec!["is-active", "--quiet", "lshttpd"],
-                "Verificando el servicio con systemd",
+                "Verifying the service with systemd",
                 "testing",
                 92,
             ),
             "lsws" => command(
                 "systemctl",
                 vec!["is-active", "--quiet", "lsws"],
-                "Verificando el servicio con systemd",
+                "Verifying the service with systemd",
                 "testing",
                 92,
             ),
             _ => command(
                 "systemctl",
                 vec!["is-active", "--quiet", server_service(server)],
-                "Verificando el servicio con systemd",
+                "Verifying the service with systemd",
                 "testing",
                 92,
             ),
@@ -621,7 +621,7 @@ pub async fn install_with_database(
             // native controller once and make the second failure diagnosable.
             if verify_openlitespeed_vhost(&state).await.is_err() {
                 state.log(
-                    "OpenLiteSpeed no respondió tras systemctl; reintentando con lswsctrl.",
+                    "OpenLiteSpeed did not respond after systemctl; retrying with lswsctrl.",
                     "info",
                 );
                 run_command(
@@ -632,7 +632,7 @@ pub async fn install_with_database(
                             "-c",
                             "/usr/local/lsws/bin/lswsctrl restart || /usr/local/lsws/bin/lswsctrl start",
                         ],
-                        "Reintentando OpenLiteSpeed con su controlador nativo",
+                        "Retrying OpenLiteSpeed with its native controller",
                         "testing",
                         94,
                     ),
@@ -640,7 +640,7 @@ pub async fn install_with_database(
                 .await?;
                 verify_openlitespeed_vhost(&state)
                     .await
-                    .map_err(|_| "OpenLiteSpeed no sirvió el vhost CPN en :80; revisa installation.log, comprueba que nginx/httpd no ocupen el puerto, y el error log de OpenLiteSpeed.".to_string())?;
+                    .map_err(|_| "OpenLiteSpeed did not serve the CPN vhost on :80; check installation.log, confirm nginx/httpd are not holding the port, and review the OpenLiteSpeed error log.".to_string())?;
             }
         } else {
             run_command(
@@ -657,7 +657,7 @@ pub async fn install_with_database(
                         "/dev/null",
                         server_url(server),
                     ],
-                    "Comprobando la respuesta HTTP local",
+                    "Checking the local HTTP response",
                     "testing",
                     96,
                 ),

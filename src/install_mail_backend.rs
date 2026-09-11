@@ -27,7 +27,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
             &guest,
             vec!["postfix", "dovecot"],
             vec!["postfix", "dovecot-core", "dovecot-imapd"],
-            "Instalando Postfix y Dovecot",
+            "Installing Postfix and Dovecot",
             DnfProgress {
                 download_start: 62,
                 download_end: 68,
@@ -130,7 +130,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         command(
             "systemctl",
             vec!["enable", "--now", "postfix"],
-            "Activando Postfix",
+            "Enabling Postfix",
             "installing",
             76,
         ),
@@ -148,7 +148,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         command(
             "systemctl",
             vec!["enable", "--now", "dovecot"],
-            "Activando Dovecot",
+            "Enabling Dovecot",
             "installing",
             78,
         ),

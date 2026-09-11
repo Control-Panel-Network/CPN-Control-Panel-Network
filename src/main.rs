@@ -381,6 +381,17 @@ async fn start_install(
     current.progress = 0;
     current.error = None;
     drop(current);
+    let detail = match request
+        .install_log_detail
+        .as_deref()
+        .unwrap_or("full")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "minimal" | "min" | "quiet" => cpn_installer::installer::InstallLogDetail::Minimal,
+        _ => cpn_installer::installer::InstallLogDetail::Full,
+    };
+    state.set_install_log_detail(detail);
     // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.
     let install_state = state.get_ref().clone();
     let server = request.server;
@@ -749,6 +760,7 @@ async fn main() -> std::io::Result<()> {
         allowed_hosts,
         cancel_requested: AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(crate::installer::InstallLogDetail::Full),
     });
     println!("✓ The web installer is ready:");
     if phase == "completed" && has_bootstrap_account {

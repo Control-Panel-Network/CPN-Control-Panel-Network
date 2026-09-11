@@ -155,6 +155,7 @@ async fn make_state() -> Arc<AppState> {
         allowed_hosts: crate::http_helpers::build_allowed_hosts(bind_port, &[]),
         cancel_requested: std::sync::atomic::AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(crate::installer::InstallLogDetail::Full),
     })
 }
 

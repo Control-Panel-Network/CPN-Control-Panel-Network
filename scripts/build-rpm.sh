@@ -6,7 +6,7 @@ ui_dir="$project_dir/installer-ui"
 rpm_root="$project_dir/target/rpmbuild"
 
 if [[ ! -f /etc/os-release ]]; then
-  echo "No se pudo identificar el sistema operativo (/etc/os-release)." >&2
+  echo "Could not identify the operating system (/etc/os-release)." >&2
   exit 1
 fi
 
@@ -23,9 +23,9 @@ for candidate in "${allowed_ids[@]}"; do
   fi
 done
 if [[ "$id_ok" -ne 1 ]] || [[ "$major" != "8" && "$major" != "9" && "$major" != "10" ]]; then
-  echo "Este empaquetado RPM debe ejecutarse en AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10 (detectado: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
-  echo "En otros hosts de desarrollo, usa ./scripts/docker-build-rpm.sh." >&2
-  echo "Los usuarios finales deben instalar los paquetes publicados en GitHub Releases." >&2
+  echo "This RPM packaging must run on AlmaLinux/Rocky/RHEL/CentOS/CloudLinux 8-10 (detected: ID=${ID:-unknown} VERSION_ID=${VERSION_ID:-unknown})." >&2
+  echo "On other development hosts, use ./scripts/docker-build-rpm.sh." >&2
+  echo "End users should install packages published on GitHub Releases." >&2
   exit 1
 fi
 

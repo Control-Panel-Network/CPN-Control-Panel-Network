@@ -2,7 +2,7 @@
 
 use crate::account::{default_password_policy, setup_account};
 use crate::cli_common::{is_root, print_generated, require_root_for_mutation};
-use crate::installer::AppState;
+use crate::installer::{AppState, InstallLogDetail};
 use crate::listen_port::{self, DEFAULT_PORT};
 use crate::model::{
     DatabaseEngine, InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ServerEngine,
@@ -195,6 +195,19 @@ fn prompt_account(
     Ok((username, password, generate, email.trim().to_string()))
 }
 
+fn prompt_install_detail() -> Result<InstallLogDetail, String> {
+    println!("\nInstallation log detail:");
+    println!("  1) Minimal  (high-level progress only; quieter console)");
+    println!("  2) Full     (stream package-manager output; more verbose)\n");
+    match prompt_choice("Select log detail", "1")?.as_str() {
+        "1" | "minimal" | "min" | "m" | "quiet" => Ok(InstallLogDetail::Minimal),
+        "2" | "full" | "f" | "verbose" | "detail" | "detailed" => Ok(InstallLogDetail::Full),
+        other => Err(format!(
+            "Unknown detail choice `{other}`. Use 1 (Minimal) or 2 (Full)."
+        )),
+    }
+}
+
 fn make_cli_state(bind_port: u16) -> Arc<AppState> {
     let (events, _) = broadcast::channel(256);
     Arc::new(AppState {
@@ -214,6 +227,7 @@ fn make_cli_state(bind_port: u16) -> Arc<AppState> {
         allowed_hosts: crate::http_helpers::build_allowed_hosts(bind_port, &[]),
         cancel_requested: AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(InstallLogDetail::Full),
     })
 }
 
@@ -377,7 +391,20 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         Err(e) => return fail(e),
     }
 
+    let detail = match prompt_install_detail() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    println!(
+        "Using {} installation logging for this run.",
+        match detail {
+            InstallLogDetail::Minimal => "minimal",
+            InstallLogDetail::Full => "full detailed",
+        }
+    );
+
     let state = make_cli_state(port);
+    state.set_install_log_detail(detail);
     let rx = state.events.subscribe();
     let pump = tokio::spawn(pump_events(rx));
     {

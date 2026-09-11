@@ -36,6 +36,7 @@ fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
         allowed_hosts: build_allowed_hosts(2087, &[]),
         cancel_requested: AtomicBool::new(false),
         active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(crate::installer::InstallLogDetail::Full),
     }))
 }
 
