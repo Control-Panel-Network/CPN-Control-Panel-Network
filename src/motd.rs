@@ -81,9 +81,11 @@ pub fn install_motd() -> Result<Vec<PathBuf>, String> {
 pub fn ensure_motd_installed() {
     match install_motd() {
         Ok(paths) if !paths.is_empty() => {
-            // Quiet success: operators see the banner on next SSH login.
+            crate::panel_login_facts::sync_public_login_facts();
         }
-        Ok(_) => {}
+        Ok(_) => {
+            crate::panel_login_facts::sync_public_login_facts();
+        }
         Err(error) => {
             eprintln!("cpn-installer: could not install login MOTD: {error}");
         }
@@ -205,6 +207,7 @@ mod tests {
         assert!(MOTD_SCRIPT.contains("cpn panel url --motd"));
         assert!(MOTD_SCRIPT.contains("listen_port"));
         assert!(MOTD_SCRIPT.contains("panel_public_url"));
+        assert!(MOTD_SCRIPT.contains("/etc/cpn"));
         assert!(MOTD_SCRIPT.contains("This server has installed CPN"));
         assert!(MOTD_SCRIPT.contains("cpn-installer.service"));
         assert!(!lower.contains("cyberpanel"));

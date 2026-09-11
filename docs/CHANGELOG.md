@@ -13,7 +13,8 @@ Cool live SSH MOTD and `cpn panel url` (Cargo `0.2.6-alpha.19`). Includes prior 
 
 - Cool CPN-branded interactive SSH MOTD (`/etc/profile.d/cpn-motd.sh`): ASCII banner, "This server has installed CPN", live login URL(s), start hints, load/CPU/RAM/disk/uptime. English only; no CyberPanel branding or passwords.
 - Operator commands: `cpn panel url`, `cpn panel status`, `cpn info` (status alias), and `cpn panel install-motd` (root). `--raw` for scripts; `--motd` for indented MOTD embedding.
-- MOTD resolves login URL(s) **live** on every interactive SSH login by calling `cpn panel url --motd` (fallback: read `/var/lib/cpn/listen_port`, `panel_public_url`, `panel_hostname`). Changing the panel port in the UI updates the next SSH banner without reinstall.
+- MOTD resolves login URL(s) **live** on every interactive SSH login by calling `cpn panel url --motd` (fallback: `/etc/cpn` world-readable mirror, then `/var/lib/cpn`). Changing the panel port in the UI updates the next SSH banner without reinstall.
+- Non-secret login facts (`listen_port`, `panel_public_url`, `panel_hostname`) are mirrored to `/etc/cpn/` (mode 644) whenever the panel writes them, so non-root SSH users see the same live URL while `$CPN_DATA_DIR` stays mode 700 for secrets.
 
 ### Changed
 

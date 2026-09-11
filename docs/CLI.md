@@ -30,7 +30,7 @@ Top-level groups:
 
 ## Panel URL and status
 
-Login URLs are resolved **live** from the same preference files the panel UI writes (`$CPN_DATA_DIR/listen_port`, `panel_public_url`, `panel_hostname`). Changing the listen port in Settings updates the next SSH MOTD and `cpn panel url` without reinstalling.
+Login URLs are resolved **live** from the same preference files the panel UI writes (`$CPN_DATA_DIR/listen_port`, `panel_public_url`, `panel_hostname`), with a world-readable mirror under `/etc/cpn/` so non-root SSH sessions can read them. Changing the listen port in Settings updates the next SSH MOTD and `cpn panel url` without reinstalling.
 
 ```bash
 cpn panel url

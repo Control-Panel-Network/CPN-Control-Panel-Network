@@ -109,9 +109,19 @@ _cpn_print_live_urls() {
       return 0
     fi
   fi
-  # Fallback if `cpn` is missing: read the same preference files the panel writes.
+  # Fallback: world-readable /etc/cpn mirror first, then root-only data dir.
+  _cpn_facts_dir="/etc/cpn"
+  if [ ! -r "${_cpn_facts_dir}/listen_port" ] && [ -r "${CPN_DATA_DIR}/listen_port" ]; then
+    _cpn_facts_dir="${CPN_DATA_DIR}"
+  fi
   _cpn_port="2087"
-  if [ -r "${CPN_DATA_DIR}/listen_port" ]; then
+  if [ -r "${_cpn_facts_dir}/listen_port" ]; then
+    _cpn_port_raw="$(tr -d '[:space:]' < "${_cpn_facts_dir}/listen_port" 2>/dev/null || true)"
+    case "${_cpn_port_raw}" in
+      ''|*[!0-9]*) ;;
+      *) _cpn_port="${_cpn_port_raw}" ;;
+    esac
+  elif [ -r "${CPN_DATA_DIR}/listen_port" ]; then
     _cpn_port_raw="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/listen_port" 2>/dev/null || true)"
     case "${_cpn_port_raw}" in
       ''|*[!0-9]*) ;;
@@ -119,11 +129,16 @@ _cpn_print_live_urls() {
     esac
   fi
   _cpn_hostname=""
-  if [ -r "${CPN_DATA_DIR}/panel_hostname" ]; then
+  if [ -r "${_cpn_facts_dir}/panel_hostname" ]; then
+    _cpn_hostname="$(tr -d '[:space:]' < "${_cpn_facts_dir}/panel_hostname" 2>/dev/null || true)"
+  elif [ -r "${CPN_DATA_DIR}/panel_hostname" ]; then
     _cpn_hostname="$(tr -d '[:space:]' < "${CPN_DATA_DIR}/panel_hostname" 2>/dev/null || true)"
   fi
   _cpn_public=""
-  if [ -r "${CPN_DATA_DIR}/panel_public_url" ]; then
+  if [ -r "${_cpn_facts_dir}/panel_public_url" ]; then
+    _cpn_public="$(tr -d '\r\n' < "${_cpn_facts_dir}/panel_public_url" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
+    _cpn_public="${_cpn_public%/}"
+  elif [ -r "${CPN_DATA_DIR}/panel_public_url" ]; then
     _cpn_public="$(tr -d '\r\n' < "${CPN_DATA_DIR}/panel_public_url" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
     _cpn_public="${_cpn_public%/}"
   fi

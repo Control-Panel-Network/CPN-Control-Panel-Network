@@ -62,6 +62,7 @@ pub fn save_preferred_listen_port(port: u16) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
+    crate::panel_login_facts::sync_public_login_facts();
     Ok(())
 }
 

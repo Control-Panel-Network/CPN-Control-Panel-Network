@@ -1,11 +1,11 @@
 //! `cpn panel` subcommands: live login URL and panel status (no secrets).
 
-use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::motd::ensure_motd_installed;
-use crate::panel_network::{
-    load_panel_hostname, preferred_listen_port_or_default, public_base_url,
+use crate::panel_login_facts::{
+    load_display_listen_port, load_display_panel_hostname, load_display_panel_public_url,
+    sync_public_login_facts,
 };
-use crate::panel_public_url::{load_panel_public_url, local_listen_base_url};
+use crate::panel_public_url::local_listen_base_url;
 use crate::panel_service::UNIT_NAME;
 use clap::Subcommand;
 use std::process::Command;
@@ -62,17 +62,28 @@ fn service_active_label() -> String {
     }
 }
 
-/// Resolve login URLs from live CPN data dir (port / public URL / hostname).
+fn primary_base_from(listen_port: u16, public: Option<&str>, hostname: Option<&str>) -> String {
+    if let Some(url) = public.map(str::trim).filter(|v| !v.is_empty()) {
+        return url.trim_end_matches('/').to_string();
+    }
+    if let Some(host) = hostname.map(str::trim).filter(|v| !v.is_empty()) {
+        return format!("https://{host}");
+    }
+    local_listen_base_url(listen_port)
+}
+
+/// Resolve login URLs from live CPN prefs (data dir, or `/etc/cpn` mirror for non-root).
 pub fn resolve_panel_url_info() -> PanelUrlInfo {
-    let listen_port = load_preferred_listen_port().unwrap_or(DEFAULT_PORT);
-    let listen_port = if listen_port == 0 {
-        preferred_listen_port_or_default()
-    } else {
-        listen_port
-    };
-    let panel_public_url = load_panel_public_url();
-    let panel_hostname = load_panel_hostname();
-    let primary_base = public_base_url(listen_port, None);
+    // Root callers refresh the world-readable mirror so MOTD stays current.
+    sync_public_login_facts();
+    let listen_port = load_display_listen_port();
+    let panel_public_url = load_display_panel_public_url();
+    let panel_hostname = load_display_panel_hostname();
+    let primary_base = primary_base_from(
+        listen_port,
+        panel_public_url.as_deref(),
+        panel_hostname.as_deref(),
+    );
     let local_base = local_listen_base_url(listen_port);
     let hostname_login = panel_hostname
         .as_ref()
@@ -174,8 +185,10 @@ pub fn run_panel(
         PanelCommands::InstallMotd => {
             require_root()?;
             ensure_motd_installed();
+            sync_public_login_facts();
             println!("motd_path=/etc/profile.d/cpn-motd.sh");
             println!("motd_lib=/usr/lib/cpn/cpn-motd.sh");
+            println!("facts_dir=/etc/cpn");
             Ok(())
         }
     }

@@ -95,6 +95,7 @@ pub mod panel_nav_catalog;
 pub mod panel_nav_chrome;
 pub mod panel_nav_tree;
 pub mod panel_nav_tree_chrome;
+pub mod panel_login_facts;
 pub mod panel_network;
 pub mod panel_notifications;
 pub mod panel_notifications_routes;
