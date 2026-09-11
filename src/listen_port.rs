@@ -131,7 +131,7 @@ pub fn print_installer_help(version: &str) {
     println!(
         "Default {DEFAULT_PORT} matches the cPanel WHM HTTPS port family (Cloudflare-friendly)."
     );
-    println!("Operator CLI: cpn network show|set-port|set-hostname.");
+    println!("Operator CLI: cpn network show|set-port|set-hostname|set-public-url.");
 }
 
 #[cfg(test)]

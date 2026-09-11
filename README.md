@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.1** (see [Changelog](docs/CHANGELOG.md)).
+- Current stable release: **v1.0.2** (see [Changelog](docs/CHANGELOG.md)).
 
 After the package install:
 

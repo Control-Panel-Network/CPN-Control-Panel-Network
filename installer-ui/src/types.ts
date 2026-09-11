@@ -105,6 +105,7 @@ export interface InstallerStatus {
   language?: string;
   listen_port?: number;
   panel_hostname?: string | null;
+  panel_public_url?: string | null;
   public_base_url?: string | null;
   port_migration?: {
     old_port: number;

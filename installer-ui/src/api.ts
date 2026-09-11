@@ -123,6 +123,7 @@ export async function setListenPort(
   options?: {
     old_port_policy?: "redirect_1m" | "redirect_3m" | "deny";
     panel_hostname?: string;
+    panel_public_url?: string;
   },
 ): Promise<ListenPortResponse> {
   const body: Record<string, unknown> = { port };
@@ -131,6 +132,9 @@ export async function setListenPort(
   }
   if (options?.panel_hostname !== undefined) {
     body.panel_hostname = options.panel_hostname;
+  }
+  if (options?.panel_public_url !== undefined) {
+    body.panel_public_url = options.panel_public_url;
   }
   const response = await apiFetch("/api/listen-port", {
     method: "POST",

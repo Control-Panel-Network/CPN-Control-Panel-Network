@@ -126,7 +126,7 @@ Notes:
   Default listen port is 2087 (Cloudflare-supported alternate HTTPS port; WHM HTTPS family). Lab installs may use another free port (for example 8787).
   Ports 1-65535 are accepted; prefer >1024 unless running as root.
   Preferred port, optional panel hostname, and port migration live under the CPN data directory (mode 0600 on Unix).
-  Operator network CLI: cpn network show|set-port|set-hostname|clear-hostname|clear-migration
+  Operator network CLI: cpn network show|set-port|set-hostname|clear-hostname|set-public-url|clear-public-url|clear-migration
   Repair overwrites only core packaged files listed in install-manifest.json under the CPN data directory.
   Accounts, bootstrap state, SMTP secrets, and other CPN data are preserved unless --reset-data is explicitly requested.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.

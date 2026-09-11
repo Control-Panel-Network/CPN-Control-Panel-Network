@@ -33,6 +33,10 @@ const en: LocaleMessages = {
   panelHostnameHint:
     "Use a DNS name such as panel.example.com for HTTPS login without a port in the URL. You must point DNS at this server and terminate TLS on 443 with a reverse proxy to the CPN listen port.",
   panelHostnamePlaceholder: "panel.example.com",
+  panelPublicUrlLabel: "External panel URL (optional)",
+  panelPublicUrlHint:
+    "Base URL browsers and password-reset emails should use (scheme + host + optional port). For VirtualBox NAT, set the host forward, for example http://127.0.0.1:2089. This is preferred over the hostname when set.",
+  panelPublicUrlPlaceholder: "http://127.0.0.1:2089",
   networkSave: "Save networking",
   selectLabel: "Select",
   compareLink: "Not sure which one to pick? Compare features",

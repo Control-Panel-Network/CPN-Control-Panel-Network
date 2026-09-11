@@ -82,8 +82,11 @@ pub struct NetworkPublic {
     pub listen_port: u16,
     pub preferred_listen_port: u16,
     pub panel_hostname: Option<String>,
+    /// Optional external base URL for emails/browsers (scheme+host[:port]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub panel_public_url: Option<String>,
     pub port_migration: Option<PortMigrationPublic>,
-    /// Suggested public login base (hostname without port, or host:port).
+    /// Suggested public login base (external URL, hostname, or loopback:port).
     pub public_base_url: String,
 }
 
@@ -322,18 +325,17 @@ pub fn preferred_listen_port_or_default() -> u16 {
 }
 
 pub fn public_base_url(listen_port: u16, host_hint: Option<&str>) -> String {
+    let _ = host_hint;
+    // Prefer an operator-set external URL (NAT labs, reverse proxies) over hostname.
+    if let Some(url) = crate::panel_public_url::load_panel_public_url() {
+        return url;
+    }
     if let Some(hostname) = load_panel_hostname() {
         // Subdomain without port: operators terminate TLS on 443 and proxy to listen_port.
         return format!("https://{hostname}");
     }
-    let host = host_hint.unwrap_or("127.0.0.1");
-    if listen_port == 443 {
-        format!("https://{host}")
-    } else if listen_port == 80 {
-        format!("http://{host}")
-    } else {
-        format!("http://{host}:{listen_port}")
-    }
+    // Loopback listen URL: reachable on the guest; set panel_public_url for host NAT ports.
+    crate::panel_public_url::local_listen_base_url(listen_port)
 }
 
 pub fn migration_public(migration: &PortMigration, bind_port: u16) -> PortMigrationPublic {
@@ -357,6 +359,7 @@ pub fn network_public(bind_port: u16, host_hint: Option<&str>) -> NetworkPublic 
         listen_port: bind_port,
         preferred_listen_port: preferred,
         panel_hostname: load_panel_hostname(),
+        panel_public_url: crate::panel_public_url::load_panel_public_url(),
         port_migration: migration,
         public_base_url: public_base_url(bind_port, host_hint),
     }
@@ -432,6 +435,27 @@ mod tests {
                 public_base_url(2087, Some("10.0.0.5")),
                 "https://panel.example.com"
             );
+        });
+    }
+
+    #[test]
+    fn public_base_prefers_external_url_over_hostname() {
+        with_test_data_dir(|| {
+            save_panel_hostname("panel.example.com").unwrap();
+            crate::panel_public_url::save_panel_public_url("http://127.0.0.1:2089").unwrap();
+            assert_eq!(
+                public_base_url(2087, Some("10.0.0.5")),
+                "http://127.0.0.1:2089"
+            );
+            crate::panel_public_url::clear_panel_public_url().unwrap();
+            clear_panel_hostname().unwrap();
+        });
+    }
+
+    #[test]
+    fn public_base_defaults_to_loopback() {
+        with_test_data_dir(|| {
+            assert_eq!(public_base_url(2087, Some("10.0.2.15")), "http://127.0.0.1:2087");
         });
     }
 

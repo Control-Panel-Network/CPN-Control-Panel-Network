@@ -13,7 +13,7 @@ use crate::auth_pages::{
 use crate::http_helpers::{enrich_status, panel_login_url_for};
 use crate::installer::AppState;
 use crate::mail_outbound::{build_password_reset_email, send_mail};
-use crate::model::InstallerStatus;
+use crate::panel_public_url::panel_email_bases;
 use crate::panel_session::{
     clear_mfa_pending_cookie_header, create_session_token, session_cookie_header, session_secret,
 };
@@ -36,22 +36,6 @@ fn client_key_from_request(http: &HttpRequest) -> Option<String> {
     // Use the peer socket address only (not X-Forwarded-For) so rate-limit keys
     // are not derived from attacker-controlled header text (CodeQL allocation/log).
     http.peer_addr().map(|addr| addr.ip().to_string())
-}
-
-fn panel_base_url_for(status: &InstallerStatus) -> String {
-    if let Some(base) = status
-        .public_base_url
-        .as_ref()
-        .filter(|v| !v.trim().is_empty())
-    {
-        return base.trim_end_matches('/').to_string();
-    }
-    let host_hint = status
-        .environment
-        .as_ref()
-        .and_then(|env_info| env_info.addresses.first())
-        .map(String::as_str);
-    crate::panel_network::public_base_url(status.listen_port, host_hint)
 }
 
 fn forgot_ack_response() -> HttpResponse {
@@ -102,11 +86,22 @@ pub async fn forgot_password_submit(
             .unwrap_or_else(|e| e.into_inner())
             .clone();
         let status = enrich_status(status, &state.token);
-        let base = panel_base_url_for(&status);
+        let host_hint = status
+            .environment
+            .as_ref()
+            .and_then(|env_info| env_info.addresses.first())
+            .map(String::as_str);
+        let bases = panel_email_bases(status.listen_port, host_hint);
         let login_url = panel_login_url_for(&status, &state.token);
         if let Ok(raw_token) = create_reset_token(&username) {
-            let reset_url = format!("{base}/reset-password?token={raw_token}");
-            let mut message = build_password_reset_email(&reset_url, &login_url);
+            let reset_url = format!("{}/reset-password?token={raw_token}", bases.primary);
+            let alternate_reset_urls: Vec<String> = bases
+                .alternates
+                .iter()
+                .map(|base| format!("{base}/reset-password?token={raw_token}"))
+                .collect();
+            let mut message =
+                build_password_reset_email(&reset_url, &login_url, &alternate_reset_urls);
             message.to = recovery_email;
             let _ = send_mail(&message);
         }

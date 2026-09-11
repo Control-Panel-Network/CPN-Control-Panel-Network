@@ -342,6 +342,7 @@ pub fn enrich_status(mut status: InstallerStatus, token: &str) -> InstallerStatu
         .map(String::as_str);
     let network = crate::panel_network::network_public(status.listen_port, host_hint);
     status.panel_hostname = network.panel_hostname.clone();
+    status.panel_public_url = network.panel_public_url.clone();
     status.port_migration = network.port_migration.clone();
     status.public_base_url = Some(network.public_base_url);
     status.panel_login_url = None;
