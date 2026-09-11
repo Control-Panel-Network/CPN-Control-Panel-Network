@@ -505,11 +505,14 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     }
 
     println!("\nInstallation finished.");
-    println!("Start or reopen the panel with: sudo cpn-installer --web");
-    println!("Default local URL: http://127.0.0.1:{port}/login");
-    if !hostname.is_empty() {
-        println!("Hostname login (after DNS + TLS proxy): https://{hostname}/login");
-    }
+    crate::motd::ensure_motd_installed();
+    let host = if hostname.is_empty() {
+        None
+    } else {
+        Some(hostname.as_str())
+    };
+    crate::motd::print_panel_ready_banner(VERSION, port, host);
+    println!("SSH logins will show the CPN MOTD (English) via /etc/profile.d/cpn-motd.sh.");
     println!("Keep using English unless you change language in the panel.");
     0
 }

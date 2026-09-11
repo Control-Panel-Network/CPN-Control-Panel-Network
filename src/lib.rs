@@ -45,6 +45,7 @@ pub mod mail_releases;
 pub mod maintenance_api;
 pub mod manifest;
 pub mod model;
+pub mod motd;
 pub mod os_support;
 pub mod package_quota;
 pub mod packages;

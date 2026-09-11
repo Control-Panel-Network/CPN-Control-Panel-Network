@@ -675,6 +675,7 @@ async fn main() -> std::io::Result<()> {
 
     println!("\nCPN Server Panel · Installer {VERSION}");
     println!("Starting the web installer (English by default)...\n");
+    cpn_installer::motd::ensure_motd_installed();
     let token: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)
@@ -763,8 +764,14 @@ async fn main() -> std::io::Result<()> {
         install_log_detail: std::sync::Mutex::new(cpn_installer::installer::InstallLogDetail::Full),
     });
     println!("✓ The web installer is ready:");
+    cpn_installer::motd::print_panel_ready_banner(
+        VERSION,
+        listen_port,
+        startup_hostname.as_deref(),
+    );
     if phase == "completed" && has_bootstrap_account {
         cpn_installer::paths::clear_installer_bootstrap_token();
+        println!("Panel account is already set up. Open the login URL above (no installer token).");
     } else {
         match cpn_installer::paths::persist_bootstrap_token_for_startup(&token, remote) {
             Ok(Some(path)) => {
@@ -784,23 +791,25 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
-    if remote {
-        println!("  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS).");
-        println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
-        println!(
-            "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
-        );
-        println!(
-            "  Token fingerprint (last 4): ...{}",
-            &token[token.len().saturating_sub(4)..]
-        );
-        println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
-    } else {
-        println!("  http://127.0.0.1:{listen_port}/?token={token}");
-        println!(
-            "  Recommended remote access via SSH tunnel, for example:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
-        );
-        println!("  To listen on all interfaces: --allow-remote or CPN_ALLOW_REMOTE=1");
+    if phase != "completed" || !has_bootstrap_account {
+        if remote {
+            println!("  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS).");
+            println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
+            println!(
+                "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
+            );
+            println!(
+                "  Token fingerprint (last 4): ...{}",
+                &token[token.len().saturating_sub(4)..]
+            );
+            println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
+        } else {
+            println!("  http://127.0.0.1:{listen_port}/?token={token}");
+            println!(
+                "  Recommended remote access via SSH tunnel, for example:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
+            );
+            println!("  To listen on all interfaces: --allow-remote or CPN_ALLOW_REMOTE=1");
+        }
     }
     println!("  Listen port: {listen_port} (change with --port, CPN_LISTEN_PORT, or the UI)");
     if let Some(hostname) = startup_hostname.as_ref() {

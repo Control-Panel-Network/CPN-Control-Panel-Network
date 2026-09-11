@@ -46,6 +46,7 @@ mkdir -p "$rpm_root"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"
 install -m 0755 target/release/cpn "$rpm_root/SOURCES/cpn"
 install -m 0644 packaging/cpn-installer.service "$rpm_root/SOURCES/cpn-installer.service"
+install -m 0755 packaging/cpn-motd.sh "$rpm_root/SOURCES/cpn-motd.sh"
 install -m 0644 packaging/cpn-installer.spec "$rpm_root/SPECS/cpn-installer.spec"
 rpmbuild --define "_topdir $rpm_root" -bb "$rpm_root/SPECS/cpn-installer.spec"
 

@@ -7,6 +7,7 @@ URL:            https://github.com/Control-Panel-Network/CPN-Control-Panel-Netwo
 Source0:        cpn-installer
 Source1:        cpn
 Source2:        cpn-installer.service
+Source3:        cpn-motd.sh
 
 ExclusiveArch:  x86_64 aarch64
 Requires:       systemd
@@ -26,6 +27,8 @@ Incluye la CLI de operador cpn para administración desde SSH.
 install -Dpm 0755 %{SOURCE0} %{buildroot}%{_bindir}/cpn-installer
 install -Dpm 0755 %{SOURCE1} %{buildroot}%{_bindir}/cpn
 install -Dpm 0644 %{SOURCE2} %{buildroot}/usr/lib/systemd/system/cpn-installer.service
+install -Dpm 0755 %{SOURCE3} %{buildroot}/usr/lib/cpn/cpn-motd.sh
+install -Dpm 0755 %{SOURCE3} %{buildroot}/etc/profile.d/cpn-motd.sh
 
 %post
 systemctl daemon-reload >/dev/null 2>&1 || :
@@ -37,6 +40,8 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_bindir}/cpn-installer
 %{_bindir}/cpn
 /usr/lib/systemd/system/cpn-installer.service
+/usr/lib/cpn/cpn-motd.sh
+/etc/profile.d/cpn-motd.sh
 
 %changelog
 * Thu Sep 03 2026 CPN <dev@cpn.invalid> - 0.2.0-1

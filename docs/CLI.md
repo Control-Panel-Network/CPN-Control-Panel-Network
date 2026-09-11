@@ -202,3 +202,16 @@ For remote installation with the web UI, SSH forwarding is safer than exposing t
 The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). After the Summary confirmation it asks for **Minimal** or **Full detailed** logging for that run (Minimal = high-level progress; Full = stream dnf/apt output). Advanced web-only UI options remain available via `--web`.
 
 Installer progress titles, wait heartbeats, and engine errors are English by default (independent of guest `LANG`).
+
+## SSH login MOTD and panel-ready banner
+
+After a successful install (web or `--cli`), CPN installs `/etc/profile.d/cpn-motd.sh` (also under `/usr/lib/cpn/cpn-motd.sh`). Interactive SSH logins show an English CPN banner with:
+
+- Panel version and login URL(s) (`https://<hostname>/login` when configured, else `http://127.0.0.1:<port>/login`)
+- Hints for `sudo cpn-installer --web` and `--cli`
+- Host facts: time, load average, CPU (load-based), RAM, disk on `/`, uptime
+- Optional last login / recent auth-fail counts when system logs allow
+
+Starting the panel with `sudo cpn-installer --web` (including systemd `ExecStart=... --web`) prints a short English "panel ready" summary (URL, port, version). It never prints account passwords; generated passwords remain path-only via `generated_password_file=...`.
+
+MOTD language is English for now (panel UI language can differ). There is no CyberPanel branding in these banners.

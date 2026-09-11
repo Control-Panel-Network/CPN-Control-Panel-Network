@@ -48,11 +48,14 @@ deb_version="${cargo_version/-/\~}"
 arch="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 pkg_root="$out_dir/cpn-installer_${deb_version}_$arch"
 rm -rf "$pkg_root"
-mkdir -p "$pkg_root/DEBIAN" "$pkg_root/usr/bin" "$pkg_root/lib/systemd/system"
+mkdir -p "$pkg_root/DEBIAN" "$pkg_root/usr/bin" "$pkg_root/lib/systemd/system" \
+  "$pkg_root/usr/lib/cpn" "$pkg_root/etc/profile.d"
 
 install -m 0755 target/release/cpn-installer "$pkg_root/usr/bin/cpn-installer"
 install -m 0755 target/release/cpn "$pkg_root/usr/bin/cpn"
 install -m 0644 packaging/cpn-installer.service "$pkg_root/lib/systemd/system/cpn-installer.service"
+install -m 0755 packaging/cpn-motd.sh "$pkg_root/usr/lib/cpn/cpn-motd.sh"
+install -m 0755 packaging/cpn-motd.sh "$pkg_root/etc/profile.d/cpn-motd.sh"
 
 cat >"$pkg_root/DEBIAN/control" <<EOF
 Package: cpn-installer
@@ -65,7 +68,7 @@ Depends: systemd, curl, ca-certificates
 Homepage: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network
 Description: CPN Control Panel Network web installer
  Experimental CPN installer package for supported Ubuntu and Debian guests.
- Includes the installer, operator CLI, and systemd unit.
+ Includes the installer, operator CLI, systemd unit, and SSH login MOTD.
 EOF
 
 cat >"$pkg_root/DEBIAN/postinst" <<'EOF'
