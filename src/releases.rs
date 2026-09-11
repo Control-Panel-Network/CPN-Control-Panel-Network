@@ -355,8 +355,8 @@ pub async fn version_check(running_version: &str, installed_version: &str) -> Ve
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_versions, deb_name_matches, is_active_0_2_line, is_retired_cpn_1_0_identity,
-        is_retag_migration, normalize_version, rpm_name_matches,
+        compare_versions, deb_name_matches, is_active_0_2_line, is_retag_migration,
+        is_retired_cpn_1_0_identity, normalize_version, rpm_name_matches,
     };
     use std::cmp::Ordering;
 

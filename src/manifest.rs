@@ -246,9 +246,7 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     let detected = has_manifest || has_bootstrap;
 
     let package_version = {
-        let from_manifest = manifest
-            .as_ref()
-            .map(|item| item.package_version.clone());
+        let from_manifest = manifest.as_ref().map(|item| item.package_version.clone());
         match (from_manifest, rpm_version.clone()) {
             (Some(manifest_ver), Some(rpm_ver))
                 if crate::releases::is_retired_cpn_1_0_identity(&manifest_ver)
