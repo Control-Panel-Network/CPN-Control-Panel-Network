@@ -78,7 +78,11 @@ pub fn webmail_ready() -> bool {
 }
 
 fn normalize_public_path(raw: &str) -> Result<String, String> {
-    let mut path = raw.trim().trim_end_matches('/').to_string();
+    let trimmed = raw.trim();
+    if trimmed == "/" || trimmed.chars().all(|ch| ch == '/') {
+        return Err("Webmail public path cannot be the panel root `/`".into());
+    }
+    let mut path = trimmed.trim_end_matches('/').to_string();
     if path.is_empty() {
         path = detect_default_public_path();
     }
