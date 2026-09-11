@@ -1,6 +1,6 @@
 [package]
 name = "cpn-installer"
-version = "1.0.2-alpha.1"
+version = "1.0.2"
 edition = "2024"
 description = "CPN Server Panel installer (web UI and SSH/CLI)"
 license = "GPL-3.0-only"
