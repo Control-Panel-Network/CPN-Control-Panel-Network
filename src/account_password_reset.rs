@@ -289,8 +289,8 @@ pub fn invalidate_tokens_for_user(username: &str) {
 mod tests {
     use super::*;
     use crate::account::{
-        PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
-        with_test_data_dir, write_account_file,
+        PanelBootstrap, default_password_policy, generate_password, hash_password,
+        new_password_salt, with_test_data_dir, write_account_file,
     };
     use crate::account_mgmt::reset_account_password;
 
