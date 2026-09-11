@@ -361,7 +361,7 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
         let exit = child.wait().await.map_err(|error| error.to_string())?;
         if !exit.success() {
             return Err(format!(
-                "{description} exited with code {}\n{}"
+                "{description} exited with code {}\n{}",
                 exit.code().unwrap_or(-1),
                 diagnostic.into_iter().collect::<Vec<_>>().join("\n")
             ));
