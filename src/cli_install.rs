@@ -57,18 +57,22 @@ fn prompt_frontend_choice() -> Result<InstallFrontend, String> {
     println!("How do you want to install?");
     println!("  1) Web UI   (open a browser; default for remote SSH tunnels)");
     println!("  2) SSH/CLI  (answer questions in this terminal)\n");
-    eprint!("Enter choice [1/2] (default: 1): ");
-    let _ = io::stderr().flush();
-    let mut line = String::new();
-    io::stdin()
-        .read_line(&mut line)
-        .map_err(|e| format!("Failed to read install mode: {e}"))?;
-    match line.trim() {
-        "" | "1" | "web" | "ui" | "w" => Ok(InstallFrontend::Web),
-        "2" | "cli" | "ssh" | "c" | "s" => Ok(InstallFrontend::Cli),
-        other => Err(format!(
-            "Unknown choice `{other}`. Use 1 (Web UI) or 2 (SSH/CLI), or pass --web / --cli."
-        )),
+    loop {
+        eprint!("Enter choice [1/2] (default: 1): ");
+        let _ = io::stderr().flush();
+        let mut line = String::new();
+        io::stdin()
+            .read_line(&mut line)
+            .map_err(|e| format!("Failed to read install mode: {e}"))?;
+        match line.trim() {
+            "" | "1" | "web" | "ui" | "w" => return Ok(InstallFrontend::Web),
+            "2" | "cli" | "ssh" | "c" | "s" => return Ok(InstallFrontend::Cli),
+            other => {
+                eprintln!(
+                    "error: Unknown choice `{other}`. Enter 1 (Web UI) or 2 (SSH/CLI), or pass --web / --cli."
+                );
+            }
+        }
     }
 }
 
@@ -91,16 +95,35 @@ fn prompt_choice(prompt: &str, default: &str) -> Result<String, String> {
     })
 }
 
+/// Ask until `parse` accepts the choice (empty input already resolved to `default`).
+/// Prints a clear English error and re-prompts; only I/O failures abort.
+fn prompt_menu<T, F>(prompt: &str, default: &str, mut parse: F) -> Result<T, String>
+where
+    F: FnMut(&str) -> Result<T, String>,
+{
+    loop {
+        let raw = prompt_choice(prompt, default)?;
+        match parse(raw.as_str()) {
+            Ok(value) => return Ok(value),
+            Err(msg) => eprintln!("error: {msg}"),
+        }
+    }
+}
+
 fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool, String> {
     let hint = if default_yes { "Y/n" } else { "y/N" };
-    let raw = read_line(&format!("{prompt} [{hint}]: "))?;
-    if raw.is_empty() {
-        return Ok(default_yes);
-    }
-    match raw.to_ascii_lowercase().as_str() {
-        "y" | "yes" => Ok(true),
-        "n" | "no" => Ok(false),
-        other => Err(format!("Expected yes/no, got `{other}`")),
+    loop {
+        let raw = read_line(&format!("{prompt} [{hint}]: "))?;
+        if raw.is_empty() {
+            return Ok(default_yes);
+        }
+        match raw.to_ascii_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            other => {
+                eprintln!("error: Expected yes/no (y or n), got `{other}`.");
+            }
+        }
     }
 }
 
@@ -109,14 +132,14 @@ fn prompt_server() -> Result<ServerEngine, String> {
     println!("  1) OpenLiteSpeed  (recommended for WordPress / LSCache)");
     println!("  2) Nginx");
     println!("  3) Caddy");
-    match prompt_choice("Select web server", "1")?.as_str() {
+    prompt_menu("Enter 1-3 for web server", "1", |raw| match raw {
         "1" | "ols" | "openlitespeed" => Ok(ServerEngine::Openlitespeed),
         "2" | "nginx" => Ok(ServerEngine::Nginx),
         "3" | "caddy" => Ok(ServerEngine::Caddy),
         other => Err(format!(
-            "Unknown server `{other}`. Use 1 (OpenLiteSpeed), 2 (Nginx), or 3 (Caddy)."
+            "Unknown server `{other}`. Enter 1 (OpenLiteSpeed), 2 (Nginx), or 3 (Caddy)."
         )),
-    }
+    })
 }
 
 fn prompt_database() -> Result<DatabaseEngine, String> {
@@ -124,12 +147,24 @@ fn prompt_database() -> Result<DatabaseEngine, String> {
     println!("  1) MariaDB   (default)");
     println!("  2) MySQL");
     println!("  3) None      (skip local database packages)");
-    match prompt_choice("Select database", "1")?.as_str() {
+    prompt_menu("Enter 1-3 for database", "1", |raw| match raw {
         "1" | "mariadb" | "maria" => Ok(DatabaseEngine::Mariadb),
         "2" | "mysql" => Ok(DatabaseEngine::Mysql),
         "3" | "none" | "skip" => Ok(DatabaseEngine::None),
         other => Err(format!(
-            "Unknown database `{other}`. Use 1 (MariaDB), 2 (MySQL), or 3 (none)."
+            "Unknown database `{other}`. Enter 1 (MariaDB), 2 (MySQL), or 3 (none)."
+        )),
+    })
+}
+
+fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
+    match raw {
+        "1" | "skip" | "none" | "n" => Ok(None),
+        "2" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
+        "3" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
+        "4" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
+        other => Err(format!(
+            "Unknown mail option `{other}`. Enter 1 (skip), 2, 3, or 4 (not an email address)."
         )),
     }
 }
@@ -140,27 +175,21 @@ fn prompt_mail() -> Result<Option<MailSystem>, String> {
     println!("  2) SnappyMail");
     println!("  3) Roundcube");
     println!("  4) Thunderbird (desktop client package only)");
-    match prompt_choice("Select mail option", "1")?.as_str() {
-        "1" | "skip" | "none" | "n" => Ok(None),
-        "2" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
-        "3" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
-        "4" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
-        other => Err(format!(
-            "Unknown mail option `{other}`. Use 1 (skip), 2, 3, or 4."
-        )),
-    }
+    println!("Enter a menu number 1-4 (not an email address). Empty uses 1 (Skip).");
+    prompt_menu("Enter 1-4 for mail option", "1", parse_mail_option)
 }
 
 fn prompt_port(default: u16) -> Result<u16, String> {
     println!("\nPanel listen port (saved preference; default {DEFAULT_PORT}).");
-    let raw = prompt_choice("Panel port", &default.to_string())?;
-    let port: u16 = raw
-        .parse()
-        .map_err(|_| format!("Invalid port `{raw}` (use 1-65535)"))?;
-    if port == 0 {
-        return Err("Port must be between 1 and 65535".into());
-    }
-    Ok(port)
+    prompt_menu("Panel port", &default.to_string(), |raw| {
+        let port: u16 = raw
+            .parse()
+            .map_err(|_| format!("Invalid port `{raw}` (use 1-65535)."))?;
+        if port == 0 {
+            return Err("Port must be between 1 and 65535.".into());
+        }
+        Ok(port)
+    })
 }
 
 fn prompt_account(
@@ -172,40 +201,48 @@ fn prompt_account(
     let password = if generate {
         None
     } else {
-        eprint!("Password: ");
-        let _ = io::stderr().flush();
-        let value =
-            rpassword::read_password().map_err(|e| format!("Failed to read password: {e}"))?;
-        if value.is_empty() {
-            return Err("Password was empty".into());
+        loop {
+            eprint!("Password: ");
+            let _ = io::stderr().flush();
+            let value =
+                rpassword::read_password().map_err(|e| format!("Failed to read password: {e}"))?;
+            if value.is_empty() {
+                eprintln!("error: Password was empty. Enter a non-empty password.");
+                continue;
+            }
+            eprint!("Confirm password: ");
+            let _ = io::stderr().flush();
+            let confirm = rpassword::read_password()
+                .map_err(|e| format!("Failed to read password confirmation: {e}"))?;
+            if confirm != value {
+                eprintln!("error: Passwords do not match. Try again.");
+                continue;
+            }
+            break Some(value);
         }
-        eprint!("Confirm password: ");
-        let _ = io::stderr().flush();
-        let confirm = rpassword::read_password()
-            .map_err(|e| format!("Failed to read password confirmation: {e}"))?;
-        if confirm != value {
-            return Err("Passwords do not match".into());
-        }
-        Some(value)
     };
-    let email = read_line("Recovery email: ")?;
-    if email.trim().is_empty() {
-        return Err("Recovery email is required".into());
-    }
-    Ok((username, password, generate, email.trim().to_string()))
+    let email = loop {
+        let email = read_line("Recovery email: ")?;
+        if email.trim().is_empty() {
+            eprintln!("error: Recovery email is required.");
+            continue;
+        }
+        break email.trim().to_string();
+    };
+    Ok((username, password, generate, email))
 }
 
 fn prompt_install_detail() -> Result<InstallLogDetail, String> {
     println!("\nInstallation log detail:");
     println!("  1) Minimal  (high-level progress only; quieter console)");
     println!("  2) Full     (stream package-manager output; more verbose)\n");
-    match prompt_choice("Select log detail", "1")?.as_str() {
+    prompt_menu("Enter 1-2 for log detail", "1", |raw| match raw {
         "1" | "minimal" | "min" | "m" | "quiet" => Ok(InstallLogDetail::Minimal),
         "2" | "full" | "f" | "verbose" | "detail" | "detailed" => Ok(InstallLogDetail::Full),
         other => Err(format!(
-            "Unknown detail choice `{other}`. Use 1 (Minimal) or 2 (Full)."
+            "Unknown detail choice `{other}`. Enter 1 (Minimal) or 2 (Full)."
         )),
-    }
+    })
 }
 
 fn make_cli_state(bind_port: u16) -> Arc<AppState> {
@@ -510,5 +547,25 @@ mod tests {
             let mode = resolve_install_frontend(&["cpn-installer".into()]).unwrap();
             assert_eq!(mode, InstallFrontend::Web);
         }
+    }
+
+    #[test]
+    fn mail_option_rejects_email_and_accepts_menu() {
+        assert!(parse_mail_option("info@newstargeted.com").is_err());
+        assert!(parse_mail_option("1").unwrap().is_none());
+        assert!(matches!(
+            parse_mail_option("2").unwrap(),
+            Some(MailSystem::Snappymail)
+        ));
+        assert!(matches!(
+            parse_mail_option("3").unwrap(),
+            Some(MailSystem::Roundcube)
+        ));
+        assert!(matches!(
+            parse_mail_option("4").unwrap(),
+            Some(MailSystem::Thunderbird)
+        ));
+        let err = parse_mail_option("info@newstargeted.com").unwrap_err();
+        assert!(err.contains("not an email address"));
     }
 }

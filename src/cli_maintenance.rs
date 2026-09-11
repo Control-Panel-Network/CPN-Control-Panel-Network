@@ -253,7 +253,11 @@ pub async fn run_cli(mode: CliMode) -> i32 {
         CliMode::EnsureDatabaseDefaults {
             database,
             install_phpmyadmin,
-        } => match crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin) {
+        } => match crate::db_defaults::ensure_database_defaults(
+            database,
+            install_phpmyadmin,
+            None,
+        ) {
             Ok(notes) => {
                 for note in notes {
                     println!("{note}");

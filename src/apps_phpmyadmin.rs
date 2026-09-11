@@ -3,10 +3,11 @@
 use crate::apps_pkg::{
     enable_now, install_packages_dnf_or_apt, package_manager, rpm_or_dpkg_installed,
 };
+use crate::model::ServerEngine;
 use crate::service_detect::{port_open, systemd_unit_active};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const NGINX_CONF: &str = "/etc/nginx/conf.d/cpn-phpmyadmin.conf";
 const FPM_POOL: &str = "/etc/php-fpm.d/cpn-phpmyadmin.conf";
@@ -24,8 +25,16 @@ pub fn phpmyadmin_share_dir() -> Option<PathBuf> {
         .find(|path| path.is_dir())
 }
 
-/// Install packages (EPEL on dnf hosts) and wire a loopback nginx + php-fpm listener.
+/// Install packages (EPEL on dnf hosts) and wire a loopback listener when safe.
 pub fn install_and_expose() -> Result<String, String> {
+    install_and_expose_for(None)
+}
+
+/// Same as [`install_and_expose`], but respects the selected web engine.
+///
+/// When OpenLiteSpeed or Caddy owns HTTP, do **not** start/reload/enable nginx
+/// (default nginx.conf binds :80 and conflicts). Packages + php-fpm still install.
+pub fn install_and_expose_for(web_server: Option<ServerEngine>) -> Result<String, String> {
     ensure_epel()?;
     install_packages_dnf_or_apt(
         &[
@@ -43,31 +52,28 @@ pub fn install_and_expose() -> Result<String, String> {
         )
     })?;
     write_fpm_pool(&share)?;
-    write_nginx_vhost(&share)?;
     ensure_selinux_http_port(8081);
-    if !systemd_unit_active("php-fpm") {
-        let _ = enable_now(&["php-fpm"]);
-    } else {
-        let _ = Command::new("systemctl")
-            .args(["reload", "php-fpm"])
-            .status();
+    reload_or_enable_php_fpm();
+
+    if !should_wire_nginx_listener(web_server) {
+        return Ok(format!(
+            "Installed phpMyAdmin under {}. Nginx loopback listener skipped (OpenLiteSpeed/Caddy owns HTTP, or nginx is not the selected engine). Share path is ready; wire a vhost later from Apps if needed.",
+            share.display()
+        ));
     }
-    if Path::new("/usr/sbin/nginx").exists() || Path::new("/usr/bin/nginx").exists() {
-        let _ = Command::new("nginx").args(["-t"]).status();
-        let reload_ok = Command::new("systemctl")
-            .args(["reload", "nginx"])
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
-        if !reload_ok {
-            let _ = Command::new("systemctl")
-                .args(["restart", "nginx"])
-                .status();
-        }
-        if !systemd_unit_active("nginx") {
-            enable_now(&["nginx"])?;
+
+    write_nginx_vhost(&share)?;
+    match activate_nginx_for_phpmyadmin() {
+        Ok(()) => {}
+        Err(note) => {
+            return Ok(format!(
+                "Installed phpMyAdmin under {}. {note} Local URL when nginx can start safely: {}.",
+                share.display(),
+                LISTEN_URL
+            ));
         }
     }
+
     if !port_open("127.0.0.1:8081", 500) {
         return Ok(format!(
             "Installed phpMyAdmin under {}. Local listener {} is not accepting yet; reload nginx/php-fpm or open Apps.",
@@ -80,6 +86,103 @@ pub fn install_and_expose() -> Result<String, String> {
         share.display(),
         LISTEN_URL
     ))
+}
+
+fn should_wire_nginx_listener(web_server: Option<ServerEngine>) -> bool {
+    match web_server {
+        Some(ServerEngine::Nginx) => true,
+        Some(ServerEngine::Openlitespeed) | Some(ServerEngine::Caddy) => false,
+        None => {
+            // Apps / standalone: only manage nginx when it is already the HTTP stack,
+            // or when OLS/Caddy are not active (avoid reclaiming :80 from OLS).
+            if ols_or_caddy_active() {
+                return false;
+            }
+            nginx_binary_present()
+        }
+    }
+}
+
+fn ols_or_caddy_active() -> bool {
+    systemd_unit_active("lshttpd")
+        || systemd_unit_active("lsws")
+        || systemd_unit_active("openlitespeed")
+        || systemd_unit_active("caddy")
+}
+
+fn nginx_binary_present() -> bool {
+    Path::new("/usr/sbin/nginx").exists() || Path::new("/usr/bin/nginx").exists()
+}
+
+fn reload_or_enable_php_fpm() {
+    if !systemd_unit_active("php-fpm") {
+        let _ = enable_now(&["php-fpm"]);
+    } else {
+        let _ = quiet_systemctl(&["reload", "php-fpm"]);
+    }
+}
+
+/// Reload nginx when already active; otherwise start only if :80 is free or already nginx.
+/// Never enable a unit that cannot start (avoids broken enable symlink spam).
+fn activate_nginx_for_phpmyadmin() -> Result<(), String> {
+    if !nginx_binary_present() {
+        return Err(
+            "Nginx binary not present; skipped loopback :8081 vhost (install nginx only when it is the selected web engine)."
+                .into(),
+        );
+    }
+
+    let _ = quiet_command("nginx", &["-t"]);
+
+    if systemd_unit_active("nginx") {
+        if quiet_systemctl(&["reload", "nginx"]) {
+            return Ok(());
+        }
+        if quiet_systemctl(&["restart", "nginx"]) && systemd_unit_active("nginx") {
+            return Ok(());
+        }
+        return Err(
+            "Nginx reload/restart failed; left unit as-is (check /etc/nginx and :8081)."
+                .into(),
+        );
+    }
+
+    if port_open("0.0.0.0:80", 200) || port_open("127.0.0.1:80", 200) {
+        return Err(
+            "Skipped starting nginx: TCP :80 is already in use (often OpenLiteSpeed). Default nginx.conf also binds :80, so starting it would fail. phpMyAdmin packages remain installed."
+                .into(),
+        );
+    }
+
+    if quiet_systemctl(&["start", "nginx"]) && systemd_unit_active("nginx") {
+        let _ = quiet_systemctl(&["enable", "nginx"]);
+        return Ok(());
+    }
+
+    Err(
+        "Skipped enabling nginx: start failed (likely a port or config conflict). phpMyAdmin packages remain installed."
+            .into(),
+    )
+}
+
+fn quiet_systemctl(args: &[&str]) -> bool {
+    Command::new("systemctl")
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn quiet_command(program: &str, args: &[&str]) -> bool {
+    Command::new(program)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn ensure_epel() -> Result<(), String> {
@@ -124,7 +227,7 @@ fn write_fpm_pool(share: &Path) -> Result<(), String> {
 }
 
 fn write_nginx_vhost(share: &Path) -> Result<(), String> {
-    if !(Path::new("/usr/sbin/nginx").exists() || Path::new("/usr/bin/nginx").exists()) {
+    if !nginx_binary_present() {
         return Ok(());
     }
     let conf = format!(
@@ -156,6 +259,8 @@ fn write_nginx_vhost(share: &Path) -> Result<(), String> {
 fn user_exists(name: &str) -> bool {
     Command::new("id")
         .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
@@ -169,22 +274,34 @@ fn ensure_selinux_http_port(port: u16) {
     let port_s = port.to_string();
     let add = Command::new("semanage")
         .args(["port", "-a", "-t", "http_port_t", "-p", "tcp", &port_s])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false);
     if !add {
         let _ = Command::new("semanage")
             .args(["port", "-m", "-t", "http_port_t", "-p", "tcp", &port_s])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::phpmyadmin_health_url;
+    use super::{phpmyadmin_health_url, should_wire_nginx_listener};
+    use crate::model::ServerEngine;
 
     #[test]
     fn health_url_is_loopback_8081() {
         assert_eq!(phpmyadmin_health_url(), "http://127.0.0.1:8081/");
+    }
+
+    #[test]
+    fn ols_and_caddy_skip_nginx_listener() {
+        assert!(!should_wire_nginx_listener(Some(ServerEngine::Openlitespeed)));
+        assert!(!should_wire_nginx_listener(Some(ServerEngine::Caddy)));
+        assert!(should_wire_nginx_listener(Some(ServerEngine::Nginx)));
     }
 }

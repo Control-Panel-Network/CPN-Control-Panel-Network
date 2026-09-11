@@ -4,7 +4,7 @@
 //! MariaDB and MySQL remain mutually exclusive (XOR).
 
 use crate::apps::{AppId, install_app};
-use crate::model::DatabaseEngine;
+use crate::model::{DatabaseEngine, ServerEngine};
 use crate::os_support::{GuestOs, PackageFamily, detect_guest_os};
 use crate::service_detect::detect_database;
 
@@ -14,11 +14,13 @@ use crate::service_detect::detect_database;
 /// - `DatabaseEngine::Mysql`: install/start MySQL (refuses if MariaDB is present).
 /// - `DatabaseEngine::None`: skip the database engine.
 /// - `install_phpmyadmin`: when true (default), install phpMyAdmin packages.
+/// - `web_server`: when set, phpMyAdmin skips starting nginx under OLS/Caddy.
 ///
 /// Windows Phase A skips package recipes; the caller should treat that as a soft skip.
 pub fn ensure_database_defaults(
     database: DatabaseEngine,
     install_phpmyadmin: bool,
+    web_server: Option<ServerEngine>,
 ) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
     match detect_guest_os() {
@@ -56,7 +58,7 @@ pub fn ensure_database_defaults(
     }
 
     if install_phpmyadmin {
-        notes.push(ensure_phpmyadmin()?);
+        notes.push(ensure_phpmyadmin(web_server)?);
     } else {
         notes.push("phpMyAdmin skipped by operator (--skip-phpmyadmin).".into());
     }
@@ -98,8 +100,8 @@ fn ensure_mysql() -> Result<String, String> {
     install_app(AppId::Mysql)
 }
 
-fn ensure_phpmyadmin() -> Result<String, String> {
-    install_app(AppId::Phpmyadmin)
+fn ensure_phpmyadmin(web_server: Option<ServerEngine>) -> Result<String, String> {
+    crate::apps_phpmyadmin::install_and_expose_for(web_server)
 }
 
 #[cfg(test)]

@@ -440,6 +440,14 @@ pub async fn install_with_database(
             }
         } else {
             let _ = crate::proxy_front::set_proxy_front_from_install(false);
+            // Proxy-front off: never leave nginx enabled/started as a side effect of
+            // a prior attempt when OpenLiteSpeed (or another origin) owns HTTP.
+            if matches!(server, ServerEngine::Openlitespeed | ServerEngine::Caddy) {
+                state.log(
+                    "Proxy front disabled: skipping nginx package install and start.",
+                    "info",
+                );
+            }
         }
 
         state
@@ -557,6 +565,10 @@ pub async fn install_with_database(
             }
         }
 
+        // Stop conflicting HTTP stacks before enable/start so Nginx/Caddy do not
+        // fail on :80 while OpenLiteSpeed (or another prior) still owns the port.
+        let _http_priors = stop_conflicting_http_services(&state, server).await?;
+
         for item in server_recipes(&guest, server) {
             run_command(&state, item).await?;
         }
@@ -577,8 +589,6 @@ pub async fn install_with_database(
                 Some("web server package installed by this CPN run".into()),
             )?;
         }
-
-        let _http_priors = stop_conflicting_http_services(&state, server).await?;
 
         let mut ols_unit = None;
         if matches!(server, ServerEngine::Openlitespeed) {
@@ -694,7 +704,11 @@ pub async fn install_with_database(
             )
             .await;
         match tokio::task::spawn_blocking(move || {
-            crate::db_defaults::ensure_database_defaults(database, install_phpmyadmin)
+            crate::db_defaults::ensure_database_defaults(
+                database,
+                install_phpmyadmin,
+                Some(server),
+            )
         })
         .await
         {
