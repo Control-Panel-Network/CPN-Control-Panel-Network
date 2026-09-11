@@ -73,7 +73,9 @@ pub fn github_token() -> Option<String> {
             }
         }
     }
-    let path = paths::default_data_dir().join("secrets").join("github-token");
+    let path = paths::default_data_dir()
+        .join("secrets")
+        .join("github-token");
     let raw = fs::read_to_string(path).ok()?;
     let trimmed = raw.trim().to_string();
     if trimmed.is_empty() {
@@ -187,7 +189,11 @@ mod tests {
         assert_eq!(DEFAULT_CHECK_MIN_INTERVAL_SECS, 60);
         assert!(!friendly_rate_limit_message(403).contains('\u{2014}'));
         assert!(!friendly_rate_limit_message(429).contains('\u{2013}'));
-        assert!(!note_for_cached(90, true, Some(30)).to_lowercase().contains("cyberpanel"));
+        assert!(
+            !note_for_cached(90, true, Some(30))
+                .to_lowercase()
+                .contains("cyberpanel")
+        );
     }
 
     #[test]
