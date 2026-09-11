@@ -123,6 +123,7 @@ pub mod panel_plugins;
 pub mod panel_prefs;
 pub mod panel_routes;
 pub mod panel_sections;
+pub mod panel_service;
 pub mod panel_session;
 pub mod panel_sidebar;
 pub mod panel_theme;

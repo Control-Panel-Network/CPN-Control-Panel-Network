@@ -99,8 +99,10 @@ if [ -n "${CPN_HOSTNAME}" ]; then
 else
   echo "  Panel login   : http://127.0.0.1:${CPN_PORT}/login"
   echo "  Lab tip       : ssh -L ${CPN_PORT}:127.0.0.1:${CPN_PORT} user@host"
+  echo "  VBox NAT tip  : host forward 2089->${CPN_PORT} => http://127.0.0.1:2089/login"
 fi
-echo "  Start panel   : sudo cpn-installer --web"
+echo "  Start panel   : systemctl start cpn-installer.service"
+echo "  Panel status  : systemctl status cpn-installer.service"
 echo "  CLI install   : sudo cpn-installer --cli"
 echo "------------------------------------------------------------"
 echo "  Time          : ${_cpn_now}"

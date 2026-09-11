@@ -543,8 +543,7 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
 }
 
 fn allow_remote_listen() -> bool {
-    env::args().any(|arg| arg == "--allow-remote" || arg == "--listen-all")
-        || env::var("CPN_ALLOW_REMOTE").ok().as_deref() == Some("1")
+    cpn_installer::panel_service::allow_remote_requested()
 }
 
 /// Ignore SIGHUP so SSH disconnect / closed PTY does not kill a long-running
@@ -689,6 +688,9 @@ async fn main() -> std::io::Result<()> {
     let environment = cpn_installer::environment::inspect(listen_port).await;
     let remote = allow_remote_listen();
     if remote {
+        if let Err(error) = cpn_installer::panel_service::save_allow_remote_preference(true) {
+            eprintln!("cpn-installer: could not save allow_remote preference: {error}");
+        }
         match cpn_installer::environment::open_installer_port(&environment).await {
             Ok(()) => {}
             Err(error) => eprintln!("Warning: {error}"),

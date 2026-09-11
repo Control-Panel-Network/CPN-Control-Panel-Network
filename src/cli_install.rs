@@ -506,6 +506,11 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
 
     println!("\nInstallation finished.");
     crate::motd::ensure_motd_installed();
+    let allow_remote = crate::panel_service::allow_remote_requested();
+    crate::panel_service::ensure_panel_service_best_effort(
+        crate::panel_service::PanelServiceMode::EnableAndStart,
+        allow_remote,
+    );
     let host = if hostname.is_empty() {
         None
     } else {

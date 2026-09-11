@@ -98,9 +98,16 @@ pub fn panel_ready_lines(version: &str, port: u16, hostname: Option<&str>) -> Ve
     if let Some(host) = hostname.map(str::trim).filter(|value| !value.is_empty()) {
         lines.push(format!("Hostname login: https://{host}/login"));
     } else {
-        lines.push(format!("Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"));
+        lines.push(format!(
+            "Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"
+        ));
+        lines.push(format!(
+            "VirtualBox NAT: if host maps 2089->guest {port}, open http://127.0.0.1:2089/login on the host"
+        ));
     }
-    lines.push("Start again: sudo cpn-installer --web".into());
+    lines.push("Panel service: systemctl status cpn-installer.service".into());
+    lines.push("Start again: sudo systemctl start cpn-installer.service".into());
+    lines.push("Or foreground: sudo cpn-installer --web".into());
     lines.push("SSH/CLI mode: sudo cpn-installer --cli".into());
     lines.push("------------------------------------------------------------".into());
     lines
@@ -131,7 +138,8 @@ mod tests {
         let joined = lines.join("\n");
         assert!(joined.contains("v1.0.0"));
         assert!(joined.contains("http://127.0.0.1:2087/login"));
-        assert!(joined.contains("cpn-installer --web"));
+        assert!(joined.contains("cpn-installer.service"));
+        assert!(joined.contains("2089"));
         assert!(!joined.to_lowercase().contains("cyberpanel"));
         assert!(!joined.contains("password"));
     }
@@ -149,6 +157,7 @@ mod tests {
         let lower = MOTD_SCRIPT.to_ascii_lowercase();
         assert!(MOTD_SCRIPT.contains("CPN / Control Panel Network"));
         assert!(MOTD_SCRIPT.contains("News Targeted"));
+        assert!(MOTD_SCRIPT.contains("cpn-installer.service"));
         assert!(!lower.contains("cyberpanel"));
         assert!(!lower.contains("enjoy your accelerated"));
         assert!(!MOTD_SCRIPT.contains('\u{2014}'));

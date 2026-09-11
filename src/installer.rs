@@ -726,6 +726,12 @@ pub(crate) async fn finish(
     match result {
         Ok(()) => {
             crate::motd::ensure_motd_installed();
+            let allow_remote = state.allow_remote
+                || crate::panel_service::allow_remote_requested();
+            crate::panel_service::ensure_panel_service_best_effort(
+                crate::panel_service::PanelServiceMode::EnablePreferRunning,
+                allow_remote,
+            );
             let _ = state
                 .events
                 .send(InstallerEvent::Completed { status: snapshot });

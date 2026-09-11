@@ -50,14 +50,18 @@ ssh -L 2087:127.0.0.1:2087 root@your-server
 
 Then open the URL printed by `cpn-installer --web` in a local browser.
 
+After a successful install, CPN enables and starts `cpn-installer.service` so `/login` remains available after you disconnect SSH and after reboot. Manage it with `systemctl status cpn-installer` / `systemctl restart cpn-installer`.
+
 > [!IMPORTANT]
 > Do not publish or share the temporary installer token printed in the console URL.
 
-Optional remote HTTP bind for the web UI (trusted networks only; installer UI is HTTP, not TLS):
+Optional remote HTTP bind for the web UI (trusted networks only; installer UI is HTTP, not TLS). Needed for some VirtualBox NAT host port forwards when you are not using SSH `-L`:
 
 ```bash
 sudo cpn-installer --web --allow-remote
 ```
+
+Example lab: AlmaLinux guest listen `2087`, host NAT forward `2089` -> `2087`, open `http://127.0.0.1:2089/login` on the host (with `--allow-remote` or SSH tunnel).
 
 Installer UI language defaults to **English** (not the guest OS locale). Use the language selector in the web UI for Spanish or Norwegian.
 ### Manual package install
