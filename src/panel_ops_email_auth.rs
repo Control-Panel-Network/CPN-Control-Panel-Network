@@ -120,8 +120,8 @@ pub fn load_mta_sts(domain: &str) -> MtaStsSettings {
     let path = mta_sts_path(&domain);
     if !path.is_file() {
         let mut s = MtaStsSettings::default();
-        s.domain = domain;
         s.mx = vec![format!("mail.{domain}")];
+        s.domain = domain;
         return s;
     }
     fs::read_to_string(&path)
