@@ -3,8 +3,6 @@
 use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::process::Stdio;
-use tokio::process::Command;
 
 const DEFAULT_REPO: &str = "Control-Panel-Network/CPN-Control-Panel-Network";
 

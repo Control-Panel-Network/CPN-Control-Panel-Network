@@ -4,7 +4,6 @@ use crate::releases::{
     CpnRelease, VersionCheck, compare_versions, github_repo, normalize_version,
     package_source_label, parse_release,
 };
-use crate::releases_cache;
 use std::cmp::Ordering;
 use std::process::Stdio;
 use tokio::process::Command;
