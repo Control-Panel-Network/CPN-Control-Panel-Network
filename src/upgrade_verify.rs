@@ -43,13 +43,7 @@ impl VerifyReport {
     }
 }
 
-fn push(
-    report: &mut VerifyReport,
-    name: &str,
-    ok: bool,
-    detail: impl AsRef<str>,
-    required: bool,
-) {
+fn push(report: &mut VerifyReport, name: &str, ok: bool, detail: impl AsRef<str>, required: bool) {
     report.checks.push(VerifyCheck {
         name: name.to_string(),
         ok,
