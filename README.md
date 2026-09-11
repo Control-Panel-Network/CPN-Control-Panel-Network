@@ -141,7 +141,7 @@ See the full **[CPN CLI and installer argument reference](docs/CLI.md)** for com
 
 ## Documentation
 
-- **[Changelog](docs/CHANGELOG.md)**: release history from the `0.2.x` alphas through **1.0.2**.
+- **[Changelog](docs/CHANGELOG.md)**: release history for the `0.2.x` alpha line (including renames from the short-lived `v1.0.0` / `v1.0.1` tags).
 - **[CLI Reference](docs/CLI.md)**: `cpn` commands, subcommands, arguments, and `cpn-installer` runtime flags.
 - **[Platform Support](docs/SUPPORT.md)**: supported/partial/refused systems, repeat installs, and behavior on hosts with existing software.
 - **[Releases and Verification](docs/RELEASES.md)**: release assets, package selection, checksums, GPG signatures, and provenance.
