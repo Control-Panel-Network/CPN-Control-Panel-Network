@@ -5,19 +5,25 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - 11/09/2026
+## [1.0.2-alpha.1] - 11/09/2026
+
+Prerelease for lab testing. GitHub marks this tag as a prerelease; stable `install.sh` / `preUpgrade.sh` keep selecting **v1.0.0** unless you pin `CPN_RELEASE_TAG=v1.0.2-alpha.1` or set `CPN_INCLUDE_PRERELEASE=1`.
 
 ### Fixed
 
 - Password-reset emails no longer use quoted-printable body encoding that turned `token=...` into `token=3D...` in raw MIME (broken clickable links). Bodies use 7bit (or base64 when needed) so query strings stay intact.
 - Reset and login links no longer blindly prefer a panel hostname that has no public DNS. Operators can set an **external panel URL** (`panel_public_url`) used first for emails and status URLs; otherwise hostname HTTPS; otherwise `http://127.0.0.1:LISTEN_PORT`.
 - When the primary email link differs from hostname HTTPS and/or the guest loopback listen URL, the reset email lists those as alternate links (helps VirtualBox NAT and private hostnames).
+- Bootstrap scripts (`install.sh`, `preUpgrade.sh`, `upgrade.sh`) skip GitHub prereleases by default so stable one-liners stay on **v1.0.0** while `v1.0.1` and this alpha remain available for explicit testing.
 
 ### Added
 
 - Persist optional external panel base URL: `cpn network set-public-url --url http://127.0.0.1:2089` / `clear-public-url`, installer network step, CLI install prompt, and Settings Change Port form. Stored under `/var/lib/cpn/panel_public_url` (mode 600).
+- Optional `CPN_INCLUDE_PRERELEASE=1` for bootstrap scripts when you want the newest prerelease without pinning a tag.
 
 ## [1.0.1] - 11/09/2026
+
+Published on GitHub as a **prerelease** (display name: `v1.0.1 (alpha / prerelease)`). Tag stays `v1.0.1`; it is not the Latest stable release. Stable one-liners continue to resolve to **v1.0.0**.
 
 ### Fixed
 
@@ -114,7 +120,7 @@ Pre-1.0 development line (`v0.2.2-alpha.1` … `v0.2.2-alpha.18`). Notable theme
 
 For per-tag PR lists, see the corresponding [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases) notes.
 
-[1.0.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.2
+[1.0.2-alpha.1]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.2-alpha.1
 [1.0.1]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v1.0.0
 [0.2.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases?q=0.2.2-alpha

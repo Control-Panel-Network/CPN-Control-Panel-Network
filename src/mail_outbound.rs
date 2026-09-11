@@ -248,7 +248,8 @@ mod tests {
         let body = "Open:\r\nhttp://127.0.0.1:2089/reset-password?token=9a09f70300845dd9bd32b\r\n";
         let email =
             build_plain_message(from, to, "CPN panel password reset request", body).unwrap();
-        let raw = String::from_utf8_lossy(&email.formatted());
+        let formatted = email.formatted();
+        let raw = String::from_utf8_lossy(&formatted);
         assert!(
             raw.contains("token=9a09f70300845dd9bd32b"),
             "raw message must keep literal token="

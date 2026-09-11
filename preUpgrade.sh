@@ -6,7 +6,7 @@
 # This file is the upgrade bootstrap. A copy also lives at repo-root preUpgrade.sh for the
 # stable branch raw URL (.../stable/preUpgrade.sh).
 #
-# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
+# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_INCLUDE_PRERELEASE, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
@@ -160,16 +160,19 @@ pick_release_json() {
   body="$(download_text "${API_BASE}/releases?per_page=30")" \
     || die "could not list GitHub Releases"
   json="$(printf '%s' "$body" | python3 -c '
-import json,sys
+import json,sys,os
 items=json.load(sys.stdin)
+include_pre=os.environ.get("CPN_INCLUDE_PRERELEASE","0").strip()=="1"
 for item in items:
     if item.get("draft"):
+        continue
+    if item.get("prerelease") and not include_pre:
         continue
     print(json.dumps(item))
     break
 else:
     sys.exit(2)
-')" || die "no non-draft GitHub release found"
+')" || die "no matching GitHub release found (stable skips prereleases; set CPN_RELEASE_TAG or CPN_INCLUDE_PRERELEASE=1)"
   printf '%s' "$json"
 }
 

@@ -24,7 +24,7 @@ Notes:
 - Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
 - `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
-- Current stable release: **v1.0.2** (see [Changelog](docs/CHANGELOG.md)).
+- Current stable release: **v1.0.0** (see [Changelog](docs/CHANGELOG.md)). Newer `v1.0.1` / `v1.0.2-alpha.*` cuts are GitHub prereleases for lab testing; stable one-liners skip them unless you pin `CPN_RELEASE_TAG` or set `CPN_INCLUDE_PRERELEASE=1`.
 
 After the package install:
 
@@ -126,7 +126,7 @@ After the package upgrade, run installer maintenance when the panel stack was pr
 sudo cpn-installer --upgrade
 ```
 
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.0` before the one-liner (or export it in the same shell). Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
+Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.0` before the one-liner (or export it in the same shell). Default install/upgrade selection uses the newest **non-prerelease** GitHub Release (currently **v1.0.0**). To try an alpha: `CPN_RELEASE_TAG=v1.0.2-alpha.1` or `CPN_INCLUDE_PRERELEASE=1`. Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
 
 ## After installation
 
