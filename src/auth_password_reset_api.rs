@@ -7,7 +7,8 @@ use crate::account_password_reset::{
     invalidate_tokens_for_user, peek_reset_token,
 };
 use crate::auth_pages::{
-    forgot_password_ack_html, forgot_password_html, reset_password_html, reset_password_invalid_html,
+    forgot_password_ack_html, forgot_password_html, reset_password_html,
+    reset_password_invalid_html,
 };
 use crate::http_helpers::{enrich_status, panel_login_url_for};
 use crate::installer::AppState;

@@ -185,7 +185,8 @@ mod tests {
             "body should mention time/single-use"
         );
         assert!(
-            !msg.body.contains("operator can reset the account when mail delivery"),
+            !msg.body
+                .contains("operator can reset the account when mail delivery"),
             "must not be the old operator-only dead-end body"
         );
     }

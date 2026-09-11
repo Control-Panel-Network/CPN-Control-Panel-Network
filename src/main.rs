@@ -6,10 +6,10 @@ use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, dashboard_page, login_mfa_page,
     login_mfa_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
 };
+use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::auth_password_reset_api::{
     forgot_password_page, forgot_password_submit, reset_password_page, reset_password_submit,
 };
-use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
     install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,

@@ -6,9 +6,7 @@ use crate::account::{
 };
 use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
-use crate::auth_pages::{
-    installer_token_required_html, panel_login_html, panel_mfa_html,
-};
+use crate::auth_pages::{installer_token_required_html, panel_login_html, panel_mfa_html};
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
     panel_login_url_for, smtp_status_public, token_matches,

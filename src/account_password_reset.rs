@@ -130,7 +130,9 @@ fn save_rate_store(store: &RateStore) {
 }
 
 fn prune_hits(entry: &mut RateEntry, now: u64) {
-    entry.hits.retain(|ts| now.saturating_sub(*ts) < RATE_WINDOW_SECS);
+    entry
+        .hits
+        .retain(|ts| now.saturating_sub(*ts) < RATE_WINDOW_SECS);
 }
 
 /// Rate-limit forgot-password by identifier and optional client key (e.g. IP).
@@ -370,7 +372,9 @@ mod tests {
     fn rate_limit_blocks_extra_hits() {
         with_test_data_dir(|| {
             for _ in 0..RATE_MAX_PER_ID {
-                assert!(check_and_record_forgot_rate("admin@example.com", Some("10.0.0.1")).is_ok());
+                assert!(
+                    check_and_record_forgot_rate("admin@example.com", Some("10.0.0.1")).is_ok()
+                );
             }
             assert!(check_and_record_forgot_rate("admin@example.com", Some("10.0.0.1")).is_err());
         });
