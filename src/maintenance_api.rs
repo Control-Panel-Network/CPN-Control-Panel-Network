@@ -29,10 +29,10 @@ fn maintenance_authorized(state: &AppState, query: &TokenQuery, http: &HttpReque
     if authorized_request(state, query, http) {
         return true;
     }
-    match panel_user_from_request(state, http) {
-        Some(user) if is_panel_admin(&user) => true,
-        _ => false,
-    }
+    matches!(
+        panel_user_from_request(state, http),
+        Some(user) if is_panel_admin(&user)
+    )
 }
 
 /// Installer token/session, or any signed-in panel user (read-only version info).
