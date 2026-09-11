@@ -78,11 +78,11 @@ async fn curl_github_releases(url: &str, etag: Option<&str>) -> Result<GithubHtt
 
     let mut etag_out = None;
     for line in headers.lines() {
-        if let Some((name, value)) = line.split_once(':') {
-            if name.eq_ignore_ascii_case("etag") {
-                etag_out = Some(value.trim().to_string());
-                break;
-            }
+        if let Some((name, value)) = line.split_once(':')
+            && name.eq_ignore_ascii_case("etag")
+        {
+            etag_out = Some(value.trim().to_string());
+            break;
         }
     }
     Ok(GithubHttpResponse {
@@ -134,21 +134,21 @@ pub async fn list_releases_cached(
                 soft_error: None,
             });
         }
-        if force_network {
-            if let Some(wait) = seconds_until_next_check(cache) {
-                let age = age_secs(cache);
-                let mut releases = cache.releases.clone();
-                releases.truncate(limit.max(1));
-                return Ok(releases_cache::ReleasesFetchResult {
-                    releases,
-                    from_cache: true,
-                    cache_age_secs: Some(age),
-                    rate_limited: true,
-                    retry_after_secs: Some(wait),
-                    note: Some(note_for_cached(age, true, Some(wait))),
-                    soft_error: None,
-                });
-            }
+        if force_network
+            && let Some(wait) = seconds_until_next_check(cache)
+        {
+            let age = age_secs(cache);
+            let mut releases = cache.releases.clone();
+            releases.truncate(limit.max(1));
+            return Ok(releases_cache::ReleasesFetchResult {
+                releases,
+                from_cache: true,
+                cache_age_secs: Some(age),
+                rate_limited: true,
+                retry_after_secs: Some(wait),
+                note: Some(note_for_cached(age, true, Some(wait))),
+                soft_error: None,
+            });
         }
     }
 
@@ -157,92 +157,16 @@ pub async fn list_releases_cached(
     let response = match curl_github_releases(&url, etag.as_deref()).await {
         Ok(resp) => resp,
         Err(error) => {
-            if let Some(cache) = existing.as_ref() {
-                if !cache.releases.is_empty() && cache.repo == repo {
-                    let age = age_secs(cache);
-                    let mut releases = cache.releases.clone();
-                    releases.truncate(limit.max(1));
-                    let mut updated = cache.clone();
-                    mark_attempt(&mut updated);
-                    updated.last_error = Some(error.clone());
-                    let _ = save_cache(&updated);
-                    return Ok(releases_cache::ReleasesFetchResult {
-                        releases,
-                        from_cache: true,
-                        cache_age_secs: Some(age),
-                        rate_limited: false,
-                        retry_after_secs: None,
-                        note: Some(note_for_cached(age, false, None)),
-                        soft_error: Some(error),
-                    });
-                }
-            }
-            return Err(error);
-        }
-    };
-
-    if response.status == 304 {
-        if let Some(cache) = existing.as_ref() {
-            let mut updated = cache.clone();
-            mark_attempt(&mut updated);
-            updated.fetched_at_unix = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(updated.fetched_at_unix);
-            updated.last_error = None;
-            if let Some(tag) = response.etag.clone() {
-                updated.etag = Some(tag);
-            }
-            let _ = save_cache(&updated);
-            let mut releases = updated.releases.clone();
-            releases.truncate(limit.max(1));
-            return Ok(releases_cache::ReleasesFetchResult {
-                releases,
-                from_cache: true,
-                cache_age_secs: Some(0),
-                rate_limited: false,
-                retry_after_secs: None,
-                note: Some("Release list unchanged (HTTP 304); cache refreshed.".into()),
-                soft_error: None,
-            });
-        }
-    }
-
-    if response.status == 403 || response.status == 429 {
-        let msg = friendly_rate_limit_message(response.status);
-        if let Some(cache) = existing.as_ref() {
-            if !cache.releases.is_empty() && cache.repo == repo {
+            if let Some(cache) = existing.as_ref()
+                && !cache.releases.is_empty()
+                && cache.repo == repo
+            {
                 let age = age_secs(cache);
                 let mut releases = cache.releases.clone();
                 releases.truncate(limit.max(1));
                 let mut updated = cache.clone();
                 mark_attempt(&mut updated);
-                updated.last_error = Some(msg.clone());
-                let _ = save_cache(&updated);
-                return Ok(releases_cache::ReleasesFetchResult {
-                    releases,
-                    from_cache: true,
-                    cache_age_secs: Some(age),
-                    rate_limited: true,
-                    retry_after_secs: None,
-                    note: Some(note_for_cached(age, true, None)),
-                    soft_error: Some(msg),
-                });
-            }
-        }
-        return Err(msg);
-    }
-
-    if response.status < 200 || response.status >= 300 {
-        let msg = format!("GitHub Releases request failed (HTTP {})", response.status);
-        if let Some(cache) = existing.as_ref() {
-            if !cache.releases.is_empty() && cache.repo == repo {
-                let age = age_secs(cache);
-                let mut releases = cache.releases.clone();
-                releases.truncate(limit.max(1));
-                let mut updated = cache.clone();
-                mark_attempt(&mut updated);
-                updated.last_error = Some(msg.clone());
+                updated.last_error = Some(error.clone());
                 let _ = save_cache(&updated);
                 return Ok(releases_cache::ReleasesFetchResult {
                     releases,
@@ -251,9 +175,88 @@ pub async fn list_releases_cached(
                     rate_limited: false,
                     retry_after_secs: None,
                     note: Some(note_for_cached(age, false, None)),
-                    soft_error: Some(msg),
+                    soft_error: Some(error),
                 });
             }
+            return Err(error);
+        }
+    };
+
+    if response.status == 304
+        && let Some(cache) = existing.as_ref()
+    {
+        let mut updated = cache.clone();
+        mark_attempt(&mut updated);
+        updated.fetched_at_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(updated.fetched_at_unix);
+        updated.last_error = None;
+        if let Some(tag) = response.etag.clone() {
+            updated.etag = Some(tag);
+        }
+        let _ = save_cache(&updated);
+        let mut releases = updated.releases.clone();
+        releases.truncate(limit.max(1));
+        return Ok(releases_cache::ReleasesFetchResult {
+            releases,
+            from_cache: true,
+            cache_age_secs: Some(0),
+            rate_limited: false,
+            retry_after_secs: None,
+            note: Some("Release list unchanged (HTTP 304); cache refreshed.".into()),
+            soft_error: None,
+        });
+    }
+
+    if response.status == 403 || response.status == 429 {
+        let msg = friendly_rate_limit_message(response.status);
+        if let Some(cache) = existing.as_ref()
+            && !cache.releases.is_empty()
+            && cache.repo == repo
+        {
+            let age = age_secs(cache);
+            let mut releases = cache.releases.clone();
+            releases.truncate(limit.max(1));
+            let mut updated = cache.clone();
+            mark_attempt(&mut updated);
+            updated.last_error = Some(msg.clone());
+            let _ = save_cache(&updated);
+            return Ok(releases_cache::ReleasesFetchResult {
+                releases,
+                from_cache: true,
+                cache_age_secs: Some(age),
+                rate_limited: true,
+                retry_after_secs: None,
+                note: Some(note_for_cached(age, true, None)),
+                soft_error: Some(msg),
+            });
+        }
+        return Err(msg);
+    }
+
+    if response.status < 200 || response.status >= 300 {
+        let msg = format!("GitHub Releases request failed (HTTP {})", response.status);
+        if let Some(cache) = existing.as_ref()
+            && !cache.releases.is_empty()
+            && cache.repo == repo
+        {
+            let age = age_secs(cache);
+            let mut releases = cache.releases.clone();
+            releases.truncate(limit.max(1));
+            let mut updated = cache.clone();
+            mark_attempt(&mut updated);
+            updated.last_error = Some(msg.clone());
+            let _ = save_cache(&updated);
+            return Ok(releases_cache::ReleasesFetchResult {
+                releases,
+                from_cache: true,
+                cache_age_secs: Some(age),
+                rate_limited: false,
+                retry_after_secs: None,
+                note: Some(note_for_cached(age, false, None)),
+                soft_error: Some(msg),
+            });
         }
         return Err(msg);
     }

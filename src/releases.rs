@@ -117,10 +117,11 @@ pub fn is_retag_migration(installed: &str, target: &str) -> bool {
 pub fn expand_compact_prerelease(compact: &str) -> String {
     let compact = compact.trim();
     for prefix in ["alpha", "beta", "rc"] {
-        if let Some(rest) = compact.strip_prefix(prefix) {
-            if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
-                return format!("{prefix}.{rest}");
-            }
+        if let Some(rest) = compact.strip_prefix(prefix)
+            && !rest.is_empty()
+            && rest.chars().all(|c| c.is_ascii_digit())
+        {
+            return format!("{prefix}.{rest}");
         }
     }
     compact.to_string()
@@ -137,10 +138,11 @@ pub fn cargo_version_from_rpm(version: &str, release: &str) -> String {
     } else if let Some(idx) = rel.find(".fc") {
         rel.truncate(idx);
     }
-    if let Some(compact) = rel.strip_prefix("0.") {
-        if !compact.is_empty() && compact != "1" {
-            return format!("{version}-{}", expand_compact_prerelease(compact));
-        }
+    if let Some(compact) = rel.strip_prefix("0.")
+        && !compact.is_empty()
+        && compact != "1"
+    {
+        return format!("{version}-{}", expand_compact_prerelease(compact));
     }
     version
 }
