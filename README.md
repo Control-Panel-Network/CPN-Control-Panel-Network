@@ -1,7 +1,7 @@
 # CPN - Control Panel Network
 
 > [!WARNING]
-> **CPN is under active development and is not ready for production servers.** Use a test VPS or VM and keep backups of any machine you modify.
+> **CPN 1.0.0 is the first stable-tagged release.** Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -21,9 +21,10 @@ Notes:
 - Root (or `sudo`) is required.
 - Supported package targets today: EL9/EL10 RPM and Ubuntu/Debian `.deb` (see [Platform Support](docs/SUPPORT.md)).
 - Unknown or refused OS versions fail closed (no install).
-- CPN is WIP: prefer a disposable test machine.
+- Prefer a disposable test machine for first installs.
 - GitHub raw fallback (same script): `https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh`.
-- `cpn.newstargeted.com` should serve or mirror that install script at `/install.sh` (HTTPS).
+- `cpn.newstargeted.com` serves or mirrors that install script at `/install.sh` (HTTPS).
+- Current stable release: **v1.0.0** (see [Changelog](docs/CHANGELOG.md)).
 
 After the package install:
 
@@ -110,7 +111,7 @@ After the package upgrade, run installer maintenance when the panel stack was pr
 sudo cpn-installer --upgrade
 ```
 
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v0.2.2-alpha.17` before the one-liner (or export it in the same shell). Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
+Pin a specific tag when needed: `CPN_RELEASE_TAG=v1.0.0` before the one-liner (or export it in the same shell). Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
 
 ## After installation
 
@@ -125,6 +126,7 @@ See the full **[CPN CLI and installer argument reference](docs/CLI.md)** for com
 
 ## Documentation
 
+- **[Changelog](docs/CHANGELOG.md)**: release history from the `0.2.x` alphas through **1.0.0**.
 - **[CLI Reference](docs/CLI.md)**: `cpn` commands, subcommands, arguments, and `cpn-installer` runtime flags.
 - **[Platform Support](docs/SUPPORT.md)**: supported/partial/refused systems, repeat installs, and behavior on hosts with existing software.
 - **[Releases and Verification](docs/RELEASES.md)**: release assets, package selection, checksums, GPG signatures, and provenance.

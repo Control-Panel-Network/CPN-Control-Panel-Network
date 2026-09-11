@@ -6,7 +6,7 @@
 #   https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh
 #
 # Env:
-#   CPN_RELEASE_TAG     pin a tag (example: v0.2.2-alpha.17); default: newest non-draft release
+#   CPN_RELEASE_TAG     pin a tag (example: v1.0.0); default: newest non-draft release
 #   CPN_GITHUB_REPO     owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
 #   CPN_REQUIRE_GPG     1 (default) require SHA256SUMS.asc + matching fingerprint
 #   CPN_ALLOW_UNSIGNED  1 allow missing GPG assets (lab only; not for production)

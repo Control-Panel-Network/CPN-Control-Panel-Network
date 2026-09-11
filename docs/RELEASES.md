@@ -72,4 +72,4 @@ Most files under `scripts/` and package definitions under `packaging/` are devel
 
 For source builds and release-development prerequisites, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-For installation, see the root [README](../README.md). For supported platforms, see [SUPPORT.md](SUPPORT.md). For vulnerability reporting and operator security guidance, see [SECURITY.md](../SECURITY.md).
+For installation, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For supported platforms, see [SUPPORT.md](SUPPORT.md). For vulnerability reporting and operator security guidance, see [SECURITY.md](../SECURITY.md).

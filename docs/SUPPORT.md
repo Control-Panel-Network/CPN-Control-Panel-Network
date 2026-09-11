@@ -1,6 +1,6 @@
 # Platform Support and Existing Hosts
 
-CPN is still alpha software. Support tiers describe how much validation a platform currently receives; they do not imply production-readiness for every web, mail, database, or plugin combination.
+CPN **1.0.0** is the first stable-tagged release. Support tiers describe how much validation a platform currently receives; they do not imply identical maturity for every web, mail, database, or plugin combination.
 
 ## Operating-system support
 
@@ -54,6 +54,6 @@ Manual review may still be required when a machine has:
 - another service already bound to ports CPN expects;
 - heavily customized OpenLiteSpeed, Nginx, Caddy, PHP, database, firewall, or mail configuration.
 
-Use a test VM/VPS and keep backups while CPN remains in alpha.
+Use a test VM/VPS and keep backups for first installs and major upgrades.
 
-For installation commands, see the root [README](../README.md). For operator commands after installation, see [CLI.md](CLI.md).
+For installation commands, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For operator commands after installation, see [CLI.md](CLI.md).

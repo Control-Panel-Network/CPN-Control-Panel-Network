@@ -9,7 +9,7 @@ Security fixes are applied on the default branch (`stable`) and released when pr
 | Latest release / `stable` | Yes |
 | Older releases | Best effort |
 
-CPN is experimental and not ready for production servers. Treat security reports seriously, but expect limited support windows while the project is unfinished.
+CPN **1.0.0** is the first stable-tagged release. Treat security reports seriously. Prefer a test host for first installs and review [SUPPORT.md](docs/SUPPORT.md) before important deployments.
 
 ## Reporting a vulnerability
 
@@ -33,14 +33,14 @@ You can expect an initial response within **7 days** when possible. Fixes may ta
 
 ## Threat model (summary)
 
-CPN is a privileged web installer that can install and configure system packages and services. Linux package paths currently cover supported/partial Enterprise Linux 8–10 targets, Ubuntu 22.04/24.04, and Debian 12/13; the exact support tiers are maintained in [README.md](README.md). Windows Server 2016+ is a limited Phase A path and does not have Linux package parity.
+CPN is a privileged web installer that can install and configure system packages and services. Linux package paths currently cover supported/partial Enterprise Linux 8 to 10 targets, Ubuntu 22.04/24.04, and Debian 12/13; the exact support tiers are maintained in [README.md](README.md). Windows Server 2016+ is a limited Phase A path and does not have Linux package parity.
 
 A single Rust process serves the installer UI, streams progress over WebSockets, and performs privileged installation actions. By default it listens on `127.0.0.1:2087` and prints a temporary access token in the console URL. Use SSH port forwarding for remote access. `--allow-remote` / `CPN_ALLOW_REMOTE=1` binds to `0.0.0.0` and is an explicit operator opt-in to HTTP exposure without TLS.
 
 ### Trust assumptions
 
 - The operator already has root or equivalent administrative access on the install host.
-- CPN should be used on a dedicated test machine while the project remains alpha.
+- Prefer a dedicated test machine for first installs and major upgrades.
 - Anyone who can reach the installer and obtain a valid temporary token can drive privileged install actions.
 
 ### In scope
@@ -55,7 +55,7 @@ A single Rust process serves the installer UI, streams progress over WebSockets,
 
 - Treating pre-existing local root access as a remote exploit by itself.
 - A vulnerability entirely inside an unmodified third-party package after installation.
-- Production deployment contrary to the project's explicit alpha warning.
+- Production deployment without reviewing support tiers and taking backups.
 
 ## Operator guidance
 
