@@ -18,7 +18,7 @@ pub fn verify_webmail_http_surface(mail_label: &str) -> Result<(), String> {
          trap 'rm -f \"$body\"' EXIT\n\
          code=$(curl -sS -o \"$body\" -w '%{{http_code}}' --retry 10 --retry-connrefused --retry-delay 1 --max-time 15 '{url}' || true)\n\
          if [ \"$code\" != \"200\" ]; then echo \"webmail HTTP $code\"; cat \"$body\"; exit 1; fi\n\
-         if grep -Eiq 'permission denied|error 202|\[202\]|is_dir\(|data folder|not writable|open_basedir' \"$body\"; then\n\
+         if grep -Eiq 'permission denied|error 202|is_dir|data folder|not writable|open_basedir' \"$body\"; then\n\
            echo 'webmail returned a permission/data-folder error page'; cat \"$body\"; exit 1\n\
          fi\n\
          if ! grep -Eiq '{expect_ui}' \"$body\"; then\n\
