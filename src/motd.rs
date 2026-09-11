@@ -31,12 +31,8 @@ fn is_root() -> bool {
 
 fn write_executable(path: &Path, contents: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "Could not create directory {}: {error}",
-                parent.display()
-            )
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create directory {}: {error}", parent.display()))?;
     }
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -102,9 +98,7 @@ pub fn panel_ready_lines(version: &str, port: u16, hostname: Option<&str>) -> Ve
     if let Some(host) = hostname.map(str::trim).filter(|value| !value.is_empty()) {
         lines.push(format!("Hostname login: https://{host}/login"));
     } else {
-        lines.push(format!(
-            "Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"
-        ));
+        lines.push(format!("Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"));
     }
     lines.push("Start again: sudo cpn-installer --web".into());
     lines.push("SSH/CLI mode: sudo cpn-installer --cli".into());

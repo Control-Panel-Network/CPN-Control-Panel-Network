@@ -793,7 +793,9 @@ async fn main() -> std::io::Result<()> {
     }
     if phase != "completed" || !has_bootstrap_account {
         if remote {
-            println!("  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS).");
+            println!(
+                "  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS)."
+            );
             println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
             println!(
                 "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
