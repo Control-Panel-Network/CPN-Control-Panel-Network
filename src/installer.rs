@@ -725,6 +725,7 @@ pub(crate) async fn finish(
 
     match result {
         Ok(()) => {
+            crate::motd::ensure_motd_installed();
             let _ = state
                 .events
                 .send(InstallerEvent::Completed { status: snapshot });
@@ -752,7 +753,7 @@ pub(crate) async fn finish(
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, fraction};
+    use super::{AppState, InstallLogDetail, fraction};
     use crate::os_support::require_installable_guest;
     use std::sync::RwLock;
     use std::sync::atomic::AtomicBool;
