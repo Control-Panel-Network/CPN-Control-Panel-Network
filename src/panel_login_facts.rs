@@ -108,12 +108,11 @@ pub fn load_display_listen_port() -> u16 {
     if let Some(port) = load_preferred_listen_port() {
         return port;
     }
-    if let Some(raw) = read_trimmed(&etc_path("listen_port")) {
-        if let Ok(port) = raw.parse::<u16>() {
-            if port > 0 {
-                return port;
-            }
-        }
+    if let Some(raw) = read_trimmed(&etc_path("listen_port"))
+        && let Ok(port) = raw.parse::<u16>()
+        && port > 0
+    {
+        return port;
     }
     DEFAULT_PORT
 }
