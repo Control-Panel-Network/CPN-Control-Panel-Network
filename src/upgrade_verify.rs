@@ -302,9 +302,9 @@ pub fn verify_after_upgrade(
             "panel.service",
             active,
             if active {
-                "cpn-installer.service is active".into()
+                "cpn-installer.service is active"
             } else {
-                "cpn-installer.service is not active after restart".into()
+                "cpn-installer.service is not active after restart"
             },
             true,
         );
@@ -374,7 +374,7 @@ pub fn verify_after_upgrade(
             &mut report,
             "database",
             true,
-            "MariaDB/MySQL not detected; skipped".into(),
+            "MariaDB/MySQL not detected; skipped",
             false,
         );
     }
@@ -457,18 +457,20 @@ pub fn verify_after_upgrade(
             &mut report,
             "docker.cpn_managed",
             ok,
-            if ok {
-                if bypass_docker {
-                    "CPN-managed containers healthy after bypass refresh".into()
+            {
+                if ok {
+                    if bypass_docker {
+                        "CPN-managed containers healthy after bypass refresh".to_string()
+                    } else {
+                        "previously running CPN-managed containers still running (user stacks untouched)"
+                            .to_string()
+                    }
                 } else {
-                    "previously running CPN-managed containers still running (user stacks untouched)"
-                        .into()
+                    format!(
+                        "CPN-managed containers no longer running: {}",
+                        missing.join(", ")
+                    )
                 }
-            } else {
-                format!(
-                    "CPN-managed containers no longer running: {}",
-                    missing.join(", ")
-                )
             },
             !previously_running_docker_ids.is_empty(),
         );
