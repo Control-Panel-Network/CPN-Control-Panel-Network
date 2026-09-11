@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.22] - 12/09/2026
 
-Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `0.2.x-alpha` via official upgrade (Cargo `0.2.6-alpha.22`).
+Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `0.2.x-alpha` via official upgrade, plus `-b`/`--ref` pin for bootstrap scripts (Cargo `0.2.6-alpha.22`).
+
+### Added
+
+- Bootstrap `-b REF` / `--branch REF` / `--ref REF` (and `CPN_BRANCH`) on `install.sh` / `upgrade.sh`: pin packages to a matching GitHub Release tag (`REF` or `vREF`). Shared helpers in `scripts/cpn-bootstrap-lib.sh`. Docs: [INSTALL.md](INSTALL.md).
+- Host serves `cpn-bootstrap-lib.sh` next to `install.sh` / `upgrade.sh`.
 
 ### Fixed
 
@@ -17,6 +22,7 @@ Allow leftover retired `1.0.0`/`1.0.1` package identities to move onto current `
 ### Notes
 
 - Docker opt-in remains `upgrade.sh --bypass` or `CPN_UPGRADE_BYPASS=1` (unchanged from alpha.21).
+- `1.0.0-dev` is an optional tracking branch name, not a stable 1.0 product release.
 
 ## [0.2.6-alpha.21] - 11/09/2026
 

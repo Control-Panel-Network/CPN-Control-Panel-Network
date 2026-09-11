@@ -1,33 +1,21 @@
 #!/usr/bin/env bash
-# CPN Control Panel Network: upgrade the installed cpn-installer package from GitHub Releases.
-# Preferred one-liner (run as root; News Targeted host, then GitHub raw fallback):
-#   sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
-# This file is the GitHub-curled bootstrap alias (repo-root / scripts). Prefer /upgrade.sh on cpn.newstargeted.com.
-#
-# Env: same as scripts/install.sh (CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, ...)
+# CPN Control Panel Network: upgrade cpn-installer from GitHub Releases.
+# One-liner: bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+# Alias: repo-root / scripts preUpgrade.sh. Shared helpers: scripts/cpn-bootstrap-lib.sh
+# Env/CLI: CPN_RELEASE_TAG, CPN_BRANCH, -b/--ref, --bypass (see cpn-bootstrap-lib.sh --help via upgrade.sh --help)
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-if [[ -n "${SCRIPT_DIR}" && -f "${SCRIPT_DIR}/upgrade.sh" ]]; then
-  # Local clone / packaged tree: reuse upgrade.sh implementation.
-  # shellcheck disable=SC1091
-  exec bash "${SCRIPT_DIR}/upgrade.sh" "$@"
-fi
-if [[ -n "${SCRIPT_DIR}" && -f "${SCRIPT_DIR}/scripts/upgrade.sh" ]]; then
-  # Repo root preUpgrade.sh: prefer scripts/upgrade.sh.
-  # shellcheck disable=SC1091
-  exec bash "${SCRIPT_DIR}/scripts/upgrade.sh" "$@"
-fi
-
-# When curled as a standalone file (no sibling upgrade.sh), continue with embedded logic below.
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
 CPN_REQUIRE_GPG="${CPN_REQUIRE_GPG:-1}"
 CPN_ALLOW_UNSIGNED="${CPN_ALLOW_UNSIGNED:-0}"
+CPN_STABLE_ONLY="${CPN_STABLE_ONLY:-0}"
 CPN_EXPECTED_FPR="${CPN_EXPECTED_FPR:-FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5}"
+CPN_REF_ARG="${CPN_REF_ARG:-}"
+CPN_BOOTSTRAP_LIB_REF="${CPN_BOOTSTRAP_LIB_REF:-stable}"
 API_BASE="https://api.github.com/repos/${CPN_GITHUB_REPO}"
 RAW_KEY_URL="https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/packaging/RPM-GPG-KEY-CPN"
 
-die() { echo "CPN preUpgrade error: $*" >&2; exit 1; }
+die() { echo "CPN upgrade error: $*" >&2; exit 1; }
 info() { echo "CPN: $*"; }
 
 require_root() {
@@ -42,6 +30,47 @@ require_https_url() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+cpn_peek_ref_arg() {
+  local -a args=("$@")
+  local i
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[$i]}" in
+      -b|--branch|--ref)
+        if ((i + 1 < ${#args[@]})); then
+          CPN_BOOTSTRAP_LIB_REF="${args[$((i + 1))]}"
+          CPN_REF_ARG="${args[$((i + 1))]}"
+          export CPN_BOOTSTRAP_LIB_REF CPN_REF_ARG
+        fi
+        ;;
+    esac
+  done
+}
+
+cpn_source_bootstrap_lib() {
+  local ref="${CPN_BOOTSTRAP_LIB_REF:-stable}"
+  local here candidate url
+  here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+  for candidate in \
+    "${here}/cpn-bootstrap-lib.sh" \
+    "./scripts/cpn-bootstrap-lib.sh" \
+    "./cpn-bootstrap-lib.sh"; do
+    if [[ -n "$candidate" && -f "$candidate" ]]; then
+      # shellcheck disable=SC1090
+      . "$candidate"
+      return 0
+    fi
+  done
+  for url in \
+    "https://cpn.newstargeted.com/cpn-bootstrap-lib.sh" \
+    "https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/${ref}/scripts/cpn-bootstrap-lib.sh" \
+    "https://raw.githubusercontent.com/${CPN_GITHUB_REPO}/stable/scripts/cpn-bootstrap-lib.sh"; do
+    if have_cmd curl && . <(curl -fsSL --proto '=https' --tlsv1.2 --max-time 30 "$url"); then
+      return 0
+    fi
+  done
+  die "could not load cpn-bootstrap-lib.sh (host or GitHub raw)"
+}
 
 download() {
   local url="$1" dest="$2"
@@ -63,12 +92,12 @@ download_text() {
   if have_cmd curl; then
     curl -fsSL --proto '=https' --tlsv1.2 --max-time 60 \
       -H "Accept: application/vnd.github+json" \
-      -H "User-Agent: CPN-preUpgrade.sh" \
+      -H "User-Agent: CPN-upgrade.sh" \
       "$url"
   elif have_cmd wget; then
     wget -qO- --https-only \
       --header="Accept: application/vnd.github+json" \
-      --header="User-Agent: CPN-preUpgrade.sh" \
+      --header="User-Agent: CPN-upgrade.sh" \
       "$url"
   else
     die "curl or wget is required"
@@ -88,7 +117,7 @@ sha256_file() {
 
 require_existing_install() {
   if ! have_cmd cpn-installer && [[ ! -x /usr/bin/cpn-installer ]]; then
-    die "cpn-installer is not installed. Use the CPN install one-liner for a new install."
+    die "cpn-installer is not installed. Use https://cpn.newstargeted.com/install.sh (GitHub raw fallback available) for a new install."
   fi
 }
 
@@ -281,24 +310,11 @@ verify_gpg_sums() {
 
 upgrade_package() {
   local artifact="$1"
-  local installed_ver=""
+  if cpn_try_retag_package "$artifact" "$FAMILY"; then
+    return 0
+  fi
   case "$FAMILY" in
     dnf)
-      if have_cmd rpm; then
-        installed_ver="$(rpm -q --qf '%{VERSION}' cpn-installer 2>/dev/null || true)"
-      fi
-      # Leftover 1.0.0/1.0.1 package identity sorts newer than 0.2.x; force replace.
-      if [[ "$installed_ver" == "1.0.0" || "$installed_ver" == "1.0.1" ]]; then
-        info "retag migration: replacing retired CPN ${installed_ver} with current 0.2.x (rpm --oldpackage)"
-        if have_cmd rpm; then
-          if rpm -Uvh --oldpackage "$artifact"; then
-            return 0
-          fi
-          rpm -e --nodeps cpn-installer >/dev/null 2>&1 || true
-          rpm -Uvh "$artifact" && return 0
-        fi
-        die "could not replace retired CPN ${installed_ver} with $(basename "$artifact")"
-      fi
       if have_cmd dnf; then
         dnf upgrade -y "$artifact" || dnf install -y "$artifact"
       elif have_cmd yum; then
@@ -308,18 +324,6 @@ upgrade_package() {
       fi
       ;;
     apt)
-      if have_cmd dpkg-query; then
-        installed_ver="$(dpkg-query -W -f='${Version}' cpn-installer 2>/dev/null || true)"
-        installed_ver="${installed_ver%%-*}"
-        installed_ver="${installed_ver%%~*}"
-      fi
-      if [[ "$installed_ver" == "1.0.0" || "$installed_ver" == "1.0.1" ]]; then
-        info "retag migration: replacing retired CPN ${installed_ver} with current 0.2.x (apt allow-downgrades)"
-        if have_cmd apt-get; then
-          apt-get install -y --allow-downgrades "$artifact" && return 0
-        fi
-        die "could not replace retired CPN ${installed_ver} with $(basename "$artifact")"
-      fi
       if have_cmd apt-get; then
         apt-get install -y "$artifact"
       else
@@ -417,32 +421,16 @@ DROPIN
 }
 
 main() {
-  # Optional: upgrade.sh --bypass  or  CPN_UPGRADE_BYPASS=1
-  for arg in "$@"; do
-    case "$arg" in
-      --bypass) CPN_UPGRADE_BYPASS_FLAG=1; export CPN_UPGRADE_BYPASS_FLAG ;;
-      -h|--help)
-        cat <<'EOF'
-CPN upgrade.sh: upgrade the cpn-installer package, then run panel maintenance when installed.
-
-Usage: upgrade.sh [--bypass]
-
-  --bypass   Pass through to cpn-installer --upgrade --bypass (CPN-managed Docker only)
-
-Env: CPN_RELEASE_TAG, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, CPN_UPGRADE_BYPASS=1
-
-Note: leftover RPM/DEB identity 1.0.0 or 1.0.1 (retired retags) is replaced with current 0.2.x via rpm --oldpackage / apt --allow-downgrades during non-interactive upgrade.
-EOF
-        exit 0
-        ;;
-    esac
-  done
+  cpn_peek_ref_arg "$@"
+  cpn_source_bootstrap_lib
+  cpn_parse_bootstrap_args upgrade -- "$@"
 
   require_root
   have_cmd python3 || die "python3 is required"
   require_existing_install
   detect_guest
   info "detected ${DIST_LABEL} (${FAMILY}, arch ${PKG_ARCH}/${DEB_ARCH})"
+  cpn_apply_git_ref_pin
 
   local work release_json tag pkg_name pkg_url sums_url asc_url key_url
   work="$(mktemp -d /var/tmp/cpn-upgrade.XXXXXX)"

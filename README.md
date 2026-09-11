@@ -1,7 +1,7 @@
 # CPN - Control Panel Network
 
 > [!WARNING]
-> **CPN is alpha-only for now** (newest published cut: **v0.2.4-alpha.19**). There is no stable 1.x line yet. Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
+> **CPN is alpha-only for now** (newest published cut: **v0.2.6-alpha.21**; tip line **0.2.6-alpha.22**). There is no stable 1.x line yet. Prefer a disposable test VPS or VM, keep backups, and review [Platform Support](docs/SUPPORT.md) before touching important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -10,10 +10,19 @@ CPN is a Rust-based web installer and server-control project. The installer embe
 
 ## Installation Instructions
 
+Full option list (one-liners, `-b` pin, env vars, `--bypass`, raw GitHub URLs, retag notes): **[docs/INSTALL.md](docs/INSTALL.md)**.
+
 Primary path for Linux guests: run the official CPN bootstrap script as **root**. It detects AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian, downloads the matching package from [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases), verifies `SHA256SUMS` and GPG when those assets exist, installs the package, then prints how to start `cpn-installer`.
 
 ```bash
-sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+bash <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+```
+
+Pin a branch or Release tag (packages require a matching GitHub Release):
+
+```bash
+bash <(curl -fsSL https://cpn.newstargeted.com/install.sh) -b 1.0.0-dev
+# or: --branch REF / --ref REF / CPN_RELEASE_TAG=v0.2.6-alpha.22
 ```
 
 Notes:
@@ -23,7 +32,8 @@ Notes:
 - Unknown or refused OS versions fail closed (no install).
 - Prefer a disposable test machine for first installs.
 - The one-liner tries `cpn.newstargeted.com` first, then GitHub raw (`stable/scripts/install.sh`) if the site is down. `-fsSL` makes curl fail on HTTP errors so the fallback runs.
-- Current published alpha: **v0.2.4-alpha.19** (see [Changelog](docs/CHANGELOG.md)). Former `v1.0.0` / `v1.0.1` tags were renamed to `v0.2.3-alpha.19` / `v0.2.4-alpha.19` and removed. Bootstrap one-liners pick the newest non-draft release (**including prereleases**) unless you pin `CPN_RELEASE_TAG` or set `CPN_STABLE_ONLY=1`.
+- Current published alpha tip: **v0.2.6-alpha.21** (see [Changelog](docs/CHANGELOG.md)). Former `v1.0.0` / `v1.0.1` tags were renamed onto `0.2.x-alpha` and removed. Bootstrap one-liners pick the newest non-draft release (**including prereleases**) unless you pin `-b` / `CPN_RELEASE_TAG` or set `CPN_STABLE_ONLY=1`.
+- GitHub "pretty" paths like `github.com/.../v1.0.0-dev/install.sh` are **not** raw files. Use `raw.githubusercontent.com/.../<ref>/scripts/install.sh` (documented in [INSTALL.md](docs/INSTALL.md)).
 
 After the package install:
 
@@ -113,24 +123,25 @@ Windows support is currently Phase A and does not yet provide feature parity wit
 
 ## Upgrading CPN
 
-On a host that already has `cpn-installer` installed, upgrade the package from GitHub Releases (same OS detection and verification as install):
+On a host that already has `cpn-installer` installed, upgrade the package from GitHub Releases (same OS detection and verification as install). Details: [docs/INSTALL.md](docs/INSTALL.md).
 
 ```bash
-sh <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+```
+
+```bash
+# Pin ref / Release; optional Docker refresh for CPN-managed stacks only
+bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b 1.0.0-dev
+bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) --bypass
 ```
 
 Notes:
 
 - Root (or `sudo`) is required.
 - Same host-then-GitHub fallback as install (`/upgrade.sh`, then `stable/scripts/upgrade.sh`). Repo-root `preUpgrade.sh` remains a GitHub alias.
-
-After the package upgrade, run installer maintenance when the panel stack was previously installed:
-
-```bash
-sudo cpn-installer --upgrade
-```
-
-Pin a specific tag when needed: `CPN_RELEASE_TAG=v0.2.4-alpha.19` before the one-liner (or export it in the same shell). Default install/upgrade selection uses the newest **non-draft** GitHub Release (**alphas included**). Set `CPN_STABLE_ONLY=1` only when a future non-prerelease Latest exists and you want to skip alphas. Canonical script copies also live under `scripts/preUpgrade.sh` and `scripts/upgrade.sh`.
+- After the package upgrade, `upgrade.sh` **auto-runs** `cpn-installer --upgrade` when a panel install is detected (no manual step required on the primary path).
+- Leftover package identity `1.0.0` / `1.0.1` (retired retags) is replaced onto tip `0.2.x` via `rpm --oldpackage` during official upgrade.
+- Pin with `-b REF`, `CPN_RELEASE_TAG`, or `CPN_BRANCH`. Default selection uses the newest **non-draft** GitHub Release (**alphas included**). Set `CPN_STABLE_ONLY=1` only when a future non-prerelease Latest exists and you want to skip alphas.
 
 ## After installation
 
@@ -145,6 +156,7 @@ See the full **[CPN CLI and installer argument reference](docs/CLI.md)** for com
 
 ## Documentation
 
+- **[Install and upgrade options](docs/INSTALL.md)**: one-liners, `-b` / `--ref` pins, raw GitHub URLs, `--bypass`, env vars, retag migration.
 - **[Changelog](docs/CHANGELOG.md)**: release history for the `0.2.x` alpha line (including renames from the short-lived `v1.0.0` / `v1.0.1` tags).
 - **[CLI Reference](docs/CLI.md)**: `cpn` commands, subcommands, arguments, and `cpn-installer` runtime flags.
 - **[Platform Support](docs/SUPPORT.md)**: supported/partial/refused systems, repeat installs, and behavior on hosts with existing software.
