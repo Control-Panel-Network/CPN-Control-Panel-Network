@@ -189,11 +189,7 @@ async fn rpm_query_nevra(path: &str) -> Option<String> {
         return None;
     }
     let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if nevra.is_empty() {
-        None
-    } else {
-        Some(nevra)
-    }
+    if nevra.is_empty() { None } else { Some(nevra) }
 }
 
 async fn rpm_nevra_installed(nevra: &str) -> bool {

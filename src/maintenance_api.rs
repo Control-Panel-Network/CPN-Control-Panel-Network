@@ -25,11 +25,7 @@ fn is_root() -> bool {
 }
 
 /// Installer token/session, or signed-in panel admin.
-fn maintenance_authorized(
-    state: &AppState,
-    query: &TokenQuery,
-    http: &HttpRequest,
-) -> bool {
+fn maintenance_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequest) -> bool {
     if authorized_request(state, query, http) {
         return true;
     }
@@ -40,11 +36,7 @@ fn maintenance_authorized(
 }
 
 /// Installer token/session, or any signed-in panel user (read-only version info).
-fn version_read_authorized(
-    state: &AppState,
-    query: &TokenQuery,
-    http: &HttpRequest,
-) -> bool {
+fn version_read_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequest) -> bool {
     if authorized_request(state, query, http) {
         return true;
     }
@@ -151,9 +143,7 @@ pub async fn start_maintenance(
             "error": "Package upgrade/downgrade requires root. Run cpn-installer.service as root, or use: sudo cpn-installer --upgrade"
         }));
     }
-    if !request.confirm_execute
-        && !matches!(request.action, MaintenanceAction::ConfigOnly)
-    {
+    if !request.confirm_execute && !matches!(request.action, MaintenanceAction::ConfigOnly) {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "confirm_execute is required for upgrade, downgrade, and repair"
         }));
