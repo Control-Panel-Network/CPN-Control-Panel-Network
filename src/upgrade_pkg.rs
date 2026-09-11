@@ -70,10 +70,10 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         if rpm_nevra_installed(&file_nevra).await {
             return Ok(());
         }
-        if let Some(installed) = rpm_cpn_installed_nevra().await {
-            if installed == file_nevra {
-                return Ok(());
-            }
+        if let Some(installed) = rpm_cpn_installed_nevra().await
+            && installed == file_nevra
+        {
+            return Ok(());
         }
     }
 
@@ -130,10 +130,10 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
-    if let Some(file_nevra) = rpm_query_nevra(path).await {
-        if rpm_nevra_installed(&file_nevra).await {
-            return Ok(());
-        }
+    if let Some(file_nevra) = rpm_query_nevra(path).await
+        && rpm_nevra_installed(&file_nevra).await
+    {
+        return Ok(());
     }
     let status = Command::new("rpm")
         .args(["-Uvh", "--force", path])

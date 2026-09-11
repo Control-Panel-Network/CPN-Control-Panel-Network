@@ -38,24 +38,13 @@ impl Default for MtaStsSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BimiSettings {
     pub domain: String,
     pub logo_svg_url: String,
     /// Optional Authority URL / VMC (PEM or HTTPS URL). Empty when not used.
     pub authority_url: String,
     pub enabled: bool,
-}
-
-impl Default for BimiSettings {
-    fn default() -> Self {
-        Self {
-            domain: String::new(),
-            logo_svg_url: String::new(),
-            authority_url: String::new(),
-            enabled: false,
-        }
-    }
 }
 
 fn auth_root() -> PathBuf {
@@ -119,18 +108,18 @@ pub fn load_mta_sts(domain: &str) -> MtaStsSettings {
     };
     let path = mta_sts_path(&domain);
     if !path.is_file() {
-        let mut s = MtaStsSettings::default();
-        s.mx = vec![format!("mail.{domain}")];
-        s.domain = domain;
-        return s;
+        return MtaStsSettings {
+            mx: vec![format!("mail.{domain}")],
+            domain,
+            ..Default::default()
+        };
     }
     fs::read_to_string(&path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_else(|| {
-            let mut s = MtaStsSettings::default();
-            s.domain = domain;
-            s
+        .unwrap_or_else(|| MtaStsSettings {
+            domain,
+            ..Default::default()
         })
 }
 
@@ -140,12 +129,7 @@ pub fn save_mta_sts(settings: &MtaStsSettings) -> Result<(), String> {
     let mut next = settings.clone();
     next.domain = domain.clone();
     next.mode = mode;
-    if next.max_age < 60 {
-        next.max_age = 60;
-    }
-    if next.max_age > 31536000 {
-        next.max_age = 31536000;
-    }
+    next.max_age = next.max_age.clamp(60, 31536000);
     next.mx = next
         .mx
         .iter()
@@ -212,17 +196,17 @@ pub fn load_bimi(domain: &str) -> BimiSettings {
     };
     let path = bimi_path(&domain);
     if !path.is_file() {
-        let mut s = BimiSettings::default();
-        s.domain = domain;
-        return s;
+        return BimiSettings {
+            domain,
+            ..Default::default()
+        };
     }
     fs::read_to_string(&path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_else(|| {
-            let mut s = BimiSettings::default();
-            s.domain = domain;
-            s
+        .unwrap_or_else(|| BimiSettings {
+            domain,
+            ..Default::default()
         })
 }
 
