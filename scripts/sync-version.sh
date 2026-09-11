@@ -4,7 +4,7 @@
 # 0.2.1-rc1 become Version 0.2.1 and Release 0.1.rc1%{?dist}.
 set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$project_dir/Cargo.toml" | head -1)"
+cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$project_dir/Cargo.toml" | head -1 | tr -d '\r')"
 if [[ -z "$cargo_version" ]]; then
   echo "Could not read version from Cargo.toml" >&2
   exit 1

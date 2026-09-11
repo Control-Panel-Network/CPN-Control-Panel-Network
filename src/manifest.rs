@@ -245,11 +245,24 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     // (HTTP 409) before transitions allowed maintenance.
     let detected = has_manifest || has_bootstrap;
 
-    let package_version = manifest
-        .as_ref()
-        .map(|item| item.package_version.clone())
-        .or(rpm_version)
-        .unwrap_or_else(|| running_version.to_string());
+    let package_version = {
+        let from_manifest = manifest
+            .as_ref()
+            .map(|item| item.package_version.clone());
+        match (from_manifest, rpm_version.clone()) {
+            (Some(manifest_ver), Some(rpm_ver))
+                if crate::releases::is_retired_cpn_1_0_identity(&manifest_ver)
+                    && (crate::releases::is_active_0_2_line(&rpm_ver)
+                        || rpm_ver.starts_with("0.2.")) =>
+            {
+                // Stale install-manifest after retag: prefer live RPM identity.
+                rpm_ver
+            }
+            (Some(manifest_ver), _) => manifest_ver,
+            (None, Some(rpm_ver)) => rpm_ver,
+            (None, None) => running_version.to_string(),
+        }
+    };
     let release_tag = manifest
         .as_ref()
         .map(|item| item.release_tag.clone())
