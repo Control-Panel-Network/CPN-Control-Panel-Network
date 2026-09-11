@@ -218,11 +218,15 @@ export async function startMaintenance(payload: {
   version?: string;
   confirm_downgrade?: boolean;
   reset_data?: boolean;
+  confirm_execute?: boolean;
 }): Promise<void> {
   const response = await apiFetch("/api/maintenance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      confirm_execute: payload.confirm_execute ?? true,
+    }),
   });
   if (!response.ok) {
     throw new Error(await readError(response, "maintenance_failed"));

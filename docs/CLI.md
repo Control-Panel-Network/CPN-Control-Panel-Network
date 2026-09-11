@@ -5,12 +5,16 @@ This document covers the operator CLI (`cpn`) and the installer runtime (`cpn-in
 > [!NOTE]
 > Run `cpn --help`, `cpn <group> --help`, or `cpn-installer --help` on the installed version for the authoritative command syntax for that release.
 
+> [!IMPORTANT]
+> Help is a flag on the CPN binaries, not a standalone bash command. Typing bare `--help` in the shell prints `command not found`. Use `cpn --help` or `cpn-installer --help` (also `-h`).
+
 ## `cpn`
 
 `cpn` is the post-install operator CLI. Read-only commands can run normally; commands that modify accounts, sites, apps, packages, plugins, or network settings require root privileges.
 
 ```bash
 cpn --help
+cpn-installer --help
 cpn list
 cpn version
 ```

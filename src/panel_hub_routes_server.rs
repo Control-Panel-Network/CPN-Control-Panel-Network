@@ -375,11 +375,12 @@ pub async fn settings_version_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    let can_manage = is_panel_admin(&user);
     html_ok(panel_shell(
         &user,
         "settings",
         "Version Management",
-        &version_management_page(),
+        &version_management_page(can_manage),
     ))
 }
 

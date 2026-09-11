@@ -249,6 +249,7 @@ function AppShell() {
         version,
         confirm_downgrade: confirmDowngrade,
         reset_data: false,
+        confirm_execute: true,
       });
     } catch (error) {
       setMaintenanceBusy(false);

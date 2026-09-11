@@ -171,6 +171,43 @@ async fn verify_downloaded_artifact(
     Ok(())
 }
 
+async fn rpm_query_nevra(path: &str) -> Option<String> {
+    let output = Command::new("rpm")
+        .args([
+            "-qp",
+            "--queryformat",
+            "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}",
+            path,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if nevra.is_empty() {
+        None
+    } else {
+        Some(nevra)
+    }
+}
+
+async fn rpm_nevra_installed(nevra: &str) -> bool {
+    Command::new("rpm")
+        .args(["-q", nevra])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 async fn install_rpm(path: &str, force: bool) -> Result<(), String> {
     let mut args = vec!["install", "-y"];
     if force {
@@ -189,6 +226,15 @@ async fn install_rpm(path: &str, force: bool) -> Result<(), String> {
         .map_err(|error| format!("dnf install failed: {error}"))?;
     if status.success() {
         return Ok(());
+    }
+    // Bootstrap `upgrade.sh` may already have installed this exact NEVRA before
+    // `cpn-installer --upgrade` runs. Treat same-package as success unless repairing.
+    if !force {
+        if let Some(nevra) = rpm_query_nevra(path).await {
+            if rpm_nevra_installed(&nevra).await {
+                return Ok(());
+            }
+        }
     }
     // Fallback for older hosts / repair of same NEVRA.
     let mut rpm_args = vec!["-Uvh"];

@@ -185,6 +185,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 version,
                 confirm_downgrade: false,
                 reset_data: false,
+                confirm_execute: true,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,
@@ -213,6 +214,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 version: Some(target),
                 confirm_downgrade: true,
                 reset_data,
+                confirm_execute: true,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,
@@ -241,6 +243,7 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 version: Some(version),
                 confirm_downgrade: true,
                 reset_data,
+                confirm_execute: true,
             };
             match run_maintenance(state, request).await {
                 Ok(()) => 0,

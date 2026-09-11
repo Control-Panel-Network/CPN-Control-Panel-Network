@@ -157,22 +157,42 @@ pick_release_json() {
   fi
   body="$(download_text "${API_BASE}/releases?per_page=30")" \
     || die "could not list GitHub Releases"
-  json="$(printf '%s' "$body" | python3 -c '
-import json,sys,os
+  # Skip published tags that still have no matching package assets (release workflow mid-run).
+  json="$(printf '%s' "$body" | FAMILY="$FAMILY" EL_MAJOR="${EL_MAJOR:-}" PKG_ARCH="$PKG_ARCH" DEB_ARCH="$DEB_ARCH" python3 -c '
+import json,sys,os,re
 items=json.load(sys.stdin)
 stable_only=os.environ.get("CPN_STABLE_ONLY","0").strip()=="1"
 include_pre_legacy=os.environ.get("CPN_INCLUDE_PRERELEASE","1").strip()
 include_pre = (not stable_only) and include_pre_legacy != "0"
+family=os.environ.get("FAMILY","").strip()
+el_major=os.environ.get("EL_MAJOR","").strip()
+pkg_arch=os.environ.get("PKG_ARCH","").strip()
+deb_arch=os.environ.get("DEB_ARCH","").strip()
+
+def has_package(rel):
+    names=[a.get("name","") for a in (rel.get("assets") or [])]
+    if not names:
+        return False
+    if "SHA256SUMS" not in names:
+        return False
+    if family=="dnf":
+        pat=re.compile(r"^cpn-installer-.*\.el%s\.%s\.rpm$" % (re.escape(el_major), re.escape(pkg_arch)))
+        return any(pat.match(n) for n in names)
+    suffix="_%s.deb" % deb_arch
+    return any(n.startswith("cpn-installer_") and n.endswith(suffix) for n in names)
+
 for item in items:
     if item.get("draft"):
         continue
     if item.get("prerelease") and not include_pre:
         continue
+    if not has_package(item):
+        continue
     print(json.dumps(item))
     break
 else:
     sys.exit(2)
-')" || die "no matching GitHub release found (set CPN_RELEASE_TAG, or unset CPN_STABLE_ONLY to allow alphas)"
+')" || die "no matching GitHub release with packages for this OS (set CPN_RELEASE_TAG, or wait for the Release workflow to finish uploading assets)"
   printf '%s' "$json"
 }
 

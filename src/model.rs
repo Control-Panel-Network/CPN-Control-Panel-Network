@@ -155,6 +155,10 @@ pub struct MaintenanceRequest {
     pub confirm_downgrade: bool,
     #[serde(default)]
     pub reset_data: bool,
+    /// Required by HTTP `/api/maintenance` so accidental single-click POSTs are rejected.
+    /// CLI and in-process callers should set this to true when intentional.
+    #[serde(default)]
+    pub confirm_execute: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

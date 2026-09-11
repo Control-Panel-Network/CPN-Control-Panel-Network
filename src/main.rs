@@ -1056,6 +1056,7 @@ async fn main() -> std::io::Result<()> {
             .service(start_mail_install)
             .service(cpn_installer::maintenance_api::api_version_check)
             .service(cpn_installer::maintenance_api::api_releases)
+            .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
             .route(
