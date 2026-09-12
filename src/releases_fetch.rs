@@ -107,6 +107,49 @@ fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, Stri
     Ok(releases)
 }
 
+async fn direct_fallback_result(
+    limit: usize,
+    repo: &str,
+    existing: Option<crate::releases_cache::ReleasesCacheFile>,
+    api_error: &str,
+) -> crate::releases_cache::ReleasesFetchResult {
+    use crate::releases_cache::{mark_attempt, save_cache, store_success};
+
+    match crate::releases_direct::list_releases_direct(limit.clamp(1, 5)).await {
+        Ok(releases) => {
+            let stored = store_success(repo, releases.clone(), None, existing);
+            let _ = save_cache(&stored);
+            crate::releases_cache::ReleasesFetchResult {
+                releases,
+                from_cache: false,
+                cache_age_secs: Some(0),
+                rate_limited: api_error.contains("403") || api_error.contains("429"),
+                retry_after_secs: None,
+                note: Some(
+                    "GitHub API unavailable; resolved tip via direct release download URLs.".into(),
+                ),
+                soft_error: Some(api_error.to_string()),
+            }
+        }
+        Err(direct_error) => {
+            if let Some(mut cache) = existing {
+                mark_attempt(&mut cache);
+                cache.last_error = Some(format!("{api_error}; {direct_error}"));
+                let _ = save_cache(&cache);
+            }
+            crate::releases_cache::ReleasesFetchResult {
+                releases: Vec::new(),
+                from_cache: false,
+                cache_age_secs: None,
+                rate_limited: api_error.contains("403") || api_error.contains("429"),
+                retry_after_secs: None,
+                note: None,
+                soft_error: Some(format!("{api_error} Direct fallback: {direct_error}")),
+            }
+        }
+    }
+}
+
 pub async fn list_releases_cached(
     limit: usize,
     force_network: bool,
@@ -176,7 +219,7 @@ pub async fn list_releases_cached(
                     soft_error: Some(error),
                 });
             }
-            return Err(error);
+            return Ok(direct_fallback_result(limit, &repo, existing, &error).await);
         }
     };
 
@@ -230,7 +273,7 @@ pub async fn list_releases_cached(
                 soft_error: Some(msg),
             });
         }
-        return Err(msg);
+        return Ok(direct_fallback_result(limit, &repo, existing, &msg).await);
     }
 
     if response.status < 200 || response.status >= 300 {
@@ -256,7 +299,7 @@ pub async fn list_releases_cached(
                 soft_error: Some(msg),
             });
         }
-        return Err(msg);
+        return Ok(direct_fallback_result(limit, &repo, existing, &msg).await);
     }
 
     let releases = parse_releases_json(&response.body, limit)?;
@@ -287,15 +330,17 @@ pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
 pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
     let wanted = normalize_version(version_or_tag);
     let releases = list_releases_cached(30, false).await?.releases;
-    releases
-        .into_iter()
-        .find(|release| {
-            normalize_version(&release.version) == wanted
-                || normalize_version(&release.tag_name) == wanted
-                || release.tag_name == version_or_tag
-                || release.tag_name == format!("v{wanted}")
-        })
-        .ok_or_else(|| format!("No GitHub release found for version {version_or_tag}"))
+    if let Some(found) = releases.into_iter().find(|release| {
+        normalize_version(&release.version) == wanted
+            || normalize_version(&release.tag_name) == wanted
+            || release.tag_name == version_or_tag
+            || release.tag_name == format!("v{wanted}")
+    }) {
+        return Ok(found);
+    }
+    crate::releases_direct::probe_direct_release(Some(version_or_tag))
+        .await
+        .map_err(|error| format!("No GitHub release found for version {version_or_tag}: {error}"))
 }
 
 pub async fn version_check(running_version: &str, installed_version: &str) -> VersionCheck {

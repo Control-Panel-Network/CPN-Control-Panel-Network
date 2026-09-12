@@ -5,6 +5,21 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.31] - 12/09/2026
+
+GitHub Releases rate-limit resilience: authenticated API when configured, last-good cache, and direct CDN tip fallback when the API returns 403/429 with an empty cache (Cargo `0.2.6-alpha.31`).
+
+### Fixed
+
+- Version Management / `--version-check` no longer leave Latest empty under unauthenticated API 403 when tip packages are still downloadable from GitHub Releases CDN URLs.
+- Running / Installed stay populated from local RPM/binary; UI softens the status line when a tip was resolved via cache or direct download.
+- `install.sh` / `upgrade.sh` send `CPN_GITHUB_TOKEN` / `GITHUB_TOKEN` / `/var/lib/cpn/secrets/github-token` on API calls, and fall back to direct `SHA256SUMS` tip resolution when the list API fails.
+
+### Notes
+
+- Never commit GitHub tokens. Lab smoke: `sudo install -m 600` the token file under `/var/lib/cpn/secrets/`.
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
 ## [0.2.6-alpha.30] - 12/09/2026
 
 OpenLiteSpeed / LiteSpeed Enterprise WebAdmin entry points in the CPN panel sidebar, plus LiteSpeed plan tier and package upgrade/downgrade management (Cargo `0.2.6-alpha.30`).

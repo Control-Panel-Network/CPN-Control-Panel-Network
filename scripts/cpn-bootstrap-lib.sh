@@ -38,6 +38,7 @@ Usage: upgrade.sh [-b REF] [--bypass]
   --bypass                  Pass --bypass to cpn-installer --upgrade (CPN-managed Docker only)
 
 Env: CPN_RELEASE_TAG, CPN_BRANCH, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED, CPN_UPGRADE_BYPASS=1
+     CPN_GITHUB_TOKEN / GITHUB_TOKEN or /var/lib/cpn/secrets/github-token (API auth; never commit)
 
 Raw script URLs (github.com/.../<ref>/upgrade.sh is not a raw file URL):
   https://raw.githubusercontent.com/${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}/stable/scripts/upgrade.sh
@@ -56,6 +57,7 @@ Usage: install.sh [-b REF | --branch REF | --ref REF]
   -b, --branch, --ref REF   Pin packages to a GitHub Release matching REF (tries REF and vREF)
 
 Env: CPN_RELEASE_TAG, CPN_BRANCH, CPN_STABLE_ONLY, CPN_REQUIRE_GPG, CPN_ALLOW_UNSIGNED
+     CPN_GITHUB_TOKEN / GITHUB_TOKEN or /var/lib/cpn/secrets/github-token (API auth; never commit)
 
 Raw script URLs (github.com/.../<ref>/install.sh is not a raw file URL):
   https://raw.githubusercontent.com/${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}/stable/scripts/install.sh

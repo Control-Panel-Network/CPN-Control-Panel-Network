@@ -99,19 +99,79 @@ download() {
 download_text() {
   local url="$1"
   require_https_url "$url"
+  local -a hdr=(
+    -H "Accept: application/vnd.github+json"
+    -H "User-Agent: CPN-install.sh"
+  )
+  local tok=""
+  if [[ -n "${CPN_GITHUB_TOKEN:-}" ]]; then
+    tok="${CPN_GITHUB_TOKEN}"
+  elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    tok="${GITHUB_TOKEN}"
+  elif [[ -r "${CPN_DATA_DIR:-/var/lib/cpn}/secrets/github-token" ]]; then
+    tok="$(tr -d '\r\n' < "${CPN_DATA_DIR:-/var/lib/cpn}/secrets/github-token")"
+  fi
+  if [[ -n "$tok" ]]; then
+    hdr+=(-H "Authorization: Bearer ${tok}")
+  fi
   if have_cmd curl; then
     curl -fsSL --proto '=https' --tlsv1.2 --max-time 60 \
-      -H "Accept: application/vnd.github+json" \
-      -H "User-Agent: CPN-install.sh" \
+      "${hdr[@]}" \
       "$url"
   elif have_cmd wget; then
-    wget -qO- --https-only \
-      --header="Accept: application/vnd.github+json" \
-      --header="User-Agent: CPN-install.sh" \
-      "$url"
+    local -a wh=(--header="Accept: application/vnd.github+json" --header="User-Agent: CPN-install.sh")
+    if [[ -n "$tok" ]]; then
+      wh+=(--header="Authorization: Bearer ${tok}")
+    fi
+    wget -qO- --https-only "${wh[@]}" "$url"
   else
     die "curl or wget is required"
   fi
+}
+
+# Build a minimal GitHub-like release JSON from CDN SHA256SUMS (bypasses api.github.com).
+direct_release_json_for_tag() {
+  local tag="$1"
+  [[ -n "$tag" ]] || return 1
+  case "$tag" in
+    v*|V*) ;;
+    *) tag="v${tag}" ;;
+  esac
+  local base="https://github.com/${CPN_GITHUB_REPO}/releases/download/${tag}"
+  local sums
+  sums="$(curl -fsSL --proto '=https' --tlsv1.2 --max-time 30 -H 'User-Agent: CPN-install.sh' "${base}/SHA256SUMS" 2>/dev/null)" \
+    || return 1
+  [[ -n "$sums" ]] || return 1
+  printf '%s' "$sums" | TAG="$tag" REPO="$CPN_GITHUB_REPO" BASE="$base" python3 -c '
+import json,os,sys
+tag=os.environ["TAG"]
+repo=os.environ["REPO"]
+base=os.environ["BASE"].rstrip("/")
+names=[]
+for line in sys.stdin:
+    line=line.strip()
+    if not line or line.startswith("#"):
+        continue
+    parts=line.split()
+    if len(parts) < 2:
+        continue
+    name=parts[1].lstrip("*")
+    if name and name not in names:
+        names.append(name)
+for extra in ("SHA256SUMS","SHA256SUMS.asc","RPM-GPG-KEY-CPN"):
+    if extra not in names:
+        names.append(extra)
+assets=[{"name":n,"browser_download_url":f"{base}/{n}","content_type":"application/octet-stream","size":0} for n in names]
+print(json.dumps({
+  "tag_name": tag,
+  "name": tag,
+  "draft": False,
+  "prerelease": ("alpha" in tag or "beta" in tag or "rc" in tag),
+  "published_at": "",
+  "html_url": f"https://github.com/{repo}/releases/tag/{tag}",
+  "assets": assets,
+}))
+'
 }
 
 sha256_file() {
@@ -195,13 +255,28 @@ detect_guest() {
 pick_release_json() {
   local json body
   if [[ -n "${CPN_RELEASE_TAG:-}" ]]; then
-    body="$(download_text "${API_BASE}/releases/tags/${CPN_RELEASE_TAG}")" \
-      || die "release tag not found: ${CPN_RELEASE_TAG}"
+    body="$(download_text "${API_BASE}/releases/tags/${CPN_RELEASE_TAG}" 2>/dev/null || true)"
+    if [[ -z "$body" ]]; then
+      info "API tag lookup failed for ${CPN_RELEASE_TAG}; trying direct download URLs"
+      body="$(direct_release_json_for_tag "${CPN_RELEASE_TAG}")" \
+        || die "release tag not found: ${CPN_RELEASE_TAG}"
+    fi
     printf '%s' "$body"
     return
   fi
-  body="$(download_text "${API_BASE}/releases?per_page=30")" \
-    || die "could not list GitHub Releases"
+  body="$(download_text "${API_BASE}/releases?per_page=30" 2>/dev/null || true)"
+  if [[ -z "$body" ]]; then
+    info "GitHub Releases API list failed (rate limit or access denied); trying direct tip download URLs"
+    local tip
+    for tip in "v0.2.6-alpha.28" "v0.2.6-alpha.27" "v0.2.6-alpha.26" "v0.2.6-alpha.25"; do
+      if body="$(direct_release_json_for_tag "$tip")"; then
+        info "resolved tip via direct download: $tip"
+        printf '%s' "$body"
+        return
+      fi
+    done
+    die "could not list GitHub Releases (set CPN_GITHUB_TOKEN or ${CPN_DATA_DIR:-/var/lib/cpn}/secrets/github-token, or CPN_RELEASE_TAG)"
+  fi
   if have_cmd python3; then
     # Skip published tags that still have no matching package assets (release workflow mid-run).
     json="$(printf '%s' "$body" | FAMILY="$FAMILY" EL_MAJOR="${EL_MAJOR:-}" PKG_ARCH="$PKG_ARCH" DEB_ARCH="$DEB_ARCH" python3 -c '
