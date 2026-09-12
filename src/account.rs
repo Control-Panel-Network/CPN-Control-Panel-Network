@@ -428,6 +428,11 @@ pub fn setup_account(
         created_at_unix: now_unix(),
     };
     persist_bootstrap(&boot)?;
+    // OLS WebAdmin uses htpasswd (apr1/bcrypt), not CPN PBKDF2. Align while plaintext
+    // is still in memory; never log the password.
+    let _ = crate::litespeed_webadmin_users::maybe_align_webadmin_after_account_setup(
+        &username, &password,
+    );
     Ok(AccountSetupResult {
         public: AccountPublic {
             username,
