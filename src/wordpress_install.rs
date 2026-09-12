@@ -5,10 +5,10 @@ use crate::panel_ops_db::create_database_with_user;
 use crate::panel_ops_php::detect_php;
 use crate::resource_accounts;
 use crate::sites::{create_site, load_site, normalize_domain};
-use crate::wordpress::{get_wordpress_site, new_site_id, upsert_wordpress_site, WordpressSite};
+use crate::wordpress::{WordpressSite, get_wordpress_site, new_site_id, upsert_wordpress_site};
 use crate::wordpress_manage::refresh_wordpress_site;
 use crate::wordpress_wpcli::{ensure_wp_cli, is_wordpress_docroot, wp_run};
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use std::fs;
 use std::path::Path;
 
@@ -35,7 +35,8 @@ pub struct WordpressInstallResult {
 /// Keeps slugs and absolute paths / http(s) URLs.
 pub fn parse_plugin_sources(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for token in raw.split(|c: char| c == ',' || c == ';' || c == '\n' || c == '\r' || c.is_whitespace())
+    for token in
+        raw.split(|c: char| c == ',' || c == ';' || c == '\n' || c == '\r' || c.is_whitespace())
     {
         let trimmed = token.trim();
         if trimmed.is_empty() {
@@ -69,13 +70,7 @@ fn random_db_password() -> String {
 fn db_ident_from_domain(domain: &str) -> String {
     let mut base: String = domain
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '_'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
     while base.contains("__") {
         base = base.replace("__", "_");
@@ -110,7 +105,12 @@ fn wp_core_download(docroot: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn wp_config_create(docroot: &Path, db_name: &str, db_user: &str, db_pass: &str) -> Result<(), String> {
+fn wp_config_create(
+    docroot: &Path,
+    db_name: &str,
+    db_user: &str,
+    db_pass: &str,
+) -> Result<(), String> {
     wp_run(
         docroot,
         &[
@@ -239,7 +239,9 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
     let db_password = random_db_password();
 
     create_database_with_user(&db_name, &db_user, &db_password)?;
-    notes.push(format!("Created MariaDB database `{db_name}` with dedicated user."));
+    notes.push(format!(
+        "Created MariaDB database `{db_name}` with dedicated user."
+    ));
 
     resource_accounts::create_database(owner, &db_name, &domain)?;
     notes.push("Registered database in CPN resource registry.".into());
@@ -310,10 +312,7 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
     ));
     notes.extend(refreshed.notes);
 
-    Ok(WordpressInstallResult {
-        site: saved,
-        notes,
-    })
+    Ok(WordpressInstallResult { site: saved, notes })
 }
 
 #[cfg(test)]

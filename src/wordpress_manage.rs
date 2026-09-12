@@ -4,10 +4,12 @@ use crate::account::now_unix;
 use crate::panel_ops_php::detect_php;
 use crate::sites::{list_sites, normalize_domain};
 use crate::wordpress::{
-    delete_wordpress_site, get_wordpress_site, list_wordpress_sites, upsert_wordpress_site,
-    WordpressSite,
+    WordpressSite, delete_wordpress_site, get_wordpress_site, list_wordpress_sites,
+    upsert_wordpress_site,
 };
-use crate::wordpress_wpcli::{detect_wp_cli, is_wordpress_docroot, wp_option_get, wp_option_update, wp_run, WpCliStatus};
+use crate::wordpress_wpcli::{
+    WpCliStatus, detect_wp_cli, is_wordpress_docroot, wp_option_get, wp_option_update, wp_run,
+};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -65,7 +67,8 @@ struct WpThemeJson {
 }
 
 fn docroot_for_domain(domain: &str) -> Result<PathBuf, String> {
-    let site = get_wordpress_site(domain).ok_or_else(|| format!("WordPress `{domain}` not registered"))?;
+    let site =
+        get_wordpress_site(domain).ok_or_else(|| format!("WordPress `{domain}` not registered"))?;
     Ok(PathBuf::from(&site.docroot))
 }
 
@@ -74,10 +77,7 @@ fn read_docroot_path(path: &Path) -> Result<(), String> {
         return Err(format!("Document root not found: {}", path.display()));
     }
     if !is_wordpress_docroot(path) {
-        return Err(format!(
-            "No WordPress installation at {}",
-            path.display()
-        ));
+        return Err(format!("No WordPress installation at {}", path.display()));
     }
     Ok(())
 }
@@ -87,8 +87,8 @@ pub fn list_plugins(domain_raw: &str) -> Result<Vec<PluginRow>, String> {
     let docroot = docroot_for_domain(&domain)?;
     read_docroot_path(&docroot)?;
     let raw = wp_run(&docroot, &["plugin", "list", "--format=json"])?;
-    let parsed: Vec<WpPluginJson> = serde_json::from_str(&raw)
-        .map_err(|e| format!("Could not parse plugin list: {e}"))?;
+    let parsed: Vec<WpPluginJson> =
+        serde_json::from_str(&raw).map_err(|e| format!("Could not parse plugin list: {e}"))?;
     Ok(parsed
         .into_iter()
         .map(|row| PluginRow {
@@ -105,8 +105,8 @@ pub fn list_themes(domain_raw: &str) -> Result<Vec<ThemeRow>, String> {
     let docroot = docroot_for_domain(&domain)?;
     read_docroot_path(&docroot)?;
     let raw = wp_run(&docroot, &["theme", "list", "--format=json"])?;
-    let parsed: Vec<WpThemeJson> = serde_json::from_str(&raw)
-        .map_err(|e| format!("Could not parse theme list: {e}"))?;
+    let parsed: Vec<WpThemeJson> =
+        serde_json::from_str(&raw).map_err(|e| format!("Could not parse theme list: {e}"))?;
     Ok(parsed
         .into_iter()
         .map(|row| ThemeRow {
@@ -136,12 +136,15 @@ pub fn refresh_wordpress_site(domain_raw: &str) -> Result<WordpressRefreshResult
         .version
         .unwrap_or_else(|| site.php_version.clone());
 
-    site.theme = wp_run(&docroot, &["theme", "list", "--status=active", "--field=name"])
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|e| {
-            notes.push(format!("Could not read active theme: {e}"));
-            String::new()
-        });
+    site.theme = wp_run(
+        &docroot,
+        &["theme", "list", "--status=active", "--field=name"],
+    )
+    .map(|s| s.trim().to_string())
+    .unwrap_or_else(|e| {
+        notes.push(format!("Could not read active theme: {e}"));
+        String::new()
+    });
 
     site.plugin_count = list_plugins(&domain)
         .map(|rows| rows.len() as u32)
@@ -157,10 +160,7 @@ pub fn refresh_wordpress_site(domain_raw: &str) -> Result<WordpressRefreshResult
     site.updated_at_unix = now_unix();
 
     let saved = upsert_wordpress_site(site)?;
-    Ok(WordpressRefreshResult {
-        site: saved,
-        notes,
-    })
+    Ok(WordpressRefreshResult { site: saved, notes })
 }
 
 pub fn scan_wordpress_sites() -> Result<Vec<WordpressRefreshResult>, String> {
@@ -247,7 +247,8 @@ pub fn activate_theme(domain_raw: &str, slug: &str) -> Result<String, String> {
 }
 
 fn save_site_patch(domain: &str, patch: impl FnOnce(&mut WordpressSite)) -> Result<(), String> {
-    let mut site = get_wordpress_site(domain).ok_or_else(|| format!("WordPress `{domain}` not registered"))?;
+    let mut site =
+        get_wordpress_site(domain).ok_or_else(|| format!("WordPress `{domain}` not registered"))?;
     patch(&mut site);
     site.updated_at_unix = now_unix();
     upsert_wordpress_site(site).map(|_| ())
@@ -281,8 +282,8 @@ pub fn set_debugging(domain_raw: &str, enabled: bool) -> Result<String, String> 
     let docroot = docroot_for_domain(&domain)?;
     read_docroot_path(&docroot)?;
     let config = docroot.join("wp-config.php");
-    let raw = fs::read_to_string(&config)
-        .map_err(|e| format!("Could not read wp-config.php: {e}"))?;
+    let raw =
+        fs::read_to_string(&config).map_err(|e| format!("Could not read wp-config.php: {e}"))?;
     let updated = replace_wp_debug_constant(&raw, enabled);
     fs::write(&config, updated.as_bytes())
         .map_err(|e| format!("Could not write wp-config.php: {e}"))?;
@@ -297,10 +298,22 @@ pub fn set_debugging(domain_raw: &str, enabled: bool) -> Result<String, String> 
 fn replace_wp_debug_constant(raw: &str, enabled: bool) -> String {
     let value = if enabled { "true" } else { "false" };
     let patterns = [
-        ("define( 'WP_DEBUG', true )", format!("define( 'WP_DEBUG', {value} )")),
-        ("define( 'WP_DEBUG', false )", format!("define( 'WP_DEBUG', {value} )")),
-        ("define('WP_DEBUG', true)", format!("define('WP_DEBUG', {value})")),
-        ("define('WP_DEBUG', false)", format!("define('WP_DEBUG', {value})")),
+        (
+            "define( 'WP_DEBUG', true )",
+            format!("define( 'WP_DEBUG', {value} )"),
+        ),
+        (
+            "define( 'WP_DEBUG', false )",
+            format!("define( 'WP_DEBUG', {value} )"),
+        ),
+        (
+            "define('WP_DEBUG', true)",
+            format!("define('WP_DEBUG', {value})"),
+        ),
+        (
+            "define('WP_DEBUG', false)",
+            format!("define('WP_DEBUG', {value})"),
+        ),
     ];
     for (from, to) in &patterns {
         if raw.contains(from) {
@@ -309,7 +322,10 @@ fn replace_wp_debug_constant(raw: &str, enabled: bool) -> String {
     }
     if raw.contains("/* That's all, stop editing") {
         let insert = format!("\ndefine( 'WP_DEBUG', {value} );\n");
-        return raw.replace("/* That's all, stop editing", &format!("{insert}/* That's all, stop editing"));
+        return raw.replace(
+            "/* That's all, stop editing",
+            &format!("{insert}/* That's all, stop editing"),
+        );
     }
     format!("{raw}\ndefine( 'WP_DEBUG', {value} );\n")
 }
@@ -428,7 +444,8 @@ fn strip_htaccess_auth(htaccess: &Path) -> Result<(), String> {
     if !htaccess.is_file() {
         return Ok(());
     }
-    let existing = fs::read_to_string(htaccess).map_err(|e| format!("Could not read .htaccess: {e}"))?;
+    let existing =
+        fs::read_to_string(htaccess).map_err(|e| format!("Could not read .htaccess: {e}"))?;
     fs::write(htaccess, filter_htaccess_block(&existing, None))
         .map_err(|e| format!("Could not update .htaccess: {e}"))
 }
@@ -440,9 +457,18 @@ pub fn delete_wordpress(domain_raw: &str, remove_files: bool) -> Result<String, 
     let docroot = PathBuf::from(&site.docroot);
     if remove_files && docroot.is_dir() {
         for name in [
-            "wp-admin", "wp-includes", "wp-content", "wp-config.php", "wp-load.php",
-            "wp-settings.php", "wp-blog-header.php", "wp-login.php", "index.php",
-            "xmlrpc.php", ".maintenance", ".htpasswd",
+            "wp-admin",
+            "wp-includes",
+            "wp-content",
+            "wp-config.php",
+            "wp-load.php",
+            "wp-settings.php",
+            "wp-blog-header.php",
+            "wp-login.php",
+            "index.php",
+            "xmlrpc.php",
+            ".maintenance",
+            ".htpasswd",
         ] {
             let path = docroot.join(name);
             if path.is_dir() {

@@ -53,9 +53,15 @@ fn section_heading(title: &str, blurb: &str) -> String {
 
 fn bool_badge(on: bool, on_label: &str, off_label: &str) -> String {
     if on {
-        format!(r#"<span class="badge-ok">{label}</span>"#, label = html_escape(on_label))
+        format!(
+            r#"<span class="badge-ok">{label}</span>"#,
+            label = html_escape(on_label)
+        )
     } else {
-        format!(r#"<span class="badge-off">{label}</span>"#, label = html_escape(off_label))
+        format!(
+            r#"<span class="badge-off">{label}</span>"#,
+            label = html_escape(off_label)
+        )
     }
 }
 

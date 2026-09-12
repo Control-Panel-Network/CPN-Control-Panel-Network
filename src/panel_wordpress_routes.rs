@@ -6,7 +6,7 @@ use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     wordpress_install_page, wordpress_list_page, wordpress_manage_page,
 };
-use crate::wordpress_install::{install_wordpress, parse_plugin_sources, WordpressInstallRequest};
+use crate::wordpress_install::{WordpressInstallRequest, install_wordpress, parse_plugin_sources};
 use crate::wordpress_manage::{
     activate_theme, all_sites_snapshot, delete_wordpress, install_plugin, refresh_wordpress_site,
     scan_wordpress_sites, set_debugging, set_maintenance, set_password_protection,
@@ -125,11 +125,7 @@ pub async fn wordpress_install_post(
                 None,
             )
         }
-        Err(error) => wp_redirect(
-            "/wordpress/install",
-            None,
-            Some(&error),
-        ),
+        Err(error) => wp_redirect("/wordpress/install", None, Some(&error)),
     }
 }
 
@@ -193,7 +189,10 @@ pub async fn wordpress_scan_post(
     match scan_wordpress_sites() {
         Ok(results) => wp_redirect(
             "/wordpress",
-            Some(&format!("Scan complete. Refreshed {} site(s).", results.len())),
+            Some(&format!(
+                "Scan complete. Refreshed {} site(s).",
+                results.len()
+            )),
             None,
         ),
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
@@ -209,11 +208,7 @@ pub async fn wordpress_ensure_wpcli_post(
         return login_redirect();
     };
     match ensure_wp_cli() {
-        Ok(status) => wp_redirect(
-            "/wordpress",
-            Some(&status.detail),
-            None,
-        ),
+        Ok(status) => wp_redirect("/wordpress", Some(&status.detail), None),
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
     }
 }
