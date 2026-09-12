@@ -426,7 +426,7 @@ pub(crate) fn store_catalog(
     };
     format!(
         r#"{toolbar}<div class="{scroll_cls}">{cards}</div>"#,
-        toolbar = store_list_toolbar(mode, opts.per_page.max(8), page, total_pages, total),
+        toolbar = store_list_toolbar(mode, opts.per_page.max(4), page, total_pages, total),
         scroll_cls = scroll_cls,
         cards = cards,
     )
