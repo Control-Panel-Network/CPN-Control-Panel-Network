@@ -65,6 +65,7 @@ pub mod panel_backups;
 pub mod panel_brand;
 pub mod panel_dashboard;
 pub mod panel_dashboard_tools;
+pub mod panel_feature_flags;
 pub mod panel_feature_gate;
 pub mod panel_footer_chrome;
 pub mod panel_host_info;
