@@ -3,8 +3,6 @@
 use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::process::Stdio;
-use tokio::process::Command;
 
 const DEFAULT_REPO: &str = "Control-Panel-Network/CPN-Control-Panel-Network";
 
@@ -51,6 +49,16 @@ pub struct VersionCheck {
     pub source: String,
     pub releases: Vec<CpnRelease>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub from_cache: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_age_secs: Option<u64>,
+    #[serde(default)]
+    pub rate_limited: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_after_secs: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_note: Option<String>,
 }
 
 pub fn github_repo() -> String {
@@ -120,7 +128,7 @@ pub fn expand_compact_prerelease(compact: &str) -> String {
 }
 
 /// Map RPM Version + Release (from `sync-version.sh`) back to Cargo package version.
-/// Example: `0.2.6` + `0.alpha24.el9` -> `0.2.6-alpha.24`.
+/// Example: `0.2.6` + `0.alpha21.el9` -> `0.2.6-alpha.21`.
 pub fn cargo_version_from_rpm(version: &str, release: &str) -> String {
     let version = normalize_version(version);
     let mut rel = release.trim().to_string();
@@ -137,37 +145,6 @@ pub fn cargo_version_from_rpm(version: &str, release: &str) -> String {
         return format!("{version}-{}", expand_compact_prerelease(compact));
     }
     version
-}
-
-async fn curl_json(url: &str) -> Result<String, String> {
-    let output = Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--max-time",
-            "12",
-            "-H",
-            "Accept: application/vnd.github+json",
-            "-H",
-            "User-Agent: cpn-installer",
-            url,
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|error| format!("Could not query GitHub Releases: {error}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "GitHub Releases request failed ({})",
-            stderr.trim().chars().take(160).collect::<String>()
-        ));
-    }
-    String::from_utf8(output.stdout).map_err(|error| error.to_string())
 }
 
 fn pick_rpm_asset(assets: &[serde_json::Value]) -> Option<ReleaseAsset> {
@@ -260,7 +237,7 @@ pub fn compatible_package_asset(
     }
 }
 
-fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
+pub(crate) fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
     let tag_name = value.get("tag_name")?.as_str()?.trim().to_string();
     if tag_name.is_empty() {
         return None;
@@ -312,80 +289,9 @@ fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
     })
 }
 
-pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
-    let repo = github_repo();
-    let url = format!("https://api.github.com/repos/{repo}/releases?per_page=30");
-    let body = curl_json(&url).await?;
-    let value: serde_json::Value =
-        serde_json::from_str(&body).map_err(|error| format!("Invalid releases JSON: {error}"))?;
-    let items = value
-        .as_array()
-        .ok_or_else(|| "GitHub Releases response was not an array".to_string())?;
-    let mut releases = items
-        .iter()
-        .filter_map(parse_release)
-        .filter(|release| !release.draft)
-        .collect::<Vec<_>>();
-    releases.truncate(limit.max(1));
-    Ok(releases)
-}
-
-pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
-    let wanted = normalize_version(version_or_tag);
-    let releases = list_releases(30).await?;
-    releases
-        .into_iter()
-        .find(|release| {
-            normalize_version(&release.version) == wanted
-                || normalize_version(&release.tag_name) == wanted
-                || release.tag_name == version_or_tag
-                || release.tag_name == format!("v{wanted}")
-        })
-        .ok_or_else(|| format!("No GitHub release found for version {version_or_tag}"))
-}
-
-pub async fn version_check(running_version: &str, installed_version: &str) -> VersionCheck {
-    let repo = github_repo();
-    let source = package_source_label();
-    match list_releases(20).await {
-        Ok(releases) => {
-            let latest = releases.first();
-            let latest_version = latest.map(|item| item.version.clone());
-            let latest_tag = latest.map(|item| item.tag_name.clone());
-            let update_available = latest_version
-                .as_ref()
-                .map(|latest| compare_versions(installed_version, latest) == Ordering::Less)
-                .unwrap_or(false);
-            let downgrade_possible = releases.iter().any(|release| {
-                compare_versions(&release.version, installed_version) == Ordering::Less
-            });
-            VersionCheck {
-                running_version: running_version.into(),
-                installed_version: installed_version.into(),
-                latest_version,
-                latest_tag,
-                update_available,
-                downgrade_possible,
-                repo,
-                source,
-                releases,
-                error: None,
-            }
-        }
-        Err(error) => VersionCheck {
-            running_version: running_version.into(),
-            installed_version: installed_version.into(),
-            latest_version: None,
-            latest_tag: None,
-            update_available: false,
-            downgrade_possible: false,
-            repo,
-            source,
-            releases: Vec::new(),
-            error: Some(error),
-        },
-    }
-}
+pub use crate::releases_fetch::{
+    find_release, list_releases, list_releases_cached, version_check, version_check_with_options,
+};
 
 #[cfg(test)]
 mod tests {
@@ -431,6 +337,10 @@ mod tests {
         assert_eq!(
             cargo_version_from_rpm("0.2.6", "0.alpha21.el10"),
             "0.2.6-alpha.21"
+        );
+        assert_eq!(
+            cargo_version_from_rpm("0.2.6", "0.alpha22.el10"),
+            "0.2.6-alpha.22"
         );
         assert_eq!(cargo_version_from_rpm("0.2.6", "1.el9"), "0.2.6");
         assert_eq!(expand_compact_prerelease("alpha21"), "alpha.21");

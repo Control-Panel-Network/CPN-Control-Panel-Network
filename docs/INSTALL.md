@@ -109,6 +109,38 @@ Former GitHub `v1.0.0` / `v1.0.1` tags were renamed onto the `0.2.x-alpha` line.
 
 Official `upgrade.sh` / `install.sh` and `cpn-installer --upgrade` treat that as a **retag migration**: replace with tip `0.2.x` via `rpm -Uvh --oldpackage` (erase+install fallback) or `apt-get --allow-downgrades`. Non-interactive when you run the official upgrade path.
 
+After a successful upgrade (or when Version Management / `--version-check` runs as root), CPN **reconciles** a stale `install-manifest.json` that still says `1.0.0`/`1.0.1` whenever the live RPM is already on `0.2.x`. The Version Management "Installed package" line then matches the RPM/Cargo identity (including prerelease, for example `0.2.6-alpha.21`).
+
+## GitHub Releases cache (Version Management)
+
+Release lists are cached on disk at `/var/lib/cpn/github-releases-cache.json` (override data root with `CPN_DATA_DIR`).
+
+| Setting | Default | Env |
+|---|---|---|
+| Cache TTL | 30 minutes | `CPN_RELEASES_CACHE_TTL_SECS` |
+| Manual check min interval | 60 seconds | `CPN_RELEASES_CHECK_MIN_INTERVAL_SECS` |
+
+On GitHub HTTP 403/429, CPN serves the last good cache when present and shows an English rate-limit note (no tight retries). Optional token for higher limits: `CPN_GITHUB_TOKEN` or `GITHUB_TOKEN`, or file `/var/lib/cpn/secrets/github-token` (mode 600; never commit).
+
+## What upgrade preserves vs refreshes
+
+**Preserved (never wiped by upgrade/repair unless `--reset-data`):**
+
+- Website docroots under `/home/<domain>/` (and subdomain homes)
+- Panel accounts, plans, billing/plan assignments, bootstrap, MFA, SSL prefs
+- Plugin/app configs and instance data under `/var/lib/cpn` and site `apps/` trees
+- Email / webmail data (`/var/lib/cpn-webmail`, live SnappyMail/Roundcube trees)
+- Docker stacks and volumes by default (opt-in refresh only with `--bypass` for CPN-managed compose)
+
+**May refresh (already installed only; never drops databases):**
+
+- CPN core package (`cpn-installer` / `cpn`) to the selected release
+- MariaDB server packages via `dnf upgrade` / `apt-get --only-upgrade`, then restart if active
+- OpenLiteSpeed and PHP/php-fpm packages when already present, then restart active units
+- Stale CPN packaging/staging under `/var/tmp/cpn-*` and similar allowlisted paths
+
+Post-upgrade verification checks panel `/login`, web server units, and MariaDB when present.
+
 ## After package install
 
 ```bash

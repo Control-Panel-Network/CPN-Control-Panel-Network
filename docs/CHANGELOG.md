@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to CPN Control Panel Network are documented in this file.
 
@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.28] - 12/09/2026
 
-Webmail blank-page fix and preferred mailbox picker (Cargo `0.2.6-alpha.28`).
+Combined tip: SnappyMail blank-page proxy fix + preferred mailbox picker, plus GitHub Releases disk cache packages from #164 (Cargo `0.2.6-alpha.28`). Published `v0.2.6-alpha.27` still pointed at the #166 packaging commit, so RPMs lacked `github-releases-cache`.
 
 ### Fixed
 
@@ -21,12 +21,19 @@ Webmail blank-page fix and preferred mailbox picker (Cargo `0.2.6-alpha.28`).
 
 ### Notes
 
-- Does not overlap Version Management work in open PR #164.
+- Includes Releases cache / searchable Version Management picker already on `stable` at `47f2f6f`.
 - Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
 
 ## [0.2.6-alpha.27] - 12/09/2026
 
-Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags the fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
+Guest-matched EL RPM selection, Version Management searchable picker, and GitHub Releases disk cache (Cargo `0.2.6-alpha.27`). Retags the EL fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
+
+### Added
+
+- Disk cache at `/var/lib/cpn/github-releases-cache.json` (TTL default **30 minutes**, `CPN_RELEASES_CACHE_TTL_SECS`). Manual "Check for updates" min interval **60 seconds** (`CPN_RELEASES_CHECK_MIN_INTERVAL_SECS`).
+- On GitHub HTTP 403/429 (or network failure): serve last good cache when present; English note such as "Checked recently; showing cached results" / try again in N seconds. No tight retry loop.
+- Optional higher API limits via `CPN_GITHUB_TOKEN` / `GITHUB_TOKEN` or `/var/lib/cpn/secrets/github-token` (never committed). ETag / If-None-Match supported.
+- Version Management searchable release typeahead; MariaDB/OLS/PHP refresh on upgrade when already installed (no database drops).
 
 ### Fixed
 
@@ -34,11 +41,12 @@ Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags 
 - `install_rpm` surfaces the real dnf/rpm stderr in the UI.
 - Version Management progress label shows a numeric percent (example: `60% installing: ...`).
 - Installed package prefers live `rpm -q` (mapped to Cargo prerelease) when the install-manifest is stale (example: manifest `0.2.2-alpha.17` vs RPM `0.2.6-alpha.24`).
+- Phantom Installed package `1.0.0`/`1.0.1` when RPM is already `0.2.x` (manifest reconcile + RPM NVR to Cargo prerelease mapping).
 
 ### Notes
 
+- Cache applies to Version Management, `--version-check`, and upgrade release discovery (`list_releases` / `find_release`).
 - Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
-
 ## [0.2.6-alpha.26] - 12/09/2026
 
 Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip (Cargo `0.2.6-alpha.26`). Prior `v0.2.6-alpha.25` tag pointed at pre-webmail tip.
@@ -227,7 +235,7 @@ First post-`0.2.2` alpha packaging cut after the `0.2.x` line. Install and upgra
 - Account security: TOTP 2FA and Passkeys (WebAuthn); MFA material stored per install under `/var/lib/cpn/mfa/`.
 - Default panel port **2087** (Cloudflare-friendly), choosable at install and changeable later.
 
-### Install and packaging (0.2.x → 0.2.3-alpha.19)
+### Install and packaging (0.2.x â†’ 0.2.3-alpha.19)
 
 - Bootstrap scripts detect AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian and refuse unsupported OS versions closed.
 - Manual RPM/DEB/Windows zip install paths documented in the README and [RELEASES.md](RELEASES.md).
@@ -261,7 +269,7 @@ Pin with `CPN_RELEASE_TAG=v0.2.3-alpha.19` or `CPN_RELEASE_TAG=v0.2.4-alpha.19` 
 
 ## [0.2.2] alphas (summary)
 
-Pre-1.0 development line (`v0.2.2-alpha.1` … `v0.2.2-alpha.18`). Notable themes:
+Pre-1.0 development line (`v0.2.2-alpha.1` â€¦ `v0.2.2-alpha.18`). Notable themes:
 
 - Install/upgrade bootstrap one-liners and News Targeted `/install.sh` mirror.
 - Release signing, checksums, GPG, SBOM, and provenance.

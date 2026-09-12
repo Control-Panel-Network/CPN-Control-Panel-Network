@@ -241,6 +241,7 @@ fn rpm_installed_version() -> Option<String> {
 }
 
 /// Prefer live RPM identity over a stale install-manifest (retired 1.0.x or older 0.2.x).
+/// Do not invent a 0.2 identity while the RPM still claims retired 1.0.x (retag needs that).
 fn resolve_package_version(
     from_manifest: Option<String>,
     rpm_version: Option<String>,
@@ -259,6 +260,7 @@ fn resolve_package_version(
             if is_retired_cpn_1_0_identity(&manifest_ver)
                 && is_active_0_2_line(running_version) =>
         {
+            // No RPM query (binary-only host): prefer running over phantom 1.0.x manifest.
             running_version.to_string()
         }
         (Some(manifest_ver), Some(rpm_ver))
@@ -272,6 +274,44 @@ fn resolve_package_version(
         (Some(manifest_ver), _) => manifest_ver,
         (None, Some(rpm_ver)) => rpm_ver,
         (None, None) => running_version.to_string(),
+    }
+}
+
+/// Rewrite install-manifest when it still claims retired `1.0.0`/`1.0.1` but the live
+/// RPM (or running binary on a binary-only host) is already on `0.2.x`.
+pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String> {
+    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity};
+
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return None;
+        }
+    }
+
+    let manifest = load_manifest()?;
+    if !is_retired_cpn_1_0_identity(&manifest.package_version) {
+        return None;
+    }
+    let rpm = rpm_installed_version();
+    let target = match &rpm {
+        Some(v) if is_active_0_2_line(v) => v.clone(),
+        None if is_active_0_2_line(running_version) => running_version.to_string(),
+        _ => return None,
+    };
+    let tag = format!("v{target}");
+    match record_install(
+        &target,
+        &tag,
+        ManifestSource::Rpm,
+        manifest.selected_server,
+        manifest.selected_mail,
+    ) {
+        Ok(_) => Some(format!(
+            "Reconciled install-manifest package_version from {} to {target}",
+            manifest.package_version
+        )),
+        Err(_) => None,
     }
 }
 
@@ -293,6 +333,7 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
         .map(|item| item.release_tag.clone())
         .filter(|tag| !tag.is_empty())
         .filter(|tag| {
+            // Drop stale v1.0.0 tags when package identity was reconciled to 0.2.x.
             !(crate::releases::is_retired_cpn_1_0_identity(tag)
                 && crate::releases::is_active_0_2_line(&package_version))
         })
@@ -376,7 +417,32 @@ mod tests {
     }
 
     #[test]
-    fn resolve_prefers_rpm_over_stale_0_2_manifest() {
+    fn resolve_prefers_rpm_over_stale_manifest() {
+        assert_eq!(
+            resolve_package_version(
+                Some("1.0.0".into()),
+                Some("0.2.6-alpha.21".into()),
+                "0.2.6-alpha.21"
+            ),
+            "0.2.6-alpha.21"
+        );
+        // Keep retired RPM identity so retag migration still triggers.
+        assert_eq!(
+            resolve_package_version(Some("1.0.0".into()), Some("1.0.0".into()), "0.2.6-alpha.21"),
+            "1.0.0"
+        );
+        assert_eq!(
+            resolve_package_version(Some("1.0.0".into()), None, "0.2.6-alpha.21"),
+            "0.2.6-alpha.21"
+        );
+        assert_eq!(
+            resolve_package_version(
+                Some("0.2.6-alpha.20".into()),
+                Some("0.2.6-alpha.21".into()),
+                "0.2.6-alpha.21"
+            ),
+            "0.2.6-alpha.21"
+        );
         assert_eq!(
             resolve_package_version(
                 Some("0.2.2-alpha.17".into()),
@@ -384,18 +450,6 @@ mod tests {
                 "0.2.6-alpha.24"
             ),
             "0.2.6-alpha.24"
-        );
-        assert_eq!(
-            resolve_package_version(
-                Some("1.0.0".into()),
-                Some("0.2.6-alpha.24".into()),
-                "0.2.6-alpha.24"
-            ),
-            "0.2.6-alpha.24"
-        );
-        assert_eq!(
-            resolve_package_version(Some("1.0.0".into()), Some("1.0.0".into()), "0.2.6-alpha.24"),
-            "1.0.0"
         );
     }
 }

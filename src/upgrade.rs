@@ -228,7 +228,7 @@ pub async fn run_maintenance(
     }
 
     state
-        .progress("testing", 88, "Cleaning stale CPN packaging/staging")
+        .progress("testing", 86, "Cleaning stale CPN packaging/staging")
         .await;
     let cleanup = crate::upgrade_cleanup::cleanup_stale_packaging();
     for path in &cleanup.removed {
@@ -236,6 +236,22 @@ pub async fn run_maintenance(
     }
     for note in cleanup.notes.iter().chain(cleanup.skipped_preserved.iter()) {
         state.log(note.clone(), "info");
+    }
+
+    if matches!(
+        request.action,
+        MaintenanceAction::Upgrade | MaintenanceAction::Repair
+    ) {
+        state
+            .progress(
+                "installing",
+                88,
+                "Refreshing CPN-managed stack packages (MariaDB/OLS/PHP when present)",
+            )
+            .await;
+        for note in crate::upgrade_stack::refresh_managed_stack() {
+            state.log(note, "info");
+        }
     }
 
     if matches!(request.action, MaintenanceAction::Upgrade) && request.bypass_docker {
