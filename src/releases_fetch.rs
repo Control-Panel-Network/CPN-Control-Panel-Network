@@ -115,7 +115,7 @@ async fn direct_fallback_result(
 ) -> crate::releases_cache::ReleasesFetchResult {
     use crate::releases_cache::{mark_attempt, save_cache, store_success};
 
-    match crate::releases_direct::list_releases_direct(limit.max(1).min(5)).await {
+    match crate::releases_direct::list_releases_direct(limit.clamp(1, 5)).await {
         Ok(releases) => {
             let stored = store_success(repo, releases.clone(), None, existing);
             let _ = save_cache(&stored);
