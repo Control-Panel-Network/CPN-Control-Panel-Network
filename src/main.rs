@@ -570,7 +570,7 @@ async fn panel_catch_all(
     path: web::Path<String>,
 ) -> HttpResponse {
     if cpn_installer::panel_webmail::webmail_ready()
-        && cpn_installer::panel_webmail::path_matches_webmail_mount(req.path())
+        && cpn_installer::panel_webmail::path_should_proxy_webmail(req.path())
     {
         return cpn_installer::panel_webmail_proxy::webmail_panel_proxy(req, payload).await;
     }

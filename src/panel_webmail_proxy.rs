@@ -1,7 +1,9 @@
 //! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP (:8080).
 
 use crate::panel_feature_gate::webmail_installed;
-use crate::panel_webmail::{load_webmail_config, strip_webmail_mount, webmail_ready};
+use crate::panel_webmail::{
+    backend_path_for_webmail_proxy, load_webmail_config, webmail_ready,
+};
 use actix_web::{HttpRequest, HttpResponse, http::Method, http::StatusCode, web};
 use futures_util::StreamExt;
 use std::process::{Command, Stdio};
@@ -21,7 +23,7 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
         let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
     });
     let path = req.path();
-    let Some(backend_path) = strip_webmail_mount(path) else {
+    let Some(backend_path) = backend_path_for_webmail_proxy(path) else {
         return HttpResponse::NotFound().finish();
     };
     // Normalize bare mount to index.php so SnappyMail serves the login UI.

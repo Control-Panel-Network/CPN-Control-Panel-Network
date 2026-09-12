@@ -14,6 +14,7 @@ Combined tip: SnappyMail blank-page proxy fix + preferred mailbox picker, plus G
 - Panel catch-all used chained `.method()` guards that AND together, so `/snappymail/*` never reached the PHP-FPM proxy (empty 404 / blank SnappyMail). Methods are now OR'd via `guard::Any`.
 - Nginx webmail config accepts `index.php/` PATH_INFO for the SnappyMail SPA, and heals loopback docroot when SnappyMail is preferred but Roundcube was still rooted on `:8080`.
 - Open SnappyMail / Roundcube lands on the login UI (with optional Email / `_user` prefill), not `#/mailbox/INBOX` before authentication.
+- Panel mount strip collided with SnappyMail's own `/snappymail/v/{ver}/static/**` asset URLs: `/snappymail/v/...` became `/v/...`, nginx fell back to `index.php` (HTML), and the browser refused JS/CSS MIME types. Proxy now keeps the `/snappymail/v/...` backend path.
 
 ### Changed
 

@@ -304,6 +304,18 @@ pub fn path_matches_webmail_mount(req_path: &str) -> bool {
         || req_path == format!("{mount}/")
 }
 
+/// SnappyMail HTML uses absolute `/snappymail/v/{ver}/static|themes/...` asset URLs.
+/// Those must proxy even when the panel mount was regenerated away from `/snappymail`.
+pub fn path_is_snappymail_app_asset(req_path: &str) -> bool {
+    matches!(detect_webmail_client(), Some(MailSystem::Snappymail))
+        && (req_path.starts_with("/snappymail/v/") || req_path == "/snappymail/v")
+}
+
+/// True when the panel catch-all should reverse-proxy to loopback webmail.
+pub fn path_should_proxy_webmail(req_path: &str) -> bool {
+    path_matches_webmail_mount(req_path) || path_is_snappymail_app_asset(req_path)
+}
+
 /// Strip mount prefix so backend (root on :8080) receives the remainder.
 pub fn strip_webmail_mount(req_path: &str) -> Option<String> {
     let cfg = load_webmail_config();
@@ -316,6 +328,31 @@ pub fn strip_webmail_mount(req_path: &str) -> Option<String> {
         return Some("/".into());
     }
     Some(rest.to_string())
+}
+
+/// Map a panel URL to the loopback (:8080) path.
+///
+/// SnappyMail ships versioned assets under `{docroot}/snappymail/v/...`, so the backend
+/// URL is `/snappymail/v/...`. The panel mount is often also `/snappymail`, and a naive
+/// strip turns `/snappymail/v/...` into `/v/...`. Nginx `try_files` then falls back to
+/// `index.php` (HTML), which browsers reject as the wrong MIME type for JS/CSS.
+pub fn backend_path_for_webmail_proxy(req_path: &str) -> Option<String> {
+    if path_is_snappymail_app_asset(req_path) {
+        return Some(req_path.to_string());
+    }
+    let stripped = strip_webmail_mount(req_path)?;
+    if matches!(detect_webmail_client(), Some(MailSystem::Snappymail)) {
+        return Some(remap_snappymail_stripped_asset(&stripped));
+    }
+    Some(stripped)
+}
+
+fn remap_snappymail_stripped_asset(stripped: &str) -> String {
+    if stripped.starts_with("/v/") || stripped == "/v" {
+        format!("/snappymail{stripped}")
+    } else {
+        stripped.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -354,5 +391,15 @@ mod tests {
                 Some("/index.php")
             );
         });
+    }
+
+    #[test]
+    fn snappymail_asset_paths_keep_app_prefix() {
+        assert_eq!(
+            remap_snappymail_stripped_asset("/v/2.38.2/static/js/min/libs.min.js"),
+            "/snappymail/v/2.38.2/static/js/min/libs.min.js"
+        );
+        assert_eq!(remap_snappymail_stripped_asset("/index.php"), "/index.php");
+        assert_eq!(remap_snappymail_stripped_asset("/v"), "/snappymail/v");
     }
 }
