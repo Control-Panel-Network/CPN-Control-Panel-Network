@@ -307,6 +307,40 @@ pub fn list_installed_all() -> Result<Vec<InstalledPlugin>, String> {
     Ok(out)
 }
 
+/// True when any site has an enabled install of `plugin_id`.
+pub fn plugin_id_enabled_anywhere(plugin_id: &str) -> bool {
+    let id = plugin_id.trim();
+    if id.is_empty() {
+        return false;
+    }
+    match list_installed_all() {
+        Ok(list) => list
+            .iter()
+            .any(|p| p.manifest.id == id && p.manifest.enabled),
+        Err(_) => false,
+    }
+}
+
+fn sync_email_auth_feature_flags(plugin_id: &str) {
+    match plugin_id.trim() {
+        "mtaSts" => {
+            if plugin_id_enabled_anywhere("mtaSts") {
+                let _ = crate::panel_feature_flags::write_host_feature_flag("mta-sts");
+            } else {
+                crate::panel_feature_flags::clear_host_feature_flag("mta-sts");
+            }
+        }
+        "bimi" => {
+            if plugin_id_enabled_anywhere("bimi") {
+                let _ = crate::panel_feature_flags::write_host_feature_flag("bimi");
+            } else {
+                crate::panel_feature_flags::clear_host_feature_flag("bimi");
+            }
+        }
+        _ => {}
+    }
+}
+
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|error| format!("Could not create {dst:?}: {error}"))?;
     let entries = fs::read_dir(src).map_err(|error| format!("Could not read {src:?}: {error}"))?;
@@ -408,6 +442,7 @@ pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginMani
         domain: domain.clone(),
     };
     write_manifest(&domain, &manifest)?;
+    sync_email_auth_feature_flags(&id);
     Ok(manifest)
 }
 
@@ -419,6 +454,7 @@ pub fn uninstall_plugin(domain_raw: &str, plugin_id: &str) -> Result<(), String>
         return Err(format!("Plugin `{id}` is not installed on `{domain}`"));
     }
     fs::remove_dir_all(&dest).map_err(|error| format!("Could not remove plugin: {error}"))?;
+    sync_email_auth_feature_flags(&id);
     Ok(())
 }
 
@@ -433,6 +469,7 @@ pub fn set_plugin_enabled(
     manifest.enabled = enabled;
     manifest.domain = domain.clone();
     write_manifest(&domain, &manifest)?;
+    sync_email_auth_feature_flags(&id);
     Ok(manifest)
 }
 

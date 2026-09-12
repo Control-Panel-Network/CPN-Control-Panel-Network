@@ -273,6 +273,14 @@ pub async fn email_mta_sts_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::mta_sts_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "email",
+            "MTA-STS",
+            &crate::panel_feature_gate::email_auth_plugin_required_page("MTA-STS", "mtaSts"),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "email",
@@ -308,6 +316,13 @@ pub async fn email_mta_sts_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::mta_sts_unlocked() {
+        return redirect_notice(
+            "/email/mta-sts",
+            None,
+            Some("Install the free mtaSts plugin from the Plugin Store first."),
+        );
+    }
     let enabled = form.enabled.as_deref() == Some("1");
     match save_mta_sts_form(&form.domain, enabled, &form.mode, &form.max_age, &form.mx) {
         Ok(msg) => redirect_notice(
@@ -332,6 +347,13 @@ pub async fn email_mta_sts_push_cf(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::mta_sts_unlocked() {
+        return redirect_notice(
+            "/email/mta-sts",
+            None,
+            Some("Install the free mtaSts plugin from the Plugin Store first."),
+        );
+    }
     let domain = form.get("domain").map(String::as_str).unwrap_or("");
     match push_mta_sts_cloudflare(domain) {
         Ok(msg) => redirect_notice(
@@ -356,6 +378,14 @@ pub async fn email_bimi_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::bimi_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "email",
+            "BIMI",
+            &crate::panel_feature_gate::email_auth_plugin_required_page("BIMI", "bimi"),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "email",
@@ -389,6 +419,13 @@ pub async fn email_bimi_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::bimi_unlocked() {
+        return redirect_notice(
+            "/email/bimi",
+            None,
+            Some("Install the free bimi plugin from the Plugin Store first."),
+        );
+    }
     let enabled = form.enabled.as_deref() == Some("1");
     match save_bimi_form(
         &form.domain,
@@ -418,6 +455,13 @@ pub async fn email_bimi_push_cf(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    if !crate::panel_feature_gate::bimi_unlocked() {
+        return redirect_notice(
+            "/email/bimi",
+            None,
+            Some("Install the free bimi plugin from the Plugin Store first."),
+        );
+    }
     let domain = form.get("domain").map(String::as_str).unwrap_or("");
     match push_bimi_cloudflare(domain) {
         Ok(msg) => redirect_notice(

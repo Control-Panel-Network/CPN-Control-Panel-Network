@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Email → MTA-STS** and **Email → BIMI** are gated behind free Plugin Store packages mtaSts and imi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.
+
 ## [0.2.6-alpha.36] - 13/09/2026
 
 Cloudflare OAuth DNS link, panel API tokens, versioned SQL migrations, and OpenLiteSpeed WebAdmin alignment with the CPN admin account (Cargo `0.2.6-alpha.36`).
