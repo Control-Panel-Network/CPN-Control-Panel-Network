@@ -202,6 +202,41 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         ),
     )
     .await?;
+
+    // CPN stores password hashes only; WebAdmin (htpasswd) is aligned when the first
+    // account is created with a plaintext password, or later via /server/openlitespeed.
+    if crate::account::load_bootstrap().is_some() {
+        state.log(
+            "OpenLiteSpeed WebAdmin: uses your CPN admin account by default. Align credentials on /server/openlitespeed (confirm password; never shown after save).",
+            "info",
+        );
+        install_journal::record(
+            "server",
+            JournalAction::Note,
+            "/usr/local/lsws/admin/conf/htpasswd",
+            None,
+            Some(
+                "OLS installed after CPN account; reset WebAdmin to CPN admin on /server/openlitespeed"
+                    .into(),
+            ),
+        )?;
+    } else {
+        state.log(
+            "OpenLiteSpeed WebAdmin: uses your CPN admin account by default. It will be aligned when the first panel account is created.",
+            "info",
+        );
+        install_journal::record(
+            "server",
+            JournalAction::Note,
+            "/usr/local/lsws/admin/conf/htpasswd",
+            None,
+            Some(
+                "WebAdmin will align to CPN admin at first-account setup (htpasswd re-hash; not CPN PBKDF2)"
+                    .into(),
+            ),
+        )?;
+    }
+
     Ok(unit)
 }
 

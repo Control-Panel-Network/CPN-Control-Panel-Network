@@ -54,7 +54,8 @@ use cpn_installer::panel_hub_routes::{
     server_litespeed_page, server_litespeed_serial, server_litespeed_tier,
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
     server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
-    server_packages_page, server_page, server_php_configs, server_php_extensions,
+    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
+    server_php_extensions,
     server_php_tuning, server_processes_page, server_services_control, server_services_page,
     settings_connect_page, settings_design_page, settings_page, settings_port_page,
     settings_setup_page, settings_version_page, users_create_get, users_create_post,
@@ -951,6 +952,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_services_control)
             .service(server_openlitespeed_page)
             .service(server_openlitespeed_password)
+            .service(server_openlitespeed_reset_cpn)
             .service(server_openlitespeed_guest)
             .service(server_openlitespeed_guest_remove)
             .service(server_litespeed_enterprise_page)

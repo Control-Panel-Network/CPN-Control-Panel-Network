@@ -89,6 +89,33 @@ pub async fn server_openlitespeed_password(
     }
 }
 
+#[post("/server/openlitespeed/reset-cpn")]
+pub async fn server_openlitespeed_reset_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let confirmed = form
+        .get("confirm")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("yes") || v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false);
+    if !confirmed {
+        return redirect_notice(
+            "/server/openlitespeed",
+            None,
+            Some("Confirm the reset checkbox to align WebAdmin with the CPN admin account."),
+        );
+    }
+    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    match crate::litespeed_webadmin_users::reset_webadmin_to_cpn_admin(pass) {
+        Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
+    }
+}
+
 #[post("/server/openlitespeed/guest")]
 pub async fn server_openlitespeed_guest(
     http: HttpRequest,

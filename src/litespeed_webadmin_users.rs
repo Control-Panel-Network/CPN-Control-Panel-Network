@@ -328,9 +328,92 @@ pub fn webadmin_users_present() -> bool {
     Path::new(&htpasswd_path()).is_file()
 }
 
+/// CPN bootstrap admin username, or `admin` when no account exists yet.
+pub fn cpn_admin_username_for_webadmin() -> String {
+    crate::account::load_bootstrap()
+        .map(|boot| boot.username)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "admin".into())
+}
+
+fn webadmin_username_from_cpn(raw: &str) -> (String, bool) {
+    match valid_username(raw) {
+        Ok(name) => (name, false),
+        Err(_) => ("admin".into(), true),
+    }
+}
+
+fn try_remove_htpasswd_user(username: &str) {
+    let path = htpasswd_path();
+    if !path.is_file() {
+        return;
+    }
+    let path_s = path.to_string_lossy().into_owned();
+    if run_htpasswd(&["-D", &path_s, username]).is_err() {
+        let _ = remove_htpasswd_line(username);
+    }
+}
+
+/// Align OLS WebAdmin htpasswd with a CPN admin username and plaintext password.
+///
+/// OLS stores apr1/bcrypt in htpasswd; CPN stores PBKDF2 (or legacy) hashes. The formats
+/// are not interchangeable, so the password is re-hashed for WebAdmin. Never logs the password.
+pub fn align_webadmin_with_credentials(username: &str, password: &str) -> Result<String, String> {
+    if !crate::litespeed_stack::openlitespeed_installed() {
+        return Err("OpenLiteSpeed is not installed.".into());
+    }
+    ensure_htpasswd_parent()?;
+    let (user, fell_back) = webadmin_username_from_cpn(username);
+    let msg = set_webadmin_password(&user, password)?;
+    // Package default is often a random `admin` password operators never see.
+    if user != "admin" {
+        try_remove_htpasswd_user("admin");
+        let _ = restart_litespeed();
+    }
+    let fallback_note = if fell_back {
+        " CPN username is not valid for OLS htpasswd; WebAdmin user is `admin` with the same password."
+    } else {
+        ""
+    };
+    Ok(format!(
+        "WebAdmin aligned to CPN admin user `{user}` (password not shown). OLS htpasswd uses apr1/bcrypt; CPN panel hashes are not copied. {msg}{fallback_note}"
+    ))
+}
+
+/// After first-account setup: if OLS is present, align WebAdmin. Soft-fail (never blocks setup).
+pub fn maybe_align_webadmin_after_account_setup(username: &str, password: &str) -> Option<String> {
+    if !crate::litespeed_stack::openlitespeed_installed() {
+        return None;
+    }
+    if !admin_conf_dir().is_dir() {
+        return None;
+    }
+    match align_webadmin_with_credentials(username, password) {
+        Ok(msg) => Some(msg),
+        Err(err) => Some(format!(
+            "WebAdmin was not aligned automatically ({err}). Use /server/openlitespeed to set it (uses your CPN admin account by default)."
+        )),
+    }
+}
+
+/// Reset WebAdmin to the CPN admin username after confirming the CPN admin password.
+/// Required when OLS was installed later or credentials drifted (hashes are not reversible).
+pub fn reset_webadmin_to_cpn_admin(confirmed_password: &str) -> Result<String, String> {
+    let boot = crate::account::load_bootstrap()
+        .ok_or_else(|| "CPN admin account is not configured yet.".to_string())?;
+    if !crate::account::verify_password(
+        confirmed_password,
+        &boot.password_salt,
+        &boot.password_hash,
+    ) {
+        return Err("Password does not match the CPN admin account.".into());
+    }
+    align_webadmin_with_credentials(&boot.username, confirmed_password)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{valid_password, valid_username};
+    use super::{valid_password, valid_username, webadmin_username_from_cpn};
 
     #[test]
     fn username_rules() {
@@ -344,5 +427,15 @@ mod tests {
     fn password_rules() {
         assert!(valid_password("short").is_err());
         assert!(valid_password("longenough1").is_ok());
+    }
+
+    #[test]
+    fn webadmin_username_falls_back_for_invalid() {
+        let (name, fell_back) = webadmin_username_from_cpn("ops");
+        assert_eq!(name, "ops");
+        assert!(!fell_back);
+        let (name, fell_back) = webadmin_username_from_cpn("bad user");
+        assert_eq!(name, "admin");
+        assert!(fell_back);
     }
 }

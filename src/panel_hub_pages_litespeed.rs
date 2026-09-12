@@ -117,6 +117,8 @@ pub fn open_ols_page(notice: Option<&str>, error: Option<&str>) -> String {
     if !openlitespeed_installed() {
         return base;
     }
+    let cpn_user = crate::litespeed_webadmin_users::cpn_admin_username_for_webadmin();
+    let cpn_user_esc = html_escape(&cpn_user);
     let users = crate::litespeed_webadmin_users::list_webadmin_usernames();
     let user_list = if users.is_empty() {
         "<p class=\"muted\">No WebAdmin users listed in htpasswd yet.</p>".to_string()
@@ -132,15 +134,29 @@ pub fn open_ols_page(notice: Option<&str>, error: Option<&str>) -> String {
         r#"{base}
 <article class="section-card" style="margin-top:18px;">
   <h2>WebAdmin users</h2>
-  <p class="muted">Passwords are never shown after save. Guests use the same WebAdmin login URL.</p>
+  <p class="muted">Uses your CPN admin account by default. At first-account setup (or Reset below), CPN sets WebAdmin to the CPN admin username and re-hashes the password for OLS htpasswd (apr1/bcrypt). CPN panel hashes cannot be copied into htpasswd. Passwords are never shown after save. Guests use the same WebAdmin login URL.</p>
   <h3>Current users</h3>
   {users}
-  <form method="post" action="/server/openlitespeed/password" class="stack-form" style="max-width:480px;margin-top:14px;">
+  <form method="post" action="/server/openlitespeed/reset-cpn" class="stack-form" style="max-width:480px;margin-top:14px;"
+    onsubmit="return confirm('Reset WebAdmin to the CPN admin account? This updates the OLS htpasswd.');">
+    <h3>Reset WebAdmin to CPN admin account</h3>
+    <p class="muted">Confirm your CPN admin password to align WebAdmin user <code>{cpn_user}</code>. Required when OLS was installed after the panel account, or credentials drifted.</p>
+    <label for="reset_pass">CPN admin password</label>
+    <input id="reset_pass" name="password" type="password" required minlength="8" autocomplete="current-password">
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+      <input type="checkbox" name="confirm" value="1" required>
+      I confirm resetting WebAdmin to the CPN admin account
+    </label>
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Reset WebAdmin to CPN admin</button>
+  </form>
+  <form method="post" action="/server/openlitespeed/password" class="stack-form" style="max-width:480px;margin-top:18px;">
+    <h3>Set WebAdmin password</h3>
+    <p class="muted">Change user or password without verifying against the CPN account.</p>
     <label for="wa_user">Username</label>
-    <input id="wa_user" name="username" value="admin" required autocomplete="username">
+    <input id="wa_user" name="username" value="{cpn_user}" required autocomplete="username">
     <label for="wa_pass">New password</label>
     <input id="wa_pass" name="password" type="password" required minlength="8" autocomplete="new-password">
-    <button type="submit" class="btn-primary">Set WebAdmin password</button>
+    <button type="submit" class="btn-secondary">Set WebAdmin password</button>
   </form>
   <form method="post" action="/server/openlitespeed/guest" class="stack-form" style="max-width:480px;margin-top:18px;">
     <label for="guest_user">Add guest username</label>
@@ -157,6 +173,7 @@ pub fn open_ols_page(notice: Option<&str>, error: Option<&str>) -> String {
 </article>"#,
         base = base,
         users = user_list,
+        cpn_user = cpn_user_esc,
     )
 }
 

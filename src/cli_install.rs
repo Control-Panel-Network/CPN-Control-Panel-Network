@@ -502,6 +502,11 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
                 return fail(error);
             }
             println!("If a password file was written, store it securely, then delete it.");
+            if matches!(server, ServerEngine::Openlitespeed) {
+                println!(
+                    "OpenLiteSpeed WebAdmin: uses your CPN admin account by default (aligned at account setup when OLS is present)."
+                );
+            }
         }
         Err(error) => return fail(format!("account setup failed: {error}")),
     }
