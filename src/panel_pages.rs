@@ -274,6 +274,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{title} · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
   {boot}
 </head>
@@ -304,6 +305,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
 </body>
 </html>"#,
         title = html_escape(title),
+        favicons = crate::panel_brand::brand_favicon_links(),
         styles = styles,
         boot = boot,
         mode = color_mode.as_str(),

@@ -1,4 +1,5 @@
 use crate::model::InstallerStatus;
+use crate::panel_brand::brand_favicon_links;
 
 fn html_escape(value: &str) -> String {
     value
@@ -27,6 +28,7 @@ pub fn status_html_page(status: &InstallerStatus) -> String {
         .map(html_escape)
         .unwrap_or_else(|| "ninguno".into());
     let json = html_escape(&pretty);
+    let favicons = brand_favicon_links();
     format!(
         r#"<!DOCTYPE html>
 <html lang="es">
@@ -34,6 +36,7 @@ pub fn status_html_page(status: &InstallerStatus) -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Estado técnico · CPN</title>
+  {favicons}
   <style>
     :root {{ color-scheme: light; }}
     body {{ margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #f7f8fa; color: #111827; }}

@@ -60,6 +60,7 @@ pub mod panel_app_routes;
 pub mod panel_apps;
 pub mod panel_backup_routes;
 pub mod panel_backups;
+pub mod panel_brand;
 pub mod panel_dashboard;
 pub mod panel_dashboard_tools;
 pub mod panel_feature_gate;
