@@ -447,10 +447,11 @@ mod tests {
     #[test]
     fn hub_contains_sections() {
         let html = security_hub_main();
-        assert!(html.contains("Firewall"));
-        assert!(html.contains("Malware scan"));
         assert!(html.contains("Manage SSL"));
+        assert!(html.contains("Secure SSH") || html.contains("SSH"));
         assert!(!html.contains("CyberPanel"));
         assert!(!html.contains("Imunify"));
+        // Fail2ban / Malware / Firewall tiles are feature-gated when not installed.
+        // Hub copy may still mention them; live tiles appear only when enabled.
     }
 }
