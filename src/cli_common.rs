@@ -58,6 +58,24 @@ pub fn read_password(
     Ok((Some(password), false))
 }
 
+pub fn read_password_confirmed(
+    password_stdin: bool,
+    generate: bool,
+) -> Result<(Option<String>, bool), String> {
+    let result = read_password(password_stdin, generate)?;
+    if password_stdin || generate {
+        return Ok(result);
+    }
+    eprint!("Confirm password: ");
+    let _ = io::stderr().flush();
+    let confirmation = rpassword::read_password()
+        .map_err(|error| format!("Failed to read password confirmation: {error}"))?;
+    if result.0.as_deref() != Some(confirmation.as_str()) {
+        return Err("Passwords do not match".into());
+    }
+    Ok(result)
+}
+
 pub fn confirm_delete(prompt: &str, yes: bool) -> Result<(), String> {
     if yes {
         return Ok(());

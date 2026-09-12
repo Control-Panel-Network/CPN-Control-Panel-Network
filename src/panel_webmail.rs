@@ -370,10 +370,11 @@ mod tests {
     #[test]
     fn config_roundtrip_and_regenerate() {
         with_test_data_dir(|| {
-            let mut cfg = WebmailPanelConfig::default();
-            cfg.public_path = "/snappymail".into();
-            cfg.auto_login_account = "user@example.com".into();
-            cfg.internal_embed = true;
+            let cfg = WebmailPanelConfig {
+                public_path: "/snappymail".into(),
+                auto_login_account: "user@example.com".into(),
+                internal_embed: true,
+            };
             save_webmail_config(&cfg).unwrap();
             let loaded = load_webmail_config();
             assert_eq!(loaded.public_path, "/snappymail");
@@ -407,8 +408,10 @@ mod tests {
     #[test]
     fn mount_trailing_slash_strips_to_root() {
         with_test_data_dir(|| {
-            let mut cfg = WebmailPanelConfig::default();
-            cfg.public_path = "/snappymail".into();
+            let cfg = WebmailPanelConfig {
+                public_path: "/snappymail".into(),
+                ..WebmailPanelConfig::default()
+            };
             save_webmail_config(&cfg).unwrap();
             assert!(path_matches_webmail_mount("/snappymail"));
             assert!(path_matches_webmail_mount("/snappymail/"));

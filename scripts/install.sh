@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: install the latest matching release package.
-# Official one-liner (run as root; News Targeted host, then GitHub raw fallback):
-#   sh <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+# Official one-liner (asks for sudo automatically; News Targeted host, then GitHub raw fallback):
+#   bash <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
 #
 # Env:
 #   CPN_RELEASE_TAG          pin a Release tag (example: v0.2.6-alpha.22); default: newest non-draft release
@@ -28,9 +28,7 @@ die() { echo "CPN install error: $*" >&2; exit 1; }
 info() { echo "CPN: $*"; }
 
 require_root() {
-  if [[ "$(id -u)" -ne 0 ]]; then
-    die "root is required (re-run with sudo or as root)"
-  fi
+  [[ "$(id -u)" -eq 0 ]] || die "automatic sudo elevation failed"
 }
 
 require_https_url() {
@@ -39,6 +37,39 @@ require_https_url() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+elevate_if_needed() {
+  [[ "$(id -u)" -eq 0 ]] && return 0
+  have_cmd sudo || die "root access is required and sudo is not installed"
+  [[ "${CPN_SELF_ELEVATED:-0}" != "1" ]] || die "sudo did not grant root access"
+
+  local source_path elevated_script exit_code
+  source_path="${BASH_SOURCE[0]:-}"
+  [[ -n "$source_path" && -r "$source_path" ]] \
+    || die "could not preserve the downloaded installer for sudo"
+  elevated_script="$(mktemp "${TMPDIR:-/tmp}/cpn-install-elevated.XXXXXX")"
+  chmod 700 "$elevated_script"
+  cp -- "$source_path" "$elevated_script" \
+    || die "could not copy the installer before sudo elevation"
+  info "administrator privileges are required; requesting them with sudo"
+  set +e
+  sudo env \
+    CPN_SELF_ELEVATED=1 \
+    CPN_RELEASE_TAG="${CPN_RELEASE_TAG:-}" \
+    CPN_BRANCH="${CPN_BRANCH:-}" \
+    CPN_REF="${CPN_REF:-}" \
+    CPN_STABLE_ONLY="$CPN_STABLE_ONLY" \
+    CPN_INCLUDE_PRERELEASE="${CPN_INCLUDE_PRERELEASE:-}" \
+    CPN_GITHUB_REPO="$CPN_GITHUB_REPO" \
+    CPN_REQUIRE_GPG="$CPN_REQUIRE_GPG" \
+    CPN_ALLOW_UNSIGNED="$CPN_ALLOW_UNSIGNED" \
+    CPN_EXPECTED_FPR="$CPN_EXPECTED_FPR" \
+    bash "$elevated_script" "$@"
+  exit_code=$?
+  set -e
+  rm -f -- "$elevated_script"
+  exit "$exit_code"
+}
 
 # Peek -b so shared lib can load from the same git ref.
 cpn_peek_ref_arg() {
@@ -356,7 +387,7 @@ print_next_steps() {
 
 CPN package install finished.
 
-Start the installer (English by default):
+Start the installer (language is detected automatically):
   sudo cpn-installer
   # or explicitly:
   sudo cpn-installer --cli    # SSH/CLI questions in this terminal
@@ -371,6 +402,7 @@ EOF
 }
 
 main() {
+  elevate_if_needed "$@"
   cpn_peek_ref_arg "$@"
   cpn_source_bootstrap_lib
   cpn_parse_bootstrap_args install -- "$@"

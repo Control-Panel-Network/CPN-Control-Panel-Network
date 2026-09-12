@@ -15,12 +15,10 @@ interface Props {
   database: DatabaseEngine;
   installPhpmyadmin: boolean;
   enableProxyFront: boolean;
-  installLogDetail: "minimal" | "full";
   onSelectServer: (server: ServerEngine) => void;
   onDatabaseChange: (database: DatabaseEngine) => void;
   onPhpmyadminChange: (enabled: boolean) => void;
   onProxyFrontChange: (enabled: boolean) => void;
-  onInstallLogDetailChange: (detail: "minimal" | "full") => void;
   onNetworkChange: (input: {
     port: number;
     oldPortPolicy?: OldPortPolicy;
@@ -39,12 +37,10 @@ export function ServerSelectionScreen({
   database,
   installPhpmyadmin,
   enableProxyFront,
-  installLogDetail,
   onSelectServer,
   onDatabaseChange,
   onPhpmyadminChange,
   onProxyFrontChange,
-  onInstallLogDetailChange,
   onNetworkChange,
   onContinue,
   onOpenCompare,
@@ -304,33 +300,13 @@ export function ServerSelectionScreen({
             className="border border-[#c1c6d5] rounded-md px-3 py-2 w-full text-[15px]"
           />
 
-          <fieldset className="mt-5">
-            <legend className="text-[15px] font-semibold text-[#1a1c1d]">
-              Installation log detail
-            </legend>
-            <p className="text-[13px] text-[#5f5e60] mt-1 mb-2">
-              Minimal shows high-level progress only. Full streams
-              package-manager output. Failures always show clearly.
-            </p>
-            <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d] mb-2">
-              <input
-                type="radio"
-                name="install-log-detail"
-                checked={installLogDetail === "minimal"}
-                onChange={() => onInstallLogDetailChange("minimal")}
-              />
-              <span>Minimal (quieter)</span>
-            </label>
-            <label className="flex items-start gap-2 text-[14px] text-[#1a1c1d]">
-              <input
-                type="radio"
-                name="install-log-detail"
-                checked={installLogDetail === "full"}
-                onChange={() => onInstallLogDetailChange("full")}
-              />
-              <span>Full detailed</span>
-            </label>
-          </fieldset>
+          <p className="install-wait-note mt-5">
+            {locale === "es"
+              ? "El registro técnico completo se guarda siempre en /var/lib/cpn/installation.log."
+              : locale === "nb"
+                ? "Hele den tekniske loggen lagres alltid i /var/lib/cpn/installation.log."
+                : "The full technical transcript is always saved to /var/lib/cpn/installation.log."}
+          </p>
 
           <button
             type="button"
@@ -472,10 +448,10 @@ export function ServerSelectionScreen({
               aria-checked={enableProxyFront}
               aria-label={
                 locale === "es"
-                  ? "Nginx frontal y Proxy Manager (IP interna única)"
+                  ? "Activar aislamiento avanzado por dominio"
                   : locale === "nb"
                     ? "Nginx-front og Proxy Manager (unik intern-IP)"
-                    : "Nginx front and Proxy Manager (unique internal IP)"
+                    : "Enable advanced per-domain isolation"
               }
               onClick={() => onProxyFrontChange(!enableProxyFront)}
             >
@@ -483,17 +459,17 @@ export function ServerSelectionScreen({
             </button>
             <span>
               {locale === "es"
-                ? "Nginx frontal + IP interna única por dominio"
+                ? "Aislamiento avanzado por dominio"
                 : locale === "nb"
                   ? "Nginx-front + unik intern-IP per domene"
-                  : "Nginx front + unique internal IP per domain"}
+                  : "Advanced per-domain isolation"}
             </span>
             <span className="default-badge">
               {locale === "es"
-                ? "Opcional · relaja el enrutado público de OLS"
+                ? "Instala Nginx Proxy Manager delante del servidor web y asigna una IP privada a cada dominio. Úsalo solo si necesitas aislamiento o reglas de proxy avanzadas."
                 : locale === "nb"
-                  ? "Valgfritt · slapper av OLS offentlig ruting"
-                  : "Optional · relaxes OLS public routing"}
+                  ? "Installerer Nginx Proxy Manager foran webserveren og gir hvert domene en privat IP. Bruk bare for isolasjon eller avanserte proxyregler."
+                  : "Installs Nginx Proxy Manager in front of the web server and gives each domain a private IP. Use only for isolation or advanced proxy rules."}
             </span>
           </div>
         </div>

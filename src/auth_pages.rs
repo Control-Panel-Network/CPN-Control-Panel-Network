@@ -32,11 +32,12 @@ fn shared_auth_styles() -> &'static str {
     r#"
     body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; }
     main { min-height:100vh; display:grid; place-items:center; padding:48px 20px; }
-    .card { width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:18px; padding:28px; position:relative; }
+    .card { width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:22px; padding:32px; position:relative; box-shadow:0 18px 50px rgba(16,24,40,.08); }
     h1 { margin:0 0 8px; font-size:1.7rem; }
     p { color:#6e6e73; line-height:1.5; }
     label { display:block; margin:14px 0 6px; font-weight:600; font-size:.92rem; }
     input { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:10px; padding:11px 12px; font:inherit; }
+    input:focus { outline:3px solid rgba(0,102,204,.16); border-color:#0066cc; }
     button { margin-top:18px; width:100%; border:0; border-radius:999px; padding:12px 16px; background:#0066cc; color:#fff; font-weight:700; cursor:pointer; }
     .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .remember { display:flex; align-items:center; gap:8px; margin:14px 0 0; font-weight:600; font-size:.92rem; }
@@ -47,10 +48,18 @@ fn shared_auth_styles() -> &'static str {
       margin:0 0 14px; padding:10px 12px; border-radius:10px; background:#fef2f2;
       border:1px solid #fecaca; color:#b91c1c; font-size:.92rem; line-height:1.4;
     }
-    .lang-host { position:absolute; top:16px; right:16px; }
-    .lang { display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin:0; font-weight:600; font-size:.8rem; color:#6e6e73; }
-    .lang select { min-width:120px; border:1px solid #d0d5dd; border-radius:8px; padding:6px 8px; font:inherit; background:#fff; color:#1d1d1f; }
-    .lang-label { font-size:.75rem; letter-spacing:.02em; }
+    .lang-host { position:absolute; top:20px; right:20px; }
+    .lang { display:flex; align-items:center; gap:7px; margin:0; border:1px solid #d0d5dd; border-radius:999px; padding:7px 10px; background:#fff; color:#344054; font-weight:650; font-size:.8rem; }
+    .lang select { min-width:84px; border:0; padding:0; font:inherit; background:#fff; color:#1d1d1f; cursor:pointer; outline:0; }
+    .lang-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+    .brand-logo { display:block; width:190px; height:72px; margin:-8px 0 10px; object-fit:contain; object-position:left center; }
+    .password-wrap { position:relative; }
+    .password-wrap input { padding-right:48px; }
+    .password-toggle { position:absolute; top:50%; right:5px; width:38px; height:38px; margin:0; padding:0; border-radius:8px; background:transparent; color:#475467; transform:translateY(-50%); }
+    .password-toggle:hover { background:#f2f4f7; }
+    .command-box { margin:22px 0; border:1px solid #b8d8fa; border-radius:14px; padding:16px; background:#f4f9ff; }
+    .command-box code { display:block; margin-top:8px; border-radius:9px; padding:12px; background:#101828; color:#f8fafc; font:600 .9rem ui-monospace,SFMono-Regular,Consolas,monospace; user-select:all; }
+    @media (max-width:520px) { .card { padding:24px; } .lang-host { position:static; display:flex; justify-content:flex-end; margin-bottom:12px; } .brand-logo { width:160px; } }
 "#
 }
 
@@ -83,26 +92,29 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
-      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <img class="brand-logo" src="/cpn-logo.png" alt="CPN Control Panel Network">
       <h1 id="i18n-title">Sign in</h1>
       {error_block}
       <form method="post" action="/login{token_q}" autocomplete="on">
         <label for="username" id="i18n-username">Username</label>
         <input id="username" name="username" value="" autocomplete="username" required>
         <label for="password" id="i18n-password">Password</label>
-        <input id="password" name="password" type="password" value="" autocomplete="current-password" required>
+        <div class="password-wrap">
+          <input id="password" name="password" type="password" value="" autocomplete="current-password" required>
+          <button class="password-toggle" type="button" aria-label="Show password" onclick="cpnTogglePassword(this)">👁</button>
+        </div>
         <label class="remember" for="remember_me">
           <input id="remember_me" name="remember_me" type="checkbox" value="1">
           <span id="i18n-remember">Remember me</span>
         </label>
         <div class="row">
           <span></span>
-          <a id="i18n-forgot" href="/forgot-password">Forgot password?</a>
+          <a id="i18n-forgot" href="/forgot-password">Reset password</a>
         </div>
         <button id="i18n-submit" type="submit">Sign in</button>
       </form>
-      <p class="hint" style="margin-top:18px;text-align:center;">or</p>
-      <button type="button" onclick="cpnLoginPasskey()" style="margin-top:8px;width:100%;border:1px solid #d0d5dd;border-radius:999px;padding:12px 16px;background:#fff;color:#1d1d1f;font-weight:700;cursor:pointer;">Sign in with passkey</button>
+      <p id="i18n-or" class="hint" style="margin-top:18px;text-align:center;">or</p>
+      <button id="i18n-passkey" type="button" onclick="cpnLoginPasskey()" style="margin-top:8px;width:100%;border:1px solid #d0d5dd;border-radius:999px;padding:12px 16px;background:#fff;color:#1d1d1f;font-weight:700;cursor:pointer;">Sign in with passkey</button>
       <p id="cpn-passkey-login-status" class="hint" role="status"></p>
     </section>
   </main>
@@ -187,15 +199,14 @@ pub fn forgot_password_html() -> String {
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
-      <p id="i18n-brand" style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
-      <h1 id="i18n-title">Forgot password</h1>
-      <p class="hint" id="i18n-forgot-intro"></p>
-      <form method="post" action="/forgot-password" autocomplete="on">
-        <label for="account" id="i18n-forgot-account">Username/Email</label>
-        <input id="account" name="account" type="text" autocomplete="username" required>
-        <button id="i18n-forgot-submit" type="submit">Request reset</button>
-      </form>
-      <p class="hint" id="i18n-forgot-smtp"></p>
+      <img class="brand-logo" src="/cpn-logo.png" alt="CPN Control Panel Network">
+      <h1 id="i18n-title">Reset your password</h1>
+      <p class="hint" id="i18n-forgot-intro">For security, password recovery is performed directly on the server.</p>
+      <div class="command-box">
+        <strong id="i18n-forgot-account">Run this command in the server terminal:</strong>
+        <code>sudo cpn password</code>
+      </div>
+      <p class="hint" id="i18n-forgot-smtp">The command securely asks for and confirms the new password without putting it in shell history.</p>
       <p><a id="i18n-forgot-back" href="/login">Back to sign in</a></p>
     </section>
   </main>
@@ -361,4 +372,24 @@ pub fn installer_token_required_html() -> String {
         styles = shared_auth_styles(),
         script = PANEL_I18N_SCRIPT,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{forgot_password_html, panel_login_html};
+    use crate::model::InstallerStatus;
+
+    #[test]
+    fn login_has_logo_and_password_visibility_control() {
+        let html = panel_login_html(&InstallerStatus::default(), None);
+        assert!(html.contains("/cpn-logo.png"));
+        assert!(html.contains("cpnTogglePassword"));
+    }
+
+    #[test]
+    fn recovery_uses_terminal_command_without_web_form() {
+        let html = forgot_password_html();
+        assert!(html.contains("sudo cpn password"));
+        assert!(!html.contains("action=\"/forgot-password\""));
+    }
 }

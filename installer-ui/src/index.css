@@ -27,6 +27,25 @@
   background: var(--installer-card);
   color: var(--installer-ink);
 }
+.cpn-app-logo {
+  position: fixed;
+  top: 18px;
+  left: 24px;
+  z-index: 70;
+  width: 148px;
+  height: 46px;
+  object-fit: contain;
+  object-position: left center;
+}
+@media (max-width: 640px) {
+  .cpn-app-logo {
+    width: 108px;
+    left: 16px;
+  }
+  .appearance-toolbar {
+    right: 16px;
+  }
+}
 .appearance-toolbar button {
   display: flex;
   align-items: center;
@@ -160,6 +179,44 @@
   color: #667085;
   font-size: 13px;
   line-height: 1.4;
+}
+.password-input-row {
+  position: relative;
+  display: block;
+}
+.password-input-row .field-input {
+  padding-right: 46px;
+}
+.password-icon-button {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--installer-muted);
+  transform: translateY(-50%);
+}
+.password-icon-button:hover {
+  background: #0071e314;
+  color: #0071e3;
+}
+.field-error {
+  display: block;
+  margin-top: 6px;
+  color: #b42318;
+  font-size: 12px;
+}
+.password-policy-note {
+  margin: 0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #0071e30d;
+  color: var(--installer-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 .issue-link {
   display: inline-flex;

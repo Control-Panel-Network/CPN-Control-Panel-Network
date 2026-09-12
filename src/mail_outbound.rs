@@ -235,7 +235,11 @@ mod tests {
     fn password_reset_email_lists_alternate_urls() {
         let reset = "http://127.0.0.1:2089/reset-password?token=abcdef";
         let alt = "http://127.0.0.1:2087/reset-password?token=abcdef".to_string();
-        let msg = build_password_reset_email(reset, "http://127.0.0.1:2089/login", &[alt.clone()]);
+        let msg = build_password_reset_email(
+            reset,
+            "http://127.0.0.1:2089/login",
+            std::slice::from_ref(&alt),
+        );
         assert!(msg.body.contains(reset));
         assert!(msg.body.contains(&alt));
         assert!(msg.body.contains("VirtualBox NAT") || msg.body.contains("does not open"));

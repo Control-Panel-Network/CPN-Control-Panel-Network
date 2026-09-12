@@ -150,6 +150,13 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
             <p className="whitespace-pre-wrap break-words text-[14px] text-[#c2413b]">
               {status.error}
             </p>
+            <p className="install-wait-note">
+              {locale === "es"
+                ? "Adjunta /var/lib/cpn/installation.log al issue; contiene todos los comandos y verificaciones."
+                : locale === "nb"
+                  ? "Legg ved /var/lib/cpn/installation.log i saken; den inneholder alle kommandoer og verifiseringer."
+                  : "Attach /var/lib/cpn/installation.log to the issue; it contains every command and verification."}
+            </p>
             <a
               className="issue-link"
               href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/issues"

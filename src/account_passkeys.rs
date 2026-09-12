@@ -158,6 +158,45 @@ pub fn passkeys_for_auth(username: &str) -> Vec<Passkey> {
         .collect()
 }
 
+/// Return every registered credential with its owning account. Login is RP-wide,
+/// so the user does not have to type an account name before choosing a passkey.
+pub fn all_passkeys_for_auth() -> Vec<(String, Passkey)> {
+    let Ok(entries) = fs::read_dir(passkeys_dir()) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("json"))
+        .filter_map(|entry| fs::read_to_string(entry.path()).ok())
+        .filter_map(|raw| serde_json::from_str::<PasskeyStore>(&raw).ok())
+        .flat_map(|store| {
+            store
+                .credentials
+                .into_iter()
+                .map(move |credential| (store.username.clone(), credential.passkey))
+        })
+        .collect()
+}
+
+pub fn passkey_owner(cred_id: &[u8]) -> Option<String> {
+    let wanted = base64url(cred_id);
+    let Ok(entries) = fs::read_dir(passkeys_dir()) else {
+        return None;
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("json"))
+        .filter_map(|entry| fs::read_to_string(entry.path()).ok())
+        .filter_map(|raw| serde_json::from_str::<PasskeyStore>(&raw).ok())
+        .find_map(|store| {
+            store
+                .credentials
+                .iter()
+                .any(|credential| credential.id == wanted)
+                .then_some(store.username)
+        })
+}
+
 pub fn update_passkey_after_auth(
     username: &str,
     cred_id: &[u8],

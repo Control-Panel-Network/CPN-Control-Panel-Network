@@ -3,13 +3,13 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use cpn_installer::account::default_password_policy;
+use cpn_installer::account::{default_password_policy, load_bootstrap};
 use cpn_installer::account_mgmt::{
     create_account, delete_account, list_accounts, reset_account_password,
 };
 use cpn_installer::cli_apps;
 use cpn_installer::cli_common::{
-    confirm_delete, print_generated, read_password, require_root_for_mutation,
+    confirm_delete, print_generated, read_password_confirmed, require_root_for_mutation,
 };
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
@@ -50,6 +50,18 @@ enum Commands {
     Info {
         #[arg(long)]
         raw: bool,
+    },
+    /// Reset a panel password from the server terminal
+    Password {
+        /// Account username; defaults to the primary administrator account
+        #[arg(long)]
+        username: Option<String>,
+        /// Read the new password from stdin (never from argv)
+        #[arg(long)]
+        password_stdin: bool,
+        /// Generate an ASCII password and write it to a mode-600 temporary file
+        #[arg(long)]
+        generate: bool,
     },
     /// Panel / operator accounts
     Account {
@@ -225,6 +237,7 @@ fn run() -> Result<(), String> {
             println!("panel    Live login URL, panel status, and MOTD install helper");
             println!("info     Alias for: cpn panel status");
             println!("account  Manage panel / operator accounts");
+            println!("password Reset a panel password from this terminal");
             println!(
                 "site     Manage website records under {}/sites",
                 paths::platform_data_dir()
@@ -242,6 +255,26 @@ fn run() -> Result<(), String> {
         Commands::Panel { command } => run_panel(command, require_root_for_mutation),
         Commands::Info { raw } => {
             run_panel(PanelCommands::Status { raw }, require_root_for_mutation)
+        }
+        Commands::Password {
+            username,
+            password_stdin,
+            generate,
+        } => {
+            require_root_for_mutation()?;
+            let username = username
+                .filter(|value| !value.trim().is_empty())
+                .or_else(|| load_bootstrap().map(|account| account.username))
+                .ok_or_else(|| {
+                    "No primary account exists yet; finish installation before resetting a password"
+                        .to_string()
+                })?;
+            let (password, generate) = read_password_confirmed(password_stdin, generate)?;
+            let result = reset_account_password(&username, password.as_deref(), generate)?;
+            let _ = result.public;
+            println!("password updated ok");
+            print_generated(result.generated_password)?;
+            Ok(())
         }
         Commands::Account { command } => match command {
             AccountCommands::List => {
@@ -268,7 +301,7 @@ fn run() -> Result<(), String> {
                 generate,
             } => {
                 require_root_for_mutation()?;
-                let (password, generate) = read_password(password_stdin, generate)?;
+                let (password, generate) = read_password_confirmed(password_stdin, generate)?;
                 let result = create_account(
                     &username,
                     password.as_deref(),
@@ -288,7 +321,7 @@ fn run() -> Result<(), String> {
                 generate,
             } => {
                 require_root_for_mutation()?;
-                let (password, generate) = read_password(password_stdin, generate)?;
+                let (password, generate) = read_password_confirmed(password_stdin, generate)?;
                 let result = reset_account_password(&username, password.as_deref(), generate)?;
                 let _ = result.public;
                 println!("password updated ok");

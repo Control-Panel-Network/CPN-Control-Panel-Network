@@ -55,9 +55,8 @@ fn append_installation_log(level: &str, line: &str) {
     }
 }
 
-/// How much package-manager output is mirrored to the operator UI/CLI.
-/// Full streams dnf/apt lines; Minimal keeps high-level progress only.
-/// Failures and `installation.log` always retain full detail.
+/// Package-manager output policy. New runs always use Full so support reports
+/// have a complete transcript; Minimal remains only for serialized compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InstallLogDetail {
     #[default]
@@ -81,7 +80,7 @@ pub struct AppState {
     pub cancel_requested: std::sync::atomic::AtomicBool,
     /// Live child PIDs (process-group leaders) so cancel can reap them while running.
     pub active_child_pids: std::sync::Mutex<Vec<u32>>,
-    /// Operator choice for this install run (Full = verbose package logs).
+    /// Always Full for new runs (kept in state for compatibility).
     pub install_log_detail: std::sync::Mutex<InstallLogDetail>,
 }
 
@@ -175,8 +174,7 @@ impl AppState {
         let _ = self.events.send(InstallerEvent::Log { line, level });
     }
 
-    /// Always write to `installation.log`; mirror to UI/CLI only when Full
-    /// (errors always mirror so failures stay visible in Minimal mode).
+    /// Always write to `installation.log`; new runs also mirror all output.
     pub fn log_command_output(&self, line: impl Into<String>, level: &'static str) {
         let line = line.into();
         append_installation_log(level, &line);
@@ -406,7 +404,14 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
     if let Some(pid) = child_pid {
         state.unregister_child_pid(pid);
     }
-    outcome?;
+    if let Err(error) = outcome {
+        state.log(
+            format!("✗ Verification failed: {description}: {error}"),
+            "error",
+        );
+        return Err(error);
+    }
+    state.log(format!("✓ Verified: {description}"), "success");
     if let Some(tracking) = spec.dnf {
         state
             .progress(

@@ -18,8 +18,7 @@ import {
 } from "./types";
 
 const CATALOG: Record<LocaleCode, LocaleMessages> = { en, es, nb };
-/** v2: do not inherit older keys that may have stored browser-detected Spanish. */
-const STORAGE_KEY = "cpn-installer-locale-v2";
+const STORAGE_KEY = "cpn-installer-locale";
 
 function readStoredLocale(): LocaleCode {
   try {
@@ -28,8 +27,10 @@ function readStoredLocale(): LocaleCode {
   } catch {
     // Storage may be unavailable in locked-down browsers.
   }
-  // English by default. Do not follow OS/browser locale (guest LANG often es_*).
-  return "en";
+  const preferred = navigator.languages?.find((language) =>
+    /^(es|en|nb|nn|no)(-|$)/i.test(language),
+  );
+  return normalizeLocale(preferred || navigator.language);
 }
 
 interface I18nContextValue {
@@ -50,9 +51,15 @@ export function I18nProvider({
   initialLocale?: string | null;
   onLocaleChange?: (locale: LocaleCode) => void;
 }) {
-  const [locale, setLocaleState] = useState<LocaleCode>(() =>
-    normalizeLocale(initialLocale ?? readStoredLocale()),
-  );
+  const [locale, setLocaleState] = useState<LocaleCode>(() => {
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY)) return readStoredLocale();
+    } catch {
+      // Browser preference remains available when storage is blocked.
+    }
+    const browserLocale = readStoredLocale();
+    return browserLocale || normalizeLocale(initialLocale);
+  });
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);

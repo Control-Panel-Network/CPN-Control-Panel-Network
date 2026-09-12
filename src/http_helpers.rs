@@ -13,6 +13,17 @@ pub use crate::listen_port::DEFAULT_PORT;
 pub const PORT: u16 = DEFAULT_PORT;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub fn detect_system_language() -> String {
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(value) = std::env::var(key)
+            && let Ok(language) = normalize_language(&value)
+        {
+            return language;
+        }
+    }
+    "en".into()
+}
+
 const INSTALL_TOKEN_COOKIE: &str = "cpn_install_token";
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
@@ -279,7 +290,14 @@ pub fn wants_html(request: &HttpRequest) -> bool {
 }
 
 pub fn normalize_language(raw: &str) -> Result<String, String> {
-    let value = raw.trim().to_lowercase();
+    let value = raw
+        .trim()
+        .to_lowercase()
+        .replace('_', "-")
+        .split(['.', '@'])
+        .next()
+        .unwrap_or_default()
+        .to_string();
     match value.as_str() {
         "en" | "en-us" | "en-gb" => Ok("en".into()),
         "es" | "es-es" | "es-mx" => Ok("es".into()),
@@ -363,7 +381,7 @@ pub fn now_unix() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_allowed_hosts, install_finished, install_session_cookie_header,
+        build_allowed_hosts, install_finished, install_session_cookie_header, normalize_language,
         origin_matches_allowed, panel_account_ready, remote_origin_ok, websocket_origin_ok,
     };
     use crate::model::{AccountPublic, InstallerStatus};
@@ -400,6 +418,13 @@ mod tests {
     fn completed_phase_is_finished() {
         let status = status_with_phase("completed");
         assert!(install_finished(&status));
+    }
+
+    #[test]
+    fn normalizes_browser_and_linux_locale_shapes() {
+        assert_eq!(normalize_language("es_ES.UTF-8").unwrap(), "es");
+        assert_eq!(normalize_language("nb_NO.UTF-8").unwrap(), "nb");
+        assert_eq!(normalize_language("en-US").unwrap(), "en");
     }
 
     #[test]

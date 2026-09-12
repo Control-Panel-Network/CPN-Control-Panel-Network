@@ -329,11 +329,13 @@ mod tests {
     #[test]
     fn mta_sts_policy_and_dns() {
         with_test_data_dir(|| {
-            let mut s = MtaStsSettings::default();
-            s.domain = "example.com".into();
-            s.mode = "testing".into();
-            s.mx = vec!["mail.example.com".into()];
-            s.enabled = true;
+            let s = MtaStsSettings {
+                domain: "example.com".into(),
+                mode: "testing".into(),
+                mx: vec!["mail.example.com".into()],
+                enabled: true,
+                ..MtaStsSettings::default()
+            };
             save_mta_sts(&s).unwrap();
             let policy = render_mta_sts_policy(&load_mta_sts("example.com"));
             assert!(policy.contains("version: STSv1"));
@@ -348,10 +350,12 @@ mod tests {
     #[test]
     fn bimi_requires_https_logo() {
         with_test_data_dir(|| {
-            let mut s = BimiSettings::default();
-            s.domain = "example.com".into();
-            s.enabled = true;
-            s.logo_svg_url = "http://example.com/logo.svg".into();
+            let mut s = BimiSettings {
+                domain: "example.com".into(),
+                enabled: true,
+                logo_svg_url: "http://example.com/logo.svg".into(),
+                ..BimiSettings::default()
+            };
             assert!(save_bimi(&s).is_err());
             s.logo_svg_url = "https://example.com/logo.svg".into();
             save_bimi(&s).unwrap();

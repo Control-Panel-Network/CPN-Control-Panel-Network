@@ -75,7 +75,7 @@ Options used by account commands:
 
 - `--username <NAME>` — account username.
 - `--email <EMAIL>` — recovery/account email on create.
-- `--language <LANG>` — account language; defaults to `en`.
+- `--language <LANG>` — account language; otherwise follows the detected locale.
 - `--password-stdin` — read the password from stdin instead of argv.
 - `--generate` — generate a password that satisfies the default password policy.
 - `--yes` — skip destructive-operation confirmation where supported.
@@ -194,7 +194,7 @@ sudo cpn package delete --id <package-id> --yes
 
 ## `cpn-installer`
 
-The installer can run as a temporary **web UI** or as an interactive **SSH/CLI** wizard. Language defaults to **English** (independent of guest `LANG` / browser locale).
+The installer can run as a temporary **web UI** or as an interactive **SSH/CLI** wizard. It uses a saved choice first, then detects the browser locale and the guest system locale (`LANG`/`LC_*`). Unsupported locales fall back to English.
 
 ```bash
 sudo cpn-installer                 # TTY: choose Web UI or SSH/CLI; non-TTY: Web UI
@@ -229,9 +229,9 @@ Port resolution order is:
 
 For remote installation with the web UI, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
 
-The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). After the Summary confirmation it asks for **Minimal** or **Full detailed** logging for that run (Minimal = high-level progress; Full = stream dnf/apt output). Advanced web-only UI options remain available via `--web`.
+The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). Installation logging is always fully detailed and persists in `/var/lib/cpn/installation.log`, ready to attach to a GitHub issue. Advanced web-only UI options remain available via `--web`.
 
-Installer progress titles, wait heartbeats, and engine errors are English by default (independent of guest `LANG`).
+Installer progress includes explicit command verification results. The selected/detected account language is saved for the panel.
 
 ## SSH login MOTD and panel-ready banner
 
