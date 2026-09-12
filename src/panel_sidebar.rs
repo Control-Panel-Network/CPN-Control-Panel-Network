@@ -2,31 +2,14 @@
 
 use crate::panel_host_info::{HostSidebarInfo, host_sidebar_info};
 
+pub use crate::panel_brand::brand_mark_svg;
+
 fn html_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-/// Original CPN mark: rounded hex with linked nodes (not a lightning bolt).
-pub fn brand_mark_svg() -> &'static str {
-    r##"<svg class="cpn-brand-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="cpnBrandGrad" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#06b6d4"/>
-    </linearGradient>
-  </defs>
-  <path fill="url(#cpnBrandGrad)" d="M16 2.2 27.5 8.8v14.4L16 29.8 4.5 23.2V8.8L16 2.2z"/>
-  <path fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
-    d="M11.2 16.2c0-2.6 2.1-4.6 4.8-4.6 1.7 0 3.1.8 4 2M20.8 15.8c0 2.6-2.1 4.6-4.8 4.6-1.7 0-3.1-.8-4-2"/>
-  <circle cx="11.2" cy="16.2" r="1.55" fill="#fff"/>
-  <circle cx="20.8" cy="15.8" r="1.55" fill="#fff"/>
-  <circle cx="16" cy="11.6" r="1.35" fill="#e0f2fe"/>
-  <circle cx="16" cy="20.4" r="1.35" fill="#e0f2fe"/>
-</svg>"##
 }
 
 /// Extra searchable destinations beyond primary nav labels.
@@ -396,6 +379,7 @@ mod tests {
     fn brand_mark_is_original_cpn() {
         let svg = brand_mark_svg();
         assert!(svg.contains("cpn-brand-mark"));
+        assert!(svg.contains("#006CFA"));
         assert!(!svg.to_lowercase().contains("cyberpanel"));
         assert!(!svg.contains("lightning"));
     }

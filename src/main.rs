@@ -3,8 +3,9 @@ use actix_web::{
 };
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
-    account_setup, api_logout_get, api_logout_post, cpn_logo, dashboard_page, login_mfa_page,
-    login_mfa_submit, login_page, login_submit, logout_get, logout_post, panel_alias,
+    account_setup, api_logout_get, api_logout_post, apple_touch_icon, cpn_brand_mark, cpn_logo,
+    dashboard_page, favicon_ico, favicon_svg, login_mfa_page, login_mfa_submit, login_page,
+    login_submit, logout_get, logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::auth_password_reset_api::{
@@ -879,6 +880,10 @@ async fn main() -> std::io::Result<()> {
             .service(status_page)
             .service(login_page)
             .service(cpn_logo)
+            .service(favicon_ico)
+            .service(favicon_svg)
+            .service(apple_touch_icon)
+            .service(cpn_brand_mark)
             .service(login_submit)
             .service(login_mfa_page)
             .service(login_mfa_submit)

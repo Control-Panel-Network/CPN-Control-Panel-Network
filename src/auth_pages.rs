@@ -1,6 +1,7 @@
 use crate::account::load_bootstrap;
 use crate::auth_i18n::PANEL_I18N_SCRIPT;
 use crate::model::InstallerStatus;
+use crate::panel_brand::brand_favicon_links;
 
 fn html_escape(value: &str) -> String {
     value
@@ -86,6 +87,7 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign in · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="login"{error_attr}>
@@ -123,6 +125,7 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         token_q = token_q,
         error_block = error_block,
@@ -152,6 +155,7 @@ pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Two-factor · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="login-mfa">
@@ -174,6 +178,7 @@ pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         error_block = error_block,
         script = PANEL_I18N_SCRIPT,
@@ -193,6 +198,7 @@ pub fn forgot_password_html() -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Forgot password · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="forgot">
@@ -219,6 +225,7 @@ pub fn forgot_password_html() -> String {
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         script = PANEL_I18N_SCRIPT,
     )
@@ -237,6 +244,7 @@ pub fn forgot_password_ack_html() -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Forgot password · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="forgot-ack">
@@ -254,6 +262,7 @@ pub fn forgot_password_ack_html() -> String {
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         script = PANEL_I18N_SCRIPT,
     )
@@ -279,6 +288,7 @@ pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reset password · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="reset-password"{error_attr}>
@@ -304,6 +314,7 @@ pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         token = html_escape(token),
         error_block = error_block,
@@ -329,6 +340,7 @@ pub fn reset_password_invalid_html(message: &str) -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reset password · CPN Panel</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="reset-invalid">
@@ -346,6 +358,7 @@ pub fn reset_password_invalid_html(message: &str) -> String {
 </body>
 </html>"#,
         locale = initial_locale,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         msg = html_escape(message),
         script = PANEL_I18N_SCRIPT,
@@ -360,6 +373,7 @@ pub fn installer_token_required_html() -> String {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CPN Installer</title>
+  {favicons}
   <style>{styles}</style>
 </head>
 <body data-page="token">
@@ -374,6 +388,7 @@ pub fn installer_token_required_html() -> String {
   {script}
 </body>
 </html>"#,
+        favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         script = PANEL_I18N_SCRIPT,
     )
@@ -388,6 +403,7 @@ mod tests {
     fn login_has_logo_and_password_visibility_control() {
         let html = panel_login_html(&InstallerStatus::default(), None);
         assert!(html.contains("/cpn-logo.png"));
+        assert!(html.contains("/favicon.ico"));
         assert!(html.contains("cpnTogglePassword"));
     }
 

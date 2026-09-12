@@ -34,6 +34,38 @@ pub async fn cpn_logo() -> HttpResponse {
         .body(include_bytes!("../installer-ui/src/assets/cpn-logo.png").as_slice())
 }
 
+#[actix_web::route("/favicon.ico", method = "GET", method = "HEAD")]
+pub async fn favicon_ico() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/x-icon")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("../installer-ui/src/assets/favicon.ico").as_slice())
+}
+
+#[actix_web::route("/favicon.svg", method = "GET", method = "HEAD")]
+pub async fn favicon_svg() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/svg+xml")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("../installer-ui/src/assets/favicon.svg").as_slice())
+}
+
+#[actix_web::route("/apple-touch-icon.png", method = "GET", method = "HEAD")]
+pub async fn apple_touch_icon() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/png")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("../installer-ui/src/assets/apple-touch-icon.png").as_slice())
+}
+
+#[actix_web::route("/cpn-brand-mark.svg", method = "GET", method = "HEAD")]
+pub async fn cpn_brand_mark() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/svg+xml")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("../installer-ui/src/assets/cpn-brand-mark.svg").as_slice())
+}
+
 fn login_error_message(locale: &str) -> &'static str {
     match locale {
         "es" => "Usuario o contraseña no válidos.",
