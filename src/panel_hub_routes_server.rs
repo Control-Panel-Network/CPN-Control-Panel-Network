@@ -205,7 +205,7 @@ fn litespeed_admin_redirect(
     http: &HttpRequest,
 ) -> Option<HttpResponse> {
     let Some(user) = require_panel_user(state, http) else {
-        return Some(login_redirect(&http));
+        return Some(login_redirect(http));
     };
     if !is_panel_admin(&user) {
         return Some(redirect_notice(

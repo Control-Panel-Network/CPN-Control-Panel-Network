@@ -169,11 +169,11 @@ pub async fn login_page(
     let secure = request_secure(&http);
     let mut builder = HttpResponse::Ok();
     builder.content_type("text/html; charset=utf-8");
-    if let Some(ref path) = next {
-        if let Some(cookie) = login_return_cookie_header(path, secure) {
-            builder.append_header(("Set-Cookie", cookie));
-        }
-    } else {
+    if let Some(ref path) = next
+        && let Some(cookie) = login_return_cookie_header(path, secure)
+    {
+        builder.append_header(("Set-Cookie", cookie));
+    } else if next.is_none() {
         builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
     }
     builder.body(panel_login_html(&payload, None, next.as_deref()))
@@ -254,10 +254,10 @@ pub async fn login_submit(
         builder.append_header(("Location", mfa_location(next.as_deref())));
         builder.append_header(("Set-Cookie", mfa_pending_cookie_header(&pending, secure)));
         builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
-        if let Some(ref path) = next {
-            if let Some(cookie) = login_return_cookie_header(path, secure) {
-                builder.append_header(("Set-Cookie", cookie));
-            }
+        if let Some(ref path) = next
+            && let Some(cookie) = login_return_cookie_header(path, secure)
+        {
+            builder.append_header(("Set-Cookie", cookie));
         }
         return builder.finish();
     }
@@ -403,11 +403,11 @@ fn logout_response(http: &HttpRequest) -> HttpResponse {
     builder.append_header(("Location", login_location(next.as_deref())));
     builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
     builder.append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)));
-    if let Some(ref path) = next {
-        if let Some(cookie) = login_return_cookie_header(path, secure) {
-            builder.append_header(("Set-Cookie", cookie));
-        }
-    } else {
+    if let Some(ref path) = next
+        && let Some(cookie) = login_return_cookie_header(path, secure)
+    {
+        builder.append_header(("Set-Cookie", cookie));
+    } else if next.is_none() {
         builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
     }
     builder.finish()

@@ -134,12 +134,10 @@ pub fn referer_return_path(http: &HttpRequest) -> Option<String> {
     sanitize_login_next(&path_and_query)
 }
 
-pub fn first_safe_next<'a>(candidates: &[Option<&'a str>]) -> Option<String> {
-    for candidate in candidates {
-        if let Some(raw) = candidate {
-            if let Some(safe) = sanitize_login_next(raw) {
-                return Some(safe);
-            }
+pub fn first_safe_next(candidates: &[Option<&str>]) -> Option<String> {
+    for raw in candidates.iter().flatten() {
+        if let Some(safe) = sanitize_login_next(raw) {
+            return Some(safe);
         }
     }
     None
@@ -148,11 +146,11 @@ pub fn first_safe_next<'a>(candidates: &[Option<&'a str>]) -> Option<String> {
 pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
     let next = request_return_path(http);
     let mut builder = HttpResponse::SeeOther();
-    if let Some(ref path) = next {
-        let secure = crate::panel_session::request_https_from_headers(http);
-        if let Some(cookie) = login_return_cookie_header(path, secure) {
-            builder.append_header(("Set-Cookie", cookie));
-        }
+    if let Some(ref path) = next
+        && let Some(cookie) =
+            login_return_cookie_header(path, crate::panel_session::request_https_from_headers(http))
+    {
+        builder.append_header(("Set-Cookie", cookie));
     }
     builder
         .append_header(("Location", login_location(next.as_deref())))
