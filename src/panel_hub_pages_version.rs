@@ -278,14 +278,35 @@ pub fn version_management_page(can_manage: bool) -> String {
       statusEl.textContent = "Update check failed: " + (err && err.message ? err.message : String(err));
     }});
   }}
+  var pollFailCount = 0;
+  var pollBackoffMs = 500;
+  var POLL_FAIL_SOFT_MAX = 8;
+  var POLL_FAIL_HARD_MAX = 40;
+  function schedulePoll(delayMs) {{
+    if (pollTimer) {{ clearTimeout(pollTimer); pollTimer = null; }}
+    pollTimer = setTimeout(pollStatus, Math.max(250, delayMs || 500));
+  }}
+  function finishPollOk() {{
+    busy = false;
+    setActionsEnabled(true);
+    if (pollTimer) {{ clearTimeout(pollTimer); pollTimer = null; }}
+    pollFailCount = 0;
+    pollBackoffMs = 500;
+  }}
   function pollStatus() {{
     fetch("/api/maintenance/status", {{
       credentials: "same-origin",
-      headers: {{ "Accept": "application/json" }}
+      headers: {{ "Accept": "application/json" }},
+      cache: "no-store"
     }}).then(function (res) {{
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
     }}).then(function (st) {{
+      pollFailCount = 0;
+      pollBackoffMs = 500;
+      if (opError && opError.textContent.indexOf("Status poll failed") === 0) {{
+        opError.textContent = "";
+      }}
       var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
       if (progressBar) progressBar.style.width = pct + "%";
       if (progressLabel) {{
@@ -293,27 +314,44 @@ pub fn version_management_page(can_manage: bool) -> String {
         progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
       }}
       if (st.error) {{
-        busy = false;
-        setActionsEnabled(true);
-        if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
+        finishPollOk();
         if (opError) opError.textContent = st.error;
         if (progressLabel) progressLabel.textContent = pct + "% Failed: " + st.error;
         return;
       }}
       if (!st.busy && (st.phase === "completed" || st.phase === "ready" || st.phase === "failed")) {{
-        busy = false;
-        setActionsEnabled(true);
-        if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
+        finishPollOk();
         if (st.phase === "failed") {{
           if (opError) opError.textContent = st.error || "Maintenance failed";
         }} else {{
           if (progressBar) progressBar.style.width = "100%";
           if (progressLabel) progressLabel.textContent = "100% Completed.";
-          check();
+          check(false);
         }}
+        return;
       }}
+      schedulePoll(500);
     }}).catch(function (err) {{
-      if (opError) opError.textContent = "Status poll failed: " + (err && err.message ? err.message : String(err));
+      // Panel restart during upgrade often yields temporary Failed to fetch.
+      pollFailCount += 1;
+      pollBackoffMs = Math.min(5000, Math.round(pollBackoffMs * 1.4));
+      if (progressLabel) {{
+        progressLabel.textContent = "Waiting for panel after restart (" + pollFailCount + ")...";
+      }}
+      if (pollFailCount >= POLL_FAIL_HARD_MAX) {{
+        finishPollOk();
+        if (opError) {{
+          opError.textContent = "Status poll failed after retries: " +
+            (err && err.message ? err.message : String(err)) +
+            ". If the package already matches tip, refresh this page.";
+        }}
+        check(false);
+        return;
+      }}
+      if (pollFailCount >= POLL_FAIL_SOFT_MAX && opError) {{
+        opError.textContent = "Reconnecting to panel after restart...";
+      }}
+      schedulePoll(pollBackoffMs);
     }});
   }}
   function startJob(action, version) {{
@@ -321,6 +359,8 @@ pub fn version_management_page(can_manage: bool) -> String {
     busy = true;
     setActionsEnabled(false);
     clearConfirm();
+    pollFailCount = 0;
+    pollBackoffMs = 500;
     if (opError) opError.textContent = "";
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
@@ -345,9 +385,7 @@ pub fn version_management_page(can_manage: bool) -> String {
         return data;
       }});
     }}).then(function () {{
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(pollStatus, 500);
-      pollStatus();
+      schedulePoll(400);
     }}).catch(function (err) {{
       busy = false;
       setActionsEnabled(true);
