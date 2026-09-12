@@ -3,6 +3,10 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_litespeed::{
+    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
+    run_set_tier, run_set_webadmin_url, run_upgrade,
+};
 use crate::panel_hub_pages_server::{
     docker_page, files_page, package_manager_page, php_configs_page, php_extensions_page,
     php_tuning_page, processes_page, run_service_control, server_hub_main, services_page,
@@ -14,10 +18,6 @@ use crate::panel_hub_pages_server_net::{
 use crate::panel_hub_pages_settings::{
     connect_page, design_settings_page, settings_hub_main, setup_wizard_page,
     version_management_page,
-};
-use crate::panel_hub_pages_litespeed::{
-    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
-    run_set_tier, run_set_webadmin_url, run_upgrade,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};

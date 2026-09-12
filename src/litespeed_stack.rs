@@ -394,8 +394,7 @@ fn restart_litespeed() -> String {
             return "Restarted via lswsctrl.".into();
         }
     }
-    "Could not restart LiteSpeed automatically; restart the service from Server > Services."
-        .into()
+    "Could not restart LiteSpeed automatically; restart the service from Server > Services.".into()
 }
 
 /// Soft package refresh for OpenLiteSpeed (best-effort).
@@ -493,8 +492,7 @@ mod tests {
 
     #[test]
     fn parse_admin_loopback() {
-        let sample =
-            "listener adminListener {\n  address                 127.0.0.1:7080\n}\n";
+        let sample = "listener adminListener {\n  address                 127.0.0.1:7080\n}\n";
         assert_eq!(
             parse_admin_address(sample),
             Some(("127.0.0.1".into(), 7080))
