@@ -120,8 +120,7 @@ const es: LocaleMessages = {
   copyPassword: "Copiar",
   copied: "Copiado",
   emailLabel: "Correo de recuperación",
-  emailHint:
-    "Se usa para avisos de cuenta. La contraseña se recupera desde la terminal del servidor.",
+  emailHint: "Se usa en el flujo de contraseña olvidada del panel.",
   emailPlaceholder: "tu@ejemplo.com",
   policyTitle: "Política de contraseña",
   policyMinLength: "Longitud mínima",

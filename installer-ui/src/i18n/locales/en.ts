@@ -115,8 +115,7 @@ const en: LocaleMessages = {
   copyPassword: "Copy",
   copied: "Copied",
   emailLabel: "Recovery email",
-  emailHint:
-    "Used for account notices. Password recovery is performed from the server terminal.",
+  emailHint: "Used for the forgotten-password flow in the panel.",
   emailPlaceholder: "you@example.com",
   policyTitle: "Password policy",
   policyMinLength: "Minimum length",

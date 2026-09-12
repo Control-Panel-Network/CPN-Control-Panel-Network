@@ -200,13 +200,18 @@ pub fn forgot_password_html() -> String {
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
       <img class="brand-logo" src="/cpn-logo.png" alt="CPN Control Panel Network">
-      <h1 id="i18n-title">Reset your password</h1>
-      <p class="hint" id="i18n-forgot-intro">For security, password recovery is performed directly on the server.</p>
+      <h1 id="i18n-title">Forgot password</h1>
+      <p class="hint" id="i18n-forgot-intro">Enter your username or email. If a matching account exists, we email a one-time reset link when SMTP or local Postfix is available.</p>
+      <form method="post" action="/forgot-password" autocomplete="on">
+        <label for="account" id="i18n-forgot-account">Username/Email</label>
+        <input id="account" name="account" type="text" autocomplete="username" required>
+        <button id="i18n-forgot-submit" type="submit">Request reset</button>
+      </form>
+      <p class="hint" id="i18n-forgot-smtp">Reset emails use configured SMTP when present, otherwise local Postfix if it is running. The message includes a time-limited link to set a new password.</p>
       <div class="command-box">
-        <strong id="i18n-forgot-account">Run this command in the server terminal:</strong>
+        <strong id="i18n-forgot-cli">If email cannot be delivered, a server operator can run:</strong>
         <code>sudo cpn password</code>
       </div>
-      <p class="hint" id="i18n-forgot-smtp">The command securely asks for and confirms the new password without putting it in shell history.</p>
       <p><a id="i18n-forgot-back" href="/login">Back to sign in</a></p>
     </section>
   </main>
@@ -387,9 +392,11 @@ mod tests {
     }
 
     #[test]
-    fn recovery_uses_terminal_command_without_web_form() {
+    fn recovery_offers_email_form_and_cli_fallback() {
         let html = forgot_password_html();
+        assert!(html.contains("action=\"/forgot-password\""));
+        assert!(html.contains("name=\"account\""));
         assert!(html.contains("sudo cpn password"));
-        assert!(!html.contains("action=\"/forgot-password\""));
+        assert!(!html.contains("For security, password recovery is performed directly on the server."));
     }
 }

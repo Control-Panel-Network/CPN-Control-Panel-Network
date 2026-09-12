@@ -5,6 +5,22 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.32] - 12/09/2026
+
+Restore email-based panel password recovery on the web UI (Cargo `0.2.6-alpha.32`).
+
+### Fixed
+
+- `/forgot-password` again shows a username/email form that posts to the reset API and emails a one-time `/reset-password?token=...` link (SMTP or local Postfix when available).
+- Re-registers `forgot_password_submit`, `reset_password_page`, and `reset_password_submit` routes removed by the installer/login UX change.
+- Keeps `sudo cpn password` as an operator SSH/console fallback on the same page, not the only recovery path.
+- Installer recovery-email hint copy again describes the forgotten-password email flow.
+
+### Notes
+
+- Ack responses stay non-enumerating: matching accounts get mail when delivery works; the page does not confirm whether an account exists.
+- Lab without public DNS should use a reachable panel base (for example forwarded `http://127.0.0.1:2090`) so reset links open.
+
 ## [0.2.6-alpha.31] - 12/09/2026
 
 GitHub Releases rate-limit resilience: authenticated API when configured, last-good cache, and direct CDN tip fallback when the API returns 403/429 with an empty cache (Cargo `0.2.6-alpha.31`).
