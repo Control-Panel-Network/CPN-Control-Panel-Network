@@ -331,7 +331,11 @@ mod tests {
     #[test]
     fn maps_rpm_nvr_back_to_cargo_prerelease() {
         assert_eq!(
-            cargo_version_from_rpm("0.2.6", "0.alpha21.el9"),
+            cargo_version_from_rpm("0.2.6", "0.alpha24.el9"),
+            "0.2.6-alpha.24"
+        );
+        assert_eq!(
+            cargo_version_from_rpm("0.2.6", "0.alpha21.el10"),
             "0.2.6-alpha.21"
         );
         assert_eq!(

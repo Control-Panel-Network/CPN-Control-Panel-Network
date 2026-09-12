@@ -231,23 +231,23 @@ fn rpm_installed_version() -> Option<String> {
         return None;
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
-    let version = lines.next()?.to_string();
-    let release = lines.next().unwrap_or("").to_string();
+    let mut lines = text.lines();
+    let version = lines.next()?.trim().to_string();
+    let release = lines.next().unwrap_or("").trim().to_string();
     if version.is_empty() || version.contains("not installed") {
         return None;
     }
     Some(crate::releases::cargo_version_from_rpm(&version, &release))
 }
 
-/// Prefer live RPM identity over a stale retired `1.0.0`/`1.0.1` manifest.
+/// Prefer live RPM identity over a stale install-manifest (retired 1.0.x or older 0.2.x).
 /// Do not invent a 0.2 identity while the RPM still claims retired 1.0.x (retag needs that).
 fn resolve_package_version(
     from_manifest: Option<String>,
     rpm_version: Option<String>,
     running_version: &str,
 ) -> String {
-    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity};
+    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity, normalize_version};
 
     match (from_manifest, rpm_version) {
         (Some(manifest_ver), Some(rpm_ver))
@@ -266,9 +266,9 @@ fn resolve_package_version(
         (Some(manifest_ver), Some(rpm_ver))
             if is_active_0_2_line(&rpm_ver)
                 && is_active_0_2_line(&manifest_ver)
-                && crate::releases::normalize_version(&manifest_ver)
-                    != crate::releases::normalize_version(&rpm_ver) =>
+                && normalize_version(&manifest_ver) != normalize_version(&rpm_ver) =>
         {
+            // Stale manifest after bootstrap upgrade.sh / binary replace: trust RPM.
             rpm_ver
         }
         (Some(manifest_ver), _) => manifest_ver,
@@ -417,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_prefers_rpm_and_running_over_retired_manifest() {
+    fn resolve_prefers_rpm_over_stale_manifest() {
         assert_eq!(
             resolve_package_version(
                 Some("1.0.0".into()),
@@ -442,6 +442,14 @@ mod tests {
                 "0.2.6-alpha.21"
             ),
             "0.2.6-alpha.21"
+        );
+        assert_eq!(
+            resolve_package_version(
+                Some("0.2.2-alpha.17".into()),
+                Some("0.2.6-alpha.24".into()),
+                "0.2.6-alpha.24"
+            ),
+            "0.2.6-alpha.24"
         );
     }
 }

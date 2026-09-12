@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.27] - 12/09/2026
 
-GitHub Releases disk cache and rate limit for Version Management, plus searchable picker and stale package identity reconcile (Cargo `0.2.6-alpha.27`). Merges webmail tip line from alpha.26.
+Guest-matched EL RPM selection, Version Management searchable picker, and GitHub Releases disk cache (Cargo `0.2.6-alpha.27`). Retags the EL fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
 
 ### Added
 
@@ -18,11 +18,16 @@ GitHub Releases disk cache and rate limit for Version Management, plus searchabl
 
 ### Fixed
 
+- Maintenance / Version Management installs the guest-matched `.elN` RPM via `compatible_package_asset`, not the first GitHub `.rpm` (often `.el10` before `.el9`). Fixes AlmaLinux 9 labs that failed with `libc.so.6(GLIBC_2.39)` / generic `Package install failed (dnf/rpm)`.
+- `install_rpm` surfaces the real dnf/rpm stderr in the UI.
+- Version Management progress label shows a numeric percent (example: `60% installing: ...`).
+- Installed package prefers live `rpm -q` (mapped to Cargo prerelease) when the install-manifest is stale (example: manifest `0.2.2-alpha.17` vs RPM `0.2.6-alpha.24`).
 - Phantom Installed package `1.0.0`/`1.0.1` when RPM is already `0.2.x` (manifest reconcile + RPM NVR to Cargo prerelease mapping).
 
 ### Notes
 
 - Cache applies to Version Management, `--version-check`, and upgrade release discovery (`list_releases` / `find_release`).
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
 
 ## [0.2.6-alpha.26] - 12/09/2026
 
@@ -31,6 +36,7 @@ Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip
 ### Notes
 
 - Includes changelog items from `0.2.6-alpha.24` (webmail / MTA-STS / BIMI) and `0.2.6-alpha.25` (Version-Release tip RPM accept).
+- EL-matched RPM maintenance fix shipped in **0.2.6-alpha.27** (not in the original `v0.2.6-alpha.26` package binaries).
 
 ## [0.2.6-alpha.25] - 12/09/2026
 

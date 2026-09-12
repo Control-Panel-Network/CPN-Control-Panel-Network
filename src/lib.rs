@@ -169,6 +169,7 @@ pub mod smtp_settings;
 pub mod status_pages;
 pub mod themes_catalog;
 pub mod upgrade;
+pub mod upgrade_apply;
 pub mod upgrade_cleanup;
 pub mod upgrade_pkg;
 pub mod upgrade_stack;

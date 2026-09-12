@@ -286,16 +286,18 @@ pub fn version_management_page(can_manage: bool) -> String {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
     }}).then(function (st) {{
-      if (progressBar) progressBar.style.width = Math.max(0, Math.min(100, Number(st.progress) || 0)) + "%";
+      var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
+      if (progressBar) progressBar.style.width = pct + "%";
       if (progressLabel) {{
-        progressLabel.textContent = (st.phase || "") + (st.message ? (": " + st.message) : "");
+        var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
+        progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
       }}
       if (st.error) {{
         busy = false;
         setActionsEnabled(true);
         if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
         if (opError) opError.textContent = st.error;
-        if (progressLabel) progressLabel.textContent = "Failed: " + st.error;
+        if (progressLabel) progressLabel.textContent = pct + "% Failed: " + st.error;
         return;
       }}
       if (!st.busy && (st.phase === "completed" || st.phase === "ready" || st.phase === "failed")) {{
@@ -306,7 +308,7 @@ pub fn version_management_page(can_manage: bool) -> String {
           if (opError) opError.textContent = st.error || "Maintenance failed";
         }} else {{
           if (progressBar) progressBar.style.width = "100%";
-          if (progressLabel) progressLabel.textContent = "Completed.";
+          if (progressLabel) progressLabel.textContent = "100% Completed.";
           check();
         }}
       }}
@@ -322,7 +324,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     if (opError) opError.textContent = "";
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
-    if (progressLabel) progressLabel.textContent = "Starting...";
+    if (progressLabel) progressLabel.textContent = "1% Starting...";
     var installed = infoCache && infoCache.installed_version ? infoCache.installed_version : "";
     var isDown = action === "downgrade" || (version && installed && cmp(version, installed) < 0);
     var body = {{
