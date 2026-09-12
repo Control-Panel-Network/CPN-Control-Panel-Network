@@ -269,6 +269,21 @@ pub fn get_package(id_or_name: &str) -> Result<Package, String> {
         .ok_or_else(|| format!("Package `{key}` not found"))
 }
 
+fn allocate_package_id(file: &PackagesFile) -> String {
+    let now = now_unix();
+    for n in 0u32..10_000 {
+        let id = if n == 0 {
+            format!("pkg-{now}")
+        } else {
+            format!("pkg-{now}-{n}")
+        };
+        if !file.packages.iter().any(|p| p.id == id) {
+            return id;
+        }
+    }
+    format!("pkg-{now}-{}", file.packages.len())
+}
+
 pub fn create_package(input: PackageInput) -> Result<Package, String> {
     let name = validate_input(&input)?;
     let mut file = load_packages_file();
@@ -277,7 +292,7 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
     }
     let now = now_unix();
     let pkg = Package {
-        id: format!("pkg-{now}"),
+        id: allocate_package_id(&file),
         name,
         disk_mb: input.disk_mb,
         bandwidth_mb: input.bandwidth_mb,
