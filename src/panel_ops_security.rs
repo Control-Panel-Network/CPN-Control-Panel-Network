@@ -153,10 +153,7 @@ pub fn enable_firewalld_http_https() -> Result<String, String> {
     }
     let _ = cmd_ok("firewall-cmd", &["--reload"]);
     let state = cmd_stdout("firewall-cmd", &["--state"]).unwrap_or_else(|| "unknown".into());
-    Ok(format!(
-        "firewalld state={state}. {}",
-        notes.join("; ")
-    ))
+    Ok(format!("firewalld state={state}. {}", notes.join("; ")))
 }
 
 #[derive(Debug, Clone)]

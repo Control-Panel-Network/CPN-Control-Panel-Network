@@ -658,4 +658,3 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
         cards = installed_cards(&installed, layout, &domain),
     )
 }
-

@@ -81,10 +81,7 @@ fn ols_vhconf(docroot: &str, sock: &str) -> String {
 }
 
 fn resolve_fpm_sock() -> String {
-    for sock in [
-        "/run/php-fpm/cpn-phpmyadmin.sock",
-        "/run/php-fpm/www.sock",
-    ] {
+    for sock in ["/run/php-fpm/cpn-phpmyadmin.sock", "/run/php-fpm/www.sock"] {
         if Path::new(sock).exists() {
             return sock.to_string();
         }
@@ -97,8 +94,9 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     if !openlitespeed_installed() {
         return Err("OpenLiteSpeed is not installed; use nginx Apps wiring or install OLS.".into());
     }
-    let share = phpmyadmin_share_dir()
-        .ok_or_else(|| "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string())?;
+    let share = phpmyadmin_share_dir().ok_or_else(|| {
+        "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
+    })?;
     let sock = resolve_fpm_sock();
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{OLS_VHOST}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("Could not create OLS vhost dir: {e}"))?;
@@ -129,7 +127,9 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     }
     write_signon_bridge(&share)?;
     if !systemd_unit_active("php-fpm") {
-        let _ = Command::new("systemctl").args(["start", "php-fpm"]).status();
+        let _ = Command::new("systemctl")
+            .args(["start", "php-fpm"])
+            .status();
     }
     if port_open("127.0.0.1:8081", 500) {
         Ok(format!(
@@ -146,7 +146,8 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
 
 fn write_signon_bridge(share: &Path) -> Result<(), String> {
     let conf_dir = join_data("phpmyadmin");
-    fs::create_dir_all(&conf_dir).map_err(|e| format!("Could not create phpmyadmin data dir: {e}"))?;
+    fs::create_dir_all(&conf_dir)
+        .map_err(|e| format!("Could not create phpmyadmin data dir: {e}"))?;
     let signon_php = conf_dir.join("signon.php");
     let body = r#"<?php
 declare(strict_types=1);
@@ -199,8 +200,8 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
         fs::write(conf_inc, body).map_err(|e| format!("Could not write config.inc.php: {e}"))?;
         return Ok(());
     }
-    let raw = fs::read_to_string(conf_inc)
-        .map_err(|e| format!("Could not read config.inc.php: {e}"))?;
+    let raw =
+        fs::read_to_string(conf_inc).map_err(|e| format!("Could not read config.inc.php: {e}"))?;
     if raw.contains("CPN-SIGNON") {
         return Ok(());
     }

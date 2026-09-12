@@ -92,7 +92,9 @@ fn run_htpasswd(args: &[&str]) -> Result<(), String> {
             Err(e) => last_err = format!("{bin}: {e}"),
         }
     }
-    Err(format!("Could not update WebAdmin password file: {last_err}"))
+    Err(format!(
+        "Could not update WebAdmin password file: {last_err}"
+    ))
 }
 
 fn ensure_htpasswd_parent() -> Result<(), String> {
@@ -130,12 +132,7 @@ pub fn set_webadmin_password(username: &str, password: &str) -> Result<String, S
         a
     });
     if try_bcrypt.is_err() {
-        run_htpasswd(&[
-            if create { "-cb" } else { "-b" },
-            &path_s,
-            &user,
-            pass,
-        ])?;
+        run_htpasswd(&[if create { "-cb" } else { "-b" }, &path_s, &user, pass])?;
     }
     #[cfg(unix)]
     {
@@ -207,9 +204,7 @@ pub fn remove_webadmin_user(username: &str) -> Result<String, String> {
         let _ = fs::write(admin_config_path(), format!("{filtered}\n"));
     }
     let restart = restart_litespeed();
-    Ok(format!(
-        "Removed WebAdmin user `{user}`. {restart}"
-    ))
+    Ok(format!("Removed WebAdmin user `{user}`. {restart}"))
 }
 
 pub fn webadmin_users_present() -> bool {

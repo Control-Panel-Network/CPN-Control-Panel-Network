@@ -55,7 +55,11 @@ pub async fn security_firewall_enable(
         return login_redirect();
     };
     if !is_panel_admin(&user) {
-        return redirect_notice("/security/firewall", None, Some("Only the panel admin can enable firewalld"));
+        return redirect_notice(
+            "/security/firewall",
+            None,
+            Some("Only the panel admin can enable firewalld"),
+        );
     }
     match crate::panel_ops_security::enable_firewalld_http_https() {
         Ok(msg) => redirect_notice("/security/firewall", Some(&msg), None),
