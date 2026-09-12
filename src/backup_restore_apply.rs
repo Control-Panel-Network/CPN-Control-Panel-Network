@@ -275,17 +275,16 @@ pub(crate) fn guess_db_name_from_wp_config(path: &Path) -> Option<String> {
     let raw = fs::read_to_string(path).ok()?;
     for line in raw.lines() {
         let t = line.trim();
-        if t.starts_with("define") && t.contains("DB_NAME") {
-            if let Some(start) = t.find(',') {
-                let rest = &t[start + 1..];
-                let rest = rest.trim().trim_start_matches(|c| c == '\'' || c == '"');
-                let end = rest
-                    .find(|c| c == '\'' || c == '"' || c == ')')
-                    .unwrap_or(rest.len());
-                let name = rest[..end].trim();
-                if !name.is_empty() {
-                    return Some(name.to_string());
-                }
+        if t.starts_with("define")
+            && t.contains("DB_NAME")
+            && let Some(start) = t.find(',')
+        {
+            let rest = &t[start + 1..];
+            let rest = rest.trim().trim_start_matches(['\'', '"']);
+            let end = rest.find(['\'', '"', ')']).unwrap_or(rest.len());
+            let name = rest[..end].trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
             }
         }
     }
