@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-OpenLiteSpeed WebAdmin aligns with the CPN admin account by default. Cloudflare OAuth DNS link, panel API tokens, and versioned SQL migrations.
+## [0.2.6-alpha.36] - 13/09/2026
+
+Cloudflare OAuth DNS link, panel API tokens, versioned SQL migrations, and OpenLiteSpeed WebAdmin alignment with the CPN admin account (Cargo `0.2.6-alpha.36`).
 
 ### Added
 
@@ -24,6 +26,7 @@ OpenLiteSpeed WebAdmin aligns with the CPN admin account by default. Cloudflare 
 - Lab smoke: after Reset or fresh install+account, `https://127.0.0.1:7080/login.php` accepts the CPN admin credentials (NAT forward `:7080` if needed).
 - Register a Cloudflare OAuth app redirect URI matching your panel public URL (for example `http://127.0.0.1:2090/dns/cloudflare/oauth/callback` in NAT labs). See `to-do/CLOUDFLARE-OAUTH.md`.
 - Set panel public URL (`cpn network set-public-url`) when OAuth callbacks must use a host NAT port instead of guest loopback.
+- Tip `0.2.6-alpha.35` is the BOM/RPM packaging fix only; this tip ships CF OAuth + API Access after that merge.
 
 ## [0.2.6-alpha.35] - 12/09/2026
 
