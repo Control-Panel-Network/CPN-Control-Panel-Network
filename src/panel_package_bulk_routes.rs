@@ -117,7 +117,7 @@ pub struct PackageBulkForm {
 }
 
 fn parse_package_ids(raw: &str) -> Vec<String> {
-    raw.split(|ch| ch == ',' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
+    raw.split([',', ' ', '\n', '\r', '\t'])
         .map(str::trim)
         .filter(|id| !id.is_empty())
         .map(str::to_string)
