@@ -314,21 +314,22 @@ pub fn verify_after_upgrade(
         true,
     );
 
-    // Web server: require active only when the unit is enabled (installed for boot).
+    // Web server: probe only units that exist on disk. Missing optional engines
+    // (httpd/caddy on OLS labs) must be skipped quietly with no systemctl stderr.
     let web_units = [
         ("nginx", "nginx"),
+        ("lsws", "OpenLiteSpeed"),
+        ("lshttpd", "LiteSpeed / OpenLiteSpeed"),
         ("openlitespeed", "OpenLiteSpeed"),
-        ("lshttpd", "LiteSpeed"),
         ("httpd", "Apache httpd"),
         ("caddy", "Caddy"),
     ];
     let mut saw_web = false;
     for (unit, label) in web_units {
-        let enabled = Command::new("systemctl")
-            .args(["is-enabled", "--quiet", unit])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        if !service_detect::systemd_unit_file_exists(unit) {
+            continue;
+        }
+        let enabled = service_detect::systemd_unit_enabled(unit);
         let active = unit_active(unit);
         if !(enabled || active) {
             continue;
@@ -343,11 +344,17 @@ pub fn verify_after_upgrade(
         );
     }
     if !saw_web {
+        let ols_bin = std::path::Path::new("/usr/local/lsws/bin/openlitespeed").is_file()
+            || std::path::Path::new("/usr/local/lsws/bin/lshttpd").is_file();
         push(
             &mut report,
             "web.server",
             true,
-            "no enabled CPN-related web server unit detected; skipped",
+            if ols_bin {
+                "OpenLiteSpeed binaries present; no enabled httpd/caddy/nginx unit (optional engines skipped)"
+            } else {
+                "no enabled CPN-related web server unit detected; optional engines skipped"
+            },
             false,
         );
     }
@@ -497,5 +504,19 @@ mod tests {
         let mut report = VerifyReport::default();
         push(&mut report, "x", false, "down", true);
         assert!(!report.ok());
+    }
+
+    #[test]
+    fn missing_optional_web_units_are_not_required_failures() {
+        let mut report = VerifyReport::default();
+        push(
+            &mut report,
+            "web.server",
+            true,
+            "OpenLiteSpeed binaries present; no enabled httpd/caddy/nginx unit (optional engines skipped)",
+            false,
+        );
+        assert!(report.ok());
+        assert!(report.failed_required().is_empty());
     }
 }

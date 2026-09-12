@@ -23,9 +23,7 @@ fn conflict_units(selected: ServerEngine) -> &'static [&'static str] {
 }
 
 fn unit_file_exists(unit: &str) -> bool {
-    let lib = format!("/usr/lib/systemd/system/{unit}.service");
-    let etc = format!("/etc/systemd/system/{unit}.service");
-    std::path::Path::new(&lib).exists() || std::path::Path::new(&etc).exists()
+    crate::service_detect::systemd_unit_file_exists(unit)
 }
 
 /// Parse `ss -ltnp` style lines for listeners on TCP 80/443 and collect PIDs.

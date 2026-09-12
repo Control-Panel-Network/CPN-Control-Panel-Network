@@ -12,10 +12,45 @@ pub struct DatabaseStatus {
     pub detail: String,
 }
 
+/// True when a systemd unit file exists under `/usr/lib` or `/etc`.
+///
+/// Call this before `systemctl is-enabled` so missing optional engines
+/// (httpd/caddy on an OpenLiteSpeed host) do not print
+/// `Failed to get unit file state for ...: No such file or directory`.
+pub fn systemd_unit_file_exists(name: &str) -> bool {
+    let unit = name.trim().trim_end_matches(".service");
+    if unit.is_empty() {
+        return false;
+    }
+    let lib = format!("/usr/lib/systemd/system/{unit}.service");
+    let etc = format!("/etc/systemd/system/{unit}.service");
+    std::path::Path::new(&lib).exists() || std::path::Path::new(&etc).exists()
+}
+
 /// True when `systemctl is-active --quiet <name>` succeeds.
 pub fn systemd_unit_active(name: &str) -> bool {
+    if !systemd_unit_file_exists(name) {
+        return false;
+    }
     Command::new("systemctl")
         .args(["is-active", "--quiet", name])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// True when `systemctl is-enabled --quiet <name>` succeeds.
+/// Missing unit files are treated as not enabled without calling systemctl.
+pub fn systemd_unit_enabled(name: &str) -> bool {
+    if !systemd_unit_file_exists(name) {
+        return false;
+    }
+    use std::process::Stdio;
+    Command::new("systemctl")
+        .args(["is-enabled", "--quiet", name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
