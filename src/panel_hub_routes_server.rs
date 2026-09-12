@@ -113,21 +113,21 @@ pub async fn server_litespeed_page(
     ))
 }
 
-fn litespeed_admin_or_redirect(
+fn litespeed_admin_redirect(
     state: &web::Data<Arc<AppState>>,
     http: &HttpRequest,
-) -> Result<String, HttpResponse> {
+) -> Option<HttpResponse> {
     let Some(user) = require_panel_user(state, http) else {
-        return Err(login_redirect());
+        return Some(login_redirect());
     };
     if !is_panel_admin(&user) {
-        return Err(redirect_notice(
+        return Some(redirect_notice(
             "/server/litespeed",
             None,
             Some("Only the panel admin can manage LiteSpeed."),
         ));
     }
-    Ok(user)
+    None
 }
 
 #[post("/server/litespeed/tier")]
@@ -136,7 +136,7 @@ pub async fn server_litespeed_tier(
     state: web::Data<Arc<AppState>>,
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    if let Err(resp) = litespeed_admin_or_redirect(&state, &http) {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
     let tier = form.get("tier").map(String::as_str).unwrap_or("");
@@ -152,7 +152,7 @@ pub async fn server_litespeed_serial(
     state: web::Data<Arc<AppState>>,
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    if let Err(resp) = litespeed_admin_or_redirect(&state, &http) {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
     let serial = form.get("serial").map(String::as_str).unwrap_or("");
@@ -168,7 +168,7 @@ pub async fn server_litespeed_webadmin_url(
     state: web::Data<Arc<AppState>>,
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    if let Err(resp) = litespeed_admin_or_redirect(&state, &http) {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
     let url = form.get("webadmin_url").map(String::as_str).unwrap_or("");
@@ -183,7 +183,7 @@ pub async fn server_litespeed_upgrade(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
-    if let Err(resp) = litespeed_admin_or_redirect(&state, &http) {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
     match run_upgrade() {
@@ -198,7 +198,7 @@ pub async fn server_litespeed_downgrade(
     state: web::Data<Arc<AppState>>,
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    if let Err(resp) = litespeed_admin_or_redirect(&state, &http) {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
     let version = form.get("version").map(String::as_str).unwrap_or("");

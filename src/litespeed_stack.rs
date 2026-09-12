@@ -255,10 +255,10 @@ pub fn webadmin_url() -> String {
             return trimmed.to_string();
         }
     }
-    if let Ok(raw) = fs::read_to_string(admin_config_path()) {
-        if let Some((host, port)) = parse_admin_address(&raw) {
-            return format!("https://{host}:{port}");
-        }
+    if let Ok(raw) = fs::read_to_string(admin_config_path())
+        && let Some((host, port)) = parse_admin_address(&raw)
+    {
+        return format!("https://{host}:{port}");
     }
     DEFAULT_WEBADMIN_URL.to_string()
 }
