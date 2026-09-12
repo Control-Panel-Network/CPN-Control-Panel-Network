@@ -17,15 +17,19 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       username: 'Username',
       password: 'Password',
       remember: 'Remember me',
-      forgot: 'Forgot password?',
+      forgot: 'Reset password',
       submit: 'Sign in',
+      or: 'or',
+      passkey: 'Sign in with passkey',
+      showPassword: 'Show password',
+      hidePassword: 'Hide password',
       loginError: 'Invalid username or password.',
-      forgotTitle: 'Forgot password',
+      forgotTitle: 'Reset your password',
       forgotDocumentTitle: 'Forgot password · CPN Panel',
-      forgotIntro: 'Enter your username or email. If a matching account exists, we email a one-time reset link when SMTP or local Postfix is available.',
-      forgotAccount: 'Username/Email',
+      forgotIntro: 'For security, password recovery is performed directly on the server.',
+      forgotAccount: 'Run this command in the server terminal:',
       forgotSubmit: 'Request reset',
-      forgotSmtp: 'Reset emails use configured SMTP when present, otherwise local Postfix if it is running. The message includes a time-limited link to set a new password. If mail cannot be delivered, a server operator can still reset the account with the CPN CLI.',
+      forgotSmtp: 'The command securely asks for and confirms the new password without putting it in shell history.',
       forgotBack: 'Back to sign in',
       forgotAckTitle: 'Check your inbox',
       forgotAckBody: 'If an account matches the details you entered, a reset message with a one-time link will be sent when mail delivery is available. For security, this page does not confirm whether an account exists.',
@@ -49,15 +53,19 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       username: 'Usuario',
       password: 'Contraseña',
       remember: 'Recuérdame',
-      forgot: '¿Olvidaste la contraseña?',
+      forgot: 'Restablecer contraseña',
       submit: 'Entrar',
+      or: 'o',
+      passkey: 'Entrar con passkey',
+      showPassword: 'Mostrar contraseña',
+      hidePassword: 'Ocultar contraseña',
       loginError: 'Usuario o contraseña no válidos.',
-      forgotTitle: 'Contraseña olvidada',
+      forgotTitle: 'Restablece tu contraseña',
       forgotDocumentTitle: 'Contraseña olvidada · CPN Panel',
-      forgotIntro: 'Introduce tu usuario o correo. Si existe una cuenta coincidente, enviaremos un enlace de un solo uso cuando SMTP o Postfix local esté disponible.',
-      forgotAccount: 'Usuario/Correo',
+      forgotIntro: 'Por seguridad, la recuperación se realiza directamente en el servidor.',
+      forgotAccount: 'Ejecuta este comando en la terminal del servidor:',
       forgotSubmit: 'Solicitar restablecimiento',
-      forgotSmtp: 'El correo de restablecimiento usa SMTP configurado si existe; si no, Postfix local cuando está en marcha. El mensaje incluye un enlace con tiempo limitado para elegir una nueva contraseña. Si el correo no se puede entregar, un operador puede restablecer la cuenta con la CLI de CPN.',
+      forgotSmtp: 'El comando solicita y confirma la nueva contraseña de forma segura, sin guardarla en el historial del shell.',
       forgotBack: 'Volver al inicio de sesión',
       forgotAckTitle: 'Revisa tu bandeja de entrada',
       forgotAckBody: 'Si una cuenta coincide con los datos introducidos, se enviará un mensaje con un enlace de un solo uso cuando el correo esté disponible. Por seguridad, esta página no confirma si la cuenta existe.',
@@ -81,15 +89,19 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       username: 'Brukernavn',
       password: 'Passord',
       remember: 'Husk meg',
-      forgot: 'Glemt passordet?',
+      forgot: 'Tilbakestill passord',
       submit: 'Logg inn',
+      or: 'eller',
+      passkey: 'Logg inn med passkey',
+      showPassword: 'Vis passord',
+      hidePassword: 'Skjul passord',
       loginError: 'Ugyldig brukernavn eller passord.',
-      forgotTitle: 'Glemt passord',
+      forgotTitle: 'Tilbakestill passordet',
       forgotDocumentTitle: 'Glemt passord · CPN Panel',
-      forgotIntro: 'Skriv inn brukernavn eller e-post. Hvis en konto matcher, sender vi en engangslenke når SMTP eller lokal Postfix er tilgjengelig.',
-      forgotAccount: 'Brukernavn/E-post',
+      forgotIntro: 'Av sikkerhetshensyn utføres passordgjenoppretting direkte på serveren.',
+      forgotAccount: 'Kjør denne kommandoen i serverterminalen:',
       forgotSubmit: 'Be om tilbakestilling',
-      forgotSmtp: 'E-post for tilbakestilling bruker konfigurert SMTP hvis den finnes, ellers lokal Postfix når den kjører. Meldingen inneholder en tidsbegrenset lenke for nytt passord. Hvis e-post ikke kan leveres, kan en serveroperatør fortsatt tilbakestille kontoen med CPN CLI.',
+      forgotSmtp: 'Kommandoen spør sikkert etter og bekrefter det nye passordet uten å legge det i skallhistorikken.',
       forgotBack: 'Tilbake til innlogging',
       forgotAckTitle: 'Sjekk innboksen',
       forgotAckBody: 'Hvis en konto matcher opplysningene du oppga, sendes en melding med engangslenke når e-post er tilgjengelig. Av sikkerhetshensyn bekrefter ikke denne siden om kontoen finnes.',
@@ -130,7 +142,10 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     } catch (e) {}
     var fromCookie = readCookie();
     if (fromCookie) return normalize(fromCookie);
-    return normalize(document.documentElement.getAttribute('data-initial-locale') || 'en');
+    var preferred = (navigator.languages || []).find(function (language) {
+      return /^(es|en|nb|nn|no)(-|$)/i.test(language);
+    });
+    return normalize(preferred || navigator.language || document.documentElement.getAttribute('data-initial-locale') || 'en');
   }
 
   function persist(locale) {
@@ -210,6 +225,8 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     setText('i18n-remember', t.remember);
     setText('i18n-forgot', t.forgot);
     setText('i18n-submit', t.submit);
+    setText('i18n-or', t.or);
+    setText('i18n-passkey', t.passkey);
     var err = document.getElementById('i18n-login-error');
     if (err && document.body.getAttribute('data-login-error') === '1') {
       err.hidden = false;
@@ -278,11 +295,23 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
     if (el) el.textContent = value;
   }
 
+  window.cpnTogglePassword = function (button) {
+    var input = document.getElementById('password');
+    if (!input) return;
+    var revealing = input.type === 'password';
+    input.type = revealing ? 'text' : 'password';
+    var locale = readStored();
+    var t = M[locale] || M.en;
+    button.setAttribute('aria-label', revealing ? t.hidePassword : t.showPassword);
+    button.textContent = revealing ? '🙈' : '👁';
+  };
+
   function mountSelector() {
     var host = document.getElementById('cpn-lang-host');
     if (!host) return;
     host.innerHTML =
       '<label class="lang">' +
+      '<span aria-hidden="true">🌐</span>' +
       '<span id="cpn-lang-label" class="lang-label"></span>' +
       '<select id="cpn-lang" aria-label="Language">' +
       Object.keys(LABELS).map(function (code) {

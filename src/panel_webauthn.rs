@@ -3,7 +3,8 @@
 
 use crate::account::{data_dir, now_unix};
 use crate::account_passkeys::{
-    add_passkey, exclude_credential_ids, passkeys_for_auth, update_passkey_after_auth,
+    add_passkey, all_passkeys_for_auth, exclude_credential_ids, passkey_owner, passkeys_for_auth,
+    update_passkey_after_auth,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -16,8 +17,9 @@ use std::{
 use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
-    CreationChallengeResponse, PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential,
-    RegisterPublicKeyCredential, RequestChallengeResponse, Webauthn, WebauthnBuilder,
+    CreationChallengeResponse, DiscoverableAuthentication, DiscoverableKey, PasskeyAuthentication,
+    PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
+    RequestChallengeResponse, Webauthn, WebauthnBuilder,
 };
 
 const CEREMONY_TTL_SECS: u64 = 300;
@@ -26,10 +28,8 @@ const MAX_HOST_LEN: usize = 253;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum CeremonyKind {
     Register(PasskeyRegistration),
-    Authenticate {
-        username: String,
-        state: PasskeyAuthentication,
-    },
+    Authenticate { state: PasskeyAuthentication },
+    Discoverable(DiscoverableAuthentication),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,24 +253,29 @@ pub fn finish_registration(
 
 pub fn start_authentication(
     webauthn: &Webauthn,
-    username: &str,
 ) -> Result<(String, RequestChallengeResponse), String> {
-    let creds = passkeys_for_auth(username);
-    if creds.is_empty() {
-        return Err("No passkeys registered for this account".into());
-    }
-    let (rcr, state) = webauthn
-        .start_passkey_authentication(&creds)
-        .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
+    let creds = all_passkeys_for_auth();
+    let (rcr, kind) = if creds.is_empty() {
+        let (rcr, state) = webauthn
+            .start_discoverable_authentication()
+            .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
+        (rcr, CeremonyKind::Discoverable(state))
+    } else {
+        let keys = creds
+            .into_iter()
+            .map(|(_, passkey)| passkey)
+            .collect::<Vec<_>>();
+        let (rcr, state) = webauthn
+            .start_passkey_authentication(&keys)
+            .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
+        (rcr, CeremonyKind::Authenticate { state })
+    };
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
         id: id.clone(),
-        username: username.to_string(),
+        username: String::new(),
         created_at_unix: now_unix(),
-        kind: CeremonyKind::Authenticate {
-            username: username.to_string(),
-            state,
-        },
+        kind,
     })?;
     Ok((id, rcr))
 }
@@ -281,12 +286,32 @@ pub fn finish_authentication(
     credential: &PublicKeyCredential,
 ) -> Result<String, String> {
     let record = take_ceremony(ceremony_id)?;
-    let CeremonyKind::Authenticate { username, state } = record.kind else {
-        return Err("Passkey ceremony type mismatch".into());
+    let (username, result) = match record.kind {
+        CeremonyKind::Authenticate { state } => {
+            let result = webauthn
+                .finish_passkey_authentication(credential, &state)
+                .map_err(|_| "Incorrect passkey".to_string())?;
+            let username =
+                passkey_owner(result.cred_id()).ok_or_else(|| "Incorrect passkey".to_string())?;
+            (username, result)
+        }
+        CeremonyKind::Discoverable(state) => {
+            let (_, credential_id) = webauthn
+                .identify_discoverable_authentication(credential)
+                .map_err(|_| "Incorrect passkey".to_string())?;
+            let username =
+                passkey_owner(credential_id).ok_or_else(|| "Incorrect passkey".to_string())?;
+            let keys = passkeys_for_auth(&username)
+                .iter()
+                .map(DiscoverableKey::from)
+                .collect::<Vec<_>>();
+            let result = webauthn
+                .finish_discoverable_authentication(credential, state, &keys)
+                .map_err(|_| "Incorrect passkey".to_string())?;
+            (username, result)
+        }
+        CeremonyKind::Register(_) => return Err("Passkey ceremony type mismatch".into()),
     };
-    let result = webauthn
-        .finish_passkey_authentication(credential, &state)
-        .map_err(|err| format!("Passkey authentication failed: {err}"))?;
     // Persist counter / credential updates when the library reports a change.
     let mut creds = passkeys_for_auth(&username);
     if let Some(pk) = creds.iter_mut().find(|c| c.cred_id() == result.cred_id()) {
@@ -400,13 +425,10 @@ async function cpnRegisterPasskey(){
 }
 async function cpnLoginPasskey(){
   const status=document.getElementById('cpn-passkey-login-status');
-  const userEl=document.getElementById('username');
   try{
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    const username=(userEl&&userEl.value||'').trim();
-    if(!username) throw new Error('Enter your username first');
     if(status) status.textContent='Waiting for authenticator...';
-    const start=await cpnJson('/login/passkey/start',{username:username});
+    const start=await cpnJson('/login/passkey/start',{});
     const pk=await cpnDecodeGetOptions(start.publicKey);
     const cred=await navigator.credentials.get({publicKey:pk});
     if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
@@ -424,7 +446,8 @@ async function cpnLoginPasskey(){
 
 #[cfg(test)]
 mod tests {
-    use super::webauthn_for_request;
+    use super::{start_authentication, webauthn_for_request};
+    use crate::account::with_test_data_dir;
 
     #[test]
     fn loopback_ip_host_builds_webauthn() {
@@ -448,5 +471,17 @@ mod tests {
             .expect("builder should accept localhost");
         assert_eq!(rp_id, "localhost");
         assert!(!wan.get_allowed_origins().is_empty());
+    }
+
+    #[test]
+    fn login_challenge_starts_without_registered_passkeys() {
+        with_test_data_dir(|| {
+            let (webauthn, _) =
+                webauthn_for_request(Some("localhost:2087"), false).expect("webauthn");
+            let (_, challenge) =
+                start_authentication(&webauthn).expect("discoverable challenge should start");
+            let json = serde_json::to_value(challenge).expect("challenge JSON");
+            assert!(json.get("publicKey").is_some());
+        });
     }
 }

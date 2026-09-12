@@ -196,7 +196,9 @@ fn prompt_port(default: u16) -> Result<u16, String> {
 fn prompt_account(
     _policy: &PasswordPolicy,
 ) -> Result<(String, Option<String>, bool, String), String> {
-    println!("\nFirst panel account (English UI default; change language later in the panel).");
+    println!(
+        "\nFirst panel account (the detected language is saved; change it later in the panel)."
+    );
     let username = prompt_choice("Username (empty = admin)", "")?;
     let generate = prompt_yes_no("Generate a strong password", true)?;
     let password = if generate {
@@ -233,19 +235,6 @@ fn prompt_account(
     Ok((username, password, generate, email))
 }
 
-fn prompt_install_detail() -> Result<InstallLogDetail, String> {
-    println!("\nInstallation log detail:");
-    println!("  1) Minimal  (high-level progress only; quieter console)");
-    println!("  2) Full     (stream package-manager output; more verbose)\n");
-    prompt_menu("Enter 1-2 for log detail", "1", |raw| match raw {
-        "1" | "minimal" | "min" | "m" | "quiet" => Ok(InstallLogDetail::Minimal),
-        "2" | "full" | "f" | "verbose" | "detail" | "detailed" => Ok(InstallLogDetail::Full),
-        other => Err(format!(
-            "Unknown detail choice `{other}`. Enter 1 (Minimal) or 2 (Full)."
-        )),
-    })
-}
-
 fn make_cli_state(bind_port: u16) -> Arc<AppState> {
     let (events, _) = broadcast::channel(256);
     Arc::new(AppState {
@@ -253,7 +242,7 @@ fn make_cli_state(bind_port: u16) -> Arc<AppState> {
             phase: "ready",
             progress: 0,
             message: "Ready for SSH/CLI install".into(),
-            language: "en".into(),
+            language: crate::http_helpers::detect_system_language(),
             listen_port: bind_port,
             ..InstallerStatus::default()
         }),
@@ -331,7 +320,8 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     }
 
     println!("\nCPN Server Panel · SSH/CLI Installer {VERSION}");
-    println!("Language: English (default). You can change language later in the panel.\n");
+    let detected_language = crate::http_helpers::detect_system_language();
+    println!("Detected language: {detected_language}. You can change it later in the panel.\n");
 
     let server = match prompt_server() {
         Ok(v) => v,
@@ -448,20 +438,12 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         Err(e) => return fail(e),
     }
 
-    let detail = match prompt_install_detail() {
-        Ok(v) => v,
-        Err(e) => return fail(e),
-    };
-    println!(
-        "Using {} installation logging for this run.",
-        match detail {
-            InstallLogDetail::Minimal => "minimal",
-            InstallLogDetail::Full => "full detailed",
-        }
-    );
-
     let state = make_cli_state(port);
-    state.set_install_log_detail(detail);
+    state.set_install_log_detail(InstallLogDetail::Full);
+    println!(
+        "Full installation logging is enabled: {}",
+        crate::installer::installation_log_path().display()
+    );
     let rx = state.events.subscribe();
     let pump = tokio::spawn(pump_events(rx));
     {
@@ -510,7 +492,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         generate,
         &email,
         policy,
-        "en",
+        &detected_language,
     ) {
         Ok(result) => {
             // Avoid cleartext username/email/password on stdout (CodeQL cleartext-logging).
@@ -538,7 +520,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     };
     crate::motd::print_panel_ready_banner(VERSION, port, host);
     println!("SSH logins will show the CPN MOTD (English) via /etc/profile.d/cpn-motd.sh.");
-    println!("Keep using English unless you change language in the panel.");
+    println!("The panel uses the detected language unless you change it in the language menu.");
     0
 }
 

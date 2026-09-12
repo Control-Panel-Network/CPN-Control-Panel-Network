@@ -1,6 +1,6 @@
 export type LocaleCode = "en" | "es" | "nb";
 
-/** Display order: English first (product default). */
+/** Display order in the language menu. */
 export const SUPPORTED_LOCALES: LocaleCode[] = ["en", "es", "nb"];
 
 export function normalizeLocale(raw: string | null | undefined): LocaleCode {
@@ -9,7 +9,7 @@ export function normalizeLocale(raw: string | null | undefined): LocaleCode {
   if (value.startsWith("nb") || value === "no" || value.startsWith("nn"))
     return "nb";
   if (value.startsWith("es")) return "es";
-  // Product default is English regardless of OS or browser locale.
+  // Unsupported locales fall back to English.
   return "en";
 }
 

@@ -96,7 +96,7 @@ fn login_valid_sets_session_and_redirects() {
             .await;
             let req = actix_web::test::TestRequest::post()
                 .uri("/login")
-                .set_form(&[
+                .set_form([
                     ("username", "Admin"),
                     ("password", password.as_str()),
                     ("remember_me", "0"),
@@ -146,7 +146,7 @@ fn login_invalid_returns_401_without_session_cookie() {
             .await;
             let req = actix_web::test::TestRequest::post()
                 .uri("/login")
-                .set_form(&[
+                .set_form([
                     ("username", "Admin"),
                     ("password", wrong.as_str()),
                     ("remember_me", "0"),

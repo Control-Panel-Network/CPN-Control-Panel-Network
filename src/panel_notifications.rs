@@ -152,7 +152,7 @@ mod tests {
             assert_eq!(unread_count(&store), 1);
             assert_eq!(store.items[0].id, item.id);
 
-            let updated = mark_read("Admin", &[item.id.clone()], false).expect("mark");
+            let updated = mark_read("Admin", std::slice::from_ref(&item.id), false).expect("mark");
             assert_eq!(unread_count(&updated), 0);
             assert!(updated.items[0].read);
         });

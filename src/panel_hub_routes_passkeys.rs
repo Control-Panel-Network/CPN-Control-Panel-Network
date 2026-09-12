@@ -154,26 +154,13 @@ pub async fn passkey_login_start(
     http: HttpRequest,
     body: web::Json<PasskeyLoginStartBody>,
 ) -> HttpResponse {
-    let username = body.username.trim();
-    if username.is_empty() {
-        return json_err(
-            actix_web::http::StatusCode::BAD_REQUEST,
-            "Username is required",
-        );
-    }
-    // Same error for missing accounts and accounts with no passkeys (no user enumeration).
-    if find_account(username).is_err() || !crate::account_passkeys::has_passkeys(username) {
-        return json_err(
-            actix_web::http::StatusCode::BAD_REQUEST,
-            "No passkeys registered for this account",
-        );
-    }
+    let _ = &body.username; // Accepted for backward compatibility; login is RP-wide.
     let https = request_https_from_headers(&http);
     let webauthn = match webauthn_for_request(host_header(&http), https) {
         Ok((w, _)) => w,
         Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
     };
-    match start_authentication(&webauthn, username) {
+    match start_authentication(&webauthn) {
         Ok((ceremony_id, rcr)) => {
             let mut value = match serde_json::to_value(&rcr) {
                 Ok(v) => v,

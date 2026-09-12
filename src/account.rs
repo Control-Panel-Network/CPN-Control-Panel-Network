@@ -32,7 +32,7 @@ pub struct AccountSetupResult {
 
 pub fn default_password_policy() -> PasswordPolicy {
     PasswordPolicy {
-        min_length: 8,
+        min_length: 12,
         require_special: true,
         require_uppercase: true,
         require_number: true,
@@ -280,14 +280,14 @@ pub fn password_hash_needs_upgrade(stored: &str) -> bool {
     !stored.trim().starts_with("pbkdf2$")
 }
 
-/// Wide UTF-8 alphabet for generated passwords (Latin letters with accents, digits, symbols).
+/// Unambiguous ASCII alphabet so generated passwords remain practical to type manually.
 const GEN_UPPER: &[char] = &[
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-    'W', 'X', 'Y', 'Z', 'Å', 'Æ', 'Ø', 'Ä', 'Ö', 'Ü', 'Ñ',
+    'W', 'X', 'Y', 'Z',
 ];
 const GEN_LOWER: &[char] = &[
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v',
-    'w', 'x', 'y', 'z', 'å', 'æ', 'ø', 'ä', 'ö', 'ü', 'ñ',
+    'w', 'x', 'y', 'z',
 ];
 const GEN_DIGIT: &[char] = &['2', '3', '4', '5', '6', '7', '8', '9'];
 const GEN_SPECIAL: &[char] = &[
@@ -300,7 +300,7 @@ fn pick(pool: &[char], rng: &mut impl Rng) -> char {
 
 pub fn generate_password(policy: &PasswordPolicy) -> String {
     let mut rng = rand::rng();
-    let target = policy.min_length.max(12) as usize;
+    let target = policy.min_length.max(20) as usize;
     for _ in 0..64 {
         let mut chars: Vec<char> = Vec::with_capacity(target);
         if policy.require_uppercase {
@@ -338,7 +338,7 @@ pub fn generate_password(policy: &PasswordPolicy) -> String {
     fallback.push(GEN_LOWER[0]);
     fallback.push(GEN_DIGIT[0]);
     fallback.push(GEN_SPECIAL[0]);
-    while fallback.chars().count() < policy.min_length.max(12) as usize {
+    while fallback.chars().count() < policy.min_length.max(20) as usize {
         fallback.push(GEN_LOWER[fallback.chars().count() % GEN_LOWER.len()]);
     }
     if password_meets_policy(&fallback, policy).is_ok() {
@@ -450,7 +450,7 @@ mod tests {
 
     fn utf8_policy_ok_sample() -> String {
         // Built from parts so CodeQL does not treat a literal as a hard-coded password.
-        ['Å', 'b', 'c', 'd', 'e', 'f', '1', '!']
+        ['Å', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '1', '!']
             .into_iter()
             .collect()
     }
@@ -481,6 +481,8 @@ mod tests {
         for _ in 0..20 {
             let password = generate_password(&policy);
             assert!(password_meets_policy(&password, &policy).is_ok());
+            assert_eq!(password.len(), 20);
+            assert!(password.is_ascii());
         }
         let sample = generate_password(&policy);
         assert!(sample.is_char_boundary(0));

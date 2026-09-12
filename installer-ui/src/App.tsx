@@ -9,6 +9,7 @@ import { CompleteScreen } from "./components/CompleteScreen";
 import { CompareModal } from "./components/CompareModal";
 import { AccountSetupScreen } from "./components/AccountSetupScreen";
 import { LanguageSelector } from "./i18n/LanguageSelector";
+import cpnLogo from "./assets/cpn-logo.png";
 import {
   connectInstallerEvents,
   getStatus,
@@ -19,7 +20,7 @@ import {
   startMaintenance,
   startServerInstall,
 } from "./api";
-import { I18nProvider, useI18n } from "./i18n";
+import { I18nProvider, normalizeLocale, useI18n } from "./i18n";
 import type {
   DatabaseEngine,
   InstallerEvent,
@@ -32,7 +33,7 @@ import type {
 } from "./types";
 
 const DEFAULT_POLICY: PasswordPolicy = {
-  min_length: 8,
+  min_length: 12,
   require_special: true,
   require_uppercase: true,
   require_number: true,
@@ -55,7 +56,7 @@ const INITIAL_STATUS: InstallerStatus = {
 };
 
 function AppShell() {
-  const { t, locale } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const [screen, setScreen] = useState<ScreenType>("preparing");
   const [selectedServer, setSelectedServer] = useState<ServerEngine | null>(
     null,
@@ -64,15 +65,13 @@ function AppShell() {
   const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [enableProxyFront, setEnableProxyFront] = useState(false);
-  const [installLogDetail, setInstallLogDetail] = useState<"minimal" | "full">(
-    "minimal",
-  );
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [compareOpen, setCompareOpen] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
+  const languageReady = useRef(false);
 
   const applyStatusScreen = useCallback(
     (next: InstallerStatus, delayComplete = false) => {
@@ -159,6 +158,18 @@ function AppShell() {
     getStatus()
       .then((next) => {
         if (disposed) return;
+        try {
+          const saved = window.localStorage.getItem("cpn-installer-locale");
+          const browserSupported = (
+            navigator.languages || [navigator.language]
+          ).some((language) => /^(es|en|nb|nn|no)(-|$)/i.test(language));
+          if (!saved && !browserSupported && next.language) {
+            setLocale(normalizeLocale(next.language));
+          }
+        } catch {
+          // Browser detection remains active when storage is unavailable.
+        }
+        languageReady.current = true;
         applyStatusScreen(next, false);
       })
       .catch(() => {
@@ -182,6 +193,7 @@ function AppShell() {
   }, [handleEvent, applyStatusScreen]);
 
   useEffect(() => {
+    if (!languageReady.current) return;
     void setLanguage(locale).catch(() => undefined);
   }, [locale]);
 
@@ -201,7 +213,7 @@ function AppShell() {
         database,
         install_phpmyadmin: installPhpmyadmin,
         enable_proxy_front: enableProxyFront,
-        install_log_detail: installLogDetail,
+        install_log_detail: "full",
       });
     } catch (error) {
       setStatus((current) => ({
@@ -289,6 +301,11 @@ function AppShell() {
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
+      <img
+        className="cpn-app-logo"
+        src={cpnLogo}
+        alt="CPN Control Panel Network"
+      />
       <LanguageSelector />
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -319,12 +336,10 @@ function AppShell() {
               database={database}
               installPhpmyadmin={installPhpmyadmin}
               enableProxyFront={enableProxyFront}
-              installLogDetail={installLogDetail}
               onSelectServer={setSelectedServer}
               onDatabaseChange={setDatabase}
               onPhpmyadminChange={setInstallPhpmyadmin}
               onProxyFrontChange={setEnableProxyFront}
-              onInstallLogDetailChange={setInstallLogDetail}
               onNetworkChange={handleNetworkChange}
               onContinue={beginServerInstall}
               onOpenCompare={() => setCompareOpen(true)}
@@ -345,8 +360,7 @@ function AppShell() {
             <AccountSetupScreen
               initialPolicy={status.password_policy ?? DEFAULT_POLICY}
               language={locale}
-              onCompleted={(nextStatus) => {
-                if (nextStatus) setStatus(nextStatus);
+              onCompleted={() => {
                 setScreen("complete");
               }}
             />

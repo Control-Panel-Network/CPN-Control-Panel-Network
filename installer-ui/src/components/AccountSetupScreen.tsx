@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, KeyRound, RefreshCw } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { setupAccount } from "../api";
 import { useI18n } from "../i18n";
 import type { PasswordPolicy } from "../types";
@@ -7,10 +7,40 @@ import type { PasswordPolicy } from "../types";
 interface Props {
   initialPolicy: PasswordPolicy;
   language: string;
-  onCompleted: (generatedPassword?: string | null) => void;
+  onCompleted: () => void;
 }
 
 type TlsMode = "starttls" | "tls" | "none";
+
+const PASSWORD_LENGTH = 20;
+const UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOWER = "abcdefghijkmnopqrstuvwxyz";
+const DIGITS = "23456789";
+const SYMBOLS = "!@#$%&*+-=?_";
+
+function randomIndex(max: number): number {
+  const value = new Uint32Array(1);
+  window.crypto.getRandomValues(value);
+  return value[0] % max;
+}
+
+function generateAsciiPassword(): string {
+  const all = UPPER + LOWER + DIGITS + SYMBOLS;
+  const chars = [
+    UPPER[randomIndex(UPPER.length)],
+    LOWER[randomIndex(LOWER.length)],
+    DIGITS[randomIndex(DIGITS.length)],
+    SYMBOLS[randomIndex(SYMBOLS.length)],
+  ];
+  while (chars.length < PASSWORD_LENGTH) {
+    chars.push(all[randomIndex(all.length)]);
+  }
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const swap = randomIndex(index + 1);
+    [chars[index], chars[swap]] = [chars[swap], chars[index]];
+  }
+  return chars.join("");
+}
 
 export function AccountSetupScreen({
   initialPolicy,
@@ -20,11 +50,16 @@ export function AccountSetupScreen({
   const { t, locale } = useI18n();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [generate, setGenerate] = useState(false);
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState("");
-  const [policy, setPolicy] = useState<PasswordPolicy>(initialPolicy);
-  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const policy: PasswordPolicy = {
+    ...initialPolicy,
+    min_length: Math.max(12, initialPolicy.min_length),
+    require_special: true,
+    require_uppercase: true,
+    require_number: true,
+  };
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [smtpEnabled, setSmtpEnabled] = useState(false);
@@ -39,23 +74,26 @@ export function AccountSetupScreen({
 
   const canSubmit = useMemo(() => {
     if (!recoveryEmail.trim()) return false;
-    if (!generate && !password) return false;
+    if (!password || password !== passwordConfirm) return false;
     if (smtpEnabled && (!smtpHost.trim() || !smtpFrom.trim())) return false;
     return true;
-  }, [generate, password, recoveryEmail, smtpEnabled, smtpHost, smtpFrom]);
+  }, [
+    password,
+    passwordConfirm,
+    recoveryEmail,
+    smtpEnabled,
+    smtpHost,
+    smtpFrom,
+  ]);
 
   const submit = async () => {
-    if (generatedPreview) {
-      onCompleted(generatedPreview);
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
       const result = await setupAccount({
         username: username.trim(),
-        password: generate ? undefined : password,
-        generate_password: generate,
+        password,
+        generate_password: false,
         recovery_email: recoveryEmail.trim(),
         password_policy: policy,
         language: locale || language,
@@ -75,11 +113,7 @@ export function AccountSetupScreen({
       if (result.setup_email_error && !result.setup_email_sent) {
         setError(result.setup_email_error);
       }
-      if (result.generated_password) {
-        setGeneratedPreview(result.generated_password);
-        return;
-      }
-      onCompleted(null);
+      onCompleted();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.accountError);
     } finally {
@@ -109,52 +143,55 @@ export function AccountSetupScreen({
             <span className="field-hint">{t.usernameHint}</span>
           </label>
 
-          <div>
-            <div className="flex flex-wrap gap-2 mb-3">
-              <button
-                type="button"
-                className={
-                  !generate
-                    ? "language-chip language-chip-active"
-                    : "language-chip"
-                }
-                onClick={() => setGenerate(false)}
-              >
-                {t.useOwnPassword}
-              </button>
-              <button
-                type="button"
-                className={
-                  generate
-                    ? "language-chip language-chip-active"
-                    : "language-chip"
-                }
-                onClick={() => {
-                  setGenerate(true);
-                  setPassword("");
-                }}
-              >
-                <RefreshCw size={14} /> {t.generatePassword}
-              </button>
-            </div>
-            {!generate && (
-              <label className="block">
-                <span className="text-sm font-semibold">{t.passwordLabel}</span>
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-sm font-semibold">{t.passwordLabel}</span>
+              <span className="password-input-row mt-2">
                 <input
-                  className="field-input mt-2"
-                  type="password"
+                  className="field-input"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="new-password"
                 />
-                <span className="field-hint">{t.passwordHint}</span>
-              </label>
-            )}
-            {generate && (
-              <p className="text-sm text-[#5f5e60] flex items-center gap-2">
-                <KeyRound size={16} /> {t.passwordHint}
-              </p>
-            )}
+                <button
+                  type="button"
+                  className="password-icon-button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((value) => !value)}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </span>
+              <span className="field-hint">{t.passwordHint}</span>
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold">
+                {t.passwordConfirmLabel}
+              </span>
+              <input
+                className="field-input mt-2"
+                type={showPassword ? "text" : "password"}
+                value={passwordConfirm}
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+                autoComplete="new-password"
+              />
+              {passwordConfirm && password !== passwordConfirm && (
+                <span className="field-error">{t.passwordMismatch}</span>
+              )}
+            </label>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                const generated = generateAsciiPassword();
+                setPassword(generated);
+                setPasswordConfirm(generated);
+                setShowPassword(true);
+              }}
+            >
+              <RefreshCw size={16} /> {t.generatePassword}
+            </button>
           </div>
 
           <label className="block">
@@ -305,82 +342,11 @@ export function AccountSetupScreen({
             )}
           </fieldset>
 
-          <fieldset className="border border-[#e5e8ec] rounded-2xl p-4">
-            <legend className="px-1 text-sm font-semibold">
-              {t.policyTitle}
-            </legend>
-            <label className="flex items-center justify-between gap-4 py-2">
-              <span>{t.policyMinLength}</span>
-              <input
-                className="field-input w-24"
-                type="number"
-                min={4}
-                max={128}
-                value={policy.min_length}
-                onChange={(event) =>
-                  setPolicy({
-                    ...policy,
-                    min_length: Number(event.target.value) || 8,
-                  })
-                }
-              />
-            </label>
-            <label className="flex items-center justify-between gap-4 py-2">
-              <span>{t.policyRequireSpecial}</span>
-              <input
-                type="checkbox"
-                checked={policy.require_special}
-                onChange={(event) =>
-                  setPolicy({
-                    ...policy,
-                    require_special: event.target.checked,
-                  })
-                }
-              />
-            </label>
-            <label className="flex items-center justify-between gap-4 py-2">
-              <span>{t.policyRequireUpper}</span>
-              <input
-                type="checkbox"
-                checked={policy.require_uppercase}
-                onChange={(event) =>
-                  setPolicy({
-                    ...policy,
-                    require_uppercase: event.target.checked,
-                  })
-                }
-              />
-            </label>
-            <label className="flex items-center justify-between gap-4 py-2">
-              <span>{t.policyRequireNumber}</span>
-              <input
-                type="checkbox"
-                checked={policy.require_number}
-                onChange={(event) =>
-                  setPolicy({ ...policy, require_number: event.target.checked })
-                }
-              />
-            </label>
-          </fieldset>
-
-          {generatedPreview && (
-            <div className="generated-box">
-              <p className="text-sm font-semibold mb-2">
-                {t.generatedPasswordNote}
-              </p>
-              <code className="break-all">{generatedPreview}</code>
-              <button
-                type="button"
-                className="secondary-button mt-3"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(generatedPreview);
-                  setCopied(true);
-                }}
-              >
-                {copied ? t.copied : t.copyPassword}
-              </button>
-            </div>
-          )}
+          <p className="password-policy-note">
+            {t.policyTitle}: {t.policyMinLength} {policy.min_length} ·{" "}
+            {t.policyRequireUpper} · {t.policyRequireNumber} ·{" "}
+            {t.policyRequireSpecial}.
+          </p>
 
           {error && <p className="error-box">{error}</p>}
 
@@ -392,12 +358,7 @@ export function AccountSetupScreen({
               void submit();
             }}
           >
-            {busy
-              ? t.accountSaving
-              : generatedPreview
-                ? t.continueLabel
-                : t.saveAccount}{" "}
-            <ArrowRight size={18} />
+            {busy ? t.accountSaving : t.saveAccount} <ArrowRight size={18} />
           </button>
         </div>
       </div>

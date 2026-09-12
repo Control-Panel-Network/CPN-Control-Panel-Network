@@ -109,7 +109,7 @@ pub fn print_help() {
 
 Usage:
   cpn-installer                 Interactive: choose Web UI or SSH/CLI (TTY). Non-TTY defaults to Web UI.
-  cpn-installer --web           Start the web installer UI (English by default)
+  cpn-installer --web           Start the web installer UI (auto-detected language)
   cpn-installer --ui            Alias for --web
   cpn-installer --cli           Interactive SSH/CLI installer (questions in the terminal)
   cpn-installer --ssh           Alias for --cli
@@ -127,7 +127,7 @@ Usage:
                                  Install MariaDB (default) + phpMyAdmin on Linux without the UI
 
 Notes:
-  Installer language defaults to English (en). Choose es or nb in the web UI language selector if needed.
+  Installer language follows the saved browser choice, browser locale, or system locale; unsupported locales use English.
   Fresh web-server installs also install MariaDB + phpMyAdmin by default (override with API/UI/CLI or --database / --skip-phpmyadmin).
   Default listen port is 2087 (Cloudflare-supported alternate HTTPS port; WHM HTTPS family). Lab installs may use another free port (for example 8787).
   Ports 1-65535 are accepted; prefer >1024 unless running as root.

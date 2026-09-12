@@ -126,7 +126,7 @@ pub fn print_installer_help(version: &str) {
     println!("  -V, --version              Show version");
     println!();
     println!(
-        "Language defaults to English. On a TTY without --web/--cli, you are prompted to choose."
+        "Language is detected from the browser/system. On a TTY without --web/--cli, you are prompted to choose."
     );
     println!("Ports 1-65535 are accepted. Prefer >1024 unless running as root.");
     println!(

@@ -26,6 +26,14 @@ use crate::smtp_settings::validate_smtp_input;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
+#[get("/cpn-logo.png")]
+pub async fn cpn_logo() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("image/png")
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(include_bytes!("../installer-ui/src/assets/cpn-logo.png").as_slice())
+}
+
 fn login_error_message(locale: &str) -> &'static str {
     match locale {
         "es" => "Usuario o contraseña no válidos.",
@@ -338,10 +346,8 @@ pub async fn account_setup(
             return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
         }
     };
-    let policy = request
-        .password_policy
-        .clone()
-        .unwrap_or_else(|| current.password_policy.clone());
+    // CPN owns the security baseline; clients cannot weaken it during setup.
+    let policy = crate::account::default_password_policy();
 
     let smtp_settings = if let Some(smtp_input) = request.smtp.as_ref() {
         match validate_smtp_input(smtp_input) {
