@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6-alpha.37] - 13/09/2026
+
+phpMyAdmin Open auto-login works from host browsers via panel reverse-proxy (Cargo `0.2.6-alpha.37`).
+
+### Fixed
+
+- **Open phpMyAdmin (auto-login)** no longer redirects to guest-only `http://127.0.0.1:8081/` (hangs under VirtualBox NAT). It redirects to same-origin `/phpmyadmin/cpn-signon.php?token=...` on the panel port.
+- Sign-on config is written to distro `/etc/phpMyAdmin/config.inc.php` (EL loads that path, not only the share copy), with `PmaAbsoluteUri=/phpmyadmin/`.
+
+### Added
+
+- Panel reverse-proxy mount `/phpmyadmin/` to loopback OLS/nginx `:8081` (session required), matching the webmail proxy pattern.
+- Open control uses `target=_blank` so the panel page stays open.
+
+### Notes
+
+- Host `:8081` NAT forward is optional; panel port alone is enough.
+- No CyberPanel branding; secrets are never shown in the Open URL.
+
+
 ### Changed
 
 - **Email → MTA-STS** and **Email → BIMI** are gated behind free Plugin Store packages mtaSts and imi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.

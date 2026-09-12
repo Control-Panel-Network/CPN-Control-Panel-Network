@@ -568,11 +568,21 @@ async fn panel_catch_all(
     req: HttpRequest,
     payload: web::Payload,
     path: web::Path<String>,
+    state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     if cpn_installer::panel_webmail::webmail_ready()
         && cpn_installer::panel_webmail::path_should_proxy_webmail(req.path())
     {
         return cpn_installer::panel_webmail_proxy::webmail_panel_proxy(req, payload).await;
+    }
+    if cpn_installer::panel_phpmyadmin_proxy::path_should_proxy_phpmyadmin(req.path()) {
+        if !cpn_installer::panel_phpmyadmin_proxy::allowed_proxy_method(req.method()) {
+            return HttpResponse::MethodNotAllowed().finish();
+        }
+        if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
+            return cpn_installer::panel_hub_http::login_redirect();
+        }
+        return cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await;
     }
     if matches!(*req.method(), Method::GET | Method::HEAD) {
         return static_asset_for(&path.into_inner());

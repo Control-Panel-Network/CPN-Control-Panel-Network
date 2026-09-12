@@ -160,6 +160,7 @@ pub mod panel_theme_chrome;
 pub mod panel_theme_routes;
 pub mod panel_theme_store;
 pub mod panel_webauthn;
+pub mod panel_phpmyadmin_proxy;
 pub mod panel_webmail;
 pub mod panel_webmail_proxy;
 pub mod panel_website_logs;
