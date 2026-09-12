@@ -1,4 +1,4 @@
-﻿//! Panel API tokens (`cpn_` prefix). Secrets hashed with SHA256 at rest.
+//! Panel API tokens (`cpn_` prefix). Secrets hashed with SHA256 at rest.
 //! Store: `/var/lib/cpn/api-tokens.json` (mode 600). CPN session auth remains primary.
 
 use crate::account::now_unix;
@@ -230,9 +230,10 @@ pub fn authenticate_bearer(raw: &str) -> Option<(String, Vec<String>)> {
     let _ = ensure_store_migrated();
     let hash = hash_token(token);
     let mut store = load_store();
-    let idx = store.tokens.iter().position(|t| {
-        t.token_hash == hash && t.revoked_at_unix.is_none()
-    })?;
+    let idx = store
+        .tokens
+        .iter()
+        .position(|t| t.token_hash == hash && t.revoked_at_unix.is_none())?;
     let record = &mut store.tokens[idx];
     record.last_used_at_unix = Some(now_unix());
     let username = record.username.clone();
@@ -250,8 +251,8 @@ mod tests {
     fn issue_list_revoke_roundtrip() {
         with_test_data_dir(|| {
             ensure_store_migrated().unwrap();
-            let (pub1, secret) = issue_token("admin", "lab token", &["read".into(), "dns".into()])
-                .unwrap();
+            let (pub1, secret) =
+                issue_token("admin", "lab token", &["read".into(), "dns".into()]).unwrap();
             assert!(secret.starts_with(TOKEN_PREFIX));
             assert!(!pub1.revoked);
             assert_eq!(pub1.scopes, vec!["read", "dns"]);

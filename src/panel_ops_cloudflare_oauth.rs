@@ -329,7 +329,9 @@ pub fn finish_oauth_callback(code: &str, state: &str, listen_port: u16) -> Resul
         serde_json::from_str(&body).map_err(|e| format!("OAuth token response invalid: {e}"))?;
     if let Some(err) = parsed.error {
         let detail = parsed.error_description.unwrap_or_default();
-        return Err(format!("Cloudflare OAuth error: {err} {detail}").trim().to_string());
+        return Err(format!("Cloudflare OAuth error: {err} {detail}")
+            .trim()
+            .to_string());
     }
     let access = parsed
         .access_token
@@ -340,7 +342,9 @@ pub fn finish_oauth_callback(code: &str, state: &str, listen_port: u16) -> Resul
         .scope
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_SCOPES.into());
-    let expires_at = parsed.expires_in.map(|secs| now_unix().saturating_add(secs));
+    let expires_at = parsed
+        .expires_in
+        .map(|secs| now_unix().saturating_add(secs));
     let link = CloudflareOauthLink {
         schema_version: 1,
         access_token: access.clone(),

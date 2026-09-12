@@ -4,8 +4,8 @@
 use crate::panel_hub_pages_cloudflare_table::records_table;
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public, format_verify_time};
-use crate::panel_ops_cloudflare_oauth::oauth_public;
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
+use crate::panel_ops_cloudflare_oauth::oauth_public;
 use crate::panel_ops_cloudflare_verify::list_accessible_zones;
 use crate::sites::list_sites;
 
@@ -306,7 +306,11 @@ fn api_body(listen_port: u16) -> String {
         oauth_status = oauth_status,
         oauth_client_id = html_escape(&oauth.client_id),
         oauth_secret_field = oauth_secret_field,
-        oauth_connect_dis = if oauth.client_configured { "" } else { " disabled" },
+        oauth_connect_dis = if oauth.client_configured {
+            ""
+        } else {
+            " disabled"
+        },
         oauth_disconnect_dis = if oauth.linked { "" } else { " disabled" },
         status_banner = status_banner,
         configured = configured,

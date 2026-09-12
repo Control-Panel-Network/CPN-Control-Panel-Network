@@ -215,7 +215,9 @@ pub fn api_access_page(
       </form>"#,
     );
     if tokens.is_empty() {
-        body.push_str(r#"<p class="empty-state" style="margin-top:20px;">No API tokens issued yet.</p>"#);
+        body.push_str(
+            r#"<p class="empty-state" style="margin-top:20px;">No API tokens issued yet.</p>"#,
+        );
     } else {
         body.push_str(
             r#"<h3 style="margin:24px 0 12px;">Active tokens</h3>

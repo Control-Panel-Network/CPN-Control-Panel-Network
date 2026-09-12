@@ -4,8 +4,8 @@ use crate::account::{default_password_policy, load_bootstrap};
 use crate::account_mgmt::{create_account, delete_account, reset_account_password};
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_api_tokens::{issue_token, list_tokens, revoke_token};
+use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_account::{
     acl_create_page, acl_modify_page, api_access_page, grant_from_form_fields, users_create_page,
     users_create_success_page, users_list_page, users_password_success_page, users_plans_hub_main,
