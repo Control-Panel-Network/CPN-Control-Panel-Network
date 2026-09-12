@@ -162,7 +162,6 @@ pub mod proxy_front;
 pub mod release_verify;
 pub mod releases;
 pub mod releases_cache;
-pub mod releases_direct;
 pub mod releases_fetch;
 pub mod resource_accounts;
 pub mod service_detect;

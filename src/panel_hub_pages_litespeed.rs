@@ -50,7 +50,10 @@ fn open_page(
             ],
             title,
             blurb,
-            &not_configured_body(missing_msg),
+            &not_configured_body(
+                missing_msg,
+                "Install OpenLiteSpeed or LiteSpeed Enterprise, then refresh this page.",
+            ),
             notice,
             error,
         );
