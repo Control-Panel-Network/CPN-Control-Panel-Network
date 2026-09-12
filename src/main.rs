@@ -25,41 +25,43 @@ use cpn_installer::model::{
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_hub_routes::{
-    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_route,
-    backups_create_route, backups_destinations_route, backups_destinations_save,
-    backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
-    backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
-    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
-    cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
-    databases_delete_get, databases_delete_post, databases_manager_route,
-    databases_phpmyadmin_open, databases_phpmyadmin_route, email_accounts_route,
-    email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
-    email_catchall_save, email_create_route, email_debugger, email_delivery_route,
-    email_dkim_ensure, email_dkim_route, email_forwarding_route, email_forwarding_save,
-    email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf, email_mta_sts_route,
-    email_mta_sts_save, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
-    email_spamassassin, email_webmail_app_route, email_webmail_regenerate_path,
-    email_webmail_route, email_webmail_settings_save, ftp_accounts_route, ftp_create,
-    ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
-    ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
-    passkey_register_finish, passkey_register_start, security_fail2ban, security_firewall,
-    security_firewall_enable, security_malware, security_modsec, security_modsec_rules,
-    security_page, security_rule_packs, security_ssh, security_ssh_toggle, security_ssl,
-    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
-    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
-    server_dns_nameservers, server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete,
-    server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
-    server_files_page, server_litespeed_downgrade, server_litespeed_enterprise_page,
-    server_litespeed_page, server_litespeed_serial, server_litespeed_tier,
-    server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
-    server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
-    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
-    server_php_extensions, server_php_tuning, server_processes_page, server_services_control,
-    server_services_page, settings_connect_page, settings_design_page, settings_page,
-    settings_port_page, settings_setup_page, settings_version_page, users_create_get,
-    users_create_post, users_delete_post, users_list_route, users_modify_get, users_password_post,
-    users_plans_page, users_profile_details_post, users_profile_password_post, users_profile_route,
+    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
+    api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
+    backups_destinations_save, backups_gdrive_route, backups_remote_route, backups_restore_route,
+    backups_schedule_route, backups_schedule_save, cloudflare_add_post, cloudflare_delete_post,
+    cloudflare_dns_get, cloudflare_oauth_callback_get, cloudflare_oauth_client_post,
+    cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post, cloudflare_proxy_post,
+    cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
+    databases_all_route, databases_create_get, databases_create_post, databases_delete_get,
+    databases_delete_post, databases_manager_route, databases_phpmyadmin_open,
+    databases_phpmyadmin_route, email_accounts_route, email_bimi_push_cf, email_bimi_route,
+    email_bimi_save, email_catchall_route, email_catchall_save, email_create_route, email_debugger,
+    email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
+    email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_pattern_fwd, email_plus,
+    email_queue, email_rspamd, email_spamassassin, email_webmail_app_route,
+    email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
+    ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset,
+    ftp_reset_password_post, ftp_reset_post, passkey_delete_post, passkey_login_finish,
+    passkey_login_start, passkey_register_finish, passkey_register_start, security_fail2ban,
+    security_firewall, security_firewall_enable, security_malware, security_modsec,
+    security_modsec_rules, security_page, security_rule_packs, security_ssh, security_ssh_toggle,
+    security_ssl, security_ssl_defaults, security_ssl_hostname, security_ssl_issue,
+    security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
+    server_dns_defaults, server_dns_nameservers, server_dns_nameservers_save, server_dns_zones,
+    server_dns_zones_delete, server_dns_zones_save, server_docker_apps, server_docker_containers,
+    server_docker_images, server_files_page, server_litespeed_downgrade,
+    server_litespeed_enterprise_page, server_litespeed_page, server_litespeed_serial,
+    server_litespeed_tier, server_litespeed_upgrade, server_litespeed_webadmin_url,
+    server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
+    server_openlitespeed_password, server_openlitespeed_reset_cpn, server_packages_page,
+    server_page, server_php_configs, server_php_extensions, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    settings_design_page, settings_page, settings_port_page, settings_setup_page,
+    settings_version_page, users_create_get, users_create_post, users_delete_post,
+    users_list_route, users_modify_get, users_password_post, users_plans_page,
+    users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
     users_reseller_route,
 };
@@ -699,6 +701,18 @@ async fn main() -> std::io::Result<()> {
     };
     apply_startup_network_flags(&args, listen_port);
     purge_expired_migration();
+    match cpn_installer::panel_migrate::run_pending_migrations() {
+        Ok(applied) if !applied.is_empty() => {
+            eprintln!(
+                "cpn-installer: applied panel migrations: {}",
+                applied.join(", ")
+            );
+        }
+        Err(error) => {
+            eprintln!("cpn-installer: warning: panel migrations: {error}");
+        }
+        _ => {}
+    }
     #[cfg(unix)]
     if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
         eprintln!(
@@ -978,6 +992,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_dns_nameservers_save)
             .service(cloudflare_dns_get)
             .service(server_cloudflare_redirect)
+            .service(cloudflare_oauth_client_post)
+            .service(cloudflare_oauth_connect_post)
+            .service(cloudflare_oauth_callback_get)
+            .service(cloudflare_oauth_disconnect_post)
             .service(cloudflare_settings_post)
             .service(cloudflare_test_post)
             .service(cloudflare_sync_post)
@@ -1030,6 +1048,8 @@ async fn main() -> std::io::Result<()> {
             .service(users_delete_post)
             .service(users_reseller_route)
             .service(api_access_route)
+            .service(api_access_create_post)
+            .service(api_access_revoke_post)
             .service(acl_create_get)
             .service(acl_create_post)
             .service(acl_modify_get)

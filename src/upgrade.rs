@@ -302,6 +302,20 @@ pub async fn run_maintenance(
         }
     }
 
+    state
+        .progress("verifying", 98, "Applying panel data migrations")
+        .await;
+    match crate::panel_migrate::run_pending_migrations() {
+        Ok(applied) => {
+            for id in applied {
+                state.log(format!("migration applied: {id}"), "info");
+            }
+        }
+        Err(error) => {
+            state.log(format!("Warning: panel migrations: {error}"), "error");
+        }
+    }
+
     let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     status.phase = "completed";
     status.progress = 100;

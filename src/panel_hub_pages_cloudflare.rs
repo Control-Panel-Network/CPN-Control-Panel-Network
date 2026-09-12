@@ -5,6 +5,7 @@ use crate::panel_hub_pages_cloudflare_table::records_table;
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public, format_verify_time};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
+use crate::panel_ops_cloudflare_oauth::oauth_public;
 use crate::panel_ops_cloudflare_verify::list_accessible_zones;
 use crate::sites::list_sites;
 
@@ -176,8 +177,9 @@ fn manage_body(
     )
 }
 
-fn api_body() -> String {
+fn api_body(listen_port: u16) -> String {
     let pubv = cloudflare_public();
+    let oauth = oauth_public(listen_port);
     let sync_en = if pubv.sync_local { " selected" } else { "" };
     let sync_dis = if pubv.sync_local { "" } else { " selected" };
     let tok_sel = if pubv.auth_type == "global_key" {
@@ -235,9 +237,44 @@ fn api_body() -> String {
         }
     };
     let test_disabled = if pubv.configured { "" } else { " disabled" };
+    let oauth_status = if oauth.linked {
+        format!(
+            r#"<p class="panel-notice success" role="status"><strong>OAuth linked</strong> · scopes: <code>{}</code></p>"#,
+            html_escape(&oauth.scopes)
+        )
+    } else if oauth.client_configured {
+        r#"<p class="panel-notice" role="status">OAuth client saved. Click <strong>Connect with Cloudflare</strong> to authorize DNS access.</p>"#.into()
+    } else {
+        r#"<p class="muted">Optional: register a Cloudflare OAuth app and connect instead of pasting an API token (DNS link only; not panel login).</p>"#.into()
+    };
+    let oauth_secret_field = if oauth.client_configured {
+        format!(
+            r#"<p class="muted">Client secret on disk: <code>{}</code> (masked). Leave blank to keep the current secret.</p>"#,
+            html_escape(&oauth.client_secret_masked)
+        )
+    } else {
+        String::new()
+    };
     format!(
         r#"{tabs}
-<h3>Cloudflare API Configuration</h3>
+<h3>Cloudflare OAuth (DNS link)</h3>
+<p class="muted">Redirect URI for your Cloudflare OAuth app: <code>{redirect}</code></p>
+{oauth_status}
+<form method="post" action="/dns/cloudflare/oauth/client" class="stack-form" style="max-width:520px;margin-bottom:16px;">
+  <label for="oauth_client_id">OAuth Client ID</label>
+  <input id="oauth_client_id" name="client_id" type="text" value="{oauth_client_id}" autocomplete="off">
+  <label for="oauth_client_secret">OAuth Client Secret</label>
+  <input id="oauth_client_secret" name="client_secret" type="password" autocomplete="new-password" placeholder="Paste client secret">
+  {oauth_secret_field}
+  <button type="submit" class="btn-secondary">Save OAuth client</button>
+</form>
+<form method="post" action="/dns/cloudflare/oauth/connect" style="display:inline-block;margin-right:8px;">
+  <button type="submit" class="btn-primary"{oauth_connect_dis}>Connect with Cloudflare</button>
+</form>
+<form method="post" action="/dns/cloudflare/oauth/disconnect" style="display:inline-block;" onsubmit="return confirm('Disconnect Cloudflare OAuth?');">
+  <button type="submit" class="btn-secondary"{oauth_disconnect_dis}>Disconnect OAuth</button>
+</form>
+<h3 style="margin-top:28px;">Manual API token (fallback)</h3>
 {status_banner}
 {configured}
 <form method="post" action="/dns/cloudflare/settings" class="stack-form" style="max-width:520px;">
@@ -263,8 +300,18 @@ fn api_body() -> String {
 <form method="post" action="/dns/cloudflare/test" style="margin-top:12px;">
   <button type="submit" class="btn-secondary"{test_disabled}>Test connection</button>
 </form>
-<p class="muted">Test connection calls Cloudflare token verify (API Token) or account check (Global Key), then lists accessible zones. Tokens are never shown in full. Stored at <code>/var/lib/cpn/cloudflare.json</code> (mode 600).</p>"#,
+<p class="muted">Test connection calls Cloudflare token verify (API Token), account check (Global Key), or OAuth refresh, then lists accessible zones. Secrets are never shown in full. Stored at <code>/var/lib/cpn/cloudflare.json</code> (mode 600).</p>"#,
         tabs = tab_bar("api"),
+        redirect = html_escape(&oauth.redirect_uri),
+        oauth_status = oauth_status,
+        oauth_client_id = html_escape(&oauth.client_id),
+        oauth_secret_field = oauth_secret_field,
+        oauth_connect_dis = if oauth.client_configured {
+            ""
+        } else {
+            " disabled"
+        },
+        oauth_disconnect_dis = if oauth.linked { "" } else { " disabled" },
         status_banner = status_banner,
         configured = configured,
         email = html_escape(&pubv.email),
@@ -281,11 +328,12 @@ pub fn cloudflare_dns_page(
     domain: &str,
     records: Result<Vec<CfDnsRecord>, String>,
     filter_type: &str,
+    listen_port: u16,
     notice: Option<&str>,
     error: Option<&str>,
 ) -> String {
     let body = if tab == "api" {
-        api_body()
+        api_body(listen_port)
     } else {
         manage_body(domain, records, filter_type, None)
     };

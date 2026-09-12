@@ -79,6 +79,22 @@ fn request_secure(http: &HttpRequest) -> bool {
 }
 
 pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
+    if let Some(auth) = http
+        .headers()
+        .get(actix_web::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+    {
+        let raw = auth.trim();
+        if raw.len() > 7 && raw[..7].eq_ignore_ascii_case("bearer ") {
+            let bearer = raw[7..].trim();
+            if bearer.starts_with(crate::panel_api_tokens::TOKEN_PREFIX)
+                && let Some((username, _scopes)) =
+                    crate::panel_api_tokens::authenticate_bearer(bearer)
+            {
+                return Some(username);
+            }
+        }
+    }
     let cookie = http
         .headers()
         .get(actix_web::http::header::COOKIE)

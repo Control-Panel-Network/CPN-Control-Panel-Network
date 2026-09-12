@@ -11,12 +11,14 @@ pub enum CloudflareAuthType {
     #[default]
     ApiToken,
     GlobalKey,
+    Oauth,
 }
 
 impl CloudflareAuthType {
     pub fn parse(raw: &str) -> Self {
         match raw.trim().to_ascii_lowercase().as_str() {
             "global_key" | "global" | "email_key" => Self::GlobalKey,
+            "oauth" | "oauth2" => Self::Oauth,
             _ => Self::ApiToken,
         }
     }
@@ -25,6 +27,7 @@ impl CloudflareAuthType {
         match self {
             Self::ApiToken => "api_token",
             Self::GlobalKey => "global_key",
+            Self::Oauth => "oauth",
         }
     }
 }
@@ -73,6 +76,7 @@ pub struct CloudflarePublic {
     pub auth_type: String,
     pub email: String,
     pub token_masked: String,
+    pub oauth_linked: bool,
     pub sync_local: bool,
     pub last_verify_ok: Option<bool>,
     pub last_verify_at_unix: Option<u64>,
@@ -133,6 +137,7 @@ pub fn load_cloudflare() -> CloudflareSettings {
 pub fn cloudflare_public() -> CloudflarePublic {
     let s = load_cloudflare();
     let configured = !s.api_token.trim().is_empty();
+    let oauth_linked = s.auth_type == CloudflareAuthType::Oauth && configured;
     CloudflarePublic {
         configured,
         auth_type: s.auth_type.as_str().to_string(),
@@ -142,12 +147,50 @@ pub fn cloudflare_public() -> CloudflarePublic {
         } else {
             String::new()
         },
+        oauth_linked,
         sync_local: s.sync_local,
         last_verify_ok: s.last_verify_ok,
         last_verify_at_unix: s.last_verify_at_unix,
         last_verify_message: s.last_verify_message,
         last_zone_count: s.last_zone_count,
     }
+}
+
+/// Migration 0003 hook: ensure cloudflare settings meta for OAuth schema bump.
+pub fn ensure_oauth_schema_migrated() -> Result<(), String> {
+    crate::panel_ops_cloudflare_oauth::ensure_oauth_stores_migrated()?;
+    let path = paths::join_data("cloudflare-settings-meta.json");
+    if path.exists() {
+        return Ok(());
+    }
+    let meta = serde_json::json!({
+        "schema_version": 2,
+        "auth_type": "api_token",
+        "oauth_enabled": false,
+        "updated_at_unix": now_unix(),
+    });
+    let json = serde_json::to_string_pretty(&meta)
+        .map_err(|e| format!("Could not serialize cloudflare settings meta: {e}"))?;
+    let dir = paths::default_data_dir();
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&path)
+        .map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+    file.write_all(json.as_bytes())
+        .map_err(|e| format!("Could not save cloudflare settings meta: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 /// Persist a Test connection outcome without touching the secret token.
@@ -256,7 +299,7 @@ pub fn save_cloudflare_settings(
         return Err("Cloudflare email is required when using a Global API Key".into());
     }
     current.sync_local = sync_local;
-    current.schema_version = 1;
+    current.schema_version = 2;
     current.updated_at_unix = now_unix();
     persist_cloudflare(&current)?;
     Ok("Cloudflare API configuration saved".into())

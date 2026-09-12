@@ -112,6 +112,10 @@ pub fn verify_cloudflare_connection() -> Result<CloudflareVerifyResult, String> 
                 }
             }
         }
+        CloudflareAuthType::Oauth => {
+            let _ = crate::panel_ops_cloudflare_oauth::refresh_oauth_access_if_needed();
+            "oauth".into()
+        }
     };
 
     match list_accessible_zones(100) {
