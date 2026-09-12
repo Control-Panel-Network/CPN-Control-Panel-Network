@@ -91,7 +91,7 @@ pub async fn apps_page(
         loc.push(sep);
         loc.push_str(&format!("error={}", urlencoding_simple(error)));
     }
-    HttpResponse::PermanentRedirect()
+    HttpResponse::MovedPermanently()
         .append_header(("Location", loc))
         .finish()
 }
