@@ -141,11 +141,7 @@ pub async fn apply_release(
                 download_file(&asset.browser_download_url, &path).await?;
                 verify_downloaded_artifact(state, release, &path).await?;
                 state
-                    .progress(
-                        "installing",
-                        60,
-                        format!("Installing RPM ({})", asset.name),
-                    )
+                    .progress("installing", 60, format!("Installing RPM ({})", asset.name))
                     .await;
                 crate::upgrade_pkg::install_rpm(&path, force, allow_oldpackage).await?;
                 let _ = std::fs::remove_file(&path);

@@ -2,8 +2,8 @@
 
 use crate::installer::AppState;
 use crate::manifest::{
-    self, core_paths_for_repair, detect_existing_install, installer_bin,
-    preserve_paths_for_repair, record_install,
+    self, core_paths_for_repair, detect_existing_install, installer_bin, preserve_paths_for_repair,
+    record_install,
 };
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
 use crate::releases::{self, CpnRelease, compare_versions, is_retag_migration, normalize_version};

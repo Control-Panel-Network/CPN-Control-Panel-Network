@@ -256,7 +256,8 @@ fn resolve_package_version(
             rpm_ver
         }
         (Some(manifest_ver), None)
-            if is_retired_cpn_1_0_identity(&manifest_ver) && is_active_0_2_line(running_version) =>
+            if is_retired_cpn_1_0_identity(&manifest_ver)
+                && is_active_0_2_line(running_version) =>
         {
             running_version.to_string()
         }
