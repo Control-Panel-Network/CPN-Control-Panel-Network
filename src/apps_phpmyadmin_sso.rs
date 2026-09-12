@@ -285,8 +285,9 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
 /// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
     let _ = ensure_ols_phpmyadmin_listener();
-    let share = phpmyadmin_share_dir()
-        .ok_or_else(|| "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string())?;
+    let share = phpmyadmin_share_dir().ok_or_else(|| {
+        "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
+    })?;
     let (user, pass) = create_ephemeral_db_user()?;
     let token = random_token();
     let dir = ensure_token_dir(&share)?;
