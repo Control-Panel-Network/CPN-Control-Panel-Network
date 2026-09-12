@@ -105,15 +105,15 @@ const nb: LocaleMessages = {
   usernamePlaceholder: "admin",
   passwordLabel: "Passord",
   passwordConfirmLabel: "Bekreft passord",
-  passwordHint:
-    "Bruk minst 12 tegn med stor bokstav, tall og symbol.",
+  passwordHint: "Bruk minst 12 tegn med stor bokstav, tall og symbol.",
   generatePassword: "Generer og fyll inn passord",
   useOwnPassword: "Jeg velger mitt eget passord",
   generatedPasswordNote: "Kopier dette passordet nå. Det vises bare én gang.",
   copyPassword: "Kopier",
   copied: "Kopiert",
   emailLabel: "Gjenopprettings-e-post",
-  emailHint: "Brukes til kontovarsler. Passord gjenopprettes fra serverterminalen.",
+  emailHint:
+    "Brukes til kontovarsler. Passord gjenopprettes fra serverterminalen.",
   emailPlaceholder: "deg@eksempel.no",
   policyTitle: "Passordpolicy",
   policyMinLength: "Minimumslengde",

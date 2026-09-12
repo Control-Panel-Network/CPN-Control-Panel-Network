@@ -77,7 +77,14 @@ export function AccountSetupScreen({
     if (!password || password !== passwordConfirm) return false;
     if (smtpEnabled && (!smtpHost.trim() || !smtpFrom.trim())) return false;
     return true;
-  }, [password, passwordConfirm, recoveryEmail, smtpEnabled, smtpHost, smtpFrom]);
+  }, [
+    password,
+    passwordConfirm,
+    recoveryEmail,
+    smtpEnabled,
+    smtpHost,
+    smtpFrom,
+  ]);
 
   const submit = async () => {
     setBusy(true);
@@ -336,7 +343,9 @@ export function AccountSetupScreen({
           </fieldset>
 
           <p className="password-policy-note">
-            {t.policyTitle}: {t.policyMinLength} {policy.min_length} · {t.policyRequireUpper} · {t.policyRequireNumber} · {t.policyRequireSpecial}.
+            {t.policyTitle}: {t.policyMinLength} {policy.min_length} ·{" "}
+            {t.policyRequireUpper} · {t.policyRequireNumber} ·{" "}
+            {t.policyRequireSpecial}.
           </p>
 
           {error && <p className="error-box">{error}</p>}
@@ -349,10 +358,7 @@ export function AccountSetupScreen({
               void submit();
             }}
           >
-            {busy
-              ? t.accountSaving
-              : t.saveAccount}{" "}
-            <ArrowRight size={18} />
+            {busy ? t.accountSaving : t.saveAccount} <ArrowRight size={18} />
           </button>
         </div>
       </div>

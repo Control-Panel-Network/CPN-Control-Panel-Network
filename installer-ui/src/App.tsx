@@ -160,9 +160,9 @@ function AppShell() {
         if (disposed) return;
         try {
           const saved = window.localStorage.getItem("cpn-installer-locale");
-          const browserSupported = (navigator.languages || [navigator.language]).some(
-            (language) => /^(es|en|nb|nn|no)(-|$)/i.test(language),
-          );
+          const browserSupported = (
+            navigator.languages || [navigator.language]
+          ).some((language) => /^(es|en|nb|nn|no)(-|$)/i.test(language));
           if (!saved && !browserSupported && next.language) {
             setLocale(normalizeLocale(next.language));
           }
@@ -301,7 +301,11 @@ function AppShell() {
 
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
-      <img className="cpn-app-logo" src={cpnLogo} alt="CPN Control Panel Network" />
+      <img
+        className="cpn-app-logo"
+        src={cpnLogo}
+        alt="CPN Control Panel Network"
+      />
       <LanguageSelector />
       <AnimatePresence mode="wait" initial={false}>
         <motion.div

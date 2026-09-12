@@ -112,8 +112,7 @@ const es: LocaleMessages = {
   usernamePlaceholder: "admin",
   passwordLabel: "Contraseña",
   passwordConfirmLabel: "Confirmar contraseña",
-  passwordHint:
-    "Usa al menos 12 caracteres con mayúscula, número y símbolo.",
+  passwordHint: "Usa al menos 12 caracteres con mayúscula, número y símbolo.",
   generatePassword: "Generar y rellenar contraseña",
   useOwnPassword: "Elegiré mi propia contraseña",
   generatedPasswordNote:
@@ -121,7 +120,8 @@ const es: LocaleMessages = {
   copyPassword: "Copiar",
   copied: "Copiado",
   emailLabel: "Correo de recuperación",
-  emailHint: "Se usa para avisos de cuenta. La contraseña se recupera desde la terminal del servidor.",
+  emailHint:
+    "Se usa para avisos de cuenta. La contraseña se recupera desde la terminal del servidor.",
   emailPlaceholder: "tu@ejemplo.com",
   policyTitle: "Política de contraseña",
   policyMinLength: "Longitud mínima",
