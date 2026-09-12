@@ -5,6 +5,7 @@ use crate::account_mgmt::{create_account, delete_account, reset_account_password
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_api_tokens::{issue_token, list_tokens, revoke_token};
 use crate::panel_hub_pages_account::{
     acl_create_page, acl_modify_page, api_access_page, grant_from_form_fields, users_create_page,
     users_create_success_page, users_list_page, users_password_success_page, users_plans_hub_main,
@@ -253,16 +254,80 @@ pub async fn users_reseller_route(
 }
 
 #[get("/account/api-access")]
-pub async fn api_access_route(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn api_access_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
+    let admin = is_panel_admin(&user);
+    let tokens = list_tokens(&user, admin);
     html_ok(panel_shell(
         &user,
         "users",
         "API Access",
-        &api_access_page(),
+        &api_access_page(
+            &tokens,
+            query.get("issued").map(String::as_str),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ApiTokenCreateForm {
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    scopes: Vec<String>,
+}
+
+#[post("/account/api-access/create")]
+pub async fn api_access_create_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<ApiTokenCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match issue_token(&user, &form.label, &form.scopes) {
+        Ok((_public, secret)) => {
+            let loc = format!(
+                "/account/api-access?issued={}",
+                crate::panel_hub_http::urlencoding_simple(&secret)
+            );
+            HttpResponse::SeeOther()
+                .append_header(("Location", loc))
+                .finish()
+        }
+        Err(error) => redirect_notice("/account/api-access", None, Some(&error)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ApiTokenRevokeForm {
+    #[serde(default)]
+    token_id: String,
+}
+
+#[post("/account/api-access/revoke")]
+pub async fn api_access_revoke_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<ApiTokenRevokeForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let admin = is_panel_admin(&user);
+    match revoke_token(&form.token_id, &user, admin) {
+        Ok(()) => redirect_notice("/account/api-access", Some("Token revoked"), None),
+        Err(error) => redirect_notice("/account/api-access", None, Some(&error)),
+    }
 }
 
 #[get("/account/acl/create")]

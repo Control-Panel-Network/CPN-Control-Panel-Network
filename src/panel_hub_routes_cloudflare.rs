@@ -9,6 +9,9 @@ use crate::panel_ops_cloudflare_api::{
     create_dns_record, delete_dns_record, list_dns_records, set_proxy,
     sync_local_zone_to_cloudflare, update_dns_record,
 };
+use crate::panel_ops_cloudflare_oauth::{
+    begin_oauth_connect, disconnect_oauth, finish_oauth_callback, save_oauth_client,
+};
 use crate::panel_ops_cloudflare_verify::verify_cloudflare_connection;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -65,6 +68,7 @@ pub async fn cloudflare_dns_get(
     } else {
         Ok(vec![])
     };
+    let listen_port = state.bind_port;
     html_ok(panel_shell(
         &user,
         "server",
@@ -74,6 +78,7 @@ pub async fn cloudflare_dns_get(
             domain.trim(),
             records,
             filter_type.trim(),
+            listen_port,
             query.notice.as_deref(),
             query.error.as_deref(),
         ),
@@ -312,6 +317,99 @@ pub async fn cloudflare_proxy_post(
     match set_proxy(&form.domain, &form.record_id, proxied) {
         Ok(msg) => redirect_notice(&back, Some(&msg), None),
         Err(err) => redirect_notice(&back, None, Some(&err)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CfOauthClientForm {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+#[post("/dns/cloudflare/oauth/client")]
+pub async fn cloudflare_oauth_client_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<CfOauthClientForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
+        return resp;
+    }
+    match save_oauth_client(&form.client_id, &form.client_secret) {
+        Ok(msg) => redirect_notice("/dns/cloudflare?tab=api", Some(&msg), None),
+        Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
+    }
+}
+
+#[post("/dns/cloudflare/oauth/connect")]
+pub async fn cloudflare_oauth_connect_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
+        return resp;
+    }
+    match begin_oauth_connect(state.bind_port) {
+        Ok(url) => HttpResponse::SeeOther()
+            .append_header(("Location", url))
+            .finish(),
+        Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CfOauthCallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
+}
+
+#[get("/dns/cloudflare/oauth/callback")]
+pub async fn cloudflare_oauth_callback_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<CfOauthCallbackQuery>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
+        return resp;
+    }
+    if let Some(err) = query.error.as_deref().filter(|s| !s.is_empty()) {
+        let detail = query.error_description.as_deref().unwrap_or("");
+        let msg = format!("Cloudflare OAuth denied: {err} {detail}");
+        return redirect_notice("/dns/cloudflare?tab=api", None, Some(msg.trim()));
+    }
+    let code = query.code.as_deref().unwrap_or("");
+    let oauth_state = query.state.as_deref().unwrap_or("");
+    match finish_oauth_callback(code, oauth_state, state.bind_port) {
+        Ok(msg) => redirect_notice("/dns/cloudflare?tab=api", Some(&msg), None),
+        Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
+    }
+}
+
+#[post("/dns/cloudflare/oauth/disconnect")]
+pub async fn cloudflare_oauth_disconnect_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
+        return resp;
+    }
+    match disconnect_oauth() {
+        Ok(msg) => redirect_notice("/dns/cloudflare?tab=api", Some(&msg), None),
+        Err(err) => redirect_notice("/dns/cloudflare?tab=api", None, Some(&err)),
     }
 }
 

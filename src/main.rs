@@ -25,12 +25,14 @@ use cpn_installer::model::{
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_hub_routes::{
-    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_route,
+    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
+    api_access_revoke_post, api_access_route,
     backups_create_route, backups_destinations_route, backups_destinations_save,
     backups_gdrive_route, backups_remote_route, backups_restore_route, backups_schedule_route,
-    backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
-    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
-    cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
+    backups_schedule_save,     cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
+    cloudflare_oauth_callback_get, cloudflare_oauth_client_post, cloudflare_oauth_connect_post,
+    cloudflare_oauth_disconnect_post, cloudflare_proxy_post, cloudflare_settings_post,
+    cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
     databases_delete_get, databases_delete_post, databases_manager_route,
     databases_phpmyadmin_open, databases_phpmyadmin_route, email_accounts_route,
     email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
@@ -699,6 +701,18 @@ async fn main() -> std::io::Result<()> {
     };
     apply_startup_network_flags(&args, listen_port);
     purge_expired_migration();
+    match cpn_installer::panel_migrate::run_pending_migrations() {
+        Ok(applied) if !applied.is_empty() => {
+            eprintln!(
+                "cpn-installer: applied panel migrations: {}",
+                applied.join(", ")
+            );
+        }
+        Err(error) => {
+            eprintln!("cpn-installer: warning: panel migrations: {error}");
+        }
+        _ => {}
+    }
     #[cfg(unix)]
     if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
         eprintln!(
@@ -978,6 +992,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_dns_nameservers_save)
             .service(cloudflare_dns_get)
             .service(server_cloudflare_redirect)
+            .service(cloudflare_oauth_client_post)
+            .service(cloudflare_oauth_connect_post)
+            .service(cloudflare_oauth_callback_get)
+            .service(cloudflare_oauth_disconnect_post)
             .service(cloudflare_settings_post)
             .service(cloudflare_test_post)
             .service(cloudflare_sync_post)
@@ -1030,6 +1048,8 @@ async fn main() -> std::io::Result<()> {
             .service(users_delete_post)
             .service(users_reseller_route)
             .service(api_access_route)
+            .service(api_access_create_post)
+            .service(api_access_revoke_post)
             .service(acl_create_get)
             .service(acl_create_post)
             .service(acl_modify_get)

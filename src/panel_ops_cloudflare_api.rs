@@ -40,6 +40,10 @@ struct CfError {
 }
 
 fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
+    if settings.auth_type == CloudflareAuthType::Oauth {
+        let _ = crate::panel_ops_cloudflare_oauth::refresh_oauth_access_if_needed();
+    }
+    let settings = load_cloudflare();
     let token = sanitize_cloudflare_secret(&settings.api_token);
     if token.is_empty() {
         return Err("Cloudflare API token is not configured".into());
@@ -58,7 +62,7 @@ fn auth_headers(settings: &CloudflareSettings) -> Result<Vec<String>, String> {
     }
     let mut headers = vec![format!("User-Agent: {CF_USER_AGENT}")];
     match auth_type {
-        CloudflareAuthType::ApiToken => {
+        CloudflareAuthType::ApiToken | CloudflareAuthType::Oauth => {
             headers.push(format!("Authorization: Bearer {token}"));
         }
         CloudflareAuthType::GlobalKey => {

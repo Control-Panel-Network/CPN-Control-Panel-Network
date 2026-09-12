@@ -183,13 +183,89 @@ pub fn users_reseller_page() -> String {
     )
 }
 
-pub fn api_access_page() -> String {
-    scaffold_feature(
-        "Users & Plans",
-        "/account/users",
+pub fn api_access_page(
+    tokens: &[crate::panel_api_tokens::ApiTokenPublic],
+    issued_secret: Option<&str>,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    let mut body = String::from(
+        r#"<p class="muted">Issue opaque <code>cpn_</code> tokens for automation. CPN session login remains the primary auth method. Tokens are shown once at creation; only a SHA256 hash is stored.</p>"#,
+    );
+    if let Some(secret) = issued_secret {
+        body.push_str(&format!(
+            r#"<p class="panel-notice ok" role="status"><strong>New token</strong> (copy now; it will not be shown again):</p>
+            <p><code style="user-select:all;word-break:break-all;">{}</code></p>"#,
+            html_escape(secret)
+        ));
+    }
+    body.push_str(
+        r#"<h3 style="margin:20px 0 12px;">Issue token</h3>
+      <form method="post" action="/account/api-access/create" class="stack-form" style="max-width:560px;display:grid;gap:12px;">
+        <label>Label
+          <input name="label" type="text" required maxlength="128" placeholder="CI deploy">
+        </label>
+        <fieldset style="border:1px solid var(--border,#444);border-radius:8px;padding:12px;">
+          <legend>Scopes</legend>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" name="scopes" value="read" checked> read</label>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" name="scopes" value="dns"> dns</label>
+          <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" name="scopes" value="admin"> admin</label>
+        </fieldset>
+        <button type="submit" class="btn-primary">Issue token</button>
+      </form>"#,
+    );
+    if tokens.is_empty() {
+        body.push_str(r#"<p class="empty-state" style="margin-top:20px;">No API tokens issued yet.</p>"#);
+    } else {
+        body.push_str(
+            r#"<h3 style="margin:24px 0 12px;">Active tokens</h3>
+        <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Label</th><th>User</th><th>Scopes</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>"#,
+        );
+        for token in tokens {
+            let status = if token.revoked { "Revoked" } else { "Active" };
+            let revoke_btn = if token.revoked {
+                String::new()
+            } else {
+                format!(
+                    r#"<form method="post" action="/account/api-access/revoke" class="inline-form" style="display:inline;"
+                          onsubmit="return confirm('Revoke this token?');">
+                      <input type="hidden" name="token_id" value="{}">
+                      <button type="submit" class="linkish" style="background:none;border:0;color:#d92d20;font-weight:600;cursor:pointer;padding:0;">Revoke</button>
+                    </form>"#,
+                    html_escape(&token.id)
+                )
+            };
+            body.push_str(&format!(
+                r#"<tr>
+                  <td><strong>{label}</strong></td>
+                  <td>{user}</td>
+                  <td>{scopes}</td>
+                  <td>{created}</td>
+                  <td>{status}</td>
+                  <td>{revoke}</td>
+                </tr>"#,
+                label = html_escape(&token.label),
+                user = html_escape(&token.username),
+                scopes = html_escape(&token.scopes.join(", ")),
+                created = token.created_at_unix,
+                status = status,
+                revoke = revoke_btn,
+            ));
+        }
+        body.push_str("</tbody></table></div>");
+    }
+    feature_shell(
+        &[
+            ("Dashboard", Some("/dashboard")),
+            ("Users & Plans", Some("/account/users")),
+            ("API Access", None),
+        ],
         "API Access",
-        "API tokens",
-        "Panel API tokens are not issued yet. Use the signed-in session for panel routes until token auth ships.",
+        "Issue and revoke panel API tokens.",
+        &body,
+        notice,
+        error,
     )
 }
 

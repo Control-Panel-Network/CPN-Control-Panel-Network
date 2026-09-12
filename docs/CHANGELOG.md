@@ -7,18 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-OpenLiteSpeed WebAdmin aligns with the CPN admin account by default.
+OpenLiteSpeed WebAdmin aligns with the CPN admin account by default. Cloudflare OAuth DNS link, panel API tokens, and versioned SQL migrations.
 
 ### Added
 
 - At first-account setup, when OpenLiteSpeed is installed, WebAdmin htpasswd is set to the CPN admin username and the same password (re-hashed as apr1/bcrypt for OLS). CPN panel PBKDF2 hashes are not reversible and are never copied into htpasswd.
 - `/server/openlitespeed`: Reset WebAdmin to CPN admin account (confirm checkbox + password confirmation) for later OLS installs or drifted credentials. Username field prefills the CPN admin. Copy: "Uses your CPN admin account by default."
 - OLS install journal notes when alignment happens at first-account setup vs when a Reset is required.
+- Panel API Access (`/account/api-access`): issue, list, and revoke opaque `cpn_` tokens (SHA256 hash at rest; scopes read/dns/admin). Bearer tokens authenticate panel routes alongside session cookies.
+- Cloudflare OAuth on API Settings: PKCE connect via `dash.cloudflare.com/oauth2/*`, manual API token fallback, scopes `zone.read dns.write offline_access`. OAuth is DNS link only; CPN account login stays primary.
+- Versioned migrations `0001` to `0003` under `sql/` with ledger `schema_migrations.json`; JSON store hooks plus optional `sqlite3 panel.db` apply. Migrations run at panel startup and after upgrade/repair.
 
 ### Notes
 
 - Passwords are never logged or shown after save. Guests and manual Set WebAdmin password remain available.
 - Lab smoke: after Reset or fresh install+account, `https://127.0.0.1:7080/login.php` accepts the CPN admin credentials (NAT forward `:7080` if needed).
+- Register a Cloudflare OAuth app redirect URI matching your panel public URL (for example `http://127.0.0.1:2090/dns/cloudflare/oauth/callback` in NAT labs). See `to-do/CLOUDFLARE-OAUTH.md`.
+- Set panel public URL (`cpn network set-public-url`) when OAuth callbacks must use a host NAT port instead of guest loopback.
 
 ## [0.2.6-alpha.34] - 12/09/2026
 
