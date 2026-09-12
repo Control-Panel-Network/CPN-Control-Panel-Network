@@ -108,11 +108,23 @@ fn apply_sql_to_panel_db(sql: &str) -> Result<(), String> {
     let db = panel_db_path();
     let dir = paths::default_data_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    let output = Command::new("sqlite3")
+    // Pipe SQL on stdin. Passing SQL as argv fails when the file starts with
+    // `--` comments (sqlite3 treats those as CLI options).
+    let mut child = Command::new("sqlite3")
         .arg(&db)
-        .arg(sql)
-        .output()
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| format!("Could not run sqlite3: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(sql.as_bytes())
+            .map_err(|e| format!("Could not write SQL to sqlite3: {e}"))?;
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Could not wait for sqlite3: {e}"))?;
     if output.status.success() {
         Ok(())
     } else {
