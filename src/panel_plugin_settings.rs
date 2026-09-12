@@ -187,7 +187,7 @@ pub fn plugin_settings_main(
         <form method="post" action="/email/webmail/regenerate-path" style="margin-top:8px;" onsubmit="return confirm('Regenerate the public webmail path? Mail data is kept.');">
           <button type="submit" class="btn-secondary">Regenerate / move webmail URL</button>
         </form>
-        <p class="muted">Auto-login is best-effort Email prefill only. True SSO would require storing mailbox passwords, which CPN does not do.</p>
+        <p class="muted">Preferred open account is best-effort Email / _user prefill only. True SSO would require storing mailbox passwords, which CPN does not do in settings.json.</p>
       </div>"#,
             open = html_escape(&open),
             admin = html_escape(&admin),

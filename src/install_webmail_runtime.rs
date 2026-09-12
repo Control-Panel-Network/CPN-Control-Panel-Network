@@ -315,6 +315,66 @@ fn configure_nginx_proxy(docroot: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Rewrite loopback Nginx/Caddy/OLS webmail config when the active client docroot drifted
+/// (example: Roundcube root while SnappyMail is preferred) or PATH_INFO support is missing.
+pub fn heal_webmail_loopback_config() -> Result<(), String> {
+    let Some(docroot) = crate::panel_webmail::webmail_backend_docroot() else {
+        return Ok(());
+    };
+    if Path::new(NGINX_CONF).is_file() {
+        let raw = std::fs::read_to_string(NGINX_CONF).unwrap_or_default();
+        let needs = !raw.contains(docroot)
+            || !raw.contains("fastcgi_split_path_info")
+            || !raw.contains("PATH_INFO");
+        if needs {
+            configure_nginx_proxy(docroot)?;
+            let _ = std::process::Command::new("systemctl")
+                .args(["reload", "nginx"])
+                .status();
+        }
+    }
+    if Path::new(CADDY_SNIPPET).is_file() {
+        let raw = std::fs::read_to_string(CADDY_SNIPPET).unwrap_or_default();
+        if !raw.contains(docroot) {
+            configure_caddy_proxy(docroot)?;
+            let _ = std::process::Command::new("systemctl")
+                .args(["reload", "caddy"])
+                .status();
+        }
+    }
+    // SnappyMail data lives under /var/lib/cpn-webmail; stale pools that omit it show
+    // "Permission denied!" instead of the login form.
+    if is_snappymail_docroot(docroot) {
+        if Path::new(FPM_POOL).is_file() {
+            let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
+            if !raw.contains("/var/lib/cpn-webmail") {
+                write_php_fpm_pool(docroot)?;
+                let _ = std::process::Command::new("systemctl")
+                    .args(["restart", "php-fpm"])
+                    .status();
+            }
+        }
+        let include_path = Path::new(docroot).join("include.php");
+        let include_ok = include_path.is_file()
+            && std::fs::read_to_string(&include_path)
+                .unwrap_or_default()
+                .contains("APP_DATA_FOLDER_PATH");
+        if !include_ok {
+            let _ = configure_snappymail_external_data(docroot);
+        }
+        let _ = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "command -v semanage >/dev/null 2>&1 && \
+                 (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
+                  semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
+                 restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
+            ])
+            .status();
+    }
+    Ok(())
+}
+
 fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
     std::fs::create_dir_all("/etc/caddy/Caddyfile.d").map_err(|error| error.to_string())?;
     install_journal::write_file_tracked(

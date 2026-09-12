@@ -16,9 +16,12 @@ pub fn nginx_webmail_conf(docroot: &str) -> String {
            location / {{\n\
              try_files $uri $uri/ /index.php?$query_string;\n\
            }}\n\
-           location ~ \\.php$ {{\n\
+           # SnappyMail SPA uses PATH_INFO under index.php/ (not only bare .php).\n\
+           location ~ ^(.+\\.php)(/.*)?$ {{\n\
              include fastcgi_params;\n\
+             fastcgi_split_path_info ^(.+\\.php)(/.*)$;\n\
              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
+             fastcgi_param PATH_INFO $fastcgi_path_info;\n\
              fastcgi_pass unix:/run/php-fpm/cpn-webmail.sock;\n\
            }}\n\
          }}\n"
@@ -115,6 +118,10 @@ mod tests {
     fn frontend_configs_deny_sensitive_paths() {
         let nginx = nginx_webmail_conf("/opt/cpn-webmail/snappymail");
         assert!(nginx.contains("return 403") && nginx.contains("temp|logs|data"));
+        assert!(
+            nginx.contains("PATH_INFO") && nginx.contains("fastcgi_split_path_info"),
+            "nginx must accept index.php/ PATH_INFO for SnappyMail SPA"
+        );
         let caddy = caddy_webmail_snippet("/opt/cpn-webmail/snappymail");
         assert!(caddy.contains("respond 403") && caddy.contains("/data /data/*"));
         let vh = ols_webmail_vhconf("/opt/cpn-webmail/snappymail");

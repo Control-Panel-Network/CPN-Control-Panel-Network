@@ -100,7 +100,7 @@ pub fn builtin_webmail_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
     vec![
         PluginSettingField {
             key: "auto_login_account".into(),
-            label: "Auto-login account (email)".into(),
+            label: "Preferred open account (mailbox)".into(),
             field_type: "text".into(),
             default: String::new(),
         },

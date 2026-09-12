@@ -174,7 +174,22 @@ fn panel_base_for_links(listen_port: u16, host_hint: Option<&str>) -> String {
     format!("http://{host}:{listen_port}")
 }
 
-/// Absolute Open Webmail URL (inbox hash for SnappyMail when applicable).
+/// Docroot the loopback webmail frontend should serve (SnappyMail preferred when both exist).
+pub fn webmail_backend_docroot() -> Option<&'static str> {
+    match detect_webmail_client()? {
+        MailSystem::Snappymail => Some("/opt/cpn-webmail/snappymail"),
+        MailSystem::Roundcube => {
+            if Path::new("/opt/cpn-webmail/roundcube/public_html").is_dir() {
+                Some("/opt/cpn-webmail/roundcube/public_html")
+            } else {
+                Some("/opt/cpn-webmail/roundcube")
+            }
+        }
+        MailSystem::Thunderbird => None,
+    }
+}
+
+/// Absolute Open Webmail URL. Unauthenticated clients get the login UI (not an inbox hash).
 pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<String> {
     if !webmail_ready() {
         return None;
@@ -184,31 +199,29 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
     let path = cfg.public_path.trim_end_matches('/');
     let client = detect_webmail_client()?;
     let mut url = match client {
-        MailSystem::Snappymail => format!("{base}{path}/index.php/#/mailbox/INBOX"),
+        // Login form first; #/mailbox/INBOX only applies after a successful session.
+        MailSystem::Snappymail => format!("{base}{path}/index.php"),
         MailSystem::Roundcube => format!("{base}{path}/"),
         MailSystem::Thunderbird => return None,
     };
-    if !cfg.auto_login_account.is_empty() && matches!(client, MailSystem::Snappymail) {
-        // Best-effort Email prefill (SnappyMail / Rainloop-style login query). True SSO is not wired.
+    if !cfg.auto_login_account.is_empty() {
+        let email = urlencoding_form(&cfg.auto_login_account);
         let sep = if url.contains('?') { "&" } else { "?" };
-        // Keep hash: put query on the document URL before the fragment.
-        if let Some((head, hash)) = url.split_once('#') {
-            url = format!(
-                "{head}{sep}Email={}#{}",
-                urlencoding_form(&cfg.auto_login_account),
-                hash
-            );
-        } else {
-            url = format!(
-                "{url}{sep}Email={}",
-                urlencoding_form(&cfg.auto_login_account)
-            );
+        match client {
+            MailSystem::Snappymail => {
+                // Best-effort Email prefill. True SSO needs a stored mailbox secret (not wired).
+                url = format!("{url}{sep}Email={email}");
+            }
+            MailSystem::Roundcube => {
+                url = format!("{url}{sep}_user={email}");
+            }
+            MailSystem::Thunderbird => {}
         }
     }
     Some(url)
 }
 
-/// Relative open path for same-origin links and iframes.
+/// Relative open path for same-origin links and iframes (login UI when not authenticated).
 pub fn webmail_open_path() -> Option<String> {
     if !webmail_ready() {
         return None;
@@ -217,16 +230,25 @@ pub fn webmail_open_path() -> Option<String> {
     let path = cfg.public_path.trim_end_matches('/');
     match detect_webmail_client()? {
         MailSystem::Snappymail => {
-            let mut rel = format!("{path}/index.php/#/mailbox/INBOX");
-            if !cfg.auto_login_account.is_empty() {
-                rel = format!(
-                    "{path}/index.php?Email={}#/mailbox/INBOX",
+            if cfg.auto_login_account.is_empty() {
+                Some(format!("{path}/index.php"))
+            } else {
+                Some(format!(
+                    "{path}/index.php?Email={}",
                     urlencoding_form(&cfg.auto_login_account)
-                );
+                ))
             }
-            Some(rel)
         }
-        MailSystem::Roundcube => Some(format!("{path}/")),
+        MailSystem::Roundcube => {
+            if cfg.auto_login_account.is_empty() {
+                Some(format!("{path}/"))
+            } else {
+                Some(format!(
+                    "{path}/?_user={}",
+                    urlencoding_form(&cfg.auto_login_account)
+                ))
+            }
+        }
         MailSystem::Thunderbird => None,
     }
 }
@@ -282,6 +304,18 @@ pub fn path_matches_webmail_mount(req_path: &str) -> bool {
         || req_path == format!("{mount}/")
 }
 
+/// SnappyMail HTML uses absolute `/snappymail/v/{ver}/static|themes/...` asset URLs.
+/// Those must proxy even when the panel mount was regenerated away from `/snappymail`.
+pub fn path_is_snappymail_app_asset(req_path: &str) -> bool {
+    matches!(detect_webmail_client(), Some(MailSystem::Snappymail))
+        && (req_path.starts_with("/snappymail/v/") || req_path == "/snappymail/v")
+}
+
+/// True when the panel catch-all should reverse-proxy to loopback webmail.
+pub fn path_should_proxy_webmail(req_path: &str) -> bool {
+    path_matches_webmail_mount(req_path) || path_is_snappymail_app_asset(req_path)
+}
+
 /// Strip mount prefix so backend (root on :8080) receives the remainder.
 pub fn strip_webmail_mount(req_path: &str) -> Option<String> {
     let cfg = load_webmail_config();
@@ -294,6 +328,31 @@ pub fn strip_webmail_mount(req_path: &str) -> Option<String> {
         return Some("/".into());
     }
     Some(rest.to_string())
+}
+
+/// Map a panel URL to the loopback (:8080) path.
+///
+/// SnappyMail ships versioned assets under `{docroot}/snappymail/v/...`, so the backend
+/// URL is `/snappymail/v/...`. The panel mount is often also `/snappymail`, and a naive
+/// strip turns `/snappymail/v/...` into `/v/...`. Nginx `try_files` then falls back to
+/// `index.php` (HTML), which browsers reject as the wrong MIME type for JS/CSS.
+pub fn backend_path_for_webmail_proxy(req_path: &str) -> Option<String> {
+    if path_is_snappymail_app_asset(req_path) {
+        return Some(req_path.to_string());
+    }
+    let stripped = strip_webmail_mount(req_path)?;
+    if matches!(detect_webmail_client(), Some(MailSystem::Snappymail)) {
+        return Some(remap_snappymail_stripped_asset(&stripped));
+    }
+    Some(stripped)
+}
+
+fn remap_snappymail_stripped_asset(stripped: &str) -> String {
+    if stripped.starts_with("/v/") || stripped == "/v" {
+        format!("/snappymail{stripped}")
+    } else {
+        stripped.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -332,5 +391,15 @@ mod tests {
                 Some("/index.php")
             );
         });
+    }
+
+    #[test]
+    fn snappymail_asset_paths_keep_app_prefix() {
+        assert_eq!(
+            remap_snappymail_stripped_asset("/v/2.38.2/static/js/min/libs.min.js"),
+            "/snappymail/v/2.38.2/static/js/min/libs.min.js"
+        );
+        assert_eq!(remap_snappymail_stripped_asset("/index.php"), "/index.php");
+        assert_eq!(remap_snappymail_stripped_asset("/v"), "/snappymail/v");
     }
 }
