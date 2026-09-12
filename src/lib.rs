@@ -134,6 +134,8 @@ pub mod panel_packages;
 pub mod panel_pages;
 pub mod panel_plugin_settings;
 pub mod panel_plugins;
+pub mod panel_plugins_markup;
+pub mod panel_plugins_spa;
 pub mod panel_prefs;
 pub mod panel_public_url;
 pub mod panel_routes;
