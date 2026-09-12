@@ -133,10 +133,7 @@ pub async fn packages_duplicate(
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                packages_redirect(
-                    Some(&format!("Duplicated package as {}", pkg.name)),
-                    None,
-                ),
+                packages_redirect(Some(&format!("Duplicated package as {}", pkg.name)), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()

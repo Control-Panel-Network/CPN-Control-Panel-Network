@@ -83,10 +83,7 @@ fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
         databases: patch.databases.unwrap_or(pkg.databases),
         ftp_accounts: patch.ftp_accounts.unwrap_or(pkg.ftp_accounts),
         fqdn_enabled: patch.fqdn_enabled.unwrap_or(pkg.fqdn_enabled),
-        notes: patch
-            .notes
-            .clone()
-            .unwrap_or_else(|| pkg.notes.clone()),
+        notes: patch.notes.clone().unwrap_or_else(|| pkg.notes.clone()),
     }
 }
 
@@ -94,13 +91,11 @@ fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
 pub fn bulk_update_packages(ids: &[String], patch: &PackageBulkPatch) -> BulkOutcome {
     let mut out = BulkOutcome::default();
     if ids.is_empty() {
-        out.errors
-            .push("Select at least one package".into());
+        out.errors.push("Select at least one package".into());
         return out;
     }
     if patch.is_empty() {
-        out.errors
-            .push("No bulk fields to apply".into());
+        out.errors.push("No bulk fields to apply".into());
         return out;
     }
     for id in ids {
@@ -114,8 +109,7 @@ pub fn bulk_update_packages(ids: &[String], patch: &PackageBulkPatch) -> BulkOut
         }
     }
     if out.ok == 0 && out.errors.is_empty() {
-        out.errors
-            .push("Select at least one package".into());
+        out.errors.push("Select at least one package".into());
     }
     out
 }
@@ -124,8 +118,7 @@ pub fn bulk_update_packages(ids: &[String], patch: &PackageBulkPatch) -> BulkOut
 pub fn bulk_delete_packages(ids: &[String]) -> BulkOutcome {
     let mut out = BulkOutcome::default();
     if ids.is_empty() {
-        out.errors
-            .push("Select at least one package".into());
+        out.errors.push("Select at least one package".into());
         return out;
     }
     for id in ids {
@@ -139,8 +132,7 @@ pub fn bulk_delete_packages(ids: &[String]) -> BulkOutcome {
         }
     }
     if out.ok == 0 && out.errors.is_empty() {
-        out.errors
-            .push("Select at least one package".into());
+        out.errors.push("Select at least one package".into());
     }
     out
 }
