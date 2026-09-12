@@ -72,6 +72,56 @@ pub async fn server_openlitespeed_page(
     ))
 }
 
+#[post("/server/openlitespeed/password")]
+pub async fn server_openlitespeed_password(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let user = form.get("username").map(String::as_str).unwrap_or("admin");
+    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    match crate::litespeed_webadmin_users::set_webadmin_password(user, pass) {
+        Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/openlitespeed/guest")]
+pub async fn server_openlitespeed_guest(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let user = form.get("username").map(String::as_str).unwrap_or("");
+    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    match crate::litespeed_webadmin_users::add_webadmin_guest(user, pass) {
+        Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/openlitespeed/guest/remove")]
+pub async fn server_openlitespeed_guest_remove(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let user = form.get("username").map(String::as_str).unwrap_or("");
+    match crate::litespeed_webadmin_users::remove_webadmin_user(user) {
+        Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
+    }
+}
+
 #[get("/server/litespeed-enterprise")]
 pub async fn server_litespeed_enterprise_page(
     http: HttpRequest,

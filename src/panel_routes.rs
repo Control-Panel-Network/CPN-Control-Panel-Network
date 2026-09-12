@@ -490,7 +490,22 @@ pub async fn plugins_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let view = query.get("view").map(String::as_str).unwrap_or("installed");
+    let view = if query.contains_key("view-store")
+        || query.get("view").map(String::as_str) == Some("store")
+        || query.get("view").map(String::as_str) == Some("view-store")
+    {
+        "store".to_string()
+    } else if query.get("view").map(String::as_str) == Some("host")
+        || query.get("view").map(String::as_str) == Some("apps")
+    {
+        "host".to_string()
+    } else {
+        query
+            .get("view")
+            .cloned()
+            .unwrap_or_else(|| "installed".to_string())
+    };
+    let view = view.as_str();
     let layout = query.get("layout").map(String::as_str).unwrap_or("grid");
     let q = query.get("q").map(String::as_str).unwrap_or("");
     let category = query.get("category").map(String::as_str).unwrap_or("");

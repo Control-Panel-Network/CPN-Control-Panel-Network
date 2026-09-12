@@ -31,7 +31,7 @@ use cpn_installer::panel_hub_routes::{
     cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
     cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
     databases_delete_get, databases_delete_post, databases_manager_route,
-    databases_phpmyadmin_route, email_accounts_route, email_bimi_push_cf, email_bimi_route,
+    databases_phpmyadmin_route, databases_phpmyadmin_open, email_accounts_route, email_bimi_push_cf, email_bimi_route,
     email_bimi_save, email_catchall_route, email_catchall_save, email_create_route, email_debugger,
     email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
     email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf,
@@ -41,16 +41,17 @@ use cpn_installer::panel_hub_routes::{
     ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset,
     ftp_reset_password_post, ftp_reset_post, passkey_delete_post, passkey_login_finish,
     passkey_login_start, passkey_register_finish, passkey_register_start, security_fail2ban,
-    security_firewall, security_malware, security_modsec, security_modsec_rules, security_page,
-    security_rule_packs, security_ssh, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
-    security_ssl_mark_custom, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
-    security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
+    security_firewall, security_firewall_enable, security_malware, security_modsec,
+    security_modsec_rules, security_page, security_rule_packs, security_ssh, security_ssh_toggle,
+    security_ssl, security_ssl_defaults, security_ssl_hostname, security_ssl_issue,
+    security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
     server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
-    server_litespeed_webadmin_url, server_openlitespeed_page, server_packages_page, server_page,
+    server_litespeed_webadmin_url, server_openlitespeed_guest, server_openlitespeed_guest_remove,
+    server_openlitespeed_page, server_openlitespeed_password, server_packages_page, server_page,
     server_php_configs, server_php_extensions, server_php_tuning, server_processes_page,
     server_services_control, server_services_page, settings_connect_page, settings_design_page,
     settings_page, settings_port_page, settings_setup_page, settings_version_page,
@@ -942,6 +943,9 @@ async fn main() -> std::io::Result<()> {
             .service(server_services_page)
             .service(server_services_control)
             .service(server_openlitespeed_page)
+            .service(server_openlitespeed_password)
+            .service(server_openlitespeed_guest)
+            .service(server_openlitespeed_guest_remove)
             .service(server_litespeed_enterprise_page)
             .service(server_litespeed_page)
             .service(server_litespeed_tier)
@@ -981,6 +985,7 @@ async fn main() -> std::io::Result<()> {
             .service(settings_port_page)
             .service(security_page)
             .service(security_firewall)
+            .service(security_firewall_enable)
             .service(security_ssh)
             .service(security_ssh_toggle)
             .service(security_fail2ban)
@@ -1057,6 +1062,7 @@ async fn main() -> std::io::Result<()> {
             .service(databases_delete_post)
             .service(databases_manager_route)
             .service(databases_phpmyadmin_route)
+            .service(databases_phpmyadmin_open)
             .service(ftp_accounts_route)
             .service(ftp_create)
             .service(ftp_create_post)

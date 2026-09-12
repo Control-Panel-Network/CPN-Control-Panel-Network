@@ -45,8 +45,9 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
 }
 
 fn view_tabs(active: &str, domain: &str) -> String {
-    let installed = if active == "store" { "" } else { " active" };
+    let installed = if active == "installed" { " active" } else { "" };
     let store = if active == "store" { " active" } else { "" };
+    let host = if active == "host" { " active" } else { "" };
     let domain_q = if domain.is_empty() {
         String::new()
     } else {
@@ -56,6 +57,7 @@ fn view_tabs(active: &str, domain: &str) -> String {
         r#"<div class="plugin-tabs" role="tablist" aria-label="Plugins views">
         <a class="plugin-tab{installed}" href="/plugins?view=installed{domain_q}" role="tab">Installed</a>
         <a class="plugin-tab{store}" href="/plugins?view=store{domain_q}" role="tab">Plugin Store</a>
+        <a class="plugin-tab{host}" href="/plugins?view=host{domain_q}" role="tab">Host packages</a>
       </div>
       <style>
         .plugin-tabs {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }}
@@ -372,6 +374,8 @@ fn store_rows(
         let installed = installed_ids.iter().any(|id| id == &entry.id);
         let action = if installed {
             r#"<span class="plugin-badge installed">Installed</span>"#.to_string()
+        } else if domain.is_empty() {
+            r#"<span class="muted">Select a domain to install</span>"#.to_string()
         } else {
             format!(
                 r#"<form method="post" action="/plugins/install" class="inline-form">
@@ -468,43 +472,54 @@ pub struct PluginsPageQuery<'a> {
 }
 
 pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
-    let view = if query.view == "store" {
-        "store"
-    } else {
-        "installed"
+    let view = match query.view {
+        "store" | "view-store" => "store",
+        "host" | "apps" => "host",
+        _ => "installed",
     };
     let sites = query.sites;
     let domain = resolve_domain(sites, query.domain);
     let picker = domain_picker(sites, &domain, view);
-    if domain.is_empty() {
+
+    if view == "host" {
+        let apps_body = crate::panel_apps::apps_main(crate::panel_apps::AppsPageQuery {
+            domain: &domain,
+            notice: query.notice,
+            error: query.error,
+            sites,
+        });
         return format!(
             r#"{heading}
-      {ok}
-      {err}
       {tabs}
       <article class="section-card">
-        <h2>Plugins</h2>
-        {picker}
-        <p class="muted">Plugins install under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Only sites you own or are granted appear here.</p>
+        <h2>Host packages</h2>
+        <p class="muted">Former Apps page: MariaDB, phpMyAdmin, PostgreSQL, Email, RabbitMQ. CLI <code>cpn app</code> still works.</p>
+        {apps_body}
       </article>"#,
-            heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),
-            ok = notice_block("ok", query.notice),
-            err = notice_block("error", query.error),
-            tabs = view_tabs(view, ""),
-            picker = picker,
+            heading = section_heading(
+                "Plugins",
+                "Installed plugins, Plugin Store, and host packages.",
+            ),
+            tabs = view_tabs(view, &domain),
+            apps_body = apps_body,
         );
     }
 
-    let installed = list_installed(&domain).unwrap_or_default();
-    let installed_count = installed.len();
-    let active_count = installed.iter().filter(|p| p.manifest.enabled).count();
-    let install_path = plugins_install_path_display(Some(&domain));
-
     if view == "store" {
         let catalog = fetch_catalog(query.refresh);
+        let installed = if domain.is_empty() {
+            Vec::new()
+        } else {
+            list_installed(&domain).unwrap_or_default()
+        };
+        let ids: Vec<String> = installed.iter().map(|p| p.manifest.id.clone()).collect();
+        let install_path = if domain.is_empty() {
+            plugins_install_path_display(None)
+        } else {
+            plugins_install_path_display(Some(&domain))
+        };
         let (body, cache_note) = match catalog {
             Ok((entries, fetched_at)) => {
-                let ids: Vec<String> = installed.iter().map(|p| p.manifest.id.clone()).collect();
                 let next = catalog_next_refresh_unix(fetched_at);
                 let note = format!(
                     "Cached 1 hour. Last refresh: {}. Next: {}.",
@@ -564,7 +579,7 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
         <h2>Plugin Store</h2>
         {picker}
         <p class="plugin-store-meta">Install into <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
-        <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install.</p>
+        <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install. Fail2ban and other Security plugins appear here from Control-Panel-Network/CPN-Plugins.</p>
         {body}
       </article>"#,
             heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),
@@ -579,6 +594,29 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
         );
     }
 
+    if domain.is_empty() {
+        return format!(
+            r#"{heading}
+      {ok}
+      {err}
+      {tabs}
+      <article class="section-card">
+        <h2>Installed Plugins</h2>
+        {picker}
+        <p class="muted">Plugins install under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Open Plugin Store to browse the catalog before creating a site.</p>
+      </article>"#,
+            heading = section_heading("Plugins", "Installed plugins and the CPN Plugin Store.",),
+            ok = notice_block("ok", query.notice),
+            err = notice_block("error", query.error),
+            tabs = view_tabs(view, ""),
+            picker = picker,
+        );
+    }
+
+    let installed = list_installed(&domain).unwrap_or_default();
+    let installed_count = installed.len();
+    let active_count = installed.iter().filter(|p| p.manifest.enabled).count();
+    let install_path = plugins_install_path_display(Some(&domain));
     let layout = if query.layout == "table" {
         "table"
     } else {
@@ -620,3 +658,4 @@ pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
         cards = installed_cards(&installed, layout, &domain),
     )
 }
+

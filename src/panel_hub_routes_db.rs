@@ -133,6 +133,7 @@ pub async fn databases_manager_route(
 pub async fn databases_phpmyadmin_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
@@ -141,8 +142,27 @@ pub async fn databases_phpmyadmin_route(
         &user,
         "databases",
         "phpMyAdmin",
-        &phpmyadmin_page(),
+        &phpmyadmin_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
+}
+
+#[get("/databases/phpmyadmin/open")]
+pub async fn databases_phpmyadmin_open(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    match crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin() {
+        Ok(url) => HttpResponse::SeeOther()
+            .append_header(("Location", url))
+            .finish(),
+        Err(err) => redirect_notice("/databases/phpmyadmin", None, Some(&err)),
+    }
 }
 
 #[get("/ftp/accounts")]

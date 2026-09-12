@@ -1,12 +1,15 @@
 //! Gate sidebar children and hub tiles on package-backed install state.
 //!
 //! Panel-native tools (MariaDB Manager, SFTP jail UI, scaffold stubs) stay visible.
-//! Optional host packages such as phpMyAdmin and webmail appear only when installed.
+//! Optional host packages such as phpMyAdmin, webmail, fail2ban, and malware scanners
+//! appear only when installed or configured.
 
 use crate::apps::{AppId, AppStateKind, detect_app};
 use crate::litespeed_stack::{
     any_litespeed_installed, litespeed_enterprise_installed, openlitespeed_installed,
 };
+use crate::panel_ops_security::{fail2ban_status, firewall_status};
+use crate::panel_ops_security_ssl::malware_scan_status;
 use std::path::Path;
 
 /// Detected optional software that backs specific nav/hub links.
@@ -17,16 +20,25 @@ pub struct InstalledOptionalFeatures {
     pub openlitespeed: bool,
     pub litespeed_enterprise: bool,
     pub litespeed_any: bool,
+    pub fail2ban: bool,
+    pub firewall: bool,
+    pub malware: bool,
 }
 
 impl InstalledOptionalFeatures {
     pub fn detect() -> Self {
+        let fw = firewall_status();
+        let f2b = fail2ban_status();
+        let mal = malware_scan_status();
         Self {
             phpmyadmin: phpmyadmin_installed(),
             webmail: webmail_installed(),
             openlitespeed: openlitespeed_installed(),
             litespeed_enterprise: litespeed_enterprise_installed(),
             litespeed_any: any_litespeed_installed(),
+            fail2ban: f2b.installed,
+            firewall: fw.backend != "none",
+            malware: mal.installed || mal.engine == "nt-api",
         }
     }
 
@@ -38,6 +50,10 @@ impl InstalledOptionalFeatures {
             "/server/openlitespeed" => self.openlitespeed,
             "/server/litespeed-enterprise" => self.litespeed_enterprise,
             "/server/litespeed" => self.litespeed_any,
+            "/security/fail2ban" => self.fail2ban,
+            "/security/firewall" => self.firewall,
+            "/security/malware-scan" => self.malware,
+            "/apps" => false, // folded into Plugins (host packages tab)
             _ => true,
         }
     }
@@ -76,6 +92,9 @@ mod tests {
         webmail: bool,
         openlitespeed: bool,
         litespeed_enterprise: bool,
+        fail2ban: bool,
+        firewall: bool,
+        malware: bool,
     ) -> InstalledOptionalFeatures {
         InstalledOptionalFeatures {
             phpmyadmin,
@@ -83,12 +102,15 @@ mod tests {
             openlitespeed,
             litespeed_enterprise,
             litespeed_any: openlitespeed || litespeed_enterprise,
+            fail2ban,
+            firewall,
+            malware,
         }
     }
 
     #[test]
     fn hides_phpmyadmin_when_not_installed() {
-        let feats = feats(false, true, false, false);
+        let feats = feats(false, true, false, false, false, true, false);
         assert!(!feats.allows_href("/databases/phpmyadmin"));
         assert!(!feats.allows_href("/databases/phpmyadmin/"));
         assert!(feats.allows_href("/databases/manager"));
@@ -98,7 +120,7 @@ mod tests {
 
     #[test]
     fn hides_webmail_when_not_installed() {
-        let feats = feats(true, false, false, false);
+        let feats = feats(true, false, false, false, false, true, false);
         assert!(!feats.allows_href("/email/webmail"));
         assert!(feats.allows_href("/databases/phpmyadmin"));
         assert!(feats.allows_href("/email/accounts"));
@@ -106,25 +128,40 @@ mod tests {
 
     #[test]
     fn gates_ols_and_olse_separately() {
-        let ols_only = feats(false, false, true, false);
+        let ols_only = feats(false, false, true, false, false, true, false);
         assert!(ols_only.allows_href("/server/openlitespeed"));
         assert!(!ols_only.allows_href("/server/litespeed-enterprise"));
         assert!(ols_only.allows_href("/server/litespeed"));
 
-        let lse_only = feats(false, false, false, true);
+        let lse_only = feats(false, false, false, true, false, true, false);
         assert!(!lse_only.allows_href("/server/openlitespeed"));
         assert!(lse_only.allows_href("/server/litespeed-enterprise"));
         assert!(lse_only.allows_href("/server/litespeed"));
 
-        let none = feats(false, false, false, false);
+        let none = feats(false, false, false, false, false, false, false);
         assert!(!none.allows_href("/server/openlitespeed"));
         assert!(!none.allows_href("/server/litespeed-enterprise"));
         assert!(!none.allows_href("/server/litespeed"));
     }
 
     #[test]
+    fn gates_security_optionals() {
+        let none = feats(false, false, false, false, false, false, false);
+        assert!(!none.allows_href("/security/fail2ban"));
+        assert!(!none.allows_href("/security/firewall"));
+        assert!(!none.allows_href("/security/malware-scan"));
+        assert!(none.allows_href("/security/ssh"));
+        assert!(!none.allows_href("/apps"));
+
+        let all = feats(true, true, true, true, true, true, true);
+        assert!(all.allows_href("/security/fail2ban"));
+        assert!(all.allows_href("/security/firewall"));
+        assert!(all.allows_href("/security/malware-scan"));
+    }
+
+    #[test]
     fn keeps_panel_native_routes() {
-        let feats = feats(false, false, false, false);
+        let feats = feats(false, false, false, false, false, false, false);
         for href in [
             "/databases",
             "/databases/all",
@@ -134,6 +171,8 @@ mod tests {
             "/email/accounts",
             "/email/delivery",
             "/dashboard",
+            "/plugins",
+            "/plugins?view=store",
         ] {
             assert!(feats.allows_href(href), "should keep {href}");
         }

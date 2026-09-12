@@ -104,6 +104,61 @@ pub fn firewall_status() -> FirewallStatus {
     }
 }
 
+fn append_firewall_journal(line: &str) {
+    let path = default_data_dir().join("firewall-journal.txt");
+    let stamp = chrono_like_stamp();
+    let entry = format!("{stamp} {line}\n");
+    if let Ok(mut existing) = fs::read_to_string(&path) {
+        existing.push_str(&entry);
+        let _ = fs::write(&path, existing);
+    } else {
+        let _ = fs::write(&path, entry);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+}
+
+fn chrono_like_stamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("unix={secs}")
+}
+
+/// Enable and start firewalld on AlmaLinux/RHEL-family hosts; open http/https.
+pub fn enable_firewalld_http_https() -> Result<String, String> {
+    if !which_exists("firewall-cmd") {
+        return Err("firewall-cmd not found. Install firewalld (dnf install firewalld).".into());
+    }
+    if !cmd_ok("systemctl", &["enable", "--now", "firewalld"]) {
+        return Err("Could not enable/start firewalld via systemctl.".into());
+    }
+    let mut notes = Vec::new();
+    for svc in ["http", "https"] {
+        if cmd_ok(
+            "firewall-cmd",
+            &["--permanent", &format!("--add-service={svc}")],
+        ) {
+            notes.push(format!("firewalld {svc} ok; created=true; owner=cpn"));
+            append_firewall_journal(&format!("firewalld {svc} ok; created=true; owner=cpn"));
+        } else {
+            notes.push(format!("firewalld {svc} failed; created=false"));
+            append_firewall_journal(&format!("firewalld {svc} failed; created=false"));
+        }
+    }
+    let _ = cmd_ok("firewall-cmd", &["--reload"]);
+    let state = cmd_stdout("firewall-cmd", &["--state"]).unwrap_or_else(|| "unknown".into());
+    Ok(format!(
+        "firewalld state={state}. {}",
+        notes.join("; ")
+    ))
+}
+
 #[derive(Debug, Clone)]
 pub struct SshdStatus {
     pub config_path: String,
