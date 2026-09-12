@@ -29,7 +29,7 @@ impl ManageTab {
             "config" | "configurations" => Self::Config,
             "ssl" => Self::Ssl,
             "files" | "file" | "docroot" => Self::Files,
-            "apps" | "applications" => Self::Apps,
+            "apps" | "applications" | "plugins" | "plugin" => Self::Apps,
             _ => Self::Overview,
         }
     }
@@ -42,7 +42,7 @@ impl ManageTab {
             Self::Config => "config",
             Self::Ssl => "ssl",
             Self::Files => "files",
-            Self::Apps => "apps",
+            Self::Apps => "plugins",
         }
     }
 }
@@ -163,5 +163,8 @@ mod tests {
         assert_eq!(ManageTab::parse(None), ManageTab::Overview);
         assert_eq!(ManageTab::parse(Some("SSL")), ManageTab::Ssl);
         assert_eq!(ManageTab::parse(Some("files")), ManageTab::Files);
+        assert_eq!(ManageTab::parse(Some("apps")), ManageTab::Apps);
+        assert_eq!(ManageTab::parse(Some("plugins")), ManageTab::Apps);
+        assert_eq!(ManageTab::Apps.as_str(), "plugins");
     }
 }

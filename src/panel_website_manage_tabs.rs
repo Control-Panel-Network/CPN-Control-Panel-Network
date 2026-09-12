@@ -1,4 +1,4 @@
-//! Manage dashboard tab bodies (Overview, Domains, Logs, Config, Files, Apps).
+//! Manage dashboard tab bodies (Overview, Domains, Logs, Config, Files, Plugins).
 //! SSL tab: `panel_website_manage_ssl`.
 
 pub use crate::panel_website_manage_ssl::tab_ssl;
@@ -378,14 +378,9 @@ pub fn tab_apps(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
     tiles.push_str(&tile(
-        &format!("/apps?domain={domain_q}"),
-        "Site Apps",
-        "Installers scoped to this domain",
-    ));
-    tiles.push_str(&tile(
         &format!("/plugins?domain={domain_q}"),
         "Plugins",
-        "Site-scoped CPN plugins",
+        "Site plugins, Plugin Store, and host packages for this domain",
     ));
     tiles.push_str(&tile(
         &format!("/backups?scope=site&domain={domain_q}"),
@@ -393,7 +388,7 @@ pub fn tab_apps(site: &SiteRecord) -> String {
         "Selective backups for this site",
     ));
     tiles.push_str("</div>");
-    section("Apps", &tiles)
+    section("Plugins", &tiles)
 }
 
 #[cfg(test)]
@@ -431,5 +426,17 @@ mod tests {
         let html = tab_domains(&site());
         assert!(html.contains("Add Domains"));
         assert!(html.contains("Cron Jobs"));
+    }
+
+    #[test]
+    fn apps_tab_is_single_plugins_entry() {
+        let html = tab_apps(&site());
+        assert!(html.contains("<strong>Plugins</strong>"));
+        assert!(html.contains("manage-section-title\">Plugins</h2>"));
+        assert!(html.contains("/plugins?domain="));
+        assert!(html.contains("/backups?scope=site"));
+        assert!(!html.contains("Site Apps"));
+        assert!(!html.contains("/apps?"));
+        assert!(!html.to_lowercase().contains("cyberpanel"));
     }
 }

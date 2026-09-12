@@ -5,6 +5,21 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.34] - 12/09/2026
+
+Finish Apps→Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).
+
+### Fixed
+
+- Website manage Plugins tab no longer splits **Site Apps** vs **Plugins**; one Plugins tile (plus Backups).
+- Sidebar search and dashboard tools no longer advertise a standalone Apps destination.
+- `/apps` issues a **301** to `/plugins?view=host`; with `domain=` it lands on site Plugins (`/plugins?domain=...`).
+- Scaffold `PanelShell` nav matches Rust: Plugins with Host packages child, no Apps leaf.
+
+### Notes
+
+- `cpn app` CLI remains an alias; Host packages UI copy stays under Plugins.
+
 ## [0.2.6-alpha.33] - 12/09/2026
 
 Clean2 lab epic: Plugin Store without a site, Apps folded into Plugins, feature gates, firewall enable, OLS WebAdmin users, phpMyAdmin auto-login, malware paid/free paths (Cargo `0.2.6-alpha.33`).

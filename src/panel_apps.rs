@@ -13,21 +13,6 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn section_heading(title: &str, blurb: &str) -> String {
-    format!(
-        r#"
-      <div class="dashboard-heading">
-        <div>
-          <p class="eyebrow">CPN PANEL</p>
-          <h1>{title}</h1>
-          <p>{blurb}</p>
-        </div>
-      </div>"#,
-        title = html_escape(title),
-        blurb = html_escape(blurb),
-    )
-}
-
 fn notice_block(kind: &str, message: Option<&str>) -> String {
     let Some(message) = message.filter(|value| !value.is_empty()) else {
         return String::new();
@@ -254,20 +239,15 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
         )
     };
     format!(
-        r#"{heading}
-      {ok}
+        r#"{ok}
       {err}
       <article class="section-card">
-        <h2>Host and site apps</h2>
+        <h2>Domain scope</h2>
         <p>MariaDB, MySQL, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin and Email can also drop paths under the selected domain or subdomain home. Only sites you own or are granted appear below.</p>
-        <p class="muted">CLI: <code>cpn app install --name postgresql</code> or <code>cpn app install --name phpmyadmin --domain example.com</code></p>
+        <p class="muted">CLI alias: <code>cpn app install --name postgresql</code> or <code>cpn app install --name phpmyadmin --domain example.com</code></p>
         {picker}
       </article>
       {cards}"#,
-        heading = section_heading(
-            "Apps",
-            "Manage host apps and optional domain/subdomain associations.",
-        ),
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
         picker = picker,

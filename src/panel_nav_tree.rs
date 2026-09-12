@@ -224,14 +224,15 @@ mod tests {
             "Dashboard leaf must not render chevron: {dash_snip}"
         );
         if let Some(apps_idx) = html.find("href=\"/apps\"") {
-            let apps_snip = &html[apps_idx..apps_idx + 160.min(html.len() - apps_idx)];
-            assert!(
-                !apps_snip.contains("nav-chevron"),
-                "Apps leaf must not render chevron: {apps_snip}"
-            );
+            panic!("standalone Apps nav must not appear: around {apps_idx}");
         }
+        assert!(
+            !html.contains(">Apps</span>") && !html.contains(">Apps</a>"),
+            "Apps label must not appear as a sidebar item"
+        );
         assert!(html.contains("nav-chevron"));
         assert!(html.contains("data-nav-group=\"websites\""));
+        assert!(html.contains("data-nav-group=\"plugins\"") || html.contains("/plugins"));
     }
 
     #[test]
