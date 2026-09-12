@@ -301,12 +301,28 @@ pub fn email_accounts_main(
         rows.push_str("</tbody></table></div>");
     }
 
+    let client_panel = {
+        let domain = accounts
+            .first()
+            .map(|a| {
+                if a.domain.is_empty() {
+                    a.address.split('@').nth(1).unwrap_or("newstargeted.com").to_string()
+                } else {
+                    a.domain.clone()
+                }
+            })
+            .unwrap_or_else(|| "newstargeted.com".into());
+        crate::panel_hub_pages_mail_client::mail_client_config_html(&domain)
+    };
+
     let create_form = r#"
       <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
         <label for="address">Mailbox address</label>
         <input id="address" name="address" type="email" required placeholder="user@example.com">
         <label for="domain">Site FQDN (optional)</label>
         <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
+        <label for="mailbox_password">Mailbox password (local Postfix/Dovecot + webmail)</label>
+        <input id="mailbox_password" name="mailbox_password" type="password" autocomplete="new-password" placeholder="Required for local mail login">
         <label for="smtp_mode">SMTP mode</label>
         <select id="smtp_mode" name="smtp_mode">
           <option value="postfix_local">Local Postfix (default)</option>
@@ -346,6 +362,7 @@ pub fn email_accounts_main(
         <p class="muted">If no external SMTP was set during install, Postfix is the default local MTA. Switching to external SMTP later does not remove Postfix unless you uninstall Email.</p>
         {webmail}
       </article>
+      {client_panel}
       <article class="section-card" style="margin-top:18px;">
         <h2>Mailboxes</h2>
         <p>Enabled accounts must have complete external SMTP or a verified Postfix local binding.</p>
@@ -364,6 +381,7 @@ pub fn email_accounts_main(
         mta = mta_line,
         smtp = html_escape(&smtp_line),
         webmail = webmail,
+        client_panel = client_panel,
         rows = rows,
         create = create_form,
     )

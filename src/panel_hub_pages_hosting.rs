@@ -7,8 +7,8 @@ use crate::panel_hubs::{
 };
 use crate::panel_ops_db::{create_database, drop_database, list_databases};
 use crate::panel_ops_mail_extra::{
-    CatchAll, MailForward, dkim_status, ensure_dkim_dir, load_catchall, load_forwards,
-    mail_stack_note, save_catchall, save_forwards,
+    CatchAll, MailForward, dkim_status, load_catchall, load_forwards, mail_stack_note,
+    save_catchall, save_forwards,
 };
 use crate::panel_sections::{databases_status_main, email_accounts_main};
 use crate::postfix_fallback::postfix_is_ready;
@@ -233,8 +233,14 @@ pub fn email_dkim_page() -> String {
 }
 
 pub fn ensure_dkim() -> Result<String, String> {
-    let dir = ensure_dkim_dir()?;
-    Ok(format!("DKIM directory ready at {}", dir.display()))
+    let mut parts = vec![crate::panel_ops_mail_extra::ensure_dkim_store_ready()?];
+    for site in crate::sites::list_sites().unwrap_or_default() {
+        match crate::panel_ops_dkim_keys::ensure_dkim_for_domain(&site.domain) {
+            Ok(msg) => parts.push(msg),
+            Err(e) => parts.push(format!("{}: {e}", site.domain)),
+        }
+    }
+    Ok(parts.join(" "))
 }
 
 /// Deprecated wrapper: prefer `panel_hub_pages_webmail::email_webmail_page`.

@@ -420,6 +420,8 @@ pub fn create_site_with_ssl(
         suspended_by: None,
     };
     persist_site(&path, &site)?;
+    // Best-effort: DKIM, SPF/DKIM/DMARC DNS, auto SSL (never fails site create).
+    let _ = crate::panel_ops_domain_ready::after_site_created(&domain);
     // Optional unique internal IP when Nginx front mode is enabled.
     if crate::proxy_front::proxy_front_enabled() {
         let _ = crate::proxy_front::ensure_site_internal_ip(&domain);

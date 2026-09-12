@@ -180,6 +180,11 @@ enum SiteCommands {
     },
     /// List website records
     List,
+    /// Re-run DKIM + SPF/DKIM/DMARC DNS + auto SSL for an existing site
+    Ready {
+        #[arg(long)]
+        domain: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -337,6 +342,15 @@ fn run() -> Result<(), String> {
             }
         },
         Commands::Site { command } => match command {
+            SiteCommands::Ready { domain } => {
+                require_root_for_mutation()?;
+                let report = cpn_installer::panel_ops_domain_ready::after_site_created(&domain);
+                println!("{}", report.summary());
+                for w in &report.warnings {
+                    eprintln!("warning: {w}");
+                }
+                Ok(())
+            }
             SiteCommands::List => {
                 let sites = list_sites()?;
                 if sites.is_empty() {
