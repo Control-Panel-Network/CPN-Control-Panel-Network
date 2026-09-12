@@ -401,5 +401,36 @@ mod tests {
         );
         assert_eq!(remap_snappymail_stripped_asset("/index.php"), "/index.php");
         assert_eq!(remap_snappymail_stripped_asset("/v"), "/snappymail/v");
+        assert_eq!(remap_snappymail_stripped_asset("/"), "/");
+    }
+
+    #[test]
+    fn mount_trailing_slash_strips_to_root() {
+        with_test_data_dir(|| {
+            let mut cfg = WebmailPanelConfig::default();
+            cfg.public_path = "/snappymail".into();
+            save_webmail_config(&cfg).unwrap();
+            assert!(path_matches_webmail_mount("/snappymail"));
+            assert!(path_matches_webmail_mount("/snappymail/"));
+            assert!(path_matches_webmail_mount("/snappymail/index.php"));
+            assert_eq!(strip_webmail_mount("/snappymail").as_deref(), Some("/"));
+            assert_eq!(strip_webmail_mount("/snappymail/").as_deref(), Some("/"));
+            assert_eq!(
+                strip_webmail_mount("/snappymail/index.php").as_deref(),
+                Some("/index.php")
+            );
+            assert_eq!(
+                strip_webmail_mount("/snappymail/v/2.38.2/static/js/min/libs.min.js").as_deref(),
+                Some("/v/2.38.2/static/js/min/libs.min.js")
+            );
+            assert_eq!(
+                remap_snappymail_stripped_asset(
+                    strip_webmail_mount("/snappymail/v/2.38.2/static/js/min/libs.min.js")
+                        .as_deref()
+                        .unwrap()
+                ),
+                "/snappymail/v/2.38.2/static/js/min/libs.min.js"
+            );
+        });
     }
 }

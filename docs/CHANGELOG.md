@@ -5,6 +5,19 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.29] - 12/09/2026
+
+Ship merged SnappyMail panel proxy fixes (#168) and quiet optional httpd/caddy upgrade probes (#169) as a tip RPM (Cargo `0.2.6-alpha.29`). Published `v0.2.6-alpha.28` was cut before those merges, so labs that upgraded to `.28` still got empty `404` on `/snappymail/` (catch-all method AND bug) and HTML MIME for `/snappymail/v/*/static/**`.
+
+### Fixed
+
+- Tip package now includes the webmail catch-all `guard::Any` OR methods, `/snappymail` + `/snappymail/` + `/snappymail/index.php` proxy to login HTML, and `/snappymail/v/{ver}/static/**` passthrough with real JS/CSS Content-Type.
+- Missing `httpd`/`caddy` units on OpenLiteSpeed hosts are skipped quietly during upgrade verify (#169).
+
+### Notes
+
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
 ## [0.2.6-alpha.28] - 12/09/2026
 
 Combined tip: SnappyMail blank-page proxy fix + preferred mailbox picker, plus GitHub Releases disk cache packages from #164 (Cargo `0.2.6-alpha.28`). Published `v0.2.6-alpha.27` still pointed at the #166 packaging commit, so RPMs lacked `github-releases-cache`.
