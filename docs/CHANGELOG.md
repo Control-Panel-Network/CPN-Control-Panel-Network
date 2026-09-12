@@ -5,6 +5,15 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.28] - 12/09/2026
+
+Package tip that includes GitHub Releases disk cache and searchable Version Management picker from #164 (Cargo `0.2.6-alpha.28`). Published `v0.2.6-alpha.27` still pointed at the #166 packaging commit, so RPMs lacked `github-releases-cache`.
+
+### Notes
+
+- Source already on `stable` at `47f2f6f`; this tip only bumps package version so Release assets ship the cache binary.
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
 ## [0.2.6-alpha.27] - 12/09/2026
 
 Guest-matched EL RPM selection, Version Management searchable picker, and GitHub Releases disk cache (Cargo `0.2.6-alpha.27`). Retags the EL fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
