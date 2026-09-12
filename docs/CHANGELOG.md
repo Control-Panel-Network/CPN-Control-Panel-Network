@@ -5,9 +5,9 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6-alpha.26] - 12/09/2026
+## [0.2.6-alpha.27] - 12/09/2026
 
-Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip (Cargo `0.2.6-alpha.26`). Prior `v0.2.6-alpha.25` tag pointed at pre-webmail tip.
+Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags the fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
 
 ### Fixed
 
@@ -18,8 +18,16 @@ Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip
 
 ### Notes
 
-- Includes changelog items from `0.2.6-alpha.24` (webmail / MTA-STS / BIMI) and `0.2.6-alpha.25` (Version-Release tip RPM accept).
 - Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
+## [0.2.6-alpha.26] - 12/09/2026
+
+Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip (Cargo `0.2.6-alpha.26`). Prior `v0.2.6-alpha.25` tag pointed at pre-webmail tip.
+
+### Notes
+
+- Includes changelog items from `0.2.6-alpha.24` (webmail / MTA-STS / BIMI) and `0.2.6-alpha.25` (Version-Release tip RPM accept).
+- EL-matched RPM maintenance fix shipped in **0.2.6-alpha.27** (not in the original `v0.2.6-alpha.26` package binaries).
 
 ## [0.2.6-alpha.25] - 12/09/2026
 
