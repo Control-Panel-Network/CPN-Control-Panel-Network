@@ -163,7 +163,7 @@ pub fn plugins_hub_script() -> String {
       return;
     }
     if (el.id === 'plugin-per-page') {
-      var per = el.value || '8';
+      var per = el.value || '4';
       loadHub(buildStoreUrl({ per_page: per, page: 1 }), { replace: false });
     }
   }, true);
@@ -218,9 +218,9 @@ pub fn list_mode_from_query(raw: &str) -> &'static str {
 }
 
 pub fn per_page_from_query(raw: &str) -> usize {
-    match raw.trim().parse::<usize>().unwrap_or(8) {
-        n @ (8 | 12 | 16 | 24 | 48) => n,
-        _ => 8,
+    match raw.trim().parse::<usize>().unwrap_or(4) {
+        n @ (4 | 8 | 12 | 16 | 24 | 48) => n,
+        _ => 4,
     }
 }
 
@@ -262,7 +262,7 @@ pub fn store_list_toolbar(
     } else {
         ""
     };
-    let sizes = [8usize, 12, 16, 24, 48];
+    let sizes = [4usize, 8, 12, 16, 24, 48];
     let mut options = String::new();
     for size in sizes {
         let sel = if size == per_page { " selected" } else { "" };
@@ -305,4 +305,36 @@ pub fn store_list_toolbar(
         next_dis = next_dis,
         total = total_items,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{list_mode_from_query, page_from_query, per_page_from_query};
+
+    #[test]
+    fn per_page_defaults_to_four() {
+        assert_eq!(per_page_from_query(""), 4);
+        assert_eq!(per_page_from_query("   "), 4);
+        assert_eq!(per_page_from_query("not-a-number"), 4);
+        assert_eq!(per_page_from_query("0"), 4);
+        assert_eq!(per_page_from_query("7"), 4);
+        assert_eq!(per_page_from_query("3"), 4);
+    }
+
+    #[test]
+    fn per_page_allows_selector_sizes() {
+        for size in [4usize, 8, 12, 16, 24, 48] {
+            assert_eq!(per_page_from_query(&size.to_string()), size);
+        }
+    }
+
+    #[test]
+    fn list_mode_and_page_helpers() {
+        assert_eq!(list_mode_from_query("page"), "page");
+        assert_eq!(list_mode_from_query("scroll"), "scroll");
+        assert_eq!(list_mode_from_query("scrollbar"), "scroll");
+        assert_eq!(page_from_query(""), 1);
+        assert_eq!(page_from_query("0"), 1);
+        assert_eq!(page_from_query("3"), 3);
+    }
 }

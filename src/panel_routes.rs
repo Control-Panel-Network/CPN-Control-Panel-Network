@@ -518,7 +518,7 @@ pub async fn plugins_page(
         query.get("page").map(String::as_str).unwrap_or("1"),
     );
     let per_page = crate::panel_plugins_spa::per_page_from_query(
-        query.get("per_page").map(String::as_str).unwrap_or("8"),
+        query.get("per_page").map(String::as_str).unwrap_or("4"),
     );
     let partial = query.get("partial").map(String::as_str) == Some("1")
         || http
