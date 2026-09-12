@@ -80,7 +80,7 @@ pub async fn backups_restore_run(
     form: web::Form<RestoreRunForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let scope = if form.scope.trim().is_empty() {
         "site"
