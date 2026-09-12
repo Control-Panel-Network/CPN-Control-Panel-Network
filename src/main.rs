@@ -72,6 +72,7 @@ use cpn_installer::panel_network::{
 use cpn_installer::panel_notifications_routes::{
     panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
 };
+use cpn_installer::panel_package_bulk_routes::{packages_bulk, packages_duplicate};
 use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
@@ -942,6 +943,8 @@ async fn main() -> std::io::Result<()> {
             .service(packages_edit_page)
             .service(packages_create)
             .service(packages_update)
+            .service(packages_duplicate)
+            .service(packages_bulk)
             .service(packages_delete)
             .service(packages_assign)
             .service(apps_page)

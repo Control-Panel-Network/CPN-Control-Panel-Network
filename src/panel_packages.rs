@@ -60,13 +60,22 @@ fn fqdn_cell(enabled: bool) -> String {
     }
 }
 
+fn action_button(label: &str, style: &str) -> String {
+    format!(
+        r#"<button type="submit" class="linkish" style="background:none;border:0;{style}font-weight:600;cursor:pointer;padding:0;">{label}</button>"#,
+        label = html_escape(label),
+        style = style,
+    )
+}
+
 fn package_rows(packages: &[Package]) -> String {
     if packages.is_empty() {
         return r#"<p class="empty-state">No packages yet.</p>"#.into();
     }
     let mut rows = String::from(
-        r#"<div class="table-wrap"><table class="data-table">
+        r#"<div class="table-wrap"><table class="data-table" id="packages-table">
       <thead><tr>
+        <th style="width:2.5rem;"><input type="checkbox" id="pkg-select-all" aria-label="Select all packages"></th>
         <th>Package name</th><th>Disk space</th><th>Bandwidth</th><th>Domains</th>
         <th>Emails</th><th>Databases</th><th>FTP accounts</th><th>FQDN status</th><th>Actions</th>
       </tr></thead><tbody>"#,
@@ -81,23 +90,35 @@ fn package_rows(packages: &[Package]) -> String {
                 html_escape(&assigned.join(", "))
             )
         };
+        let dup_default = format!("{} Copy", pkg.name);
         rows.push_str(&format!(
             r#"<tr>
+          <td>
+            <input type="checkbox" class="pkg-row-check" form="packages-bulk-form" name="package_ids" value="{id}" aria-label="Select {name}">
+          </td>
           <td><strong>{name}</strong>{assigned_note}<div class="muted" style="font-size:12px;">{id}</div></td>
           <td>{disk}</td><td>{bw}</td><td>{domains}</td><td>{emails}</td>
           <td>{dbs}</td><td>{ftp}</td><td>{fqdn}</td>
           <td>
             <a href="/packages/edit?id={id}">Edit</a>
             &nbsp;|&nbsp;
+            <form method="post" action="/packages/duplicate" class="inline-form" style="display:inline;" onsubmit="return cpnPkgDuplicate(this);">
+              <input type="hidden" name="id" value="{id}">
+              <input type="hidden" name="new_name" value="">
+              <input type="hidden" data-default-name="{dup_default}">
+              {dup_btn}
+            </form>
+            &nbsp;|&nbsp;
             <form method="post" action="/packages/delete" class="inline-form" style="display:inline;" onsubmit="return confirm('Delete package {name}?');">
               <input type="hidden" name="id" value="{id}">
-              <button type="submit" class="linkish" style="background:none;border:0;color:#d92d20;font-weight:600;cursor:pointer;padding:0;">Delete</button>
+              {del_btn}
             </form>
           </td>
         </tr>"#,
             name = html_escape(&pkg.name),
             assigned_note = assigned_note,
             id = html_escape(&pkg.id),
+            dup_default = html_escape(&dup_default),
             disk = limit_cell(pkg.disk_mb, "MB"),
             bw = limit_cell(pkg.bandwidth_mb, "MB"),
             domains = limit_cell(pkg.domains, ""),
@@ -105,10 +126,91 @@ fn package_rows(packages: &[Package]) -> String {
             dbs = limit_cell(pkg.databases, ""),
             ftp = limit_cell(pkg.ftp_accounts, ""),
             fqdn = fqdn_cell(pkg.fqdn_enabled),
+            dup_btn = action_button("Duplicate", "color:inherit;"),
+            del_btn = action_button("Delete", "color:#d92d20;"),
         ));
     }
     rows.push_str("</tbody></table></div>");
     rows
+}
+
+fn bulk_toolbar() -> String {
+    r#"<form id="packages-bulk-form" method="post" action="/packages/bulk" style="margin:0 0 14px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+        <span class="muted" id="pkg-selected-count" aria-live="polite">0 selected</span>
+        <button type="submit" name="action" value="fqdn_enable" class="btn-secondary" onclick="return cpnPkgBulkConfirm(this);">Enable FQDN</button>
+        <button type="submit" name="action" value="fqdn_disable" class="btn-secondary" onclick="return cpnPkgBulkConfirm(this);">Disable FQDN</button>
+        <button type="submit" name="action" value="delete" class="btn-secondary" style="color:#d92d20;" onclick="return cpnPkgBulkConfirm(this);">Delete selected</button>
+        <button type="button" class="btn-secondary" id="pkg-toggle-bulk-edit" aria-expanded="false" aria-controls="pkg-bulk-edit">Bulk edit fields</button>
+      </div>
+      <div id="pkg-bulk-edit" hidden style="display:none;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px;padding:12px;border:1px solid var(--border, #d0d5dd);border-radius:8px;">
+        <p class="muted" style="grid-column:1/-1;margin:0;">Leave a field blank to keep each package value. Names are not changed.</p>
+        <label>Disk MB<input name="disk_mb" type="number" placeholder="unchanged"></label>
+        <label>Bandwidth MB<input name="bandwidth_mb" type="number" placeholder="unchanged"></label>
+        <label>Domains<input name="domains" type="number" placeholder="unchanged"></label>
+        <label>Emails<input name="emails" type="number" placeholder="unchanged"></label>
+        <label>Databases<input name="databases" type="number" placeholder="unchanged"></label>
+        <label>FTP accounts<input name="ftp_accounts" type="number" placeholder="unchanged"></label>
+        <label>FQDN
+          <select name="fqdn_enabled">
+            <option value="">Unchanged</option>
+            <option value="1">Enable</option>
+            <option value="0">Disable</option>
+          </select>
+        </label>
+        <label style="grid-column:1/-1;">Notes
+          <textarea name="notes" rows="2" placeholder="Optional shared notes"></textarea>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" name="apply_notes" value="1"> Apply notes to selection
+        </label>
+        <div style="grid-column:1/-1;">
+          <button type="submit" name="action" value="update" class="btn-primary" onclick="return cpnPkgBulkConfirm(this);">Apply to selected</button>
+        </div>
+      </div>
+    </form>
+    <script>
+    (function(){
+      function checks(){return Array.prototype.slice.call(document.querySelectorAll('.pkg-row-check'));}
+      function refresh(){
+        var list=checks(), n=list.filter(function(c){return c.checked;}).length;
+        var el=document.getElementById('pkg-selected-count');
+        if(el) el.textContent=n+' selected';
+        var all=document.getElementById('pkg-select-all');
+        if(all){all.checked=list.length>0&&n===list.length; all.indeterminate=n>0&&n<list.length;}
+      }
+      var all=document.getElementById('pkg-select-all');
+      if(all){all.addEventListener('change',function(){checks().forEach(function(c){c.checked=all.checked;});refresh();});}
+      checks().forEach(function(c){c.addEventListener('change',refresh);});
+      var toggle=document.getElementById('pkg-toggle-bulk-edit');
+      var panel=document.getElementById('pkg-bulk-edit');
+      if(toggle&&panel){
+        toggle.addEventListener('click',function(){
+          var open=panel.getAttribute('hidden')===null;
+          if(open){panel.setAttribute('hidden','');panel.style.display='none';toggle.setAttribute('aria-expanded','false');}
+          else{panel.removeAttribute('hidden');panel.style.display='grid';toggle.setAttribute('aria-expanded','true');}
+        });
+      }
+      refresh();
+      window.cpnPkgDuplicate=function(form){
+        var hint=form.querySelector('[data-default-name]');
+        var suggested=hint?hint.getAttribute('data-default-name'):'';
+        var name=window.prompt('New package name', suggested||'');
+        if(!name||!String(name).trim()) return false;
+        form.querySelector('input[name="new_name"]').value=String(name).trim();
+        return true;
+      };
+      window.cpnPkgBulkConfirm=function(btn){
+        var n=checks().filter(function(c){return c.checked;}).length;
+        if(n<1){alert('Select at least one package.');return false;}
+        var action=btn&&btn.value?btn.value:'';
+        if(action==='delete') return confirm('Delete '+n+' selected package(s)? Assigned packages and Default stay blocked.');
+        if(action==='update') return confirm('Apply bulk fields to '+n+' package(s)?');
+        return true;
+      };
+    })();
+    </script>"#
+        .into()
 }
 
 fn usage_card(usage: &PackageUsage) -> String {
@@ -277,7 +379,7 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
     let _ = crate::packages::ensure_default_package();
     let heading = section_heading(
         "List Packages",
-        "Manage hosting packages: edit resource limits or delete packages.",
+        "Manage hosting packages: duplicate, multi-select, and bulk update limits.",
     );
     let notices = format!(
         "{}{}",
@@ -301,11 +403,13 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         <h2 style="margin:0;font-size:18px;">Hosting Packages</h2>
         <a class="btn-primary" href="/packages/new">Create package</a>
       </div>
+      {toolbar}
       {rows}
     </div>
     {assign}"#,
         heading = heading,
         notices = notices,
+        toolbar = bulk_toolbar(),
         rows = package_rows(&packages),
         assign = assign_form(&packages),
     )
