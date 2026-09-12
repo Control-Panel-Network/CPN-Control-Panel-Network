@@ -1,8 +1,11 @@
 //! Backups hub feature routes.
 
+use crate::backup_restore::{RestoreRequest, restore_backup};
 use crate::installer::AppState;
 use crate::panel_backups::BackupsPageQuery;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+};
 use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
     save_backup_destinations, save_backup_schedule,
@@ -48,10 +51,80 @@ pub async fn backups_restore_route(
         "backups",
         "Restore Backup",
         &backups_restore_page(
-            query.get("scope").map(String::as_str).unwrap_or("panel"),
+            query.get("scope").map(String::as_str).unwrap_or("site"),
             query.get("domain").map(String::as_str).unwrap_or(""),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
         ),
     ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RestoreRunForm {
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    domain: String,
+    #[serde(default)]
+    archive: String,
+    #[serde(default)]
+    format: String,
+    #[serde(default)]
+    db_name: String,
+}
+
+#[post("/backups/restore/run")]
+pub async fn backups_restore_run(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<RestoreRunForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    let scope = if form.scope.trim().is_empty() {
+        "site"
+    } else {
+        form.scope.trim()
+    };
+    let domain = form.domain.trim();
+    let mut return_base = format!(
+        "/backups/restore?scope={}&domain={}",
+        urlencoding_simple(scope),
+        urlencoding_simple(domain)
+    );
+    match restore_backup(&RestoreRequest {
+        scope: scope.to_string(),
+        domain: domain.to_string(),
+        archive: form.archive.clone(),
+        format: form.format.clone(),
+        db_name: form.db_name.clone(),
+    }) {
+        Ok(result) => {
+            let mut msg = result.message;
+            if !result.warnings.is_empty() {
+                msg.push(' ');
+                msg.push_str(&result.warnings.join(" "));
+            }
+            // Keep redirect query reasonable.
+            if msg.len() > 500 {
+                msg.truncate(497);
+                msg.push_str("...");
+            }
+            return_base.push_str("&notice=");
+            return_base.push_str(&urlencoding_simple(&msg));
+            HttpResponse::SeeOther()
+                .append_header(("Location", return_base))
+                .finish()
+        }
+        Err(err) => {
+            return_base.push_str("&error=");
+            return_base.push_str(&urlencoding_simple(&err));
+            HttpResponse::SeeOther()
+                .append_header(("Location", return_base))
+                .finish()
+        }
+    }
 }
 
 #[get("/backups/schedule")]
