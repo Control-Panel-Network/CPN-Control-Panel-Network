@@ -513,6 +513,19 @@ pub async fn plugins_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let refresh = query.get("refresh").map(String::as_str) == Some("1");
+    let mode = query.get("mode").map(String::as_str).unwrap_or("page");
+    let page = crate::panel_plugins_spa::page_from_query(
+        query.get("page").map(String::as_str).unwrap_or("1"),
+    );
+    let per_page = crate::panel_plugins_spa::per_page_from_query(
+        query.get("per_page").map(String::as_str).unwrap_or("8"),
+    );
+    let partial = query.get("partial").map(String::as_str) == Some("1")
+        || http
+            .headers()
+            .get("X-CPN-Partial")
+            .and_then(|v| v.to_str().ok())
+            == Some("1");
     let sites = sites_manageable_by(&user).unwrap_or_default();
     let domain = if domain.trim().is_empty() {
         ""
@@ -524,22 +537,24 @@ pub async fn plugins_page(
     } else {
         ""
     };
-    html_ok(panel_shell(
-        &user,
-        "plugins",
-        "Plugins",
-        &plugins_main(PluginsPageQuery {
-            view,
-            layout,
-            q,
-            category,
-            domain,
-            notice,
-            error,
-            refresh,
-            sites: &sites,
-        }),
-    ))
+    let body = plugins_main(PluginsPageQuery {
+        view,
+        layout,
+        q,
+        category,
+        domain,
+        notice,
+        error,
+        refresh,
+        mode,
+        page,
+        per_page,
+        sites: &sites,
+    });
+    if partial {
+        return html_ok(body);
+    }
+    html_ok(panel_shell(&user, "plugins", "Plugins", &body))
 }
 
 #[derive(Debug, serde::Deserialize)]
