@@ -3,6 +3,7 @@
 use crate::apps::{AppId, install_app_on, reinstall_app_on, uninstall_app_on};
 use crate::apps_control::{start_app, stop_app};
 use crate::auth_api::panel_user_from_request;
+use crate::login_next::login_redirect;
 use crate::installer::AppState;
 use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -10,12 +11,6 @@ use std::sync::Arc;
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
-}
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
 }
 
 fn urlencoding_simple(value: &str) -> String {
@@ -65,7 +60,7 @@ pub async fn apps_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     // No domain: Host packages hub. With domain: site Plugins view (Installed / Store / Host tabs).
     let domain = query
@@ -111,7 +106,7 @@ pub async fn apps_install(
     form: web::Form<AppNameForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = match optional_domain_for_user(&user, &form.domain, SitePerm::Install) {
         Ok(v) => v,
@@ -144,7 +139,7 @@ pub async fn apps_reinstall(
     form: web::Form<AppNameForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = match optional_domain_for_user(&user, &form.domain, SitePerm::Install) {
         Ok(v) => v,
@@ -177,7 +172,7 @@ pub async fn apps_uninstall(
     form: web::Form<AppNameForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = match optional_domain_for_user(&user, &form.domain, SitePerm::Uninstall) {
         Ok(v) => v,
@@ -210,7 +205,7 @@ pub async fn apps_start(
     form: web::Form<AppNameForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match AppId::parse(&form.name).and_then(start_app) {
         Ok(message) => HttpResponse::SeeOther()
@@ -235,7 +230,7 @@ pub async fn apps_stop(
     form: web::Form<AppNameForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match AppId::parse(&form.name).and_then(stop_app) {
         Ok(message) => HttpResponse::SeeOther()

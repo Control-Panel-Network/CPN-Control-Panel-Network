@@ -22,7 +22,7 @@ pub async fn backups_create_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -44,7 +44,7 @@ pub async fn backups_restore_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -134,7 +134,7 @@ pub async fn backups_schedule_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -166,7 +166,7 @@ pub async fn backups_schedule_save(
     form: web::Form<ScheduleForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let enabled = matches!(form.enabled.trim(), "1" | "true" | "on" | "yes");
     match save_backup_schedule(enabled, &form.cron, &form.scope, &form.domain) {
@@ -182,7 +182,7 @@ pub async fn backups_destinations_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -212,7 +212,7 @@ pub async fn backups_destinations_save(
     form: web::Form<DestinationsForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let local = matches!(form.local_enabled.trim(), "1" | "true" | "on" | "yes");
     match save_backup_destinations(local, &form.google_drive_note, &form.remote_note) {
@@ -227,7 +227,7 @@ pub async fn backups_gdrive_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -249,7 +249,7 @@ pub async fn backups_remote_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,

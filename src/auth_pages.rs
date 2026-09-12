@@ -64,14 +64,34 @@ fn shared_auth_styles() -> &'static str {
 "#
 }
 
-pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String {
+pub fn panel_login_html(
+    status: &InstallerStatus,
+    error: Option<&str>,
+    next: Option<&str>,
+) -> String {
     let initial_locale = resolve_initial_locale(status);
-    let token_q = status
+    let safe_next = next.and_then(crate::login_next::sanitize_login_next);
+    let mut action_q = String::new();
+    if let Some(token) = status
         .panel_login_url
         .as_ref()
         .and_then(|url| url.split("token=").nth(1))
-        .map(|value| format!("?token={}", html_escape(value)))
-        .unwrap_or_default();
+    {
+        action_q.push_str("?token=");
+        action_q.push_str(&html_escape(token));
+    }
+    if let Some(ref n) = safe_next {
+        action_q.push(if action_q.is_empty() { '?' } else { '&' });
+        action_q.push_str("next=");
+        action_q.push_str(&html_escape(n));
+    }
+    let next_hidden = match safe_next.as_deref() {
+        Some(n) => format!(
+            r#"<input type="hidden" name="next" value="{val}">"#,
+            val = html_escape(n)
+        ),
+        None => String::new(),
+    };
     let error_block = match error {
         Some(message) if !message.is_empty() => format!(
             r#"<p class="error" id="i18n-login-error" role="alert">{msg}</p>"#,
@@ -90,14 +110,15 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
   {favicons}
   <style>{styles}</style>
 </head>
-<body data-page="login"{error_attr}>
+<body data-page="login"{error_attr}{next_attr}>
   <main>
     <section class="card">
       <div id="cpn-lang-host" class="lang-host"></div>
       <img class="brand-logo" src="/cpn-logo.png" alt="CPN Control Panel Network">
       <h1 id="i18n-title">Sign in</h1>
       {error_block}
-      <form method="post" action="/login{token_q}" autocomplete="on">
+      <form method="post" action="/login{action_q}" autocomplete="on">
+        {next_hidden}
         <label for="username" id="i18n-username">Username</label>
         <input id="username" name="username" value="" autocomplete="username" required>
         <label for="password" id="i18n-password">Password</label>
@@ -127,20 +148,38 @@ pub fn panel_login_html(status: &InstallerStatus, error: Option<&str>) -> String
         locale = initial_locale,
         favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
-        token_q = token_q,
+        action_q = action_q,
+        next_hidden = next_hidden,
         error_block = error_block,
         error_attr = if error.is_some() {
             r#" data-login-error="1""#
         } else {
             ""
         },
+        next_attr = match safe_next.as_deref() {
+            Some(n) => format!(r#" data-login-next="{}""#, html_escape(n)),
+            None => String::new(),
+        },
         passkey_script = crate::panel_webauthn::passkey_client_script(),
         script = PANEL_I18N_SCRIPT,
     )
 }
 
-pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
+pub fn panel_mfa_html(
+    status: &InstallerStatus,
+    error: Option<&str>,
+    next: Option<&str>,
+) -> String {
     let initial_locale = resolve_initial_locale(status);
+    let safe_next = next.and_then(crate::login_next::sanitize_login_next);
+    let next_hidden = match safe_next.as_deref() {
+        Some(n) => format!(
+            r#"<input type="hidden" name="next" value="{val}">"#,
+            val = html_escape(n)
+        ),
+        None => String::new(),
+    };
+    let back_href = crate::login_next::login_location(safe_next.as_deref());
     let error_block = match error {
         Some(message) if !message.is_empty() => format!(
             r#"<p class="error" role="alert">{msg}</p>"#,
@@ -167,11 +206,12 @@ pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
       <p class="hint">Enter the 6-digit code from your authenticator app, or a one-time backup code.</p>
       {error_block}
       <form method="post" action="/login/2fa" autocomplete="off">
+        {next_hidden}
         <label for="code">Authenticator code</label>
         <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required maxlength="32" autofocus>
         <button type="submit">Verify</button>
       </form>
-      <p class="hint"><a href="/login">Back to sign in</a></p>
+      <p class="hint"><a href="{back_href}">Back to sign in</a></p>
     </section>
   </main>
   {script}
@@ -181,6 +221,8 @@ pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>) -> String {
         favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
         error_block = error_block,
+        next_hidden = next_hidden,
+        back_href = html_escape(&back_href),
         script = PANEL_I18N_SCRIPT,
     )
 }
@@ -401,7 +443,7 @@ mod tests {
 
     #[test]
     fn login_has_logo_and_password_visibility_control() {
-        let html = panel_login_html(&InstallerStatus::default(), None);
+        let html = panel_login_html(&InstallerStatus::default(), None, None);
         assert!(html.contains("/cpn-logo.png"));
         assert!(html.contains("/favicon.ico"));
         assert!(html.contains("cpnTogglePassword"));

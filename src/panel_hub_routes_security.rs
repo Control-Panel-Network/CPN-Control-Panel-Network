@@ -15,7 +15,7 @@ use std::sync::Arc;
 #[get("/security")]
 pub async fn security_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -32,7 +32,7 @@ pub async fn security_firewall(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -52,7 +52,7 @@ pub async fn security_firewall_enable(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return redirect_notice(
@@ -74,7 +74,7 @@ pub async fn security_ssh(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -103,7 +103,7 @@ pub async fn security_ssh_toggle(
     form: web::Form<SshToggleForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match run_sshd_toggle(&user, form.key.trim(), form.value.trim()) {
         Ok(msg) => redirect_notice("/security/ssh", Some(&msg), None),
@@ -114,7 +114,7 @@ pub async fn security_ssh_toggle(
 #[get("/security/fail2ban")]
 pub async fn security_fail2ban(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(&user, "security", "Fail2ban", &fail2ban_page()))
 }
@@ -122,7 +122,7 @@ pub async fn security_fail2ban(http: HttpRequest, state: web::Data<Arc<AppState>
 #[get("/security/modsecurity")]
 pub async fn security_modsec(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -138,7 +138,7 @@ pub async fn security_modsec_rules(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -154,7 +154,7 @@ pub async fn security_rule_packs(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -167,7 +167,7 @@ pub async fn security_rule_packs(
 #[get("/security/malware-scan")]
 pub async fn security_malware(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -184,7 +184,7 @@ pub async fn security_ssl(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -203,7 +203,7 @@ pub async fn security_ssl_hostname(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -216,7 +216,7 @@ pub async fn security_ssl_hostname(
 #[get("/security/ssl/mail")]
 pub async fn security_ssl_mail(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,

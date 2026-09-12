@@ -26,7 +26,7 @@ use std::sync::Arc;
 #[get("/server")]
 pub async fn server_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(&user, "server", "Server", &server_hub_main()))
 }
@@ -38,7 +38,7 @@ pub async fn server_services_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -59,7 +59,7 @@ pub async fn server_openlitespeed_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -166,7 +166,7 @@ pub async fn server_litespeed_enterprise_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -186,7 +186,7 @@ pub async fn server_litespeed_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -205,7 +205,7 @@ fn litespeed_admin_redirect(
     http: &HttpRequest,
 ) -> Option<HttpResponse> {
     let Some(user) = require_panel_user(state, http) else {
-        return Some(login_redirect());
+        return Some(login_redirect(&http));
     };
     if !is_panel_admin(&user) {
         return Some(redirect_notice(
@@ -310,7 +310,7 @@ pub async fn server_services_control(
     form: web::Form<ServiceControlForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match run_service_control(&user, form.unit.trim(), form.action.trim()) {
         Ok(msg) => redirect_notice("/server/services", Some(&msg), None),
@@ -324,7 +324,7 @@ pub async fn server_processes_page(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -340,7 +340,7 @@ pub async fn server_php_extensions(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -356,7 +356,7 @@ pub async fn server_php_configs(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -369,7 +369,7 @@ pub async fn server_php_configs(
 #[get("/server/php/tuning")]
 pub async fn server_php_tuning(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -386,7 +386,7 @@ pub async fn server_packages_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let q = query.get("q").map(String::as_str).unwrap_or("");
     html_ok(panel_shell(
@@ -403,7 +403,7 @@ pub async fn server_docker_apps(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -419,7 +419,7 @@ pub async fn server_docker_containers(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -435,7 +435,7 @@ pub async fn server_docker_images(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -452,7 +452,7 @@ pub async fn server_files_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return html_ok(panel_shell(
@@ -478,7 +478,7 @@ pub async fn server_dns_zones(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -506,7 +506,7 @@ pub async fn server_dns_zones_save(
     form: web::Form<DnsZoneForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return redirect_notice("/server/dns/zones", None, Some("Admin only"));
@@ -524,7 +524,7 @@ pub async fn server_dns_zones_delete(
     form: web::Form<DnsZoneForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return redirect_notice("/server/dns/zones", None, Some("Admin only"));
@@ -542,7 +542,7 @@ pub async fn server_dns_nameservers(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -563,7 +563,7 @@ pub async fn server_dns_defaults(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -590,7 +590,7 @@ pub async fn server_dns_nameservers_save(
     form: web::Form<NameserversForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return redirect_notice("/server/dns/nameservers", None, Some("Admin only"));
@@ -604,7 +604,7 @@ pub async fn server_dns_nameservers_save(
 #[get("/settings")]
 pub async fn settings_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -620,7 +620,7 @@ pub async fn settings_version_page(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let can_manage = is_panel_admin(&user);
     html_ok(panel_shell(
@@ -637,7 +637,7 @@ pub async fn settings_design_page(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -653,7 +653,7 @@ pub async fn settings_setup_page(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -669,7 +669,7 @@ pub async fn settings_connect_page(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(&user, "settings", "Connect", &connect_page()))
 }
@@ -681,7 +681,7 @@ pub async fn settings_port_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,

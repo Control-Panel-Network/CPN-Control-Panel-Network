@@ -4,6 +4,8 @@ use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use actix_web::{HttpRequest, HttpResponse};
 
+pub use crate::login_next::login_redirect;
+
 pub fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
 }
@@ -12,12 +14,6 @@ pub fn html_ok(body: String) -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(body)
-}
-
-pub fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
 }
 
 pub fn urlencoding_simple(value: &str) -> String {

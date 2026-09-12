@@ -370,6 +370,9 @@ pub struct TokenQuery {
 #[allow(dead_code)] // Reserved for endpoints that accept optional ?token=
 pub struct OptionalTokenQuery {
     pub token: Option<String>,
+    /// Post-login return path (validated server-side; relative panel paths only).
+    #[serde(default)]
+    pub next: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

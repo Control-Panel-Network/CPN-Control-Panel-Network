@@ -1,6 +1,7 @@
 //! Authenticated Backups panel routes.
 
 use crate::auth_api::panel_user_from_request;
+use crate::login_next::login_redirect;
 use crate::backups::{BackupRequest, create_selective_backup};
 use crate::installer::AppState;
 use crate::panel_hub_pages_backups::backups_hub_main;
@@ -16,12 +17,6 @@ fn html_ok(body: String) -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(body)
-}
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
 }
 
 fn urlencoding_simple(value: &str) -> String {
@@ -45,7 +40,7 @@ pub async fn backups_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let _ = query;
     html_ok(panel_shell(
@@ -83,7 +78,7 @@ pub async fn backups_run(
     form: web::Form<BackupRunForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let scope = if form.scope.trim().is_empty() {
         "panel"

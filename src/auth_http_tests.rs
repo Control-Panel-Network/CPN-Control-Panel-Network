@@ -189,7 +189,127 @@ fn dashboard_without_session_redirects_to_login() {
             .get(actix_web::http::header::LOCATION)
             .and_then(|value| value.to_str().ok())
             .unwrap_or("");
-        assert_eq!(location, "/login");
+        assert_eq!(location, "/login?next=%2Fdashboard");
+    });
+}
+
+#[test]
+fn login_honors_safe_next_and_rejects_external() {
+    with_test_data_dir(|| {
+        let password = generate_password(&default_password_policy());
+        let session_secret = ephemeral_session_secret();
+        unsafe {
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
+        }
+        write_admin_account(&password);
+        runtime().block_on(async {
+            let app = actix_web::test::init_service(
+                App::new()
+                    .app_data(test_state("completed"))
+                    .service(login_submit),
+            )
+            .await;
+            let ok = actix_web::test::TestRequest::post()
+                .uri("/login?next=%2Fwebsites%3Ftab%3Dssl")
+                .set_form([
+                    ("username", "Admin"),
+                    ("password", password.as_str()),
+                    ("remember_me", "0"),
+                    ("next", "/websites?tab=ssl"),
+                ])
+                .to_request();
+            let resp = actix_web::test::call_service(&app, ok).await;
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let location = resp
+                .headers()
+                .get(actix_web::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("");
+            assert_eq!(location, "/websites?tab=ssl");
+
+            let bad = actix_web::test::TestRequest::post()
+                .uri("/login")
+                .set_form([
+                    ("username", "Admin"),
+                    ("password", password.as_str()),
+                    ("remember_me", "0"),
+                    ("next", "https://evil.example/phish"),
+                ])
+                .to_request();
+            let resp_bad = actix_web::test::call_service(&app, bad).await;
+            assert_eq!(resp_bad.status(), StatusCode::SEE_OTHER);
+            let loc_bad = resp_bad
+                .headers()
+                .get(actix_web::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("");
+            assert_eq!(loc_bad, "/dashboard");
+        });
+        unsafe {
+            std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+        }
+    });
+}
+
+#[test]
+fn logout_clears_session_and_keeps_return_path() {
+    use crate::auth_api::logout_get;
+    use crate::panel_session::{SESSION_COOKIE, create_session_token};
+
+    with_test_data_dir(|| {
+        let session_secret = ephemeral_session_secret();
+        unsafe {
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
+        }
+        let token = create_session_token("Admin", &session_secret);
+        runtime().block_on(async {
+            let app = actix_web::test::init_service(
+                App::new()
+                    .app_data(test_state("completed"))
+                    .service(logout_get),
+            )
+            .await;
+            let req = actix_web::test::TestRequest::get()
+                .uri("/logout")
+                .insert_header((
+                    actix_web::http::header::COOKIE,
+                    format!("{}={}", SESSION_COOKIE, token),
+                ))
+                .insert_header((
+                    actix_web::http::header::REFERER,
+                    "http://127.0.0.1:2090/server/openlitespeed",
+                ))
+                .insert_header((actix_web::http::header::HOST, "127.0.0.1:2090"))
+                .to_request();
+            let resp = actix_web::test::call_service(&app, req).await;
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let location = resp
+                .headers()
+                .get(actix_web::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("");
+            assert_eq!(location, "/login?next=%2Fserver%2Fopenlitespeed");
+            let cookies: Vec<_> = resp
+                .headers()
+                .get_all(actix_web::http::header::SET_COOKIE)
+                .filter_map(|v| v.to_str().ok())
+                .collect();
+            assert!(
+                cookies
+                    .iter()
+                    .any(|c| c.contains(SESSION_COOKIE) && c.contains("Max-Age=0")),
+                "session cookie must be cleared: {cookies:?}"
+            );
+            assert!(
+                cookies
+                    .iter()
+                    .any(|c| c.contains("cpn_panel_mfa_pending") && c.contains("Max-Age=0")),
+                "mfa pending cookie must be cleared: {cookies:?}"
+            );
+        });
+        unsafe {
+            std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+        }
     });
 }
 

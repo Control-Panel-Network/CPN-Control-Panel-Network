@@ -93,7 +93,7 @@ pub async fn users_profile_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -118,7 +118,7 @@ pub async fn users_modify_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let mut enroll_secret = None;
     let mut enroll_qr = None;
@@ -149,7 +149,7 @@ pub async fn users_profile_details_post(
     form: web::Form<ProfileDetailsForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let rename_needed = !form.username.trim().eq_ignore_ascii_case(user.trim());
     if let Err(error) = update_own_profile(
@@ -185,7 +185,7 @@ pub async fn users_profile_password_post(
     form: web::Form<ProfilePasswordForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let generate = parse_flag(&form.generate) || form.password.trim().is_empty();
     let password = if generate {
@@ -219,7 +219,7 @@ pub async fn users_profile_totp_begin(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match begin_totp_enroll(&user) {
         Ok((secret, _uri, svg)) => modify_html(
@@ -242,7 +242,7 @@ pub async fn users_profile_totp_confirm(
     form: web::Form<ProfileTotpCodeForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match confirm_totp_enroll(&user, &form.code) {
         Ok(codes) => modify_html(
@@ -265,7 +265,7 @@ pub async fn users_profile_totp_disable(
     form: web::Form<ProfileTotpDisableForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let Ok((boot, _)) = find_account(&user) else {
         return redirect_notice("/account/users/modify", None, Some("Account not found"));

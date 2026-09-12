@@ -20,7 +20,7 @@ pub async fn databases_all_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -40,7 +40,7 @@ pub async fn databases_create_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -66,7 +66,7 @@ pub async fn databases_create_post(
     form: web::Form<DbNameForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match run_create_database(&form.name) {
         Ok(msg) => redirect_notice("/databases/create", Some(&msg), None),
@@ -81,7 +81,7 @@ pub async fn databases_delete_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -101,7 +101,7 @@ pub async fn databases_delete_post(
     form: web::Form<DbNameForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match run_drop_database(&form.name) {
         Ok(msg) => redirect_notice("/databases/delete", Some(&msg), None),
@@ -116,7 +116,7 @@ pub async fn databases_manager_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -136,7 +136,7 @@ pub async fn databases_phpmyadmin_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -155,7 +155,7 @@ pub async fn databases_phpmyadmin_open(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin() {
         Ok(url) => HttpResponse::SeeOther()
@@ -172,7 +172,7 @@ pub async fn ftp_accounts_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -202,7 +202,7 @@ pub async fn ftp_create(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -222,7 +222,7 @@ pub async fn ftp_create_post(
     form: web::Form<FtpCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match crate::panel_ops_sftp::create_jailed_sftp_account(
         &user,
@@ -255,7 +255,7 @@ pub async fn ftp_delete(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -275,7 +275,7 @@ pub async fn ftp_delete_post(
     form: web::Form<FtpUserForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match crate::panel_ops_sftp::delete_jailed_sftp_account(&form.username) {
         Ok(msg) => redirect_notice("/ftp/accounts", Some(&msg), None),
@@ -290,7 +290,7 @@ pub async fn ftp_reset(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -306,7 +306,7 @@ pub async fn ftp_reset(
 #[post("/ftp/reset")]
 pub async fn ftp_reset_post(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match crate::panel_ops_sftp::ensure_sftp_stack() {
         Ok(msg) => redirect_notice("/ftp/reset", Some(&msg), None),
@@ -329,7 +329,7 @@ pub async fn ftp_reset_password_post(
     form: web::Form<FtpPasswordForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match crate::panel_ops_sftp::reset_sftp_password(&form.username, &form.password) {
         Ok(msg) => redirect_notice("/ftp/reset", Some(&msg), None),
