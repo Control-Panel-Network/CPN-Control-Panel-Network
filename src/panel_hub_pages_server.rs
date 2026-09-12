@@ -21,12 +21,17 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn server_hub_main() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
         "Server",
         "Host services, PHP, containers, files, and DNS tools for this CPN node.",
     );
     for (title, tiles) in server_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }

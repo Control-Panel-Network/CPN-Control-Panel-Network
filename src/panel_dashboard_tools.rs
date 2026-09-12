@@ -170,6 +170,21 @@ const TOOL_GROUPS: &[ToolGroup] = &[
                 href: "/packages",
                 icon_id: "settings",
             },
+            ToolLink {
+                label: "Open OLS",
+                href: "/server/openlitespeed",
+                icon_id: "server",
+            },
+            ToolLink {
+                label: "Open OLSE",
+                href: "/server/litespeed-enterprise",
+                icon_id: "server",
+            },
+            ToolLink {
+                label: "LiteSpeed plans",
+                href: "/server/litespeed",
+                icon_id: "server",
+            },
         ],
     },
 ];

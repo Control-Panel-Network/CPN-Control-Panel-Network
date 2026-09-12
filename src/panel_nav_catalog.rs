@@ -154,6 +154,18 @@ const SERVER_CHILDREN: &[NavChild] = &[
         href: "/server/services",
     },
     NavChild {
+        label: "Open OLS",
+        href: "/server/openlitespeed",
+    },
+    NavChild {
+        label: "Open OLSE",
+        href: "/server/litespeed-enterprise",
+    },
+    NavChild {
+        label: "LiteSpeed plans",
+        href: "/server/litespeed",
+    },
+    NavChild {
         label: "PHP Extensions",
         href: "/server/php/extensions",
     },

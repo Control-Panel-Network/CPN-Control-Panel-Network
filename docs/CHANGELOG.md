@@ -5,6 +5,22 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.30] - 12/09/2026
+
+OpenLiteSpeed / LiteSpeed Enterprise WebAdmin entry points in the CPN panel sidebar, plus LiteSpeed plan tier and package upgrade/downgrade management (Cargo `0.2.6-alpha.30`).
+
+### Added
+
+- Sidebar **Server** links: **Open OLS** (when OpenLiteSpeed is installed) and **Open OLSE** (when LiteSpeed Enterprise is installed), gated like phpMyAdmin/webmail.
+- Server hub tiles and Dashboard Software tools for the same Open OLS / Open OLSE / LiteSpeed plans routes.
+- `/server/openlitespeed` and `/server/litespeed-enterprise` pages with **Open WebAdmin** (default `https://127.0.0.1:7080`, or admin_config / panel override). Notes TLS self-signed lab certs.
+- `/server/litespeed` LiteSpeed plans & versions: owned LSWS tiers (Web Host Lite / Essential / Professional / Enterprise / Elite), deep links to LiteSpeed store owned + support catalogs, serial apply to `serial.no`, WebAdmin URL override, OLS package upgrade/downgrade. Secrets in `/var/lib/cpn/litespeed.json` (mode 600); purchase stays on the LiteSpeed store.
+
+### Notes
+
+- Does not scrape LiteSpeed store credentials. Plan purchase happens on store.litespeedtech.com; CPN applies serial + package ops.
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
 ## [0.2.6-alpha.29] - 12/09/2026
 
 Ship merged SnappyMail panel proxy fixes (#168) and quiet optional httpd/caddy upgrade probes (#169) as a tip RPM (Cargo `0.2.6-alpha.29`). Published `v0.2.6-alpha.28` was cut before those merges, so labs that upgraded to `.28` still got empty `404` on `/snappymail/` (catch-all method AND bug) and HTML MIME for `/snappymail/v/*/static/**`.

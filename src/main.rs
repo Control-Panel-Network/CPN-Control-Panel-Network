@@ -48,14 +48,16 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
-    server_packages_page, server_page, server_php_configs, server_php_extensions,
-    server_php_tuning, server_processes_page, server_services_control, server_services_page,
-    settings_connect_page, settings_design_page, settings_page, settings_port_page,
-    settings_setup_page, settings_version_page, users_create_get, users_create_post,
-    users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
-    users_profile_details_post, users_profile_password_post, users_profile_route,
-    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
-    users_reseller_route,
+    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
+    server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
+    server_litespeed_webadmin_url, server_openlitespeed_page, server_packages_page, server_page,
+    server_php_configs, server_php_extensions, server_php_tuning, server_processes_page,
+    server_services_control, server_services_page, settings_connect_page, settings_design_page,
+    settings_page, settings_port_page, settings_setup_page, settings_version_page,
+    users_create_get, users_create_post, users_delete_post, users_list_route, users_modify_get,
+    users_password_post, users_plans_page, users_profile_details_post, users_profile_password_post,
+    users_profile_route, users_profile_totp_begin, users_profile_totp_confirm,
+    users_profile_totp_disable, users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -947,6 +949,14 @@ async fn main() -> std::io::Result<()> {
             .service(server_page)
             .service(server_services_page)
             .service(server_services_control)
+            .service(server_openlitespeed_page)
+            .service(server_litespeed_enterprise_page)
+            .service(server_litespeed_page)
+            .service(server_litespeed_tier)
+            .service(server_litespeed_serial)
+            .service(server_litespeed_webadmin_url)
+            .service(server_litespeed_upgrade)
+            .service(server_litespeed_downgrade)
             .service(server_processes_page)
             .service(server_php_extensions)
             .service(server_php_configs)
