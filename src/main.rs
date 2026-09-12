@@ -92,6 +92,12 @@ use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
     panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
+use cpn_installer::panel_wordpress_routes::{
+    wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
+    wordpress_install_post, wordpress_list_route, wordpress_manage_route,
+    wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
+    wordpress_theme_activate_post, wordpress_toggles_post,
+};
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
 use rand::{Rng, distr::Alphanumeric};
@@ -919,6 +925,17 @@ async fn main() -> std::io::Result<()> {
             .service(websites_suspend)
             .service(websites_resume)
             .service(websites_prefs)
+            .service(wordpress_list_route)
+            .service(wordpress_install_get)
+            .service(wordpress_install_post)
+            .service(wordpress_manage_route)
+            .service(wordpress_scan_post)
+            .service(wordpress_ensure_wpcli_post)
+            .service(wordpress_refresh_post)
+            .service(wordpress_delete_post)
+            .service(wordpress_plugin_install_post)
+            .service(wordpress_theme_activate_post)
+            .service(wordpress_toggles_post)
             .service(panel_color_mode_get)
             .service(panel_color_mode_set)
             .service(panel_notifications_get)

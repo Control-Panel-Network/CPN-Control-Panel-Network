@@ -32,6 +32,17 @@ const WEBSITES_CHILDREN: &[NavChild] = &[
     },
 ];
 
+const WORDPRESS_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "WordPress Sites",
+        href: "/wordpress",
+    },
+    NavChild {
+        label: "Install WordPress",
+        href: "/wordpress/install",
+    },
+];
+
 const EMAIL_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Email Accounts",
@@ -263,6 +274,12 @@ pub(crate) const HOSTING: &[NavEntry] = &[
         href: "/websites",
         label: "Websites",
         children: WEBSITES_CHILDREN,
+    },
+    NavEntry::Group {
+        id: "wordpress",
+        href: "/wordpress",
+        label: "WordPress",
+        children: WORDPRESS_CHILDREN,
     },
     NavEntry::Group {
         id: "email",

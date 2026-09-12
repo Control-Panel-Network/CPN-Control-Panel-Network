@@ -17,6 +17,12 @@ pub fn search_catalog_json() -> String {
     let entries: &[(&str, &str, &str)] = &[
         ("Dashboard", "/dashboard", "overview home"),
         ("Websites", "/websites", "sites domains"),
+        ("WordPress", "/wordpress", "wordpress wp-cli plugins themes"),
+        (
+            "Install WordPress",
+            "/wordpress/install",
+            "wordpress install plugins",
+        ),
         ("Email", "/email", "mail postfix"),
         ("Databases & FTP", "/databases", "mariadb mysql ftp"),
         ("MariaDB Manager", "/databases/manager", "database"),

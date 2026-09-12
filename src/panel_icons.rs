@@ -120,6 +120,8 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/packages", "package", IconTone::Blue),
         ("/plugins", "puzzle", IconTone::Violet),
         ("/apps", "boxes", IconTone::Cyan),
+        ("/wordpress/install", "rocket", IconTone::Green),
+        ("/wordpress", "package", IconTone::Violet),
         ("/websites", "globe", IconTone::Blue),
         ("/dashboard", "layout-dashboard", IconTone::Blue),
     ];
@@ -148,6 +150,7 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
     match id {
         "dashboard" => ("layout-dashboard", IconTone::Blue),
         "websites" => ("globe", IconTone::Blue),
+        "wordpress" => ("package", IconTone::Violet),
         "email" => ("mail", IconTone::Cyan),
         "databases" => ("database", IconTone::Violet),
         "backups" => ("hard-drive", IconTone::Amber),
