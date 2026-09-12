@@ -94,9 +94,9 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
 
     // WordPress plugin / plain layouts.
     let wp_updraft = contains("updraft")
-        || paths
-            .iter()
-            .any(|p| p.contains("-plugins.zip") || p.contains("-themes.zip") || p.contains("-db.gz"));
+        || paths.iter().any(|p| {
+            p.contains("-plugins.zip") || p.contains("-themes.zip") || p.contains("-db.gz")
+        });
     let wp_duplicator = contains("dup-installer/")
         || paths
             .iter()
@@ -109,7 +109,11 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
     let cpn = contains("panel-config/")
         || has("databases.sql")
         || (contains("public_html/")
-            && (contains("plugins/") || contains("backups-copy/") || name.starts_with("site-") || name.starts_with("panel-") || name.starts_with("subdomain-")));
+            && (contains("plugins/")
+                || contains("backups-copy/")
+                || name.starts_with("site-")
+                || name.starts_with("panel-")
+                || name.starts_with("subdomain-")));
 
     if has_wpress {
         notes.push(
@@ -181,7 +185,10 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
         };
     }
 
-    notes.push("Could not confidently detect format. Pick a format manually or use a supported archive.".into());
+    notes.push(
+        "Could not confidently detect format. Pick a format manually or use a supported archive."
+            .into(),
+    );
     DetectedBackup {
         format: BackupFormat::Unknown,
         confidence: "low",
@@ -254,6 +261,11 @@ mod tests {
     #[test]
     fn labels_never_claim_cpn_is_cyberpanel() {
         assert!(BackupFormat::CyberPanel.label().contains("source format"));
-        assert!(!BackupFormat::Cpn.label().to_ascii_lowercase().contains("cyberpanel"));
+        assert!(
+            !BackupFormat::Cpn
+                .label()
+                .to_ascii_lowercase()
+                .contains("cyberpanel")
+        );
     }
 }

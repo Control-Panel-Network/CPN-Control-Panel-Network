@@ -5,7 +5,7 @@ use crate::backup_restore_apply::{
 };
 use crate::backup_restore_detect::{BackupFormat, DetectedBackup, detect_from_members};
 use crate::backup_restore_extract::{
-    archive_kind, extract_archive_safe, list_archive_members, ArchiveKind,
+    ArchiveKind, archive_kind, extract_archive_safe, list_archive_members,
 };
 use crate::backups::{BackupScope, resolve_archive_dir};
 use crate::sites::{ensure_site_directories, load_site};
@@ -66,8 +66,7 @@ pub fn restore_backup(req: &RestoreRequest) -> Result<RestoreResult, String> {
     };
     if format == BackupFormat::Unknown {
         return Err(
-            "Could not detect archive format. Choose WordPress, cPanel, CyberPanel, or CPN."
-                .into(),
+            "Could not detect archive format. Choose WordPress, cPanel, CyberPanel, or CPN.".into(),
         );
     }
     if detected.has_wpress && format == BackupFormat::WordPress {

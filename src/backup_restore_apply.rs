@@ -204,11 +204,7 @@ pub(crate) fn restore_cpanel(
 ) -> Result<(), String> {
     let src = if let Some(homedir) = find_dir_named(staging, "homedir") {
         let pub_html = homedir.join("public_html");
-        if pub_html.is_dir() {
-            pub_html
-        } else {
-            homedir
-        }
+        if pub_html.is_dir() { pub_html } else { homedir }
     } else if let Some(pub_html) = find_dir_named(staging, "public_html") {
         pub_html
     } else {
@@ -247,8 +243,7 @@ pub(crate) fn restore_cyberpanel(
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     let src = find_dir_named(staging, "public_html").ok_or_else(|| {
-        "CyberPanel archive missing public_html/ (expected classic meta.xml backup)."
-            .to_string()
+        "CyberPanel archive missing public_html/ (expected classic meta.xml backup).".to_string()
     })?;
     let nested = src.join("public_html");
     let files_src = if nested.is_dir() { nested } else { src };
@@ -264,8 +259,7 @@ pub(crate) fn restore_cyberpanel(
     }
     if find_dir_named(staging, "vmail").is_some() {
         warnings.push(
-            "vmail/ email data was present but not imported (best-effort: files/DB only)."
-                .into(),
+            "vmail/ email data was present but not imported (best-effort: files/DB only).".into(),
         );
     }
     if find_file_named(staging, "meta.xml").is_some() {
@@ -298,7 +292,11 @@ pub(crate) fn guess_db_name_from_wp_config(path: &Path) -> Option<String> {
     None
 }
 
-fn remap_wp_config_db(path: &Path, db_name: &str, warnings: &mut Vec<String>) -> Result<(), String> {
+fn remap_wp_config_db(
+    path: &Path,
+    db_name: &str,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
     if !path.is_file() {
         warnings.push("wp-config.php missing after file restore; skipped credential remap.".into());
         return Ok(());
