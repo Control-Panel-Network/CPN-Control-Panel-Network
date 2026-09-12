@@ -90,6 +90,7 @@ pub mod panel_hub_pages_server_net;
 pub mod panel_hub_pages_settings;
 pub mod panel_hub_pages_ssl_le;
 pub mod panel_hub_pages_version;
+pub mod panel_hub_pages_version_script;
 pub mod panel_hub_pages_webmail;
 pub mod panel_hub_routes;
 pub mod panel_hub_routes_account;
