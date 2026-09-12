@@ -109,7 +109,17 @@ pub async fn server_openlitespeed_reset_cpn(
             Some("Confirm the reset checkbox to align WebAdmin with the CPN admin account."),
         );
     }
-    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    let Some(pass) = form
+        .get("password")
+        .map(|s| s.as_str())
+        .filter(|p| !p.is_empty())
+    else {
+        return redirect_notice(
+            "/server/openlitespeed",
+            None,
+            Some("CPN admin password is required to reset WebAdmin."),
+        );
+    };
     match crate::litespeed_webadmin_users::reset_webadmin_to_cpn_admin(pass) {
         Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
         Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
