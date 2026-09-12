@@ -1,9 +1,7 @@
 //! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP (:8080).
 
 use crate::panel_feature_gate::webmail_installed;
-use crate::panel_webmail::{
-    backend_path_for_webmail_proxy, load_webmail_config, webmail_ready,
-};
+use crate::panel_webmail::{backend_path_for_webmail_proxy, load_webmail_config, webmail_ready};
 use actix_web::{HttpRequest, HttpResponse, http::Method, http::StatusCode, web};
 use futures_util::StreamExt;
 use std::process::{Command, Stdio};
