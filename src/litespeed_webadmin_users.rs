@@ -183,8 +183,8 @@ fn remove_htpasswd_line(username: &str) -> Result<(), String> {
     if !path.is_file() {
         return Err("WebAdmin htpasswd file is missing.".into());
     }
-    let raw = fs::read_to_string(&path)
-        .map_err(|e| format!("Could not read WebAdmin htpasswd: {e}"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|e| format!("Could not read WebAdmin htpasswd: {e}"))?;
     let filtered: Vec<&str> = raw
         .lines()
         .filter(|line| {
@@ -238,16 +238,12 @@ pub fn set_webadmin_password(username: &str, password: &str) -> Result<String, S
         a
     });
     if try_bcrypt.is_err() {
-        if let Err(ht_err) = run_htpasswd(&[
-            if create { "-cb" } else { "-b" },
-            &path_s,
-            &user,
-            pass,
-        ]) {
+        if let Err(ht_err) =
+            run_htpasswd(&[if create { "-cb" } else { "-b" }, &path_s, &user, pass])
+        {
             // AlmaLinux labs often lack httpd-tools; openssl is usually present.
-            let hash = openssl_apr1_hash(pass).map_err(|e| {
-                format!("{ht_err}; openssl apr1 fallback also failed: {e}")
-            })?;
+            let hash = openssl_apr1_hash(pass)
+                .map_err(|e| format!("{ht_err}; openssl apr1 fallback also failed: {e}"))?;
             upsert_htpasswd_line(&user, &hash)?;
         }
     }
