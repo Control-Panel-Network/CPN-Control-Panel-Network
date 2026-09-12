@@ -10,7 +10,11 @@ use crate::release_verify::{
     maybe_check_rpm_sig, verify_gpg_enabled, verify_gpg_sums, verify_release_enabled,
     verify_sha256_file,
 };
-use crate::releases::{self, CpnRelease, compare_versions, is_retag_migration, normalize_version};
+use crate::os_support::detect_guest_os;
+use crate::releases::{
+    self, CpnRelease, NativePackageKind, compare_versions, compatible_package_asset,
+    is_retag_migration, normalize_version,
+};
 use rand::{Rng, distr::Alphanumeric};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
@@ -206,19 +210,34 @@ async fn apply_release(
     force: bool,
     allow_oldpackage: bool,
 ) -> Result<ManifestSource, String> {
-    if let Some(rpm) = &release.rpm_asset {
+    // Never use release.rpm_asset alone: GitHub asset order often lists el10 before el9
+    // (lexicographic "el10" < "el9"), which breaks AlmaLinux/Rocky/RHEL 9 upgrades.
+    let guest = detect_guest_os()?;
+    if let Some((pkg, kind)) = compatible_package_asset(release, &guest) {
         state
-            .progress("downloading", 20, format!("Downloading {}", rpm.name))
+            .progress("downloading", 20, format!("Downloading {}", pkg.name))
             .await;
-        let path = ephemeral_path(&rpm.name)?;
-        download_file(&rpm.browser_download_url, &path).await?;
+        let path = ephemeral_path(&pkg.name)?;
+        download_file(&pkg.browser_download_url, &path).await?;
         verify_downloaded_artifact(state, release, &path).await?;
-        state
-            .progress("installing", 60, "Installing RPM package")
-            .await;
-        crate::upgrade_pkg::install_rpm(&path, force, allow_oldpackage).await?;
-        let _ = std::fs::remove_file(&path);
-        return Ok(ManifestSource::Rpm);
+        match kind {
+            NativePackageKind::Rpm => {
+                state
+                    .progress("installing", 60, "Installing RPM package")
+                    .await;
+                crate::upgrade_pkg::install_rpm(&path, force, allow_oldpackage).await?;
+                let _ = std::fs::remove_file(&path);
+                return Ok(ManifestSource::Rpm);
+            }
+            NativePackageKind::Deb => {
+                state
+                    .progress("installing", 60, "Installing Debian package")
+                    .await;
+                crate::upgrade_pkg::install_deb(&path, force, allow_oldpackage).await?;
+                let _ = std::fs::remove_file(&path);
+                return Ok(ManifestSource::Deb);
+            }
+        }
     }
     if let Some(bin) = &release.binary_asset {
         state
@@ -235,8 +254,8 @@ async fn apply_release(
         return Ok(ManifestSource::Binary);
     }
     Err(format!(
-        "Release {} has no cpn-installer RPM or binary asset. Lab fallback: build from git and install the RPM locally (see to-do/UPGRADE-REPAIR.md).",
-        release.tag_name
+        "Release {} has no compatible cpn-installer package for {} (and no raw binary fallback). Lab fallback: build from git and install the package locally (see to-do/UPGRADE-REPAIR.md).",
+        release.tag_name, guest.label
     ))
 }
 

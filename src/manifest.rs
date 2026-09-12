@@ -26,6 +26,7 @@ pub fn cli_bin() -> &'static str {
 #[serde(rename_all = "snake_case")]
 pub enum ManifestSource {
     Rpm,
+    Deb,
     Binary,
     Local,
     Unknown,
@@ -274,6 +275,7 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
         .as_ref()
         .map(|item| match item.source {
             ManifestSource::Rpm => "rpm",
+            ManifestSource::Deb => "deb",
             ManifestSource::Binary => "binary",
             ManifestSource::Local => "local",
             ManifestSource::Unknown => "unknown",

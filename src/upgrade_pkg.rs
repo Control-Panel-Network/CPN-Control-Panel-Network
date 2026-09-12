@@ -175,6 +175,38 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     Err("Package install failed (dnf/rpm)".into())
 }
 
+/// Install or replace the `cpn-installer` .deb (apt guests).
+pub async fn install_deb(path: &str, force: bool, allow_downgrade: bool) -> Result<(), String> {
+    let mut args = vec!["install".to_string(), "-y".to_string()];
+    if allow_downgrade || force {
+        args.push("--allow-downgrades".into());
+    }
+    args.push(path.to_string());
+    let status = Command::new("apt-get")
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .status()
+        .await
+        .map_err(|error| format!("apt-get install failed: {error}"))?;
+    if status.success() {
+        return Ok(());
+    }
+    let status = Command::new("dpkg")
+        .args(["-i", path])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .status()
+        .await
+        .map_err(|error| format!("dpkg -i failed: {error}"))?;
+    if status.success() {
+        return Ok(());
+    }
+    Err("Package install failed (apt/dpkg)".into())
+}
+
 pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {
     std::fs::copy(path, dest).map_err(|error| format!("Could not replace {dest}: {error}"))?;
     #[cfg(unix)]

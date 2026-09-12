@@ -398,6 +398,16 @@ mod tests {
             10,
             "x86_64"
         ));
+        assert!(rpm_name_matches(
+            "cpn-installer-0.2.6-0.alpha25.el9.x86_64.rpm",
+            9,
+            "x86_64"
+        ));
+        assert!(!rpm_name_matches(
+            "cpn-installer-0.2.6-0.alpha25.el10.x86_64.rpm",
+            9,
+            "x86_64"
+        ));
         assert!(deb_name_matches(
             "cpn-installer_0.2.2~alpha.7_amd64.deb",
             "amd64"
