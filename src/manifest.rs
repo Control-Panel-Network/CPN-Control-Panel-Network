@@ -224,17 +224,54 @@ pub fn record_install(
 
 fn rpm_installed_version() -> Option<String> {
     let output = std::process::Command::new("rpm")
-        .args(["-q", "--qf", "%{VERSION}", "cpn-installer"])
+        .args(["-q", "--qf", "%{VERSION}\n%{RELEASE}", "cpn-installer"])
         .output()
         .ok()?;
     if !output.status.success() {
         return None;
     }
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let version = lines.next()?.trim().to_string();
+    let release = lines.next().unwrap_or("").trim().to_string();
     if version.is_empty() || version.contains("not installed") {
-        None
-    } else {
-        Some(version)
+        return None;
+    }
+    Some(crate::releases::cargo_version_from_rpm(&version, &release))
+}
+
+/// Prefer live RPM identity over a stale install-manifest (retired 1.0.x or older 0.2.x).
+fn resolve_package_version(
+    from_manifest: Option<String>,
+    rpm_version: Option<String>,
+    running_version: &str,
+) -> String {
+    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity, normalize_version};
+
+    match (from_manifest, rpm_version) {
+        (Some(manifest_ver), Some(rpm_ver))
+            if is_retired_cpn_1_0_identity(&manifest_ver)
+                && (is_active_0_2_line(&rpm_ver) || rpm_ver.starts_with("0.2.")) =>
+        {
+            rpm_ver
+        }
+        (Some(manifest_ver), None)
+            if is_retired_cpn_1_0_identity(&manifest_ver)
+                && is_active_0_2_line(running_version) =>
+        {
+            running_version.to_string()
+        }
+        (Some(manifest_ver), Some(rpm_ver))
+            if is_active_0_2_line(&rpm_ver)
+                && is_active_0_2_line(&manifest_ver)
+                && normalize_version(&manifest_ver) != normalize_version(&rpm_ver) =>
+        {
+            // Stale manifest after bootstrap upgrade.sh / binary replace: trust RPM.
+            rpm_ver
+        }
+        (Some(manifest_ver), _) => manifest_ver,
+        (None, Some(rpm_ver)) => rpm_ver,
+        (None, None) => running_version.to_string(),
     }
 }
 
@@ -249,26 +286,16 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
     // (HTTP 409) before transitions allowed maintenance.
     let detected = has_manifest || has_bootstrap;
 
-    let package_version = {
-        let from_manifest = manifest.as_ref().map(|item| item.package_version.clone());
-        match (from_manifest, rpm_version.clone()) {
-            (Some(manifest_ver), Some(rpm_ver))
-                if crate::releases::is_retired_cpn_1_0_identity(&manifest_ver)
-                    && (crate::releases::is_active_0_2_line(&rpm_ver)
-                        || rpm_ver.starts_with("0.2.")) =>
-            {
-                // Stale install-manifest after retag: prefer live RPM identity.
-                rpm_ver
-            }
-            (Some(manifest_ver), _) => manifest_ver,
-            (None, Some(rpm_ver)) => rpm_ver,
-            (None, None) => running_version.to_string(),
-        }
-    };
+    let from_manifest = manifest.as_ref().map(|item| item.package_version.clone());
+    let package_version = resolve_package_version(from_manifest, rpm_version, running_version);
     let release_tag = manifest
         .as_ref()
         .map(|item| item.release_tag.clone())
         .filter(|tag| !tag.is_empty())
+        .filter(|tag| {
+            !(crate::releases::is_retired_cpn_1_0_identity(tag)
+                && crate::releases::is_active_0_2_line(&package_version))
+        })
         .unwrap_or_else(|| format!("v{package_version}"));
     let source = manifest
         .as_ref()
@@ -346,5 +373,29 @@ mod tests {
         let detected = has_manifest || has_bootstrap;
         assert!(!detected);
         assert!(binary || rpm_present);
+    }
+
+    #[test]
+    fn resolve_prefers_rpm_over_stale_0_2_manifest() {
+        assert_eq!(
+            resolve_package_version(
+                Some("0.2.2-alpha.17".into()),
+                Some("0.2.6-alpha.24".into()),
+                "0.2.6-alpha.24"
+            ),
+            "0.2.6-alpha.24"
+        );
+        assert_eq!(
+            resolve_package_version(
+                Some("1.0.0".into()),
+                Some("0.2.6-alpha.24".into()),
+                "0.2.6-alpha.24"
+            ),
+            "0.2.6-alpha.24"
+        );
+        assert_eq!(
+            resolve_package_version(Some("1.0.0".into()), Some("1.0.0".into()), "0.2.6-alpha.24"),
+            "1.0.0"
+        );
     }
 }

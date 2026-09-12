@@ -104,6 +104,41 @@ pub fn is_retag_migration(installed: &str, target: &str) -> bool {
     is_retired_cpn_1_0_identity(installed) && is_active_0_2_line(target)
 }
 
+/// Expand compact RPM Release prerelease tokens back toward Cargo form.
+/// `alpha21` -> `alpha.21`, `beta3` -> `beta.3`, `rc1` -> `rc.1`.
+pub fn expand_compact_prerelease(compact: &str) -> String {
+    let compact = compact.trim();
+    for prefix in ["alpha", "beta", "rc"] {
+        if let Some(rest) = compact.strip_prefix(prefix)
+            && !rest.is_empty()
+            && rest.chars().all(|c| c.is_ascii_digit())
+        {
+            return format!("{prefix}.{rest}");
+        }
+    }
+    compact.to_string()
+}
+
+/// Map RPM Version + Release (from `sync-version.sh`) back to Cargo package version.
+/// Example: `0.2.6` + `0.alpha24.el9` -> `0.2.6-alpha.24`.
+pub fn cargo_version_from_rpm(version: &str, release: &str) -> String {
+    let version = normalize_version(version);
+    let mut rel = release.trim().to_string();
+    // Drop dist tags (.el9, .el10, .fc41, ...).
+    if let Some(idx) = rel.find(".el") {
+        rel.truncate(idx);
+    } else if let Some(idx) = rel.find(".fc") {
+        rel.truncate(idx);
+    }
+    if let Some(compact) = rel.strip_prefix("0.")
+        && !compact.is_empty()
+        && compact != "1"
+    {
+        return format!("{version}-{}", expand_compact_prerelease(compact));
+    }
+    version
+}
+
 async fn curl_json(url: &str) -> Result<String, String> {
     let output = Command::new("curl")
         .args([
@@ -355,8 +390,9 @@ pub async fn version_check(running_version: &str, installed_version: &str) -> Ve
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_versions, deb_name_matches, is_active_0_2_line, is_retag_migration,
-        is_retired_cpn_1_0_identity, normalize_version, rpm_name_matches,
+        cargo_version_from_rpm, compare_versions, deb_name_matches, expand_compact_prerelease,
+        is_active_0_2_line, is_retag_migration, is_retired_cpn_1_0_identity, normalize_version,
+        rpm_name_matches,
     };
     use std::cmp::Ordering;
 
@@ -384,6 +420,21 @@ mod tests {
         assert!(is_retag_migration("1.0.0", "0.2.6-alpha.21"));
         assert!(!is_retag_migration("0.2.5-alpha.19", "0.2.6-alpha.21"));
         assert!(!is_retag_migration("1.0.0", "1.0.1"));
+    }
+
+    #[test]
+    fn maps_rpm_nvr_back_to_cargo_prerelease() {
+        assert_eq!(
+            cargo_version_from_rpm("0.2.6", "0.alpha24.el9"),
+            "0.2.6-alpha.24"
+        );
+        assert_eq!(
+            cargo_version_from_rpm("0.2.6", "0.alpha21.el10"),
+            "0.2.6-alpha.21"
+        );
+        assert_eq!(cargo_version_from_rpm("0.2.6", "1.el9"), "0.2.6");
+        assert_eq!(expand_compact_prerelease("alpha21"), "alpha.21");
+        assert_eq!(expand_compact_prerelease("rc1"), "rc.1");
     }
 
     #[test]

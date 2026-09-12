@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip (Cargo `0.2.6-alpha.26`). Prior `v0.2.6-alpha.25` tag pointed at pre-webmail tip.
 
+### Fixed
+
+- Maintenance / Version Management installs the guest-matched `.elN` RPM via `compatible_package_asset`, not the first GitHub `.rpm` (often `.el10` before `.el9`). Fixes AlmaLinux 9 labs that failed with `libc.so.6(GLIBC_2.39)` / generic `Package install failed (dnf/rpm)`.
+- `install_rpm` surfaces the real dnf/rpm stderr in the UI.
+- Version Management progress label shows a numeric percent (example: `60% installing: ...`).
+- Installed package prefers live `rpm -q` (mapped to Cargo prerelease) when the install-manifest is stale (example: manifest `0.2.2-alpha.17` vs RPM `0.2.6-alpha.24`).
+
 ### Notes
 
 - Includes changelog items from `0.2.6-alpha.24` (webmail / MTA-STS / BIMI) and `0.2.6-alpha.25` (Version-Release tip RPM accept).
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
 
 ## [0.2.6-alpha.25] - 12/09/2026
 
