@@ -153,12 +153,13 @@ fn upsert_htpasswd_line(username: &str, hash: &str) -> Result<(), String> {
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        if let Some((u, _)) = trimmed.split_once(':') {
-            if u.trim() == username {
+        match trimmed.split_once(':') {
+            Some((u, _)) if u.trim() == username => {
                 *line = format!("{username}:{hash}");
                 replaced = true;
                 break;
             }
+            _ => {}
         }
     }
     if !replaced {
@@ -237,14 +238,15 @@ pub fn set_webadmin_password(username: &str, password: &str) -> Result<String, S
         a.push(pass);
         a
     });
-    if try_bcrypt.is_err() {
-        if let Err(ht_err) =
-            run_htpasswd(&[if create { "-cb" } else { "-b" }, &path_s, &user, pass])
-        {
-            // AlmaLinux labs often lack httpd-tools; openssl is usually present.
-            let hash = openssl_apr1_hash(pass)
-                .map_err(|e| format!("{ht_err}; openssl apr1 fallback also failed: {e}"))?;
-            upsert_htpasswd_line(&user, &hash)?;
+    if let Err(_bcrypt_err) = try_bcrypt {
+        match run_htpasswd(&[if create { "-cb" } else { "-b" }, &path_s, &user, pass]) {
+            Ok(()) => {}
+            Err(ht_err) => {
+                // AlmaLinux labs often lack httpd-tools; openssl is usually present.
+                let hash = openssl_apr1_hash(pass)
+                    .map_err(|e| format!("{ht_err}; openssl apr1 fallback also failed: {e}"))?;
+                upsert_htpasswd_line(&user, &hash)?;
+            }
         }
     }
     #[cfg(unix)]
