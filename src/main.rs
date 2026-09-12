@@ -59,7 +59,12 @@ use cpn_installer::panel_hub_routes::{
     server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
     server_php_extensions, server_php_tuning, server_processes_page, server_services_control,
     server_services_page, settings_connect_page, settings_design_page, settings_page,
-    settings_port_page, settings_setup_page, settings_version_page, users_create_get,
+    settings_port_page, settings_setup_page,
+    settings_site_messages_page,
+    settings_site_messages_reset,
+    settings_site_messages_restore_site_ready,
+    settings_site_messages_restore_suspend,
+    settings_site_messages_save, settings_version_page, users_create_get,
     users_create_post, users_delete_post, users_list_route, users_modify_get, users_password_post,
     users_plans_page, users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
@@ -85,8 +90,8 @@ use cpn_installer::panel_routes::{
     plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
     plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
     preview_mode_page, websites_create, websites_delete, websites_manage, websites_page,
-    websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_resume,
-    websites_suspend,
+    websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_reset_placeholder,
+    websites_resume, websites_suspend, websites_suspend_message,
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
@@ -935,6 +940,9 @@ async fn main() -> std::io::Result<()> {
             .service(websites_delete)
             .service(websites_suspend)
             .service(websites_resume)
+            .service(websites_suspend_message)
+            .service(websites_suspend_message_restore)
+            .service(websites_reset_placeholder)
             .service(websites_prefs)
             .service(wordpress_list_route)
             .service(wordpress_install_get)
@@ -1043,6 +1051,11 @@ async fn main() -> std::io::Result<()> {
             .service(settings_design_page)
             .service(settings_setup_page)
             .service(settings_connect_page)
+            .service(settings_site_messages_page)
+            .service(settings_site_messages_save)
+            .service(settings_site_messages_restore_suspend)
+            .service(settings_site_messages_restore_site_ready)
+            .service(settings_site_messages_reset)
             .service(settings_port_page)
             .service(security_page)
             .service(security_firewall)

@@ -337,6 +337,12 @@ pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/settings/connect",
                     live: true,
                 },
+                HubTile {
+                    title: "Site messages",
+                    subtitle: "Suspend & site-ready copy",
+                    href: "/settings/site-messages",
+                    live: true,
+                },
             ],
         ),
         (

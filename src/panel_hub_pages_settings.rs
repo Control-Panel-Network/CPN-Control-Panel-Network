@@ -110,6 +110,7 @@ mod tests {
         assert!(html.contains("Server onboarding"));
         assert!(html.contains("Connect"));
         assert!(html.contains("Community &amp; docs") || html.contains("Community & docs"));
+        assert!(html.contains("Site messages"));
         assert!(html.contains("Change Port"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
         assert!(!html.to_lowercase().contains("cyberpersons"));
