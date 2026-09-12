@@ -54,6 +54,14 @@ const EMAIL_CHILDREN: &[NavChild] = &[
         href: "/email/webmail",
     },
     NavChild {
+        label: "MTA-STS",
+        href: "/email/mta-sts",
+    },
+    NavChild {
+        label: "BIMI",
+        href: "/email/bimi",
+    },
+    NavChild {
         label: "Email Delivery",
         href: "/email/delivery",
     },

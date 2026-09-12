@@ -764,6 +764,24 @@ pub async fn plugins_settings_save(
         .map(|f| f.key)
         .collect();
     let settings = settings_from_form(&form, &previous, &declared);
+    if crate::plugins_settings::is_webmail_plugin_id(id) {
+        let mut cfg = crate::panel_webmail::load_webmail_config();
+        if let Some(account) = settings.fields.get("auto_login_account") {
+            cfg.auto_login_account = account.clone();
+        }
+        if let Some(path) = settings.fields.get("public_path")
+            && !path.trim().is_empty()
+        {
+            cfg.public_path = path.clone();
+        }
+        let embed = settings
+            .fields
+            .get("internal_webmail")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v == "on")
+            .unwrap_or(false);
+        cfg.internal_embed = embed;
+        let _ = crate::panel_webmail::save_webmail_config(&cfg);
+    }
     match save_plugin_settings(domain, id, &settings) {
         Ok(()) => HttpResponse::SeeOther()
             .append_header((

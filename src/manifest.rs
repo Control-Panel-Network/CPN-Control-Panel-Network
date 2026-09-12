@@ -100,6 +100,10 @@ pub fn default_preserve_paths() -> Vec<String> {
         root.join("docker").to_string_lossy().into_owned(),
         root.join("listen_port").to_string_lossy().into_owned(),
         root.join("panel_public_url").to_string_lossy().into_owned(),
+        root.join("webmail-panel.json")
+            .to_string_lossy()
+            .into_owned(),
+        root.join("email-auth").to_string_lossy().into_owned(),
         root.join("panel_hostname").to_string_lossy().into_owned(),
         root.join("allow_remote").to_string_lossy().into_owned(),
         root.join("cloudflare.json").to_string_lossy().into_owned(),

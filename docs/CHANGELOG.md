@@ -5,9 +5,9 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.6-alpha.25] - 12/09/2026
+## [0.2.6-alpha.27] - 12/09/2026
 
-GitHub Releases disk cache and rate limit for Version Management, plus searchable picker and stale package identity reconcile (Cargo `0.2.6-alpha.25`).
+GitHub Releases disk cache and rate limit for Version Management, plus searchable picker and stale package identity reconcile (Cargo `0.2.6-alpha.27`). Merges webmail tip line from alpha.26.
 
 ### Added
 
@@ -19,15 +19,42 @@ GitHub Releases disk cache and rate limit for Version Management, plus searchabl
 ### Fixed
 
 - Phantom Installed package `1.0.0`/`1.0.1` when RPM is already `0.2.x` (manifest reconcile + RPM NVR to Cargo prerelease mapping).
-- Same-tip RPM NEVRA after bootstrap `upgrade.sh` (force/skip) from alpha.24.
 
 ### Notes
 
 - Cache applies to Version Management, `--version-check`, and upgrade release discovery (`list_releases` / `find_release`).
 
+## [0.2.6-alpha.26] - 12/09/2026
+
+Ship Email webmail UX, MTA-STS/BIMI, and tip RPM helpers as a GitHub Release tip (Cargo `0.2.6-alpha.26`). Prior `v0.2.6-alpha.25` tag pointed at pre-webmail tip.
+
+### Notes
+
+- Includes changelog items from `0.2.6-alpha.24` (webmail / MTA-STS / BIMI) and `0.2.6-alpha.25` (Version-Release tip RPM accept).
+
+## [0.2.6-alpha.25] - 12/09/2026
+
+Webmail UX + MTA-STS/BIMI (from alpha.24 line) plus same Version-Release tip RPM accept during maintenance (Cargo `0.2.6-alpha.25`).
+
+### Fixed
+
+- Compare RPM Version-Release before/after dnf so tip re-runs after `upgrade.sh` succeed even when NEVRA string compares fail.
+
 ## [0.2.6-alpha.24] - 12/09/2026
 
-Harden RPM apply when bootstrap `upgrade.sh` already installed the tip NEVRA (Cargo `0.2.6-alpha.24`).
+Email webmail UX (SnappyMail/Roundcube), MTA-STS/BIMI DNS helpers, and harder same-NEVRA RPM apply (Cargo `0.2.6-alpha.24`).
+
+### Added
+
+- **Email > Webmail**: detect installed SnappyMail/Roundcube on disk (fixes false "Not configured yet" after panel restart). Open client, Admin Panel, regenerate public path, auto-login Email prefill (best-effort), and optional internal iframe at `/email/webmail/app`.
+- Panel reverse-proxy for the configured webmail mount (default `/snappymail` or `/roundcube`) to loopback PHP-FPM `127.0.0.1:8080`.
+- Built-in settings fields for `snappymailWebmail` / `snappymailAdmin` / `roundcubeWebmail` plugins (auto-login, internal embed, public path) plus Open / Admin / Regenerate actions.
+- Sidebar: active webmail plugins with Show in sidebar appear under **Email** (not only Installed plugins).
+- **Email > MTA-STS** and **Email > BIMI**: policy storage, recommended DNS, copy-friendly UI, optional Cloudflare add/update push (no unrelated deletes). Honest notes that receivers/MTA and brand indicators matter more than SnappyMail/Roundcube logo support.
+
+### Changed
+
+- Install manifest preserve list includes `webmail-panel.json` and `email-auth/`.
 
 ### Fixed
 

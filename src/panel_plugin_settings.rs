@@ -167,6 +167,37 @@ pub fn plugin_settings_main(
     } else {
         r#"<p class="muted">Activate the plugin to use its dashboard route.</p>"#.into()
     };
+    let webmail_actions = if crate::plugins_settings::is_webmail_plugin_id(&m.id)
+        && crate::panel_webmail::webmail_ready()
+    {
+        let open = crate::panel_webmail::webmail_open_path().unwrap_or_else(|| {
+            crate::panel_webmail::load_webmail_config()
+                .public_path
+                .clone()
+        });
+        let admin = crate::panel_webmail::webmail_admin_path().unwrap_or_default();
+        let label = crate::panel_webmail::webmail_label();
+        format!(
+            r#"<div class="section-card" style="margin-top:16px;padding:0;">
+        <p style="display:flex;flex-wrap:wrap;gap:10px;">
+          <a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open {label}</a>
+          <a class="btn-secondary" href="{admin}" target="_blank" rel="noopener noreferrer">{label} Admin Panel</a>
+          <a class="btn-secondary" href="/email/webmail">Email &gt; Webmail</a>
+        </p>
+        <form method="post" action="/email/webmail/regenerate-path" style="margin-top:8px;" onsubmit="return confirm('Regenerate the public webmail path? Mail data is kept.');">
+          <button type="submit" class="btn-secondary">Regenerate / move webmail URL</button>
+        </form>
+        <p class="muted">Auto-login is best-effort Email prefill only. True SSO would require storing mailbox passwords, which CPN does not do.</p>
+      </div>"#,
+            open = html_escape(&open),
+            admin = html_escape(&admin),
+            label = html_escape(label),
+        )
+    } else if crate::plugins_settings::is_webmail_plugin_id(&m.id) {
+        r#"<p class="muted">Host webmail files were not detected under <code>/opt/cpn-webmail</code>. Install SnappyMail/Roundcube from the installer, then use Open here.</p>"#.into()
+    } else {
+        String::new()
+    };
     let _ = sites;
     format!(
         r#"{heading}
@@ -177,6 +208,7 @@ pub fn plugin_settings_main(
         <h2>{name}</h2>
         <p class="muted">{id} v{ver} on {domain}</p>
         <p class="muted">Settings file: <code>{path}/settings.json</code></p>
+        {webmail_actions}
         <form method="post" action="/plugins/settings" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="domain" value="{domain}">
           <input type="hidden" name="id" value="{id}">
@@ -184,7 +216,7 @@ pub fn plugin_settings_main(
             <input type="checkbox" name="show_in_sidebar" value="1"{sidebar}>
             Show in sidebar
           </label>
-          <p class="muted">When enabled and the plugin is Active, it appears under the Plugins section in the panel nav.</p>
+          <p class="muted">When enabled and the plugin is Active, webmail plugins appear under Email; other plugins appear under Installed plugins.</p>
           {fields}
           <button type="submit" class="btn-primary">Save settings</button>
         </form>
@@ -204,6 +236,7 @@ pub fn plugin_settings_main(
         sidebar = sidebar_checked,
         fields = custom_fields,
         dash = dash_link,
+        webmail_actions = webmail_actions,
     )
 }
 

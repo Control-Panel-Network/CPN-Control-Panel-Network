@@ -46,6 +46,7 @@ fn group_block(
     children: &[NavChild],
     active: &str,
     feats: crate::panel_feature_gate::InstalledOptionalFeatures,
+    extra_children: &[(String, String)],
 ) -> String {
     let open = if id == active { " open" } else { "" };
     let parent_active = if id == active {
@@ -57,7 +58,7 @@ fn group_block(
         .iter()
         .filter(|child| feats.allows_href(child.href))
         .collect();
-    let mut child_rows = Vec::with_capacity(visible.len() + 1);
+    let mut child_rows = Vec::with_capacity(visible.len() + 1 + extra_children.len());
     let has_hub_child = visible.iter().any(|c| c.href == href);
     if !has_hub_child {
         child_rows.push(child_button(&format!("{label} overview"), href));
@@ -69,6 +70,13 @@ fn group_block(
             continue;
         }
         child_rows.push(child_button(child.label, child.href));
+    }
+    for (extra_label, extra_href) in extra_children {
+        let key = format!("{extra_href}|{extra_label}");
+        if !seen.insert(key) {
+            continue;
+        }
+        child_rows.push(child_button(extra_label, extra_href));
     }
     format!(
         r#"<details class="nav-group" data-nav-group="{id}"{open}>
@@ -94,6 +102,7 @@ fn render_section(
     entries: &[NavEntry],
     active: &str,
     feats: crate::panel_feature_gate::InstalledOptionalFeatures,
+    email_plugin_children: &[(String, String)],
 ) -> Vec<String> {
     let mut parts = Vec::new();
     parts.push(format!(
@@ -112,7 +121,14 @@ fn render_section(
                 label,
                 children,
             } => {
-                parts.push(group_block(id, href, label, children, active, feats));
+                let extras = if id == "email" {
+                    email_plugin_children
+                } else {
+                    &[]
+                };
+                parts.push(group_block(
+                    id, href, label, children, active, feats, extras,
+                ));
             }
         }
     }
@@ -123,39 +139,51 @@ fn render_section(
 /// Primary sidebar navigation HTML (sections, expandable groups, child buttons).
 pub fn nav_links_html(active: &str, username: &str) -> String {
     let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
-    let mut parts = Vec::new();
-    parts.extend(render_section("Hosting", HOSTING, active, feats));
-    parts.extend(render_section("Account", ACCOUNT, active, feats));
-    parts.extend(render_section(
-        "Administration",
-        ADMINISTRATION,
-        active,
-        feats,
-    ));
-
-    // Installed plugin shortcuts (Hosting already has Plugins + Plugin Store).
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
-    if !plugin_links.is_empty() {
-        parts.push(r#"<div class="nav-section">Installed plugins</div>"#.to_string());
-        parts.push(r#"<div class="nav-tile-grid">"#.to_string());
-        let mut child_html = Vec::new();
-        let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
-        domains.sort_unstable();
-        domains.dedup();
-        let need_domain_hint = domains.len() > 1;
-        for link in &plugin_links {
-            let label = if need_domain_hint {
-                format!("{} ({})", link.name, link.domain)
-            } else {
-                link.name.clone()
-            };
-            child_html.push(format!(
+    let mut email_plugin_children = Vec::new();
+    let mut other_plugin_html = Vec::new();
+    let mut domains: Vec<&str> = plugin_links.iter().map(|l| l.domain.as_str()).collect();
+    domains.sort_unstable();
+    domains.dedup();
+    let need_domain_hint = domains.len() > 1;
+    for link in &plugin_links {
+        let label = if need_domain_hint {
+            format!("{} ({})", link.name, link.domain)
+        } else {
+            link.name.clone()
+        };
+        if link.email_category {
+            email_plugin_children.push((label, link.href.clone()));
+        } else {
+            other_plugin_html.push(format!(
                 r#"<a class="nav-child-btn" href="{href}" data-nav-child="1"><span>{label}</span></a>"#,
                 href = html_escape(&link.href),
                 label = html_escape(&label),
             ));
         }
-        parts.push(child_html.join("\n          "));
+    }
+
+    let mut parts = Vec::new();
+    parts.extend(render_section(
+        "Hosting",
+        HOSTING,
+        active,
+        feats,
+        &email_plugin_children,
+    ));
+    parts.extend(render_section("Account", ACCOUNT, active, feats, &[]));
+    parts.extend(render_section(
+        "Administration",
+        ADMINISTRATION,
+        active,
+        feats,
+        &[],
+    ));
+
+    if !other_plugin_html.is_empty() {
+        parts.push(r#"<div class="nav-section">Installed plugins</div>"#.to_string());
+        parts.push(r#"<div class="nav-tile-grid">"#.to_string());
+        parts.push(other_plugin_html.join("\n          "));
         parts.push(r#"</div>"#.to_string());
     }
 

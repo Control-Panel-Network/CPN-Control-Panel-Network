@@ -36,14 +36,9 @@ async fn rpm_nevra_installed(nevra: &str) -> bool {
         .unwrap_or(false)
 }
 
-async fn rpm_cpn_installed_nevra() -> Option<String> {
+async fn rpm_query_vr(path: &str) -> Option<String> {
     let output = Command::new("rpm")
-        .args([
-            "-q",
-            "--qf",
-            "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}",
-            "cpn-installer",
-        ])
+        .args(["-qp", "--qf", "%{VERSION}-%{RELEASE}", path])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -53,11 +48,27 @@ async fn rpm_cpn_installed_nevra() -> Option<String> {
     if !output.status.success() {
         return None;
     }
-    let nevra = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if nevra.is_empty() || nevra.contains("not installed") {
+    let vr = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if vr.is_empty() { None } else { Some(vr) }
+}
+
+async fn rpm_installed_vr() -> Option<String> {
+    let output = Command::new("rpm")
+        .args(["-q", "--qf", "%{VERSION}-%{RELEASE}", "cpn-installer"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let vr = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if vr.is_empty() || vr.contains("not installed") {
         None
     } else {
-        Some(nevra)
+        Some(vr)
     }
 }
 
@@ -66,15 +77,15 @@ async fn rpm_cpn_installed_nevra() -> Option<String> {
 /// When `allow_oldpackage` is true (retired `1.0.0`/`1.0.1` -> `0.2.x` retag),
 /// uses `rpm -Uvh --oldpackage` with erase+install fallback.
 pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Result<(), String> {
-    if let Some(file_nevra) = rpm_query_nevra(path).await {
-        if rpm_nevra_installed(&file_nevra).await {
-            return Ok(());
-        }
-        if let Some(installed) = rpm_cpn_installed_nevra().await
-            && installed == file_nevra
-        {
-            return Ok(());
-        }
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
+    }
+    if let Some(file_nevra) = rpm_query_nevra(path).await
+        && rpm_nevra_installed(&file_nevra).await
+    {
+        return Ok(());
     }
 
     if allow_oldpackage {
@@ -107,6 +118,11 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         if status.success() {
             return Ok(());
         }
+        if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+            && file_vr == inst_vr
+        {
+            return Ok(());
+        }
         return Err(
             "Package install failed (retag 1.0.x -> 0.2.x; rpm --oldpackage / erase+install)"
                 .into(),
@@ -130,6 +146,11 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
     if status.success() {
         return Ok(());
     }
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
+    }
     if let Some(file_nevra) = rpm_query_nevra(path).await
         && rpm_nevra_installed(&file_nevra).await
     {
@@ -143,10 +164,15 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
         .status()
         .await
         .map_err(|error| format!("rpm upgrade failed: {error}"))?;
-    if !status.success() {
-        return Err("Package install failed (dnf/rpm)".into());
+    if status.success() {
+        return Ok(());
     }
-    Ok(())
+    if let (Some(file_vr), Some(inst_vr)) = (rpm_query_vr(path).await, rpm_installed_vr().await)
+        && file_vr == inst_vr
+    {
+        return Ok(());
+    }
+    Err("Package install failed (dnf/rpm)".into())
 }
 
 pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {

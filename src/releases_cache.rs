@@ -209,8 +209,8 @@ mod tests {
         };
         assert!(!cache_is_fresh(&cache, &cache.repo));
         cache.releases.push(CpnRelease {
-            tag_name: "v0.2.6-alpha.25".into(),
-            version: "0.2.6-alpha.25".into(),
+            tag_name: "v0.2.6-alpha.27".into(),
+            version: "0.2.6-alpha.27".into(),
             name: "x".into(),
             published_at: "2026-09-12".into(),
             prerelease: true,

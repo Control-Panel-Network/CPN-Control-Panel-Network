@@ -31,19 +31,21 @@ use cpn_installer::panel_hub_routes::{
     cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
     cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
     databases_delete_get, databases_delete_post, databases_manager_route,
-    databases_phpmyadmin_route, email_accounts_route, email_catchall_route, email_catchall_save,
-    email_create_route, email_debugger, email_delivery_route, email_dkim_ensure, email_dkim_route,
-    email_forwarding_route, email_forwarding_save, email_limits, email_mailscanner,
-    email_marketing, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
-    email_spamassassin, email_webmail_route, ftp_accounts_route, ftp_create, ftp_create_post,
-    ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post, ftp_reset_post,
-    passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_register_finish,
-    passkey_register_start, security_fail2ban, security_firewall, security_malware,
-    security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
-    security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
-    security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom,
-    security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
-    server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
+    databases_phpmyadmin_route, email_accounts_route, email_bimi_push_cf, email_bimi_route,
+    email_bimi_save, email_catchall_route, email_catchall_save, email_create_route, email_debugger,
+    email_delivery_route, email_dkim_ensure, email_dkim_route, email_forwarding_route,
+    email_forwarding_save, email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_pattern_fwd, email_plus,
+    email_queue, email_rspamd, email_spamassassin, email_webmail_app_route,
+    email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
+    ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset,
+    ftp_reset_password_post, ftp_reset_post, passkey_delete_post, passkey_login_finish,
+    passkey_login_start, passkey_register_finish, passkey_register_start, security_fail2ban,
+    security_firewall, security_malware, security_modsec, security_modsec_rules, security_page,
+    security_rule_packs, security_ssh, security_ssh_toggle, security_ssl, security_ssl_defaults,
+    security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
+    security_ssl_mark_custom, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
+    security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
     server_packages_page, server_page, server_php_configs, server_php_extensions,
@@ -525,13 +527,18 @@ async fn websocket(
     Ok(response)
 }
 
+/// Kept for direct route wiring; `panel_catch_all` calls `static_asset_for` after webmail proxy checks.
+#[allow(dead_code)]
 async fn static_asset(path: web::Path<String>) -> impl Responder {
-    let requested = path.into_inner();
+    static_asset_for(&path.into_inner())
+}
+
+fn static_asset_for(requested: &str) -> HttpResponse {
     // Never treat empty path as the installer SPA here; `root_page` owns `/`.
     if requested.is_empty() {
         return HttpResponse::NotFound().finish();
     }
-    let name = requested.as_str();
+    let name = requested;
     let asset = UiAssets::get(name).or_else(|| {
         if name.contains('.') {
             None
@@ -555,6 +562,22 @@ async fn static_asset(path: web::Path<String>) -> impl Responder {
         None => HttpResponse::ServiceUnavailable()
             .body("The web interface is not embedded in this binary yet"),
     }
+}
+
+async fn panel_catch_all(
+    req: HttpRequest,
+    payload: web::Payload,
+    path: web::Path<String>,
+) -> HttpResponse {
+    if cpn_installer::panel_webmail::webmail_ready()
+        && cpn_installer::panel_webmail::path_matches_webmail_mount(req.path())
+    {
+        return cpn_installer::panel_webmail_proxy::webmail_panel_proxy(req, payload).await;
+    }
+    if matches!(*req.method(), Method::GET | Method::HEAD) {
+        return static_asset_for(&path.into_inner());
+    }
+    HttpResponse::NotFound().finish()
 }
 
 fn allow_remote_listen() -> bool {
@@ -1005,6 +1028,15 @@ async fn main() -> std::io::Result<()> {
             .service(email_dkim_route)
             .service(email_dkim_ensure)
             .service(email_webmail_route)
+            .service(email_webmail_app_route)
+            .service(email_webmail_settings_save)
+            .service(email_webmail_regenerate_path)
+            .service(email_mta_sts_route)
+            .service(email_mta_sts_save)
+            .service(email_mta_sts_push_cf)
+            .service(email_bimi_route)
+            .service(email_bimi_save)
+            .service(email_bimi_push_cf)
             .service(email_delivery_route)
             .service(email_pattern_fwd)
             .service(email_limits)
@@ -1064,7 +1096,11 @@ async fn main() -> std::io::Result<()> {
                 web::route()
                     .method(Method::GET)
                     .method(Method::HEAD)
-                    .to(static_asset),
+                    .method(Method::POST)
+                    .method(Method::PUT)
+                    .method(Method::PATCH)
+                    .method(Method::DELETE)
+                    .to(panel_catch_all),
             )
     })
     .keep_alive(actix_web::http::KeepAlive::Disabled)
