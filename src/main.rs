@@ -28,7 +28,8 @@ use cpn_installer::panel_hub_routes::{
     acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
     api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
     backups_destinations_save, backups_gdrive_route, backups_remote_route, backups_restore_route,
-    backups_schedule_route, backups_schedule_save, cloudflare_add_post, cloudflare_delete_post,
+    backups_restore_run, backups_schedule_route, backups_schedule_save, cloudflare_add_post,
+    cloudflare_delete_post,
     cloudflare_dns_get, cloudflare_oauth_callback_get, cloudflare_oauth_client_post,
     cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post, cloudflare_proxy_post,
     cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
@@ -957,6 +958,7 @@ async fn main() -> std::io::Result<()> {
             .service(backups_run)
             .service(backups_create_route)
             .service(backups_restore_route)
+            .service(backups_restore_run)
             .service(backups_schedule_route)
             .service(backups_schedule_save)
             .service(backups_destinations_route)
