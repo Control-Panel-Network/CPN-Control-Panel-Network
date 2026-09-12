@@ -74,6 +74,7 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
         {
             let mut ssl = site.ssl.clone();
             ssl.coverage_mode = SslCoverageMode::San;
+            ssl.include_subdomains_on_cert = false;
             if modify_site(
                 &domain,
                 SiteModify {
