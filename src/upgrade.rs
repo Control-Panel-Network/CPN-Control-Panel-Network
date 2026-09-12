@@ -6,11 +6,11 @@ use crate::manifest::{
     preserve_paths_for_repair, record_install,
 };
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
+use crate::os_support::detect_guest_os;
 use crate::release_verify::{
     maybe_check_rpm_sig, verify_gpg_enabled, verify_gpg_sums, verify_release_enabled,
     verify_sha256_file,
 };
-use crate::os_support::detect_guest_os;
 use crate::releases::{
     self, CpnRelease, NativePackageKind, compare_versions, compatible_package_asset,
     is_retag_migration, normalize_version,
