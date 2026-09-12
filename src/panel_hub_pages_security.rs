@@ -27,17 +27,22 @@ fn pre_block(text: &str) -> String {
 }
 
 pub fn security_hub_main() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
         "Security",
         "Firewall, SSH hardening, fail2ban, WAF, malware scan, and SSL certificates for this CPN node.",
     );
     for (title, tiles) in security_hub_sections() {
-        body.push_str(&hub_tiles_grid(title, &tiles));
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &filtered));
     }
     body
 }
 
-pub fn firewall_page() -> String {
+pub fn firewall_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
     let st = firewall_status();
     let services = if st.services.is_empty() {
         "n/a".into()
@@ -50,13 +55,25 @@ pub fn firewall_page() -> String {
         ("Services", &services),
     ]);
     let journal = if st.journal_excerpt.is_empty() {
-        "<p class=\"muted\">No CPN firewall journal yet (issue #21 journal is written on install).</p>"
+        "<p class=\"muted\">No CPN firewall journal yet (written on install or when you enable firewalld here).</p>"
             .to_string()
     } else {
         format!(
             "<h3>CPN firewall journal</h3>{}",
             pre_block(&st.journal_excerpt)
         )
+    };
+    let enable_form = if is_admin && st.backend == "firewalld" && !st.active {
+        r#"<form method="post" action="/security/firewall/enable" style="margin:14px 0;">
+          <button type="submit" class="btn-primary">Enable firewalld (http/https)</button>
+        </form>
+        <p class="muted">Starts firewalld and permanently opens http/https services on AlmaLinux 9.</p>"#
+            .to_string()
+    } else if is_admin && st.backend == "none" {
+        "<p class=\"muted\">Install firewalld (<code>dnf install firewalld</code>), then return here to enable it.</p>"
+            .into()
+    } else {
+        String::new()
     };
     feature_shell(
         &[
@@ -67,11 +84,12 @@ pub fn firewall_page() -> String {
         "Firewall",
         "Live firewalld / ufw / iptables status.",
         &format!(
-            "{kv}<h3>Status</h3>{}{journal}<p class=\"muted\">Rule edits that open arbitrary ports stay admin-gated for a later release. CPN only manages journaled http/https rules from install.</p>",
-            pre_block(&st.detail)
+            "{kv}{enable}<h3>Status</h3>{}{journal}<p class=\"muted\">Arbitrary port edits stay admin-gated for a later release. CPN manages journaled http/https rules from install or Enable.</p>",
+            pre_block(&st.detail),
+            enable = enable_form,
         ),
-        None,
-        None,
+        notice,
+        error,
     )
 }
 
@@ -280,14 +298,16 @@ pub fn malware_scan_page() -> String {
         ("Installed", if st.installed { "yes" } else { "no" }),
     ]);
     let extra = if st.installed {
-        format!(
-            "{}<p class=\"muted\">On-demand scan UI is next; status above is live from ClamAV binaries.</p>",
-            pre_block(&st.detail)
-        )
+        let engine_note = if st.engine == "nt-api" {
+            "<p class=\"muted\">Paid path uses News Targeted API (<code>api.newstargeted.com</code>). Token lives in <code>/var/lib/cpn/malware.json</code> (mode 600).</p>"
+        } else {
+            "<p class=\"muted\">Free path: ClamAV binaries on this host. Install via Plugins / packages when missing.</p>"
+        };
+        format!("{}{engine_note}", pre_block(&st.detail))
     } else {
         not_configured_body(
             &st.detail,
-            "CPN Malware scan never claims third-party products. Install ClamAV for live status.",
+            "CPN Malware scan never claims third-party product brands as CPN itself. Free: install ClamAV. Paid: configure api.newstargeted.com token in /var/lib/cpn/malware.json.",
         )
     };
     feature_shell(
@@ -297,7 +317,7 @@ pub fn malware_scan_page() -> String {
             ("Malware scan", None),
         ],
         "Malware scan",
-        "CPN malware status (ClamAV when present).",
+        "CPN malware status (ClamAV free, or paid News Targeted API).",
         &format!("{kv}{extra}"),
         None,
         None,
@@ -427,10 +447,11 @@ mod tests {
     #[test]
     fn hub_contains_sections() {
         let html = security_hub_main();
-        assert!(html.contains("Firewall"));
-        assert!(html.contains("Malware scan"));
         assert!(html.contains("Manage SSL"));
+        assert!(html.contains("Secure SSH") || html.contains("SSH"));
         assert!(!html.contains("CyberPanel"));
         assert!(!html.contains("Imunify"));
+        // Fail2ban / Malware / Firewall tiles are feature-gated when not installed.
+        // Hub copy may still mention them; live tiles appear only when enabled.
     }
 }

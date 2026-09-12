@@ -105,14 +105,58 @@ fn open_page(
 }
 
 pub fn open_ols_page(notice: Option<&str>, error: Option<&str>) -> String {
-    open_page(
+    let base = open_page(
         "Open OLS",
         "OpenLiteSpeed WebAdmin",
         "Open the OpenLiteSpeed WebAdmin console for this host.",
         openlitespeed_installed(),
-        "OpenLiteSpeed is not installed on this host. Install it during CPN setup (OpenLiteSpeed engine) or from Apps / package recipes, then return here.",
+        "OpenLiteSpeed is not installed on this host. Install it during CPN setup (OpenLiteSpeed engine) or from Plugins host packages, then return here.",
         notice,
         error,
+    );
+    if !openlitespeed_installed() {
+        return base;
+    }
+    let users = crate::litespeed_webadmin_users::list_webadmin_usernames();
+    let user_list = if users.is_empty() {
+        "<p class=\"muted\">No WebAdmin users listed in htpasswd yet.</p>".to_string()
+    } else {
+        let mut ul = String::from("<ul>");
+        for u in &users {
+            ul.push_str(&format!("<li><code>{}</code></li>", html_escape(u)));
+        }
+        ul.push_str("</ul>");
+        ul
+    };
+    format!(
+        r#"{base}
+<article class="section-card" style="margin-top:18px;">
+  <h2>WebAdmin users</h2>
+  <p class="muted">Passwords are never shown after save. Guests use the same WebAdmin login URL.</p>
+  <h3>Current users</h3>
+  {users}
+  <form method="post" action="/server/openlitespeed/password" class="stack-form" style="max-width:480px;margin-top:14px;">
+    <label for="wa_user">Username</label>
+    <input id="wa_user" name="username" value="admin" required autocomplete="username">
+    <label for="wa_pass">New password</label>
+    <input id="wa_pass" name="password" type="password" required minlength="8" autocomplete="new-password">
+    <button type="submit" class="btn-primary">Set WebAdmin password</button>
+  </form>
+  <form method="post" action="/server/openlitespeed/guest" class="stack-form" style="max-width:480px;margin-top:18px;">
+    <label for="guest_user">Add guest username</label>
+    <input id="guest_user" name="username" required autocomplete="off">
+    <label for="guest_pass">Guest password</label>
+    <input id="guest_pass" name="password" type="password" required minlength="8" autocomplete="new-password">
+    <button type="submit" class="btn-secondary">Add guest</button>
+  </form>
+  <form method="post" action="/server/openlitespeed/guest/remove" class="stack-form" style="max-width:480px;margin-top:18px;">
+    <label for="rm_user">Remove guest username</label>
+    <input id="rm_user" name="username" required autocomplete="off">
+    <button type="submit" class="btn-warn">Remove guest</button>
+  </form>
+</article>"#,
+        base = base,
+        users = user_list,
     )
 }
 

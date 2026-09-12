@@ -404,10 +404,26 @@ pub fn databases_manager_page(notice: Option<&str>, error: Option<&str>) -> Stri
     )
 }
 
-pub fn phpmyadmin_page() -> String {
-    let body = r#"<p>phpMyAdmin is installed per site via Apps when available.</p>
-      <p><a class="btn-primary" href="/apps">Open Apps</a></p>
-      <p class="muted">MariaDB is the default database engine. phpMyAdmin is the default companion UI when installed.</p>"#;
+pub fn phpmyadmin_page(notice: Option<&str>, error: Option<&str>) -> String {
+    let (installed, detail) = crate::apps_phpmyadmin_sso::phpmyadmin_open_status();
+    let body = if installed {
+        format!(
+            r#"<p>{detail}</p>
+      <p style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;">
+        <a class="btn-primary" href="/databases/phpmyadmin/open">Open phpMyAdmin (auto-login)</a>
+        <a class="btn-secondary" href="/plugins?view=host">Host packages</a>
+      </p>
+      <p class="muted">Auto-login creates a short-lived MariaDB user and sign-on token (never shown). On OpenLiteSpeed hosts CPN wires a loopback listener on <code>127.0.0.1:8081</code>.</p>"#,
+            detail = html_escape(&detail),
+        )
+    } else {
+        format!(
+            r#"<p>{detail}</p>
+      <p><a class="btn-primary" href="/plugins?view=host">Install via Host packages</a></p>
+      <p class="muted">MariaDB is the default database engine. phpMyAdmin is the default companion UI when installed.</p>"#,
+            detail = html_escape(&detail),
+        )
+    };
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -415,10 +431,10 @@ pub fn phpmyadmin_page() -> String {
             ("phpMyAdmin", None),
         ],
         "phpMyAdmin",
-        "Open phpMyAdmin.",
-        body,
-        None,
-        None,
+        "Open phpMyAdmin with optional auto-login.",
+        &body,
+        notice,
+        error,
     )
 }
 

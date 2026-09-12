@@ -26,11 +26,45 @@ pub async fn security_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -
 }
 
 #[get("/security/firewall")]
-pub async fn security_firewall(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn security_firewall(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    html_ok(panel_shell(&user, "security", "Firewall", &firewall_page()))
+    html_ok(panel_shell(
+        &user,
+        "security",
+        "Firewall",
+        &firewall_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+            is_panel_admin(&user),
+        ),
+    ))
+}
+
+#[post("/security/firewall/enable")]
+pub async fn security_firewall_enable(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/firewall",
+            None,
+            Some("Only the panel admin can enable firewalld"),
+        );
+    }
+    match crate::panel_ops_security::enable_firewalld_http_https() {
+        Ok(msg) => redirect_notice("/security/firewall", Some(&msg), None),
+        Err(err) => redirect_notice("/security/firewall", None, Some(&err)),
+    }
 }
 
 #[get("/security/ssh")]

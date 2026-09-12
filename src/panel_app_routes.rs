@@ -4,20 +4,12 @@ use crate::apps::{AppId, install_app_on, reinstall_app_on, uninstall_app_on};
 use crate::apps_control::{start_app, stop_app};
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
-use crate::panel_apps::{AppsPageQuery, apps_main};
-use crate::panel_pages::panel_shell;
-use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
+use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
-}
-
-fn html_ok(body: String) -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(body)
 }
 
 fn login_redirect() -> HttpResponse {
@@ -41,19 +33,14 @@ fn urlencoding_simple(value: &str) -> String {
 }
 
 fn apps_redirect(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
-    let mut url = "/apps".to_string();
-    let mut sep = '?';
+    let mut url = "/plugins?view=host".to_string();
     if !domain.trim().is_empty() {
-        url.push(sep);
-        sep = '&';
-        url.push_str(&format!("domain={}", urlencoding_simple(domain.trim())));
+        url.push_str(&format!("&domain={}", urlencoding_simple(domain.trim())));
     }
     if let Some(notice) = notice {
-        url.push(sep);
-        url.push_str(&format!("notice={}", urlencoding_simple(notice)));
+        url.push_str(&format!("&notice={}", urlencoding_simple(notice)));
     } else if let Some(error) = error {
-        url.push(sep);
-        url.push_str(&format!("error={}", urlencoding_simple(error)));
+        url.push_str(&format!("&error={}", urlencoding_simple(error)));
     }
     url
 }
@@ -77,34 +64,21 @@ pub async fn apps_page(
     state: web::Data<Arc<AppState>>,
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
+    let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let domain = query.get("domain").map(String::as_str).unwrap_or("");
-    let sites = sites_manageable_by(&user).unwrap_or_default();
-    let domain = if domain.trim().is_empty() {
-        ""
-    } else if sites
-        .iter()
-        .any(|s| s.domain.eq_ignore_ascii_case(domain.trim()))
-    {
-        domain.trim()
-    } else {
-        ""
-    };
-    html_ok(panel_shell(
-        &user,
-        "apps",
-        "Apps",
-        &apps_main(AppsPageQuery {
-            notice,
-            error,
-            domain,
-            sites: &sites,
-        }),
-    ))
+    let mut loc = String::from("/plugins?view=host");
+    if let Some(domain) = query.get("domain").filter(|d| !d.trim().is_empty()) {
+        loc.push_str(&format!("&domain={}", urlencoding_simple(domain.trim())));
+    }
+    if let Some(notice) = query.get("notice") {
+        loc.push_str(&format!("&notice={}", urlencoding_simple(notice)));
+    } else if let Some(error) = query.get("error") {
+        loc.push_str(&format!("&error={}", urlencoding_simple(error)));
+    }
+    HttpResponse::SeeOther()
+        .append_header(("Location", loc))
+        .finish()
 }
 
 #[derive(Debug, serde::Deserialize)]

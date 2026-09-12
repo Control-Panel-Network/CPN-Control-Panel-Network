@@ -243,7 +243,8 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
         r#"<p class="muted">No manageable sites yet. Create a website (or subdomain) you own to attach site-scoped app paths. Host engines can still be installed without a site.</p>"#.into()
     } else {
         format!(
-            r#"<form method="get" action="/apps" class="stack-form" style="max-width:560px;">
+            r#"<form method="get" action="/plugins" class="stack-form" style="max-width:560px;">
+          <input type="hidden" name="view" value="host">
           <label for="domain">Domain or subdomain</label>
           <select id="domain" name="domain" onchange="this.form.submit()">{opts}</select>
           <noscript><button type="submit" class="btn-secondary">Apply</button></noscript>

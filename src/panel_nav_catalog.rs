@@ -246,6 +246,10 @@ const PLUGINS_CHILDREN: &[NavChild] = &[
         label: "Plugin Store",
         href: "/plugins?view=store",
     },
+    NavChild {
+        label: "Host packages",
+        href: "/plugins?view=host",
+    },
 ];
 
 pub(crate) const HOSTING: &[NavEntry] = &[
@@ -277,11 +281,6 @@ pub(crate) const HOSTING: &[NavEntry] = &[
         href: "/backups",
         label: "Backups",
         children: BACKUPS_CHILDREN,
-    },
-    NavEntry::Link {
-        id: "apps",
-        href: "/apps",
-        label: "Apps",
     },
     NavEntry::Group {
         id: "plugins",

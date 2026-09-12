@@ -5,6 +5,29 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.33] - 12/09/2026
+
+Clean2 lab epic: Plugin Store without a site, Apps folded into Plugins, feature gates, firewall enable, OLS WebAdmin users, phpMyAdmin auto-login, malware paid/free paths (Cargo `0.2.6-alpha.33`).
+
+### Fixed
+
+- Plugin Store (`/plugins?view=store` and legacy `?view-store`) loads the CPN-Plugins catalog even when no website exists yet; install still requires a domain.
+- `upgrade.sh` / `preUpgrade.sh` retry with `rpm --oldpackage` / apt `--allow-downgrades` when an explicit `-b` / `CPN_RELEASE_TAG` pin targets an older package than installed.
+
+### Added
+
+- Plugins **Host packages** tab (former `/apps`); `/apps` redirects to `/plugins?view=host`; `cpn app` CLI unchanged.
+- Sidebar/hub gates for Fail2ban, Firewall tooling, Malware scan, and removal of standalone Apps link until/unless package-backed.
+- Firewall page: enable firewalld + http/https on AlmaLinux; writes CPN firewall journal.
+- Open OLS: set WebAdmin password, add/remove guests via htpasswd (passwords never echoed after save).
+- phpMyAdmin: OpenLiteSpeed loopback `:8081` wiring and panel auto-login sign-on token.
+- Malware: free ClamAV status; paid News Targeted API probe from `/var/lib/cpn/malware.json` (`api_token`, optional `api_base`).
+
+### Notes
+
+- Fail2ban remains a CPN-Plugins catalog entry (`fail2ban`); sidebar appears after the host package/plugin is installed.
+- Cloudflare DNS still needs `/var/lib/cpn/cloudflare.json` token on the lab before Sync works. IP allowlists stay add-only.
+
 ## [0.2.6-alpha.32] - 12/09/2026
 
 Restore email-based panel password recovery on the web UI (Cargo `0.2.6-alpha.32`).

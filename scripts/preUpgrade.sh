@@ -391,7 +391,17 @@ upgrade_package() {
   case "$FAMILY" in
     dnf)
       if have_cmd dnf; then
-        dnf upgrade -y "$artifact" || dnf install -y "$artifact"
+        if dnf upgrade -y "$artifact"; then
+          return 0
+        fi
+        # Explicit -b / CPN_RELEASE_TAG pin may target an older NEVRA than installed.
+        if [[ -n "${CPN_RELEASE_TAG:-}${CPN_REF_ARG:-}${CPN_BRANCH:-}" ]]; then
+          info "pin may be older than installed; retrying with rpm --oldpackage"
+          if have_cmd rpm && rpm -Uvh --oldpackage "$artifact"; then
+            return 0
+          fi
+        fi
+        dnf install -y "$artifact"
       elif have_cmd yum; then
         yum upgrade -y "$artifact" || yum install -y "$artifact"
       else
@@ -400,7 +410,14 @@ upgrade_package() {
       ;;
     apt)
       if have_cmd apt-get; then
-        apt-get install -y "$artifact"
+        if ! apt-get install -y "$artifact"; then
+          if [[ -n "${CPN_RELEASE_TAG:-}${CPN_REF_ARG:-}${CPN_BRANCH:-}" ]]; then
+            info "pin may be older than installed; retrying with apt allow-downgrades"
+            apt-get install -y --allow-downgrades "$artifact" || die "could not install pinned package $(basename "$artifact")"
+            return 0
+          fi
+          die "could not install package $(basename "$artifact")"
+        fi
       else
         die "apt-get is required"
       fi

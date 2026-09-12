@@ -196,32 +196,48 @@ fn ensure_epel() -> Result<(), String> {
 }
 
 fn write_fpm_pool(share: &Path) -> Result<(), String> {
+    // OpenLiteSpeed workers typically run as nobody and cannot connect to an
+    // nginx-only 0660 socket. When OLS owns HTTP, expose the sock to nobody.
+    let ols = crate::litespeed_stack::openlitespeed_installed();
+    let (owner, group, mode) = if ols && user_exists("nobody") {
+        ("nobody", "nobody", "0660")
+    } else if user_exists("nginx") {
+        ("nginx", "nginx", "0660")
+    } else if user_exists("www-data") {
+        ("www-data", "www-data", "0660")
+    } else {
+        ("nobody", "nobody", "0666")
+    };
     let body = format!(
         "[cpn-phpmyadmin]\n\
-         user = nginx\n\
-         group = nginx\n\
+         user = {owner}\n\
+         group = {group}\n\
          listen = /run/php-fpm/cpn-phpmyadmin.sock\n\
-         listen.owner = nginx\n\
-         listen.group = nginx\n\
-         listen.mode = 0660\n\
+         listen.owner = {owner}\n\
+         listen.group = {group}\n\
+         listen.mode = {mode}\n\
          pm = ondemand\n\
          pm.max_children = 5\n\
-         php_admin_value[open_basedir] = {share}:/tmp\n\
+         php_admin_value[open_basedir] = {share}:/var/lib/cpn/phpmyadmin:/tmp\n\
          php_admin_flag[allow_url_fopen] = on\n",
         share = share.display()
     );
-    // Fall back to apache user on apt hosts without nginx user.
-    let body = if user_exists("nginx") {
-        body
-    } else if user_exists("www-data") {
-        body.replace("user = nginx", "user = www-data")
-            .replace("group = nginx", "group = www-data")
-            .replace("listen.owner = nginx", "listen.owner = www-data")
-            .replace("listen.group = nginx", "listen.group = www-data")
-    } else {
-        body
-    };
     fs::write(FPM_POOL, body).map_err(|error| format!("Could not write {FPM_POOL}: {error}"))?;
+    Ok(())
+}
+
+/// Ensure the php-fpm pool socket is reachable by OpenLiteSpeed (nobody).
+pub fn ensure_fpm_socket_for_ols() -> Result<(), String> {
+    if !crate::litespeed_stack::openlitespeed_installed() {
+        return Ok(());
+    }
+    let share = phpmyadmin_share_dir().ok_or_else(|| {
+        "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
+    })?;
+    write_fpm_pool(&share)?;
+    let _ = Command::new("systemctl")
+        .args(["restart", "php-fpm"])
+        .status();
     Ok(())
 }
 

@@ -125,13 +125,20 @@ pub fn malware_scan_status() -> MalwareScanStatus {
         return MalwareScanStatus {
             engine: "clamav".into(),
             installed: true,
-            detail: format!("{version}; clamd active={active}"),
+            detail: format!("{version}; clamd active={active}. Free CPN ClamAV path."),
+        };
+    }
+    if let Some((engine, installed, detail)) = crate::panel_ops_malware_nt::paid_malware_probe() {
+        return MalwareScanStatus {
+            engine,
+            installed,
+            detail,
         };
     }
     MalwareScanStatus {
         engine: "none".into(),
         installed: false,
-        detail: "No ClamAV tools found. CPN Malware scan is scaffolded until ClamAV (or another CPN scanner) is installed.".into(),
+        detail: "No ClamAV tools found and no News Targeted malware API token configured. Install the free ClamAV plugin/package, or configure the paid CPN malware API under /var/lib/cpn/malware.json.".into(),
     }
 }
 

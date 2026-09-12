@@ -369,7 +369,7 @@ pub fn set_webadmin_url(url: &str) -> Result<String, String> {
     Ok("WebAdmin URL saved.".into())
 }
 
-fn restart_litespeed() -> String {
+pub(crate) fn restart_litespeed() -> String {
     for unit in ["openlitespeed", "lsws", "lshttpd"] {
         if systemd_unit_active(unit)
             || Path::new(&format!("/usr/lib/systemd/system/{unit}.service")).exists()
