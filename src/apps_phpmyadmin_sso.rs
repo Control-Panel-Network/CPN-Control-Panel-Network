@@ -10,9 +10,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 const OLS_VHOST: &str = "CPNPhpMyAdmin";
 const LISTENER: &str = "CPNPhpMyAdminHttp";
 const HTTPD_CONF: &str = "/usr/local/lsws/conf/httpd_config.conf";
@@ -76,6 +73,14 @@ fn ols_vhconf(docroot: &str, sock: &str) -> String {
              enable                1\n\
            }}\n\
            addDefaultCharset       off\n\
+         }}\n\
+         context /cpn-private/ {{\n\
+           type                    NULL\n\
+           location                {docroot}/cpn-private/\n\
+           allowBrowse             0\n\
+           accessControl  {{\n\
+             deny                  *\n\
+           }}\n\
          }}\n"
     )
 }
@@ -156,7 +161,7 @@ session_name('CPNPmaSignon');
 session_start();
 $token = isset($_GET['token']) ? (string)$_GET['token'] : '';
 $token = preg_replace('/[^a-f0-9]/', '', $token) ?? '';
-$file = '/var/lib/cpn/phpmyadmin/tokens/' . $token . '.json';
+$file = __DIR__ . '/cpn-private/tokens/' . $token . '.json';
 if ($token === '' || !is_readable($file)) {
   http_response_code(403);
   echo 'Sign-on token missing or expired.';
@@ -245,17 +250,46 @@ fn create_ephemeral_db_user() -> Result<(String, String), String> {
     Ok((user, pass))
 }
 
-/// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
-pub fn open_phpmyadmin_autologin() -> Result<String, String> {
-    let _ = ensure_ols_phpmyadmin_listener();
-    let (user, pass) = create_ephemeral_db_user()?;
-    let token = random_token();
-    let dir = join_data("phpmyadmin").join("tokens");
+fn token_dir(share: &Path) -> PathBuf {
+    share.join("cpn-private").join("tokens")
+}
+
+fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
+    let dir = token_dir(share);
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create token dir: {e}"))?;
     #[cfg(unix)]
     {
-        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+        use std::os::unix::fs::PermissionsExt;
+        let private = share.join("cpn-private");
+        let _ = fs::set_permissions(&private, fs::Permissions::from_mode(0o750));
+        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o750));
+        let owner = if openlitespeed_installed() {
+            "nobody:nobody"
+        } else if Path::new("/etc/nginx").is_dir() {
+            "nginx:nginx"
+        } else {
+            "nobody:nobody"
+        };
+        let _ = Command::new("chown")
+            .args(["-R", owner, &private.display().to_string()])
+            .status();
     }
+    // Deny web listing of private token files when OLS serves the share.
+    let deny = share.join("cpn-private").join(".htaccess");
+    if !deny.is_file() {
+        let _ = fs::write(&deny, "Require all denied\n");
+    }
+    Ok(dir)
+}
+
+/// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
+pub fn open_phpmyadmin_autologin() -> Result<String, String> {
+    let _ = ensure_ols_phpmyadmin_listener();
+    let share = phpmyadmin_share_dir()
+        .ok_or_else(|| "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string())?;
+    let (user, pass) = create_ephemeral_db_user()?;
+    let token = random_token();
+    let dir = ensure_token_dir(&share)?;
     let exp = now_unix() + 120;
     let payload = serde_json::json!({
         "user": user,
@@ -267,7 +301,16 @@ pub fn open_phpmyadmin_autologin() -> Result<String, String> {
     fs::write(&path, payload.to_string()).map_err(|e| format!("Could not write token: {e}"))?;
     #[cfg(unix)]
     {
-        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o640));
+        let owner = if openlitespeed_installed() {
+            "nobody:nobody"
+        } else {
+            "nginx:nginx"
+        };
+        let _ = Command::new("chown")
+            .args([owner, &path.display().to_string()])
+            .status();
     }
     Ok(format!(
         "{}cpn-signon.php?token={token}",
