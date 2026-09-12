@@ -23,13 +23,22 @@ if [[ "$cargo_version" == *-* ]]; then
 fi
 
 spec="$project_dir/packaging/cpn-installer.spec"
-tmp="$(mktemp)"
+tmp_in="$(mktemp)"
+tmp_out="$(mktemp)"
+# Drop UTF-8 BOM if present. Windows editors (and OneDrive) reintroduce it;
+# rpmbuild then fails with: Unknown tag: Name
+if [[ -s "$spec" ]] && cmp -s <(head -c 3 "$spec") <(printf '\xef\xbb\xbf'); then
+  tail -c +4 "$spec" > "$tmp_in"
+else
+  cat "$spec" > "$tmp_in"
+fi
 awk -v ver="$rpm_version" -v rel="$rpm_release" '
   BEGIN { v=0; r=0 }
   /^Version:/ { print "Version:        " ver; v=1; next }
   /^Release:/ { print "Release:        " rel; r=1; next }
   { print }
   END { if (!v || !r) exit 2 }
-' "$spec" > "$tmp"
-mv "$tmp" "$spec"
+' "$tmp_in" > "$tmp_out"
+rm -f "$tmp_in"
+mv "$tmp_out" "$spec"
 echo "Synced packaging Version=$rpm_version Release=$rpm_release (from Cargo.toml $cargo_version)"

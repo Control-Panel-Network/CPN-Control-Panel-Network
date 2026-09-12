@@ -20,6 +20,20 @@ OpenLiteSpeed WebAdmin aligns with the CPN admin account by default.
 - Passwords are never logged or shown after save. Guests and manual Set WebAdmin password remain available.
 - Lab smoke: after Reset or fresh install+account, `https://127.0.0.1:7080/login.php` accepts the CPN admin credentials (NAT forward `:7080` if needed).
 
+## [0.2.6-alpha.35] - 12/09/2026
+
+Fix RPM packaging failure: strip UTF-8 BOM from the installer spec so EL9/EL10 builds succeed (Cargo `0.2.6-alpha.35`).
+
+### Fixed
+
+- `packaging/cpn-installer.spec` no longer starts with a UTF-8 BOM (rpmbuild reported `Unknown tag: Name` on alpha.33/alpha.34).
+- Restored correct UTF-8 Spanish changelog/description text that had been double-encoded on Windows.
+- `scripts/sync-version.sh` and `scripts/build-rpm.sh` strip a leading BOM before writing or rpmbuild; `scripts/check-version-sync.sh` fails CI if a BOM is present.
+
+### Notes
+
+- `v0.2.6-alpha.34` remains tagged without EL9/EL10 RPM assets (retag avoided). Use alpha.35 RPM assets after this release, or DEB/Windows from tips where those jobs succeeded.
+
 ## [0.2.6-alpha.34] - 12/09/2026
 
 Finish Apps→Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).

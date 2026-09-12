@@ -47,7 +47,20 @@ install -m 0755 target/release/cpn-installer "$rpm_root/SOURCES/cpn-installer"
 install -m 0755 target/release/cpn "$rpm_root/SOURCES/cpn"
 install -m 0644 packaging/cpn-installer.service "$rpm_root/SOURCES/cpn-installer.service"
 install -m 0755 packaging/cpn-motd.sh "$rpm_root/SOURCES/cpn-motd.sh"
-install -m 0644 packaging/cpn-installer.spec "$rpm_root/SPECS/cpn-installer.spec"
-rpmbuild --define "_topdir $rpm_root" -bb "$rpm_root/SPECS/cpn-installer.spec"
+# Always stage a BOM-free spec. rpmbuild treats a leading UTF-8 BOM as part of
+# the first tag name (Unknown tag: Name).
+spec_src="$project_dir/packaging/cpn-installer.spec"
+spec_dst="$rpm_root/SPECS/cpn-installer.spec"
+if [[ -s "$spec_src" ]] && cmp -s <(head -c 3 "$spec_src") <(printf '\xef\xbb\xbf'); then
+  tail -c +4 "$spec_src" > "$spec_dst"
+  chmod 0644 "$spec_dst"
+else
+  install -m 0644 "$spec_src" "$spec_dst"
+fi
+if cmp -s <(head -c 3 "$spec_dst") <(printf '\xef\xbb\xbf'); then
+  echo "Refusing rpmbuild: $spec_dst still has a UTF-8 BOM." >&2
+  exit 1
+fi
+rpmbuild --define "_topdir $rpm_root" -bb "$spec_dst"
 
 find "$rpm_root/RPMS" -type f -name '*.rpm' -print
