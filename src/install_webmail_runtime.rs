@@ -342,6 +342,17 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
                 .status();
         }
     }
+    // SnappyMail data lives under /var/lib/cpn-webmail; stale pools that omit it show
+    // "Permission denied!" instead of the login form.
+    if Path::new(FPM_POOL).is_file() && is_snappymail_docroot(docroot) {
+        let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
+        if !raw.contains("/var/lib/cpn-webmail") {
+            write_php_fpm_pool(docroot)?;
+            let _ = std::process::Command::new("systemctl")
+                .args(["restart", "php-fpm"])
+                .status();
+        }
+    }
     Ok(())
 }
 
