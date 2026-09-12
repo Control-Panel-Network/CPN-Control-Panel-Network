@@ -400,7 +400,7 @@ pub(crate) fn store_catalog(
     let total_pages = if mode == "scroll" {
         1
     } else {
-        ((total + per_page - 1) / per_page).max(1)
+        total.div_ceil(per_page).max(1)
     };
     let page = page_from_query(&opts.page.to_string()).min(total_pages);
     let start = if mode == "scroll" {

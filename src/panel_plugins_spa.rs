@@ -235,8 +235,16 @@ pub fn store_list_toolbar(
     total_pages: usize,
     total_items: usize,
 ) -> String {
-    let page_active = if mode == "page" { " active" } else { "" };
-    let scroll_active = if mode == "scroll" { " active" } else { "" };
+    let page_cls = if mode == "page" {
+        "plugin-mode-btn active"
+    } else {
+        "plugin-mode-btn"
+    };
+    let scroll_cls = if mode == "scroll" {
+        "plugin-mode-btn active"
+    } else {
+        "plugin-mode-btn"
+    };
     let pager_style = if mode == "scroll" {
         " style=\"display:none\""
     } else {
@@ -285,8 +293,8 @@ pub fn store_list_toolbar(
           </form>
         </div>
       </div>"#,
-        page_cls = format!("plugin-mode-btn{page_active}"),
-        scroll_cls = format!("plugin-mode-btn{scroll_active}"),
+        page_cls = page_cls,
+        scroll_cls = scroll_cls,
         pager_style = pager_style,
         options = options,
         page = page,
