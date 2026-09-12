@@ -362,6 +362,15 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
         if !include_ok {
             let _ = configure_snappymail_external_data(docroot);
         }
+        let _ = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "command -v semanage >/dev/null 2>&1 && \
+                 (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
+                  semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
+                 restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
+            ])
+            .status();
     }
     Ok(())
 }
