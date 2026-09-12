@@ -1,8 +1,8 @@
 //! HTML for CPN Panel Plugins (Installed + Store + Host packages).
 
 use crate::panel_plugins_markup::{
-    category_pills, domain_picker, html_escape, installed_cards, notice_block, resolve_domain,
-    section_heading, store_catalog, urlencoding_simple, view_tabs, StoreListOpts,
+    StoreListOpts, category_pills, domain_picker, html_escape, installed_cards, notice_block,
+    resolve_domain, section_heading, store_catalog, urlencoding_simple, view_tabs,
 };
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, plugins_hub_script,
