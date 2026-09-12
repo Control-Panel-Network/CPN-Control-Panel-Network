@@ -87,12 +87,11 @@ pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<S
         let raw = auth.trim();
         if raw.len() > 7 && raw[..7].eq_ignore_ascii_case("bearer ") {
             let bearer = raw[7..].trim();
-            if bearer.starts_with(crate::panel_api_tokens::TOKEN_PREFIX) {
-                if let Some((username, _scopes)) =
+            if bearer.starts_with(crate::panel_api_tokens::TOKEN_PREFIX)
+                && let Some((username, _scopes)) =
                     crate::panel_api_tokens::authenticate_bearer(bearer)
-                {
-                    return Some(username);
-                }
+            {
+                return Some(username);
             }
         }
     }
