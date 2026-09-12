@@ -259,7 +259,7 @@ fn acl_form(action: &str) -> String {
         </label>
         <button type="submit" class="btn-primary">Save grant</button>
       </form>
-      <p class="muted" style="margin-top:12px;">Grants map to the existing site ACL store used by Apps and Plugins.</p>"#,
+      <p class="muted" style="margin-top:12px;">Grants map to the existing site ACL store used by Plugins.</p>"#,
         action = html_escape(action),
     )
 }

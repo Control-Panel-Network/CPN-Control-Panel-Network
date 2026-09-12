@@ -198,12 +198,16 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
         ("config", "Config"),
         ("ssl", "SSL"),
         ("files", "Files"),
-        ("apps", "Apps"),
+        ("plugins", "Plugins"),
     ];
     let domain_q = html_escape(domain);
     let mut out = String::from(r#"<nav class="manage-tabs" aria-label="Website sections">"#);
+    let active_norm = match active {
+        "apps" | "applications" | "plugin" => "plugins",
+        other => other,
+    };
     for (id, label) in tabs {
-        let class = if id == active {
+        let class = if id == active_norm {
             " class=\"active\""
         } else {
             ""

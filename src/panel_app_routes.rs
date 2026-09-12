@@ -67,16 +67,31 @@ pub async fn apps_page(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect();
     };
-    let mut loc = String::from("/plugins?view=host");
-    if let Some(domain) = query.get("domain").filter(|d| !d.trim().is_empty()) {
-        loc.push_str(&format!("&domain={}", urlencoding_simple(domain.trim())));
+    // No domain: Host packages hub. With domain: site Plugins view (Installed / Store / Host tabs).
+    let domain = query
+        .get("domain")
+        .map(|s| s.trim())
+        .filter(|d| !d.is_empty());
+    let mut loc = if domain.is_some() {
+        String::from("/plugins")
+    } else {
+        String::from("/plugins?view=host")
+    };
+    if let Some(domain) = domain {
+        let sep = if loc.contains('?') { '&' } else { '?' };
+        loc.push(sep);
+        loc.push_str(&format!("domain={}", urlencoding_simple(domain)));
     }
     if let Some(notice) = query.get("notice") {
-        loc.push_str(&format!("&notice={}", urlencoding_simple(notice)));
+        let sep = if loc.contains('?') { '&' } else { '?' };
+        loc.push(sep);
+        loc.push_str(&format!("notice={}", urlencoding_simple(notice)));
     } else if let Some(error) = query.get("error") {
-        loc.push_str(&format!("&error={}", urlencoding_simple(error)));
+        let sep = if loc.contains('?') { '&' } else { '?' };
+        loc.push(sep);
+        loc.push_str(&format!("error={}", urlencoding_simple(error)));
     }
-    HttpResponse::SeeOther()
+    HttpResponse::MovedPermanently()
         .append_header(("Location", loc))
         .finish()
 }

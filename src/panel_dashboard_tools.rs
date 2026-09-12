@@ -161,8 +161,8 @@ const TOOL_GROUPS: &[ToolGroup] = &[
                 icon_id: "plugins",
             },
             ToolLink {
-                label: "Apps",
-                href: "/apps",
+                label: "Host packages",
+                href: "/plugins?view=host",
                 icon_id: "plugins",
             },
             ToolLink {

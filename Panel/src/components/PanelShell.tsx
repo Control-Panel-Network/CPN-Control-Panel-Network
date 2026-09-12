@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
-  AppWindow,
   ChevronDown,
   Database,
   Gauge,
@@ -148,8 +147,17 @@ const hosting: NavItem[] = [
       { label: "Restore Backup", href: "/backups/restore" },
     ],
   },
-  { label: "Apps", href: "/apps", icon: AppWindow, id: "apps" },
-  { label: "Plugins", href: "/plugins", icon: Puzzle, id: "plugins" },
+  {
+    label: "Plugins",
+    href: "/plugins",
+    icon: Puzzle,
+    id: "plugins",
+    children: [
+      { label: "Installed", href: "/plugins" },
+      { label: "Plugin Store", href: "/plugins?view=store" },
+      { label: "Host packages", href: "/plugins?view=host" },
+    ],
+  },
 ];
 
 const account: NavItem[] = [
