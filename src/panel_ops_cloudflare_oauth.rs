@@ -91,7 +91,7 @@ fn write_mode_600(path: &PathBuf, contents: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn read_json<T: for<'de> Deserialize<'de>>(path: &PathBuf) -> T {
+fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &PathBuf) -> T {
     let Ok(raw) = fs::read_to_string(path) else {
         return T::default();
     };

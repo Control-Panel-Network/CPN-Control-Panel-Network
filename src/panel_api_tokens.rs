@@ -55,7 +55,11 @@ pub fn api_tokens_path() -> PathBuf {
 fn hash_token(raw: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(raw.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn write_mode_600(path: &PathBuf, contents: &[u8]) -> Result<(), String> {
