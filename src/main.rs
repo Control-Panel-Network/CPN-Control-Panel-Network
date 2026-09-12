@@ -1,5 +1,5 @@
 use actix_web::{
-    App, HttpRequest, HttpResponse, HttpServer, Responder, http::Method, post, route, web,
+    App, HttpRequest, HttpResponse, HttpServer, Responder, guard, http::Method, post, route, web,
 };
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
 use cpn_installer::auth_api::{
@@ -1091,15 +1091,18 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
+            // Use Any/or for methods. Chained .method() guards are AND'd and never match.
             .route(
                 "/{path:.*}",
                 web::route()
-                    .method(Method::GET)
-                    .method(Method::HEAD)
-                    .method(Method::POST)
-                    .method(Method::PUT)
-                    .method(Method::PATCH)
-                    .method(Method::DELETE)
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
                     .to(panel_catch_all),
             )
     })

@@ -174,7 +174,22 @@ fn panel_base_for_links(listen_port: u16, host_hint: Option<&str>) -> String {
     format!("http://{host}:{listen_port}")
 }
 
-/// Absolute Open Webmail URL (inbox hash for SnappyMail when applicable).
+/// Docroot the loopback webmail frontend should serve (SnappyMail preferred when both exist).
+pub fn webmail_backend_docroot() -> Option<&'static str> {
+    match detect_webmail_client()? {
+        MailSystem::Snappymail => Some("/opt/cpn-webmail/snappymail"),
+        MailSystem::Roundcube => {
+            if Path::new("/opt/cpn-webmail/roundcube/public_html").is_dir() {
+                Some("/opt/cpn-webmail/roundcube/public_html")
+            } else {
+                Some("/opt/cpn-webmail/roundcube")
+            }
+        }
+        MailSystem::Thunderbird => None,
+    }
+}
+
+/// Absolute Open Webmail URL. Unauthenticated clients get the login UI (not an inbox hash).
 pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<String> {
     if !webmail_ready() {
         return None;
@@ -184,31 +199,29 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
     let path = cfg.public_path.trim_end_matches('/');
     let client = detect_webmail_client()?;
     let mut url = match client {
-        MailSystem::Snappymail => format!("{base}{path}/index.php/#/mailbox/INBOX"),
+        // Login form first; #/mailbox/INBOX only applies after a successful session.
+        MailSystem::Snappymail => format!("{base}{path}/index.php"),
         MailSystem::Roundcube => format!("{base}{path}/"),
         MailSystem::Thunderbird => return None,
     };
-    if !cfg.auto_login_account.is_empty() && matches!(client, MailSystem::Snappymail) {
-        // Best-effort Email prefill (SnappyMail / Rainloop-style login query). True SSO is not wired.
+    if !cfg.auto_login_account.is_empty() {
+        let email = urlencoding_form(&cfg.auto_login_account);
         let sep = if url.contains('?') { "&" } else { "?" };
-        // Keep hash: put query on the document URL before the fragment.
-        if let Some((head, hash)) = url.split_once('#') {
-            url = format!(
-                "{head}{sep}Email={}#{}",
-                urlencoding_form(&cfg.auto_login_account),
-                hash
-            );
-        } else {
-            url = format!(
-                "{url}{sep}Email={}",
-                urlencoding_form(&cfg.auto_login_account)
-            );
+        match client {
+            MailSystem::Snappymail => {
+                // Best-effort Email prefill. True SSO needs a stored mailbox secret (not wired).
+                url = format!("{url}{sep}Email={email}");
+            }
+            MailSystem::Roundcube => {
+                url = format!("{url}{sep}_user={email}");
+            }
+            MailSystem::Thunderbird => {}
         }
     }
     Some(url)
 }
 
-/// Relative open path for same-origin links and iframes.
+/// Relative open path for same-origin links and iframes (login UI when not authenticated).
 pub fn webmail_open_path() -> Option<String> {
     if !webmail_ready() {
         return None;
@@ -217,16 +230,25 @@ pub fn webmail_open_path() -> Option<String> {
     let path = cfg.public_path.trim_end_matches('/');
     match detect_webmail_client()? {
         MailSystem::Snappymail => {
-            let mut rel = format!("{path}/index.php/#/mailbox/INBOX");
-            if !cfg.auto_login_account.is_empty() {
-                rel = format!(
-                    "{path}/index.php?Email={}#/mailbox/INBOX",
+            if cfg.auto_login_account.is_empty() {
+                Some(format!("{path}/index.php"))
+            } else {
+                Some(format!(
+                    "{path}/index.php?Email={}",
                     urlencoding_form(&cfg.auto_login_account)
-                );
+                ))
             }
-            Some(rel)
         }
-        MailSystem::Roundcube => Some(format!("{path}/")),
+        MailSystem::Roundcube => {
+            if cfg.auto_login_account.is_empty() {
+                Some(format!("{path}/"))
+            } else {
+                Some(format!(
+                    "{path}/?_user={}",
+                    urlencoding_form(&cfg.auto_login_account)
+                ))
+            }
+        }
         MailSystem::Thunderbird => None,
     }
 }

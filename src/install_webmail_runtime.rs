@@ -315,6 +315,36 @@ fn configure_nginx_proxy(docroot: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Rewrite loopback Nginx/Caddy/OLS webmail config when the active client docroot drifted
+/// (example: Roundcube root while SnappyMail is preferred) or PATH_INFO support is missing.
+pub fn heal_webmail_loopback_config() -> Result<(), String> {
+    let Some(docroot) = crate::panel_webmail::webmail_backend_docroot() else {
+        return Ok(());
+    };
+    if Path::new(NGINX_CONF).is_file() {
+        let raw = std::fs::read_to_string(NGINX_CONF).unwrap_or_default();
+        let needs = !raw.contains(docroot)
+            || !raw.contains("fastcgi_split_path_info")
+            || !raw.contains("PATH_INFO");
+        if needs {
+            configure_nginx_proxy(docroot)?;
+            let _ = std::process::Command::new("systemctl")
+                .args(["reload", "nginx"])
+                .status();
+        }
+    }
+    if Path::new(CADDY_SNIPPET).is_file() {
+        let raw = std::fs::read_to_string(CADDY_SNIPPET).unwrap_or_default();
+        if !raw.contains(docroot) {
+            configure_caddy_proxy(docroot)?;
+            let _ = std::process::Command::new("systemctl")
+                .args(["reload", "caddy"])
+                .status();
+        }
+    }
+    Ok(())
+}
+
 fn configure_caddy_proxy(docroot: &str) -> Result<(), String> {
     std::fs::create_dir_all("/etc/caddy/Caddyfile.d").map_err(|error| error.to_string())?;
     install_journal::write_file_tracked(

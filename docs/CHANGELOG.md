@@ -5,6 +5,25 @@ All notable changes to CPN Control Panel Network are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6-alpha.28] - 12/09/2026
+
+Webmail blank-page fix and preferred mailbox picker (Cargo `0.2.6-alpha.28`).
+
+### Fixed
+
+- Panel catch-all used chained `.method()` guards that AND together, so `/snappymail/*` never reached the PHP-FPM proxy (empty 404 / blank SnappyMail). Methods are now OR'd via `guard::Any`.
+- Nginx webmail config accepts `index.php/` PATH_INFO for the SnappyMail SPA, and heals loopback docroot when SnappyMail is preferred but Roundcube was still rooted on `:8080`.
+- Open SnappyMail / Roundcube lands on the login UI (with optional Email / `_user` prefill), not `#/mailbox/INBOX` before authentication.
+
+### Changed
+
+- Email > Webmail preferred open account is a searchable mailbox picker from Email Accounts (clearable). Prefill only; true SSO still needs a future secure secret store.
+
+### Notes
+
+- Does not overlap Version Management work in open PR #164.
+- Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
+
 ## [0.2.6-alpha.27] - 12/09/2026
 
 Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags the fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
