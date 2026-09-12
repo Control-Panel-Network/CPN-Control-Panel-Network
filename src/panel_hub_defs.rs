@@ -173,12 +173,32 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
     vec![
         (
             "Services",
-            vec![HubTile {
-                title: "Services Status",
-                subtitle: "Start/stop known units",
-                href: "/server/services",
-                live: true,
-            }],
+            vec![
+                HubTile {
+                    title: "Services Status",
+                    subtitle: "Start/stop known units",
+                    href: "/server/services",
+                    live: true,
+                },
+                HubTile {
+                    title: "Open OLS",
+                    subtitle: "OpenLiteSpeed WebAdmin",
+                    href: "/server/openlitespeed",
+                    live: true,
+                },
+                HubTile {
+                    title: "Open OLSE",
+                    subtitle: "LiteSpeed Enterprise WebAdmin",
+                    href: "/server/litespeed-enterprise",
+                    live: true,
+                },
+                HubTile {
+                    title: "LiteSpeed plans",
+                    subtitle: "Tiers, serial, upgrade/downgrade",
+                    href: "/server/litespeed",
+                    live: true,
+                },
+            ],
         ),
         (
             "PHP & performance",

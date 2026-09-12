@@ -3,6 +3,10 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_litespeed::{
+    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
+    run_set_tier, run_set_webadmin_url, run_upgrade,
+};
 use crate::panel_hub_pages_server::{
     docker_page, files_page, package_manager_page, php_configs_page, php_extensions_page,
     php_tuning_page, processes_page, run_service_control, server_hub_main, services_page,
@@ -46,6 +50,162 @@ pub async fn server_services_page(
             is_panel_admin(&user),
         ),
     ))
+}
+
+#[get("/server/openlitespeed")]
+pub async fn server_openlitespeed_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Open OLS",
+        &open_ols_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[get("/server/litespeed-enterprise")]
+pub async fn server_litespeed_enterprise_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Open OLSE",
+        &open_olse_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[get("/server/litespeed")]
+pub async fn server_litespeed_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "LiteSpeed plans",
+        &litespeed_manage_page(
+            is_panel_admin(&user),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+fn litespeed_admin_redirect(
+    state: &web::Data<Arc<AppState>>,
+    http: &HttpRequest,
+) -> Option<HttpResponse> {
+    let Some(user) = require_panel_user(state, http) else {
+        return Some(login_redirect());
+    };
+    if !is_panel_admin(&user) {
+        return Some(redirect_notice(
+            "/server/litespeed",
+            None,
+            Some("Only the panel admin can manage LiteSpeed."),
+        ));
+    }
+    None
+}
+
+#[post("/server/litespeed/tier")]
+pub async fn server_litespeed_tier(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let tier = form.get("tier").map(String::as_str).unwrap_or("");
+    match run_set_tier(tier) {
+        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/serial")]
+pub async fn server_litespeed_serial(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let serial = form.get("serial").map(String::as_str).unwrap_or("");
+    match run_apply_serial(serial) {
+        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/webadmin-url")]
+pub async fn server_litespeed_webadmin_url(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let url = form.get("webadmin_url").map(String::as_str).unwrap_or("");
+    match run_set_webadmin_url(url) {
+        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/upgrade")]
+pub async fn server_litespeed_upgrade(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    match run_upgrade() {
+        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/downgrade")]
+pub async fn server_litespeed_downgrade(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let version = form.get("version").map(String::as_str).unwrap_or("");
+    match run_downgrade(version) {
+        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]

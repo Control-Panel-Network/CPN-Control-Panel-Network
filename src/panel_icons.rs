@@ -96,6 +96,13 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/backups/remote", "network", IconTone::Slate),
         ("/backups", "hard-drive", IconTone::Blue),
         ("/server/services", "activity", IconTone::Green),
+        ("/server/openlitespeed", "external-link", IconTone::Cyan),
+        (
+            "/server/litespeed-enterprise",
+            "external-link",
+            IconTone::Violet,
+        ),
+        ("/server/litespeed", "rocket", IconTone::Amber),
         ("/server/php/extensions", "plug", IconTone::Violet),
         ("/server/php/configs", "file", IconTone::Slate),
         ("/server/php/tuning", "gauge", IconTone::Amber),
