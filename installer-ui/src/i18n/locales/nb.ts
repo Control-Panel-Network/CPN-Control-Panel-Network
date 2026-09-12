@@ -112,8 +112,7 @@ const nb: LocaleMessages = {
   copyPassword: "Kopier",
   copied: "Kopiert",
   emailLabel: "Gjenopprettings-e-post",
-  emailHint:
-    "Brukes til kontovarsler. Passord gjenopprettes fra serverterminalen.",
+  emailHint: "Brukes hvis du glemmer passordet til denne kontoen.",
   emailPlaceholder: "deg@eksempel.no",
   policyTitle: "Passordpolicy",
   policyMinLength: "Minimumslengde",
