@@ -301,6 +301,8 @@ mod tests {
             rewrite_location("http://127.0.0.1:8081/cpn-signon.php"),
             "/phpmyadmin/cpn-signon.php"
         );
-        assert!(rewrite_set_cookie("phpMyAdmin=abc; path=/; HttpOnly").contains("Path=/phpmyadmin"));
+        assert!(
+            rewrite_set_cookie("phpMyAdmin=abc; path=/; HttpOnly").contains("Path=/phpmyadmin")
+        );
     }
 }

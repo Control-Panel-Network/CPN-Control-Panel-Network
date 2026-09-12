@@ -224,7 +224,8 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
             session = session,
             secret = random_token()
         );
-        fs::write(conf_inc, body).map_err(|e| format!("Could not write {}: {e}", conf_inc.display()))?;
+        fs::write(conf_inc, body)
+            .map_err(|e| format!("Could not write {}: {e}", conf_inc.display()))?;
         return Ok(());
     }
     let raw = fs::read_to_string(conf_inc)
