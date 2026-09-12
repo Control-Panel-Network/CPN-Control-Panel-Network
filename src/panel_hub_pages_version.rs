@@ -76,6 +76,7 @@ pub fn version_management_page(can_manage: bool) -> String {
   var statusEl = document.getElementById("cpn-version-status");
   var detailsEl = document.getElementById("cpn-version-details");
   var btn = document.getElementById("cpn-version-refresh");
+  var runningEl = document.getElementById("cpn-version-running");
   var latestEl = document.getElementById("cpn-version-latest");
   var installedEl = document.getElementById("cpn-version-installed");
   var searchEl = document.getElementById("cpn-version-search");
@@ -240,9 +241,11 @@ pub fn version_management_page(can_manage: bool) -> String {
       statusEl.textContent = "Could not load version information.";
       return;
     }}
+    if (runningEl && info.running_version) runningEl.textContent = info.running_version;
     if (installedEl && info.installed_version) installedEl.textContent = info.installed_version;
     if (latestEl) latestEl.textContent = info.latest_version || info.latest_tag || "-";
-    if (info.check_error) {{
+    var hasTip = !!(info.latest_version || info.latest_tag || (info.releases && info.releases.length));
+    if (info.check_error && !hasTip) {{
       statusEl.textContent = "Update check failed: " + info.check_error;
     }} else if (info.rate_limited && info.cache_note) {{
       statusEl.textContent = info.cache_note;
@@ -250,6 +253,8 @@ pub fn version_management_page(can_manage: bool) -> String {
       statusEl.textContent = "Update available: " + (info.latest_version || info.latest_tag || "newer release");
     }} else if (info.cache_note) {{
       statusEl.textContent = info.cache_note;
+    }} else if (info.check_error && hasTip) {{
+      statusEl.textContent = "Showing available release info. Note: " + info.check_error;
     }} else {{
       statusEl.textContent = "You are on the latest known release" +
         (info.latest_version ? (" (" + info.latest_version + ")") : "") + ".";
@@ -260,6 +265,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     if (info.latest_tag) lines.push("Latest tag: " + info.latest_tag);
     if (info.from_cache) lines.push("Release list: cached" + (info.cache_age_secs != null ? (" (" + info.cache_age_secs + "s old)") : ""));
     if (info.cache_note) lines.push(info.cache_note);
+    if (info.check_error && hasTip) lines.push("API note: " + info.check_error);
     detailsEl.innerHTML = lines.map(function (l) {{
       return "<p>" + esc(l) + "</p>";
     }}).join("");
@@ -276,6 +282,7 @@ pub fn version_management_page(can_manage: bool) -> String {
       return res.json();
     }}).then(render).catch(function (err) {{
       statusEl.textContent = "Update check failed: " + (err && err.message ? err.message : String(err));
+      if (latestEl && !latestEl.textContent) latestEl.textContent = "-";
     }});
   }}
   var pollFailCount = 0;

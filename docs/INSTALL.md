@@ -120,7 +120,16 @@ Release lists are cached on disk at `/var/lib/cpn/github-releases-cache.json` (o
 | Cache TTL | 30 minutes | `CPN_RELEASES_CACHE_TTL_SECS` |
 | Manual check min interval | 60 seconds | `CPN_RELEASES_CHECK_MIN_INTERVAL_SECS` |
 
-On GitHub HTTP 403/429, CPN serves the last good cache when present and shows an English rate-limit note (no tight retries). Optional token for higher limits: `CPN_GITHUB_TOKEN` or `GITHUB_TOKEN`, or file `/var/lib/cpn/secrets/github-token` (mode 600; never commit).
+On GitHub HTTP 403/429, CPN serves the last good cache when present and shows an English rate-limit note (no tight retries). If no cache exists yet, CPN falls back to direct release download URLs (CDN `.../releases/download/<tag>/SHA256SUMS`), which do not use the GitHub REST API quota. Optional token for higher API limits: `CPN_GITHUB_TOKEN` or `GITHUB_TOKEN`, or file `/var/lib/cpn/secrets/github-token` (mode 600; never commit).
+
+```bash
+sudo mkdir -p /var/lib/cpn/secrets
+# Paste a classic PAT or fine-grained token with public_repo (or Contents: Read) only:
+sudo install -m 600 /dev/stdin /var/lib/cpn/secrets/github-token <<<'ghp_...'
+# Or: export CPN_GITHUB_TOKEN=... before cpn-installer / upgrade.sh
+```
+
+`install.sh` / `upgrade.sh` use the same token sources, and when the API list fails they resolve tip packages via direct download URLs (or `CPN_RELEASE_TAG=v0.2.6-alpha.28`).
 
 ## What upgrade preserves vs refreshes
 
