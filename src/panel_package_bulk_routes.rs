@@ -93,8 +93,9 @@ pub struct PackageDuplicateForm {
 pub struct PackageBulkForm {
     #[serde(default)]
     action: String,
+    /// Comma-separated package ids (filled by the packages list JS).
     #[serde(default)]
-    package_ids: Vec<String>,
+    package_ids: String,
     #[serde(default)]
     disk_mb: String,
     #[serde(default)]
@@ -113,6 +114,14 @@ pub struct PackageBulkForm {
     notes: String,
     #[serde(default)]
     apply_notes: String,
+}
+
+fn parse_package_ids(raw: &str) -> Vec<String> {
+    raw.split(|ch| ch == ',' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 #[post("/packages/duplicate")]
@@ -156,12 +165,7 @@ pub async fn packages_bulk(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    let ids: Vec<String> = form
-        .package_ids
-        .iter()
-        .map(|id| id.trim().to_string())
-        .filter(|id| !id.is_empty())
-        .collect();
+    let ids = parse_package_ids(&form.package_ids);
     let action = form.action.trim().to_ascii_lowercase();
     match action.as_str() {
         "delete" => redirect_after_bulk(&bulk_delete_packages(&ids), "Deleted"),

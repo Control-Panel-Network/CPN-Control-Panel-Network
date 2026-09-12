@@ -94,7 +94,7 @@ fn package_rows(packages: &[Package]) -> String {
         rows.push_str(&format!(
             r#"<tr>
           <td>
-            <input type="checkbox" class="pkg-row-check" form="packages-bulk-form" name="package_ids" value="{id}" aria-label="Select {name}">
+            <input type="checkbox" class="pkg-row-check" value="{id}" aria-label="Select {name}">
           </td>
           <td><strong>{name}</strong>{assigned_note}<div class="muted" style="font-size:12px;">{id}</div></td>
           <td>{disk}</td><td>{bw}</td><td>{domains}</td><td>{emails}</td>
@@ -135,7 +135,8 @@ fn package_rows(packages: &[Package]) -> String {
 }
 
 fn bulk_toolbar() -> String {
-    r#"<form id="packages-bulk-form" method="post" action="/packages/bulk" style="margin:0 0 14px;">
+    r#"<form id="packages-bulk-form" method="post" action="/packages/bulk" style="margin:0 0 14px;" onsubmit="return cpnPkgBulkPrepare(this);">
+      <input type="hidden" name="package_ids" id="pkg-ids-joined" value="">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
         <span class="muted" id="pkg-selected-count" aria-live="polite">0 selected</span>
         <button type="submit" name="action" value="fqdn_enable" class="btn-secondary" onclick="return cpnPkgBulkConfirm(this);">Enable FQDN</button>
@@ -172,6 +173,7 @@ fn bulk_toolbar() -> String {
     <script>
     (function(){
       function checks(){return Array.prototype.slice.call(document.querySelectorAll('.pkg-row-check'));}
+      function selectedIds(){return checks().filter(function(c){return c.checked;}).map(function(c){return c.value;});}
       function refresh(){
         var list=checks(), n=list.filter(function(c){return c.checked;}).length;
         var el=document.getElementById('pkg-selected-count');
@@ -200,8 +202,13 @@ fn bulk_toolbar() -> String {
         form.querySelector('input[name="new_name"]').value=String(name).trim();
         return true;
       };
+      window.cpnPkgBulkPrepare=function(form){
+        var joined=document.getElementById('pkg-ids-joined');
+        if(joined) joined.value=selectedIds().join(',');
+        return true;
+      };
       window.cpnPkgBulkConfirm=function(btn){
-        var n=checks().filter(function(c){return c.checked;}).length;
+        var n=selectedIds().length;
         if(n<1){alert('Select at least one package.');return false;}
         var action=btn&&btn.value?btn.value:'';
         if(action==='delete') return confirm('Delete '+n+' selected package(s)? Assigned packages and Default stay blocked.');
