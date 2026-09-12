@@ -397,6 +397,8 @@ mod tests {
         assert!(html.contains("action=\"/forgot-password\""));
         assert!(html.contains("name=\"account\""));
         assert!(html.contains("sudo cpn password"));
-        assert!(!html.contains("For security, password recovery is performed directly on the server."));
+        assert!(
+            !html.contains("For security, password recovery is performed directly on the server.")
+        );
     }
 }
