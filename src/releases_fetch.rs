@@ -107,7 +107,6 @@ fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, Stri
     Ok(releases)
 }
 
-
 async fn direct_fallback_result(
     limit: usize,
     repo: &str,
@@ -127,8 +126,7 @@ async fn direct_fallback_result(
                 rate_limited: api_error.contains("403") || api_error.contains("429"),
                 retry_after_secs: None,
                 note: Some(
-                    "GitHub API unavailable; resolved tip via direct release download URLs."
-                        .into(),
+                    "GitHub API unavailable; resolved tip via direct release download URLs.".into(),
                 ),
                 soft_error: Some(api_error.to_string()),
             }
