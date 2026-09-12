@@ -19,8 +19,14 @@ if [[ "$cargo_version" == *-* ]]; then
   expected_rpm_release="0.${pre_compact}%{?dist}"
 fi
 
-spec_version="$(awk '/^Version:/ { print $2; exit }' "$project_dir/packaging/cpn-installer.spec")"
-spec_release="$(awk '/^Release:/ { print $2; exit }' "$project_dir/packaging/cpn-installer.spec")"
+spec="$project_dir/packaging/cpn-installer.spec"
+if [[ -s "$spec" ]] && cmp -s <(head -c 3 "$spec") <(printf '\xef\xbb\xbf'); then
+  echo "packaging/cpn-installer.spec has a UTF-8 BOM; rpmbuild fails with Unknown tag: Name." >&2
+  echo "Strip the BOM (or run ./scripts/sync-version.sh) and re-save as UTF-8 without BOM." >&2
+  exit 1
+fi
+spec_version="$(awk '/^Version:/ { print $2; exit }' "$spec")"
+spec_release="$(awk '/^Release:/ { print $2; exit }' "$spec")"
 if [[ "$spec_version" != "$expected_rpm_version" || "$spec_release" != "$expected_rpm_release" ]]; then
   echo "Version drift: Cargo.toml=$cargo_version" >&2
   echo "  expected RPM Version=$expected_rpm_version Release=$expected_rpm_release" >&2
