@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.27] - 12/09/2026
 
-Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags the fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
+Guest-matched EL RPM selection, Version Management searchable picker, and GitHub Releases disk cache (Cargo `0.2.6-alpha.27`). Retags the EL fix that landed on `stable` after `v0.2.6-alpha.26` was already published from the pre-fix tip.
+
+### Added
+
+- Disk cache at `/var/lib/cpn/github-releases-cache.json` (TTL default **30 minutes**, `CPN_RELEASES_CACHE_TTL_SECS`). Manual "Check for updates" min interval **60 seconds** (`CPN_RELEASES_CHECK_MIN_INTERVAL_SECS`).
+- On GitHub HTTP 403/429 (or network failure): serve last good cache when present; English note such as "Checked recently; showing cached results" / try again in N seconds. No tight retry loop.
+- Optional higher API limits via `CPN_GITHUB_TOKEN` / `GITHUB_TOKEN` or `/var/lib/cpn/secrets/github-token` (never committed). ETag / If-None-Match supported.
+- Version Management searchable release typeahead; MariaDB/OLS/PHP refresh on upgrade when already installed (no database drops).
 
 ### Fixed
 
@@ -15,9 +22,11 @@ Guest-matched EL RPM selection for maintenance (Cargo `0.2.6-alpha.27`). Retags 
 - `install_rpm` surfaces the real dnf/rpm stderr in the UI.
 - Version Management progress label shows a numeric percent (example: `60% installing: ...`).
 - Installed package prefers live `rpm -q` (mapped to Cargo prerelease) when the install-manifest is stale (example: manifest `0.2.2-alpha.17` vs RPM `0.2.6-alpha.24`).
+- Phantom Installed package `1.0.0`/`1.0.1` when RPM is already `0.2.x` (manifest reconcile + RPM NVR to Cargo prerelease mapping).
 
 ### Notes
 
+- Cache applies to Version Management, `--version-check`, and upgrade release discovery (`list_releases` / `find_release`).
 - Host scripts: `https://cpn.newstargeted.com/install.sh` / `upgrade.sh` with `-b` / `--ref` pin; see `docs/INSTALL.md`.
 
 ## [0.2.6-alpha.26] - 12/09/2026
