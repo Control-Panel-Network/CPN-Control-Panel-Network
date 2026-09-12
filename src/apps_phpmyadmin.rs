@@ -218,7 +218,7 @@ fn write_fpm_pool(share: &Path) -> Result<(), String> {
          listen.mode = {mode}\n\
          pm = ondemand\n\
          pm.max_children = 5\n\
-         php_admin_value[open_basedir] = {share}:/tmp\n\
+         php_admin_value[open_basedir] = {share}:/var/lib/cpn/phpmyadmin:/tmp\n\
          php_admin_flag[allow_url_fopen] = on\n",
         share = share.display()
     );
