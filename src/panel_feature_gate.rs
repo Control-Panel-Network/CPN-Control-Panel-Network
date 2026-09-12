@@ -193,7 +193,9 @@ mod tests {
 
     #[test]
     fn hides_mta_sts_and_bimi_until_plugins() {
-        let none = feats(false, false, false, false, false, false, false, false, false);
+        let none = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
         assert!(!none.allows_href("/email/mta-sts"));
         assert!(!none.allows_href("/email/bimi"));
         assert!(none.allows_href("/email/accounts"));
@@ -216,7 +218,9 @@ mod tests {
         assert!(lse_only.allows_href("/server/litespeed-enterprise"));
         assert!(lse_only.allows_href("/server/litespeed"));
 
-        let none = feats(false, false, false, false, false, false, false, false, false);
+        let none = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
         assert!(!none.allows_href("/server/openlitespeed"));
         assert!(!none.allows_href("/server/litespeed-enterprise"));
         assert!(!none.allows_href("/server/litespeed"));
@@ -224,7 +228,9 @@ mod tests {
 
     #[test]
     fn gates_security_optionals() {
-        let none = feats(false, false, false, false, false, false, false, false, false);
+        let none = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
         assert!(!none.allows_href("/security/fail2ban"));
         assert!(!none.allows_href("/security/firewall"));
         assert!(!none.allows_href("/security/malware-scan"));
@@ -239,7 +245,9 @@ mod tests {
 
     #[test]
     fn keeps_panel_native_routes() {
-        let feats = feats(false, false, false, false, false, false, false, false, false);
+        let feats = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
         for href in [
             "/databases",
             "/databases/all",
