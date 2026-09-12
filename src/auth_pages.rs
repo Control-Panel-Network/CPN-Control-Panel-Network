@@ -165,11 +165,7 @@ pub fn panel_login_html(
     )
 }
 
-pub fn panel_mfa_html(
-    status: &InstallerStatus,
-    error: Option<&str>,
-    next: Option<&str>,
-) -> String {
+pub fn panel_mfa_html(status: &InstallerStatus, error: Option<&str>, next: Option<&str>) -> String {
     let initial_locale = resolve_initial_locale(status);
     let safe_next = next.and_then(crate::login_next::sanitize_login_next);
     let next_hidden = match safe_next.as_deref() {

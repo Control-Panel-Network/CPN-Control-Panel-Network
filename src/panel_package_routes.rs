@@ -1,8 +1,8 @@
 //! Authenticated `/packages` panel routes.
 
 use crate::auth_api::panel_user_from_request;
-use crate::login_next::login_redirect;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::packages::{
     PackageInput, assign_package, create_package, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package,

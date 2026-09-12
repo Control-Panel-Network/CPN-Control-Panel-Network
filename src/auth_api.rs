@@ -12,6 +12,11 @@ use crate::http_helpers::{
     panel_login_url_for, smtp_status_public, token_matches,
 };
 use crate::installer::AppState;
+use crate::login_next::{
+    clear_login_return_cookie_header, first_safe_next, login_location, login_return_cookie_header,
+    mfa_location, post_login_location, read_login_return_cookie, referer_return_path,
+    request_return_path,
+};
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
@@ -19,11 +24,6 @@ use crate::panel_session::{
     clear_mfa_pending_cookie_header, clear_session_cookie_header, create_mfa_pending_token,
     create_session_token, mfa_pending_cookie_header, read_mfa_pending_cookie, read_session_cookie,
     session_cookie_header, session_secret, verify_mfa_pending_token, verify_session_token,
-};
-use crate::login_next::{
-    clear_login_return_cookie_header, first_safe_next, login_location, login_return_cookie_header,
-    mfa_location, post_login_location, read_login_return_cookie, referer_return_path,
-    request_return_path,
 };
 use crate::postfix_fallback::ensure_postfix_default;
 use crate::smtp_settings::persist_smtp;
@@ -142,11 +142,7 @@ fn resolve_next_from_request(
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
     let from_cookie = read_login_return_cookie(cookie);
-    first_safe_next(&[
-        form_next,
-        query_next,
-        from_cookie.as_deref(),
-    ])
+    first_safe_next(&[form_next, query_next, from_cookie.as_deref()])
 }
 
 #[actix_web::route("/login", method = "GET", method = "HEAD")]
@@ -221,11 +217,7 @@ pub async fn login_submit(
     let username = form.username.trim();
     let password = form.password.as_str();
     let _remember_me = form.remember_me.trim() == "1";
-    let next = resolve_next_from_request(
-        &http,
-        Some(form.next.as_str()),
-        query.next.as_deref(),
-    );
+    let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
 
     let authed = if username.is_empty() || password.is_empty() {
         None

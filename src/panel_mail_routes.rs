@@ -1,8 +1,8 @@
 //! Email mailbox create/enable/disable panel routes.
 
 use crate::auth_api::panel_user_from_request;
-use crate::login_next::login_redirect;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::mail_accounts::{MailAccountInput, MailSmtpMode, create_account, set_account_enabled};
 use crate::packages::{QuotaResource, require_quota};
 use crate::smtp_settings::SmtpTlsMode;

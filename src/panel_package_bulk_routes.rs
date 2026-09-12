@@ -1,8 +1,8 @@
 //! Bulk update/delete and duplicate routes for `/packages`.
 
 use crate::auth_api::panel_user_from_request;
-use crate::login_next::login_redirect;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::package_bulk::{
     PackageBulkPatch, bulk_delete_packages, bulk_update_packages, duplicate_package,
 };

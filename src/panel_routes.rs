@@ -1,8 +1,8 @@
 //! Authenticated Panel section routes and mutating actions.
 
 use crate::auth_api::panel_user_from_request;
-use crate::login_next::login_redirect;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_pages::panel_shell;

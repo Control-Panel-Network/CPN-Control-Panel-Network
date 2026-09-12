@@ -3,8 +3,8 @@
 use crate::apps::{AppId, install_app_on, reinstall_app_on, uninstall_app_on};
 use crate::apps_control::{start_app, stop_app};
 use crate::auth_api::panel_user_from_request;
-use crate::login_next::login_redirect;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;

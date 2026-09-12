@@ -228,10 +228,7 @@ mod tests {
     fn post_login_falls_back_to_dashboard() {
         assert_eq!(post_login_location(None), "/dashboard");
         assert_eq!(post_login_location(Some("//evil")), "/dashboard");
-        assert_eq!(
-            post_login_location(Some("/packages")),
-            "/packages"
-        );
+        assert_eq!(post_login_location(Some("/packages")), "/packages");
     }
 
     #[test]
