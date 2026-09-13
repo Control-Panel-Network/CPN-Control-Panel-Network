@@ -269,12 +269,11 @@ fn basic_settings(raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
 fn advanced_editor(path: &str, raw: &str, php: &str, csrf: &str, is_admin: bool) -> String {
     let disabled = if is_admin { "" } else { " disabled" };
     let save = if is_admin {
-        format!(
-            r#"<div class="php-cfg-footer">
+        r#"<div class="php-cfg-footer">
         <button type="submit" class="btn-primary">Save Changes</button>
         <button type="submit" formaction="/server/php/configs/restart" class="btn-secondary">Restart PHP</button>
       </div>"#
-        )
+            .to_string()
     } else {
         String::new()
     };

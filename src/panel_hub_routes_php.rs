@@ -61,12 +61,12 @@ fn require_admin_csrf(
     user: &str,
     form: &HashMap<String, String>,
     deny: &str,
-) -> Result<(), HttpResponse> {
+) -> Option<HttpResponse> {
     if !is_panel_admin(user) {
-        return Err(redirect_cfg("", "basic", None, Some(deny)));
+        return Some(redirect_cfg("", "basic", None, Some(deny)));
     }
     if !same_origin_ok(http) {
-        return Err(redirect_cfg(
+        return Some(redirect_cfg(
             "",
             "basic",
             None,
@@ -75,14 +75,14 @@ fn require_admin_csrf(
     }
     let csrf = form.get("csrf").map(String::as_str).unwrap_or("");
     if !verify_php_ext_csrf(user, csrf) {
-        return Err(redirect_cfg(
+        return Some(redirect_cfg(
             "",
             "basic",
             None,
             Some("Invalid or expired CSRF token"),
         ));
     }
-    Ok(())
+    None
 }
 
 #[get("/server/php/extensions")]
@@ -278,7 +278,7 @@ pub async fn server_php_configs_set_default(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Err(resp) = require_admin_csrf(
+    if let Some(resp) = require_admin_csrf(
         &http,
         &user,
         &form,
@@ -323,7 +323,7 @@ pub async fn server_php_configs_save_basic(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Err(resp) = require_admin_csrf(
+    if let Some(resp) = require_admin_csrf(
         &http,
         &user,
         &form,
@@ -389,7 +389,7 @@ pub async fn server_php_configs_save_advanced(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Err(resp) = require_admin_csrf(
+    if let Some(resp) = require_admin_csrf(
         &http,
         &user,
         &form,
@@ -441,7 +441,7 @@ pub async fn server_php_configs_restart(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Err(resp) =
+    if let Some(resp) =
         require_admin_csrf(&http, &user, &form, "Only the panel admin can restart PHP")
     {
         return resp;
