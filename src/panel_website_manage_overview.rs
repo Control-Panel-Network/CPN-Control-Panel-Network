@@ -351,7 +351,8 @@ mod tests {
             assert!(html.contains("Samples every ~10s"));
             assert!(html.contains("data-metric-details"));
             assert!(html.contains("data-metrics-poll=\"10000\""));
-            assert!(!html.contains("Snapshot (minimalist)"));
+            assert!(html.contains("Live host load:"));
+            assert!(html.contains("data-metrics-minimalist=\"0\""));
             assert!(!html.to_lowercase().contains("email marketing"));
             assert!(!html.to_lowercase().contains("cyberpanel"));
             assert!(!html.contains('\u{2014}'));
