@@ -57,6 +57,18 @@ const EMAIL_CHILDREN: &[NavChild] = &[
         href: "/email/forwarding",
     },
     NavChild {
+        label: "Pattern Forwarding",
+        href: "/email/pattern-forwarding",
+    },
+    NavChild {
+        label: "Email Limits",
+        href: "/email/limits",
+    },
+    NavChild {
+        label: "Change Password",
+        href: "/email/password",
+    },
+    NavChild {
         label: "DKIM Manager",
         href: "/email/dkim",
     },
@@ -75,6 +87,34 @@ const EMAIL_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Email Delivery",
         href: "/email/delivery",
+    },
+    NavChild {
+        label: "Email Debugger",
+        href: "/email/debugger",
+    },
+    NavChild {
+        label: "Mail Queue",
+        href: "/email/queue",
+    },
+    NavChild {
+        label: "SpamAssassin",
+        href: "/email/spamassassin",
+    },
+    NavChild {
+        label: "Rspamd",
+        href: "/email/rspamd",
+    },
+    NavChild {
+        label: "MailScanner",
+        href: "/email/mailscanner",
+    },
+    NavChild {
+        label: "Email Marketing",
+        href: "/email/marketing",
+    },
+    NavChild {
+        label: "Plus-Addressing",
+        href: "/email/plus-addressing",
     },
 ];
 

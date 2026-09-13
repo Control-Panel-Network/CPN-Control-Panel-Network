@@ -41,9 +41,13 @@ use cpn_installer::panel_hub_routes::{
     email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
     email_catchall_save, email_create_route, email_debugger, email_delivery_route,
     email_dkim_ensure, email_dkim_route, email_forwarding_route, email_forwarding_save,
-    email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf, email_mta_sts_route,
-    email_mta_sts_save, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
-    email_spamassassin, email_webmail_app_route, email_webmail_regenerate_path,
+    email_limits, email_mailscanner, email_mailscanner_enable, email_marketing,
+    email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_password_save, email_pattern_fwd,
+    email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save, email_plus,
+    email_plus_save, email_queue, email_queue_delete, email_queue_delete_all, email_queue_flush,
+    email_rspamd, email_rspamd_enable, email_spamassassin, email_spamassassin_enable,
+    email_limits_delete, email_limits_save, email_webmail_app_route, email_webmail_regenerate_path,
     email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
     ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
     ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
@@ -1218,15 +1222,31 @@ async fn main() -> std::io::Result<()> {
             .service(email_bimi_push_cf)
             .service(email_delivery_route)
             .service(email_pattern_fwd)
+            .service(email_pattern_fwd_save)
+            .service(email_pattern_fwd_delete)
+            .service(email_pattern_fwd_apply)
             .service(email_limits)
+            .service(email_limits_save)
+            .service(email_limits_delete)
             .service(email_password)
+            .service(email_password_save)
             .service(email_debugger)
             .service(email_queue)
+            .service(email_queue_flush)
+            .service(email_queue_delete)
+            .service(email_queue_delete_all)
             .service(email_spamassassin)
+            .service(email_spamassassin_enable)
             .service(email_rspamd)
+            .service(email_rspamd_enable)
             .service(email_mailscanner)
+            .service(email_mailscanner_enable)
             .service(email_marketing)
+            .service(email_marketing_list)
+            .service(email_marketing_recipient)
+            .service(email_marketing_send)
             .service(email_plus)
+            .service(email_plus_save)
             .service(databases_all_route)
             .service(databases_create_get)
             .service(databases_create_post)
