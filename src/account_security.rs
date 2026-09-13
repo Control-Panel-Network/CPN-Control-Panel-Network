@@ -298,8 +298,16 @@ mod tests {
             "start view must include passkey client script"
         );
         assert!(
-            !start.contains("/account/users/modify"),
-            "must not send gated admins to Modify User for passkeys"
+            start.contains("data-redirect=\"/dashboard\""),
+            "dedicated enroll gate defaults to dashboard unlock"
+        );
+        assert!(
+            !start.contains("href=\"/account/users/modify\""),
+            "must not send gated admins to Modify User via link"
+        );
+        assert!(
+            !start.contains("data-redirect=\"/account/users/modify"),
+            "dedicated enroll HTML must not hard-code Modify User redirect"
         );
 
         let mid = enroll_mfa_gate_main(
