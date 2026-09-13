@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Site Manage **Open Terminal**, **Manage Git**, and **Clone/Staging** (no longer greyed out): web terminal over authenticated WebSocket (`/api/websites/terminal/ws`, xterm.js UI, shell under site home via `script` PTY), Git tab with allowlisted status/pull/push/commit/init/clone (`POST /websites/git`), and file clone to a staging subdomain or custom target (`POST /websites/clone`) with site registry update. CSRF, same-origin, site ACL, and rate limits apply. Database clone is not included (files only; note in UI).
+
 ### Fixed
 
 - phpMyAdmin Open auto-login **503** after host PHP default / php-fpm thrash: `ensure_fpm_socket_for_ols` no longer unconditionally restarts php-fpm (reload when healthy; `systemctl reset-failed` + start when in `start-limit-hit`). Panel `/phpmyadmin` proxy heals a missing `cpn-phpmyadmin.sock` and retries once on backend 503 so `cpn-signon.php` reaches the UI again. Open auto-login no longer runs a full OLS listener refresh on every remint (that restart loop hit start-limit when SignonURL pointed at `/databases/phpmyadmin/open`).

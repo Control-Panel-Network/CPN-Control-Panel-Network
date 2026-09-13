@@ -253,9 +253,9 @@ pub fn quick_actions(site: &SiteRecord) -> String {
     ));
     format!(
         r#"<div class="manage-quick" aria-label="Quick actions">
-  <span class="scaffold" title="Web terminal ships later">Open Terminal</span>
-  <span class="scaffold" title="Git manager ships later">Manage Git</span>
-  <span class="scaffold" title="Clone/staging ships later">Clone/Staging</span>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=terminal" title="Web terminal in site home">Open Terminal</a>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=git" title="Git status, pull, commit, push">Manage Git</a>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=clone" title="Clone files to staging or new site">Clone/Staging</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=config" title="{ssh_hint}">SSH/SFTP Access</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=domains">Cron Jobs</a>
   <span class="scaffold" title="Stress test ships later">Stress Test</span>
@@ -276,11 +276,16 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
         ("ssl", "SSL"),
         ("files", "Files"),
         ("plugins", "Plugins"),
+        ("terminal", "Terminal"),
+        ("git", "Git"),
+        ("clone", "Clone"),
     ];
     let domain_q = html_escape(domain);
     let mut out = String::from(r#"<nav class="manage-tabs" aria-label="Website sections">"#);
     let active_norm = match active {
         "apps" | "applications" | "plugin" => "plugins",
+        "term" | "shell" => "terminal",
+        "staging" => "clone",
         other => other,
     };
     for (id, label) in tabs {
