@@ -59,13 +59,9 @@ fn insert_map_before_catchall(conf: &str, listener: &str, map_line: &str) -> Opt
         return None;
     }
     let marker = format!("listener {listener}");
-    let Some(start) = conf.find(&marker) else {
-        return None;
-    };
+    let start = conf.find(&marker)?;
     let rest = &conf[start..];
-    let Some(end_rel) = rest.find("\n}") else {
-        return None;
-    };
+    let end_rel = rest.find("\n}")?;
     let block_end = start + end_rel;
     let before = &conf[..block_end];
     let after = &conf[block_end..];

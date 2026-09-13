@@ -55,12 +55,11 @@ fn path_allowed(site: &SiteRecord, path: &Path) -> bool {
         return false;
     }
     let home_logs = site_home_from_record(site).join("logs");
-    if let Ok(canon_home) = home_logs.canonicalize() {
-        if let Ok(canon_path) = path.canonicalize() {
-            if canon_path.starts_with(&canon_home) {
-                return true;
-            }
-        }
+    if let Ok(canon_home) = home_logs.canonicalize()
+        && let Ok(canon_path) = path.canonicalize()
+        && canon_path.starts_with(&canon_home)
+    {
+        return true;
     }
     // Allow preferred paths even before the file exists (prefix check).
     let home_prefix = format!("{}/", home_logs.display());
