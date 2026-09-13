@@ -38,6 +38,9 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
             .content_type("text/plain; charset=utf-8")
             .body("phpMyAdmin is not installed on this host.");
     }
+    // Always refresh TempDir/upload ownership so OLS/php-fpm (nobody) can write
+    // even when the :8081 listener was already up from a prior boot.
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
     if !port_open("127.0.0.1:8081", 200) {
         let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
     }
