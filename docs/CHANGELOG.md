@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Server **Top Processes** (`/server/processes`): card toolbar with Refresh, truncated commands (full path in `title` tooltip), high-CPU highlight, and a stacked card layout under ~720px so CPU/MEM stay readable without horizontal scroll.
+
 ### Added
 
 - Server **PHP Configurations** (`/server/php/configs`): Basic Settings and Advanced php.ini editor per PHP version, Save Changes (backup under `/var/lib/cpn/php-ini-backups/`), Restart PHP, and **Set as host default** for system php-fpm / phpMyAdmin. Sidebar entry under Server; cross-linked with PHP Extensions. Admin-only POSTs with CSRF + same-origin checks.
