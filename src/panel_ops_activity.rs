@@ -73,7 +73,7 @@ pub fn sanitize_log_line(line: &str) -> String {
             skip_until_space = true;
             continue;
         }
-        out.push(trimmed[i] as char);
+        out.push(bytes[i] as char);
         i += 1;
     }
     if i < bytes.len() {
