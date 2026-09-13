@@ -9,7 +9,7 @@ use crate::panel_ops_php::detect_php;
 use crate::panel_website_logs::log_panel_html;
 use crate::panel_website_manage_ui::{html_escape, section, tile};
 use crate::service_detect::detect_web_server_label;
-use crate::sites::{SiteRecord, list_sites, resolve_parent_domain, site_home_from_record};
+use crate::sites::{SiteRecord, list_sites, resolve_parent_domain};
 use std::path::{Path, PathBuf};
 
 fn child_sites(parent: &str) -> Vec<SiteRecord> {
