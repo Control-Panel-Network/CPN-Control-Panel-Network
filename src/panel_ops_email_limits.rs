@@ -138,10 +138,7 @@ pub fn write_policy_file() -> Result<String, String> {
         let min_rate = limits.iter().map(|l| l.max_messages).min().unwrap_or(0);
         if min_rate > 0 {
             let _ = Command::new("postconf")
-                .args([
-                    "-e",
-                    &format!("smtpd_client_message_rate_limit={min_rate}"),
-                ])
+                .args(["-e", &format!("smtpd_client_message_rate_limit={min_rate}")])
                 .status();
         }
     }

@@ -15,7 +15,9 @@ pub struct FilterStatus {
 }
 
 fn unit_active_any(units: &[&str]) -> bool {
-    units.iter().any(|u| systemd_unit_active(u) || systemctl_active(u) == "active")
+    units
+        .iter()
+        .any(|u| systemd_unit_active(u) || systemctl_active(u) == "active")
 }
 
 pub fn spamassassin_status() -> FilterStatus {

@@ -1,6 +1,6 @@
 //! Mailbox password reset (panel registry + local system hash via chpasswd).
 
-use crate::mail_accounts::{list_accounts, MailAccount};
+use crate::mail_accounts::{MailAccount, list_accounts};
 use crate::panel_ops_mailbox_provision::provision_local_mailbox;
 use crate::paths::join_data;
 use serde::{Deserialize, Serialize};
@@ -63,9 +63,11 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
         return Err("Select a mailbox".into());
     }
     let mut file = load_accounts_file();
-    let Some(account) = file.accounts.iter_mut().find(|a| {
-        a.id.eq_ignore_ascii_case(&key) || a.address.eq_ignore_ascii_case(&key)
-    }) else {
+    let Some(account) = file
+        .accounts
+        .iter_mut()
+        .find(|a| a.id.eq_ignore_ascii_case(&key) || a.address.eq_ignore_ascii_case(&key))
+    else {
         return Err(format!("Mailbox `{key}` not found in the panel registry"));
     };
     let address = account.address.clone();

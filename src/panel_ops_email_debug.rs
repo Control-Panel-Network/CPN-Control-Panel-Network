@@ -85,7 +85,10 @@ fn recent_mail_log_lines(needle: &str, max_lines: usize) -> String {
             let matched: Vec<&str> = raw
                 .lines()
                 .rev()
-                .filter(|l| l.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()))
+                .filter(|l| {
+                    l.to_ascii_lowercase()
+                        .contains(&needle.to_ascii_lowercase())
+                })
                 .take(max_lines)
                 .collect();
             if matched.is_empty() {

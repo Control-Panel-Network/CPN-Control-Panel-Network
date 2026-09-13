@@ -74,7 +74,9 @@ fn validate_pattern(kind: &str, pattern: &str) -> Result<(), String> {
     match kind {
         "glob" => {
             if !pattern.contains('@') {
-                return Err("Glob patterns should include @domain (e.g. sales-*@example.com)".into());
+                return Err(
+                    "Glob patterns should include @domain (e.g. sales-*@example.com)".into(),
+                );
             }
             Ok(())
         }

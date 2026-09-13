@@ -2,9 +2,9 @@
 
 use crate::panel_hubs::{feature_shell, status_kv};
 use crate::panel_ops_email_antispam::{
-    mailscanner_status, rspamd_status, spamassassin_status, FilterStatus,
+    FilterStatus, mailscanner_status, rspamd_status, spamassassin_status,
 };
-use crate::panel_ops_email_debug::{run_debug, DebugReport};
+use crate::panel_ops_email_debug::{DebugReport, run_debug};
 use crate::panel_ops_email_marketing::{list_campaigns, list_marketing_lists};
 use crate::panel_ops_email_queue::{list_queue, queue_available};
 
@@ -36,10 +36,7 @@ pub fn email_debugger_page(
     if let Some(d) = domain.filter(|s| !s.trim().is_empty()) {
         match run_debug(d) {
             Ok(r) => report_html.push_str(&render_debug_report(&r)),
-            Err(e) => report_html.push_str(&format!(
-                r#"<p class="error">{}</p>"#,
-                html_escape(&e)
-            )),
+            Err(e) => report_html.push_str(&format!(r#"<p class="error">{}</p>"#, html_escape(&e))),
         }
     }
     let body = format!(
@@ -68,10 +65,7 @@ pub fn email_debugger_page(
 }
 
 fn render_debug_report(r: &DebugReport) -> String {
-    let mut out = status_kv(&[
-        ("Domain", &r.domain),
-        ("Local SMTP", &r.smtp_local),
-    ]);
+    let mut out = status_kv(&[("Domain", &r.domain), ("Local SMTP", &r.smtp_local)]);
     out.push_str(&pre_block("MX", &r.mx));
     out.push_str(&pre_block("SPF / TXT", &r.spf));
     out.push_str(&pre_block("DKIM (default._domainkey)", &r.dkim));
