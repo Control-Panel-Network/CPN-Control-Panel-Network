@@ -4,6 +4,7 @@ use crate::panel_hubs::{feature_shell, status_kv};
 use crate::panel_ops_email_antispam::{
     FilterStatus, mailscanner_status, rspamd_status, spamassassin_status,
 };
+use crate::panel_ops_email_csrf::email_csrf_token;
 use crate::panel_ops_email_debug::{DebugReport, run_debug};
 use crate::panel_ops_email_marketing::{list_campaigns, list_marketing_lists};
 use crate::panel_ops_email_queue::{list_queue, queue_available};
