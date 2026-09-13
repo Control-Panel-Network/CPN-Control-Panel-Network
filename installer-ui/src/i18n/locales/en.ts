@@ -111,7 +111,7 @@ const en: LocaleMessages = {
   passwordLabel: "Password",
   passwordConfirmLabel: "Confirm password",
   passwordHint:
-    "Leave blank to auto-generate. Otherwise use at least 12 characters with an uppercase letter, number, and symbol. Common weak passwords are blocked.",
+    "Leave blank to auto-generate. Otherwise use at least 8 characters with an uppercase letter and a number. Special characters are allowed but not required. Common weak passwords are blocked.",
   generatePassword: "Generate and fill password",
   useOwnPassword:
     "Leave both password fields empty to auto-generate, or enter your own.",
@@ -124,6 +124,7 @@ const en: LocaleMessages = {
   policyTitle: "Password policy",
   policyMinLength: "Minimum length",
   policyRequireSpecial: "Require a special character",
+  policySpecialOptional: "Special characters optional",
   policyRequireUpper: "Require an uppercase letter",
   policyRequireNumber: "Require a number",
   saveAccount: "Save account and continue",

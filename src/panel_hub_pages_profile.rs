@@ -99,7 +99,7 @@ pub fn users_self_edit_body(
     } else {
         "Disabled"
     };
-    let policy = boot.password_policy.clone();
+    let policy = crate::account::default_password_policy();
     let policy_hint = password_policy_hint(&policy);
     let min_len = policy.min_length;
     let mut body = format!(

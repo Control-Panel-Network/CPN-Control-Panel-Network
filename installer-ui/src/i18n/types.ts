@@ -106,6 +106,7 @@ export interface LocaleMessages {
   policyTitle: string;
   policyMinLength: string;
   policyRequireSpecial: string;
+  policySpecialOptional: string;
   policyRequireUpper: string;
   policyRequireNumber: string;
   saveAccount: string;

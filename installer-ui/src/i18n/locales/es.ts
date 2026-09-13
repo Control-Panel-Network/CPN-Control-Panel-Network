@@ -116,7 +116,7 @@ const es: LocaleMessages = {
   passwordLabel: "Contraseña",
   passwordConfirmLabel: "Confirmar contraseña",
   passwordHint:
-    "Déjala vacía para auto-generar. Si no, usa al menos 12 caracteres con mayúscula, número y símbolo. Las contraseñas débiles comunes están bloqueadas.",
+    "Déjala vacía para auto-generar. Si no, usa al menos 8 caracteres con mayúscula y número. Los caracteres especiales están permitidos, pero no son obligatorios. Las contraseñas débiles comunes están bloqueadas.",
   generatePassword: "Generar y rellenar contraseña",
   useOwnPassword:
     "Deja ambos campos vacíos para auto-generar, o escribe la tuya.",
@@ -130,6 +130,7 @@ const es: LocaleMessages = {
   policyTitle: "Política de contraseña",
   policyMinLength: "Longitud mínima",
   policyRequireSpecial: "Requerir un carácter especial",
+  policySpecialOptional: "Caracteres especiales opcionales",
   policyRequireUpper: "Requerir una mayúscula",
   policyRequireNumber: "Requerir un número",
   saveAccount: "Guardar cuenta y continuar",

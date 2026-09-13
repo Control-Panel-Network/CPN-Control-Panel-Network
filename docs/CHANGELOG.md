@@ -14,13 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Default panel password policy: minimum length **8** (was 12); special characters optional (uppercase and number still required; max 256; blocked-password list enforced). Installer/first-account copy and Security / Create User / Change password hints follow the policy.
 - PHP Configurations (`/server/php/configs`): changing **Select PHP Version** auto-loads that version's settings. Unsaved basic/advanced edits show a modal (Cancel / Abandon changes / Save first). Load button remains as a `<noscript>` fallback.
 - Server **Top Processes** (`/server/processes`): card toolbar with Refresh, truncated commands (full path in `title` tooltip), high-CPU highlight, and a stacked card layout under ~720px so CPU/MEM stay readable without horizontal scroll.
 
 ### Added
 
 - **Firewall manager** at `/security/firewall` (tabs: `?tab=rules`, `?tab=banned`, `?tab=trusted`): Start/Stop/Reload for firewalld, CPN-managed port rules with import/export, banned IPs (fail closed on trusted addresses), and SSH trusted / never-block IPs. Server IP and first admin login IP are auto-seeded and cannot be banned; panel listen port is kept open. Admin-only POSTs with CSRF + same-origin checks. Persists under `/var/lib/cpn/firewall-manager.json`.
-- Password policy hints on Security hub, Create User, and Change password (min length from policy, max 256, uppercase/number/special required by default, blocked-password list).
+- Password policy hints on Security hub, Create User, and Change password (min length from policy, max 256, uppercase/number required by default, special optional, blocked-password list).
 
 ### Notes
 
