@@ -74,6 +74,7 @@ use cpn_installer::panel_hub_routes::{
     server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
     server_packages_page, server_page, server_php_configs, server_php_configs_post,
     server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
     server_php_extensions_install, server_php_extensions_set_default,
     server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
     server_processes_page, server_services_control, server_services_page, settings_connect_page,
