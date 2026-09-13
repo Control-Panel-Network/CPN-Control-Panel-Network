@@ -141,6 +141,8 @@ mod tests {
             vhost_wired: false,
             ssl: Default::default(),
             internal_ip: None,
+            owner_suspend_message: String::new(),
+            suspended_by: None,
         }
     }
 

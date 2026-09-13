@@ -324,12 +324,16 @@ pub fn tab_config(site: &SiteRecord) -> String {
     );
 
     format!(
-        "{tiles}{php}{vhost}{rewrite}{ssh}",
+        "{tiles}{php}{vhost}{rewrite}{ssh}{suspend_msg}",
         tiles = section("Configurations", &tiles),
         php = php_line,
         vhost = vhost_block,
         rewrite = rewrite_block,
         ssh = ssh,
+        suspend_msg = crate::panel_hub_pages_site_messages::site_suspend_message_form(
+            &site.domain,
+            &site.owner_suspend_message,
+        ),
     )
 }
 
@@ -409,6 +413,8 @@ mod tests {
             vhost_wired: false,
             ssl: Default::default(),
             internal_ip: None,
+            owner_suspend_message: String::new(),
+            suspended_by: None,
         }
     }
 

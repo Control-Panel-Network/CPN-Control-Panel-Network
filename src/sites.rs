@@ -26,21 +26,17 @@ use crate::panel_ops_ssl_provider::{
     SiteSslSettings, SslProvider, initial_provider_for_new_site, load_ssl_defaults,
 };
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 
-const DEFAULT_INDEX_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Site ready</title>
-</head>
-<body>
-  <h1>Site ready</h1>
-  <p>This document root was created by CPN. Replace this file with your site.</p>
-</body>
-</html>
-"#;
+/// Who last suspended the site (drives which suspend message is shown).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SuspendActor {
+    /// CPN panel admin: always use global default message.
+    Admin,
+    /// Website owner (or non-admin grantee): use per-site message.
+    Owner,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SiteRecord {
@@ -62,6 +58,12 @@ pub struct SiteRecord {
     /// Unique internal IPv4 when Nginx front / proxy-front mode is enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub internal_ip: Option<String>,
+    /// Owner-editable suspend copy (plain text). Used only when `suspended_by` is Owner.
+    #[serde(default)]
+    pub owner_suspend_message: String,
+    /// Set on suspend; cleared on resume. Missing on legacy records → treat as Admin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suspended_by: Option<SuspendActor>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -74,6 +76,9 @@ pub struct SiteModify {
     pub ssl_provider: Option<SslProvider>,
     pub ssl_include_subdomains_on_cert: Option<bool>,
     pub ssl: Option<SiteSslSettings>,
+    pub owner_suspend_message: Option<String>,
+    /// `Some(None)` clears; `Some(Some(actor))` sets; `None` leaves unchanged.
+    pub suspended_by: Option<Option<SuspendActor>>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -276,7 +281,8 @@ pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
     }
     let index = docroot_path.join("index.html");
     if !index.is_file() {
-        fs::write(&index, DEFAULT_INDEX_HTML)
+        let html = crate::site_messages::site_ready_html_for_new_docroot();
+        fs::write(&index, html.as_bytes())
             .map_err(|error| format!("Could not write {}: {error}", index.display()))?;
         set_dir_mode(&index, 0o644);
         try_chown_root(&index);
@@ -410,6 +416,8 @@ pub fn create_site_with_ssl(
         vhost_wired: false,
         ssl: SiteSslSettings::with_provider(provider),
         internal_ip: None,
+        owner_suspend_message: String::new(),
+        suspended_by: None,
     };
     persist_site(&path, &site)?;
     // Optional unique internal IP when Nginx front mode is enabled.
@@ -466,6 +474,16 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     }
     if let Some(enabled) = patch.enabled {
         site.enabled = enabled;
+        if enabled {
+            site.suspended_by = None;
+        }
+    }
+    if let Some(owner_msg) = patch.owner_suspend_message {
+        site.owner_suspend_message =
+            crate::site_messages::sanitize_owner_suspend_message(&owner_msg)?;
+    }
+    if let Some(actor) = patch.suspended_by {
+        site.suspended_by = actor;
     }
     if let Some(engine) = patch.engine {
         let engine = engine.trim();

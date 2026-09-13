@@ -7,6 +7,7 @@ use crate::panel_api_tokens::ensure_store_migrated;
 use crate::panel_ops_cloudflare::ensure_oauth_schema_migrated;
 use crate::panel_ops_cloudflare_oauth::ensure_oauth_stores_migrated;
 use crate::paths;
+use crate::site_messages::ensure_site_messages_migrated;
 use crate::wordpress::ensure_wordpress_store_migrated;
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf, process::Command};
@@ -15,6 +16,7 @@ const SQL_0001: &str = include_str!("../sql/0001_panel_api_tokens.sql");
 const SQL_0002: &str = include_str!("../sql/0002_cloudflare_oauth.sql");
 const SQL_0003: &str = include_str!("../sql/0003_cloudflare_settings_oauth.sql");
 const SQL_0004: &str = include_str!("../sql/0004_wordpress_sites.sql");
+const SQL_0005: &str = include_str!("../sql/0005_site_messages.sql");
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct MigrationLedger {
@@ -50,6 +52,11 @@ const MIGRATIONS: &[MigrationDef] = &[
         id: "0004_wordpress_sites",
         sql: SQL_0004,
         hook: ensure_wordpress_store_migrated,
+    },
+    MigrationDef {
+        id: "0005_site_messages",
+        sql: SQL_0005,
+        hook: ensure_site_messages_migrated,
     },
 ];
 
@@ -115,8 +122,6 @@ fn apply_sql_to_panel_db(sql: &str) -> Result<(), String> {
     let db = panel_db_path();
     let dir = paths::default_data_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    // Pipe SQL on stdin. Passing SQL as argv fails when the file starts with
-    // `--` comments (sqlite3 treats those as CLI options).
     let mut child = Command::new("sqlite3")
         .arg(&db)
         .stdin(std::process::Stdio::piped())
@@ -174,13 +179,14 @@ mod tests {
     fn migrations_apply_idempotently() {
         with_test_data_dir(|| {
             let first = run_pending_migrations().unwrap();
-            assert_eq!(first.len(), 4);
+            assert_eq!(first.len(), 5);
             assert!(first.contains(&"0001_panel_api_tokens".to_string()));
             assert!(first.contains(&"0004_wordpress_sites".to_string()));
+            assert!(first.contains(&"0005_site_messages".to_string()));
             let second = run_pending_migrations().unwrap();
             assert!(second.is_empty());
             let ledger = load_ledger();
-            assert_eq!(ledger.applied.len(), 4);
+            assert_eq!(ledger.applied.len(), 5);
         });
     }
 

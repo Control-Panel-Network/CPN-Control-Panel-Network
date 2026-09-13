@@ -142,6 +142,14 @@ pub async fn preview_content(
         }
     };
     let docroot = Path::new(&site.docroot);
+    if !site.enabled {
+        let page = crate::site_messages::render_suspend_page(&site);
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .append_header(("X-Content-Type-Options", "nosniff"))
+            .append_header(("Cache-Control", "private, no-store"))
+            .body(page);
+    }
     let resolved = match resolve_under_docroot(docroot, &tail) {
         Ok(path) => path,
         Err(err) => return HttpResponse::BadRequest().body(err),

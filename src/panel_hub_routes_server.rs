@@ -19,7 +19,12 @@ use crate::panel_hub_pages_settings::{
     connect_page, design_settings_page, settings_hub_main, setup_wizard_page,
     version_management_page,
 };
+use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_pages::panel_shell;
+use crate::site_messages::{
+    SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
+    restore_factory_suspend_message, save_defaults,
+};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -672,6 +677,134 @@ pub async fn settings_connect_page(
         return login_redirect(&http);
     };
     html_ok(panel_shell(&user, "settings", "Connect", &connect_page()))
+}
+
+#[get("/settings/site-messages")]
+pub async fn settings_site_messages_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "settings",
+        "Site messages",
+        &site_messages_settings_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SiteMessagesForm {
+    #[serde(default)]
+    suspend_message_html: String,
+    #[serde(default)]
+    site_ready_html: String,
+}
+
+#[post("/settings/site-messages")]
+pub async fn settings_site_messages_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SiteMessagesForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    let mut defaults = load_defaults();
+    defaults.suspend_message_html = form.suspend_message_html.clone();
+    defaults.site_ready_html = form.site_ready_html.clone();
+    match save_defaults(&defaults) {
+        Ok(()) => redirect_notice("/settings/site-messages", Some("Site messages saved"), None),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
+}
+
+#[post("/settings/site-messages/restore-suspend")]
+pub async fn settings_site_messages_restore_suspend(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    match restore_factory_suspend_message() {
+        Ok(()) => redirect_notice(
+            "/settings/site-messages",
+            Some("Factory suspend message restored"),
+            None,
+        ),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
+}
+
+#[post("/settings/site-messages/restore-site-ready")]
+pub async fn settings_site_messages_restore_site_ready(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    match restore_factory_site_ready() {
+        Ok(()) => redirect_notice(
+            "/settings/site-messages",
+            Some("Factory site-ready template restored"),
+            None,
+        ),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
+}
+
+#[post("/settings/site-messages/reset-builtins")]
+pub async fn settings_site_messages_reset(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    match save_defaults(&SiteMessageDefaults {
+        site_ready_html: builtin_site_ready_html().to_string(),
+        ..SiteMessageDefaults::default()
+    }) {
+        Ok(()) => redirect_notice(
+            "/settings/site-messages",
+            Some("Built-in defaults restored"),
+            None,
+        ),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
 }
 
 #[get("/settings/port")]
