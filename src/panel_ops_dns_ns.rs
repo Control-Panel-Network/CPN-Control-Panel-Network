@@ -95,10 +95,10 @@ fn write_legacy_nameservers(values: &[String]) -> Result<(), String> {
 
 pub fn load_ns_hosts() -> Vec<NsHost> {
     let path = ns_hosts_path();
-    if let Ok(raw) = fs::read_to_string(&path) {
-        if let Ok(hosts) = serde_json::from_str::<Vec<NsHost>>(&raw) {
-            return hosts;
-        }
+    if let Ok(raw) = fs::read_to_string(&path)
+        && let Ok(hosts) = serde_json::from_str::<Vec<NsHost>>(&raw)
+    {
+        return hosts;
     }
     load_nameservers()
         .into_iter()
@@ -178,10 +178,10 @@ pub fn delete_ns_host(hostname: &str) -> Result<(), String> {
 
 pub fn load_default_nameservers() -> Vec<String> {
     let path = default_ns_path();
-    if let Ok(raw) = fs::read_to_string(&path) {
-        if let Ok(list) = serde_json::from_str::<Vec<String>>(&raw) {
-            return list;
-        }
+    if let Ok(raw) = fs::read_to_string(&path)
+        && let Ok(list) = serde_json::from_str::<Vec<String>>(&raw)
+    {
+        return list;
     }
     load_nameservers()
 }

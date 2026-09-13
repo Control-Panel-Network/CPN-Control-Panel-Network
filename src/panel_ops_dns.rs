@@ -115,14 +115,13 @@ pub fn list_zones() -> Result<Vec<String>, String> {
             let name = ent.file_name().to_string_lossy().to_string();
             if let Some(zone) = name.strip_suffix(".zone") {
                 zones.push(zone.to_string());
-            } else if let Some(zone) = name.strip_suffix(".json") {
-                if zone != "nameservers"
-                    && zone != "ns-hosts"
-                    && zone != "default-nameservers"
-                    && !zones.iter().any(|z| z == zone)
-                {
-                    zones.push(zone.to_string());
-                }
+            } else if let Some(zone) = name.strip_suffix(".json")
+                && zone != "nameservers"
+                && zone != "ns-hosts"
+                && zone != "default-nameservers"
+                && !zones.iter().any(|z| z == zone)
+            {
+                zones.push(zone.to_string());
             }
         }
     }
@@ -255,19 +254,19 @@ pub fn create_zone(domain_raw: &str, host_ipv4: Option<&str>) -> Result<String, 
             content: format!("{ns_fqdn}."),
         });
     }
-    if let Some(ip) = host_ipv4.filter(|v| !v.is_empty() && *v != "Unavailable") {
-        if validate_ipv4(ip).is_ok() {
-            records.push(DnsRecord {
-                id: new_record_id(),
-                name: "@".into(),
-                rtype: "A".into(),
-                ttl: 3600,
-                priority: None,
-                weight: None,
-                port: None,
-                content: ip.to_string(),
-            });
-        }
+    if let Some(ip) = host_ipv4.filter(|v| !v.is_empty() && *v != "Unavailable")
+        && validate_ipv4(ip).is_ok()
+    {
+        records.push(DnsRecord {
+            id: new_record_id(),
+            name: "@".into(),
+            rtype: "A".into(),
+            ttl: 3600,
+            priority: None,
+            weight: None,
+            port: None,
+            content: ip.to_string(),
+        });
     }
     let hosts = load_ns_hosts();
     for ns in &defaults {

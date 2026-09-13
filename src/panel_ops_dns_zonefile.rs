@@ -253,12 +253,11 @@ fn take_name<'a>(tokens: &'a [String], zone_fqdn: &str) -> (String, &'a [String]
 }
 
 fn take_optional_ttl(tokens: &[String]) -> (u32, &[String]) {
-    if let Some(first) = tokens.first() {
-        if first.chars().all(|c| c.is_ascii_digit()) {
-            if let Ok(ttl) = first.parse::<u32>() {
-                return (ttl, &tokens[1..]);
-            }
-        }
+    if let Some(first) = tokens.first()
+        && first.chars().all(|c| c.is_ascii_digit())
+        && let Ok(ttl) = first.parse::<u32>()
+    {
+        return (ttl, &tokens[1..]);
     }
     (3600, tokens)
 }
