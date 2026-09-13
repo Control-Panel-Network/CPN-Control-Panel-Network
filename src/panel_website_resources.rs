@@ -90,8 +90,7 @@ pub fn host_resource_snapshot(prev: Option<CpuCounters>) -> HostSnapshot {
             cpu_pct,
             mem_pct,
             cpu_counters,
-            detail: "Host live metrics (not per-site). Site-level CPU metering ships later."
-                .into(),
+            detail: "Host live metrics (not per-site). Site-level CPU metering ships later.".into(),
         }
     }
 }

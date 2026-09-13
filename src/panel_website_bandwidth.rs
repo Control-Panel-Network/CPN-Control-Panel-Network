@@ -58,7 +58,11 @@ fn local_month_token() -> Option<String> {
 
 /// Sum response sizes from Common/Combined-style access log lines.
 /// Looks for `"...HTTP/x.y" STATUS BYTES` after the request.
-pub fn sum_bytes_from_access_log(text: &str, day: Option<&str>, month: Option<&str>) -> (u64, u64, usize) {
+pub fn sum_bytes_from_access_log(
+    text: &str,
+    day: Option<&str>,
+    month: Option<&str>,
+) -> (u64, u64, usize) {
     let mut today = 0u64;
     let mut month_total = 0u64;
     let mut lines = 0usize;
@@ -67,9 +71,7 @@ pub fn sum_bytes_from_access_log(text: &str, day: Option<&str>, month: Option<&s
             continue;
         };
         lines += 1;
-        let in_month = month
-            .map(|m| line.contains(m))
-            .unwrap_or(false);
+        let in_month = month.map(|m| line.contains(m)).unwrap_or(false);
         let in_day = day.map(|d| line.contains(d)).unwrap_or(false);
         if in_day {
             today = today.saturating_add(bytes);
@@ -84,7 +86,8 @@ pub fn sum_bytes_from_access_log(text: &str, day: Option<&str>, month: Option<&s
 fn parse_response_bytes(line: &str) -> Option<u64> {
     // Prefer the quote that ends the request line, then status + bytes.
     let after = line.rsplit_once("\" ").map(|(_, rest)| rest).or_else(|| {
-        line.rsplit_once("HTTP/1.").map(|(_, rest)| rest)
+        line.rsplit_once("HTTP/1.")
+            .map(|(_, rest)| rest)
             .or_else(|| line.rsplit_once("HTTP/2").map(|(_, rest)| rest))
     })?;
     let mut parts = after.split_whitespace();

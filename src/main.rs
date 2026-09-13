@@ -85,7 +85,6 @@ use cpn_installer::panel_network::{
 use cpn_installer::panel_notifications_routes::{
     panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
 };
-use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_package_bulk_routes::{packages_bulk, packages_duplicate};
 use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
@@ -106,6 +105,7 @@ use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
     panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
+use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,
