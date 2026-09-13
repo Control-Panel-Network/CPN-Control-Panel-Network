@@ -1,4 +1,4 @@
-//! Path allowlisting and directory listing for Root File Manager.
+//! Path allowlisting, jail resolution, and directory listing for File Manager.
 
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
@@ -6,6 +6,11 @@ use std::time::SystemTime;
 /// Admin Root File Manager may browse the whole host filesystem (documented risk).
 pub fn allowed_roots() -> Vec<PathBuf> {
     vec![PathBuf::from("/")]
+}
+
+/// Root jail for the admin Root File Manager.
+pub fn root_jail() -> PathBuf {
+    PathBuf::from("/")
 }
 
 #[derive(Debug, Clone)]
@@ -21,11 +26,18 @@ pub struct DirEntryInfo {
     pub mode_label: String,
 }
 
-/// Resolve `requested` under an allowlisted root. Rejects traversal and NUL bytes.
+/// Resolve `requested` under the admin Root File Manager allowlist (`/`).
 pub fn resolve_under_allowlist(requested: &str) -> Result<PathBuf, String> {
+    resolve_under_jail(requested, Path::new("/"))
+}
+
+/// Resolve `requested` so it stays inside `jail` (site home or `/` for root FM).
+/// Rejects traversal (`..`), NUL bytes, and escapes outside the jail.
+pub fn resolve_under_jail(requested: &str, jail: &Path) -> Result<PathBuf, String> {
+    let jail_n = normalize_path(jail)?;
     let raw = requested.trim();
     if raw.is_empty() {
-        return Ok(PathBuf::from("/"));
+        return Ok(jail_n);
     }
     if raw.contains('\0') {
         return Err("Invalid path".into());
@@ -36,19 +48,20 @@ pub fn resolve_under_allowlist(requested: &str) -> Result<PathBuf, String> {
         return Err("Path must be absolute".into());
     }
     let normalized = normalize_path(&path)?;
-    for root in allowed_roots() {
-        if path_is_under(&normalized, &root)? {
-            return Ok(normalized);
-        }
+    if path_is_under(&normalized, &jail_n)? {
+        return Ok(normalized);
     }
-    Err("Path is outside the Root File Manager allowlist".into())
+    Err(format!(
+        "Path is outside the File Manager jail ({})",
+        jail_n.display()
+    ))
 }
 
 /// Join a directory with a single file/folder name (rejects nested segments).
-pub fn join_child(parent: &Path, name: &str) -> Result<PathBuf, String> {
+pub fn join_child(parent: &Path, name: &str, jail: &Path) -> Result<PathBuf, String> {
     let clean = validate_entry_name(name)?;
     let joined = parent.join(clean);
-    resolve_under_allowlist(&joined.display().to_string())
+    resolve_under_jail(&joined.display().to_string(), jail)
 }
 
 pub fn validate_entry_name(name: &str) -> Result<&str, String> {
@@ -266,6 +279,28 @@ mod tests {
     fn rejects_relative() {
         assert!(resolve_under_allowlist("home/foo").is_err());
         assert!(resolve_under_allowlist("../home").is_err());
+    }
+
+    #[test]
+    fn site_jail_blocks_escape() {
+        let jail = Path::new("/home/example.com");
+        assert_eq!(
+            resolve_under_jail("/home/example.com", jail).unwrap(),
+            PathBuf::from("/home/example.com")
+        );
+        assert!(resolve_under_jail("/home/example.com/public_html", jail).is_ok());
+        assert!(resolve_under_jail("/home/example.com/../other.com", jail).is_err());
+        assert!(resolve_under_jail("/home/other.com", jail).is_err());
+        assert!(resolve_under_jail("/etc/passwd", jail).is_err());
+        assert!(resolve_under_jail("/home/example.com/blog.example.com/../../other", jail).is_err());
+    }
+
+    #[test]
+    fn subdomain_jail_cannot_see_parent_siblings() {
+        let jail = Path::new("/home/example.com/blog.example.com");
+        assert!(resolve_under_jail("/home/example.com/blog.example.com", jail).is_ok());
+        assert!(resolve_under_jail("/home/example.com", jail).is_err());
+        assert!(resolve_under_jail("/home/example.com/shop.example.com", jail).is_err());
     }
 
     #[test]

@@ -1,19 +1,22 @@
-//! Compress and extract helpers for Root File Manager.
+//! Compress and extract helpers for File Manager (root or site jail).
 
 use crate::backup_restore_extract::extract_archive_safe;
 use crate::panel_ops_path::{
-    is_protected_path, join_child, resolve_under_allowlist, validate_entry_name,
+    is_protected_path, join_child, resolve_under_jail, validate_entry_name,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn ensure_writable(path: &Path) -> Result<(), String> {
+fn ensure_writable(path: &Path, jail: &Path) -> Result<(), String> {
     if is_protected_path(path) {
         return Err(format!(
             "Refusing to modify protected path {}",
             path.display()
         ));
+    }
+    if path.to_string_lossy() == jail.to_string_lossy() {
+        return Err("Refusing to modify the File Manager jail root".into());
     }
     Ok(())
 }
@@ -23,23 +26,24 @@ pub fn compress_entries(
     parent: &str,
     names: &[String],
     archive_name: &str,
+    jail: &Path,
 ) -> Result<String, String> {
     if names.is_empty() {
         return Err("Nothing selected to compress".into());
     }
-    let parent = resolve_under_allowlist(parent)?;
+    let parent = resolve_under_jail(parent, jail)?;
     let archive_name = validate_entry_name(archive_name)?;
     let lower = archive_name.to_ascii_lowercase();
     if !(lower.ends_with(".zip") || lower.ends_with(".tar.gz") || lower.ends_with(".tgz")) {
         return Err("Archive name must end with .zip, .tar.gz, or .tgz".into());
     }
-    let dest = join_child(&parent, archive_name)?;
-    ensure_writable(&dest)?;
+    let dest = join_child(&parent, archive_name, jail)?;
+    ensure_writable(&dest, jail)?;
     if dest.exists() {
         return Err("Archive already exists".into());
     }
     for name in names {
-        let _ = join_child(&parent, name)?;
+        let _ = join_child(&parent, name, jail)?;
     }
     let status = if lower.ends_with(".zip") {
         let mut cmd = Command::new("zip");
@@ -68,13 +72,13 @@ pub fn compress_entries(
 }
 
 /// Extract an archive file that lives under `parent` into the same directory.
-pub fn extract_entry(parent: &str, archive_name: &str) -> Result<String, String> {
-    let parent = resolve_under_allowlist(parent)?;
-    let archive = join_child(&parent, archive_name)?;
+pub fn extract_entry(parent: &str, archive_name: &str, jail: &Path) -> Result<String, String> {
+    let parent = resolve_under_jail(parent, jail)?;
+    let archive = join_child(&parent, archive_name, jail)?;
     if !archive.is_file() {
         return Err("Archive file not found".into());
     }
-    ensure_writable(&parent)?;
+    ensure_writable(&parent, jail)?;
     extract_archive_safe(&archive, &parent)?;
     Ok(format!(
         "Extracted {} into {}",
@@ -83,9 +87,9 @@ pub fn extract_entry(parent: &str, archive_name: &str) -> Result<String, String>
     ))
 }
 
-/// Resolve a path for callers that only need allowlist validation.
-pub fn resolve_path(path: &str) -> Result<PathBuf, String> {
-    resolve_under_allowlist(path)
+/// Resolve a path for callers that only need jail validation.
+pub fn resolve_path(path: &str, jail: &Path) -> Result<PathBuf, String> {
+    resolve_under_jail(path, jail)
 }
 
 #[cfg(test)]
@@ -94,7 +98,8 @@ mod tests {
 
     #[test]
     fn rejects_bad_archive_name() {
-        let err = compress_entries("/tmp", &["a".into()], "out.exe").unwrap_err();
+        let err =
+            compress_entries("/tmp", &["a".into()], "out.exe", Path::new("/")).unwrap_err();
         assert!(err.contains("Archive name"));
     }
 }

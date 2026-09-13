@@ -1,5 +1,6 @@
 //! Expandable sidebar groups with stacked child button rows for CPN Panel.
 
+use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
 use crate::panel_nav_catalog::{ACCOUNT, ADMINISTRATION, HOSTING, NavChild, NavEntry};
 
@@ -57,6 +58,10 @@ fn group_block(
     let visible: Vec<&NavChild> = children
         .iter()
         .filter(|child| feats.allows_href(child.href))
+        .filter(|child| {
+            // Root File Manager is also a top-level Administration link for admins.
+            !(child.href == "/server/files" && child.label == "Root File Manager")
+        })
         .collect();
     let mut child_rows = Vec::with_capacity(visible.len() + 1 + extra_children.len());
     let has_hub_child = visible.iter().any(|c| c.href == href);
@@ -103,6 +108,7 @@ fn render_section(
     active: &str,
     feats: crate::panel_feature_gate::InstalledOptionalFeatures,
     email_plugin_children: &[(String, String)],
+    admin: bool,
 ) -> Vec<String> {
     let mut parts = Vec::new();
     parts.push(format!(
@@ -113,6 +119,9 @@ fn render_section(
     for entry in entries {
         match *entry {
             NavEntry::Link { id, href, label } => {
+                if id == "root-files" && !admin {
+                    continue;
+                }
                 parts.push(flat_link(id, href, label, active));
             }
             NavEntry::Group {
@@ -139,6 +148,7 @@ fn render_section(
 /// Primary sidebar navigation HTML (sections, expandable groups, child buttons).
 pub fn nav_links_html(active: &str, username: &str) -> String {
     let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
+    let admin = is_panel_admin(username);
     let plugin_links = crate::plugins_settings::sidebar_plugin_links(username);
     let mut email_plugin_children = Vec::new();
     let mut other_plugin_html = Vec::new();
@@ -170,14 +180,16 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         active,
         feats,
         &email_plugin_children,
+        admin,
     ));
-    parts.extend(render_section("Account", ACCOUNT, active, feats, &[]));
+    parts.extend(render_section("Account", ACCOUNT, active, feats, &[], admin));
     parts.extend(render_section(
         "Administration",
         ADMINISTRATION,
         active,
         feats,
         &[],
+        admin,
     ));
 
     if !other_plugin_html.is_empty() {
@@ -210,6 +222,44 @@ mod tests {
         assert!(
             html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\"")
         );
+    }
+
+    #[test]
+    fn root_file_manager_is_admin_leaf_link() {
+        use crate::account::{
+            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
+            PanelBootstrap,
+        };
+        with_test_data_dir(|| {
+            let salt = new_password_salt();
+            let boot = PanelBootstrap {
+                schema_version: 1,
+                username: "admin".into(),
+                recovery_email: "admin@example.com".into(),
+                password_hash: "x".into(),
+                password_salt: salt,
+                password_policy: default_password_policy(),
+                language: "en".into(),
+                created_at_unix: 1,
+                must_change_password: false,
+                totp_required: false,
+            };
+            write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
+            let html = nav_links_html("root-files", "admin");
+            assert!(html.contains("Root File Manager"));
+            assert!(html.contains("href=\"/server/files\""));
+            let idx = html.find(">Root File Manager</span>").expect("root fm label");
+            let snip = &html[idx.saturating_sub(160)..idx];
+            assert!(
+                snip.contains("nav-tile") && !snip.contains("nav-child-btn"),
+                "Root File Manager must be a top-level leaf, not only a Server child: {snip}"
+            );
+            let guest = nav_links_html("dashboard", "guest");
+            assert!(
+                !guest.contains(">Root File Manager</span>"),
+                "non-admin must not see Root File Manager leaf"
+            );
+        });
     }
 
     #[test]

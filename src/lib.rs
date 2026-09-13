@@ -88,6 +88,7 @@ pub mod panel_hub_pages_cloudflare;
 pub mod panel_hub_pages_cloudflare_table;
 pub mod panel_hub_pages_email_auth;
 pub mod panel_hub_pages_files;
+pub mod panel_hub_pages_files_assets;
 pub mod panel_hub_pages_firewall;
 pub mod panel_hub_pages_ftp;
 pub mod panel_hub_pages_hosting;
