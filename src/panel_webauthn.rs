@@ -408,23 +408,47 @@ async function cpnRegisterPasskey(){
     }
     if(status) status.textContent='Starting registration...';
     const label=(document.getElementById('cpn-passkey-label')||{}).value||'';
+    const next=cpnPasskeyRegisterNext();
     const start=await cpnJson('/account/users/profile/passkey/register/start',{});
     const pk=await cpnDecodeCreateOptions(start.publicKey);
     const cred=await navigator.credentials.create({publicKey:pk});
     if(!cred) throw new Error('Passkey registration was cancelled or timed out.');
-    await cpnJson('/account/users/profile/passkey/register/finish',{
+    const finish=await cpnJson('/account/users/profile/passkey/register/finish',{
       ceremony_id:start.ceremony_id,
       label:label,
+      next:next,
       credential:cpnCredToJson(cred)
     });
     if(status) status.textContent='Passkey registered.';
-    const enroll=document.getElementById('cpn-passkey-enroll');
-    const redirectTo=enroll&&enroll.getAttribute('data-redirect');
-    if(redirectTo){ location.href=redirectTo; return; }
+    const go=finish.redirect||next||'';
+    if(go){ location.href=go; return; }
     location.reload();
   }catch(err){
     if(status) status.textContent=cpnPasskeyUserMessage(err,'register');
   }
+}
+function cpnPasskeyRegisterNext(){
+  const path=String((location&&location.pathname)||'');
+  const enroll=document.getElementById('cpn-passkey-enroll');
+  if(enroll){
+    // MFA gate may overlay Edit/View profile; return there so another passkey can be added.
+    if(path==='/account/users/modify'||path.indexOf('/account/users/modify/')===0
+      ||path==='/account/users/profile'||path.indexOf('/account/users/profile/')===0){
+      return '/account/users/modify?notice=Passkey+registered';
+    }
+    const fromEnroll=enroll.getAttribute('data-redirect');
+    if(fromEnroll) return fromEnroll;
+    return '/dashboard';
+  }
+  const box=document.getElementById('cpn-passkey-register');
+  if(box){
+    const fromBox=box.getAttribute('data-redirect');
+    if(fromBox) return fromBox;
+  }
+  if(path.indexOf('/account/users/')===0){
+    return '/account/users/modify?notice=Passkey+registered';
+  }
+  return '';
 }
 async function cpnLoginPasskey(){
   const status=document.getElementById('cpn-passkey-login-status');
@@ -450,8 +474,29 @@ async function cpnLoginPasskey(){
 
 #[cfg(test)]
 mod tests {
-    use super::{start_authentication, webauthn_for_request};
+    use super::{passkey_client_script, start_authentication, webauthn_for_request};
     use crate::account::with_test_data_dir;
+
+    #[test]
+    fn register_script_sends_next_and_prefers_profile_return() {
+        let script = passkey_client_script();
+        assert!(
+            script.contains("function cpnPasskeyRegisterNext"),
+            "client must compute context-aware return path"
+        );
+        assert!(
+            script.contains("next:next"),
+            "register finish must send next for server allowlist"
+        );
+        assert!(
+            script.contains("/account/users/modify?notice=Passkey+registered"),
+            "profile/edit overlay must return to Modify User"
+        );
+        assert!(
+            script.contains("finish.redirect||next"),
+            "client must honor server redirect"
+        );
+    }
 
     #[test]
     fn loopback_ip_host_builds_webauthn() {

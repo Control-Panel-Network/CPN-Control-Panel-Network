@@ -143,6 +143,35 @@ pub fn first_safe_next(candidates: &[Option<&str>]) -> Option<String> {
     None
 }
 
+/// Safe post-passkey-register return paths (profile / security / dashboard only).
+///
+/// Rejects external hosts (via [`sanitize_login_next`]) and panel paths outside
+/// account profile, account security, and `/dashboard`.
+pub fn sanitize_passkey_register_next(raw: &str) -> Option<String> {
+    let safe = sanitize_login_next(raw)?;
+    let path = safe.split('?').next().unwrap_or(safe.as_str());
+    if path == "/dashboard" {
+        return Some(safe);
+    }
+    if path == "/account/users/profile"
+        || path == "/account/users/modify"
+        || path.starts_with("/account/users/profile/")
+        || path.starts_with("/account/users/modify/")
+    {
+        return Some(safe);
+    }
+    if path == "/account/security" || path.starts_with("/account/security/") {
+        return Some(safe);
+    }
+    None
+}
+
+/// Prefer a sanitized client `next`; otherwise `/dashboard` (MFA unlock default).
+pub fn passkey_register_location(next: Option<&str>) -> String {
+    next.and_then(sanitize_passkey_register_next)
+        .unwrap_or_else(|| "/dashboard".to_string())
+}
+
 pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
     let next = request_return_path(http);
     let mut builder = HttpResponse::SeeOther();
@@ -220,6 +249,36 @@ mod tests {
         assert!(sanitize_login_next("/api/logout").is_none());
         assert!(sanitize_login_next("").is_none());
         assert!(sanitize_login_next("websites").is_none());
+    }
+
+    #[test]
+    fn passkey_register_next_allowlist() {
+        assert_eq!(
+            sanitize_passkey_register_next("/account/users/modify?notice=Passkey+registered")
+                .as_deref(),
+            Some("/account/users/modify?notice=Passkey+registered")
+        );
+        assert_eq!(
+            sanitize_passkey_register_next("/account/users/profile").as_deref(),
+            Some("/account/users/profile")
+        );
+        assert_eq!(
+            sanitize_passkey_register_next("/account/security/enroll-2fa").as_deref(),
+            Some("/account/security/enroll-2fa")
+        );
+        assert_eq!(
+            sanitize_passkey_register_next("/dashboard").as_deref(),
+            Some("/dashboard")
+        );
+        assert!(sanitize_passkey_register_next("/websites").is_none());
+        assert!(sanitize_passkey_register_next("https://evil.example/").is_none());
+        assert!(sanitize_passkey_register_next("//evil").is_none());
+        assert_eq!(passkey_register_location(None), "/dashboard");
+        assert_eq!(
+            passkey_register_location(Some("/account/users/modify")),
+            "/account/users/modify"
+        );
+        assert_eq!(passkey_register_location(Some("/packages")), "/dashboard");
     }
 
     #[test]

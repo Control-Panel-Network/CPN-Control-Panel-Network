@@ -206,7 +206,7 @@ pub fn users_self_edit_body(
     // Passkeys
     body.push_str(
         r#"
-      <div class="stack-form" style="max-width:560px;display:grid;gap:12px;margin-bottom:28px;">
+      <div id="cpn-passkey-register" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form" style="max-width:560px;display:grid;gap:12px;margin-bottom:28px;">
         <h3 style="margin:0;">Passkeys (WebAuthn)</h3>
         <p class="muted" style="margin:0;">Register a platform or security-key passkey for passwordless sign-in. Credentials are stored under the CPN data directory.</p>"#,
     );
@@ -330,4 +330,49 @@ fn admin_other_users_section() -> String {
       </form>
       <p class="muted">The bootstrap admin account cannot be deleted from this screen.</p>"#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::users_self_edit_body;
+    use crate::account::{default_password_policy, with_test_data_dir};
+    use crate::account_mgmt::create_account;
+
+    #[test]
+    fn edit_profile_passkey_section_returns_to_modify() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "panelowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            let html = users_self_edit_body("panelowner", None, None, None, None);
+            assert!(
+                html.contains("id=\"cpn-passkey-register\""),
+                "edit profile must mark the passkey register section"
+            );
+            assert!(
+                html.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
+                "edit profile passkey success must return to Modify User with notice"
+            );
+            assert!(
+                html.contains("cpnRegisterPasskey"),
+                "edit profile must include passkey client script"
+            );
+            assert!(
+                !html.contains("id=\"cpn-passkey-enroll\""),
+                "edit profile must not use the MFA enroll redirect marker"
+            );
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
+    }
 }

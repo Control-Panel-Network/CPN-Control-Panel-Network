@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GET `/account/security/enroll-2fa/begin` (browser refresh after POST) no longer falls through to the installer SPA ("Could not query the installer"). It redirects to `/account/security/enroll-2fa`. Successful begin uses PRG to the same GET page. Extensionless unknown paths no longer serve installer `index.html`.
 
+### Fixed
+
+- Passkey register from **Edit profile** (or View/Edit URLs while the MFA gate overlays them) returns to `/account/users/modify` with a success notice so another passkey can be added. Dedicated `/account/security/enroll-2fa` enroll still unlocks to `/dashboard`. Register finish accepts an allowlisted `next` (same-origin relative `/account/users/...`, `/account/security...`, or `/dashboard` only).
+
 ### Changed
 
 - Mandatory admin MFA enroll (`/account/security/enroll-2fa`): show an in-page **Register passkey** path alongside TOTP (same WebAuthn APIs as Modify User). Completing either TOTP or a passkey clears `totp_required` / unlocks the dashboard. Removed the dead "use Modify User after TOTP" hint (that page stays gated until MFA is enrolled).

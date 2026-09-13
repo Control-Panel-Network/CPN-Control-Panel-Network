@@ -53,6 +53,8 @@ pub struct PasskeyRegisterFinishBody {
     ceremony_id: String,
     #[serde(default)]
     label: String,
+    #[serde(default)]
+    next: Option<String>,
     credential: RegisterPublicKeyCredential,
 }
 
@@ -131,7 +133,10 @@ pub async fn passkey_register_finish(
         body.label.trim(),
         &body.credential,
     ) {
-        Ok(()) => json_ok(serde_json::json!({"ok": true})),
+        Ok(()) => {
+            let redirect = crate::login_next::passkey_register_location(body.next.as_deref());
+            json_ok(serde_json::json!({ "ok": true, "redirect": redirect }))
+        }
         Err(error) => json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
     }
 }
