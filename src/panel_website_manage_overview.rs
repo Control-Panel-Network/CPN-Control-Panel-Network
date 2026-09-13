@@ -71,16 +71,30 @@ pub fn tab_overview(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
     let charts = format!(
         r#"<div class="manage-charts" data-metrics-domain="{domain}" data-metrics-poll="10000">
-  <button type="button" class="manage-chart manage-chart-btn" data-metric="cpu" aria-haspopup="dialog">
-    <h3>CPU Usage (host)</h3>
-    <p class="manage-chart-summary">Live host load: <strong data-metric-current="cpu">{cpu}</strong>. Avg <span data-metric-avg="cpu">{cpu_avg}</span>, peak <span data-metric-peak="cpu">{cpu_peak}</span>. Not per-site. Tap for details.</p>
+  <div class="manage-chart" data-metric="cpu">
+    <div class="manage-chart-head">
+      <h3>CPU Usage (host)</h3>
+      <button type="button" class="manage-chart-details" data-metric-details="cpu" aria-haspopup="dialog">Details</button>
+    </div>
+    <p class="manage-chart-summary">Live host load: <strong data-metric-current="cpu">{cpu}</strong>. Avg <span data-metric-avg="cpu">{cpu_avg}</span>, peak <span data-metric-peak="cpu">{cpu_peak}</span>. Not per-site. Samples every ~10s.</p>
     <div class="manage-chart-svg" data-metric-svg="cpu">{cpu_svg}</div>
-  </button>
-  <button type="button" class="manage-chart manage-chart-btn" data-metric="mem" aria-haspopup="dialog">
-    <h3>Memory Usage (host)</h3>
-    <p class="manage-chart-summary">Live host memory: <strong data-metric-current="mem">{mem}</strong>. Avg <span data-metric-avg="mem">{mem_avg}</span>, peak <span data-metric-peak="mem">{mem_peak}</span>. Tap for details.</p>
+    <div class="manage-chart-readout" data-metric-readout="cpu" aria-live="polite">
+      <span class="manage-chart-readout-hint">Tap a sample for time and value</span>
+      <span class="manage-chart-readout-value" hidden></span>
+    </div>
+  </div>
+  <div class="manage-chart" data-metric="mem">
+    <div class="manage-chart-head">
+      <h3>Memory Usage (host)</h3>
+      <button type="button" class="manage-chart-details" data-metric-details="mem" aria-haspopup="dialog">Details</button>
+    </div>
+    <p class="manage-chart-summary">Live host memory: <strong data-metric-current="mem">{mem}</strong>. Avg <span data-metric-avg="mem">{mem_avg}</span>, peak <span data-metric-peak="mem">{mem_peak}</span>. Samples every ~10s.</p>
     <div class="manage-chart-svg" data-metric-svg="mem">{mem_svg}</div>
-  </button>
+    <div class="manage-chart-readout" data-metric-readout="mem" aria-live="polite">
+      <span class="manage-chart-readout-hint">Tap a sample for time and value</span>
+      <span class="manage-chart-readout-value" hidden></span>
+    </div>
+  </div>
 </div>
 <dialog class="manage-metric-dialog" id="manage-metric-dialog">
   <form method="dialog" class="manage-metric-dialog-inner">
@@ -90,6 +104,10 @@ pub fn tab_overview(site: &SiteRecord) -> String {
     </header>
     <p id="manage-metric-dialog-summary" class="manage-muted"></p>
     <div id="manage-metric-dialog-svg"></div>
+    <div class="manage-chart-readout manage-chart-readout-dialog" id="manage-metric-dialog-readout" aria-live="polite">
+      <span class="manage-chart-readout-hint">Tap a sample for time and value</span>
+      <span class="manage-chart-readout-value" hidden></span>
+    </div>
     <ul id="manage-metric-dialog-stats" class="manage-metric-stats"></ul>
   </form>
 </dialog>
@@ -178,10 +196,107 @@ fn overview_metrics_script() -> &'static str {
   var summaryEl = document.getElementById("manage-metric-dialog-summary");
   var svgEl = document.getElementById("manage-metric-dialog-svg");
   var statsEl = document.getElementById("manage-metric-dialog-stats");
+  var dialogReadout = document.getElementById("manage-metric-dialog-readout");
   var lastPayload = null;
+  var selectedTs = { cpu: null, mem: null };
+  var dialogKind = null;
 
   function pct(v) {
     return (v === null || v === undefined) ? "n/a" : (Math.round(v) + "%");
+  }
+
+  function setReadout(readout, clock, valuePct, selected) {
+    if (!readout) return;
+    var hint = readout.querySelector(".manage-chart-readout-hint");
+    var value = readout.querySelector(".manage-chart-readout-value");
+    if (!value) return;
+    if (!selected || !clock) {
+      readout.classList.remove("is-active");
+      value.hidden = true;
+      value.textContent = "";
+      if (hint) hint.hidden = false;
+      return;
+    }
+    readout.classList.add("is-active");
+    if (hint) hint.hidden = true;
+    value.hidden = false;
+    value.textContent = clock + "  " + valuePct + "%";
+  }
+
+  function clearHighlight(svg) {
+    if (!svg) return;
+    svg.classList.remove("has-selection");
+    svg.querySelectorAll(".metric-hit.is-selected, .metric-dot.is-selected").forEach(function (el) {
+      el.classList.remove("is-selected");
+      if (el.classList.contains("metric-dot")) el.setAttribute("r", "3.2");
+    });
+    var cross = svg.querySelector(".metric-crosshair");
+    if (cross) {
+      cross.setAttribute("opacity", "0");
+    }
+  }
+
+  function applySelection(svg, readout, ts) {
+    if (!svg) return;
+    clearHighlight(svg);
+    if (ts === null || ts === undefined) {
+      setReadout(readout, null, null, false);
+      return;
+    }
+    var hit = svg.querySelector('.metric-hit[data-t="' + ts + '"]');
+    if (!hit) {
+      setReadout(readout, null, null, false);
+      return;
+    }
+    hit.classList.add("is-selected");
+    var dot = svg.querySelector('.metric-dot[data-t="' + ts + '"]');
+    if (dot) {
+      dot.classList.add("is-selected");
+      dot.setAttribute("r", "5");
+    }
+    svg.classList.add("has-selection");
+    var cross = svg.querySelector(".metric-crosshair");
+    if (cross) {
+      var cx = hit.getAttribute("cx") || "0";
+      cross.setAttribute("x1", cx);
+      cross.setAttribute("x2", cx);
+      cross.setAttribute("opacity", "0.85");
+    }
+    setReadout(readout, hit.getAttribute("data-clock"), hit.getAttribute("data-pct"), true);
+  }
+
+  function bindHits(scope, kind, readout) {
+    if (!scope) return;
+    scope.querySelectorAll(".metric-hit").forEach(function (hit) {
+      function selectHit(ev) {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+        var ts = hit.getAttribute("data-t");
+        var hitKind = hit.getAttribute("data-kind") || kind;
+        if (hitKind === "cpu" || hitKind === "mem") {
+          selectedTs[hitKind] = ts;
+        }
+        applySelection(scope.querySelector("svg.manage-metric-svg") || scope, readout, ts);
+      }
+      hit.addEventListener("click", selectHit);
+      hit.addEventListener("mouseenter", function () {
+        if (window.matchMedia && window.matchMedia("(hover: hover)").matches) {
+          selectHit(null);
+        }
+      });
+    });
+  }
+
+  function wireInlineCharts() {
+    ["cpu", "mem"].forEach(function (kind) {
+      var wrap = root.querySelector('[data-metric-svg="' + kind + '"]');
+      var readout = root.querySelector('[data-metric-readout="' + kind + '"]');
+      if (!wrap) return;
+      bindHits(wrap, kind, readout);
+      applySelection(wrap.querySelector("svg"), readout, selectedTs[kind]);
+    });
   }
 
   function applyPayload(data) {
@@ -199,6 +314,12 @@ fn overview_metrics_script() -> &'static str {
       if (peak) peak.textContent = pct(block.peak);
       if (svgWrap && block.svg) svgWrap.innerHTML = block.svg;
     });
+    wireInlineCharts();
+    if (dialog && dialog.open && dialogKind && data[dialogKind] && svgEl) {
+      svgEl.innerHTML = data[dialogKind].svg || "";
+      bindHits(svgEl, dialogKind, dialogReadout);
+      applySelection(svgEl.querySelector("svg"), dialogReadout, selectedTs[dialogKind]);
+    }
     var bwHint = document.querySelector(".manage-stat-hint");
     if (data.bandwidth && bwHint) {
       var card = bwHint.closest(".manage-stat");
@@ -215,12 +336,14 @@ fn overview_metrics_script() -> &'static str {
 
   function openMetric(kind) {
     if (!dialog || !lastPayload || !lastPayload[kind]) return;
+    dialogKind = kind;
     var block = lastPayload[kind];
     var name = kind === "mem" ? "Memory Usage (host)" : "CPU Usage (host)";
     if (titleEl) titleEl.textContent = name;
     if (summaryEl) {
       summaryEl.textContent = (lastPayload.detail || "Host live metrics.") +
-        " Window: last " + Math.round((lastPayload.window_seconds || 900) / 60) + " minutes.";
+        " Window: last " + Math.round((lastPayload.window_seconds || 900) / 60) +
+        " minutes. Samples every ~10s (real poll points, not per-minute).";
     }
     if (svgEl) svgEl.innerHTML = block.svg || "";
     if (statsEl) {
@@ -230,6 +353,8 @@ fn overview_metrics_script() -> &'static str {
         "<li>Peak: <strong>" + pct(block.peak) + "</strong></li>" +
         "<li>Samples: <strong>" + ((lastPayload.samples && lastPayload.samples.length) || 0) + "</strong></li>";
     }
+    bindHits(svgEl, kind, dialogReadout);
+    applySelection(svgEl && svgEl.querySelector("svg"), dialogReadout, selectedTs[kind]);
     if (typeof dialog.showModal === "function") dialog.showModal();
   }
 
@@ -240,12 +365,20 @@ fn overview_metrics_script() -> &'static str {
     }).then(function (r) { return r.json(); }).then(applyPayload).catch(function () {});
   }
 
-  root.querySelectorAll(".manage-chart-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      openMetric(btn.getAttribute("data-metric") || "cpu");
+  root.querySelectorAll("[data-metric-details]").forEach(function (btn) {
+    btn.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      openMetric(btn.getAttribute("data-metric-details") || "cpu");
     });
   });
 
+  if (dialog) {
+    dialog.addEventListener("close", function () {
+      dialogKind = null;
+    });
+  }
+
+  wireInlineCharts();
   poll();
   if (pollMs > 0) setInterval(poll, pollMs);
 })();
@@ -285,7 +418,12 @@ mod tests {
         assert!(html.contains("Memory Usage (host)"));
         assert!(html.contains("/api/websites/manage/metrics"));
         assert!(html.contains("manage-metric-dialog"));
+        assert!(html.contains("manage-chart-readout"));
+        assert!(html.contains("Samples every ~10s"));
+        assert!(html.contains("data-metric-details"));
         assert!(!html.to_lowercase().contains("email marketing"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+        assert!(!html.contains('\u{2014}'));
+        assert!(!html.contains('\u{2013}'));
     }
 }

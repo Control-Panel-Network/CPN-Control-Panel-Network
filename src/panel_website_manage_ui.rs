@@ -83,15 +83,34 @@ pub fn manage_styles() -> &'static str {
   background:var(--m-card); border:1px solid var(--m-line); border-radius:14px; padding:14px;
   text-align:left; color:inherit; width:100%;
 }
-.site-manage .manage-chart-btn {
-  cursor:pointer; font:inherit; appearance:none; -webkit-appearance:none;
+.site-manage .manage-chart-head {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px;
 }
-.site-manage .manage-chart-btn:hover, .site-manage .manage-chart-btn:focus-visible {
+.site-manage .manage-chart-head h3 { margin:0; }
+.site-manage .manage-chart-details {
+  flex:0 0 auto; min-height:28px; padding:0 10px; border-radius:999px; border:1px solid var(--m-line);
+  background:#12151c; color:var(--m-ink); font:inherit; font-size:12px; font-weight:700; cursor:pointer;
+}
+.site-manage .manage-chart-details:hover, .site-manage .manage-chart-details:focus-visible {
   border-color:var(--m-accent); outline:none;
 }
 .site-manage .manage-chart h3 { margin:0 0 4px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--m-muted); }
 .site-manage .manage-chart p, .site-manage .manage-chart-summary { margin:0 0 10px; color:var(--m-muted); font-size:12px; line-height:1.4; }
 .site-manage .manage-chart svg, .site-manage .manage-metric-svg { width:100%; height:120px; display:block; }
+.site-manage .manage-chart-svg { position:relative; }
+.site-manage .manage-metric-svg .metric-hit { cursor:pointer; }
+.site-manage .manage-metric-svg .metric-dot.is-selected {
+  stroke:#fff; stroke-width:2;
+}
+.site-manage .manage-chart-readout {
+  margin-top:8px; min-height:36px; display:flex; align-items:center; gap:10px;
+  padding:8px 12px; border-radius:10px; background:#0b0d12; border:1px solid var(--m-line);
+  color:#f5f7fb; font-size:14px; font-weight:600; letter-spacing:.01em;
+}
+.site-manage .manage-chart-readout.is-active { border-color:var(--m-accent); }
+.site-manage .manage-chart-readout-hint { color:var(--m-muted); font-weight:500; font-size:12px; }
+.site-manage .manage-chart-readout-value { font-variant-numeric:tabular-nums; }
+.site-manage .manage-chart-readout-dialog { margin:0 0 12px; }
 .site-manage .manage-stat-hint {
   display:block; margin-top:6px; font-style:normal; color:var(--m-muted); font-size:11px; line-height:1.35;
 }
