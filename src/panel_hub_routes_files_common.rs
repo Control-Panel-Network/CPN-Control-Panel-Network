@@ -45,6 +45,7 @@ pub(crate) fn site_redirect(
     redirect_notice(&base, notice, error)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_op(
     op: &str,
     path: &str,

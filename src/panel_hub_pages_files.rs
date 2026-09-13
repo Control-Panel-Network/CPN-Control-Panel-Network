@@ -113,6 +113,10 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
                     notice_block("ok", opts.notice),
                     notice_block("error", opts.error)
                 );
+                let risk = format!(
+                    r#"<p class="muted">{}</p>"#,
+                    html_escape(opts.risk_note)
+                );
                 format!(
                     r#"{styles}
 {risk}
@@ -178,7 +182,7 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
 {editor}
 {script}"#,
                     styles = fm_styles(),
-                    risk = format!(r#"<p class="muted">{}</p>"#, html_escape(opts.risk_note)),
+                    risk = risk,
                     notices = notices,
                     path_esc = html_escape(&path_s),
                     csrf = html_escape(&csrf),
@@ -250,6 +254,7 @@ pub fn root_files_page(
 }
 
 /// Site-jailed File Manager for one domain/subdomain home.
+#[allow(clippy::too_many_arguments)]
 pub fn site_files_page(
     username: &str,
     domain: &str,
