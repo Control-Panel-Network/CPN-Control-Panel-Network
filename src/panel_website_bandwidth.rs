@@ -116,45 +116,42 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
     let month = local_month_token();
 
     if let Some(path) = first_existing_log(&access) {
-        match read_log_tail(&path, 2_000_000) {
-            Ok(text) => {
-                let (today, month_total, lines) =
-                    sum_bytes_from_access_log(&text, day.as_deref(), month.as_deref());
-                if lines > 0 && (today > 0 || month_total > 0 || day.is_some()) {
-                    let (bytes, period) = if today > 0 || day.is_some() {
-                        (today, "today")
-                    } else {
-                        (month_total, "this month")
-                    };
-                    let mut label = format!("{} ({period})", format_bytes(bytes));
-                    let mut hint = format!(
-                        "From access log sample ({path}). Host transfer estimate, not package enforcement.",
-                        path = path.display()
-                    );
-                    if let Some(q) = quota_mb {
-                        hint.push_str(&format!(
-                            " Package quota: {}.",
+        if let Ok(text) = read_log_tail(&path, 2_000_000) {
+            let (today, month_total, lines) =
+                sum_bytes_from_access_log(&text, day.as_deref(), month.as_deref());
+            if lines > 0 && (today > 0 || month_total > 0 || day.is_some()) {
+                let (bytes, period) = if today > 0 || day.is_some() {
+                    (today, "today")
+                } else {
+                    (month_total, "this month")
+                };
+                let mut label = format!("{} ({period})", format_bytes(bytes));
+                let mut hint = format!(
+                    "From access log sample ({path}). Host transfer estimate, not package enforcement.",
+                    path = path.display()
+                );
+                if let Some(q) = quota_mb {
+                    hint.push_str(&format!(
+                        " Package quota: {}.",
+                        format_limit_display(q, "MB")
+                    ));
+                    if q != UNLIMITED && q > 0 {
+                        label = format!(
+                            "{} / {}",
+                            format_bytes(bytes),
                             format_limit_display(q, "MB")
-                        ));
-                        if q != UNLIMITED && q > 0 {
-                            label = format!(
-                                "{} / {}",
-                                format_bytes(bytes),
-                                format_limit_display(q, "MB")
-                            );
-                        }
+                        );
                     }
-                    return BandwidthInfo {
-                        label,
-                        hint,
-                        bytes: Some(bytes),
-                        period: Some(period),
-                        source: "access_log",
-                        quota_mb,
-                    };
                 }
+                return BandwidthInfo {
+                    label,
+                    hint,
+                    bytes: Some(bytes),
+                    period: Some(period),
+                    source: "access_log",
+                    quota_mb,
+                };
             }
-            Err(_) => {}
         }
     }
 
