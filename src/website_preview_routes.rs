@@ -72,6 +72,7 @@ pub async fn websites_pretty_manage(
     if matches!(
         domain.as_str(),
         "manage" | "create" | "delete" | "suspend" | "resume" | "prefs" | "preview"
+            | "site-preview"
     ) {
         return HttpResponse::NotFound().finish();
     }

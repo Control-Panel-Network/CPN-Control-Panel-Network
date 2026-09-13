@@ -4,7 +4,8 @@ use crate::http_helpers::smtp_status_public;
 use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
 use crate::service_detect::{detect_database, install_mariadb_server};
-use crate::sites::{SiteRecord, list_sites};
+use crate::site_preview_list_ui::{site_preview_cards, site_preview_list_styles};
+use crate::sites::list_sites;
 
 fn html_escape(value: &str) -> String {
     value
@@ -44,128 +45,7 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
-fn site_action_buttons(site: &SiteRecord) -> String {
-    let domain = html_escape(&site.domain);
-    let suspend = if site.enabled {
-        format!(
-            r#"<form method="post" action="/websites/suspend" class="inline-form" onsubmit="return confirm('Suspend {domain}?');">
-              <input type="hidden" name="domain" value="{domain}">
-              <button type="submit" class="btn-warn" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#fffaeb;color:#b54708;font-weight:700;cursor:pointer;">Suspend</button>
-            </form>"#
-        )
-    } else {
-        format!(
-            r#"<form method="post" action="/websites/resume" class="inline-form">
-              <input type="hidden" name="domain" value="{domain}">
-              <button type="submit" class="btn-secondary" style="min-height:36px;padding:0 12px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Resume</button>
-            </form>"#
-        )
-    };
-    format!(
-        r#"<div class="site-actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">
-            <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
-            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/">Preview</a>
-            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}&amp;tab=files">File manager</a>
-            {suspend}
-            <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
-              <input type="hidden" name="domain" value="{domain}">
-              <button type="submit" class="btn-danger" style="min-height:36px;padding:0 12px;font-size:13px;">Delete</button>
-            </form>
-          </div>"#
-    )
-}
-
-fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
-    if sites.is_empty() {
-        return r#"<p class="empty-state">No sites yet. Create one below or use <code>cpn site create</code>.</p>
-        <p class="muted">New sites store files under the domain home (for example <code>/home/example.com/public_html</code>).</p>"#
-            .into();
-    }
-    let docroot_th = if show_docroots {
-        "<th>Document root</th>"
-    } else {
-        ""
-    };
-    let mut rows = format!(
-        r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th>SSL</th><th>Actions</th></tr></thead><tbody>"#
-    );
-    for site in sites {
-        let status = if site.enabled { "Active" } else { "Suspended" };
-        let wired = if site.vhost_wired {
-            "vhost wired"
-        } else {
-            "files ready"
-        };
-        let docroot_td = if show_docroots {
-            let legacy = if crate::sites::is_legacy_docroot(&site.docroot) {
-                r#"<div class="muted">Legacy path (still served from this location).</div>"#
-            } else {
-                ""
-            };
-            format!(
-                r#"<td><details><summary>Show path</summary><code>{docroot}</code>{legacy}</details></td>"#,
-                docroot = html_escape(&site.docroot),
-                legacy = legacy,
-            )
-        } else {
-            String::new()
-        };
-        let insight = crate::panel_ops_ssl_inspect::inspect_domain_ssl(&site.domain);
-        let ssl_cell = {
-            let short = insight.kind.short_label();
-            let tip = insight
-                .expires_display
-                .as_deref()
-                .map(|d| format!("Expires {d}"))
-                .unwrap_or_else(|| insight.detail.clone());
-            let (bg, fg) = match insight.kind {
-                crate::panel_ops_ssl_inspect::SslValidityKind::Valid => {
-                    ("rgba(18,183,106,.18)", "#067647")
-                }
-                crate::panel_ops_ssl_inspect::SslValidityKind::ExpiringSoon => {
-                    ("rgba(247,144,9,.2)", "#b54708")
-                }
-                crate::panel_ops_ssl_inspect::SslValidityKind::Expired
-                | crate::panel_ops_ssl_inspect::SslValidityKind::Invalid
-                | crate::panel_ops_ssl_inspect::SslValidityKind::Mismatch => {
-                    ("rgba(240,68,56,.18)", "#b42318")
-                }
-                crate::panel_ops_ssl_inspect::SslValidityKind::None => {
-                    ("rgba(152,162,179,.16)", "#475467")
-                }
-            };
-            format!(
-                r#"<td><span title="{tip}" style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:{bg};color:{fg};">{short}</span></td>"#,
-                tip = html_escape(&tip),
-                bg = bg,
-                fg = fg,
-                short = html_escape(short),
-            )
-        };
-        rows.push_str(&format!(
-            r#"<tr>
-          <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
-          <td>{owner}</td>
-          {docroot_td}
-          <td>{status}</td>
-          {ssl_cell}
-          <td>{actions}</td>
-        </tr>"#,
-            domain = html_escape(&site.domain),
-            owner = html_escape(&site.owner),
-            docroot_td = docroot_td,
-            status = status,
-            ssl_cell = ssl_cell,
-            actions = site_action_buttons(site),
-            wired = wired,
-        ));
-    }
-    rows.push_str("</tbody></table></div>");
-    rows
-}
-
-pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let sites = list_sites().unwrap_or_default();
     let prefs = load_panel_ui_prefs();
     let show = prefs.show_document_roots;
@@ -176,12 +56,13 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
     };
     let toggle_value = if show { "0" } else { "1" };
     format!(
-        r#"{heading}
+        r#"<style>{preview_css}</style>
+      {heading}
       {ok}
       {err}
       <article class="section-card">
         <h2>Sites ({count})</h2>
-        <p class="muted">Each site has a Manage page with overview, quick links, and suspend/delete. Document roots live under the domain home. Vhost wiring is applied later by panel recipes.</p>
+        <p class="muted">Each site shows a Site preview thumbnail (cached homepage shot), Manage, Visit, SSL status, and File manager. Document roots live under the domain home. Vhost wiring is applied later by panel recipes.</p>
         <form method="post" action="/websites/prefs" class="inline-form" style="margin:12px 0;">
           <input type="hidden" name="show_document_roots" value="{toggle_value}">
           <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
@@ -201,6 +82,7 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
           <button type="submit" class="btn-primary">Create site</button>
         </form>
       </article>"#,
+        preview_css = site_preview_list_styles(),
         heading = section_heading(
             "Websites",
             "Manage website files under /home for each domain.",
@@ -210,7 +92,7 @@ pub fn websites_main(notice: Option<&str>, error: Option<&str>) -> String {
         count = sites.len(),
         toggle_value = toggle_value,
         toggle_label = toggle_label,
-        rows = site_rows(&sites, show),
+        rows = site_preview_cards(&sites, show, username),
     )
 }
 

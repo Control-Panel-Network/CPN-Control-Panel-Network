@@ -98,9 +98,10 @@ use cpn_installer::panel_routes::{
     email_account_create, email_account_disable, email_account_enable, email_page,
     plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
     plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
-    preview_mode_page, websites_create, websites_delete, websites_manage, websites_page,
-    websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_reset_placeholder,
-    websites_resume, websites_suspend, websites_suspend_message, websites_suspend_message_restore,
+    preview_mode_page, site_preview_image, site_preview_refresh, websites_create, websites_delete,
+    websites_manage, websites_page, websites_prefs, websites_pretty_manage,
+    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
+    websites_suspend_message, websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
@@ -967,6 +968,8 @@ async fn main() -> std::io::Result<()> {
             .service(websites_pretty_manage)
             .service(preview_mode_page)
             .service(preview_content)
+            .service(site_preview_image)
+            .service(site_preview_refresh)
             .service(websites_create)
             .service(websites_delete)
             .service(websites_suspend)
