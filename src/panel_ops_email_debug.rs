@@ -25,17 +25,16 @@ fn safe_domain(domain: &str) -> Result<String, String> {
 }
 
 fn dig_or_host(name: &str, rtype: &str) -> String {
-    if which_exists("dig") {
-        if let Some(out) = cmd_stdout("dig", &["+short", name, rtype]) {
-            if !out.is_empty() {
-                return out;
-            }
-        }
+    if which_exists("dig")
+        && let Some(out) = cmd_stdout("dig", &["+short", name, rtype])
+        && !out.is_empty()
+    {
+        return out;
     }
-    if which_exists("host") {
-        if let Some(out) = cmd_stdout("host", &["-t", rtype, name]) {
-            return out;
-        }
+    if which_exists("host")
+        && let Some(out) = cmd_stdout("host", &["-t", rtype, name])
+    {
+        return out;
     }
     "(no dig/host output)".into()
 }

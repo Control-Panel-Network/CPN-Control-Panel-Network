@@ -134,13 +134,14 @@ pub fn write_policy_file() -> Result<String, String> {
     }
     fs::write(&path, &body).map_err(|e| e.to_string())?;
 
-    if postfix_is_ready() && !limits.is_empty() {
-        let min_rate = limits.iter().map(|l| l.max_messages).min().unwrap_or(0);
-        if min_rate > 0 {
-            let _ = Command::new("postconf")
-                .args(["-e", &format!("smtpd_client_message_rate_limit={min_rate}")])
-                .status();
-        }
+    if postfix_is_ready()
+        && !limits.is_empty()
+        && let Some(min_rate) = limits.iter().map(|l| l.max_messages).min()
+        && min_rate > 0
+    {
+        let _ = Command::new("postconf")
+            .args(["-e", &format!("smtpd_client_message_rate_limit={min_rate}")])
+            .status();
     }
 
     Ok(format!(

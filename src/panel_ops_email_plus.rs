@@ -46,10 +46,10 @@ fn save_plus_settings(settings: &PlusSettings) -> Result<(), String> {
 }
 
 pub fn current_postfix_delimiter() -> String {
-    if which_exists("postconf") {
-        if let Some(v) = cmd_stdout("postconf", &["-h", "recipient_delimiter"]) {
-            return v;
-        }
+    if which_exists("postconf")
+        && let Some(v) = cmd_stdout("postconf", &["-h", "recipient_delimiter"])
+    {
+        return v;
     }
     "(unknown)".into()
 }
