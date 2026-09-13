@@ -155,37 +155,8 @@ impl Default for PanelDesignFile {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct UserUiPrefs {
-    #[serde(default)]
-    pub color_mode: ColorMode,
-}
-
 fn design_path() -> PathBuf {
     data_dir().join("panel-design.json")
-}
-
-fn user_prefs_path(username: &str) -> PathBuf {
-    data_dir()
-        .join("user-prefs")
-        .join(format!("{}.json", safe_username_key(username)))
-}
-
-fn safe_username_key(username: &str) -> String {
-    let trimmed = username.trim();
-    let mut out = String::with_capacity(trimmed.len());
-    for ch in trimmed.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
-            out.push(ch.to_ascii_lowercase());
-        } else {
-            out.push('_');
-        }
-    }
-    if out.is_empty() {
-        "user".into()
-    } else {
-        out.chars().take(128).collect()
-    }
 }
 
 fn normalize_hex_color(raw: &str, field: &str) -> Result<String, String> {
@@ -268,21 +239,6 @@ pub fn restore_default_design() -> Result<PanelDesignFile, String> {
     let design = PanelDesignFile::default();
     save_panel_design(&design)?;
     Ok(design)
-}
-
-pub fn load_user_color_mode(username: &str) -> ColorMode {
-    let Ok(raw) = fs::read_to_string(user_prefs_path(username)) else {
-        return ColorMode::default();
-    };
-    serde_json::from_str::<UserUiPrefs>(&raw)
-        .map(|p| p.color_mode)
-        .unwrap_or_default()
-}
-
-pub fn save_user_color_mode(username: &str, mode: ColorMode) -> Result<ColorMode, String> {
-    let prefs = UserUiPrefs { color_mode: mode };
-    write_json(&user_prefs_path(username), &prefs)?;
-    Ok(mode)
 }
 
 /// Inline `:root` CSS variables for the active design (panel chrome + Manage).
@@ -463,16 +419,6 @@ mod tests {
             assert_eq!(design.preset, DesignPreset::Default);
             assert!(design.custom.is_some());
             assert_eq!(resolve_tokens(&design), default_tokens());
-        });
-    }
-
-    #[test]
-    fn user_color_mode_persists() {
-        with_test_data_dir(|| {
-            assert_eq!(load_user_color_mode("Admin"), ColorMode::Light);
-            save_user_color_mode("Admin", ColorMode::Dark).unwrap();
-            assert_eq!(load_user_color_mode("Admin"), ColorMode::Dark);
-            assert_eq!(safe_username_key("Admin/../x"), "admin_.._x");
         });
     }
 }

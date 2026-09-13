@@ -1,4 +1,4 @@
-//! Sidebar color-mode toggle script and Manage Design editor markup.
+﻿//! Sidebar color-mode toggle script and Manage Design editor markup.
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_theme::{
@@ -156,9 +156,11 @@ pub fn design_settings_panel(username: &str) -> String {
         r#"<p class="manage-muted">Only the panel admin can change Design. You can still use the sidebar light/dark toggle for your own session.</p>"#
             .to_string()
     };
+    let minimalist = crate::panel_minimalist_settings::minimalist_settings_card(username);
 
     format!(
-        r#"<article class="section-card cpn-design-inline" id="cpn-design-dialog">
+        r#"{minimalist}
+<article class="section-card cpn-design-inline" id="cpn-design-dialog">
   <div class="cpn-design-panel">
     <header>
       <h2>Panel Design</h2>
@@ -276,6 +278,7 @@ pub fn design_settings_panel(username: &str) -> String {
   setActivePreset("{preset}");
 }})();
 </script>"#,
+        minimalist = minimalist,
         preset = html_escape(preset),
         fields = fields,
         save_row = save_row,

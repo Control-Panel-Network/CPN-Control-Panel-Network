@@ -60,7 +60,7 @@ impl ManageTab {
 
 fn tab_body(site: &SiteRecord, tab: ManageTab, username: &str) -> String {
     match tab {
-        ManageTab::Overview => tab_overview(site),
+        ManageTab::Overview => tab_overview(site, username),
         ManageTab::Domains => tab_domains(site),
         ManageTab::Logs => tab_logs(site),
         ManageTab::Config => tab_config(site),
