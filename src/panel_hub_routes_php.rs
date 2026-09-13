@@ -311,9 +311,7 @@ pub async fn server_php_configs_post(
         .trim()
         .to_ascii_lowercase();
     match op.as_str() {
-        "set-default" | "set_default" => {
-            server_php_configs_set_default(http, state, form).await
-        }
+        "set-default" | "set_default" => server_php_configs_set_default(http, state, form).await,
         "save-basic" | "save_basic" => server_php_configs_save_basic(http, state, form).await,
         "save-advanced" | "save_advanced" => {
             server_php_configs_save_advanced(http, state, form).await
