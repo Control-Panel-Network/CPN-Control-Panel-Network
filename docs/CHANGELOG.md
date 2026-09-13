@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Mandatory admin MFA enroll (`/account/security/enroll-2fa`): show an in-page **Register passkey** path alongside TOTP (same WebAuthn APIs as Modify User). Completing either TOTP or a passkey clears `totp_required` / unlocks the dashboard. Removed the dead "use Modify User after TOTP" hint (that page stays gated until MFA is enrolled).
+
 - Install default PHP is **8.5** on AlmaLinux/RHEL 9+ (Remi). CLI and web installers offer 8.5 / 8.4 / 8.3 / 8.2. Missing packages fall back to the next branch with a clear log line; choice is stored in `/var/lib/cpn/php-default.json` and applied as the default `php_version` on new sites. See `to-do/PHP-INSTALL-DEFAULT-85.md`.
 
 ### Added

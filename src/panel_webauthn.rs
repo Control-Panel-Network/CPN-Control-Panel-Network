@@ -418,6 +418,9 @@ async function cpnRegisterPasskey(){
       credential:cpnCredToJson(cred)
     });
     if(status) status.textContent='Passkey registered.';
+    const enroll=document.getElementById('cpn-passkey-enroll');
+    const redirectTo=enroll&&enroll.getAttribute('data-redirect');
+    if(redirectTo){ location.href=redirectTo; return; }
     location.reload();
   }catch(err){
     if(status) status.textContent=cpnPasskeyUserMessage(err,'register');
