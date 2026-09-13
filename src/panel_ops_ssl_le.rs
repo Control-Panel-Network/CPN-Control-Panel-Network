@@ -93,7 +93,13 @@ pub fn ssl_status_for_domain(domain: &str) -> SslStatusRow {
     let sans_summary = if insight.sans.is_empty() {
         String::new()
     } else {
-        insight.sans.iter().take(6).cloned().collect::<Vec<_>>().join(", ")
+        insight
+            .sans
+            .iter()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     };
     SslStatusRow {
         domain: domain.to_string(),

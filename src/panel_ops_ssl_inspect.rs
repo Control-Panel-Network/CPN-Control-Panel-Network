@@ -377,8 +377,12 @@ fn parse_openssl_utc(s: &str) -> Result<u64, String> {
         return Err(format!("Bad time in notAfter: {}", parts[2]));
     }
     let hour: u32 = time_parts[0].parse().map_err(|_| "bad hour".to_string())?;
-    let min: u32 = time_parts[1].parse().map_err(|_| "bad minute".to_string())?;
-    let sec: u32 = time_parts[2].parse().map_err(|_| "bad second".to_string())?;
+    let min: u32 = time_parts[1]
+        .parse()
+        .map_err(|_| "bad minute".to_string())?;
+    let sec: u32 = time_parts[2]
+        .parse()
+        .map_err(|_| "bad second".to_string())?;
     let year: i32 = parts[3]
         .parse()
         .map_err(|_| format!("Bad year in notAfter: {}", parts[3]))?;
@@ -429,10 +433,7 @@ fn civil_from_days(days: i64) -> (i32, u32, u32) {
 pub fn ssl_status_badge_html(insight: &SslCertInsight) -> String {
     let kind = insight.kind.as_str();
     let label = insight.kind.label();
-    let title = match (
-        insight.expires_display.as_deref(),
-        insight.issuer.as_str(),
-    ) {
+    let title = match (insight.expires_display.as_deref(), insight.issuer.as_str()) {
         (Some(exp), iss) if !iss.is_empty() => format!("Expires: {exp}. Issuer: {iss}"),
         (Some(exp), _) => format!("Expires: {exp}"),
         _ => insight.detail.clone(),

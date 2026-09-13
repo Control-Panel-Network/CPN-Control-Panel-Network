@@ -1,8 +1,6 @@
 //! Manage dashboard styles and chrome (banner, quick actions, tabs).
 
-use crate::panel_ops_ssl_inspect::{
-    SslValidityKind, inspect_domain_ssl, ssl_status_badge_html,
-};
+use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl, ssl_status_badge_html};
 use crate::sites::SiteRecord;
 use crate::website_preview::{preview_mode_url, public_site_url};
 
@@ -313,14 +311,25 @@ pub fn ssl_status_card(site: &SiteRecord) -> String {
     let issuer = if insight.issuer.is_empty() {
         String::new()
     } else {
-        format!(" · Issuer: <strong>{}</strong>", html_escape(&insight.issuer))
+        format!(
+            " · Issuer: <strong>{}</strong>",
+            html_escape(&insight.issuer)
+        )
     };
     let sans = if insight.sans.is_empty() {
         String::new()
     } else {
         format!(
             " · SANs: <strong>{}</strong>",
-            html_escape(&insight.sans.iter().take(4).cloned().collect::<Vec<_>>().join(", "))
+            html_escape(
+                &insight
+                    .sans
+                    .iter()
+                    .take(4)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         )
     };
     let headline = match insight.kind {
