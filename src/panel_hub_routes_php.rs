@@ -311,22 +311,21 @@ pub async fn server_php_configs_post(
         .trim()
         .to_ascii_lowercase();
     match op.as_str() {
-        "set-default" | "set_default" => server_php_configs_set_default(http, state, form).await,
-        "save-basic" | "save_basic" => server_php_configs_save_basic(http, state, form).await,
-        "save-advanced" | "save_advanced" => {
-            server_php_configs_save_advanced(http, state, form).await
-        }
-        "restart" => server_php_configs_restart(http, state, form).await,
+        "set-default" | "set_default" => apply_configs_set_default(http, state, form).await,
         _ => {
             let php = form.get("php").map(String::as_str).unwrap_or("");
             let tab = form.get("tab").map(String::as_str).unwrap_or("basic");
-            redirect_cfg(php, tab, None, Some("Unknown PHP Configurations action"))
+            redirect_cfg(
+                php,
+                tab,
+                None,
+                Some("Unknown PHP Configurations action. Use the page forms."),
+            )
         }
     }
 }
 
-#[post("/server/php/configs/set-default")]
-pub async fn server_php_configs_set_default(
+async fn apply_configs_set_default(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     form: web::Form<HashMap<String, String>>,
@@ -368,6 +367,15 @@ pub async fn server_php_configs_set_default(
             Some(&format!("Set-default task failed: {err}")),
         ),
     }
+}
+
+#[post("/server/php/configs/set-default")]
+pub async fn server_php_configs_set_default(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<HashMap<String, String>>,
+) -> HttpResponse {
+    apply_configs_set_default(http, state, form).await
 }
 
 #[post("/server/php/configs/save-basic")]
