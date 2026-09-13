@@ -4,9 +4,7 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, require_panel_user};
 use crate::panel_hub_pages_files::root_files_page;
-use crate::panel_hub_routes_files_common::{
-    parse_op_form, root_redirect, run_op, same_origin_ok,
-};
+use crate::panel_hub_routes_files_common::{parse_op_form, root_redirect, run_op, same_origin_ok};
 use crate::panel_ops_files::{
     MAX_UPLOAD_BYTES, check_rate_limit, read_text, upload_bytes, verify_files_csrf,
 };
