@@ -175,7 +175,7 @@ mod tests {
     fn policy() -> PasswordPolicy {
         PasswordPolicy {
             min_length: 8,
-            require_special: true,
+            require_special: false,
             require_uppercase: true,
             require_number: true,
         }

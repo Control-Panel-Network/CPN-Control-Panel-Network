@@ -109,7 +109,7 @@ const nb: LocaleMessages = {
   passwordLabel: "Passord",
   passwordConfirmLabel: "Bekreft passord",
   passwordHint:
-    "La stå tomt for auto-generering. Ellers minst 12 tegn med stor bokstav, tall og symbol. Vanlige svake passord blokkeres.",
+    "La stå tomt for auto-generering. Ellers minst 8 tegn med stor bokstav og tall. Spesialtegn er tillatt, men ikke påkrevd. Vanlige svake passord blokkeres.",
   generatePassword: "Generer og fyll inn passord",
   useOwnPassword:
     "La begge passordfeltene stå tomme for auto-generering, eller skriv inn ditt eget.",
@@ -122,6 +122,7 @@ const nb: LocaleMessages = {
   policyTitle: "Passordpolicy",
   policyMinLength: "Minimumslengde",
   policyRequireSpecial: "Krev spesialtegn",
+  policySpecialOptional: "Spesialtegn valgfritt",
   policyRequireUpper: "Krev stor bokstav",
   policyRequireNumber: "Krev tall",
   saveAccount: "Lagre konto og fortsett",

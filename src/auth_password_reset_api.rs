@@ -178,15 +178,16 @@ pub async fn reset_password_submit(
         }
     };
 
-    // Validate against the account policy before consuming the token.
-    let Ok((boot, _)) = find_account(&username) else {
+    // Validate against the current panel password baseline before consuming the token.
+    let Ok((_boot, _)) = find_account(&username) else {
         return HttpResponse::BadRequest()
             .content_type("text/html; charset=utf-8")
             .body(reset_password_invalid_html(
                 "This reset link is missing, invalid, or already used.",
             ));
     };
-    if let Err(error) = password_meets_policy(password, &boot.password_policy) {
+    let policy = crate::account::default_password_policy();
+    if let Err(error) = password_meets_policy(password, &policy) {
         return HttpResponse::BadRequest()
             .content_type("text/html; charset=utf-8")
             .body(reset_password_html(&token, Some(&error)));

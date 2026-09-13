@@ -39,8 +39,8 @@ pub struct AccountSetupResult {
 
 pub fn default_password_policy() -> PasswordPolicy {
     PasswordPolicy {
-        min_length: 12,
-        require_special: true,
+        min_length: 8,
+        require_special: false,
         require_uppercase: true,
         require_number: true,
     }
@@ -519,6 +519,26 @@ mod tests {
         ]
         .into_iter()
         .collect()
+    }
+
+    fn ascii_min8_no_special_sample() -> String {
+        ['A', 'b', 'c', 'd', 'e', 'f', 'g', '1']
+            .into_iter()
+            .collect()
+    }
+
+    #[test]
+    fn default_policy_is_min8_special_optional() {
+        let policy = default_password_policy();
+        assert_eq!(policy.min_length, 8);
+        assert!(!policy.require_special);
+        assert!(policy.require_uppercase);
+        assert!(policy.require_number);
+        let hint = password_policy_hint(&policy);
+        assert!(hint.contains("Min 8 characters"));
+        assert!(hint.contains("max 256"));
+        assert!(!hint.contains("special character"));
+        assert!(password_meets_policy(&ascii_min8_no_special_sample(), &policy).is_ok());
     }
 
     #[test]

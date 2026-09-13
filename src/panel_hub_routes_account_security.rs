@@ -96,11 +96,14 @@ pub async fn account_security_change_password_post(
 }
 
 fn set_forced_password(username: &str, password: &str) -> Result<(), String> {
+    use crate::account::default_password_policy;
     let (mut boot, path) = find_account(username)?;
-    password_meets_policy(password, &boot.password_policy)?;
+    let policy = default_password_policy();
+    password_meets_policy(password, &policy)?;
     let salt = new_password_salt();
     boot.password_salt = salt.clone();
     boot.password_hash = hash_password(password, &salt);
+    boot.password_policy = policy;
     boot.must_change_password = false;
     write_account_file(&path, &boot)
 }

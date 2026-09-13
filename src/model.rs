@@ -271,8 +271,8 @@ impl Default for InstallerStatus {
             public_base_url: None,
             account: None,
             password_policy: PasswordPolicy {
-                min_length: 12,
-                require_special: true,
+                min_length: 8,
+                require_special: false,
                 require_uppercase: true,
                 require_number: true,
             },

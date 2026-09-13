@@ -3,9 +3,9 @@
 use std::{fs, path::PathBuf};
 
 use crate::account::{
-    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, generate_password,
-    hash_password, load_bootstrap, new_password_salt, now_unix, password_meets_policy,
-    validate_policy, validate_recovery_email, write_account_file,
+    AccountSetupResult, PanelBootstrap, accounts_dir, bootstrap_path, default_password_policy,
+    generate_password, hash_password, load_bootstrap, new_password_salt, now_unix,
+    password_meets_policy, validate_policy, validate_recovery_email, write_account_file,
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 
@@ -217,12 +217,13 @@ pub fn reset_account_password(
     generate: bool,
 ) -> Result<AccountSetupResult, String> {
     let (mut boot, path) = find_account(username_raw)?;
-    validate_policy(&boot.password_policy)?;
-    let (password, generated_password) =
-        resolve_password(password_raw, generate, &boot.password_policy)?;
+    let policy = default_password_policy();
+    validate_policy(&policy)?;
+    let (password, generated_password) = resolve_password(password_raw, generate, &policy)?;
     let salt = new_password_salt();
     boot.password_salt = salt.clone();
     boot.password_hash = hash_password(&password, &salt);
+    boot.password_policy = policy;
     if generated_password.is_some() {
         boot.must_change_password = true;
     }
@@ -256,9 +257,10 @@ pub fn change_own_password(
     if !verify_password(current_password, &boot.password_salt, &boot.password_hash) {
         return Err("Current password is incorrect".into());
     }
-    validate_policy(&boot.password_policy)?;
+    let policy = default_password_policy();
+    validate_policy(&policy)?;
     let (password, generated_password) = if generate {
-        let value = generate_password(&boot.password_policy);
+        let value = generate_password(&policy);
         (value.clone(), Some(value))
     } else {
         let Some(password) = new_password_raw
@@ -267,12 +269,13 @@ pub fn change_own_password(
         else {
             return Err("Enter a new password or enable generate".into());
         };
-        password_meets_policy(password, &boot.password_policy)?;
+        password_meets_policy(password, &policy)?;
         (password.to_string(), None)
     };
     let salt = new_password_salt();
     boot.password_salt = salt.clone();
     boot.password_hash = hash_password(&password, &salt);
+    boot.password_policy = policy;
     write_account_file(&path, &boot)?;
     Ok(AccountSetupResult {
         public: AccountPublic {

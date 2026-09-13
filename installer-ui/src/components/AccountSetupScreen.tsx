@@ -55,8 +55,7 @@ export function AccountSetupScreen({
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const policy: PasswordPolicy = {
     ...initialPolicy,
-    min_length: Math.max(12, initialPolicy.min_length),
-    require_special: true,
+    min_length: Math.max(8, initialPolicy.min_length),
     require_uppercase: true,
     require_number: true,
   };
@@ -353,7 +352,10 @@ export function AccountSetupScreen({
           <p className="password-policy-note">
             {t.policyTitle}: {t.policyMinLength} {policy.min_length} ·{" "}
             {t.policyRequireUpper} · {t.policyRequireNumber} ·{" "}
-            {t.policyRequireSpecial}.
+            {policy.require_special
+              ? t.policyRequireSpecial
+              : t.policySpecialOptional}
+            .
           </p>
 
           {error && <p className="error-box">{error}</p>}
