@@ -73,7 +73,7 @@ pub fn verify_files_csrf(username: &str, token: &str) -> bool {
     }
     let payload = format!("files|{username}|{hour}");
     let expected = hmac_hex(&secret, &payload);
-    expected == sig && verify_hmac_hex(&expected, sig)
+    verify_hmac_hex(&expected, sig)
 }
 
 pub fn check_rate_limit(username: &str) -> Result<(), String> {
@@ -287,6 +287,11 @@ mod tests {
 
     #[test]
     fn csrf_roundtrip() {
+        // Pin secret so CI hosts with/without a data-dir secret stay deterministic.
+        // SAFETY: test-only; this suite does not run concurrent CSRF tests that depend on other secrets.
+        unsafe {
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", "cpn-fm-unit-test-secret");
+        }
         let t = files_csrf_token("admin");
         assert!(verify_files_csrf("admin", &t));
         assert!(!verify_files_csrf("other", &t));
