@@ -14,6 +14,7 @@ pub use crate::panel_hub_routes_php::*;
 pub use crate::panel_hub_routes_profile::*;
 pub use crate::panel_hub_routes_security::*;
 pub use crate::panel_hub_routes_server::*;
+pub use crate::panel_hub_routes_settings_logs::*;
 pub use crate::panel_hub_routes_site_files::*;
 pub use crate::panel_hub_routes_ssl_actions::*;
 

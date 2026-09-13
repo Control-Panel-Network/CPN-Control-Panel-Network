@@ -173,6 +173,7 @@ pub fn manage_styles() -> &'static str {
 .site-manage .manage-log-panel h3 { margin:0 0 6px; font-size:16px; }
 .site-manage .manage-log-toolbar { margin:0 0 8px; }
 .site-manage .manage-log-toolbar .manage-btn { display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:999px; background:var(--m-card); border:1px solid var(--m-line); color:inherit; text-decoration:none; font-weight:700; font-size:13px; }
+/* Log modal styles appended from panel_website_logs_ui::logs_modal_styles */
 .site-manage code { background:#0b0d12; padding:1px 6px; border-radius:6px; font-size:12px; }
 .site-manage .manage-actions-row { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .site-manage .btn-danger, .site-manage .btn-warn, .site-manage .btn-primary {

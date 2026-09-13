@@ -343,6 +343,12 @@ pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/settings/site-messages",
                     live: true,
                 },
+                HubTile {
+                    title: "Log retention",
+                    subtitle: "Access & error keep window",
+                    href: "/settings/logs",
+                    live: true,
+                },
             ],
         ),
         (
