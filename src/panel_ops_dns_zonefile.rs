@@ -225,7 +225,7 @@ fn split_zone_tokens(line: &str) -> Vec<String> {
     out
 }
 
-fn take_name(tokens: &[String], zone_fqdn: &str) -> (String, &[String]) {
+fn take_name<'a>(tokens: &'a [String], zone_fqdn: &str) -> (String, &'a [String]) {
     if tokens.is_empty() {
         return ("@".into(), tokens);
     }
