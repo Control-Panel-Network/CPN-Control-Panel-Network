@@ -254,14 +254,14 @@ mod tests {
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let html = nav_links_html("root-files", "admin");
             assert!(html.contains("Root File Manager"));
-            assert!(html.contains("href=\"/server/files\""));
-            let idx = html
-                .find(">Root File Manager</span>")
-                .expect("root fm label");
-            let snip = &html[idx.saturating_sub(160)..idx];
             assert!(
-                snip.contains("nav-tile") && !snip.contains("nav-child-btn"),
-                "Root File Manager must be a top-level leaf, not only a Server child: {snip}"
+                html.contains(r#"class="nav-tile active" href="/server/files""#)
+                    || html.contains(r#"class="nav-tile" href="/server/files""#),
+                "Root File Manager must be a top-level nav-tile leaf"
+            );
+            assert!(
+                !html.contains(r#"nav-child-btn" href="/server/files""#),
+                "Root File Manager must not appear only as a Server child button"
             );
             let guest = nav_links_html("dashboard", "guest");
             assert!(
