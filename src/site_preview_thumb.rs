@@ -231,9 +231,6 @@ pub fn image_mtime_secs(path: &Path) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn rejects_path_tricks_in_domain() {
@@ -243,29 +240,18 @@ mod tests {
 
     #[test]
     fn cache_roundtrip_under_data_dir() {
-        let _g = LOCK.lock().unwrap();
-        let stamp = now_unix();
-        let dir = std::env::temp_dir().join(format!("cpn-preview-cache-{stamp}"));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        // SAFETY: tests hold LOCK; only this thread sets CPN_DATA_DIR.
-        unsafe {
-            std::env::set_var("CPN_DATA_DIR", &dir);
-        }
-        let domain = "preview-lab.example";
-        write_cached_image(domain, b"\x89PNG\r\n\x1a\nfake", "test").unwrap();
-        assert_eq!(freshness(domain), PreviewFreshness::Fresh);
-        let (bytes, ctype) = read_cached_image(domain).unwrap();
-        assert_eq!(bytes, b"\x89PNG\r\n\x1a\nfake");
-        assert_eq!(ctype, "image/png");
-        record_capture_failure(domain, "boom", "test").unwrap();
-        let meta = load_meta(domain);
-        assert!(!meta.ok);
-        assert!(meta.error.contains("boom"));
-        unsafe {
-            std::env::remove_var("CPN_DATA_DIR");
-        }
-        let _ = fs::remove_dir_all(&dir);
+        crate::account::with_test_data_dir(|| {
+            let domain = "preview-lab.example";
+            write_cached_image(domain, b"\x89PNG\r\n\x1a\nfake", "test").unwrap();
+            assert_eq!(freshness(domain), PreviewFreshness::Fresh);
+            let (bytes, ctype) = read_cached_image(domain).unwrap();
+            assert_eq!(bytes, b"\x89PNG\r\n\x1a\nfake");
+            assert_eq!(ctype, "image/png");
+            record_capture_failure(domain, "boom", "test").unwrap();
+            let meta = load_meta(domain);
+            assert!(!meta.ok);
+            assert!(meta.error.contains("boom"));
+        });
     }
 
     #[test]
