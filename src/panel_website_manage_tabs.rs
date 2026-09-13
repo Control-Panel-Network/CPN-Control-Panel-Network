@@ -6,7 +6,7 @@ pub use crate::panel_website_manage_ssl::tab_ssl;
 
 use crate::panel_ops_ftp::detect_ftp;
 use crate::panel_ops_php::detect_php;
-use crate::panel_website_logs::log_panel_html;
+use crate::panel_website_logs_ui::logs_tab_html;
 use crate::panel_website_manage_ui::{html_escape, section, tile};
 use crate::service_detect::detect_web_server_label;
 use crate::sites::{SiteRecord, list_sites, resolve_parent_domain};
@@ -108,20 +108,7 @@ pub fn tab_domains(site: &SiteRecord) -> String {
 
 pub fn tab_logs(site: &SiteRecord) -> String {
     let _ = crate::panel_site_vhost_wire::ensure_site_vhost_logging(site);
-    let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
-    tiles.push_str(&tile(
-        "#access",
-        "Access Logs",
-        "Tail allowlisted access logs",
-    ));
-    tiles.push_str(&tile("#error", "Error Logs", "Tail allowlisted error logs"));
-    tiles.push_str("</div>");
-    format!(
-        "{tiles}<div id=\"access\">{access}</div><div id=\"error\">{error}</div>",
-        tiles = section("Logs", &tiles),
-        access = log_panel_html(site, "access"),
-        error = log_panel_html(site, "error"),
-    )
+    logs_tab_html(site)
 }
 
 fn vhost_candidates(domain: &str) -> Vec<PathBuf> {
@@ -338,6 +325,17 @@ mod tests {
         assert!(html.contains("/backups?scope=site"));
         assert!(!html.contains("Site Apps"));
         assert!(!html.contains("/apps?"));
+        assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn logs_tab_opens_modal_not_inline_dump() {
+        let html = tab_logs(&site());
+        assert!(html.contains("manage-log-dialog"));
+        assert!(html.contains("/api/websites/manage/logs"));
+        assert!(html.contains("data-log-kind=\"access\""));
+        assert!(html.contains("data-log-kind=\"error\""));
+        assert!(html.contains("/settings/logs"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
     }
 }

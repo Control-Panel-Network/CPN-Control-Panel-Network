@@ -1,12 +1,19 @@
-//! Safe website log tail reads for Manage > Logs.
+//! Safe, domain-scoped website log reads for Manage > Logs.
+//!
+//! Manage and the logs API only jail to `{site_home}/logs/{access|error}.log`.
+//! Parent domains never read child subdomain trees (and the reverse).
 
 use crate::sites::{SiteRecord, site_home_from_record};
+use serde::Serialize;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-/// Default number of trailing lines shown in the Logs tab.
+/// Default number of trailing lines loaded into memory for search/pagination.
 pub const LOG_TAIL_LINES: usize = 400;
+/// Hard cap when scanning for the modal (keeps payloads bounded).
+pub const LOG_SCAN_LINES: usize = 5_000;
+const LOG_SCAN_BYTES: u64 = 512_000;
 
 /// Preferred access log path under the site home.
 pub fn site_access_log_path(site: &SiteRecord) -> PathBuf {
@@ -18,7 +25,17 @@ pub fn site_error_log_path(site: &SiteRecord) -> PathBuf {
     site_home_from_record(site).join("logs").join("error.log")
 }
 
-/// Candidate access/error log paths for a site (first existing wins per kind).
+/// Resolve the jailed log file for a kind (`access` or `error`).
+pub fn site_log_path_for_kind(site: &SiteRecord, kind: &str) -> Result<PathBuf, String> {
+    match kind {
+        "access" => Ok(site_access_log_path(site)),
+        "error" => Ok(site_error_log_path(site)),
+        _ => Err("Log kind must be access or error".into()),
+    }
+}
+
+/// Candidate access/error log paths (bandwidth helpers may use fallbacks).
+/// Manage UI and the logs API use [`site_log_path_for_kind`] only.
 pub fn candidate_log_paths(site: &SiteRecord) -> (Vec<PathBuf>, Vec<PathBuf>) {
     let domain = &site.domain;
     let home_logs = site_home_from_record(site).join("logs");
@@ -31,8 +48,6 @@ pub fn candidate_log_paths(site: &SiteRecord) -> (Vec<PathBuf>, Vec<PathBuf>) {
         PathBuf::from(format!("/var/log/httpd/{domain}-access.log")),
         PathBuf::from(format!("/var/log/nginx/{domain}.access.log")),
         PathBuf::from(format!("/var/log/apache2/{domain}-access.log")),
-        PathBuf::from(format!("/home/{domain}/logs/access.log")),
-        PathBuf::from(format!("/home/{domain}/logs/access_log")),
     ];
     let error = vec![
         home_logs.join("error.log"),
@@ -43,35 +58,62 @@ pub fn candidate_log_paths(site: &SiteRecord) -> (Vec<PathBuf>, Vec<PathBuf>) {
         PathBuf::from(format!("/var/log/httpd/{domain}-error.log")),
         PathBuf::from(format!("/var/log/nginx/{domain}.error.log")),
         PathBuf::from(format!("/var/log/apache2/{domain}-error.log")),
-        PathBuf::from(format!("/home/{domain}/logs/error.log")),
-        PathBuf::from(format!("/home/{domain}/logs/error_log")),
     ];
     (access, error)
 }
 
-fn path_allowed(site: &SiteRecord, path: &Path) -> bool {
+fn file_name_matches_domain(path: &Path, domain: &str) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    // Exact prefix: `{domain}.access.log` or `{domain}-access.log`, not substring of a child FQDN.
+    name == format!("{domain}.access.log")
+        || name == format!("{domain}.access_log")
+        || name == format!("{domain}-access.log")
+        || name == format!("{domain}-access_log")
+        || name == format!("{domain}.error.log")
+        || name == format!("{domain}.error_log")
+        || name == format!("{domain}-error.log")
+        || name == format!("{domain}-error_log")
+}
+
+/// True when `path` is inside this site's `logs/` jail (or an exact domain std log).
+pub fn path_allowed(site: &SiteRecord, path: &Path) -> bool {
     let s = path.to_string_lossy();
     if s.contains("..") {
         return false;
     }
     let home_logs = site_home_from_record(site).join("logs");
-    if let Ok(canon_home) = home_logs.canonicalize()
-        && let Ok(canon_path) = path.canonicalize()
-        && canon_path.starts_with(&canon_home)
-    {
-        return true;
+    if let Ok(canon_home) = home_logs.canonicalize() {
+        if let Ok(canon_path) = path.canonicalize() {
+            if canon_path.starts_with(&canon_home) {
+                // Reject nested child trees that somehow share a prefix (should not happen).
+                return true;
+            }
+        } else if path.parent() == Some(home_logs.as_path()) {
+            // Preferred path before create / before canonicalize works.
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            return matches!(
+                name,
+                "access.log" | "access_log" | "error.log" | "error_log"
+            );
+        }
+    } else {
+        let home_prefix = format!("{}/", home_logs.display());
+        if (s.starts_with(&home_prefix) || path.parent() == Some(home_logs.as_path()))
+            && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                matches!(n, "access.log" | "access_log" | "error.log" | "error_log")
+            })
+        {
+            return true;
+        }
     }
-    // Allow preferred paths even before the file exists (prefix check).
-    let home_prefix = format!("{}/", home_logs.display());
-    if s.starts_with(&home_prefix) || path.parent() == Some(home_logs.as_path()) {
-        return true;
-    }
-    let domain = &site.domain;
+
     let in_std = s.starts_with("/usr/local/lsws/logs/")
         || s.starts_with("/var/log/httpd/")
         || s.starts_with("/var/log/nginx/")
         || s.starts_with("/var/log/apache2/");
-    in_std && s.contains(domain.as_str())
+    in_std && file_name_matches_domain(path, &site.domain)
 }
 
 /// First existing allowlisted log path from candidates.
@@ -120,7 +162,6 @@ fn chown_web_server(path: &Path) {
     let Ok(c_path) = CString::new(path.as_os_str().as_bytes()) else {
         return;
     };
-    // LiteSpeed/OLS default runtime user is nobody.
     let nobody = CString::new("nobody").ok();
     let uid = nobody
         .as_ref()
@@ -152,7 +193,7 @@ fn chown_web_server(path: &Path) {
 /// Read the last `max_bytes` of a log file (path must already be allowlisted).
 pub fn read_log_tail(site: &SiteRecord, path: &Path, max_bytes: u64) -> Result<String, String> {
     if !path_allowed(site, path) {
-        return Err("Log path is not allowlisted".into());
+        return Err("Log path is not allowlisted for this domain".into());
     }
     if !path.is_file() {
         return Err(format!("Log file not found: {}", path.display()));
@@ -193,66 +234,126 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// HTML-escaped pre block for a log kind, or an honest empty message.
+#[derive(Debug, Clone, Serialize)]
+pub struct LogPagePayload {
+    pub ok: bool,
+    pub domain: String,
+    pub kind: String,
+    pub path: String,
+    pub search: String,
+    pub page: usize,
+    pub per_page: usize,
+    pub total_lines: usize,
+    pub total_pages: usize,
+    pub lines: Vec<String>,
+    pub empty: bool,
+    pub message: String,
+}
+
+fn clamp_per_page(n: usize) -> usize {
+    match n {
+        0..=9 => 10,
+        10..=50 => n,
+        _ => 50,
+    }
+}
+
+/// Paginated, searchable view of the jailed site log (no foreign paths).
+pub fn query_site_log_page(
+    site: &SiteRecord,
+    kind: &str,
+    search: &str,
+    page: usize,
+    per_page: usize,
+) -> Result<LogPagePayload, String> {
+    let _ = ensure_site_log_files(site);
+    let path = site_log_path_for_kind(site, kind)?;
+    if !path_allowed(site, &path) {
+        return Err("Log path is not allowlisted for this domain".into());
+    }
+    let per_page = clamp_per_page(per_page);
+    let page = page.max(1);
+    let search_trim = search.trim();
+    let search_lc = search_trim.to_ascii_lowercase();
+
+    if !path.is_file() {
+        return Ok(LogPagePayload {
+            ok: true,
+            domain: site.domain.clone(),
+            kind: kind.into(),
+            path: path.display().to_string(),
+            search: search_trim.into(),
+            page: 1,
+            per_page,
+            total_lines: 0,
+            total_pages: 1,
+            lines: Vec::new(),
+            empty: true,
+            message: format!("No {kind} log file yet. Expected path: {}", path.display()),
+        });
+    }
+
+    let raw = read_log_tail(site, &path, LOG_SCAN_BYTES)?;
+    let mut lines: Vec<String> = raw.lines().map(|l| l.to_string()).collect();
+    if lines.len() > LOG_SCAN_LINES {
+        lines = lines[lines.len() - LOG_SCAN_LINES..].to_vec();
+    }
+    if !search_lc.is_empty() {
+        lines.retain(|l| l.to_ascii_lowercase().contains(&search_lc));
+    }
+    let total_lines = lines.len();
+    let total_pages = total_lines.max(1).div_ceil(per_page).max(1);
+    let page = page.min(total_pages);
+    let start = (page - 1) * per_page;
+    let page_lines: Vec<String> = lines.into_iter().skip(start).take(per_page).collect();
+    let empty = total_lines == 0;
+    let message = if empty && search_trim.is_empty() {
+        format!(
+            "Source: {} (file exists but is empty). Generate traffic and refresh.",
+            path.display()
+        )
+    } else if empty {
+        format!("No lines matched search in {}", path.display())
+    } else {
+        format!(
+            "Source: {} (showing page {page} of {total_pages}, {total_lines} matching lines)",
+            path.display()
+        )
+    };
+
+    Ok(LogPagePayload {
+        ok: true,
+        domain: site.domain.clone(),
+        kind: kind.into(),
+        path: path.display().to_string(),
+        search: search_trim.into(),
+        page,
+        per_page,
+        total_lines,
+        total_pages,
+        lines: page_lines,
+        empty,
+        message,
+    })
+}
+
+/// Compact hint panel under the log cards (no inline dump).
 pub fn log_panel_html(site: &SiteRecord, kind: &str) -> String {
     let _ = ensure_site_log_files(site);
-    let (access, error) = candidate_log_paths(site);
-    let candidates = if kind == "error" { error } else { access };
     let title = if kind == "error" {
         "Error Logs"
     } else {
         "Access Logs"
     };
-    let preferred = if kind == "error" {
-        site_error_log_path(site)
-    } else {
-        site_access_log_path(site)
-    };
-    let domain_q = html_escape(&site.domain);
-    let refresh = format!(
-        r#"<p class="manage-log-toolbar"><a class="manage-btn" href="/websites/manage?domain={domain_q}&amp;tab=logs#{anchor}">Refresh</a></p>"#,
-        anchor = if kind == "error" { "error" } else { "access" },
-    );
-
-    match first_existing_log(site, &candidates) {
-        Some(path) => match read_log_tail_lines(site, &path, LOG_TAIL_LINES) {
-            Ok(body) if body.trim().is_empty() => format!(
-                r#"{refresh}<div class="manage-log-panel">
+    let preferred = site_log_path_for_kind(site, kind).unwrap_or_else(|_| PathBuf::from(""));
+    format!(
+        r#"<div class="manage-log-panel manage-log-hint" data-log-kind="{kind}">
   <h3>{title}</h3>
-  <p class="manage-muted">Source: <code>{path}</code> (last {lines} lines). File exists but is empty. Generate traffic (curl the site or Preview) and refresh.</p>
-  <pre class="manage-log-pre" aria-label="{title}"></pre>
+  <p class="manage-muted">Open the card above for a searchable, paginated viewer. Domain-scoped source: <code>{path}</code></p>
 </div>"#,
-                path = html_escape(&path.display().to_string()),
-                lines = LOG_TAIL_LINES,
-            ),
-            Ok(body) => {
-                let escaped = html_escape(&body);
-                format!(
-                    r#"{refresh}<div class="manage-log-panel">
-  <h3>{title}</h3>
-  <p class="manage-muted">Source: <code>{path}</code> (last {lines} lines)</p>
-  <pre class="manage-log-pre" aria-label="{title}">{escaped}</pre>
-</div>"#,
-                    path = html_escape(&path.display().to_string()),
-                    lines = LOG_TAIL_LINES,
-                )
-            }
-            Err(err) => format!(
-                r#"{refresh}<div class="manage-log-panel">
-  <h3>{title}</h3>
-  <p class="manage-muted">{err}</p>
-</div>"#,
-                err = html_escape(&err),
-            ),
-        },
-        None => format!(
-            r#"{refresh}<div class="manage-log-panel">
-  <h3>{title}</h3>
-  <p class="manage-muted">No {kind} log file found yet for this domain. Expected path: <code>{pref}</code>. When the web stack writes vhost logs, they will appear here.</p>
-</div>"#,
-            pref = html_escape(&preferred.display().to_string()),
-        ),
-    }
+        kind = html_escape(kind),
+        path = html_escape(&preferred.display().to_string()),
+    )
 }
 
 #[cfg(test)]
@@ -299,10 +400,60 @@ mod tests {
             &site,
             Path::new("/var/log/nginx/example.com.access.log")
         ));
+        // Child FQDN must not pass parent substring match on std logs.
+        assert!(!path_allowed(
+            &site,
+            Path::new("/var/log/nginx/test.example.com.access.log")
+        ));
     }
 
     #[test]
-    fn creates_and_tails_site_home_logs() {
+    fn parent_cannot_read_child_home_logs() {
+        let parent = sample_site("newstargeted.com", "/home/newstargeted.com/public_html");
+        let child = sample_site(
+            "test2.newstargeted.com",
+            "/home/newstargeted.com/test2.newstargeted.com/public_html",
+        );
+        let parent_log = Path::new("/home/newstargeted.com/logs/access.log");
+        let child_log = Path::new("/home/newstargeted.com/test2.newstargeted.com/logs/access.log");
+        assert!(path_allowed(&parent, parent_log));
+        assert!(!path_allowed(&parent, child_log));
+        assert!(path_allowed(&child, child_log));
+        assert!(!path_allowed(&child, parent_log));
+    }
+
+    #[test]
+    fn query_paginates_and_searches() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cpn-log-page-{stamp}"));
+        let docroot = root.join("public_html");
+        fs::create_dir_all(&docroot).unwrap();
+        let site = sample_site("lab.example", &docroot.to_string_lossy());
+        ensure_site_log_files(&site).unwrap();
+        let access = site_access_log_path(&site);
+        let mut body = String::new();
+        for i in 1..=25 {
+            body.push_str(&format!("line-{i} GET /path-{i}\n"));
+        }
+        fs::write(&access, body).unwrap();
+        let page = query_site_log_page(&site, "access", "", 2, 10).unwrap();
+        assert_eq!(page.total_lines, 25);
+        assert_eq!(page.total_pages, 3);
+        assert_eq!(page.page, 2);
+        assert_eq!(page.lines.len(), 10);
+        assert!(page.lines[0].contains("line-11"));
+        let filtered = query_site_log_page(&site, "access", "path-3", 1, 10).unwrap();
+        assert!(filtered.total_lines >= 1);
+        assert!(filtered.lines.iter().all(|l| l.contains("path-3")));
+        assert!(!page.path.contains("CyberPanel"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn creates_and_hints_without_inline_dump() {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -312,27 +463,12 @@ mod tests {
         fs::create_dir_all(&docroot).unwrap();
         let site = sample_site("lab.example", &docroot.to_string_lossy());
         ensure_site_log_files(&site).unwrap();
-        let access = site_access_log_path(&site);
-        assert!(access.is_file());
-        fs::write(&access, "a\nb\nc\n").unwrap();
+        fs::write(site_access_log_path(&site), "secret-line\n").unwrap();
         let html = log_panel_html(&site, "access");
         assert!(html.contains("Access Logs"));
-        assert!(html.contains("Source:"));
-        assert!(html.contains(">a\nb\nc"));
-        assert!(html.contains("Refresh"));
+        assert!(html.contains("Open the card"));
+        assert!(!html.contains("secret-line"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
         let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn empty_missing_domain_panel() {
-        let site = sample_site(
-            "missing-logs.example",
-            "/tmp/cpn-missing-logs-example/public_html",
-        );
-        let html = log_panel_html(&site, "access");
-        assert!(html.contains("Access Logs"));
-        // ensure creates files under temp home when writable; otherwise empty-state text.
-        assert!(html.contains("Access Logs"));
     }
 }

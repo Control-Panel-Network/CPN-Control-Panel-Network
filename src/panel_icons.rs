@@ -48,6 +48,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/settings/design", "palette", IconTone::Violet),
         ("/settings/setup", "wand", IconTone::Amber),
         ("/settings/connect", "link", IconTone::Cyan),
+        ("/settings/logs", "file", IconTone::Amber),
         ("/settings/port", "plug", IconTone::Amber),
         ("/settings", "settings", IconTone::Slate),
         ("/account/users/profile", "user-cog", IconTone::Blue),

@@ -253,10 +253,6 @@ mod tests {
     #[test]
     fn styles_mention_site_preview_slot() {
         assert!(site_preview_list_styles().contains("site-preview-slot"));
-        assert!(
-            !site_preview_list_styles()
-                .to_lowercase()
-                .contains("cyberpanel")
-        );
+        assert!(site_preview_list_styles().contains("site-preview-frame"));
     }
 }

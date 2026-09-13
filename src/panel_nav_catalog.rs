@@ -287,6 +287,10 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
         href: "/settings/connect",
     },
     NavChild {
+        label: "Log retention",
+        href: "/settings/logs",
+    },
+    NavChild {
         label: "Change Port",
         href: "/settings/port",
     },

@@ -62,7 +62,10 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
     security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
     security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
-    server_dns_nameservers, server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete,
+    server_dns_defaults_save, server_dns_nameservers, server_dns_nameservers_add,
+    server_dns_nameservers_delete, server_dns_nameservers_save, server_dns_record_add,
+    server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
     server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
@@ -71,19 +74,18 @@ use cpn_installer::panel_hub_routes::{
     server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
     server_packages_page, server_page, server_php_configs, server_php_configs_post,
     server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
-    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
     server_php_extensions_install, server_php_extensions_set_default,
     server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
     server_processes_page, server_services_control, server_services_page, settings_connect_page,
-    settings_design_page, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
-    settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_version_page, site_filemanager_alias, site_files_op,
-    site_files_page_route, site_files_upload, users_create_get, users_create_post,
-    users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
-    users_profile_details_post, users_profile_password_post, users_profile_route,
-    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
-    users_reseller_route,
+    settings_design_page, settings_logs_page, settings_logs_save, settings_page,
+    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_site_messages_reset, settings_site_messages_restore_site_ready,
+    settings_site_messages_restore_suspend, settings_site_messages_save, settings_version_page,
+    site_filemanager_alias, site_files_op, site_files_page_route, site_files_upload,
+    users_create_get, users_create_post, users_delete_post, users_list_route, users_modify_get,
+    users_password_post, users_plans_page, users_profile_details_post, users_profile_password_post,
+    users_profile_route, users_profile_totp_begin, users_profile_totp_confirm,
+    users_profile_totp_disable, users_reseller_route,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -121,6 +123,7 @@ use cpn_installer::panel_website_alias_cron_routes::{
     websites_alias_add, websites_alias_remove, websites_cron_add, websites_cron_delete,
     websites_cron_update,
 };
+use cpn_installer::panel_website_logs_routes::websites_manage_logs;
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
@@ -975,11 +978,12 @@ async fn main() -> std::io::Result<()> {
             .service(site_files_op)
             .service(site_files_upload)
             .service(websites_preview_redirect)
+            // Site preview image/refresh before /websites/{domain} catch-all.
+            .service(site_preview_image)
+            .service(site_preview_refresh)
             .service(websites_pretty_manage)
             .service(preview_mode_page)
             .service(preview_content)
-            .service(site_preview_image)
-            .service(site_preview_refresh)
             .service(websites_create)
             .service(websites_delete)
             .service(websites_suspend)
@@ -1010,6 +1014,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
             .service(websites_manage_metrics)
+            .service(websites_manage_logs)
             .service(websites_git_post)
             .service(websites_clone_post)
             .service(websites_tools_csrf_get)
@@ -1107,10 +1112,18 @@ async fn main() -> std::io::Result<()> {
             .service(server_files_op)
             .service(server_files_upload)
             .service(server_dns_zones)
+            .service(server_dns_zones_create_get)
+            .service(server_dns_zones_create_post)
+            .service(server_dns_zones_manage)
             .service(server_dns_zones_save)
             .service(server_dns_zones_delete)
+            .service(server_dns_record_add)
+            .service(server_dns_record_delete)
             .service(server_dns_nameservers)
+            .service(server_dns_nameservers_add)
+            .service(server_dns_nameservers_delete)
             .service(server_dns_defaults)
+            .service(server_dns_defaults_save)
             .service(server_dns_nameservers_save)
             .service(cloudflare_dns_get)
             .service(server_cloudflare_redirect)
@@ -1136,6 +1149,8 @@ async fn main() -> std::io::Result<()> {
             .service(settings_site_messages_restore_suspend)
             .service(settings_site_messages_restore_site_ready)
             .service(settings_site_messages_reset)
+            .service(settings_logs_page)
+            .service(settings_logs_save)
             .service(settings_port_page)
             .service(security_page)
             .service(security_firewall)

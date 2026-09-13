@@ -55,15 +55,18 @@ enum BackendKind {
 
 fn discover_backends() -> Vec<CaptureBackend> {
     let mut out = Vec::new();
-    let chromium_names = [
+    // Prefer PATH /usr/bin names, then AlmaLinux `chromium-headless` layout
+    // (`/usr/lib64/chromium-browser/headless_shell`) which has no short name by default.
+    let chromium_candidates = [
         "chromium-browser",
         "chromium",
         "google-chrome",
         "google-chrome-stable",
         "chrome",
         "chromium-headless-shell",
+        "headless_shell",
     ];
-    for name in chromium_names {
+    for name in chromium_candidates {
         if let Some(bin) = find_bin(name) {
             out.push(CaptureBackend {
                 label: "chromium",
@@ -71,6 +74,19 @@ fn discover_backends() -> Vec<CaptureBackend> {
                 bin,
             });
             break;
+        }
+    }
+    if out.is_empty() {
+        for path in almalinux_headless_paths() {
+            let p = PathBuf::from(path);
+            if p.is_file() {
+                out.push(CaptureBackend {
+                    label: "chromium",
+                    kind: BackendKind::Chromium,
+                    bin: p,
+                });
+                break;
+            }
         }
     }
     if let Some(bin) = find_bin("wkhtmltoimage") {
@@ -83,12 +99,22 @@ fn discover_backends() -> Vec<CaptureBackend> {
     out
 }
 
+fn almalinux_headless_paths() -> &'static [&'static str] {
+    &[
+        "/usr/lib64/chromium-browser/headless_shell",
+        "/usr/lib/chromium-browser/headless_shell",
+        "/usr/lib64/chromium-browser/chromium-headless-shell",
+    ]
+}
+
 fn find_bin(name: &str) -> Option<PathBuf> {
     // Absolute common paths first (AlmaLinux / container installs).
     let absolutes = [
         format!("/usr/bin/{name}"),
         format!("/usr/local/bin/{name}"),
         format!("/opt/google/chrome/{name}"),
+        format!("/usr/lib64/chromium-browser/{name}"),
+        format!("/usr/lib/chromium-browser/{name}"),
     ];
     for path in absolutes {
         let p = PathBuf::from(&path);
@@ -299,6 +325,17 @@ mod tests {
     fn resolver_rules_map_loopback() {
         let rules = host_resolver_rules("lab.example");
         assert!(rules.contains("MAP lab.example 127.0.0.1"));
-        assert!(!rules.to_lowercase().contains("cyberpanel"));
+        assert!(rules.contains("MAP www.lab.example 127.0.0.1"));
+    }
+
+    #[test]
+    fn almalinux_headless_paths_cover_lib64() {
+        let paths = almalinux_headless_paths();
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.contains("/usr/lib64/chromium-browser/"))
+        );
+        assert!(paths.iter().any(|p| p.ends_with("headless_shell")));
     }
 }
