@@ -97,10 +97,10 @@ fn split_timestamp(line: &str) -> (String, String) {
         let msg = parts[3..].join(" ");
         return (ts, msg);
     }
-    if let Some((head, rest)) = line.split_once(' ') {
-        if head.contains('T') || (head.len() >= 10 && head.as_bytes().get(4) == Some(&b'-')) {
-            return (head.to_string(), rest.to_string());
-        }
+    if let Some((head, rest)) = line.split_once(' ')
+        && (head.contains('T') || (head.len() >= 10 && head.as_bytes().get(4) == Some(&b'-')))
+    {
+        return (head.to_string(), rest.to_string());
     }
     ("-".into(), line.to_string())
 }

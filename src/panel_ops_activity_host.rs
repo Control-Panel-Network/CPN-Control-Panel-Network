@@ -64,7 +64,7 @@ pub fn network_traffic() -> Vec<TrafficNic> {
                 tx_packets,
             });
         }
-        rows.sort_by(|a, b| b.rx_bytes.cmp(&a.rx_bytes));
+        rows.sort_by_key(|a| std::cmp::Reverse(a.rx_bytes));
         rows.truncate(12);
         rows
     }
