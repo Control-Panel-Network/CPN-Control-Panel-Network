@@ -315,14 +315,13 @@ pub async fn server_files_upload(
     }
 }
 
-#[get("/websites/files")]
-pub async fn site_files_page_route(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<HashMap<String, String>>,
+async fn render_site_files_page(
+    http: &HttpRequest,
+    state: &AppState,
+    query: &HashMap<String, String>,
 ) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
+    let Some(user) = require_panel_user(state, http) else {
+        return login_redirect(http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let site = match require_manage_site(&user, domain, SitePerm::Enable) {
@@ -372,13 +371,22 @@ pub async fn site_files_page_route(
     ))
 }
 
+#[get("/websites/files")]
+pub async fn site_files_page_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    render_site_files_page(&http, &state, &query).await
+}
+
 #[get("/filemanager/site")]
 pub async fn site_filemanager_alias(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
-    site_files_page_route(http, state, query).await
+    render_site_files_page(&http, &state, &query).await
 }
 
 #[post("/websites/files/op")]
