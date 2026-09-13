@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Email hub LIVE tools** (former SCAFFOLD cards): Pattern Forwarding (`/email/pattern-forwarding` with Postfix virtual maps), Email Limits (`/email/limits`), Change Password (`/email/password`), Email Debugger (`/email/debugger`), Mail Queue (`/email/queue` via allowlisted `postqueue`/`postsuper`), SpamAssassin / Rspamd / MailScanner status+enable pages, Email Marketing MVP (`/email/marketing`), and Plus-Addressing (`/email/plus-addressing` via `recipient_delimiter`). Admin ACL + CSRF on POSTs; MailScanner may show Unavailable on AlmaLinux 9 when the package is missing.
 - **DNS Zones** create/manage UX at `/server/dns/zones` and `/server/dns/zones/create`: domain-only create (strips `http`/`www`), auto-seed SOA + NS from Default Nameservers plus apex A when the host IP is known, structured record table (A, AAAA, CNAME, MX, TXT, NS, SRV) with add/delete, optional Advanced raw zone editor. Zones persist as JSON + `.zone` under the CPN DNS data directory. Admin-only POSTs with CSRF and same-origin checks.
 - **Nameservers** (`/server/dns/nameservers`): create/list/delete NS hostnames with glue A/AAAA.
 - **Default Nameservers** (`/server/dns/defaults`): choose which NS hostnames are assigned to newly created zones. Server hub tiles and sidebar links stay live for Zones / Nameservers / Default Nameservers.

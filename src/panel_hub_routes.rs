@@ -7,6 +7,7 @@ pub use crate::panel_hub_routes_cloudflare::*;
 pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_dns::*;
 pub use crate::panel_hub_routes_email::*;
+pub use crate::panel_hub_routes_email_actions::*;
 pub use crate::panel_hub_routes_email_stubs::*;
 pub use crate::panel_hub_routes_files::*;
 pub use crate::panel_hub_routes_firewall::*;
