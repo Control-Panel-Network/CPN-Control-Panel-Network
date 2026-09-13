@@ -84,12 +84,14 @@ pub fn sum_bytes_from_access_log(
 }
 
 fn parse_response_bytes(line: &str) -> Option<u64> {
-    // Prefer the quote that ends the request line, then status + bytes.
-    let after = line.rsplit_once("\" ").map(|(_, rest)| rest).or_else(|| {
-        line.rsplit_once("HTTP/1.")
-            .map(|(_, rest)| rest)
-            .or_else(|| line.rsplit_once("HTTP/2").map(|(_, rest)| rest))
-    })?;
+    // Prefer bytes after the request line that ends with HTTP/x.y".
+    let after = if let Some(http_at) = line.find("HTTP/") {
+        let tail = &line[http_at..];
+        let q = tail.find('"')?;
+        &tail[q + 1..]
+    } else {
+        line.rsplit_once("\" ").map(|(_, rest)| rest)?
+    };
     let mut parts = after.split_whitespace();
     let status = parts.next()?;
     if !status.chars().all(|c| c.is_ascii_digit()) {
