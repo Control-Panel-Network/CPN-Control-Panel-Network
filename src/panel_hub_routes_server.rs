@@ -8,8 +8,8 @@ use crate::panel_hub_pages_litespeed::{
     run_set_tier, run_set_webadmin_url, run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    docker_page, files_page, package_manager_page, php_tuning_page, processes_page,
-    run_service_control, server_hub_main, services_page,
+    docker_page, package_manager_page, php_tuning_page, processes_page, run_service_control,
+    server_hub_main, services_page,
 };
 use crate::panel_hub_pages_server_net::{
     change_port_page, dns_zones_page, nameservers_page, remove_dns_zone, save_dns_zone,
@@ -415,32 +415,6 @@ pub async fn server_docker_images(
         "server",
         "Docker Images",
         &docker_page("Docker Images"),
-    ))
-}
-
-#[get("/server/files")]
-pub async fn server_files_page(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    if !is_panel_admin(&user) {
-        return html_ok(panel_shell(
-            &user,
-            "server",
-            "Root File Manager",
-            &files_page("/home", Some("Only the panel admin can browse root paths.")),
-        ));
-    }
-    let path = query.get("path").map(String::as_str).unwrap_or("/home");
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "Root File Manager",
-        &files_page(path, None),
     ))
 }
 

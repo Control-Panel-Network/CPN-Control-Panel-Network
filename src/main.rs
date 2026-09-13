@@ -59,7 +59,8 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
     server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
-    server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
+    server_docker_apps, server_docker_containers, server_docker_images, filemanager_alias,
+    server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
     server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
     server_litespeed_webadmin_url, server_openlitespeed_guest, server_openlitespeed_guest_remove,
@@ -1050,6 +1051,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_containers)
             .service(server_docker_images)
             .service(server_files_page)
+            .service(filemanager_alias)
+            .service(server_filemanager_alias)
+            .service(server_files_op)
+            .service(server_files_upload)
             .service(server_dns_zones)
             .service(server_dns_zones_save)
             .service(server_dns_zones_delete)
