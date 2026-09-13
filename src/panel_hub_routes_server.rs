@@ -686,7 +686,7 @@ pub async fn settings_site_messages_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()
@@ -719,7 +719,7 @@ pub async fn settings_site_messages_save(
     form: web::Form<SiteMessagesForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()
@@ -741,7 +741,7 @@ pub async fn settings_site_messages_restore_suspend(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()
@@ -764,7 +764,7 @@ pub async fn settings_site_messages_restore_site_ready(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()
@@ -787,7 +787,7 @@ pub async fn settings_site_messages_reset(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()

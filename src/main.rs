@@ -589,7 +589,7 @@ async fn panel_catch_all(
             return HttpResponse::MethodNotAllowed().finish();
         }
         if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
-            return cpn_installer::panel_hub_http::login_redirect();
+            return cpn_installer::panel_hub_http::login_redirect(&req);
         }
         return cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await;
     }
@@ -741,7 +741,7 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
-    println!("\nCPN Server Panel · Installer {VERSION}");
+    println!("\nCPN Server Panel Â· Installer {VERSION}");
     println!("Starting the web installer (language detected from browser/system)...\n");
     cpn_installer::motd::ensure_motd_installed();
     let token: String = rand::rng()
@@ -835,7 +835,7 @@ async fn main() -> std::io::Result<()> {
         active_child_pids: std::sync::Mutex::new(Vec::new()),
         install_log_detail: std::sync::Mutex::new(cpn_installer::installer::InstallLogDetail::Full),
     });
-    println!("✓ The web installer is ready:");
+    println!("âœ“ The web installer is ready:");
     cpn_installer::motd::print_panel_ready_banner(
         VERSION,
         listen_port,

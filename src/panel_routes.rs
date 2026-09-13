@@ -336,7 +336,7 @@ pub async fn websites_suspend_message(
     form: web::Form<SuspendMessageForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -383,7 +383,7 @@ pub async fn websites_suspend_message_restore(
     form: web::Form<SiteDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -430,7 +430,7 @@ pub async fn websites_reset_placeholder(
     form: web::Form<SiteDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let site = match require_manage_site(&user, &form.domain, SitePerm::Enable) {
         Ok(site) => site,
