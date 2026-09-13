@@ -1,10 +1,7 @@
-//! Server hub: Change Port and DNS feature pages.
+//! Server hub: Change Port page (DNS lives in panel_hub_pages_dns*).
 
 use crate::panel_hubs::feature_shell;
 use crate::panel_network::{network_public, preferred_listen_port_or_default};
-use crate::panel_ops_dns::{
-    delete_zone, list_zones, load_nameservers, save_nameservers, write_zone,
-};
 
 fn html_escape(value: &str) -> String {
     value
@@ -85,95 +82,4 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
         notice,
         error,
     )
-}
-
-pub fn dns_zones_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let zones = list_zones().unwrap_or_default();
-    let mut list = String::from("<ul>");
-    if zones.is_empty() {
-        list = "<p class=\"empty-state\">No zones yet.</p>".into();
-    } else {
-        for z in &zones {
-            list.push_str(&format!(
-                r#"<li><code>{z}</code>
-              <form method="post" action="/server/dns/zones/delete" class="inline-form" style="display:inline;margin-left:8px;">
-                <input type="hidden" name="name" value="{z}">
-                <button type="submit" class="btn-danger">Delete</button>
-              </form></li>"#,
-                z = html_escape(z),
-            ));
-        }
-        list.push_str("</ul>");
-    }
-    let form = r#"<form method="post" action="/server/dns/zones/save" class="stack-form" style="max-width:640px;margin-top:16px;">
-      <label for="name">Zone name</label>
-      <input id="name" name="name" type="text" required placeholder="example.com">
-      <label for="content">Zone file</label>
-      <textarea id="content" name="content" rows="8" style="width:100%;font:inherit;" placeholder="example.com. IN A 203.0.113.10"></textarea>
-      <button type="submit" class="btn-primary">Save zone</button>
-    </form>"#;
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("DNS Zones", None),
-        ],
-        "DNS Zones",
-        "Zone files stored under the CPN data directory.",
-        &format!("{list}{form}"),
-        notice,
-        error,
-    )
-}
-
-pub fn save_dns_zone(name: &str, content: &str) -> Result<String, String> {
-    write_zone(name, content)?;
-    Ok(format!("Saved zone {}", name.trim()))
-}
-
-pub fn remove_dns_zone(name: &str) -> Result<String, String> {
-    delete_zone(name)?;
-    Ok(format!("Deleted zone {}", name.trim()))
-}
-
-pub fn nameservers_page(notice: Option<&str>, error: Option<&str>, defaults: bool) -> String {
-    let ns = load_nameservers();
-    let joined = ns.join("\n");
-    let title = if defaults {
-        "Default Nameservers"
-    } else {
-        "Nameservers"
-    };
-    let form = format!(
-        r#"<form method="post" action="/server/dns/nameservers/save" class="stack-form" style="max-width:560px;">
-      <label for="nameservers">One nameserver per line</label>
-      <textarea id="nameservers" name="nameservers" rows="6" style="width:100%;font:inherit;">{joined}</textarea>
-      <button type="submit" class="btn-primary">Save nameservers</button>
-    </form>
-    <p class="muted">Stored as JSON under the CPN data dir. Wire to PowerDNS or BIND in a later release.</p>"#,
-        joined = html_escape(&joined),
-    );
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            (title, None),
-        ],
-        title,
-        "Configure nameserver defaults for this node.",
-        &form,
-        notice,
-        error,
-    )
-}
-
-pub fn save_ns_lines(raw: &str) -> Result<String, String> {
-    let values: Vec<String> = raw
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(str::to_string)
-        .collect();
-    save_nameservers(&values)?;
-    Ok(format!("Saved {} nameserver(s)", values.len()))
 }

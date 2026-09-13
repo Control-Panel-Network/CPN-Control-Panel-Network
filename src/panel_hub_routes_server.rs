@@ -11,10 +11,7 @@ use crate::panel_hub_pages_server::{
     docker_page, package_manager_page, php_tuning_page, processes_page, run_service_control,
     server_hub_main, services_page,
 };
-use crate::panel_hub_pages_server_net::{
-    change_port_page, dns_zones_page, nameservers_page, remove_dns_zone, save_dns_zone,
-    save_ns_lines,
-};
+use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
     connect_page, design_settings_page, settings_hub_main, setup_wizard_page_with,
     version_management_page,
@@ -416,136 +413,6 @@ pub async fn server_docker_images(
         "Docker Images",
         &docker_page("Docker Images"),
     ))
-}
-
-#[get("/server/dns/zones")]
-pub async fn server_dns_zones(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "DNS Zones",
-        &dns_zones_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct DnsZoneForm {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    content: String,
-}
-
-#[post("/server/dns/zones/save")]
-pub async fn server_dns_zones_save(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    form: web::Form<DnsZoneForm>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    if !is_panel_admin(&user) {
-        return redirect_notice("/server/dns/zones", None, Some("Admin only"));
-    }
-    match save_dns_zone(&form.name, &form.content) {
-        Ok(msg) => redirect_notice("/server/dns/zones", Some(&msg), None),
-        Err(err) => redirect_notice("/server/dns/zones", None, Some(&err)),
-    }
-}
-
-#[post("/server/dns/zones/delete")]
-pub async fn server_dns_zones_delete(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    form: web::Form<DnsZoneForm>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    if !is_panel_admin(&user) {
-        return redirect_notice("/server/dns/zones", None, Some("Admin only"));
-    }
-    match remove_dns_zone(&form.name) {
-        Ok(msg) => redirect_notice("/server/dns/zones", Some(&msg), None),
-        Err(err) => redirect_notice("/server/dns/zones", None, Some(&err)),
-    }
-}
-
-#[get("/server/dns/nameservers")]
-pub async fn server_dns_nameservers(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "Nameservers",
-        &nameservers_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            false,
-        ),
-    ))
-}
-
-#[get("/server/dns/defaults")]
-pub async fn server_dns_defaults(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<std::collections::HashMap<String, String>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "Default Nameservers",
-        &nameservers_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            true,
-        ),
-    ))
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct NameserversForm {
-    #[serde(default)]
-    nameservers: String,
-}
-
-#[post("/server/dns/nameservers/save")]
-pub async fn server_dns_nameservers_save(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    form: web::Form<NameserversForm>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    if !is_panel_admin(&user) {
-        return redirect_notice("/server/dns/nameservers", None, Some("Admin only"));
-    }
-    match save_ns_lines(&form.nameservers) {
-        Ok(msg) => redirect_notice("/server/dns/nameservers", Some(&msg), None),
-        Err(err) => redirect_notice("/server/dns/nameservers", None, Some(&err)),
-    }
 }
 
 #[get("/settings")]
