@@ -216,12 +216,10 @@ pub async fn websites_terminal_ws(
                     match message {
                         Some(Ok(actix_ws::Message::Text(text))) => {
                             let t = text.to_string();
-                            if t.starts_with('{') {
-                                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
-                                    if v.get("type").and_then(|x| x.as_str()) == Some("resize") {
-                                        continue;
-                                    }
-                                }
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t)
+                                && v.get("type").and_then(|x| x.as_str()) == Some("resize")
+                            {
+                                continue;
                             }
                             if stdin.write_all(t.as_bytes()).await.is_err() {
                                 break;

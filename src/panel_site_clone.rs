@@ -38,9 +38,8 @@ fn copy_dir_contents(src: &Path, dst: &Path) -> Result<u64, String> {
         if !status.success() {
             return Err("cp -a failed while cloning site files".into());
         }
-        return Ok(approx_file_count(dst));
+        Ok(approx_file_count(dst))
     }
-
     #[cfg(not(unix))]
     {
         copy_recursive(src, dst)?;
