@@ -34,8 +34,7 @@ const RUNTIME_SUBDIRS: &[&str] = &["temp", "upload", "save", "cache", "config"];
 /// runs as `nobody`. Without this, phpMyAdmin shows TempDir warnings and slows down.
 pub fn ensure_phpmyadmin_runtime_dirs() -> Result<String, String> {
     let root = PathBuf::from(LIB_DIR);
-    fs::create_dir_all(&root)
-        .map_err(|e| format!("Could not create {LIB_DIR}: {e}"))?;
+    fs::create_dir_all(&root).map_err(|e| format!("Could not create {LIB_DIR}: {e}"))?;
     for name in RUNTIME_SUBDIRS {
         let path = root.join(name);
         fs::create_dir_all(&path)

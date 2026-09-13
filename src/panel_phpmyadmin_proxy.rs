@@ -303,9 +303,7 @@ pub fn clear_phpmyadmin_cookie_headers(secure: bool) -> Vec<String> {
     PMA_SESSION_COOKIE_NAMES
         .iter()
         .map(|name| {
-            format!(
-                "{name}=; Path={PMA_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}"
-            )
+            format!("{name}=; Path={PMA_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
         })
         .collect()
 }
@@ -360,7 +358,11 @@ mod tests {
         )));
         assert!(!aligned.contains("999999"));
         let cleared = clear_phpmyadmin_cookie_headers(false);
-        assert!(cleared.iter().any(|c| c.starts_with("phpMyAdmin=") && c.contains("Max-Age=0")));
+        assert!(
+            cleared
+                .iter()
+                .any(|c| c.starts_with("phpMyAdmin=") && c.contains("Max-Age=0"))
+        );
         assert!(cleared.iter().any(|c| c.starts_with("CPNPmaSignon=")));
     }
 
