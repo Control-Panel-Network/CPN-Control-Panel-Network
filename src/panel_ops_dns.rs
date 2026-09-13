@@ -13,7 +13,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 pub use crate::panel_ops_dns_ns::{
     NsHost, add_ns_host, delete_ns_host, load_default_nameservers, load_nameservers, load_ns_hosts,
-    save_default_nameservers, validate_hostname, validate_ipv4, validate_ipv6,
+    save_default_nameservers, save_ns_hosts, validate_hostname, validate_ipv4, validate_ipv6,
 };
 pub use crate::panel_ops_dns_zonefile::{ALLOWED_TYPES, DnsRecord};
 
