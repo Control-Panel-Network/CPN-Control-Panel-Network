@@ -47,8 +47,8 @@ fn load_or_create_control_password() -> Result<String, String> {
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create phpmyadmin data dir: {e}"))?;
     let path = secret_path();
     if path.is_file() {
-        let raw = fs::read_to_string(&path)
-            .map_err(|e| format!("Could not read control secret: {e}"))?;
+        let raw =
+            fs::read_to_string(&path).map_err(|e| format!("Could not read control secret: {e}"))?;
         let pass = raw.trim().to_string();
         if !pass.is_empty() {
             return Ok(pass);
