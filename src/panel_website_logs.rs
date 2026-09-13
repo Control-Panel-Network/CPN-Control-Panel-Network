@@ -308,7 +308,7 @@ pub fn query_site_log_page(
         lines.retain(|l| l.to_ascii_lowercase().contains(&search_lc));
     }
     let total_lines = lines.len();
-    let total_pages = ((total_lines.max(1) + per_page - 1) / per_page).max(1);
+    let total_pages = total_lines.max(1).div_ceil(per_page).max(1);
     let page = page.min(total_pages);
     let start = (page - 1) * per_page;
     let page_lines: Vec<String> = lines.into_iter().skip(start).take(per_page).collect();
