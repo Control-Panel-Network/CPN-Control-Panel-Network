@@ -12,6 +12,11 @@ use crate::http_helpers::{
     panel_login_url_for, smtp_status_public, token_matches,
 };
 use crate::installer::AppState;
+use crate::login_next::{
+    clear_login_return_cookie_header, first_safe_next, login_location, login_return_cookie_header,
+    mfa_location, post_login_location, read_login_return_cookie, referer_return_path,
+    request_return_path,
+};
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
@@ -116,8 +121,33 @@ fn maybe_upgrade_password_hash(
     let _ = write_account_file(path, boot);
 }
 
+fn login_success_response(http: &HttpRequest, token: &str, next: Option<&str>) -> HttpResponse {
+    let secure = request_secure(http);
+    let location = post_login_location(next);
+    HttpResponse::SeeOther()
+        .append_header(("Location", location))
+        .append_header(("Set-Cookie", session_cookie_header(token, secure)))
+        .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
+        .append_header(("Set-Cookie", clear_login_return_cookie_header(secure)))
+        .finish()
+}
+
+fn resolve_next_from_request(
+    http: &HttpRequest,
+    form_next: Option<&str>,
+    query_next: Option<&str>,
+) -> Option<String> {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let from_cookie = read_login_return_cookie(cookie);
+    first_safe_next(&[form_next, query_next, from_cookie.as_deref()])
+}
+
 #[actix_web::route("/login", method = "GET", method = "HEAD")]
 pub async fn login_page(
+    http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<OptionalTokenQuery>,
 ) -> HttpResponse {
@@ -135,9 +165,18 @@ pub async fn login_page(
             .body(installer_token_required_html());
     }
     let payload = enrich_status(status, &state.token);
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(panel_login_html(&payload, None))
+    let next = first_safe_next(&[query.next.as_deref()]);
+    let secure = request_secure(&http);
+    let mut builder = HttpResponse::Ok();
+    builder.content_type("text/html; charset=utf-8");
+    if let Some(ref path) = next
+        && let Some(cookie) = login_return_cookie_header(path, secure)
+    {
+        builder.append_header(("Set-Cookie", cookie));
+    } else if next.is_none() {
+        builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
+    }
+    builder.body(panel_login_html(&payload, None, next.as_deref()))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -148,6 +187,8 @@ struct LoginForm {
     password: String,
     #[serde(default)]
     remember_me: String,
+    #[serde(default)]
+    next: String,
 }
 
 #[post("/login")]
@@ -176,6 +217,7 @@ pub async fn login_submit(
     let username = form.username.trim();
     let password = form.password.as_str();
     let _remember_me = form.remember_me.trim() == "1";
+    let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
 
     let authed = if username.is_empty() || password.is_empty() {
         None
@@ -199,6 +241,7 @@ pub async fn login_submit(
             .body(panel_login_html(
                 &payload,
                 Some(login_error_message(locale)),
+                next.as_deref(),
             ));
     };
 
@@ -207,29 +250,36 @@ pub async fn login_submit(
 
     if totp_enabled_for(&session_user) {
         let pending = create_mfa_pending_token(&session_user, &secret);
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/login/2fa"))
-            .append_header(("Set-Cookie", mfa_pending_cookie_header(&pending, secure)))
-            .append_header(("Set-Cookie", clear_session_cookie_header(secure)))
-            .finish();
+        let mut builder = HttpResponse::SeeOther();
+        builder.append_header(("Location", mfa_location(next.as_deref())));
+        builder.append_header(("Set-Cookie", mfa_pending_cookie_header(&pending, secure)));
+        builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
+        if let Some(ref path) = next
+            && let Some(cookie) = login_return_cookie_header(path, secure)
+        {
+            builder.append_header(("Set-Cookie", cookie));
+        }
+        return builder.finish();
     }
 
     let token = create_session_token(&session_user, &secret);
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/dashboard"))
-        .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
-        .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
-        .finish()
+    login_success_response(&http, &token, next.as_deref())
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct MfaForm {
     #[serde(default)]
     code: String,
+    #[serde(default)]
+    next: String,
 }
 
 #[get("/login/2fa")]
-pub async fn login_mfa_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn login_mfa_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let status = state
         .status
         .read()
@@ -244,14 +294,15 @@ pub async fn login_mfa_page(http: HttpRequest, state: web::Data<Arc<AppState>>) 
     let pending_ok = read_mfa_pending_cookie(cookie)
         .and_then(|token| verify_mfa_pending_token(&token, &secret))
         .is_some();
+    let next = first_safe_next(&[query.get("next").map(String::as_str)]);
     if !pending_ok {
         return HttpResponse::SeeOther()
-            .append_header(("Location", "/login"))
+            .append_header(("Location", login_location(next.as_deref())))
             .finish();
     }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(panel_mfa_html(&payload, None))
+        .body(panel_mfa_html(&payload, None, next.as_deref()))
 }
 
 #[post("/login/2fa")]
@@ -271,33 +322,30 @@ pub async fn login_mfa_submit(
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
     let secret = session_secret(Some(&state.token));
-    let secure = request_secure(&http);
+    let next = resolve_next_from_request(&http, Some(form.next.as_str()), None);
     let Some(username) =
         read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret))
     else {
         return HttpResponse::SeeOther()
-            .append_header(("Location", "/login"))
+            .append_header(("Location", login_location(next.as_deref())))
             .finish();
     };
 
     match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
         Ok(true) => {
             let token = create_session_token(&username, &secret);
-            HttpResponse::SeeOther()
-                .append_header(("Location", "/dashboard"))
-                .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
-                .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
-                .finish()
+            login_success_response(&http, &token, next.as_deref())
         }
         Ok(false) => HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body(panel_mfa_html(
                 &payload,
                 Some("Invalid authenticator or backup code."),
+                next.as_deref(),
             )),
         Err(error) => HttpResponse::TooManyRequests()
             .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(&payload, Some(&error))),
+            .body(panel_mfa_html(&payload, Some(&error), next.as_deref())),
     }
 }
 
@@ -317,9 +365,7 @@ fn panel_html_response(
             .content_type("text/html; charset=utf-8")
             .body(render("preview"));
     }
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
+    crate::login_next::login_redirect(http)
 }
 
 #[actix_web::route("/dashboard", method = "GET", method = "HEAD")]
@@ -341,10 +387,30 @@ pub async fn panel_alias() -> HttpResponse {
 
 fn logout_response(http: &HttpRequest) -> HttpResponse {
     let secure = request_secure(http);
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .append_header(("Set-Cookie", clear_session_cookie_header(secure)))
-        .finish()
+    let query_map = web::Query::<std::collections::HashMap<String, String>>::from_query(
+        http.uri().query().unwrap_or(""),
+    )
+    .ok();
+    let query_next = query_map
+        .as_ref()
+        .and_then(|m| m.get("next").map(String::as_str));
+    let next = first_safe_next(&[
+        query_next,
+        referer_return_path(http).as_deref(),
+        request_return_path(http).as_deref(),
+    ]);
+    let mut builder = HttpResponse::SeeOther();
+    builder.append_header(("Location", login_location(next.as_deref())));
+    builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
+    builder.append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)));
+    if let Some(ref path) = next
+        && let Some(cookie) = login_return_cookie_header(path, secure)
+    {
+        builder.append_header(("Set-Cookie", cookie));
+    } else if next.is_none() {
+        builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
+    }
+    builder.finish()
 }
 
 #[get("/logout")]

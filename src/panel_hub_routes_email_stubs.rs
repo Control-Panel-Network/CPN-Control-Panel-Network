@@ -12,7 +12,7 @@ macro_rules! email_scaffold {
         #[get($path)]
         pub async fn $name(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
             let Some(user) = require_panel_user(&state, &http) else {
-                return login_redirect();
+                return login_redirect(&http);
             };
             html_ok(panel_shell(
                 &user,

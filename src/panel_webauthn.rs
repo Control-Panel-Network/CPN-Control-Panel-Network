@@ -434,7 +434,8 @@ async function cpnLoginPasskey(){
     if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
     const finish=await cpnJson('/login/passkey/finish',{
       ceremony_id:start.ceremony_id,
-      credential:cpnCredToJson(cred)
+      credential:cpnCredToJson(cred),
+      next:(document.body&&document.body.getAttribute('data-login-next'))||new URLSearchParams(location.search).get('next')||''
     });
     location.href=finish.redirect||'/dashboard';
   }catch(err){

@@ -73,6 +73,8 @@ pub struct PasskeyLoginFinishBody {
     #[serde(default)]
     ceremony_id: String,
     credential: PublicKeyCredential,
+    #[serde(default)]
+    next: Option<String>,
 }
 
 #[post("/account/users/profile/passkey/register/start")]
@@ -141,7 +143,7 @@ pub async fn passkey_delete_post(
     form: web::Form<PasskeyDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match delete_passkey(&user, form.id.trim()) {
         Ok(()) => redirect_notice("/account/users/modify", Some("Passkey removed"), None),
@@ -200,12 +202,25 @@ pub async fn passkey_login_finish(
             let secret = session_secret(Some(&state.token));
             let token = create_session_token(&session_user, &secret);
             let secure = https;
+            let cookie = http
+                .headers()
+                .get(actix_web::http::header::COOKIE)
+                .and_then(|value| value.to_str().ok());
+            let next = crate::login_next::first_safe_next(&[
+                body.next.as_deref(),
+                crate::login_next::read_login_return_cookie(cookie).as_deref(),
+            ]);
+            let redirect = crate::login_next::post_login_location(next.as_deref());
             HttpResponse::Ok()
                 .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
                 .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
+                .append_header((
+                    "Set-Cookie",
+                    crate::login_next::clear_login_return_cookie_header(secure),
+                ))
                 .json(serde_json::json!({
                     "ok": true,
-                    "redirect": "/dashboard",
+                    "redirect": redirect,
                     "username": session_user,
                 }))
         }

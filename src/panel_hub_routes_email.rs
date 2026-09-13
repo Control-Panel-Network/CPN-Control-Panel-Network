@@ -25,7 +25,7 @@ pub async fn email_accounts_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let status = state
         .status
@@ -52,7 +52,7 @@ pub async fn email_create_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -69,7 +69,7 @@ pub async fn email_forwarding_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -97,7 +97,7 @@ pub async fn email_forwarding_save(
     form: web::Form<ForwardForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match add_forward(&form.from, &form.to) {
         Ok(msg) => redirect_notice("/email/forwarding", Some(&msg), None),
@@ -112,7 +112,7 @@ pub async fn email_catchall_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -140,7 +140,7 @@ pub async fn email_catchall_save(
     form: web::Form<CatchAllForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match add_catchall(&form.domain, &form.target) {
         Ok(msg) => redirect_notice("/email/catchall", Some(&msg), None),
@@ -151,7 +151,7 @@ pub async fn email_catchall_save(
 #[get("/email/dkim")]
 pub async fn email_dkim_route(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -164,7 +164,7 @@ pub async fn email_dkim_route(http: HttpRequest, state: web::Data<Arc<AppState>>
 #[post("/email/dkim/ensure")]
 pub async fn email_dkim_ensure(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match ensure_dkim() {
         Ok(msg) => redirect_notice("/email/dkim", Some(&msg), None),
@@ -179,7 +179,7 @@ pub async fn email_webmail_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -198,7 +198,7 @@ pub async fn email_webmail_app_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -225,7 +225,7 @@ pub async fn email_webmail_settings_save(
     form: web::Form<WebmailSettingsForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let embed = form.internal_embed.as_deref() == Some("1");
     match apply_webmail_settings_form(&form.auto_login_account, &form.public_path, embed) {
@@ -240,7 +240,7 @@ pub async fn email_webmail_regenerate_path(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match apply_regenerate_path() {
         Ok(msg) => redirect_notice("/email/webmail", Some(&msg), None),
@@ -254,7 +254,7 @@ pub async fn email_delivery_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -271,7 +271,7 @@ pub async fn email_mta_sts_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::mta_sts_unlocked() {
         return html_ok(panel_shell(
@@ -314,7 +314,7 @@ pub async fn email_mta_sts_save(
     form: web::Form<MtaStsForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::mta_sts_unlocked() {
         return redirect_notice(
@@ -345,7 +345,7 @@ pub async fn email_mta_sts_push_cf(
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::mta_sts_unlocked() {
         return redirect_notice(
@@ -376,7 +376,7 @@ pub async fn email_bimi_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::bimi_unlocked() {
         return html_ok(panel_shell(
@@ -417,7 +417,7 @@ pub async fn email_bimi_save(
     form: web::Form<BimiForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::bimi_unlocked() {
         return redirect_notice(
@@ -453,7 +453,7 @@ pub async fn email_bimi_push_cf(
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !crate::panel_feature_gate::bimi_unlocked() {
         return redirect_notice(

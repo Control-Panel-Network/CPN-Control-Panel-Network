@@ -2,17 +2,12 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::mail_accounts::{MailAccountInput, MailSmtpMode, create_account, set_account_enabled};
 use crate::packages::{QuotaResource, require_quota};
 use crate::smtp_settings::SmtpTlsMode;
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use std::sync::Arc;
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
-}
 
 fn urlencoding_simple(value: &str) -> String {
     let mut out = String::with_capacity(value.len() * 3);
@@ -118,7 +113,7 @@ pub async fn email_account_create(
     form: web::Form<MailAccountCreateForm>,
 ) -> HttpResponse {
     let Some(user) = panel_user_from_request(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let owner = if crate::packages::is_panel_admin(&user) && !form.domain.trim().is_empty() {
         crate::sites::load_site(&form.domain)
@@ -150,7 +145,7 @@ pub async fn email_account_enable(
     form: web::Form<MailAccountIdForm>,
 ) -> HttpResponse {
     if panel_user_from_request(&state, &http).is_none() {
-        return login_redirect();
+        return login_redirect(&http);
     }
     match set_account_enabled(&form.id, true) {
         Ok(account) => HttpResponse::SeeOther()
@@ -172,7 +167,7 @@ pub async fn email_account_disable(
     form: web::Form<MailAccountIdForm>,
 ) -> HttpResponse {
     if panel_user_from_request(&state, &http).is_none() {
-        return login_redirect();
+        return login_redirect(&http);
     }
     match set_account_enabled(&form.id, false) {
         Ok(account) => HttpResponse::SeeOther()

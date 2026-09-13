@@ -44,7 +44,7 @@ pub async fn security_ssl_issue(
     form: web::Form<SslDomainForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = ssl_back(form.r#return.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -62,7 +62,7 @@ pub async fn security_ssl_issue_all(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/security/ssl") {
         return resp;
@@ -79,7 +79,7 @@ pub async fn security_ssl_renew(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/security/ssl") {
         return resp;
@@ -97,7 +97,7 @@ pub async fn security_ssl_restore_le(
     form: web::Form<SslDomainForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = ssl_back(form.r#return.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -116,7 +116,7 @@ pub async fn security_ssl_mark_custom(
     form: web::Form<SslDomainForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = ssl_back(form.r#return.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -147,7 +147,7 @@ pub async fn security_ssl_provider(
     form: web::Form<SslProviderForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = ssl_back(form.r#return.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -195,7 +195,7 @@ pub async fn security_ssl_defaults(
     form: web::Form<SslDefaultsForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/security/ssl") {
         return resp;
@@ -228,7 +228,7 @@ pub async fn security_ssl_upload(
     form: web::Form<SslUploadForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = ssl_back(form.r#return.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {

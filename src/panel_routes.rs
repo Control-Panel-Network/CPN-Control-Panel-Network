@@ -2,6 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_pages::panel_shell;
@@ -41,12 +42,6 @@ fn html_ok(body: String) -> HttpResponse {
         .body(body)
 }
 
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
-}
-
 #[get("/websites")]
 pub async fn websites_page(
     http: HttpRequest,
@@ -54,7 +49,7 @@ pub async fn websites_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
@@ -83,7 +78,7 @@ pub async fn websites_create(
     form: web::Form<SiteCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let owner = if form.owner.trim().is_empty() {
         user.clone()
@@ -145,7 +140,7 @@ pub async fn websites_delete(
     form: web::Form<SiteDeleteForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match delete_site(&form.domain) {
         Ok(()) => HttpResponse::SeeOther()
@@ -179,7 +174,7 @@ pub async fn websites_prefs(
     form: web::Form<WebsitePrefsForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let show = matches!(form.show_document_roots.trim(), "1" | "true" | "on" | "yes");
     match set_websites_docroot_pref(show) {
@@ -212,7 +207,7 @@ pub async fn websites_manage(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let tab = query.get("tab").map(String::as_str);
@@ -241,7 +236,7 @@ pub async fn websites_suspend(
     form: web::Form<SiteDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -284,7 +279,7 @@ pub async fn websites_resume(
     form: web::Form<SiteDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -327,7 +322,7 @@ pub async fn email_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let status = state
         .status
@@ -347,7 +342,7 @@ pub async fn databases_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
@@ -366,7 +361,7 @@ pub async fn databases_install_mariadb(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match run_mariadb_install() {
         Ok(message) => HttpResponse::SeeOther()
@@ -401,7 +396,7 @@ pub async fn databases_create(
     form: web::Form<DatabaseCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let owner = if form.owner.trim().is_empty() {
         user.clone()
@@ -448,7 +443,7 @@ pub async fn databases_ftp_create(
     form: web::Form<FtpCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let owner = if form.owner.trim().is_empty() {
         user.clone()
@@ -488,7 +483,7 @@ pub async fn plugins_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let view = if query.contains_key("view-store")
         || query.get("view").map(String::as_str) == Some("store")
@@ -587,7 +582,7 @@ pub async fn plugins_install(
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Install) {
         return HttpResponse::SeeOther()
@@ -625,7 +620,7 @@ pub async fn plugins_uninstall(
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Uninstall) {
         return HttpResponse::SeeOther()
@@ -663,7 +658,7 @@ pub async fn plugins_enable(
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -701,7 +696,7 @@ pub async fn plugins_disable(
     form: web::Form<PluginIdForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
         return HttpResponse::SeeOther()
@@ -739,7 +734,7 @@ pub async fn plugins_settings_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let id = query.get("id").map(String::as_str).unwrap_or("");
@@ -771,7 +766,7 @@ pub async fn plugins_settings_save(
     form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = form.get("domain").map(String::as_str).unwrap_or("");
     let id = form.get("id").map(String::as_str).unwrap_or("");
@@ -845,7 +840,7 @@ pub async fn plugins_dashboard_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let id = query.get("id").map(String::as_str).unwrap_or("");

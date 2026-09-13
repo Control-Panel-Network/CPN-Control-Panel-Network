@@ -2,6 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::packages::{
     PackageInput, assign_package, create_package, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package,
@@ -19,12 +20,6 @@ fn html_ok(body: String) -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(body)
-}
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
 }
 
 fn urlencoding_simple(value: &str) -> String {
@@ -137,7 +132,7 @@ pub async fn packages_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let _ = ensure_default_package();
     let notice = query.get("notice").map(String::as_str);
@@ -157,7 +152,7 @@ pub async fn packages_new_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -181,7 +176,7 @@ pub async fn packages_edit_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -213,7 +208,7 @@ pub async fn packages_create(
     form: web::Form<PackageForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -243,7 +238,7 @@ pub async fn packages_update(
     form: web::Form<PackageForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -280,7 +275,7 @@ pub async fn packages_delete(
     form: web::Form<PackageIdForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -304,7 +299,7 @@ pub async fn packages_assign(
     form: web::Form<PackageAssignForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()

@@ -219,5 +219,9 @@ pub async fn reset_password_submit(
         .append_header(("Location", "/dashboard"))
         .append_header(("Set-Cookie", session_cookie_header(&session, secure)))
         .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
+        .append_header((
+            "Set-Cookie",
+            crate::login_next::clear_login_return_cookie_header(secure),
+        ))
         .finish()
 }

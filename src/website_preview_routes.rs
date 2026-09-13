@@ -2,6 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::site_acl::{SitePerm, require_manage_site};
 use crate::website_preview::{
     guess_content_type, preview_content_url, preview_mode_html, preview_mode_url, public_site_url,
@@ -10,12 +11,6 @@ use crate::website_preview::{
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::path::Path;
 use std::sync::Arc;
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
-}
 
 fn urlencoding_simple(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
@@ -38,7 +33,7 @@ pub async fn websites_preview_redirect(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = panel_user_from_request(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     match require_manage_site(&user, domain, SitePerm::Enable) {
@@ -70,7 +65,7 @@ pub async fn websites_pretty_manage(
     path: web::Path<String>,
 ) -> HttpResponse {
     let Some(_user) = panel_user_from_request(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = path.into_inner();
     // Avoid capturing reserved subpaths.
@@ -95,7 +90,7 @@ pub async fn preview_mode_page(
     path: web::Path<String>,
 ) -> HttpResponse {
     let Some(user) = panel_user_from_request(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = path.into_inner();
     let site = match require_manage_site(&user, &domain, SitePerm::Enable) {
@@ -137,7 +132,7 @@ pub async fn preview_content(
     path: web::Path<(String, String)>,
 ) -> HttpResponse {
     let Some(user) = panel_user_from_request(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let (domain, tail) = path.into_inner();
     let site = match require_manage_site(&user, &domain, SitePerm::Enable) {

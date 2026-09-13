@@ -2,6 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::login_next::login_redirect;
 use crate::package_bulk::{
     PackageBulkPatch, bulk_delete_packages, bulk_update_packages, duplicate_package,
 };
@@ -11,12 +12,6 @@ use std::sync::Arc;
 
 fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
-}
-
-fn login_redirect() -> HttpResponse {
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
-        .finish()
 }
 
 fn urlencoding_simple(value: &str) -> String {
@@ -131,7 +126,7 @@ pub async fn packages_duplicate(
     form: web::Form<PackageDuplicateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()
@@ -158,7 +153,7 @@ pub async fn packages_bulk(
     form: web::Form<PackageBulkForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return HttpResponse::SeeOther()

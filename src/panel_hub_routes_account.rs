@@ -84,7 +84,7 @@ pub struct AclDeleteForm {
 #[get("/account/users")]
 pub async fn users_plans_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -101,7 +101,7 @@ pub async fn users_list_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -122,7 +122,7 @@ pub async fn users_create_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
@@ -145,7 +145,7 @@ pub async fn users_create_post(
     form: web::Form<UserCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
@@ -187,7 +187,7 @@ pub async fn users_password_post(
     form: web::Form<UserModifyForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
@@ -219,7 +219,7 @@ pub async fn users_delete_post(
     form: web::Form<UserDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
@@ -243,7 +243,7 @@ pub async fn users_reseller_route(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -260,7 +260,7 @@ pub async fn api_access_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let admin = is_panel_admin(&user);
     let tokens = list_tokens(&user, admin);
@@ -292,7 +292,7 @@ pub async fn api_access_create_post(
     form: web::Form<ApiTokenCreateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match issue_token(&user, &form.label, &form.scopes) {
         Ok((_public, secret)) => {
@@ -321,7 +321,7 @@ pub async fn api_access_revoke_post(
     form: web::Form<ApiTokenRevokeForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let admin = is_panel_admin(&user);
     match revoke_token(&form.token_id, &user, admin) {
@@ -337,7 +337,7 @@ pub async fn acl_create_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users", None, Some(&error));
@@ -360,7 +360,7 @@ pub async fn acl_create_post(
     form: web::Form<AclGrantForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users", None, Some(&error));
@@ -386,7 +386,7 @@ pub async fn acl_modify_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users", None, Some(&error));
@@ -409,7 +409,7 @@ pub async fn acl_delete_post(
     form: web::Form<AclDeleteForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users", None, Some(&error));

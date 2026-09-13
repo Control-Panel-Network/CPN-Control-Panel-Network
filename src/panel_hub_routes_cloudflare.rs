@@ -58,7 +58,7 @@ pub async fn cloudflare_dns_get(
     query: web::Query<CfQuery>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let tab = query.tab.as_deref().unwrap_or("manage");
     let domain = query.domain.clone().unwrap_or_default();
@@ -108,7 +108,7 @@ pub async fn cloudflare_settings_post(
     form: web::Form<CfSettingsForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
@@ -126,7 +126,7 @@ pub async fn cloudflare_test_post(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
@@ -154,7 +154,7 @@ pub async fn cloudflare_sync_post(
     form: web::Form<CfDomainForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = manage_back(&form.domain, form.filter_type.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -193,7 +193,7 @@ pub async fn cloudflare_add_post(
     form: web::Form<CfAddForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = manage_back(&form.domain, form.filter_type.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -233,7 +233,7 @@ pub async fn cloudflare_delete_post(
     form: web::Form<CfRecordForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = manage_back(&form.domain, form.filter_type.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -266,7 +266,7 @@ pub async fn cloudflare_update_post(
     form: web::Form<CfUpdateForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = manage_back(&form.domain, form.filter_type.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -307,7 +307,7 @@ pub async fn cloudflare_proxy_post(
     form: web::Form<CfProxyForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let back = manage_back(&form.domain, form.filter_type.as_deref());
     if let Some(resp) = admin_gate(&user, &back) {
@@ -333,7 +333,7 @@ pub async fn cloudflare_oauth_client_post(
     form: web::Form<CfOauthClientForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
@@ -350,7 +350,7 @@ pub async fn cloudflare_oauth_connect_post(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
@@ -378,7 +378,7 @@ pub async fn cloudflare_oauth_callback_get(
     query: web::Query<CfOauthCallbackQuery>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
@@ -402,7 +402,7 @@ pub async fn cloudflare_oauth_disconnect_post(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if let Some(resp) = admin_gate(&user, "/dns/cloudflare?tab=api") {
         return resp;
