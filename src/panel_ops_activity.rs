@@ -86,7 +86,10 @@ fn split_timestamp(line: &str) -> (String, String) {
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() >= 4
         && parts[0].len() == 3
-        && parts[0].chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && parts[0]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
         && parts[1].chars().all(|c| c.is_ascii_digit())
         && parts[2].contains(':')
     {

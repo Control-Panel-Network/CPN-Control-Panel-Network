@@ -135,12 +135,7 @@ pub fn cpu_activity() -> CpuActivity {
     });
     let loadavg = fs::read_to_string("/proc/loadavg")
         .ok()
-        .map(|s| {
-            s.split_whitespace()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
+        .map(|s| s.split_whitespace().take(3).collect::<Vec<_>>().join(" "))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Unavailable".into());
     CpuActivity {

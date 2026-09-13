@@ -2,9 +2,11 @@
 
 use crate::packages::is_panel_admin;
 use crate::panel_ops_activity::{
-    recent_ssh_logins, recent_ssh_logs, ssh_security_analysis, ActivityLogRow, SshSecurityAnalysis,
+    ActivityLogRow, SshSecurityAnalysis, recent_ssh_logins, recent_ssh_logs, ssh_security_analysis,
 };
-use crate::panel_ops_activity_host::{cpu_activity, disk_io_snapshot, format_bytes, network_traffic};
+use crate::panel_ops_activity_host::{
+    cpu_activity, disk_io_snapshot, format_bytes, network_traffic,
+};
 use crate::panel_ops_process::snapshot_top_processes;
 
 fn html_escape(value: &str) -> String {
@@ -213,9 +215,7 @@ fn ssh_logs_panel(analysis: &SshSecurityAnalysis) -> String {
 
 fn top_process_panel() -> String {
     let body = match snapshot_top_processes(12) {
-        Ok(rows) if rows.is_empty() => {
-            "<p class=\"empty-state\">No processes returned.</p>".into()
-        }
+        Ok(rows) if rows.is_empty() => "<p class=\"empty-state\">No processes returned.</p>".into(),
         Ok(rows) => {
             let mut t = String::from(
                 r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>User</th><th>PID</th><th>CPU%</th><th>MEM%</th><th>Command</th></tr></thead><tbody>"#,
