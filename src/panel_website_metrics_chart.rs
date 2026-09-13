@@ -41,14 +41,7 @@ fn fmt_clock(ts: u64) -> String {
 pub fn metrics_chart_svg(samples: &[MetricSample], kind: &str, stroke: &str) -> String {
     let values: Vec<f32> = samples
         .iter()
-        .map(|s| {
-            if kind == "mem" {
-                s.mem
-            } else {
-                s.cpu
-            }
-            .clamp(0.0, 100.0)
-        })
+        .map(|s| if kind == "mem" { s.mem } else { s.cpu }.clamp(0.0, 100.0))
         .collect();
     let width = 360.0f32;
     let height = 120.0f32;
