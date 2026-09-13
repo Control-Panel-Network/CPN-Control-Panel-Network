@@ -83,7 +83,10 @@ pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) 
 }
 
 pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let body = r#"
+    let policy = crate::account::default_password_policy();
+    let hint = crate::account::password_policy_hint(&policy);
+    let body = format!(
+        r#"
       <form method="post" action="/account/users/create" class="stack-form" style="max-width:520px;display:grid;gap:12px;">
         <label>Username
           <input name="username" type="text" required autocomplete="username" maxlength="128">
@@ -92,7 +95,7 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
           <input name="recovery_email" type="email" required autocomplete="email" maxlength="254">
         </label>
         <label>Password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" maxlength="256">
+          <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
         </label>
         <label style="display:flex;align-items:center;gap:8px;">
           <input name="generate" type="checkbox" value="1">
@@ -100,7 +103,11 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
         </label>
         <button type="submit" class="btn-primary">Create user</button>
       </form>
-      <p class="muted" style="margin-top:12px;">Generated passwords are shown once on the success page and never stored in the URL.</p>"#;
+      <p class="muted" style="margin-top:12px;">Password policy: {hint}</p>
+      <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>"#,
+        min_len = policy.min_length,
+        hint = html_escape(&hint),
+    );
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -109,7 +116,7 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
         ],
         "Create User",
         "Add a panel account.",
-        body,
+        &body,
         notice,
         error,
     )
