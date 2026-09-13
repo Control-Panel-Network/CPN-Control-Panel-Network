@@ -111,7 +111,7 @@ pub fn stream_for_branch(guest: &GuestOs, branch: &str) -> Option<String> {
     if !guest.uses_dnf() {
         return None;
     }
-    // Remi module streams on EL8–10; AppStream php:8.2 is a separate last-resort path.
+    // Remi module streams on EL8/EL9/EL10; AppStream php:8.2 is a separate last-resort path.
     Some(format!("php:remi-{branch}"))
 }
 
