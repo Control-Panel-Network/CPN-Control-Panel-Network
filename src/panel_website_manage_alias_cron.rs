@@ -20,7 +20,9 @@ pub fn tab_alias(site: &SiteRecord, username: &str) -> String {
         r#"<p class="manage-muted">Cloudflare API is not configured on this host (<code>/var/lib/cpn/cloudflare.json</code>). Alias is still stored and applied to the web stack.</p>"#
     };
 
-    let mut rows = String::from(r#"<table class="manage-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Hostname</th><th></th></tr></thead><tbody>"#);
+    let mut rows = String::from(
+        r#"<table class="manage-table" style="width:100%;border-collapse:collapse;margin-top:12px;"><thead><tr><th align="left">Hostname</th><th></th></tr></thead><tbody>"#,
+    );
     if site.aliases.is_empty() {
         rows.push_str(
             r#"<tr><td colspan="2" class="manage-muted">No aliases yet. Add a hostname that should serve this site.</td></tr>"#,

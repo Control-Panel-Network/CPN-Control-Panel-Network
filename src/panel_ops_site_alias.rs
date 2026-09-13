@@ -238,7 +238,9 @@ fn ensure_apache_aliases(site: &SiteRecord) -> Result<(), String> {
         let body = lines.join("\n") + "\n";
         fs::write(&path, body).map_err(|e| format!("Could not update {}: {e}", path.display()))?;
         let _ = Command::new("systemctl").args(["reload", "httpd"]).status();
-        let _ = Command::new("systemctl").args(["reload", "apache2"]).status();
+        let _ = Command::new("systemctl")
+            .args(["reload", "apache2"])
+            .status();
         return Ok(());
     }
     Ok(())
@@ -344,11 +346,7 @@ pub fn add_site_alias(
         ));
     }
     for other in crate::sites::list_sites().unwrap_or_default() {
-        if other
-            .aliases
-            .iter()
-            .any(|a| a.eq_ignore_ascii_case(&alias))
-        {
+        if other.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
             return Err(format!(
                 "`{alias}` is already an alias on `{}`",
                 other.domain
@@ -376,7 +374,10 @@ pub fn add_site_alias(
 }
 
 /// Remove a hostname alias and re-apply vhost maps.
-pub fn remove_site_alias(domain_raw: &str, alias_raw: &str) -> Result<(SiteRecord, String), String> {
+pub fn remove_site_alias(
+    domain_raw: &str,
+    alias_raw: &str,
+) -> Result<(SiteRecord, String), String> {
     let domain = normalize_domain(domain_raw)?;
     let alias = normalize_domain(alias_raw)?;
     let site = load_site(&domain)?;
@@ -397,10 +398,7 @@ pub fn remove_site_alias(domain_raw: &str, alias_raw: &str) -> Result<(SiteRecor
         },
     )?;
     let vhost_note = apply_vhost(&updated)?;
-    Ok((
-        updated,
-        format!("Removed alias `{alias}`. {vhost_note}"),
-    ))
+    Ok((updated, format!("Removed alias `{alias}`. {vhost_note}")))
 }
 
 #[cfg(test)]

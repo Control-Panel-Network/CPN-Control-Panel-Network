@@ -29,7 +29,12 @@ fn same_origin_ok(http: &HttpRequest) -> bool {
     true
 }
 
-fn redirect_manage(domain: &str, tab: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
+fn redirect_manage(
+    domain: &str,
+    tab: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> HttpResponse {
     let mut loc = format!(
         "/websites/manage?domain={}&tab={}",
         urlencoding_simple(domain),
@@ -196,10 +201,7 @@ pub async fn websites_cron_delete(
     if let Err(err) = require_manage_site(&user, domain, SitePerm::Enable) {
         return redirect_manage(domain, "cron", None, Some(&err));
     }
-    match delete_site_cron_job(
-        domain,
-        form.get("job_id").map(String::as_str).unwrap_or(""),
-    ) {
+    match delete_site_cron_job(domain, form.get("job_id").map(String::as_str).unwrap_or("")) {
         Ok((site, msg)) => redirect_manage(&site.domain, "cron", Some(&msg), None),
         Err(err) => redirect_manage(domain, "cron", None, Some(&err)),
     }

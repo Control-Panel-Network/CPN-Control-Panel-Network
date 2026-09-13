@@ -111,13 +111,7 @@ fn cron_store_path(domain: &str) -> PathBuf {
 fn cron_d_path(domain: &str) -> PathBuf {
     let safe: String = domain
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
     PathBuf::from(format!("/etc/cron.d/cpn-site-{safe}"))
 }
@@ -170,7 +164,11 @@ fn valid_cron_field(raw: &str, max: u32) -> bool {
             return false;
         }
         if let Some(step) = part.strip_prefix("*/") {
-            return step.parse::<u32>().ok().filter(|n| *n >= 1 && *n <= max).is_some()
+            return step
+                .parse::<u32>()
+                .ok()
+                .filter(|n| *n >= 1 && *n <= max)
+                .is_some()
                 && part.split(',').count() == 1;
         }
         if let Some((a, b)) = part.split_once('-') {
@@ -195,7 +193,13 @@ fn valid_cron_field(raw: &str, max: u32) -> bool {
     true
 }
 
-fn validate_schedule(minute: &str, hour: &str, day: &str, month: &str, weekday: &str) -> Result<(), String> {
+fn validate_schedule(
+    minute: &str,
+    hour: &str,
+    day: &str,
+    month: &str,
+    weekday: &str,
+) -> Result<(), String> {
     if !valid_cron_field(minute, 59) {
         return Err("Invalid minute field".into());
     }
@@ -427,7 +431,10 @@ pub fn update_site_cron_job(
     Ok((site, format!("Cron job updated. {sync}")))
 }
 
-pub fn delete_site_cron_job(domain_raw: &str, job_id: &str) -> Result<(SiteRecord, String), String> {
+pub fn delete_site_cron_job(
+    domain_raw: &str,
+    job_id: &str,
+) -> Result<(SiteRecord, String), String> {
     let domain = normalize_domain(domain_raw)?;
     let site = load_site(&domain)?;
     let mut file = load_file(&domain);
