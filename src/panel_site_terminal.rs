@@ -238,8 +238,9 @@ pub async fn websites_terminal_ws(
                             let _ = session.pong(&p).await;
                         }
                         Some(Ok(actix_ws::Message::Close(reason))) => {
+                            let _ = child.kill().await;
                             let _ = session.close(reason).await;
-                            break;
+                            return;
                         }
                         None | Some(Err(_)) => break,
                         _ => {}
