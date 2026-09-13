@@ -307,19 +307,18 @@ pub fn ensure_protected_seeds(
     }
 
     if store.first_admin_ip.is_none() {
-        if let Some(lip) = login_ip.map(str::trim).filter(|s| !s.is_empty()) {
-            if let Ok(norm) = validate_ip_or_cidr(lip) {
-                // Skip obvious loopback for first-admin seed when a better IP may come later,
-                // but still trust it so local lab operators are never blocked.
-                store.first_admin_ip = Some(norm.clone());
-                upsert_trusted(
-                    &mut store,
-                    &norm,
-                    "First admin IP (protected)",
-                    TrustedSource::FirstAdmin,
-                );
-                changed = true;
-            }
+        if let Some(lip) = login_ip.map(str::trim).filter(|s| !s.is_empty())
+            && let Ok(norm) = validate_ip_or_cidr(lip)
+        {
+            // Still trust loopback so local lab operators are never blocked.
+            store.first_admin_ip = Some(norm.clone());
+            upsert_trusted(
+                &mut store,
+                &norm,
+                "First admin IP (protected)",
+                TrustedSource::FirstAdmin,
+            );
+            changed = true;
         }
     } else if let Some(ref fip) = store.first_admin_ip.clone() {
         let before = store.trusted.len();
@@ -379,15 +378,15 @@ pub fn is_protected_ip(store: &FirewallManagerStore, ip: &str) -> bool {
     let Ok(norm) = validate_ip_or_cidr(ip) else {
         return false;
     };
-    if let Some(ref sip) = store.server_ip {
-        if ip_matches_entry(&norm, sip) || ip_matches_entry(sip, &norm) {
-            return true;
-        }
+    if let Some(ref sip) = store.server_ip
+        && (ip_matches_entry(&norm, sip) || ip_matches_entry(sip, &norm))
+    {
+        return true;
     }
-    if let Some(ref fip) = store.first_admin_ip {
-        if ip_matches_entry(&norm, fip) || ip_matches_entry(fip, &norm) {
-            return true;
-        }
+    if let Some(ref fip) = store.first_admin_ip
+        && (ip_matches_entry(&norm, fip) || ip_matches_entry(fip, &norm))
+    {
+        return true;
     }
     store
         .trusted
@@ -532,11 +531,11 @@ pub fn purge_expired_bans(store: &mut FirewallManagerStore) -> Vec<String> {
     let now = now_unix();
     let mut removed = Vec::new();
     store.banned.retain(|b| {
-        if let Some(exp) = b.expires_at {
-            if exp <= now {
-                removed.push(b.ip.clone());
-                return false;
-            }
+        if let Some(exp) = b.expires_at
+            && exp <= now
+        {
+            removed.push(b.ip.clone());
+            return false;
         }
         true
     });
