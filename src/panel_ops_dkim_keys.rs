@@ -179,10 +179,10 @@ pub fn read_dkim_txt_value(domain: &str) -> Result<String, String> {
     }
     let txt_path = dns_txt_path(&domain)?;
     let raw = fs::read_to_string(txt_path).map_err(|e| format!("DKIM TXT missing: {e}"))?;
-    if let Some(start) = raw.find('"') {
-        if let Some(end) = raw[start + 1..].find('"') {
-            return Ok(raw[start + 1..start + 1 + end].to_string());
-        }
+    if let Some(start) = raw.find('"')
+        && let Some(end) = raw[start + 1..].find('"')
+    {
+        return Ok(raw[start + 1..start + 1 + end].to_string());
     }
     Err("Could not parse DKIM TXT value".into())
 }
