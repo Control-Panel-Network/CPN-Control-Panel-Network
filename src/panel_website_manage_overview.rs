@@ -12,11 +12,13 @@ use crate::panel_website_metrics_ring::{
 };
 use crate::panel_website_resources::{approx_dir_bytes, format_bytes};
 use crate::service_detect::detect_web_server_label;
+use crate::site_preview_list_ui::manage_overview_preview;
 use crate::sites::{SiteRecord, is_legacy_docroot, site_home_from_record};
 use std::path::Path;
 
 pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let minimalist = load_user_minimalist_mode(username);
+    let preview = manage_overview_preview(site);
     let disk_bytes = approx_dir_bytes(Path::new(&site.docroot), 8_000);
     let disk = disk_bytes
         .map(format_bytes)
@@ -187,7 +189,8 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     );
 
     format!(
-        "{cards}{ssl}{charts}{meta}",
+        "{preview}{cards}{ssl}{charts}{meta}",
+        preview = preview,
         cards = cards,
         ssl = ssl_status_card(site),
         charts = charts,
@@ -366,6 +369,9 @@ mod tests {
             assert!(html.contains("data-metrics-poll=\"10000\""));
             assert!(html.contains("Live host load:"));
             assert!(html.contains("data-metrics-minimalist=\"0\""));
+            assert!(html.contains("Site preview"));
+            assert!(html.contains("/websites/site-preview/image"));
+            assert!(html.contains("Refresh preview"));
             assert!(!html.to_lowercase().contains("email marketing"));
             assert!(!html.to_lowercase().contains("cyberpanel"));
             assert!(!html.contains('\u{2014}'));
@@ -386,6 +392,7 @@ mod tests {
             assert!(html.contains("Refresh page to update"));
             assert!(html.contains("manage-metrics-snapshot"));
             assert!(html.contains("manage-chart-readout"));
+            assert!(html.contains("Site preview"));
             assert!(!html.contains("Live host load:"));
             assert!(!html.contains("Live host memory:"));
             assert!(!html.contains('\u{2014}'));
