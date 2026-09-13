@@ -115,8 +115,8 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
     let day = local_day_token();
     let month = local_month_token();
 
-    if let Some(path) = first_existing_log(&access)
-        && let Ok(text) = read_log_tail(&path, 2_000_000)
+    if let Some(path) = first_existing_log(site, &access)
+        && let Ok(text) = read_log_tail(site, &path, 2_000_000)
     {
         let (today, month_total, lines) =
             sum_bytes_from_access_log(&text, day.as_deref(), month.as_deref());

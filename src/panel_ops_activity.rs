@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-const MAX_LINES: usize = 80;
+const MAX_LINES: usize = 200;
 const ANALYZE_LINES: usize = 500;
 const MAX_LINE_CHARS: usize = 420;
 

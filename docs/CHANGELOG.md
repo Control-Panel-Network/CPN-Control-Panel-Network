@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Site Manage **Open Terminal**, **Manage Git**, and **Clone/Staging** (no longer greyed out): web terminal over authenticated WebSocket (`/api/websites/terminal/ws`, xterm.js UI, shell under site home via `script` PTY), Git tab with allowlisted status/pull/push/commit/init/clone (`POST /websites/git`), and file clone to a staging subdomain or custom target (`POST /websites/clone`) with site registry update. CSRF, same-origin, site ACL, and rate limits apply. Database clone is not included (files only; note in UI).
+- Site Manage **Logs** tab: real Access and Error log tails from allowlisted paths under the site home (`…/logs/access.log`, `…/logs/error.log`) plus standard OLS/LSE/nginx locations. New sites get a `logs/` directory; opening Logs (or creating a site) best-effort wires OpenLiteSpeed/LiteSpeed (and nginx when selected) vhost access/error log paths so traffic produces lines. Refresh control, last 400 lines, HTML-escaped output, mobile-friendly wrapping/scroll. Admin/owner ACL unchanged (`require_manage_site`).
+
 ### Fixed
 
+- phpMyAdmin Open auto-login **503** after host PHP default / php-fpm thrash: `ensure_fpm_socket_for_ols` no longer unconditionally restarts php-fpm (reload when healthy; `systemctl reset-failed` + start when in `start-limit-hit`). Panel `/phpmyadmin` proxy heals a missing `cpn-phpmyadmin.sock` and retries once on backend 503 so `cpn-signon.php` reaches the UI again. Open auto-login no longer runs a full OLS listener refresh on every remint (that restart loop hit start-limit when SignonURL pointed at `/databases/phpmyadmin/open`).
 - PHP Configurations unsaved-changes modal: use panel card surface (`--canvas`) so dark mode title/body stay readable; Cancel (secondary) and Abandon (danger) match pill button styles instead of unstyled borders.
 - phpMyAdmin SSO after **Set as host default** (php-fpm restart): SignonURL now remints via `/databases/phpmyadmin/open` while the CPN panel session is valid; `cpn-signon.php` redirects there instead of plain-text "Sign-on token missing or expired." Proxy Location rewrite no longer prefixes panel routes with `/phpmyadmin`. Open clears stale PMA cookies; host-default apply refreshes the sign-on bridge, TempDir ownership, and OLS FPM socket.
 
@@ -21,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Root File Manager** (classic hosting file manager): full toolbar (Upload, New File, New Folder, Delete, Copy, Move, Rename, Edit, Compress, Extract), directory tree, and file table under `/server/files`, with aliases `/filemanager` and `/server/filemanager`. Admin-only; CSRF and same-origin checks on mutations; path traversal blocked; protected system paths refuse overwrite/delete; rate-limited dangerous ops. Starts at `/` for the panel owner (documented risk).
-- Dashboard **Activity Board** under Recent Activity: admin-only tabs for Recent SSH Logins, Recent SSH Logs (with light SSH security review and hardening tips), Top Process (snapshot plus link to `/server/processes`), Traffic (`/proc/net/dev` counters), Disk IO (`/proc/diskstats`), and CPU Usage. Log lines are sanitized; mobile tab strip wraps or scrolls.
+- Dashboard **Activity Board** under Recent Activity: admin-only tabs for Recent SSH Logins, Recent SSH Logs (with light SSH security review and hardening tips), Top Process (snapshot plus link to `/server/processes`), Traffic (`/proc/net/dev` counters), Disk IO (`/proc/diskstats`), and CPU Usage. Log lines are sanitized; mobile tab strip wraps or scrolls. Table tabs include search, default **10** per page, page indicator, Prev/Next, and Go to page (CPU Usage stays KPI-only).
 - **Firewall manager** at `/security/firewall` (tabs: `?tab=rules`, `?tab=banned`, `?tab=trusted`): Start/Stop/Reload for firewalld, CPN-managed port rules with import/export, banned IPs (fail closed on trusted addresses), and SSH trusted / never-block IPs. Server IP and first admin login IP are auto-seeded and cannot be banned; panel listen port is kept open. Admin-only POSTs with CSRF + same-origin checks. Persists under `/var/lib/cpn/firewall-manager.json`.
 - Password policy hints on Security hub, Create User, and Change password (min length from policy, max 256, uppercase/number required by default, special optional, blocked-password list).
 

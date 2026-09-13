@@ -1,8 +1,10 @@
 //! Website Manage dashboard HTML for CPN Panel.
 
+use crate::panel_site_terminal::tab_terminal;
 use crate::panel_website_manage_tabs::{
     tab_apps, tab_config, tab_domains, tab_files, tab_logs, tab_overview, tab_ssl,
 };
+use crate::panel_website_manage_tools::{tab_clone, tab_git};
 use crate::panel_website_manage_ui::{
     html_escape, manage_banner, manage_styles, notice_block, quick_actions, tab_bar,
 };
@@ -19,6 +21,9 @@ pub enum ManageTab {
     Ssl,
     Files,
     Apps,
+    Terminal,
+    Git,
+    Clone,
 }
 
 impl ManageTab {
@@ -30,6 +35,9 @@ impl ManageTab {
             "ssl" => Self::Ssl,
             "files" | "file" | "docroot" => Self::Files,
             "apps" | "applications" | "plugins" | "plugin" => Self::Apps,
+            "terminal" | "term" | "shell" => Self::Terminal,
+            "git" => Self::Git,
+            "clone" | "staging" => Self::Clone,
             _ => Self::Overview,
         }
     }
@@ -43,6 +51,9 @@ impl ManageTab {
             Self::Ssl => "ssl",
             Self::Files => "files",
             Self::Apps => "plugins",
+            Self::Terminal => "terminal",
+            Self::Git => "git",
+            Self::Clone => "clone",
         }
     }
 }
@@ -56,6 +67,9 @@ fn tab_body(site: &SiteRecord, tab: ManageTab, username: &str) -> String {
         ManageTab::Ssl => tab_ssl(site),
         ManageTab::Files => tab_files(site),
         ManageTab::Apps => tab_apps(site),
+        ManageTab::Terminal => tab_terminal(site, username),
+        ManageTab::Git => tab_git(site, username),
+        ManageTab::Clone => tab_clone(site, username),
     }
 }
 
@@ -168,6 +182,20 @@ mod tests {
         assert_eq!(ManageTab::parse(Some("files")), ManageTab::Files);
         assert_eq!(ManageTab::parse(Some("apps")), ManageTab::Apps);
         assert_eq!(ManageTab::parse(Some("plugins")), ManageTab::Apps);
+        assert_eq!(ManageTab::parse(Some("git")), ManageTab::Git);
+        assert_eq!(ManageTab::parse(Some("terminal")), ManageTab::Terminal);
+        assert_eq!(ManageTab::parse(Some("staging")), ManageTab::Clone);
         assert_eq!(ManageTab::Apps.as_str(), "plugins");
+    }
+
+    #[test]
+    fn quick_actions_enable_terminal_git_clone() {
+        let html = website_manage_main(&sample(), "Admin", Some("overview"), None, None);
+        assert!(html.contains("tab=terminal"));
+        assert!(html.contains("tab=git"));
+        assert!(html.contains("tab=clone"));
+        assert!(!html.contains("Web terminal ships later"));
+        assert!(!html.contains("Git manager ships later"));
+        assert!(!html.contains("Clone/staging ships later"));
     }
 }

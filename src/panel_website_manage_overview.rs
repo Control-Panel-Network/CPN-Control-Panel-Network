@@ -369,6 +369,8 @@ mod tests {
             assert!(!html.to_lowercase().contains("cyberpanel"));
             assert!(!html.contains('\u{2014}'));
             assert!(!html.contains('\u{2013}'));
+            assert!(!html.contains("SSL material"));
+            assert!(html.contains("manage-ssl") || html.contains("No SSL"));
         });
     }
 

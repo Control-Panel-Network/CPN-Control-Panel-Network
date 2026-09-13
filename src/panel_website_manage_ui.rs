@@ -1,7 +1,8 @@
 //! Manage dashboard styles and chrome (banner, quick actions, tabs).
 
+use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl, ssl_status_badge_html};
 use crate::sites::SiteRecord;
-use crate::website_preview::{preview_mode_url, public_site_url, ssl_material_present};
+use crate::website_preview::{preview_mode_url, public_site_url};
 
 pub fn html_escape(value: &str) -> String {
     value
@@ -30,6 +31,21 @@ pub fn manage_styles() -> &'static str {
 }
 .site-manage .manage-badge.active { background:rgba(18,183,106,.18); color:#6ce9a6; }
 .site-manage .manage-badge.suspended { background:rgba(247,144,9,.18); color:#fdb022; }
+.site-manage .manage-badge.ssl-badge { gap:5px; margin-left:8px; }
+.site-manage .manage-badge.ssl-valid { background:rgba(18,183,106,.18); color:#6ce9a6; }
+.site-manage .manage-badge.ssl-expiring { background:rgba(247,144,9,.2); color:#fdb022; }
+.site-manage .manage-badge.ssl-expired,
+.site-manage .manage-badge.ssl-invalid,
+.site-manage .manage-badge.ssl-mismatch { background:rgba(240,68,56,.2); color:#fda29b; }
+.site-manage .manage-badge.ssl-none { background:rgba(152,162,179,.16); color:#98a2b3; }
+.site-manage .ssl-lock { flex-shrink:0; }
+.site-manage .manage-ssl.ssl-valid { border-color:rgba(18,183,106,.35); }
+.site-manage .manage-ssl.ssl-expiring { border-color:rgba(247,144,9,.4); }
+.site-manage .manage-ssl.ssl-expired,
+.site-manage .manage-ssl.ssl-invalid,
+.site-manage .manage-ssl.ssl-mismatch { border-color:rgba(240,68,56,.4); }
+.site-manage .manage-ssl .ssl-meta { margin:6px 0 0; color:var(--m-muted); font-size:13px; line-height:1.45; }
+.site-manage .manage-ssl .ssl-meta strong { display:inline; font-size:inherit; }
 .site-manage .manage-banner-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
 .site-manage .manage-btn {
   display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 14px;
@@ -149,11 +165,14 @@ pub fn manage_styles() -> &'static str {
 .site-manage .manage-tile span { display:block; color:var(--m-muted); font-size:12px; margin-top:2px; }
 .site-manage .manage-muted { color:var(--m-muted); font-size:13px; }
 .site-manage .manage-log-pre {
-  max-height:360px; overflow:auto; background:#0b0d12; border:1px solid var(--m-line);
+  max-height:min(60vh, 420px); overflow:auto; background:#0b0d12; border:1px solid var(--m-line);
   border-radius:12px; padding:12px; font-size:12px; line-height:1.45; white-space:pre-wrap;
+  word-break:break-word; overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;
 }
 .site-manage .manage-log-panel { margin-bottom:16px; }
 .site-manage .manage-log-panel h3 { margin:0 0 6px; font-size:16px; }
+.site-manage .manage-log-toolbar { margin:0 0 8px; }
+.site-manage .manage-log-toolbar .manage-btn { display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:999px; background:var(--m-card); border:1px solid var(--m-line); color:inherit; text-decoration:none; font-weight:700; font-size:13px; }
 .site-manage code { background:#0b0d12; padding:1px 6px; border-radius:6px; font-size:12px; }
 .site-manage .manage-actions-row { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .site-manage .btn-danger, .site-manage .btn-warn, .site-manage .btn-primary {
@@ -194,9 +213,22 @@ pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
     let preview = preview_mode_url(&site.domain).unwrap_or_else(|_| "#".into());
     let domain_q = html_escape(&site.domain);
     let design = crate::panel_theme_chrome::manage_design_controls(username);
+    let php_badge = site
+        .php_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| {
+            format!(
+                r#"<span class="manage-badge" style="background:rgba(59,130,246,.18);color:#93c5fd;">PHP {}</span>"#,
+                html_escape(v)
+            )
+        })
+        .unwrap_or_default();
+    let ssl_badge = ssl_status_badge_html(&inspect_domain_ssl(&site.domain));
     format!(
         r#"<div class="manage-banner">
-  <h1>{domain}<span class="manage-badge {badge}">{status}</span></h1>
+  <h1>{domain}<span class="manage-badge {badge}">{status}</span>{php}{ssl}</h1>
   <p>Manage your website with powerful tools and real-time monitoring.</p>
   <div class="manage-banner-actions">
     <a class="manage-btn primary" href="{preview}">Preview Website</a>
@@ -207,6 +239,8 @@ pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
         domain = html_escape(&site.domain),
         badge = badge_class,
         status = status,
+        php = php_badge,
+        ssl = ssl_badge,
         preview = html_escape(&preview),
         domain_q = domain_q,
         design = design,
@@ -222,9 +256,9 @@ pub fn quick_actions(site: &SiteRecord) -> String {
     ));
     format!(
         r#"<div class="manage-quick" aria-label="Quick actions">
-  <span class="scaffold" title="Web terminal ships later">Open Terminal</span>
-  <span class="scaffold" title="Git manager ships later">Manage Git</span>
-  <span class="scaffold" title="Clone/staging ships later">Clone/Staging</span>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=terminal" title="Web terminal in site home">Open Terminal</a>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=git" title="Git status, pull, commit, push">Manage Git</a>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=clone" title="Clone files to staging or new site">Clone/Staging</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=config" title="{ssh_hint}">SSH/SFTP Access</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=domains">Cron Jobs</a>
   <span class="scaffold" title="Stress test ships later">Stress Test</span>
@@ -245,11 +279,16 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
         ("ssl", "SSL"),
         ("files", "Files"),
         ("plugins", "Plugins"),
+        ("terminal", "Terminal"),
+        ("git", "Git"),
+        ("clone", "Clone"),
     ];
     let domain_q = html_escape(domain);
     let mut out = String::from(r#"<nav class="manage-tabs" aria-label="Website sections">"#);
     let active_norm = match active {
         "apps" | "applications" | "plugin" => "plugins",
+        "term" | "shell" => "terminal",
+        "staging" => "clone",
         other => other,
     };
     for (id, label) in tabs {
@@ -267,41 +306,85 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
 }
 
 pub fn ssl_status_card(site: &SiteRecord) -> String {
-    let has = ssl_material_present(&site.domain);
+    let insight = inspect_domain_ssl(&site.domain);
     let live = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let domain_q = html_escape(&site.domain);
     let provider = html_escape(site.ssl.provider.label());
-    if has {
+    let badge = ssl_status_badge_html(&insight);
+    let expires = insight
+        .expires_display
+        .as_deref()
+        .map(|d| format!("Expires: <strong>{}</strong>", html_escape(d)))
+        .unwrap_or_else(|| "Expires: <strong>n/a</strong>".into());
+    let issuer = if insight.issuer.is_empty() {
+        String::new()
+    } else {
         format!(
-            r#"<div class="manage-ssl">
-  <div>
-    <strong>{domain} has SSL material on this host.</strong>
-    <p>Provider: <strong>{provider}</strong>. Manage per-domain settings on the SSL tab (siblings are independent).</p>
-  </div>
-  <div class="manage-actions-row">
-    <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Renew / Manage SSL</a>
-    <a class="manage-btn" href="{live}" target="_blank" rel="noopener noreferrer">Visit live site</a>
-  </div>
-</div>"#,
-            domain = html_escape(&site.domain),
-            domain_q = domain_q,
-            live = html_escape(&live),
-            provider = provider,
+            " · Issuer: <strong>{}</strong>",
+            html_escape(&insight.issuer)
+        )
+    };
+    let sans = if insight.sans.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " · SANs: <strong>{}</strong>",
+            html_escape(
+                &insight
+                    .sans
+                    .iter()
+                    .take(4)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        )
+    };
+    let headline = match insight.kind {
+        SslValidityKind::None => format!(
+            "No SSL certificate detected for {}.",
+            html_escape(&site.domain)
+        ),
+        other => format!(
+            "{} for {}.",
+            html_escape(other.label()),
+            html_escape(&site.domain)
+        ),
+    };
+    let actions = if insight.kind == SslValidityKind::None {
+        format!(
+            r#"<a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Manage SSL</a>"#
         )
     } else {
         format!(
-            r#"<div class="manage-ssl">
-  <div>
-    <strong>No SSL certificate detected for {domain}.</strong>
-    <p>Provider: <strong>{provider}</strong>. Open the SSL tab to issue ACME, upload Custom, or set None.</p>
-  </div>
-  <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Manage SSL</a>
-</div>"#,
-            domain = html_escape(&site.domain),
+            r#"<div class="manage-actions-row">
+    <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Renew / Manage SSL</a>
+    <a class="manage-btn" href="{live}" target="_blank" rel="noopener noreferrer">Visit live site</a>
+  </div>"#,
             domain_q = domain_q,
-            provider = provider,
+            live = html_escape(&live),
         )
-    }
+    };
+    format!(
+        r#"<div class="manage-ssl ssl-{kind}">
+  <div>
+    {badge}
+    <strong style="margin-top:8px;">{headline}</strong>
+    <p class="ssl-meta">Provider: <strong>{provider}</strong>. {expires}{issuer}{sans}</p>
+    <p>{detail}</p>
+  </div>
+  {actions}
+</div>"#,
+        kind = insight.kind.as_str(),
+        badge = badge,
+        headline = headline,
+        provider = provider,
+        expires = expires,
+        issuer = issuer,
+        sans = sans,
+        detail = html_escape(&insight.detail),
+        actions = actions,
+    )
 }
 
 pub fn resource_card(label: &str, value: &str, pct: Option<u8>) -> String {

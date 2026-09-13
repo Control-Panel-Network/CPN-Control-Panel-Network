@@ -94,6 +94,7 @@ pub fn tab_domains(site: &SiteRecord) -> String {
 }
 
 pub fn tab_logs(site: &SiteRecord) -> String {
+    let _ = crate::panel_site_vhost_wire::ensure_site_vhost_logging(site);
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
     tiles.push_str(&tile(
         "#access",

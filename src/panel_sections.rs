@@ -88,7 +88,7 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
     };
     let mut rows = format!(
         r#"<div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th>Actions</th></tr></thead><tbody>"#
+      <thead><tr><th>Domain</th><th>Owner</th>{docroot_th}<th>Status</th><th>SSL</th><th>Actions</th></tr></thead><tbody>"#
     );
     for site in sites {
         let status = if site.enabled { "Active" } else { "Suspended" };
@@ -111,18 +111,52 @@ fn site_rows(sites: &[SiteRecord], show_docroots: bool) -> String {
         } else {
             String::new()
         };
+        let insight = crate::panel_ops_ssl_inspect::inspect_domain_ssl(&site.domain);
+        let ssl_cell = {
+            let short = insight.kind.short_label();
+            let tip = insight
+                .expires_display
+                .as_deref()
+                .map(|d| format!("Expires {d}"))
+                .unwrap_or_else(|| insight.detail.clone());
+            let (bg, fg) = match insight.kind {
+                crate::panel_ops_ssl_inspect::SslValidityKind::Valid => {
+                    ("rgba(18,183,106,.18)", "#067647")
+                }
+                crate::panel_ops_ssl_inspect::SslValidityKind::ExpiringSoon => {
+                    ("rgba(247,144,9,.2)", "#b54708")
+                }
+                crate::panel_ops_ssl_inspect::SslValidityKind::Expired
+                | crate::panel_ops_ssl_inspect::SslValidityKind::Invalid
+                | crate::panel_ops_ssl_inspect::SslValidityKind::Mismatch => {
+                    ("rgba(240,68,56,.18)", "#b42318")
+                }
+                crate::panel_ops_ssl_inspect::SslValidityKind::None => {
+                    ("rgba(152,162,179,.16)", "#475467")
+                }
+            };
+            format!(
+                r#"<td><span title="{tip}" style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:{bg};color:{fg};">{short}</span></td>"#,
+                tip = html_escape(&tip),
+                bg = bg,
+                fg = fg,
+                short = html_escape(short),
+            )
+        };
         rows.push_str(&format!(
             r#"<tr>
           <td><strong>{domain}</strong><div class="muted">{wired}</div></td>
           <td>{owner}</td>
           {docroot_td}
           <td>{status}</td>
+          {ssl_cell}
           <td>{actions}</td>
         </tr>"#,
             domain = html_escape(&site.domain),
             owner = html_escape(&site.owner),
             docroot_td = docroot_td,
             status = status,
+            ssl_cell = ssl_cell,
             actions = site_action_buttons(site),
             wired = wired,
         ));

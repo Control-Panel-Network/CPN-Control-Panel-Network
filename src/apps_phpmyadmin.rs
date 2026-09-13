@@ -329,7 +329,35 @@ fn write_fpm_pool(share: &Path) -> Result<(), String> {
     Ok(())
 }
 
+const PMA_FPM_SOCK: &str = "/run/php-fpm/cpn-phpmyadmin.sock";
+
+/// Recover php-fpm after `start-limit-hit` (rapid restart loops from host PHP
+/// default apply + OLS listener refresh). Always reset-failed before start.
+pub fn recover_php_fpm() {
+    let _ = quiet_systemctl(&["reset-failed", "php-fpm"]);
+    if systemd_unit_active("php-fpm") {
+        let _ = quiet_systemctl(&["reload", "php-fpm"]);
+        if Path::new(PMA_FPM_SOCK).exists() && systemd_unit_active("php-fpm") {
+            return;
+        }
+        let _ = quiet_systemctl(&["restart", "php-fpm"]);
+    } else {
+        if !quiet_systemctl(&["start", "php-fpm"]) {
+            let _ = enable_now(&["php-fpm"]);
+        }
+        if !systemd_unit_active("php-fpm") {
+            // Second chance after start-limit cooldown / residual failed state.
+            let _ = quiet_systemctl(&["reset-failed", "php-fpm"]);
+            let _ = quiet_systemctl(&["start", "php-fpm"]);
+        }
+    }
+}
+
 /// Ensure the php-fpm pool socket is reachable by OpenLiteSpeed (nobody).
+///
+/// Avoids unconditional `systemctl restart php-fpm` (that hit systemd
+/// start-limit and left OLS returning 503 on `/phpmyadmin/cpn-signon.php`).
+/// Rewrites the pool only when content changes; reloads when already healthy.
 pub fn ensure_fpm_socket_for_ols() -> Result<(), String> {
     if !crate::litespeed_stack::openlitespeed_installed() {
         return Ok(());
@@ -337,10 +365,25 @@ pub fn ensure_fpm_socket_for_ols() -> Result<(), String> {
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
+    let previous = fs::read_to_string(FPM_POOL).unwrap_or_default();
     write_fpm_pool(&share)?;
-    let _ = Command::new("systemctl")
-        .args(["restart", "php-fpm"])
-        .status();
+    let next = fs::read_to_string(FPM_POOL).unwrap_or_default();
+    let pool_changed = previous != next;
+    let sock_ok = Path::new(PMA_FPM_SOCK).exists();
+    if systemd_unit_active("php-fpm") && sock_ok {
+        if pool_changed && !quiet_systemctl(&["reload", "php-fpm"]) {
+            recover_php_fpm();
+        }
+        if Path::new(PMA_FPM_SOCK).exists() {
+            return Ok(());
+        }
+    }
+    recover_php_fpm();
+    if !Path::new(PMA_FPM_SOCK).exists() && systemd_unit_active("php-fpm") {
+        // Pool may exist but sock missing after a crashed worker; force restart once.
+        let _ = quiet_systemctl(&["reset-failed", "php-fpm"]);
+        let _ = quiet_systemctl(&["restart", "php-fpm"]);
+    }
     Ok(())
 }
 

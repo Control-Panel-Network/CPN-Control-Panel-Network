@@ -65,7 +65,7 @@ pub fn network_traffic() -> Vec<TrafficNic> {
             });
         }
         rows.sort_by_key(|a| std::cmp::Reverse(a.rx_bytes));
-        rows.truncate(12);
+        rows.truncate(48);
         rows
     }
 }
@@ -110,7 +110,7 @@ pub fn disk_io_snapshot() -> Vec<DiskIoRow> {
                 .cmp(&(a.reads + a.writes))
                 .then_with(|| a.device.cmp(&b.device))
         });
-        rows.truncate(12);
+        rows.truncate(48);
         rows
     }
 }

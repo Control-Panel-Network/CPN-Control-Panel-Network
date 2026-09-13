@@ -102,6 +102,9 @@ use cpn_installer::panel_routes::{
     websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_reset_placeholder,
     websites_resume, websites_suspend, websites_suspend_message, websites_suspend_message_restore,
 };
+use cpn_installer::panel_site_tools_routes::{
+    websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
+};
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
     panel_design_restore, panel_design_save, panel_minimalist_mode_get, panel_minimalist_mode_set,
@@ -985,6 +988,13 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
             .service(websites_manage_metrics)
+            .service(websites_git_post)
+            .service(websites_clone_post)
+            .service(websites_tools_csrf_get)
+            .route(
+                "/api/websites/terminal/ws",
+                web::get().to(websites_terminal_ws),
+            )
             .service(panel_design_get)
             .service(panel_design_save)
             .service(panel_design_preset)
