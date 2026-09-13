@@ -346,9 +346,7 @@ mod tests {
                 "edit profile must mark the passkey register section"
             );
             assert!(
-                html.contains(
-                    "data-redirect=\"/account/users/modify?notice=Passkey+registered\""
-                ),
+                html.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
                 "edit profile passkey success must return to Modify User with notice"
             );
             assert!(

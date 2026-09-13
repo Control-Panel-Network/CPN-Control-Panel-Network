@@ -278,10 +278,7 @@ mod tests {
             passkey_register_location(Some("/account/users/modify")),
             "/account/users/modify"
         );
-        assert_eq!(
-            passkey_register_location(Some("/packages")),
-            "/dashboard"
-        );
+        assert_eq!(passkey_register_location(Some("/packages")), "/dashboard");
     }
 
     #[test]
