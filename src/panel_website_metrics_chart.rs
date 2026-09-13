@@ -19,12 +19,11 @@ fn fmt_clock(ts: u64) -> String {
             .args(["-d", &format!("@{ts}"), "+%H:%M"])
             .env("LC_ALL", "C")
             .output()
+            && out.status.success()
         {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !s.is_empty() {
-                    return s;
-                }
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return s;
             }
         }
     }
