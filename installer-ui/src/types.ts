@@ -10,6 +10,7 @@ export type ScreenType =
 export type ServerEngine = "openlitespeed" | "nginx" | "caddy";
 export type MailSystem = "snappymail" | "roundcube" | "thunderbird";
 export type DatabaseEngine = "mariadb" | "mysql" | "none";
+export type PhpVersion = "8.5" | "8.4" | "8.3" | "8.2";
 
 export type InstallerPhase =
   | "configuring"

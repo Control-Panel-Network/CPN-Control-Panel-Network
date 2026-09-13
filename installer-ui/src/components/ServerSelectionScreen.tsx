@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, CircleHelp, Database, LockKeyhole } from "lucide-react";
 import { siMariadb } from "simple-icons";
-import type { DatabaseEngine, ServerEngine } from "../types";
+import type { DatabaseEngine, PhpVersion, ServerEngine } from "../types";
 import { ServerBrandIcon } from "./ServerBrandIcon";
 import { useI18n } from "../i18n";
 
@@ -13,10 +13,12 @@ interface Props {
   panelHostname?: string | null;
   panelPublicUrl?: string | null;
   database: DatabaseEngine;
+  phpVersion: PhpVersion;
   installPhpmyadmin: boolean;
   enableProxyFront: boolean;
   onSelectServer: (server: ServerEngine) => void;
   onDatabaseChange: (database: DatabaseEngine) => void;
+  onPhpVersionChange: (php: PhpVersion) => void;
   onPhpmyadminChange: (enabled: boolean) => void;
   onProxyFrontChange: (enabled: boolean) => void;
   onNetworkChange: (input: {
@@ -35,10 +37,12 @@ export function ServerSelectionScreen({
   panelHostname,
   panelPublicUrl,
   database,
+  phpVersion,
   installPhpmyadmin,
   enableProxyFront,
   onSelectServer,
   onDatabaseChange,
+  onPhpVersionChange,
   onPhpmyadminChange,
   onProxyFrontChange,
   onNetworkChange,
@@ -403,6 +407,35 @@ export function ServerSelectionScreen({
                 </article>
               );
             })}
+          </div>
+          <div className="phpmyadmin-option mx-auto mt-6" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px" }}>
+            <label htmlFor="cpn-php-version" className="text-[14px] font-medium text-[#1a1c1d]">
+              {locale === "es"
+                ? "Versión de PHP (predeterminada 8.5)"
+                : locale === "nb"
+                  ? "PHP-versjon (standard 8.5)"
+                  : "PHP version (default 8.5)"}
+            </label>
+            <select
+              id="cpn-php-version"
+              className="w-full rounded-md border border-[#e0e0e0] px-3 py-2 text-[14px] text-[#1a1c1d] bg-white"
+              value={phpVersion}
+              onChange={(event) =>
+                onPhpVersionChange(event.target.value as import("../types").PhpVersion)
+              }
+            >
+              <option value="8.5">PHP 8.5 (recommended)</option>
+              <option value="8.4">PHP 8.4</option>
+              <option value="8.3">PHP 8.3</option>
+              <option value="8.2">PHP 8.2</option>
+            </select>
+            <p className="text-[13px] text-[#5f5e60] m-0">
+              {locale === "es"
+                ? "Si faltan paquetes de 8.5, CPN usa la siguiente versión disponible y lo registra."
+                : locale === "nb"
+                  ? "Hvis 8.5-pakker mangler, bruker CPN neste tilgjengelige versjon og logger det."
+                  : "If 8.5 packages are missing, CPN enables the next available version and logs it."}
+            </p>
           </div>
           <div
             className={`phpmyadmin-option mx-auto mt-6 ${database === "none" ? "phpmyadmin-option-disabled" : ""}`}

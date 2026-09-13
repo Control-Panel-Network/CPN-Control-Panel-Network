@@ -64,6 +64,9 @@ pub struct SiteRecord {
     /// Set on suspend; cleared on resume. Missing on legacy records → treat as Admin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suspended_by: Option<SuspendActor>,
+    /// Preferred PHP major.minor for this site (from install default when omitted).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub php_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -79,6 +82,7 @@ pub struct SiteModify {
     pub owner_suspend_message: Option<String>,
     /// `Some(None)` clears; `Some(Some(actor))` sets; `None` leaves unchanged.
     pub suspended_by: Option<Option<SuspendActor>>,
+    pub php_version: Option<String>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -418,6 +422,7 @@ pub fn create_site_with_ssl(
         internal_ip: None,
         owner_suspend_message: String::new(),
         suspended_by: None,
+        php_version: Some(crate::php_defaults::default_php_branch_for_sites()),
     };
     persist_site(&path, &site)?;
     // Best-effort: DKIM, SPF/DKIM/DMARC DNS, auto SSL (never fails site create).
@@ -486,6 +491,14 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     }
     if let Some(actor) = patch.suspended_by {
         site.suspended_by = actor;
+    }
+    if let Some(php) = patch.php_version {
+        let php = php.trim();
+        site.php_version = if php.is_empty() {
+            None
+        } else {
+            Some(php.to_string())
+        };
     }
     if let Some(engine) = patch.engine {
         let engine = engine.trim();

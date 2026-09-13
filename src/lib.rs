@@ -181,6 +181,7 @@ pub mod panel_website_resources;
 pub mod panel_wordpress_routes;
 pub mod panel_wordpress_ui;
 pub mod paths;
+pub mod php_defaults;
 pub mod php_lifecycle;
 pub mod plugins;
 pub mod plugins_catalog;

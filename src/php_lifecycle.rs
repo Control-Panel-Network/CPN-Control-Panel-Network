@@ -9,6 +9,7 @@ const PHP_BRANCH_EOL: &[(&str, &str)] = &[
     ("8.2", "2026-12-31"),
     ("8.3", "2027-12-31"),
     ("8.4", "2028-12-31"),
+    ("8.5", "2029-12-31"),
 ];
 
 /// Minimum CPN-supported PHP major.minor while this release is published.
@@ -24,11 +25,11 @@ pub fn webmail_php_compat(mail: MailSystem) -> Option<PhpCompatRange> {
     match mail {
         MailSystem::Snappymail => Some(PhpCompatRange {
             min: "8.1",
-            max: "8.4",
+            max: "8.5",
         }),
         MailSystem::Roundcube => Some(PhpCompatRange {
             min: "8.1",
-            max: "8.4",
+            max: "8.5",
         }),
         MailSystem::Thunderbird => None,
     }
@@ -90,6 +91,9 @@ pub fn assert_php_branch_not_eol(branch: &str, today_ymd: &str) -> Result<(), St
 /// Map GuestOs module stream / Remi tag to a PHP branch label.
 pub fn branch_from_module_stream(stream: &str) -> Option<&'static str> {
     let value = stream.trim();
+    if value.contains("8.5") {
+        return Some("8.5");
+    }
     if value.contains("8.4") {
         return Some("8.4");
     }
@@ -142,7 +146,13 @@ mod tests {
         let snappy = webmail_php_compat(MailSystem::Snappymail).expect("range");
         assert_eq!(snappy.min, "8.1");
         let roundcube = webmail_php_compat(MailSystem::Roundcube).expect("range");
-        assert_eq!(roundcube.max, "8.4");
+        assert_eq!(roundcube.max, "8.5");
         assert!(webmail_php_compat(MailSystem::Thunderbird).is_none());
+    }
+
+    #[test]
+    fn remi_85_maps() {
+        assert_eq!(branch_from_module_stream("php:remi-8.5"), Some("8.5"));
+        assert!(assert_selected_runtime_ok("php:remi-8.5", "2026-09-13").is_ok());
     }
 }

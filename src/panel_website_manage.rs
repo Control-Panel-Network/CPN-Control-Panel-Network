@@ -143,6 +143,7 @@ mod tests {
             internal_ip: None,
             owner_suspend_message: String::new(),
             suspended_by: None,
+            php_version: None,
         }
     }
 

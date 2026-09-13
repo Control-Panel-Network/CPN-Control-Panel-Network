@@ -28,6 +28,7 @@ import type {
   MailSystem,
   MaintenanceAction,
   PasswordPolicy,
+  PhpVersion,
   ScreenType,
   ServerEngine,
 } from "./types";
@@ -63,6 +64,7 @@ function AppShell() {
   );
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
   const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
+  const [phpVersion, setPhpVersion] = useState<PhpVersion>("8.5");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [enableProxyFront, setEnableProxyFront] = useState(false);
   const [status, setStatus] = useState(INITIAL_STATUS);
@@ -213,6 +215,7 @@ function AppShell() {
         database,
         install_phpmyadmin: installPhpmyadmin,
         enable_proxy_front: enableProxyFront,
+        php_version: phpVersion,
         install_log_detail: "full",
       });
     } catch (error) {
@@ -334,10 +337,12 @@ function AppShell() {
               panelHostname={status.panel_hostname}
               panelPublicUrl={status.panel_public_url}
               database={database}
+              phpVersion={phpVersion}
               installPhpmyadmin={installPhpmyadmin}
               enableProxyFront={enableProxyFront}
               onSelectServer={setSelectedServer}
               onDatabaseChange={setDatabase}
+              onPhpVersionChange={setPhpVersion}
               onPhpmyadminChange={setInstallPhpmyadmin}
               onProxyFrontChange={setEnableProxyFront}
               onNetworkChange={handleNetworkChange}

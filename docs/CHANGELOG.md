@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Install default PHP is **8.5** on AlmaLinux/RHEL 9+ (Remi). CLI and web installers offer 8.5 / 8.4 / 8.3 / 8.2. Missing packages fall back to the next branch with a clear log line; choice is stored in `/var/lib/cpn/php-default.json` and applied as the default `php_version` on new sites. See `to-do/PHP-INSTALL-DEFAULT-85.md`.
+
 ## [0.2.6-alpha.38] - 13/09/2026
 
 Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail client defaults, and CPN mail onboarding (Cargo `0.2.6-alpha.38`).

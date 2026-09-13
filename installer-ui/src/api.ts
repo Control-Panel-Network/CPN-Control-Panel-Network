@@ -194,6 +194,7 @@ export async function startServerInstall(
     database?: import("./types").DatabaseEngine;
     install_phpmyadmin?: boolean;
     enable_proxy_front?: boolean;
+    php_version?: import("./types").PhpVersion | string;
     install_log_detail?: "minimal" | "full";
   },
 ): Promise<void> {
@@ -205,6 +206,7 @@ export async function startServerInstall(
       database: options?.database ?? "mariadb",
       install_phpmyadmin: options?.install_phpmyadmin ?? true,
       enable_proxy_front: options?.enable_proxy_front ?? false,
+      php_version: options?.php_version ?? "8.5",
       install_log_detail: options?.install_log_detail ?? "full",
     }),
   });

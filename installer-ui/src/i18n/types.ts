@@ -58,6 +58,8 @@ export interface LocaleMessages {
   databaseMysql: string;
   databaseNone: string;
   databasePhpmyadmin: string;
+  phpVersionTitle: string;
+  phpVersionHint: string;
   serverOpenlitespeedDesc: string;
   serverNginxDesc: string;
   serverCaddyDesc: string;
