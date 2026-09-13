@@ -7,12 +7,14 @@ use crate::panel_api_tokens::ensure_store_migrated;
 use crate::panel_ops_cloudflare::ensure_oauth_schema_migrated;
 use crate::panel_ops_cloudflare_oauth::ensure_oauth_stores_migrated;
 use crate::paths;
+use crate::wordpress::ensure_wordpress_store_migrated;
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf, process::Command};
 
 const SQL_0001: &str = include_str!("../sql/0001_panel_api_tokens.sql");
 const SQL_0002: &str = include_str!("../sql/0002_cloudflare_oauth.sql");
 const SQL_0003: &str = include_str!("../sql/0003_cloudflare_settings_oauth.sql");
+const SQL_0004: &str = include_str!("../sql/0004_wordpress_sites.sql");
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct MigrationLedger {
@@ -43,6 +45,11 @@ const MIGRATIONS: &[MigrationDef] = &[
         id: "0003_cloudflare_settings_oauth",
         sql: SQL_0003,
         hook: ensure_oauth_schema_migrated,
+    },
+    MigrationDef {
+        id: "0004_wordpress_sites",
+        sql: SQL_0004,
+        hook: ensure_wordpress_store_migrated,
     },
 ];
 
@@ -167,12 +174,13 @@ mod tests {
     fn migrations_apply_idempotently() {
         with_test_data_dir(|| {
             let first = run_pending_migrations().unwrap();
-            assert_eq!(first.len(), 3);
+            assert_eq!(first.len(), 4);
             assert!(first.contains(&"0001_panel_api_tokens".to_string()));
+            assert!(first.contains(&"0004_wordpress_sites".to_string()));
             let second = run_pending_migrations().unwrap();
             assert!(second.is_empty());
             let ledger = load_ledger();
-            assert_eq!(ledger.applied.len(), 3);
+            assert_eq!(ledger.applied.len(), 4);
         });
     }
 

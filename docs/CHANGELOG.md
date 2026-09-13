@@ -1,3 +1,6 @@
+﻿## [0.2.6-alpha.37] - 13/09/2026
+
+CPN-native WordPress installer and manager under Hosting (WP-CLI install, plugin preinstall, manage tabs, MariaDB provisioning).
 # Changelog
 
 All notable changes to CPN Control Panel Network are documented in this file.
@@ -9,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Email → MTA-STS** and **Email → BIMI** are gated behind free Plugin Store packages mtaSts and imi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.
+- **Email â†’ MTA-STS** and **Email â†’ BIMI** are gated behind free Plugin Store packages mtaSts and imi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.
 
 ## [0.2.6-alpha.36] - 13/09/2026
 
@@ -48,7 +51,7 @@ Fix RPM packaging failure: strip UTF-8 BOM from the installer spec so EL9/EL10 b
 
 ## [0.2.6-alpha.34] - 12/09/2026
 
-Finish Apps→Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).
+Finish Appsâ†’Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).
 
 ### Fixed
 
@@ -375,7 +378,7 @@ First post-`0.2.2` alpha packaging cut after the `0.2.x` line. Install and upgra
 - Account security: TOTP 2FA and Passkeys (WebAuthn); MFA material stored per install under `/var/lib/cpn/mfa/`.
 - Default panel port **2087** (Cloudflare-friendly), choosable at install and changeable later.
 
-### Install and packaging (0.2.x â†’ 0.2.3-alpha.19)
+### Install and packaging (0.2.x Ã¢â€ â€™ 0.2.3-alpha.19)
 
 - Bootstrap scripts detect AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian and refuse unsupported OS versions closed.
 - Manual RPM/DEB/Windows zip install paths documented in the README and [RELEASES.md](RELEASES.md).
@@ -409,7 +412,7 @@ Pin with `CPN_RELEASE_TAG=v0.2.3-alpha.19` or `CPN_RELEASE_TAG=v0.2.4-alpha.19` 
 
 ## [0.2.2] alphas (summary)
 
-Pre-1.0 development line (`v0.2.2-alpha.1` â€¦ `v0.2.2-alpha.18`). Notable themes:
+Pre-1.0 development line (`v0.2.2-alpha.1` Ã¢â‚¬Â¦ `v0.2.2-alpha.18`). Notable themes:
 
 - Install/upgrade bootstrap one-liners and News Targeted `/install.sh` mirror.
 - Release signing, checksums, GPG, SBOM, and provenance.
@@ -427,3 +430,4 @@ For per-tag PR lists, see the corresponding [GitHub Releases](https://github.com
 [0.2.4-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.4-alpha.19
 [0.2.3-alpha.19]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases/tag/v0.2.3-alpha.19
 [0.2.2]: https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases?q=0.2.2-alpha
+

@@ -85,6 +85,72 @@ pub fn create_database(name: &str) -> Result<String, String> {
     }
 }
 
+fn sanitize_db_password(raw: &str) -> Result<String, String> {
+    let pass = raw.trim();
+    if pass.is_empty() || pass.chars().count() > 128 {
+        return Err("Database password must be 1-128 characters".into());
+    }
+    if pass.chars().any(|c| c.is_control()) {
+        return Err("Database password cannot include control characters".into());
+    }
+    Ok(pass.to_string())
+}
+
+fn sql_escape_password(pass: &str) -> String {
+    pass.replace('\\', "\\\\").replace('\'', "''")
+}
+
+/// Create database, dedicated user, and grants (local MariaDB/MySQL socket auth).
+pub fn create_database_with_user(
+    db_name: &str,
+    db_user: &str,
+    db_password: &str,
+) -> Result<String, String> {
+    let name = sanitize_db_ident(db_name)?;
+    let user = sanitize_db_ident(db_user)?;
+    let pass = sanitize_db_password(db_password)?;
+    let pass_sql = sql_escape_password(&pass);
+    let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
+
+    let modern_sql = format!(
+        "CREATE DATABASE IF NOT EXISTS `{name}`; \
+         CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; \
+         GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'localhost'; \
+         FLUSH PRIVILEGES;"
+    );
+    let out = Command::new(bin)
+        .args(["-e", &modern_sql])
+        .output()
+        .map_err(|e| format!("Failed to run {bin}: {e}"))?;
+    if out.status.success() {
+        return Ok(format!(
+            "Created database `{name}` with user `{user}`@localhost"
+        ));
+    }
+
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    let legacy_sql = format!(
+        "CREATE DATABASE IF NOT EXISTS `{name}`; \
+         CREATE USER '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; \
+         GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'localhost'; \
+         FLUSH PRIVILEGES;"
+    );
+    let legacy = Command::new(bin)
+        .args(["-e", &legacy_sql])
+        .output()
+        .map_err(|e| format!("Failed to run {bin}: {e}"))?;
+    if legacy.status.success() {
+        return Ok(format!(
+            "Created database `{name}` with user `{user}`@localhost (legacy user create)"
+        ));
+    }
+    Err(format!(
+        "CREATE DATABASE/USER failed: {} / legacy: {}",
+        stderr,
+        String::from_utf8_lossy(&legacy.stderr).trim()
+    ))
+}
+
 pub fn drop_database(name: &str) -> Result<String, String> {
     let name = sanitize_db_ident(name)?;
     if matches!(
