@@ -1,6 +1,9 @@
 //! Dashboard Activity Board markup (tabs for SSH, processes, traffic, disk, CPU).
 
 use crate::packages::is_panel_admin;
+use crate::panel_dashboard_activity_list::{
+    activity_list_script, activity_list_styles, wrap_activity_table,
+};
 use crate::panel_ops_activity::{
     ActivityLogRow, SshSecurityAnalysis, recent_ssh_logins, recent_ssh_logs, ssh_security_analysis,
 };
@@ -17,8 +20,9 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub fn activity_board_styles() -> &'static str {
-    r#"
+pub fn activity_board_styles() -> String {
+    let mut css = String::from(
+        r#"
 .activity-board {
   max-width:1200px; margin:22px auto 0; padding:22px 24px 24px;
   border-radius:8px; background:var(--canvas); border:1px solid var(--hairline);
@@ -94,7 +98,10 @@ pub fn activity_board_styles() -> &'static str {
 }
 [data-color-mode="dark"] .activity-tip { background:#2a2f3a; }
 [data-color-mode="dark"] .activity-kpi article { background:#161922; }
-"#
+"#,
+    );
+    css.push_str(activity_list_styles());
+    css
 }
 
 fn log_table(rows: &[ActivityLogRow], empty: &str) -> String {
@@ -144,20 +151,25 @@ fn panel(id: &str, hidden: bool, body: &str) -> String {
 }
 
 fn ssh_logins_panel() -> String {
-    let rows = recent_ssh_logins(40);
+    let rows = recent_ssh_logins(200);
+    let table = wrap_activity_table(
+        "ssh-logins",
+        "Filter timestamp or message",
+        &log_table(
+            &rows,
+            "No recent SSH logins found (log files may be empty or unreadable).",
+        ),
+    );
     format!(
         r#"<div class="activity-panel-head"><h3>Recent SSH Logins</h3>
         <p class="muted" style="margin:0;">Accepted sessions from auth logs / journal.</p></div>
         {table}"#,
-        table = log_table(
-            &rows,
-            "No recent SSH logins found (log files may be empty or unreadable)."
-        ),
+        table = table,
     )
 }
 
 fn ssh_logs_panel(analysis: &SshSecurityAnalysis) -> String {
-    let (rows, _analyzed) = recent_ssh_logs(50);
+    let (rows, _analyzed) = recent_ssh_logs(200);
     let tips: String = analysis
         .tips
         .iter()
@@ -173,6 +185,14 @@ fn ssh_logs_panel(analysis: &SshSecurityAnalysis) -> String {
     } else {
         "SSH security review".into()
     };
+    let table = wrap_activity_table(
+        "ssh-logs",
+        "Filter timestamp or message",
+        &log_table(
+            &rows,
+            "No SSH log lines available (need readable auth logs or journalctl).",
+        ),
+    );
     format!(
         r#"<div class="activity-panel-head">
           <h3>SSH Security Analysis</h3>
@@ -206,15 +226,12 @@ fn ssh_logs_panel(analysis: &SshSecurityAnalysis) -> String {
         failed = analysis.failed_logins,
         ok = analysis.accepted_logins,
         tips = tips,
-        table = log_table(
-            &rows,
-            "No SSH log lines available (need readable auth logs or journalctl)."
-        ),
+        table = table,
     )
 }
 
 fn top_process_panel() -> String {
-    let body = match snapshot_top_processes(12) {
+    let body = match snapshot_top_processes(50) {
         Ok(rows) if rows.is_empty() => "<p class=\"empty-state\">No processes returned.</p>".into(),
         Ok(rows) => {
             let mut t = String::from(
@@ -231,7 +248,7 @@ fn top_process_panel() -> String {
                 ));
             }
             t.push_str("</tbody></table></div>");
-            t
+            wrap_activity_table("top-process", "Filter user, PID, or command", &t)
         }
         Err(err) => format!(
             r#"<p class="panel-notice error">{e}</p>"#,
@@ -269,7 +286,7 @@ fn traffic_panel() -> String {
             ));
         }
         t.push_str("</tbody></table></div>");
-        t
+        wrap_activity_table("traffic", "Filter interface name", &t)
     };
     format!(
         r#"<div class="activity-panel-head"><h3>Traffic</h3>
@@ -299,7 +316,7 @@ fn disk_io_panel() -> String {
             ));
         }
         t.push_str("</tbody></table></div>");
-        t
+        wrap_activity_table("disk-io", "Filter device name", &t)
     };
     format!(
         r#"<div class="activity-panel-head"><h3>Disk IO</h3>
@@ -330,8 +347,9 @@ fn cpu_panel() -> String {
     )
 }
 
-fn activity_script() -> &'static str {
-    r#"
+fn activity_script() -> String {
+    let mut js = String::from(
+        r#"
 (function(){
   var root=document.getElementById('activity-board');
   if(!root) return;
@@ -356,7 +374,10 @@ fn activity_script() -> &'static str {
   if(hash.indexOf('activity-')===0) want=hash.slice('activity-'.length);
   if(want && root.querySelector('[data-activity-tab="'+want+'"]')) activate(want);
 })();
-"#
+"#,
+    );
+    js.push_str(activity_list_script());
+    js
 }
 
 /// Full Activity Board for panel admins; non-admins get a short placeholder.
@@ -429,5 +450,15 @@ mod tests {
         assert!(html.contains("Activity Board"));
         assert!(html.contains("panel admin only"));
         assert!(!html.contains("data-activity-tab=\"ssh-logins\""));
+    }
+
+    #[test]
+    fn wrap_helper_exports_list_controls_markup() {
+        use crate::panel_dashboard_activity_list::wrap_activity_table;
+        let table = r#"<div class="table-wrap"><table class="data-table"><tbody><tr><td>ok</td></tr></tbody></table></div>"#;
+        let html = wrap_activity_table("demo", "Filter", table);
+        assert!(html.contains("Go to page"));
+        assert!(html.contains("activity-list-search"));
+        assert!(html.contains("data-page-size=\"10\""));
     }
 }
