@@ -88,10 +88,20 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let mem_summary = chart_summary("mem", minimalist, &mem_label, mem_avg, mem_peak, false);
     let cpu_svg = metrics_chart_svg(&samples, "cpu", cpu_stroke);
     let mem_svg = metrics_chart_svg(&samples, "mem", mem_stroke);
-    let snapshot = metrics_snapshot_script(
-        site, &samples, cpu_cur, cpu_avg, cpu_peak, mem_cur, mem_avg, mem_peak, &cpu_svg, &mem_svg,
-        &bw, minimalist,
-    );
+    let snapshot = metrics_snapshot_script(SnapshotInput {
+        site,
+        samples: &samples,
+        cpu_cur,
+        cpu_avg,
+        cpu_peak,
+        mem_cur,
+        mem_avg,
+        mem_peak,
+        cpu_svg: &cpu_svg,
+        mem_svg: &mem_svg,
+        bw: &bw,
+        minimalist,
+    });
     let charts = format!(
         r#"<div class="manage-charts" data-metrics-domain="{domain}" data-metrics-poll="{poll}" data-metrics-minimalist="{mini}">
   <div class="manage-chart" data-metric="cpu">
@@ -231,21 +241,23 @@ fn pct_json(v: Option<f32>) -> serde_json::Value {
     }
 }
 
-fn metrics_snapshot_script(
-    site: &SiteRecord,
-    samples: &[MetricSample],
+struct SnapshotInput<'a> {
+    site: &'a SiteRecord,
+    samples: &'a [MetricSample],
     cpu_cur: Option<f32>,
     cpu_avg: Option<f32>,
     cpu_peak: Option<f32>,
     mem_cur: Option<f32>,
     mem_avg: Option<f32>,
     mem_peak: Option<f32>,
-    cpu_svg: &str,
-    mem_svg: &str,
-    bw: &BandwidthInfo,
+    cpu_svg: &'a str,
+    mem_svg: &'a str,
+    bw: &'a BandwidthInfo,
     minimalist: bool,
-) -> String {
-    let detail = if minimalist {
+}
+
+fn metrics_snapshot_script(input: SnapshotInput<'_>) -> String {
+    let detail = if input.minimalist {
         "Host metrics snapshot (minimalist). Refresh the page to update."
     } else {
         "Host live metrics (not per-site). Site-level CPU/bandwidth metering ships later."
@@ -253,32 +265,32 @@ fn metrics_snapshot_script(
     let payload = serde_json::json!({
         "ok": true,
         "scope": "host",
-        "domain": site.domain,
+        "domain": input.site.domain,
         "window_seconds": WINDOW_SECS,
-        "minimalist": minimalist,
+        "minimalist": input.minimalist,
         "detail": detail,
         "cpu": {
-            "current": pct_json(cpu_cur),
-            "avg": pct_json(cpu_avg),
-            "peak": pct_json(cpu_peak),
-            "svg": cpu_svg,
+            "current": pct_json(input.cpu_cur),
+            "avg": pct_json(input.cpu_avg),
+            "peak": pct_json(input.cpu_peak),
+            "svg": input.cpu_svg,
         },
         "mem": {
-            "current": pct_json(mem_cur),
-            "avg": pct_json(mem_avg),
-            "peak": pct_json(mem_peak),
-            "svg": mem_svg,
+            "current": pct_json(input.mem_cur),
+            "avg": pct_json(input.mem_avg),
+            "peak": pct_json(input.mem_peak),
+            "svg": input.mem_svg,
         },
         "bandwidth": {
-            "label": bw.label,
-            "hint": bw.hint,
-            "bytes": bw.bytes,
-            "bytes_label": bw.bytes.map(format_bytes),
-            "period": bw.period,
-            "source": bw.source,
-            "quota_mb": bw.quota_mb,
+            "label": input.bw.label,
+            "hint": input.bw.hint,
+            "bytes": input.bw.bytes,
+            "bytes_label": input.bw.bytes.map(format_bytes),
+            "period": input.bw.period,
+            "source": input.bw.source,
+            "quota_mb": input.bw.quota_mb,
         },
-        "samples": samples.iter().map(|s| serde_json::json!({
+        "samples": input.samples.iter().map(|s| serde_json::json!({
             "t": s.t,
             "cpu": s.cpu,
             "mem": s.mem,
