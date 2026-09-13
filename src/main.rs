@@ -96,9 +96,8 @@ use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,
     wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
-    wordpress_theme_activate_post, wordpress_toggle_debug_post,
-    wordpress_toggle_maintenance_post, wordpress_toggle_password_post,
-    wordpress_toggle_search_post,
+    wordpress_theme_activate_post, wordpress_toggle_debug_post, wordpress_toggle_maintenance_post,
+    wordpress_toggle_password_post, wordpress_toggle_search_post,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
