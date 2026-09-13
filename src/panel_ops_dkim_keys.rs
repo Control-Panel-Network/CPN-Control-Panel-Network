@@ -13,7 +13,8 @@ pub fn dkim_root() -> PathBuf {
 
 pub fn ensure_dkim_root() -> Result<PathBuf, String> {
     let dir = dkim_root();
-    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create DKIM dir {}: {e}", dir.display()))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Cannot create DKIM dir {}: {e}", dir.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

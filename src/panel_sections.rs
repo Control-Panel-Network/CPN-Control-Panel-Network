@@ -306,7 +306,11 @@ pub fn email_accounts_main(
             .first()
             .map(|a| {
                 if a.domain.is_empty() {
-                    a.address.split('@').nth(1).unwrap_or("newstargeted.com").to_string()
+                    a.address
+                        .split('@')
+                        .nth(1)
+                        .unwrap_or("newstargeted.com")
+                        .to_string()
                 } else {
                     a.domain.clone()
                 }

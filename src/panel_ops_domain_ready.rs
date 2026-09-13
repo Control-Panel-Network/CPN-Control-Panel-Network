@@ -70,8 +70,7 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
         }
     };
     if site.ssl.provider.supports_auto_issue() {
-        if matches!(site.ssl.coverage_mode, SslCoverageMode::Wildcard) && !cloudflare_configured()
-        {
+        if matches!(site.ssl.coverage_mode, SslCoverageMode::Wildcard) && !cloudflare_configured() {
             let mut ssl = site.ssl.clone();
             ssl.coverage_mode = SslCoverageMode::San;
             ssl.include_subdomains_on_cert = false;
