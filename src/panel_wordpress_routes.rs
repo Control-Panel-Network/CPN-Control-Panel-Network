@@ -34,7 +34,7 @@ pub async fn wordpress_list_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let wp_cli = detect_wp_cli();
     html_ok(panel_shell(
@@ -56,7 +56,7 @@ pub async fn wordpress_install_get(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     html_ok(panel_shell(
         &user,
@@ -96,7 +96,7 @@ pub async fn wordpress_install_post(
     form: web::Form<WordpressInstallForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let req = WordpressInstallRequest {
         domain: form.domain.clone(),
@@ -136,7 +136,7 @@ pub async fn wordpress_manage_route(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     if domain.trim().is_empty() {
@@ -184,7 +184,7 @@ pub async fn wordpress_scan_post(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match scan_wordpress_sites() {
         Ok(results) => wp_redirect(
@@ -205,7 +205,7 @@ pub async fn wordpress_ensure_wpcli_post(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     match ensure_wp_cli() {
         Ok(status) => wp_redirect("/wordpress", Some(&status.detail), None),
@@ -220,7 +220,7 @@ pub async fn wordpress_refresh_post(
     form: web::Form<WordpressDomainForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let domain = form.domain.trim();
     let base = format!(
@@ -252,7 +252,7 @@ pub async fn wordpress_delete_post(
     form: web::Form<WordpressDeleteForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let remove_files = parse_bool_flag(&form.remove_files);
     match delete_wordpress(&form.domain, remove_files) {
@@ -283,7 +283,7 @@ pub async fn wordpress_plugin_install_post(
     form: web::Form<WordpressPluginForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let base = format!(
         "/wordpress/manage?domain={}&tab=plugins",
@@ -310,7 +310,7 @@ pub async fn wordpress_theme_activate_post(
     form: web::Form<WordpressThemeForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let base = format!(
         "/wordpress/manage?domain={}&tab=themes",
@@ -341,7 +341,7 @@ pub async fn wordpress_toggle_search_post(
     form: web::Form<WordpressToggleForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let enabled = parse_bool_flag(&form.enabled);
     let base = format!(
@@ -361,7 +361,7 @@ pub async fn wordpress_toggle_debug_post(
     form: web::Form<WordpressToggleForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let enabled = parse_bool_flag(&form.enabled);
     let base = format!(
@@ -381,7 +381,7 @@ pub async fn wordpress_toggle_maintenance_post(
     form: web::Form<WordpressToggleForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let enabled = parse_bool_flag(&form.enabled);
     let base = format!(
@@ -401,7 +401,7 @@ pub async fn wordpress_toggle_password_post(
     form: web::Form<WordpressToggleForm>,
 ) -> HttpResponse {
     let Some(_user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     let enabled = parse_bool_flag(&form.enabled);
     let base = format!(

@@ -262,10 +262,10 @@ fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Some(parent) = conf_inc.parent() {
-            if parent.exists() {
-                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
-            }
+        if let Some(parent) = conf_inc.parent()
+            && parent.exists()
+        {
+            let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
         }
         if conf_inc.is_file() {
             let _ = fs::set_permissions(conf_inc, fs::Permissions::from_mode(0o644));
