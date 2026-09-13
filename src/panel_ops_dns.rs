@@ -1,4 +1,4 @@
-//! DNS zone store under the CPN data directory (file-backed JSON + zone text).
+﻿//! DNS zone store under the CPN data directory (file-backed JSON + zone text).
 
 use crate::panel_ops_dns_zonefile::{parse_zone_file, serialize_zone_file, validate_record};
 use crate::panel_session::session_secret;
@@ -395,7 +395,12 @@ mod tests {
         with_test_data_dir(|| {
             save_default_nameservers(&["ns1.example.com".into(), "ns2.example.com".into()])
                 .unwrap();
-            add_ns_host("ns1.example.com", Some("203.0.113.10"), None).unwrap();
+            save_ns_hosts(&[NsHost {
+                hostname: "ns1.example.com".into(),
+                ipv4: Some("203.0.113.10".into()),
+                ipv6: None,
+            }])
+            .unwrap();
             let zone = create_zone("example.com", Some("203.0.113.50")).unwrap();
             assert_eq!(zone, "example.com");
             let recs = load_zone_records("example.com").unwrap();
@@ -411,10 +416,13 @@ mod tests {
     #[test]
     fn csrf_roundtrip() {
         unsafe {
-            std::env::set_var("CPN_TEST_SESSION_SECRET", "dns-csrf-test-secret");
+            std::env::set_var("CPN_PANEL_SESSION_SECRET", "dns-csrf-test-secret-fixed");
         }
         let t = dns_csrf_token("admin");
         assert!(verify_dns_csrf("admin", &t));
         assert!(!verify_dns_csrf("other", &t));
+        unsafe {
+            std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+        }
     }
 }
