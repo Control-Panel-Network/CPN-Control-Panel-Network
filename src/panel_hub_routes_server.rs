@@ -692,7 +692,7 @@ pub async fn settings_setup_save(
     form: web::Form<SetupOnboardingForm>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect();
+        return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
         return redirect_notice(
