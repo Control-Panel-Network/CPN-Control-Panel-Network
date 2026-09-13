@@ -1,8 +1,8 @@
 //! Forced password-change and mandatory 2FA enrollment routes.
 
 use crate::account::{hash_password, new_password_salt, password_meets_policy, write_account_file};
-use crate::account_mgmt::find_account;
 use crate::account_mfa::{begin_totp_enroll, confirm_totp_enroll, load_pending_secret};
+use crate::account_mgmt::find_account;
 use crate::account_security::{
     change_password_gate_main, enroll_mfa_gate_main, must_change_password, needs_mfa_enrollment,
     post_login_security_path,
@@ -206,13 +206,7 @@ pub async fn account_security_enroll_2fa_confirm(
             gate_shell(
                 &user,
                 "Enable 2FA",
-                &enroll_mfa_gate_main(
-                    None,
-                    Some(&error),
-                    secret.as_deref(),
-                    qr.as_deref(),
-                    None,
-                ),
+                &enroll_mfa_gate_main(None, Some(&error), secret.as_deref(), qr.as_deref(), None),
             )
         }
     }

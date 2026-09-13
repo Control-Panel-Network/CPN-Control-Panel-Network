@@ -199,7 +199,9 @@ fn prompt_account(
     println!(
         "\nFirst panel account (the detected language is saved; change it later in the panel)."
     );
-    println!("Reserved names such as admin/root/support are blocked (live GitHub list + local fallback).");
+    println!(
+        "Reserved names such as admin/root/support are blocked (live GitHub list + local fallback)."
+    );
     let username = loop {
         let username = read_line("Admin username: ")?;
         if username.trim().is_empty() {
@@ -223,7 +225,9 @@ fn prompt_account(
             let value =
                 rpassword::read_password().map_err(|e| format!("Failed to read password: {e}"))?;
             if value.is_empty() {
-                eprintln!("error: Password was empty. Enter a non-empty password, or choose generate.");
+                eprintln!(
+                    "error: Password was empty. Enter a non-empty password, or choose generate."
+                );
                 continue;
             }
             eprint!("Confirm password: ");

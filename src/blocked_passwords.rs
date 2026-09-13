@@ -11,18 +11,10 @@
 
 use crate::account::{data_dir, now_unix};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashSet,
-    fs,
-    io::Write,
-    path::PathBuf,
-    sync::Mutex,
-    time::Duration,
-};
+use std::{collections::HashSet, fs, io::Write, path::PathBuf, sync::Mutex, time::Duration};
 
 const BUNDLED_LIST: &str = include_str!("../docs/blocked-passwords.txt");
-const DEFAULT_RAW_URL: &str =
-    "https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/docs/blocked-passwords.txt";
+const DEFAULT_RAW_URL: &str = "https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/docs/blocked-passwords.txt";
 const CACHE_TTL_SECS: u64 = 24 * 60 * 60;
 const FETCH_TIMEOUT_SECS: u64 = 8;
 

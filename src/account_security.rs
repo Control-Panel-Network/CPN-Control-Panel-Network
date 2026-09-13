@@ -1,8 +1,8 @@
 //! First-login security gates: forced password change and mandatory admin 2FA.
 
 use crate::account::{PanelBootstrap, load_bootstrap, write_account_file};
-use crate::account_mgmt::find_account;
 use crate::account_mfa::totp_enabled_for;
+use crate::account_mgmt::find_account;
 use crate::account_passkeys::has_passkeys;
 use crate::panel_admin::is_panel_admin;
 use std::fs;
@@ -51,8 +51,8 @@ pub fn ensure_account_security_flags_migrated() -> Result<(), String> {
     if !dir.is_dir() {
         return Ok(());
     }
-    let entries = fs::read_dir(&dir)
-        .map_err(|err| format!("Could not read {}: {err}", dir.display()))?;
+    let entries =
+        fs::read_dir(&dir).map_err(|err| format!("Could not read {}: {err}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|err| format!("Could not read account entry: {err}"))?;
         let path = entry.path();

@@ -370,15 +370,10 @@ mod tests {
                 bootstrap_path().display()
             );
             assert!(created.generated_password.is_some());
-            assert!(create_account(
-                "admin",
-                None,
-                true,
-                "bad@example.com",
-                policy.clone(),
-                "en",
-            )
-            .is_err());
+            assert!(
+                create_account("admin", None, true, "bad@example.com", policy.clone(), "en",)
+                    .is_err()
+            );
 
             let second = create_account("ops", None, true, "ops@example.com", policy, "en")
                 .expect("create extra");
