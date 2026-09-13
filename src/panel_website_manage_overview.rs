@@ -346,6 +346,7 @@ mod tests {
             owner_suspend_message: String::new(),
             suspended_by: None,
             php_version: None,
+            aliases: Vec::new(),
         }
     }
 

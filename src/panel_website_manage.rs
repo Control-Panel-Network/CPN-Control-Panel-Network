@@ -1,6 +1,7 @@
 //! Website Manage dashboard HTML for CPN Panel.
 
 use crate::panel_site_terminal::tab_terminal;
+use crate::panel_website_manage_alias_cron::{tab_alias, tab_cron};
 use crate::panel_website_manage_tabs::{
     tab_apps, tab_config, tab_domains, tab_files, tab_logs, tab_overview, tab_ssl,
 };
@@ -16,6 +17,8 @@ pub use crate::panel_website_resources::{approx_dir_bytes, format_bytes};
 pub enum ManageTab {
     Overview,
     Domains,
+    Alias,
+    Cron,
     Logs,
     Config,
     Ssl,
@@ -30,6 +33,8 @@ impl ManageTab {
     pub fn parse(raw: Option<&str>) -> Self {
         match raw.unwrap_or("").trim().to_ascii_lowercase().as_str() {
             "domains" => Self::Domains,
+            "alias" | "aliases" | "domain-alias" => Self::Alias,
+            "cron" | "crons" | "cronjobs" => Self::Cron,
             "logs" => Self::Logs,
             "config" | "configurations" => Self::Config,
             "ssl" => Self::Ssl,
@@ -46,6 +51,8 @@ impl ManageTab {
         match self {
             Self::Overview => "overview",
             Self::Domains => "domains",
+            Self::Alias => "alias",
+            Self::Cron => "cron",
             Self::Logs => "logs",
             Self::Config => "config",
             Self::Ssl => "ssl",
@@ -62,6 +69,8 @@ fn tab_body(site: &SiteRecord, tab: ManageTab, username: &str) -> String {
     match tab {
         ManageTab::Overview => tab_overview(site, username),
         ManageTab::Domains => tab_domains(site),
+        ManageTab::Alias => tab_alias(site, username),
+        ManageTab::Cron => tab_cron(site, username),
         ManageTab::Logs => tab_logs(site),
         ManageTab::Config => tab_config(site),
         ManageTab::Ssl => tab_ssl(site),
@@ -158,6 +167,7 @@ mod tests {
             owner_suspend_message: String::new(),
             suspended_by: None,
             php_version: None,
+            aliases: Vec::new(),
         }
     }
 
@@ -182,6 +192,8 @@ mod tests {
         assert_eq!(ManageTab::parse(Some("files")), ManageTab::Files);
         assert_eq!(ManageTab::parse(Some("apps")), ManageTab::Apps);
         assert_eq!(ManageTab::parse(Some("plugins")), ManageTab::Apps);
+        assert_eq!(ManageTab::parse(Some("alias")), ManageTab::Alias);
+        assert_eq!(ManageTab::parse(Some("cron")), ManageTab::Cron);
         assert_eq!(ManageTab::parse(Some("git")), ManageTab::Git);
         assert_eq!(ManageTab::parse(Some("terminal")), ManageTab::Terminal);
         assert_eq!(ManageTab::parse(Some("staging")), ManageTab::Clone);
