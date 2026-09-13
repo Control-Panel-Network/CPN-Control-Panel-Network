@@ -1,0 +1,1218 @@
+use actix_web::{
+    App, HttpRequest, HttpResponse, HttpServer, Responder, guard, http::Method, post, route, web,
+};
+use cpn_installer::account::{account_public_from_disk, default_password_policy};
+use cpn_installer::auth_api::{
+    account_setup, api_logout_get, api_logout_post, apple_touch_icon, cpn_brand_mark, cpn_logo,
+    dashboard_page, favicon_ico, favicon_svg, login_mfa_page, login_mfa_submit, login_page,
+    login_submit, logout_get, logout_post, panel_alias,
+};
+use cpn_installer::auth_pages::installer_token_required_html;
+use cpn_installer::auth_password_reset_api::{
+    forgot_password_page, forgot_password_submit, reset_password_page, reset_password_submit,
+};
+use cpn_installer::http_helpers::{
+    VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
+    install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
+    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
+};
+use cpn_installer::installer::AppState;
+use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
+use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
+use cpn_installer::manifest::detect_existing_install;
+use cpn_installer::model::{
+    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
+    MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
+};
+use cpn_installer::panel_hub_routes::{
+    acl_create_get, acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
+    api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
+    backups_destinations_save, backups_gdrive_route, backups_remote_route, backups_restore_route,
+    backups_restore_run, backups_schedule_route, backups_schedule_save, cloudflare_add_post,
+    cloudflare_delete_post, cloudflare_dns_get, cloudflare_oauth_callback_get,
+    cloudflare_oauth_client_post, cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post,
+    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
+    cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
+    databases_delete_get, databases_delete_post, databases_manager_route,
+    databases_phpmyadmin_open, databases_phpmyadmin_route, email_accounts_route,
+    email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
+    email_catchall_save, email_create_route, email_debugger, email_delivery_route,
+    email_dkim_ensure, email_dkim_route, email_forwarding_route, email_forwarding_save,
+    email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf, email_mta_sts_route,
+    email_mta_sts_save, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
+    email_spamassassin, email_webmail_app_route, email_webmail_regenerate_path,
+    email_webmail_route, email_webmail_settings_save, ftp_accounts_route, ftp_create,
+    ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
+    ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
+    passkey_register_finish, passkey_register_start, security_fail2ban, security_firewall,
+    security_firewall_enable, security_malware, security_modsec, security_modsec_rules,
+    security_page, security_rule_packs, security_ssh, security_ssh_toggle, security_ssl,
+    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
+    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
+    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
+    server_dns_nameservers, server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete,
+    server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
+    server_files_page, server_litespeed_downgrade, server_litespeed_enterprise_page,
+    server_litespeed_page, server_litespeed_serial, server_litespeed_tier,
+    server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
+    server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
+    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
+    server_php_extensions, server_php_tuning, server_processes_page, server_services_control,
+    server_services_page, settings_connect_page, settings_design_page, settings_page,
+    settings_port_page, settings_setup_page, settings_version_page, users_create_get,
+    users_create_post, users_delete_post, users_list_route, users_modify_get, users_password_post,
+    users_plans_page, users_profile_details_post, users_profile_password_post, users_profile_route,
+    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
+    users_reseller_route,
+};
+use cpn_installer::panel_network::{
+    OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
+    purge_expired_migration, save_panel_hostname,
+};
+use cpn_installer::panel_notifications_routes::{
+    panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
+};
+use cpn_installer::panel_package_bulk_routes::{packages_bulk, packages_duplicate};
+use cpn_installer::panel_package_routes::{
+    packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
+    packages_page, packages_update,
+};
+use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
+use cpn_installer::panel_routes::{
+    apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
+    backups_run, databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
+    email_account_create, email_account_disable, email_account_enable, email_page,
+    plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
+    plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
+    preview_mode_page, websites_create, websites_delete, websites_manage, websites_page,
+    websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_resume,
+    websites_suspend,
+};
+use cpn_installer::panel_theme_routes::{
+    panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
+    panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
+};
+use cpn_installer::panel_wordpress_routes::{
+    wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
+    wordpress_install_post, wordpress_list_route, wordpress_manage_route,
+    wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
+    wordpress_theme_activate_post, wordpress_toggle_debug_post,
+    wordpress_toggle_maintenance_post, wordpress_toggle_password_post,
+    wordpress_toggle_search_post,
+};
+use cpn_installer::status_pages::status_html_page;
+use futures_util::StreamExt;
+use rand::{Rng, distr::Alphanumeric};
+use rust_embed::Embed;
+use std::{
+    env,
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
+use tokio::sync::broadcast;
+
+#[derive(Embed)]
+#[folder = "installer-ui/dist"]
+struct UiAssets;
+
+fn status_response(request: &HttpRequest, payload: &InstallerStatus) -> HttpResponse {
+    if wants_html(request) {
+        HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(status_html_page(payload))
+    } else {
+        HttpResponse::Ok().json(payload)
+    }
+}
+
+fn serve_index_html() -> HttpResponse {
+    match UiAssets::get("index.html") {
+        Some(asset) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(asset.data),
+        None => HttpResponse::ServiceUnavailable()
+            .body("The web interface is not embedded in this binary yet"),
+    }
+}
+
+#[route("/", method = "GET", method = "HEAD")]
+async fn root_page(
+    request: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<OptionalTokenQuery>,
+) -> HttpResponse {
+    let status = state
+        .status
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if install_finished(&status) {
+        return HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish();
+    }
+    let from_query = query.token.as_deref();
+    // Query token is bootstrap-only. SPA exchanges it for HttpOnly cookie + Bearer storage
+    // and strips ?token= from the address bar (issue #1).
+    if token_matches(&state, from_query) {
+        return serve_index_html();
+    }
+    // Cookie / header may already authorize without putting the token in the URL.
+    let fake = TokenQuery {
+        token: String::new(),
+    };
+    if authorized_request(&state, &fake, &request) {
+        return serve_index_html();
+    }
+    // Already-installed systems (incl. maintenance phase): send token-less visitors
+    // to panel login instead of the "installation is not finished" blocker.
+    // Installer SPA remains available with ?token= above.
+    if panel_account_ready(&status) {
+        return HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish();
+    }
+    HttpResponse::Unauthorized()
+        .content_type("text/html; charset=utf-8")
+        .body(installer_token_required_html())
+}
+
+#[post("/api/session")]
+async fn bootstrap_session(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<SessionBootstrapRequest>,
+) -> HttpResponse {
+    // Token must arrive in JSON body (not query) so Set-Cookie is not tied to ?token= (CodeQL / #1).
+    if !token_matches(&state, Some(body.token.as_str())) {
+        return HttpResponse::Unauthorized().json(serde_json::json!({"error": "invalid token"}));
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    // Avoid connection_info()/Host-derived allocs (CodeQL rust/uncontrolled-allocation-size).
+    let secure = cpn_installer::panel_session::request_https_from_headers(&http);
+    HttpResponse::Ok()
+        .append_header((
+            actix_web::http::header::SET_COOKIE,
+            install_session_cookie_header(&state.session_id, secure),
+        ))
+        .append_header((
+            actix_web::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate",
+        ))
+        .json(serde_json::json!({"ok": true}))
+}
+
+#[route("/api/status", method = "GET", method = "HEAD")]
+async fn api_status(
+    request: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &request) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let payload = enrich_status(
+        match state.status.try_read() {
+            Ok(guard) => guard.clone(),
+            Err(_) => {
+                // Prefer brief wait over wedging an Actix worker on a write lock.
+                for _ in 0..20 {
+                    std::thread::sleep(Duration::from_millis(5));
+                    if let Ok(guard) = state.status.try_read() {
+                        return status_response(
+                            &request,
+                            &enrich_status(guard.clone(), &state.token),
+                        );
+                    }
+                }
+                return HttpResponse::ServiceUnavailable()
+                    .json(serde_json::json!({"error": "status busy"}));
+            }
+        },
+        &state.token,
+    );
+    status_response(&request, &payload)
+}
+
+#[route("/status", method = "GET", method = "HEAD")]
+async fn status_page(
+    request: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &request) {
+        return HttpResponse::Unauthorized()
+            .content_type("text/html; charset=utf-8")
+            .body("<!DOCTYPE html><html lang=\"en\"><body><h1>Access denied</h1><p>Invalid token.</p></body></html>");
+    }
+    let payload = enrich_status(
+        state
+            .status
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone(),
+        &state.token,
+    );
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(status_html_page(&payload))
+}
+
+#[post("/api/language")]
+async fn set_language(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<LanguageRequest>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    let language = match normalize_language(&request.language) {
+        Ok(value) => value,
+        Err(error) => {
+            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+        }
+    };
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    current.language = language;
+    let payload = enrich_status(current.clone(), &state.token);
+    HttpResponse::Ok().json(payload)
+}
+
+#[post("/api/listen-port")]
+async fn set_listen_port(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<ListenPortRequest>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    let port = match validate_listen_port(request.port) {
+        Ok(value) => value,
+        Err(error) => {
+            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+        }
+    };
+    let policy = match request.old_port_policy.as_deref() {
+        None => None,
+        Some(raw) => match OldPortPolicy::parse(raw) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            }
+        },
+    };
+    let hostname_update = request.panel_hostname.as_ref().map(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let (preferred, migration) =
+        match apply_network_change(port, state.bind_port, policy, hostname_update) {
+            Ok(value) => value,
+            Err(error) => {
+                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            }
+        };
+
+    if let Some(ref public_url) = request.panel_public_url {
+        let trimmed = public_url.trim();
+        let result = if trimmed.is_empty() {
+            clear_panel_public_url()
+        } else {
+            save_panel_public_url(trimmed)
+        };
+        if let Err(error) = result {
+            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+        }
+    }
+
+    let restart_required = preferred != state.bind_port;
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    if !restart_required {
+        current.listen_port = preferred;
+        if let Some(env_info) = current.environment.as_mut() {
+            env_info.port = preferred;
+        }
+        current.panel_login_url = None;
+    }
+    let payload = enrich_status(current.clone(), &state.token);
+    let note = if restart_required {
+        let policy_note = migration
+            .as_ref()
+            .map(|value| {
+                format!(
+                    " Old-port policy: {} (expires unix {}). Restart to bind the new port; redirect helper starts automatically when policy is redirect_*.",
+                    value.mode.as_str(),
+                    value.expires_at
+                )
+            })
+            .unwrap_or_default();
+        format!(
+            "Preferred listen port {preferred} saved. Restart with: cpn-installer --port {preferred} (current session stays on {}).{policy_note}",
+            state.bind_port
+        )
+    } else {
+        format!("Listen port {preferred} confirmed for this session")
+    };
+    let network = network_public(state.bind_port, None);
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": payload,
+        "listen_port": state.bind_port,
+        "preferred_listen_port": preferred,
+        "restart_required": restart_required,
+        "message": note,
+        "network": network,
+        "port_migration": migration,
+    }))
+}
+
+#[post("/api/install/server")]
+async fn start_install(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<InstallRequest>,
+) -> impl Responder {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    #[cfg(unix)]
+    if unsafe { libc::geteuid() } != 0 {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
+    }
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    if let Err(denied) = can_start_server(&current, request.force_reinstall) {
+        return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
+    }
+    current.selected_server = Some(request.server);
+    if request.force_reinstall {
+        current.selected_mail = None;
+        current.server_ready = false;
+        current.external_ports_configured = false;
+    } else {
+        current.selected_mail = None;
+    }
+    current.phase = "configuring";
+    current.progress = 0;
+    current.error = None;
+    drop(current);
+    // Support tickets need a complete transcript, regardless of client payload.
+    state.set_install_log_detail(cpn_installer::installer::InstallLogDetail::Full);
+    // Dedicated OS thread + runtime so sync/package work cannot starve Actix HTTP.
+    let install_state = state.get_ref().clone();
+    let server = request.server;
+    let database = request.database;
+    let install_phpmyadmin = request.install_phpmyadmin;
+    let enable_proxy_front = request.enable_proxy_front;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-server".into())
+        .spawn(move || {
+            // current_thread keeps package work off Actix workers without a second
+            // multi-thread runtime competing for a 1-vCPU matrix guest.
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_with_database(
+                install_state,
+                server,
+                database,
+                install_phpmyadmin,
+                enable_proxy_front,
+            ));
+        });
+    HttpResponse::Accepted().finish()
+}
+
+#[post("/api/install/mail")]
+async fn start_mail_install(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<MailInstallRequest>,
+) -> impl Responder {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    #[cfg(unix)]
+    if unsafe { libc::geteuid() } != 0 {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Run the installer as root (sudo cpn-installer)"}));
+    }
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    if let Err(denied) = can_start_mail(&current, request.force_reinstall) {
+        return HttpResponse::Conflict().json(serde_json::json!({"error": denied.message}));
+    }
+    current.selected_mail = Some(request.mail);
+    current.phase = "downloading";
+    current.progress = 0;
+    current.error = None;
+    drop(current);
+    let install_state = state.get_ref().clone();
+    let mail = request.mail;
+    let _ = std::thread::Builder::new()
+        .name("cpn-install-mail".into())
+        .spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                eprintln!("cpn-installer: failed to build mail install runtime");
+                return;
+            };
+            rt.block_on(cpn_installer::installer::install_mail(install_state, mail));
+        });
+    HttpResponse::Accepted().finish()
+}
+
+async fn websocket(
+    request: HttpRequest,
+    body: web::Payload,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+) -> actix_web::Result<HttpResponse> {
+    if !authorized_request(&state, &query, &request) {
+        return Ok(HttpResponse::Unauthorized().finish());
+    }
+    if !websocket_origin_ok(&request, state.allow_remote, &state.allowed_hosts) {
+        return Ok(HttpResponse::Forbidden().finish());
+    }
+    let (response, mut session, mut messages) = actix_ws::handle(&request, body)?;
+    let mut events = state.events.subscribe();
+    let snapshot = InstallerEvent::Snapshot {
+        status: enrich_status(
+            state
+                .status
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+            &state.token,
+        ),
+    };
+    actix_web::rt::spawn(async move {
+        let _ = session
+            .text(serde_json::to_string(&snapshot).unwrap_or_default())
+            .await;
+        loop {
+            tokio::select! {
+                event = events.recv() => match event {
+                    Ok(event) => if session.text(serde_json::to_string(&event).unwrap_or_default()).await.is_err() { break; },
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue, Err(_) => break,
+                },
+                message = messages.next() => match message {
+                    Some(Ok(actix_ws::Message::Ping(value))) => { let _ = session.pong(&value).await; }
+                    Some(Ok(actix_ws::Message::Close(reason))) => { let _ = session.close(reason).await; break; }
+                    None | Some(Err(_)) => break, _ => {}
+                }
+            }
+        }
+    });
+    Ok(response)
+}
+
+/// Kept for direct route wiring; `panel_catch_all` calls `static_asset_for` after webmail proxy checks.
+#[allow(dead_code)]
+async fn static_asset(path: web::Path<String>) -> impl Responder {
+    static_asset_for(&path.into_inner())
+}
+
+fn static_asset_for(requested: &str) -> HttpResponse {
+    // Never treat empty path as the installer SPA here; `root_page` owns `/`.
+    if requested.is_empty() {
+        return HttpResponse::NotFound().finish();
+    }
+    let name = requested;
+    let asset = UiAssets::get(name).or_else(|| {
+        if name.contains('.') {
+            None
+        } else {
+            UiAssets::get("index.html")
+        }
+    });
+    match asset {
+        Some(asset) => {
+            let content_type = match name.rsplit('.').next() {
+                Some("js") => "text/javascript; charset=utf-8",
+                Some("css") => "text/css; charset=utf-8",
+                Some("svg") => "image/svg+xml",
+                Some("png") => "image/png",
+                _ => "text/html; charset=utf-8",
+            };
+            HttpResponse::Ok()
+                .content_type(content_type)
+                .body(asset.data)
+        }
+        None => HttpResponse::ServiceUnavailable()
+            .body("The web interface is not embedded in this binary yet"),
+    }
+}
+
+async fn panel_catch_all(
+    req: HttpRequest,
+    payload: web::Payload,
+    path: web::Path<String>,
+) -> HttpResponse {
+    if cpn_installer::panel_webmail::webmail_ready()
+        && cpn_installer::panel_webmail::path_should_proxy_webmail(req.path())
+    {
+        return cpn_installer::panel_webmail_proxy::webmail_panel_proxy(req, payload).await;
+    }
+    if matches!(*req.method(), Method::GET | Method::HEAD) {
+        return static_asset_for(&path.into_inner());
+    }
+    HttpResponse::NotFound().finish()
+}
+
+fn allow_remote_listen() -> bool {
+    cpn_installer::panel_service::allow_remote_requested()
+}
+
+/// Ignore SIGHUP so SSH disconnect / closed PTY does not kill a long-running
+/// installer (common VirtualBox lab failure when starting without systemd).
+#[cfg(unix)]
+fn ignore_sighup() {
+    // SAFETY: SIG_IGN is a valid disposition; we only change SIGHUP handling.
+    unsafe {
+        libc::signal(libc::SIGHUP, libc::SIG_IGN);
+    }
+}
+
+#[cfg(not(unix))]
+fn ignore_sighup() {}
+
+fn apply_startup_network_flags(args: &[String], listen_port: u16) {
+    let mut hostname: Option<String> = None;
+    let mut policy: Option<OldPortPolicy> = None;
+    let mut iter = args.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        if arg == "--panel-hostname" {
+            if let Some(value) = iter.next() {
+                hostname = Some(value.clone());
+            }
+        } else if let Some(value) = arg.strip_prefix("--panel-hostname=") {
+            hostname = Some(value.to_string());
+        } else if arg == "--old-port-policy" {
+            if let Some(value) = iter.next() {
+                match OldPortPolicy::parse(value) {
+                    Ok(parsed) => policy = Some(parsed),
+                    Err(error) => eprintln!("cpn-installer: {error}"),
+                }
+            }
+        } else if let Some(value) = arg.strip_prefix("--old-port-policy=") {
+            match OldPortPolicy::parse(value) {
+                Ok(parsed) => policy = Some(parsed),
+                Err(error) => eprintln!("cpn-installer: {error}"),
+            }
+        }
+    }
+    // Capture previous preferred port before --port overwrites preferences on apply.
+    let previous_preferred = cpn_installer::listen_port::load_preferred_listen_port();
+    if let Some(host) = hostname {
+        match save_panel_hostname(&host) {
+            Ok(()) => println!("  Panel hostname saved: {host}"),
+            Err(error) => eprintln!("cpn-installer: could not save panel hostname: {error}"),
+        }
+    }
+    if let Some(policy) = policy {
+        let old = previous_preferred.unwrap_or(cpn_installer::listen_port::DEFAULT_PORT);
+        if old != listen_port {
+            match cpn_installer::panel_network::build_port_migration(old, listen_port, policy) {
+                Ok(Some(migration)) => {
+                    if let Err(error) =
+                        cpn_installer::panel_network::save_port_migration(&migration)
+                    {
+                        eprintln!("cpn-installer: could not save port migration: {error}");
+                    } else {
+                        println!(
+                            "  Old-port policy {}: {} -> {} (expires unix {})",
+                            policy.as_str(),
+                            migration.old_port,
+                            migration.new_port,
+                            migration.expires_at
+                        );
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => eprintln!("cpn-installer: {error}"),
+            }
+        }
+        let _ = cpn_installer::listen_port::save_preferred_listen_port(listen_port);
+    }
+}
+
+fn listen_hosts() -> Vec<String> {
+    if allow_remote_listen() {
+        vec!["0.0.0.0".into()]
+    } else {
+        vec!["127.0.0.1".into()]
+    }
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if let Some(mode) = cpn_installer::cli_maintenance::parse_cli(&args) {
+        let code = cpn_installer::cli_maintenance::run_cli(mode).await;
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
+
+    let frontend = match cpn_installer::cli_install::resolve_install_frontend(&args) {
+        Ok(mode) => mode,
+        Err(error) => {
+            eprintln!("cpn-installer: {error}");
+            std::process::exit(2);
+        }
+    };
+    if frontend == cpn_installer::cli_install::InstallFrontend::Cli {
+        let code = cpn_installer::cli_install::run_interactive_cli(&args).await;
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
+
+    ignore_sighup();
+
+    let listen_port = match resolve_listen_port(&args) {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("cpn-installer: {error}");
+            std::process::exit(2);
+        }
+    };
+    apply_startup_network_flags(&args, listen_port);
+    purge_expired_migration();
+    match cpn_installer::panel_migrate::run_pending_migrations() {
+        Ok(applied) if !applied.is_empty() => {
+            eprintln!(
+                "cpn-installer: applied panel migrations: {}",
+                applied.join(", ")
+            );
+        }
+        Err(error) => {
+            eprintln!("cpn-installer: warning: panel migrations: {error}");
+        }
+        _ => {}
+    }
+    #[cfg(unix)]
+    if listen_port < 1024 && unsafe { libc::geteuid() } != 0 {
+        eprintln!(
+            "Warning: port {listen_port} is privileged (<1024). Usually requires root, or choose a port >1024 (default {}).",
+            cpn_installer::listen_port::DEFAULT_PORT
+        );
+    }
+
+    println!("\nCPN Server Panel · Installer {VERSION}");
+    println!("Starting the web installer (language detected from browser/system)...\n");
+    cpn_installer::motd::ensure_motd_installed();
+    let token: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(28)
+        .map(char::from)
+        .collect();
+    let session_id: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(28)
+        .map(char::from)
+        .collect();
+    let environment = cpn_installer::environment::inspect(listen_port).await;
+    let remote = allow_remote_listen();
+    if remote {
+        if let Err(error) = cpn_installer::panel_service::save_allow_remote_preference(true) {
+            eprintln!("cpn-installer: could not save allow_remote preference: {error}");
+        }
+        match cpn_installer::environment::open_installer_port(&environment).await {
+            Ok(()) => {}
+            Err(error) => eprintln!("Warning: {error}"),
+        }
+    }
+    let mail_releases = cpn_installer::mail_releases::load_mail_releases().await;
+    let maintenance = cpn_installer::maintenance_api::load_maintenance_info().await;
+    let existing = detect_existing_install(VERSION);
+    let (events, _) = broadcast::channel(256);
+    let bootstrap_account = account_public_from_disk();
+    let phase = if maintenance.existing_install {
+        "maintenance"
+    } else if bootstrap_account.is_some() {
+        "completed"
+    } else {
+        "ready"
+    };
+    let has_bootstrap_account = bootstrap_account.is_some();
+    let message = if maintenance.existing_install {
+        format!(
+            "CPN {} is already installed. Choose upgrade, repair, or continue config.",
+            existing.package_version
+        )
+    } else {
+        "The system is ready to continue".into()
+    };
+    let mut initial = InstallerStatus {
+        phase,
+        progress: 0,
+        message,
+        selected_server: existing.selected_server,
+        selected_mail: existing.selected_mail,
+        environment: Some(environment.clone()),
+        error: None,
+        language: cpn_installer::http_helpers::detect_system_language(),
+        listen_port,
+        panel_hostname: None,
+        panel_public_url: None,
+        port_migration: None,
+        public_base_url: None,
+        account: bootstrap_account,
+        password_policy: default_password_policy(),
+        panel_login_path: "/login".into(),
+        panel_login_url: None,
+        version: VERSION.into(),
+        server_ready: existing.selected_server.is_some() || existing.has_manifest,
+        mail_client_ready: false,
+        mail_backend_ready: false,
+        external_ports_configured: false,
+        access_note: None,
+        mail_releases,
+        smtp: Some(smtp_status_public()),
+        maintenance: Some(maintenance),
+    };
+    initial = enrich_status(initial, &token);
+    cpn_installer::installer::persist_status_snapshot(&initial);
+    let startup_hostname = initial.panel_hostname.clone();
+    let startup_migration = initial.port_migration.clone();
+    let mut host_seeds = environment.addresses.clone();
+    if let Some(hostname) = startup_hostname.as_ref() {
+        host_seeds.push(hostname.clone());
+    }
+    let allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
+    let state = Arc::new(AppState {
+        status: std::sync::RwLock::new(initial),
+        events,
+        token: token.clone(),
+        session_id,
+        bind_port: listen_port,
+        allow_remote: remote,
+        allowed_hosts,
+        cancel_requested: AtomicBool::new(false),
+        active_child_pids: std::sync::Mutex::new(Vec::new()),
+        install_log_detail: std::sync::Mutex::new(cpn_installer::installer::InstallLogDetail::Full),
+    });
+    println!("✓ The web installer is ready:");
+    cpn_installer::motd::print_panel_ready_banner(
+        VERSION,
+        listen_port,
+        startup_hostname.as_deref(),
+    );
+    if phase == "completed" && has_bootstrap_account {
+        cpn_installer::paths::clear_installer_bootstrap_token();
+        println!("Panel account is already set up. Open the login URL above (no installer token).");
+    } else {
+        match cpn_installer::paths::persist_bootstrap_token_for_startup(&token, remote) {
+            Ok(Some(path)) => {
+                if remote {
+                    println!("  Bootstrap token file (mode 0600): {}", path.display());
+                    println!("  Read once with: sudo cat {}", path.display());
+                }
+            }
+            Ok(None) => {
+                eprintln!(
+                    "cpn-installer: could not persist bootstrap token file (continuing; token is printed for local bind)"
+                );
+            }
+            Err(error) => {
+                eprintln!("cpn-installer: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    if phase != "completed" || !has_bootstrap_account {
+        if remote {
+            println!(
+                "  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS)."
+            );
+            println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
+            println!(
+                "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
+            );
+            println!(
+                "  Token fingerprint (last 4): ...{}",
+                &token[token.len().saturating_sub(4)..]
+            );
+            println!("  Full token also accepted via Authorization: Bearer or X-CPN-Token.");
+        } else {
+            println!("  http://127.0.0.1:{listen_port}/?token={token}");
+            println!(
+                "  Recommended remote access via SSH tunnel, for example:\n  ssh -L {listen_port}:127.0.0.1:{listen_port} user@host"
+            );
+            println!("  To listen on all interfaces: --allow-remote or CPN_ALLOW_REMOTE=1");
+        }
+    }
+    println!("  Listen port: {listen_port} (change with --port, CPN_LISTEN_PORT, or the UI)");
+    if let Some(hostname) = startup_hostname.as_ref() {
+        println!(
+            "  Panel hostname: https://{hostname}/login (DNS + reverse proxy on 443 -> {listen_port})"
+        );
+    }
+    if let Some(migration) = startup_migration.as_ref() {
+        println!(
+            "  Port migration: {} -> {} ({}; expires unix {})",
+            migration.old_port, migration.new_port, migration.mode, migration.expires_at
+        );
+    }
+    println!("\nKeep this window open until you finish. Press Ctrl+C to stop.\n");
+    println!("Tip: use `sudo cpn-installer --cli` for an SSH/CLI install without the browser.\n");
+    let hosts = listen_hosts();
+    if let Some(migration) = active_redirect_migration(listen_port) {
+        let redirect_hosts = hosts.clone();
+        tokio::spawn(async move {
+            cpn_installer::port_redirect::run_redirect_listeners(redirect_hosts, migration).await;
+        });
+    }
+    let cancel_state = state.clone();
+    let mut server = HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(state.clone()))
+            .app_data(web::JsonConfig::default().limit(64 * 1024))
+            .app_data(web::PayloadConfig::new(64 * 1024))
+            .service(root_page)
+            .service(api_status)
+            .service(status_page)
+            .service(login_page)
+            .service(cpn_logo)
+            .service(favicon_ico)
+            .service(favicon_svg)
+            .service(apple_touch_icon)
+            .service(cpn_brand_mark)
+            .service(login_submit)
+            .service(login_mfa_page)
+            .service(login_mfa_submit)
+            .service(passkey_login_start)
+            .service(passkey_login_finish)
+            .service(dashboard_page)
+            .service(websites_page)
+            .service(websites_manage)
+            .service(websites_preview_redirect)
+            .service(websites_pretty_manage)
+            .service(preview_mode_page)
+            .service(preview_content)
+            .service(websites_create)
+            .service(websites_delete)
+            .service(websites_suspend)
+            .service(websites_resume)
+            .service(websites_prefs)
+            .service(wordpress_list_route)
+            .service(wordpress_install_get)
+            .service(wordpress_install_post)
+            .service(wordpress_manage_route)
+            .service(wordpress_scan_post)
+            .service(wordpress_ensure_wpcli_post)
+            .service(wordpress_refresh_post)
+            .service(wordpress_delete_post)
+            .service(wordpress_plugin_install_post)
+            .service(wordpress_theme_activate_post)
+            .service(wordpress_toggle_search_post)
+            .service(wordpress_toggle_debug_post)
+            .service(wordpress_toggle_maintenance_post)
+            .service(wordpress_toggle_password_post)
+            .service(panel_color_mode_get)
+            .service(panel_color_mode_set)
+            .service(panel_notifications_get)
+            .service(panel_notifications_mark_read)
+            .service(panel_notifications_push)
+            .service(panel_design_get)
+            .service(panel_design_save)
+            .service(panel_design_preset)
+            .service(panel_design_restore)
+            .service(panel_themes_catalog)
+            .service(panel_themes_apply)
+            .service(email_page)
+            .service(email_account_create)
+            .service(email_account_enable)
+            .service(email_account_disable)
+            .service(databases_page)
+            .service(databases_install_mariadb)
+            .service(databases_create)
+            .service(databases_ftp_create)
+            .service(packages_page)
+            .service(packages_new_page)
+            .service(packages_edit_page)
+            .service(packages_create)
+            .service(packages_update)
+            .service(packages_duplicate)
+            .service(packages_bulk)
+            .service(packages_delete)
+            .service(packages_assign)
+            .service(apps_page)
+            .service(apps_install)
+            .service(apps_reinstall)
+            .service(apps_uninstall)
+            .service(apps_start)
+            .service(apps_stop)
+            .service(backups_page)
+            .service(backups_run)
+            .service(backups_create_route)
+            .service(backups_restore_route)
+            .service(backups_restore_run)
+            .service(backups_schedule_route)
+            .service(backups_schedule_save)
+            .service(backups_destinations_route)
+            .service(backups_destinations_save)
+            .service(backups_gdrive_route)
+            .service(backups_remote_route)
+            .service(server_page)
+            .service(server_services_page)
+            .service(server_services_control)
+            .service(server_openlitespeed_page)
+            .service(server_openlitespeed_password)
+            .service(server_openlitespeed_reset_cpn)
+            .service(server_openlitespeed_guest)
+            .service(server_openlitespeed_guest_remove)
+            .service(server_litespeed_enterprise_page)
+            .service(server_litespeed_page)
+            .service(server_litespeed_tier)
+            .service(server_litespeed_serial)
+            .service(server_litespeed_webadmin_url)
+            .service(server_litespeed_upgrade)
+            .service(server_litespeed_downgrade)
+            .service(server_processes_page)
+            .service(server_php_extensions)
+            .service(server_php_configs)
+            .service(server_php_tuning)
+            .service(server_packages_page)
+            .service(server_docker_apps)
+            .service(server_docker_containers)
+            .service(server_docker_images)
+            .service(server_files_page)
+            .service(server_dns_zones)
+            .service(server_dns_zones_save)
+            .service(server_dns_zones_delete)
+            .service(server_dns_nameservers)
+            .service(server_dns_defaults)
+            .service(server_dns_nameservers_save)
+            .service(cloudflare_dns_get)
+            .service(server_cloudflare_redirect)
+            .service(cloudflare_oauth_client_post)
+            .service(cloudflare_oauth_connect_post)
+            .service(cloudflare_oauth_callback_get)
+            .service(cloudflare_oauth_disconnect_post)
+            .service(cloudflare_settings_post)
+            .service(cloudflare_test_post)
+            .service(cloudflare_sync_post)
+            .service(cloudflare_add_post)
+            .service(cloudflare_update_post)
+            .service(cloudflare_delete_post)
+            .service(cloudflare_proxy_post)
+            .service(settings_page)
+            .service(settings_version_page)
+            .service(settings_design_page)
+            .service(settings_setup_page)
+            .service(settings_connect_page)
+            .service(settings_port_page)
+            .service(security_page)
+            .service(security_firewall)
+            .service(security_firewall_enable)
+            .service(security_ssh)
+            .service(security_ssh_toggle)
+            .service(security_fail2ban)
+            .service(security_modsec)
+            .service(security_modsec_rules)
+            .service(security_rule_packs)
+            .service(security_malware)
+            .service(security_ssl)
+            .service(security_ssl_hostname)
+            .service(security_ssl_mail)
+            .service(security_ssl_issue)
+            .service(security_ssl_issue_all)
+            .service(security_ssl_renew)
+            .service(security_ssl_restore_le)
+            .service(security_ssl_mark_custom)
+            .service(security_ssl_provider)
+            .service(security_ssl_defaults)
+            .service(security_ssl_upload)
+            .service(users_plans_page)
+            .service(users_profile_route)
+            .service(users_profile_details_post)
+            .service(users_profile_password_post)
+            .service(users_profile_totp_begin)
+            .service(users_profile_totp_confirm)
+            .service(users_profile_totp_disable)
+            .service(passkey_register_start)
+            .service(passkey_register_finish)
+            .service(passkey_delete_post)
+            .service(users_list_route)
+            .service(users_create_get)
+            .service(users_create_post)
+            .service(users_modify_get)
+            .service(users_password_post)
+            .service(users_delete_post)
+            .service(users_reseller_route)
+            .service(api_access_route)
+            .service(api_access_create_post)
+            .service(api_access_revoke_post)
+            .service(acl_create_get)
+            .service(acl_create_post)
+            .service(acl_modify_get)
+            .service(acl_delete_post)
+            .service(email_accounts_route)
+            .service(email_create_route)
+            .service(email_forwarding_route)
+            .service(email_forwarding_save)
+            .service(email_catchall_route)
+            .service(email_catchall_save)
+            .service(email_dkim_route)
+            .service(email_dkim_ensure)
+            .service(email_webmail_route)
+            .service(email_webmail_app_route)
+            .service(email_webmail_settings_save)
+            .service(email_webmail_regenerate_path)
+            .service(email_mta_sts_route)
+            .service(email_mta_sts_save)
+            .service(email_mta_sts_push_cf)
+            .service(email_bimi_route)
+            .service(email_bimi_save)
+            .service(email_bimi_push_cf)
+            .service(email_delivery_route)
+            .service(email_pattern_fwd)
+            .service(email_limits)
+            .service(email_password)
+            .service(email_debugger)
+            .service(email_queue)
+            .service(email_spamassassin)
+            .service(email_rspamd)
+            .service(email_mailscanner)
+            .service(email_marketing)
+            .service(email_plus)
+            .service(databases_all_route)
+            .service(databases_create_get)
+            .service(databases_create_post)
+            .service(databases_delete_get)
+            .service(databases_delete_post)
+            .service(databases_manager_route)
+            .service(databases_phpmyadmin_route)
+            .service(databases_phpmyadmin_open)
+            .service(ftp_accounts_route)
+            .service(ftp_create)
+            .service(ftp_create_post)
+            .service(ftp_delete)
+            .service(ftp_delete_post)
+            .service(ftp_reset)
+            .service(ftp_reset_post)
+            .service(ftp_reset_password_post)
+            .service(plugins_page)
+            .service(plugins_settings_page)
+            .service(plugins_settings_save)
+            .service(plugins_dashboard_page)
+            .service(plugins_install)
+            .service(plugins_uninstall)
+            .service(plugins_enable)
+            .service(plugins_disable)
+            .service(panel_alias)
+            .service(logout_get)
+            .service(logout_post)
+            .service(api_logout_get)
+            .service(api_logout_post)
+            .service(forgot_password_page)
+            .service(forgot_password_submit)
+            .service(reset_password_page)
+            .service(reset_password_submit)
+            .service(set_language)
+            .service(set_listen_port)
+            .service(bootstrap_session)
+            .service(account_setup)
+            .service(start_install)
+            .service(start_mail_install)
+            .service(cpn_installer::maintenance_api::api_version_check)
+            .service(cpn_installer::maintenance_api::api_releases)
+            .service(cpn_installer::maintenance_api::api_maintenance_status)
+            .service(cpn_installer::maintenance_api::start_maintenance)
+            .route("/api/events", web::get().to(websocket))
+            // Use Any/or for methods. Chained .method() guards are AND'd and never match.
+            .route(
+                "/{path:.*}",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(panel_catch_all),
+            )
+    })
+    .keep_alive(actix_web::http::KeepAlive::Disabled)
+    // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
+    // work freezes /api/status for the whole smoke. Keep at least two workers.
+    .workers(std::cmp::max(
+        2,
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2),
+    ));
+    for host in &hosts {
+        server = server.bind((host.as_str(), listen_port))?;
+    }
+    println!(
+        "Listening on port {listen_port} (hosts: {})",
+        hosts.join(", ")
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    let running = server.run();
+    let handle = running.handle();
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut sigterm = signal(SignalKind::terminate()).ok();
+            let mut sigint = signal(SignalKind::interrupt()).ok();
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = async {
+                    if let Some(ref mut s) = sigterm { s.recv().await; }
+                } => {}
+                _ = async {
+                    if let Some(ref mut s) = sigint { s.recv().await; }
+                } => {}
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+        cancel_state.request_cancel();
+        handle.stop(true).await;
+    });
+    let result = running.await;
+    if remote {
+        let _ = cpn_installer::environment::close_installer_port(&environment).await;
+    }
+    result
+}
