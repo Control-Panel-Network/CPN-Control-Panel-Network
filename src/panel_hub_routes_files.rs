@@ -39,12 +39,12 @@ fn files_redirect(path: &str, notice: Option<&str>, error: Option<&str>) -> Http
     redirect_notice(&base, notice, error)
 }
 
-fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, HttpResponse> {
+fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Box<HttpResponse>> {
     let Some(user) = require_panel_user(state, http) else {
-        return Err(login_redirect(http));
+        return Err(Box::new(login_redirect(http)));
     };
     if !is_panel_admin(&user) {
-        return Err(html_ok(panel_shell(
+        return Err(Box::new(html_ok(panel_shell(
             &user,
             "server",
             "Root File Manager",
@@ -56,7 +56,7 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Ht
                 None,
                 None,
             ),
-        )));
+        ))));
     }
     Ok(user)
 }
@@ -98,7 +98,7 @@ pub async fn server_files_page(
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
         Ok(user) => render_files(&user, &query).await,
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }
 
@@ -110,7 +110,7 @@ pub async fn filemanager_alias(
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
         Ok(user) => render_files(&user, &query).await,
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }
 
@@ -122,7 +122,7 @@ pub async fn server_filemanager_alias(
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
         Ok(user) => render_files(&user, &query).await,
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }
 
@@ -134,7 +134,7 @@ pub async fn server_files_op(
 ) -> HttpResponse {
     let user = match require_admin_user(&state, &http) {
         Ok(u) => u,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if !same_origin_ok(&http) {
         return files_redirect("/", None, Some("Rejected cross-origin form post"));
@@ -211,7 +211,7 @@ pub async fn server_files_upload(
 ) -> HttpResponse {
     let user = match require_admin_user(&state, &http) {
         Ok(u) => u,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     if !same_origin_ok(&http) {
         return files_redirect("/", None, Some("Rejected cross-origin form post"));

@@ -136,7 +136,7 @@ pub fn read_text(path: &str) -> Result<String, String> {
     let mut buf = Vec::new();
     f.read_to_end(&mut buf)
         .map_err(|e| format!("read failed: {e}"))?;
-    if buf.iter().any(|&b| b == 0) {
+    if buf.contains(&0) {
         return Err("Binary files cannot be edited in the text editor".into());
     }
     String::from_utf8(buf).map_err(|_| "File is not valid UTF-8".to_string())

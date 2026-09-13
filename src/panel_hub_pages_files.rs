@@ -72,6 +72,11 @@ pub fn files_page(
                 }
                 let tree = build_tree_html(&path_s);
                 let editor = edit_modal(edit_path, edit_content, &csrf, &path_s);
+                let notices = format!(
+                    "{}{}",
+                    notice_block("ok", notice),
+                    notice_block("error", error)
+                );
                 format!(
                     r#"{styles}
 {risk}
@@ -136,11 +141,7 @@ pub fn files_page(
 {script}"#,
                     styles = fm_styles(),
                     risk = r#"<p class="muted">Admin-only full filesystem access. Path traversal is blocked; protected system paths refuse delete/overwrite. Prefer site jails for routine hosting work.</p>"#,
-                    notices = format!(
-                        "{}{}",
-                        notice_block("ok", notice),
-                        notice_block("error", error)
-                    ),
+                    notices = notices,
                     path_esc = html_escape(&path_s),
                     path_enc = urlencoding_simple(&path_s),
                     csrf = html_escape(&csrf),
