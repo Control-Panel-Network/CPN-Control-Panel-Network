@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ExternalLink } from "lucide-react";
 import { formatMessage, useI18n } from "../i18n";
 import type { MailSystem, ServerEngine } from "../types";
@@ -28,12 +28,14 @@ export function CompleteScreen({
   mail,
   message,
   panelLoginUrl,
+  generatedPassword,
   autoOpen = true,
 }: {
   server: ServerEngine | null;
   mail: MailSystem | null;
   message?: string | null;
   panelLoginUrl: string;
+  generatedPassword?: string | null;
   autoOpen?: boolean;
 }) {
   const { t } = useI18n();
@@ -51,6 +53,7 @@ export function CompleteScreen({
   const opened = useRef(false);
   const serverName = serverLabel(server);
   const mailName = mailLabel(mail);
+  const [copied, setCopied] = useState(false);
 
   const summary = useMemo(() => {
     if (serverName && mailName) {
@@ -87,6 +90,30 @@ export function CompleteScreen({
         <p className="text-[#667085] text-lg mt-4">{summary}</p>
         {message ? (
           <p className="text-[#475467] text-base mt-3">{message}</p>
+        ) : null}
+        {generatedPassword ? (
+          <div className="panel mt-6 p-4 text-left">
+            <p className="text-sm font-semibold text-[#1d1d1f]">
+              {t.generatedPasswordNote}
+            </p>
+            <code className="block mt-2 break-all text-[15px] text-[#1d1d1f]">
+              {generatedPassword}
+            </code>
+            <button
+              type="button"
+              className="secondary-button mt-3"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(generatedPassword);
+                  setCopied(true);
+                } catch {
+                  setCopied(false);
+                }
+              }}
+            >
+              {copied ? t.copied : t.copyPassword}
+            </button>
+          </div>
         ) : null}
         <p className="text-[#667085] text-sm mt-3">{t.openingPanelHint}</p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center items-center">

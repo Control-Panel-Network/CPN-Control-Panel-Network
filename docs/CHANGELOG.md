@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Install default PHP is **8.5** on AlmaLinux/RHEL 9+ (Remi). CLI and web installers offer 8.5 / 8.4 / 8.3 / 8.2. Missing packages fall back to the next branch with a clear log line; choice is stored in `/var/lib/cpn/php-default.json` and applied as the default `php_version` on new sites. See `to-do/PHP-INSTALL-DEFAULT-85.md`.
 
+### Added
+
+- Live reserved panel usernames list (`docs/reserved-usernames.txt` on `stable`) fetched with 24h disk cache and bundled fallback; blocked at first-admin setup, `cpn account create`, and rename.
+- Live blocked passwords list (`docs/blocked-passwords.txt` on `stable`) with the same cache/fallback pattern; enforced via `password_meets_policy` on install, create, change, reset, and forced first-login change.
+- Install first-admin UX: required non-reserved username; empty password auto-generates a strong secret shown once (CLI end / installer Complete screen); `must_change_password` when generated; panel admins require TOTP/passkey before full dashboard (`totp_required`, migration `0007_account_security_flags`).
+
+### Notes
+
+- GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
+- Generated passwords are never logged; shown once in the installer UI/CLI only.
+
 ## [0.2.6-alpha.38] - 13/09/2026
 
 Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail client defaults, and CPN mail onboarding (Cargo `0.2.6-alpha.38`).

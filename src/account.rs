@@ -22,6 +22,12 @@ pub struct PanelBootstrap {
     pub password_policy: PasswordPolicy,
     pub language: String,
     pub created_at_unix: u64,
+    /// When true, the next login must change the password before full panel use.
+    #[serde(default)]
+    pub must_change_password: bool,
+    /// When true (panel admins default on), require TOTP or a passkey before full panel use.
+    #[serde(default)]
+    pub totp_required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -94,11 +100,15 @@ pub(crate) fn with_test_data_dir<T>(f: impl FnOnce() -> T) -> T {
     unsafe {
         std::env::set_var("CPN_DATA_DIR", &dir);
         std::env::set_var("CPN_SITES_HOME", &sites_home);
+        std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+        std::env::set_var("CPN_BLOCKED_PASSWORDS_OFFLINE", "1");
     }
     let result = f();
     unsafe {
         std::env::remove_var("CPN_DATA_DIR");
         std::env::remove_var("CPN_SITES_HOME");
+        std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+        std::env::remove_var("CPN_BLOCKED_PASSWORDS_OFFLINE");
     }
     let _ = fs::remove_dir_all(&dir);
     result
@@ -111,7 +121,7 @@ fn has_control_chars(value: &str) -> bool {
 pub fn normalize_username(raw: &str) -> Result<String, String> {
     let username = raw.trim();
     if username.is_empty() {
-        return Ok("admin".into());
+        return Err("Choose a username for the administrator account".into());
     }
     if username.chars().count() > MAX_USERNAME_CHARS {
         return Err(format!(
@@ -121,6 +131,7 @@ pub fn normalize_username(raw: &str) -> Result<String, String> {
     if has_control_chars(username) {
         return Err("Username cannot include control characters".into());
     }
+    crate::reserved_usernames::reject_if_reserved(username)?;
     Ok(username.to_string())
 }
 
@@ -180,6 +191,7 @@ pub fn password_meets_policy(password: &str, policy: &PasswordPolicy) -> Result<
     if policy.require_special && !password.chars().any(is_special) {
         return Err("Password must include at least one special character".into());
     }
+    crate::blocked_passwords::reject_if_blocked(password)?;
     Ok(())
 }
 
@@ -402,6 +414,11 @@ pub fn setup_account(
     validate_policy(&policy)?;
     let username = normalize_username(username_raw)?;
     let recovery_email = validate_recovery_email(recovery_email_raw)?;
+    let password_empty = password_raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none();
+    let generate = generate || password_empty;
     let (password, generated_password) = if generate {
         let value = generate_password(&policy);
         (value.clone(), Some(value))
@@ -426,6 +443,8 @@ pub fn setup_account(
         password_policy: policy,
         language: language.to_string(),
         created_at_unix: now_unix(),
+        must_change_password: generated_password.is_some(),
+        totp_required: true,
     };
     persist_bootstrap(&boot)?;
     // OLS WebAdmin uses htpasswd (apr1/bcrypt), not CPN PBKDF2. Align while plaintext
@@ -448,9 +467,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_username_when_empty() {
-        assert_eq!(normalize_username("  ").unwrap(), "admin");
-        assert_eq!(normalize_username("Ådmin_ø1").unwrap(), "Ådmin_ø1");
+    fn username_required_and_rejects_reserved() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            assert!(normalize_username("  ").is_err());
+            assert!(normalize_username("admin").is_err());
+            assert_eq!(normalize_username("Ådmin_ø1").unwrap(), "Ådmin_ø1");
+            assert_eq!(normalize_username("panelowner").unwrap(), "panelowner");
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
     }
 
     fn utf8_policy_ok_sample() -> String {

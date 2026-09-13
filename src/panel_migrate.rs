@@ -19,6 +19,7 @@ const SQL_0003: &str = include_str!("../sql/0003_cloudflare_settings_oauth.sql")
 const SQL_0004: &str = include_str!("../sql/0004_wordpress_sites.sql");
 const SQL_0005: &str = include_str!("../sql/0005_site_messages.sql");
 const SQL_0006: &str = include_str!("../sql/0006_mail_onboarding_ssl_defaults.sql");
+const SQL_0007: &str = include_str!("../sql/0007_account_security_flags.sql");
 
 fn ensure_ssl_defaults_migrated() -> Result<(), String> {
     let existing = load_ssl_defaults();
@@ -73,6 +74,11 @@ const MIGRATIONS: &[MigrationDef] = &[
         id: "0006_mail_onboarding_ssl_defaults",
         sql: SQL_0006,
         hook: ensure_ssl_defaults_migrated,
+    },
+    MigrationDef {
+        id: "0007_account_security_flags",
+        sql: SQL_0007,
+        hook: crate::account_security::ensure_account_security_flags_migrated,
     },
 ];
 
@@ -195,15 +201,16 @@ mod tests {
     fn migrations_apply_idempotently() {
         with_test_data_dir(|| {
             let first = run_pending_migrations().unwrap();
-            assert_eq!(first.len(), 6);
+            assert_eq!(first.len(), 7);
             assert!(first.contains(&"0001_panel_api_tokens".to_string()));
             assert!(first.contains(&"0004_wordpress_sites".to_string()));
             assert!(first.contains(&"0005_site_messages".to_string()));
             assert!(first.contains(&"0006_mail_onboarding_ssl_defaults".to_string()));
+            assert!(first.contains(&"0007_account_security_flags".to_string()));
             let second = run_pending_migrations().unwrap();
             assert!(second.is_empty());
             let ledger = load_ledger();
-            assert_eq!(ledger.applied.len(), 6);
+            assert_eq!(ledger.applied.len(), 7);
         });
     }
 

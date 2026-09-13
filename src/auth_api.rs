@@ -121,9 +121,16 @@ fn maybe_upgrade_password_hash(
     let _ = write_account_file(path, boot);
 }
 
-fn login_success_response(http: &HttpRequest, token: &str, next: Option<&str>) -> HttpResponse {
+fn login_success_response(
+    http: &HttpRequest,
+    token: &str,
+    username: &str,
+    next: Option<&str>,
+) -> HttpResponse {
     let secure = request_secure(http);
-    let location = post_login_location(next);
+    let location = crate::account_security::post_login_security_path(username)
+        .map(str::to_string)
+        .unwrap_or_else(|| post_login_location(next));
     HttpResponse::SeeOther()
         .append_header(("Location", location))
         .append_header(("Set-Cookie", session_cookie_header(token, secure)))
@@ -263,7 +270,7 @@ pub async fn login_submit(
     }
 
     let token = create_session_token(&session_user, &secret);
-    login_success_response(&http, &token, next.as_deref())
+    login_success_response(&http, &token, &session_user, next.as_deref())
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -334,7 +341,7 @@ pub async fn login_mfa_submit(
     match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
         Ok(true) => {
             let token = create_session_token(&username, &secret);
-            login_success_response(&http, &token, next.as_deref())
+            login_success_response(&http, &token, &username, next.as_deref())
         }
         Ok(false) => HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")

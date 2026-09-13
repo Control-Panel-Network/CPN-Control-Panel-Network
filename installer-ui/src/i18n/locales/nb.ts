@@ -101,16 +101,18 @@ const nb: LocaleMessages = {
   accountEyebrow: "FØRSTE KONTO",
   accountTitle: "Opprett administratorkonto",
   accountIntro:
-    "Denne kontoen logger inn i panelet. La brukernavn stå tomt for admin. Full UTF-8 støttes for navn og passord.",
+    "Denne kontoen logger inn i panelet. Velg et unikt brukernavn (navn som admin/root/support er reserverte). La passordet stå tomt for å auto-generere et sterkt passord som vises én gang til slutt.",
   usernameLabel: "Brukernavn",
   usernameHint:
-    "Valgfritt. Standard er admin. Bokstaver (inkl. Å), tall og symboler er tillatt.",
-  usernamePlaceholder: "admin",
+    "Påkrevd. Reserverte navn (admin, root, support, …) blokkeres. Bokstaver (inkl. Å), tall og symboler er tillatt.",
+  usernamePlaceholder: "panelowner",
   passwordLabel: "Passord",
   passwordConfirmLabel: "Bekreft passord",
-  passwordHint: "Bruk minst 12 tegn med stor bokstav, tall og symbol.",
+  passwordHint:
+    "La stå tomt for auto-generering. Ellers minst 12 tegn med stor bokstav, tall og symbol. Vanlige svake passord blokkeres.",
   generatePassword: "Generer og fyll inn passord",
-  useOwnPassword: "Jeg velger mitt eget passord",
+  useOwnPassword:
+    "La begge passordfeltene stå tomme for auto-generering, eller skriv inn ditt eget.",
   generatedPasswordNote: "Kopier dette passordet nå. Det vises bare én gang.",
   copyPassword: "Kopier",
   copied: "Kopiert",
