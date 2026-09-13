@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dashboard **Activity Board** under Recent Activity: admin-only tabs for Recent SSH Logins, Recent SSH Logs (with light SSH security review and hardening tips), Top Process (snapshot plus link to `/server/processes`), Traffic (`/proc/net/dev` counters), Disk IO (`/proc/diskstats`), and CPU Usage. Log lines are sanitized; mobile tab strip wraps or scrolls.
 - **Firewall manager** at `/security/firewall` (tabs: `?tab=rules`, `?tab=banned`, `?tab=trusted`): Start/Stop/Reload for firewalld, CPN-managed port rules with import/export, banned IPs (fail closed on trusted addresses), and SSH trusted / never-block IPs. Server IP and first admin login IP are auto-seeded and cannot be banned; panel listen port is kept open. Admin-only POSTs with CSRF + same-origin checks. Persists under `/var/lib/cpn/firewall-manager.json`.
 - Password policy hints on Security hub, Create User, and Change password (min length from policy, max 256, uppercase/number/special required by default, blocked-password list).
 

@@ -195,15 +195,12 @@ pub fn panel_dashboard_html(username: &str) -> String {
           </ul>
           <p class="muted" style="margin-top:14px;">Health uses the same live detection as the Databases and Email pages (no placeholder Running states).</p>
         </article>
-        <article class="activity-card">
-          <p class="eyebrow">RECENT ACTIVITY</p>
-          <h2>Latest changes</h2>
-          <p class="empty-state">No recent panel activity to show yet.</p>
-        </article>
-      </div>"#,
+      </div>
+      {activity}"#,
         user = user,
         sites = crate::panel_dashboard_tools::dashboard_sites_panel(),
         tools = crate::panel_dashboard_tools::dashboard_tool_groups(),
+        activity = crate::panel_dashboard_activity::activity_board_html(username),
         cpu_pct = cpu_pct,
         ram_pct = ram_pct,
         disk_pct = disk_pct,

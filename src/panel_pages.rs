@@ -120,7 +120,7 @@ button { font:inherit; cursor:pointer; }
 .gauge-copy strong { font-size:24px; line-height:1.05; }
 .gauge-copy span { margin-top:3px; color:var(--muted); font-size:12px; white-space:nowrap; }
 .dashboard-lower-grid {
-  max-width:1200px; margin:22px auto 0; display:grid; grid-template-columns:1.15fr .85fr; gap:22px;
+  max-width:1200px; margin:22px auto 0; display:grid; grid-template-columns:1fr; gap:22px;
 }
 .status-card, .activity-card, .section-card {
   min-width:0; max-width:100%;
@@ -254,7 +254,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_theme::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
@@ -262,6 +262,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_footer_chrome::sidebar_footer_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_dashboard_tools::dashboard_tools_styles(),
+        crate::panel_dashboard_activity::activity_board_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
     );
