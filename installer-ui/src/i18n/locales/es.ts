@@ -105,16 +105,18 @@ const es: LocaleMessages = {
   accountEyebrow: "PRIMERA CUENTA",
   accountTitle: "Crea la cuenta de administrador",
   accountIntro:
-    "Esta cuenta inicia sesión en el panel. Si dejas el usuario vacío se usará admin. Se admiten nombres y contraseñas UTF-8 completos.",
+    "Esta cuenta inicia sesión en el panel. Elige un usuario único (nombres como admin/root/support están reservados). Deja la contraseña vacía para generar una fuerte que se muestra una sola vez al final.",
   usernameLabel: "Nombre de usuario",
   usernameHint:
-    "Opcional. Por defecto admin. Se permiten letras (incluida Å), números y símbolos.",
-  usernamePlaceholder: "admin",
+    "Obligatorio. Los nombres reservados (admin, root, support, …) están bloqueados. Se permiten letras (incluida Å), números y símbolos.",
+  usernamePlaceholder: "panelowner",
   passwordLabel: "Contraseña",
   passwordConfirmLabel: "Confirmar contraseña",
-  passwordHint: "Usa al menos 12 caracteres con mayúscula, número y símbolo.",
+  passwordHint:
+    "Déjala vacía para auto-generar. Si no, usa al menos 12 caracteres con mayúscula, número y símbolo. Las contraseñas débiles comunes están bloqueadas.",
   generatePassword: "Generar y rellenar contraseña",
-  useOwnPassword: "Elegiré mi propia contraseña",
+  useOwnPassword:
+    "Deja ambos campos vacíos para auto-generar, o escribe la tuya.",
   generatedPasswordNote:
     "Copia esta contraseña ahora. Solo se muestra una vez.",
   copyPassword: "Copiar",

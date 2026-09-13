@@ -65,7 +65,9 @@ use cpn_installer::panel_hub_routes::{
     users_create_get, users_create_post, users_delete_post, users_list_route, users_modify_get,
     users_password_post, users_plans_page, users_profile_details_post, users_profile_password_post,
     users_profile_route, users_profile_totp_begin, users_profile_totp_confirm,
-    users_profile_totp_disable, users_reseller_route,
+    users_profile_totp_disable, users_reseller_route, account_security_change_password_get,
+    account_security_change_password_post, account_security_enroll_2fa_begin,
+    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -1083,6 +1085,11 @@ async fn main() -> std::io::Result<()> {
             .service(users_profile_totp_begin)
             .service(users_profile_totp_confirm)
             .service(users_profile_totp_disable)
+            .service(account_security_change_password_get)
+            .service(account_security_change_password_post)
+            .service(account_security_enroll_2fa_get)
+            .service(account_security_enroll_2fa_begin)
+            .service(account_security_enroll_2fa_confirm)
             .service(passkey_register_start)
             .service(passkey_register_finish)
             .service(passkey_delete_post)

@@ -305,6 +305,8 @@ mod tests {
             password_policy: default_password_policy(),
             language: "en".into(),
             created_at_unix: 1,
+            must_change_password: false,
+            totp_required: false,
         };
         write_account_file(&crate::account::bootstrap_path(), &boot).expect("write");
     }

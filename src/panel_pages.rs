@@ -241,6 +241,15 @@ code { font-size:.9em; word-break:break-word; }
 }
 
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
+    let (active, title, main_owned) =
+        if let Some((gate_active, gate_title, gate_main)) =
+            crate::account_security::security_gate_override(username, active)
+        {
+            (gate_active, gate_title, gate_main)
+        } else {
+            (active, title, main.to_string())
+        };
+    let main = main_owned.as_str();
     let nav = crate::panel_nav_tree::nav_links_html(active, username);
     let header = crate::panel_sidebar::sidebar_header_html(username);
     let color_mode = crate::panel_theme::load_user_color_mode(username);

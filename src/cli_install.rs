@@ -199,8 +199,21 @@ fn prompt_account(
     println!(
         "\nFirst panel account (the detected language is saved; change it later in the panel)."
     );
-    let username = prompt_choice("Username (empty = admin)", "")?;
-    let generate = prompt_yes_no("Generate a strong password", true)?;
+    println!("Reserved names such as admin/root/support are blocked (live GitHub list + local fallback).");
+    let username = loop {
+        let username = read_line("Admin username: ")?;
+        if username.trim().is_empty() {
+            eprintln!("error: Choose a username (admin and similar names are reserved).");
+            continue;
+        }
+        match crate::reserved_usernames::reject_if_reserved(username.trim()) {
+            Ok(()) => break username.trim().to_string(),
+            Err(error) => {
+                eprintln!("error: {error}");
+            }
+        }
+    };
+    let generate = prompt_yes_no("Generate a strong password (shown once at the end)", true)?;
     let password = if generate {
         None
     } else {
@@ -210,7 +223,7 @@ fn prompt_account(
             let value =
                 rpassword::read_password().map_err(|e| format!("Failed to read password: {e}"))?;
             if value.is_empty() {
-                eprintln!("error: Password was empty. Enter a non-empty password.");
+                eprintln!("error: Password was empty. Enter a non-empty password, or choose generate.");
                 continue;
             }
             eprint!("Confirm password: ");
@@ -423,7 +436,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     println!(
         "  Account    : {}",
         if username.is_empty() {
-            "admin"
+            "(required)"
         } else {
             username.as_str()
         }

@@ -7,7 +7,7 @@ import type { PasswordPolicy } from "../types";
 interface Props {
   initialPolicy: PasswordPolicy;
   language: string;
-  onCompleted: () => void;
+  onCompleted: (info: { generatedPassword?: string | null }) => void;
 }
 
 type TlsMode = "starttls" | "tls" | "none";
@@ -73,11 +73,15 @@ export function AccountSetupScreen({
   const [includePasswordInEmail, setIncludePasswordInEmail] = useState(false);
 
   const canSubmit = useMemo(() => {
+    if (!username.trim()) return false;
     if (!recoveryEmail.trim()) return false;
-    if (!password || password !== passwordConfirm) return false;
+    const bothEmpty = !password && !passwordConfirm;
+    const bothMatch = Boolean(password) && password === passwordConfirm;
+    if (!bothEmpty && !bothMatch) return false;
     if (smtpEnabled && (!smtpHost.trim() || !smtpFrom.trim())) return false;
     return true;
   }, [
+    username,
     password,
     passwordConfirm,
     recoveryEmail,
@@ -90,10 +94,11 @@ export function AccountSetupScreen({
     setBusy(true);
     setError(null);
     try {
+      const autoGenerate = !password.trim();
       const result = await setupAccount({
         username: username.trim(),
-        password,
-        generate_password: false,
+        password: autoGenerate ? undefined : password,
+        generate_password: autoGenerate,
         recovery_email: recoveryEmail.trim(),
         password_policy: policy,
         language: locale || language,
@@ -113,7 +118,9 @@ export function AccountSetupScreen({
       if (result.setup_email_error && !result.setup_email_sent) {
         setError(result.setup_email_error);
       }
-      onCompleted();
+      onCompleted({
+        generatedPassword: result.generated_password ?? null,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t.accountError);
     } finally {
@@ -180,6 +187,7 @@ export function AccountSetupScreen({
                 <span className="field-error">{t.passwordMismatch}</span>
               )}
             </label>
+            <p className="field-hint">{t.useOwnPassword}</p>
             <button
               type="button"
               className="secondary-button"
