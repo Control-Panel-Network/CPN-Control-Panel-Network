@@ -58,7 +58,8 @@ fn parse_list(raw: &str) -> HashSet<String> {
         .collect()
 }
 
-fn write_mode_600(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
+fn write_mode_600(path: impl AsRef<std::path::Path>, bytes: &[u8]) -> Result<(), String> {
+    let path = path.as_ref();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Could not create {}: {err}", parent.display()))?;

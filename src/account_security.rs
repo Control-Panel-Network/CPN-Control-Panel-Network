@@ -62,11 +62,12 @@ pub fn ensure_account_security_flags_migrated() -> Result<(), String> {
         let Ok(raw) = fs::read_to_string(&path) else {
             continue;
         };
-        let Ok(mut boot) = serde_json::from_str::<PanelBootstrap>(&raw) else {
+        let Ok(boot) = serde_json::from_str::<PanelBootstrap>(&raw) else {
             continue;
         };
-        // Extra panel accounts keep totp_required as stored; do not force-on.
+        // Touch parse path so older JSON without new flags stays loadable.
         let _ = boot.must_change_password;
+        let _ = boot.totp_required;
         let _ = write_account_file(&path, &boot);
     }
     Ok(())
