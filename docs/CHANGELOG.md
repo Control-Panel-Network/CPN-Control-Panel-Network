@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Install default PHP is **8.5** on AlmaLinux/RHEL 9+ (Remi). CLI and web installers offer 8.5 / 8.4 / 8.3 / 8.2. Missing packages fall back to the next branch with a clear log line; choice is stored in `/var/lib/cpn/php-default.json` and applied as the default `php_version` on new sites. See `to-do/PHP-INSTALL-DEFAULT-85.md`.
+
 ### Added
 
 - Live reserved panel usernames list (`docs/reserved-usernames.txt` on `stable`) fetched with 24h disk cache and bundled fallback; blocked at first-admin setup, `cpn account create`, and rename.

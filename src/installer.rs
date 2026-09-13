@@ -431,24 +431,44 @@ pub(crate) async fn install_php_runtime(
     label: &'static str,
 ) -> Result<(), String> {
     let guest = require_installable_guest()?;
-    if let Some(enable) = php_module_enable_command(&guest) {
-        run_command(state, enable).await?;
-    } else {
-        let message = if guest.uses_apt() {
-            format!("Usando paquetes PHP de apt en {}", guest.label)
-        } else {
-            format!("Usando PHP de AppStream en {}", guest.label)
-        };
-        state.progress("downloading", 38, message).await;
+    let today = chrono_today_ymd();
+    // Prefer the persisted install default; otherwise enable preferred 8.5 (EL9+) with fallback.
+    let requested = crate::php_defaults::load_php_default().map(|r| r.requested);
+    match tokio::task::spawn_blocking({
+        let guest = guest.clone();
+        let requested = requested.clone();
+        let today = today.clone();
+        move || crate::php_defaults::prepare_and_persist_php(&guest, requested.as_deref(), &today)
+    })
+    .await
+    {
+        Ok(Ok(record)) => {
+            state.log(record.message.clone(), "info");
+            if let Err(err) = crate::php_defaults::assert_stream_ok(&record.stream, &today) {
+                // apt path uses stream "apt"; skip lifecycle for that marker.
+                if record.stream != "apt" {
+                    return Err(err);
+                }
+            }
+        }
+        Ok(Err(error)) => {
+            // Fall back to legacy module enable when prepare fails on partial hosts.
+            state.log(
+                format!("PHP prepare warning: {error}; trying legacy module enable"),
+                "error",
+            );
+            if let Some(enable) = php_module_enable_command(&guest) {
+                run_command(state, enable).await?;
+            }
+        }
+        Err(error) => {
+            return Err(format!("PHP prepare join failed: {error}"));
+        }
     }
     if guest.uses_apt() {
         run_command(state, apt_update_command()).await?;
     }
     run_command(state, php_install_command(&guest, label)).await?;
-    if let Some(stream) = guest.php_module_stream() {
-        let today = chrono_today_ymd();
-        crate::php_lifecycle::assert_selected_runtime_ok(stream, &today)?;
-    }
     // Refuse EOL runtimes even if a host already had an old php package (issue #4).
     let status = Command::new("bash")
         .args([
@@ -461,7 +481,7 @@ pub(crate) async fn install_php_runtime(
         .map_err(|error| format!("PHP version check failed: {error}"))?;
     if !status.success() {
         return Err(
-            "Installed PHP is older than 8.2 (EOL). Enable php:8.2 or Remi remi-8.2 and retry."
+            "Installed PHP is older than 8.2 (EOL). Enable Remi php:remi-8.5 (or 8.4/8.3/8.2) and retry."
                 .into(),
         );
     }

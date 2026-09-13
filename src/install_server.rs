@@ -426,17 +426,21 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
         crate::model::DatabaseEngine::Mariadb,
         true,
         false,
+        None,
     )
     .await;
 }
 
 /// Web server install plus optional MariaDB/MySQL + phpMyAdmin defaults.
+///
+/// `php_version`: optional major.minor (`8.5`, `8.4`, …) or `auto`/None for preferred 8.5 on EL9+.
 pub async fn install_with_database(
     state: std::sync::Arc<AppState>,
     server: ServerEngine,
     database: crate::model::DatabaseEngine,
     install_phpmyadmin: bool,
     enable_proxy_front: bool,
+    php_version: Option<String>,
 ) {
     let result = async {
         let _run = install_journal::begin_install_run("server")?;
@@ -727,6 +731,42 @@ pub async fn install_with_database(
             } else {
                 status.access_note = Some(
                     "No host firewall detected; service verified on loopback only.".into(),
+                );
+            }
+        }
+
+        state
+            .progress(
+                "installing",
+                96,
+                "Preparing PHP runtime (default 8.5 on EL9+)",
+            )
+            .await;
+        let php_requested = php_version.clone();
+        let guest_for_php = guest.clone();
+        match tokio::task::spawn_blocking(move || {
+            let today = crate::php_defaults::today_ymd();
+            crate::php_defaults::prepare_and_persist_php(
+                &guest_for_php,
+                php_requested.as_deref(),
+                &today,
+            )
+        })
+        .await
+        {
+            Ok(Ok(record)) => {
+                state.log(record.message, "info");
+            }
+            Ok(Err(error)) => {
+                state.log(
+                    format!("PHP default prepare warning (continuing): {error}"),
+                    "error",
+                );
+            }
+            Err(error) => {
+                state.log(
+                    format!("PHP default prepare join failed (continuing): {error}"),
+                    "error",
                 );
             }
         }

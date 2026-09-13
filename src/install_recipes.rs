@@ -351,8 +351,9 @@ pub(crate) const PHP_PACKAGES_APT: &[&str] = &[
 ];
 
 pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> {
-    // If PHP is already present (any enabled stream), do not fail trying to switch streams.
-    // Fresh hosts still enable a supported stream when php is missing (never EOL 8.0/8.1).
+    // If PHP is already present (any enabled non-EOL stream), do not fail trying to switch.
+    // Fresh hosts enable the preferred Remi stream (8.5 on EL9+, Remi 8.2 on EL8).
+    // Full selection + fallback is handled by `php_defaults::prepare_and_persist_php`.
     match guest.php_module_stream()? {
         "remi-8.2" => Some(command(
             "bash",
@@ -367,15 +368,37 @@ pub(crate) fn php_module_enable_command(guest: &GuestOs) -> Option<CommandSpec> 
             "downloading",
             38,
         )),
+        "php:remi-8.5" => Some(command(
+            "bash",
+            vec![
+                "-c",
+                "php -v >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);' \
+|| (rpm -q remi-release >/dev/null 2>&1 || dnf -y install https://rpms.remirepo.net/enterprise/remi-release-9.rpm; \
+dnf -y module reset php; \
+(dnf -y module enable php:remi-8.5 \
+|| dnf -y module enable php:remi-8.4 \
+|| dnf -y module enable php:remi-8.3 \
+|| dnf -y module enable php:remi-8.2 \
+|| dnf -y module enable php:8.2))",
+            ],
+            "Preparing PHP 8.5 (Remi; fallback 8.4/8.3/8.2)",
+            "downloading",
+            38,
+        )),
         _ => Some(command(
             "bash",
             vec![
                 "-c",
                 "php -v >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);' \
-|| (dnf -y module reset php \
-&& dnf -y module enable php:8.2)",
+|| (rpm -q remi-release >/dev/null 2>&1 || true; \
+dnf -y module reset php; \
+(dnf -y module enable php:remi-8.5 \
+|| dnf -y module enable php:remi-8.4 \
+|| dnf -y module enable php:remi-8.3 \
+|| dnf -y module enable php:remi-8.2 \
+|| dnf -y module enable php:8.2))",
             ],
-            "Preparing PHP 8.2",
+            "Preparing PHP (Remi preferred)",
             "downloading",
             38,
         )),

@@ -158,6 +158,24 @@ fn prompt_database() -> Result<DatabaseEngine, String> {
     })
 }
 
+fn prompt_php_version() -> Result<String, String> {
+    println!("\nPHP version (system php-fpm / CLI used by phpMyAdmin and webmail):");
+    println!("  1) 8.5  (default on AlmaLinux/RHEL 9+)");
+    println!("  2) 8.4");
+    println!("  3) 8.3");
+    println!("  4) 8.2");
+    println!("If 8.5 packages are missing, CPN falls back to the next available branch.");
+    prompt_menu("Enter 1-4 for PHP version", "1", |raw| match raw {
+        "1" | "8.5" | "85" => Ok("8.5".into()),
+        "2" | "8.4" | "84" => Ok("8.4".into()),
+        "3" | "8.3" | "83" => Ok("8.3".into()),
+        "4" | "8.2" | "82" => Ok("8.2".into()),
+        other => Err(format!(
+            "Unknown PHP version `{other}`. Enter 1 (8.5), 2 (8.4), 3 (8.3), or 4 (8.2)."
+        )),
+    })
+}
+
 fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
     match raw {
         "1" | "skip" | "none" | "n" => Ok(None),
@@ -348,6 +366,10 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         Ok(v) => v,
         Err(e) => return fail(e),
     };
+    let php_version = match prompt_php_version() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
     let install_phpmyadmin = if matches!(database, DatabaseEngine::None) {
         false
     } else {
@@ -418,6 +440,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     println!("\nSummary");
     println!("  Web server : {}", server.label());
     println!("  Database   : {}", database.label());
+    println!("  PHP        : {php_version}");
     println!(
         "  phpMyAdmin : {}",
         if install_phpmyadmin { "yes" } else { "no" }
@@ -478,6 +501,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         database,
         install_phpmyadmin,
         enable_proxy_front,
+        Some(php_version),
     )
     .await;
     let _ = pump.await;

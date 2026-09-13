@@ -427,6 +427,7 @@ async fn start_install(
     let database = request.database;
     let install_phpmyadmin = request.install_phpmyadmin;
     let enable_proxy_front = request.enable_proxy_front;
+    let php_version = request.php_version.clone();
     let _ = std::thread::Builder::new()
         .name("cpn-install-server".into())
         .spawn(move || {
@@ -445,6 +446,7 @@ async fn start_install(
                 database,
                 install_phpmyadmin,
                 enable_proxy_front,
+                php_version,
             ));
         });
     HttpResponse::Accepted().finish()

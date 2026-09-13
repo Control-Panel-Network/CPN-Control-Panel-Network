@@ -307,6 +307,9 @@ pub struct InstallRequest {
     /// Optional Nginx front + unique internal IP per domain (OLS origin may relax public :80/:443).
     #[serde(default)]
     pub enable_proxy_front: bool,
+    /// PHP major.minor to enable (`8.5`, `8.4`, `8.3`, `8.2`) or `auto` for preferred 8.5 on EL9+.
+    #[serde(default)]
+    pub php_version: Option<String>,
     /// `minimal` = high-level progress only; `full` = stream package-manager output (default).
     #[serde(default)]
     pub install_log_detail: Option<String>,

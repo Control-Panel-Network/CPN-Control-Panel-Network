@@ -146,7 +146,14 @@ sudo install -m 600 /dev/stdin /var/lib/cpn/secrets/github-token <<<'ghp_...'
 - CPN core package (`cpn-installer` / `cpn`) to the selected release
 - MariaDB server packages via `dnf upgrade` / `apt-get --only-upgrade`, then restart if active
 - OpenLiteSpeed and PHP/php-fpm packages when already present, then restart active units
-- Stale CPN packaging/staging under `/var/tmp/cpn-*` and similar allowlisted paths
+
+### PHP version at install
+
+- **Default on AlmaLinux/RHEL 9+:** PHP **8.5** (Remi `php:remi-8.5`).
+- **Default on EL8:** Remi PHP **8.2**.
+- CLI and web installers let you choose 8.5 / 8.4 / 8.3 / 8.2.
+- If the selected packages are missing, CPN falls back (8.5 → 8.4 → 8.3 → 8.2) and writes `/var/lib/cpn/php-default.json`.
+- See `to-do/PHP-INSTALL-DEFAULT-85.md`.
 
 Post-upgrade verification checks panel `/login`, web server units, and MariaDB when present.
 

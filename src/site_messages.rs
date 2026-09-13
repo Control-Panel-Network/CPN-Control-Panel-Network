@@ -346,6 +346,7 @@ mod tests {
             internal_ip: None,
             owner_suspend_message: owner_msg.into(),
             suspended_by: by,
+            php_version: None,
         }
     }
 
