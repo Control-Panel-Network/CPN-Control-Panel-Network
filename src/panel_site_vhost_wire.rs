@@ -2,7 +2,7 @@
 
 use crate::litespeed_stack::{any_litespeed_installed, restart_litespeed};
 use crate::panel_website_logs::{ensure_site_log_files, site_access_log_path, site_error_log_path};
-use crate::sites::{SiteRecord, modify_site, site_home_from_record, SiteModify};
+use crate::sites::{SiteModify, SiteRecord, modify_site, site_home_from_record};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -127,7 +127,10 @@ fn ensure_ols_site_vhost(site: &SiteRecord) -> Result<bool, String> {
         changed = true;
     }
 
-    let map_line = format!("  map                      {vh_name} {domain}\n", domain = site.domain);
+    let map_line = format!(
+        "  map                      {vh_name} {domain}\n",
+        domain = site.domain
+    );
     for listener in ["CPNHttp", "Default"] {
         if let Some(updated) = insert_map_before_catchall(&conf, listener, &map_line) {
             conf = updated;

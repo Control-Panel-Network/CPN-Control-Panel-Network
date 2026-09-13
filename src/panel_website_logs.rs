@@ -1,6 +1,6 @@
 //! Safe website log tail reads for Manage > Logs.
 
-use crate::sites::{site_home_from_record, SiteRecord};
+use crate::sites::{SiteRecord, site_home_from_record};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -284,10 +284,7 @@ mod tests {
 
     #[test]
     fn rejects_traversal_and_foreign_home() {
-        let site = sample_site(
-            "example.com",
-            "/home/example.com/public_html",
-        );
+        let site = sample_site("example.com", "/home/example.com/public_html");
         let bad = PathBuf::from("/var/log/httpd/../../etc/passwd");
         assert!(!path_allowed(&site, &bad));
         assert!(!path_allowed(
@@ -313,10 +310,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("cpn-log-home-{stamp}"));
         let docroot = root.join("public_html");
         fs::create_dir_all(&docroot).unwrap();
-        let site = sample_site(
-            "lab.example",
-            &docroot.to_string_lossy(),
-        );
+        let site = sample_site("lab.example", &docroot.to_string_lossy());
         ensure_site_log_files(&site).unwrap();
         let access = site_access_log_path(&site);
         assert!(access.is_file());
