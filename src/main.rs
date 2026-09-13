@@ -26,8 +26,9 @@ use cpn_installer::model::{
 };
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
-    account_security_enroll_2fa_begin, account_security_enroll_2fa_confirm,
-    account_security_enroll_2fa_get, acl_create_get, acl_create_post, acl_delete_post,
+    account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
+    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
+    acl_create_post, acl_delete_post,
     acl_modify_get, api_access_create_post, api_access_revoke_post, api_access_route,
     backups_create_route, backups_destinations_route, backups_destinations_save,
     backups_gdrive_route, backups_remote_route, backups_restore_route, backups_restore_run,
@@ -554,28 +555,26 @@ fn static_asset_for(requested: &str) -> HttpResponse {
         return HttpResponse::NotFound().finish();
     }
     let name = requested;
-    let asset = UiAssets::get(name).or_else(|| {
-        if name.contains('.') {
-            None
-        } else {
-            UiAssets::get("index.html")
-        }
-    });
-    match asset {
+    // Serve only real embedded assets. Do not fall back to installer index.html for
+    // extensionless panel paths (e.g. /account/security/enroll-2fa/begin on GET refresh),
+    // which previously showed the Installing SPA with "Could not query the installer".
+    match UiAssets::get(name) {
         Some(asset) => {
             let content_type = match name.rsplit('.').next() {
                 Some("js") => "text/javascript; charset=utf-8",
                 Some("css") => "text/css; charset=utf-8",
                 Some("svg") => "image/svg+xml",
                 Some("png") => "image/png",
-                _ => "text/html; charset=utf-8",
+                Some("ico") => "image/x-icon",
+                Some("woff2") => "font/woff2",
+                Some("map") => "application/json",
+                _ => "application/octet-stream",
             };
             HttpResponse::Ok()
                 .content_type(content_type)
                 .body(asset.data)
         }
-        None => HttpResponse::ServiceUnavailable()
-            .body("The web interface is not embedded in this binary yet"),
+        None => HttpResponse::NotFound().finish(),
     }
 }
 
@@ -1103,6 +1102,7 @@ async fn main() -> std::io::Result<()> {
             .service(account_security_change_password_get)
             .service(account_security_change_password_post)
             .service(account_security_enroll_2fa_get)
+            .service(account_security_enroll_2fa_begin_get)
             .service(account_security_enroll_2fa_begin)
             .service(account_security_enroll_2fa_confirm)
             .service(passkey_register_start)

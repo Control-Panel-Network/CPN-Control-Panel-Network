@@ -34,6 +34,12 @@ export interface EnvironmentInfo {
   firewall: string | null;
   port: number;
   addresses: string[];
+  /** Guest OS pretty name from os-release (safe for issue reports). */
+  os_pretty_name?: string | null;
+  /** CPU architecture (e.g. x86_64). */
+  arch?: string | null;
+  /** Kernel release string when available. */
+  kernel?: string | null;
 }
 
 export interface PasswordPolicy {

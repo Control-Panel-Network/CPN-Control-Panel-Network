@@ -8,7 +8,7 @@ use crate::account_security::{
     post_login_security_path,
 };
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect, require_panel_user};
+use crate::panel_hub_http::{html_ok, login_redirect, redirect, require_panel_user, urlencoding_simple};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -139,6 +139,13 @@ pub async fn account_security_enroll_2fa_get(
     )
 }
 
+/// GET on the POST-only begin path (browser refresh) must not fall through to the
+/// installer SPA catch-all.
+#[get("/account/security/enroll-2fa/begin")]
+pub async fn account_security_enroll_2fa_begin_get() -> HttpResponse {
+    redirect("/account/security/enroll-2fa")
+}
+
 #[post("/account/security/enroll-2fa/begin")]
 pub async fn account_security_enroll_2fa_begin(
     http: HttpRequest,
@@ -151,16 +158,12 @@ pub async fn account_security_enroll_2fa_begin(
         return redirect("/account/security/change-password");
     }
     match begin_totp_enroll(&user) {
-        Ok((secret, _uri, svg)) => gate_shell(
-            &user,
-            "Enable 2FA",
-            &enroll_mfa_gate_main(None, None, Some(&secret), Some(&svg), None),
-        ),
-        Err(error) => gate_shell(
-            &user,
-            "Enable 2FA",
-            &enroll_mfa_gate_main(None, Some(&error), None, None, None),
-        ),
+        // PRG: keep the address bar on the GET enroll page so refresh stays on MFA UI.
+        Ok((_secret, _uri, _svg)) => redirect("/account/security/enroll-2fa"),
+        Err(error) => redirect(&format!(
+            "/account/security/enroll-2fa?error={}",
+            urlencoding_simple(&error)
+        )),
     }
 }
 
