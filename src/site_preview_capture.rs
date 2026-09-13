@@ -170,9 +170,7 @@ fn local_listen_hints() -> Vec<String> {
     text.split_whitespace()
         .filter(|ip| {
             let parts: Vec<_> = ip.split('.').collect();
-            parts.len() == 4
-                && parts.iter().all(|p| p.parse::<u8>().is_ok())
-                && *ip != "127.0.0.1"
+            parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok()) && *ip != "127.0.0.1"
         })
         .take(2)
         .map(str::to_string)
@@ -291,7 +289,10 @@ mod tests {
     #[test]
     fn candidate_urls_include_http() {
         let urls = candidate_urls("lab-preview.example");
-        assert!(urls.iter().any(|u| u.starts_with("http://lab-preview.example")));
+        assert!(
+            urls.iter()
+                .any(|u| u.starts_with("http://lab-preview.example"))
+        );
     }
 
     #[test]

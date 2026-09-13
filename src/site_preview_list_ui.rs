@@ -96,8 +96,7 @@ fn site_action_buttons(site: &SiteRecord) -> String {
 
 fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     let domain = html_escape(&site.domain);
-    let visit = public_site_url(&site.domain)
-        .unwrap_or_else(|_| format!("http://{}", site.domain));
+    let visit = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let visit_e = html_escape(&visit);
     let state = freshness(&site.domain);
     if auto_capture && matches!(state, PreviewFreshness::Missing | PreviewFreshness::Stale) {
@@ -222,8 +221,7 @@ pub fn site_preview_cards(sites: &[SiteRecord], show_docroots: bool, username: &
 /// Compact Site preview block for Manage Overview.
 pub fn manage_overview_preview(site: &SiteRecord) -> String {
     let domain = html_escape(&site.domain);
-    let visit = public_site_url(&site.domain)
-        .unwrap_or_else(|_| format!("http://{}", site.domain));
+    let visit = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let meta = load_meta(&site.domain);
     format!(
         r#"<aside class="manage-site-preview" style="margin:0 0 14px;display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:14px;align-items:center;background:var(--m-card,#1b1e27);border:1px solid var(--m-line,#2a2f3a);border-radius:14px;padding:12px;">
@@ -255,6 +253,10 @@ mod tests {
     #[test]
     fn styles_mention_site_preview_slot() {
         assert!(site_preview_list_styles().contains("site-preview-slot"));
-        assert!(!site_preview_list_styles().to_lowercase().contains("cyberpanel"));
+        assert!(
+            !site_preview_list_styles()
+                .to_lowercase()
+                .contains("cyberpanel")
+        );
     }
 }

@@ -54,8 +54,7 @@ pub fn ensure_preview_dir() -> Result<PathBuf, String> {
 
 fn safe_domain_key(domain_raw: &str) -> Result<String, String> {
     let domain = normalize_domain(domain_raw)?;
-    if domain.is_empty() || domain.contains('/') || domain.contains('\\') || domain.contains("..")
-    {
+    if domain.is_empty() || domain.contains('/') || domain.contains('\\') || domain.contains("..") {
         return Err("Invalid domain for site preview".into());
     }
     Ok(domain)
@@ -197,7 +196,7 @@ pub fn placeholder_svg(domain: &str, detail: &str) -> String {
     let d = xml_escape(domain);
     let m = xml_escape(detail);
     format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="Site preview unavailable">
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img" aria-label="Site preview unavailable">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#1a1d26"/>
@@ -209,7 +208,7 @@ pub fn placeholder_svg(domain: &str, detail: &str) -> String {
   <text x="320" y="175" text-anchor="middle" fill="#f2f4f7" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="700">Site preview</text>
   <text x="320" y="210" text-anchor="middle" fill="#98a2b3" font-family="Segoe UI, system-ui, sans-serif" font-size="14">{d}</text>
   <text x="320" y="245" text-anchor="middle" fill="#667085" font-family="Segoe UI, system-ui, sans-serif" font-size="12">{m}</text>
-</svg>"#
+</svg>"##
     )
 }
 

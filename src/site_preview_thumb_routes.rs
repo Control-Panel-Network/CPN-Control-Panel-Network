@@ -126,7 +126,10 @@ pub async fn site_preview_refresh(
     let result = web::block(move || capture_site_preview(&capture_domain)).await;
 
     let location = match result {
-        Ok(Ok(_)) => format!("{next}notice={}", urlencoding_simple("Site preview updated.")),
+        Ok(Ok(_)) => format!(
+            "{next}notice={}",
+            urlencoding_simple("Site preview updated.")
+        ),
         Ok(Err(err)) => format!("{next}error={}", urlencoding_simple(&err)),
         Err(_) => format!(
             "{next}error={}",
