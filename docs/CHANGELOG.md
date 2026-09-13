@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **DNS Zones** create/manage UX at `/server/dns/zones` and `/server/dns/zones/create`: domain-only create (strips `http`/`www`), auto-seed SOA + NS from Default Nameservers plus apex A when the host IP is known, structured record table (A, AAAA, CNAME, MX, TXT, NS, SRV) with add/delete, optional Advanced raw zone editor. Zones persist as JSON + `.zone` under the CPN DNS data directory. Admin-only POSTs with CSRF and same-origin checks.
+- **Nameservers** (`/server/dns/nameservers`): create/list/delete NS hostnames with glue A/AAAA.
+- **Default Nameservers** (`/server/dns/defaults`): choose which NS hostnames are assigned to newly created zones. Server hub tiles and sidebar links stay live for Zones / Nameservers / Default Nameservers.
+
+### Added
+
 - **Site preview** thumbnails on `/websites` (and Manage Overview): cached homepage screenshots under `/var/lib/cpn/site-previews/`, 24h TTL, authenticated image + Refresh preview routes (registry domains only). Headless Chromium or wkhtmltoimage when installed; otherwise an honest placeholder. Minimalist mode skips auto-capture (refresh on demand). Lab hosts map the domain to loopback via Chromium host-resolver rules.
 - Website Manage **Domain Alias** (`?tab=alias`): add/list/remove hostnames for a site, persist in the site registry, apply OLS map / Apache ServerAlias / nginx `server_name` when present, and optionally create Cloudflare CNAME or A records when `/var/lib/cpn/cloudflare.json` is configured. CSRF + site ACL on all POSTs.
 - Website Manage **Cron Jobs** (`?tab=cron`): per-site schedule editor (list/add/edit/delete) with commands jailed under the site home, synced to `/etc/cron.d/cpn-site-*` (mirror under `/var/lib/cpn/site-crons/`). Domains tab cards and the header Cron Jobs button open the working UI (scaffold copy removed).

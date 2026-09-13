@@ -57,8 +57,11 @@ use cpn_installer::panel_hub_routes::{
     security_ssh, security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
     security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom,
     security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
-    server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
-    server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
+    server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
+    server_dns_nameservers, server_dns_nameservers_add, server_dns_nameservers_delete,
+    server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete,
+    server_dns_zones, server_dns_zones_create_get, server_dns_zones_create_post,
+    server_dns_zones_delete, server_dns_zones_manage, server_dns_zones_save,
     server_docker_apps, server_docker_containers, server_docker_images, server_filemanager_alias,
     server_files_op, server_files_page, server_files_upload, server_litespeed_downgrade,
     server_litespeed_enterprise_page, server_litespeed_page, server_litespeed_serial,
@@ -1106,10 +1109,18 @@ async fn main() -> std::io::Result<()> {
             .service(server_files_op)
             .service(server_files_upload)
             .service(server_dns_zones)
+            .service(server_dns_zones_create_get)
+            .service(server_dns_zones_create_post)
+            .service(server_dns_zones_manage)
             .service(server_dns_zones_save)
             .service(server_dns_zones_delete)
+            .service(server_dns_record_add)
+            .service(server_dns_record_delete)
             .service(server_dns_nameservers)
+            .service(server_dns_nameservers_add)
+            .service(server_dns_nameservers_delete)
             .service(server_dns_defaults)
+            .service(server_dns_defaults_save)
             .service(server_dns_nameservers_save)
             .service(cloudflare_dns_get)
             .service(server_cloudflare_redirect)

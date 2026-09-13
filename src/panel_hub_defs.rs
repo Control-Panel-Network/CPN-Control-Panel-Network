@@ -281,7 +281,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 },
                 HubTile {
                     title: "DNS Zones",
-                    subtitle: "Zone files under CPN data",
+                    subtitle: "Create zones",
                     href: "/server/dns/zones",
                     live: true,
                 },
@@ -293,7 +293,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 },
                 HubTile {
                     title: "Nameservers",
-                    subtitle: "NS records list",
+                    subtitle: "Create nameservers",
                     href: "/server/dns/nameservers",
                     live: true,
                 },
