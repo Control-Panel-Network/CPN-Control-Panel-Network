@@ -91,10 +91,7 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
         }
     }
 
-    Ok(format!(
-        "Host PHP default is {} ({})",
-        record.branch, note
-    ))
+    Ok(format!("Host PHP default is {} ({})", record.branch, note))
 }
 
 #[cfg(test)]
