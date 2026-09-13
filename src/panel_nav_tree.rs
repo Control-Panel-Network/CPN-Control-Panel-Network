@@ -182,7 +182,14 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         &email_plugin_children,
         admin,
     ));
-    parts.extend(render_section("Account", ACCOUNT, active, feats, &[], admin));
+    parts.extend(render_section(
+        "Account",
+        ACCOUNT,
+        active,
+        feats,
+        &[],
+        admin,
+    ));
     parts.extend(render_section(
         "Administration",
         ADMINISTRATION,
@@ -227,8 +234,8 @@ mod tests {
     #[test]
     fn root_file_manager_is_admin_leaf_link() {
         use crate::account::{
-            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
-            PanelBootstrap,
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
         };
         with_test_data_dir(|| {
             let salt = new_password_salt();
@@ -248,7 +255,9 @@ mod tests {
             let html = nav_links_html("root-files", "admin");
             assert!(html.contains("Root File Manager"));
             assert!(html.contains("href=\"/server/files\""));
-            let idx = html.find(">Root File Manager</span>").expect("root fm label");
+            let idx = html
+                .find(">Root File Manager</span>")
+                .expect("root fm label");
             let snip = &html[idx.saturating_sub(160)..idx];
             assert!(
                 snip.contains("nav-tile") && !snip.contains("nav-child-btn"),

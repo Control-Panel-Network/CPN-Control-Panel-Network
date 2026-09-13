@@ -292,7 +292,9 @@ mod tests {
         assert!(resolve_under_jail("/home/example.com/../other.com", jail).is_err());
         assert!(resolve_under_jail("/home/other.com", jail).is_err());
         assert!(resolve_under_jail("/etc/passwd", jail).is_err());
-        assert!(resolve_under_jail("/home/example.com/blog.example.com/../../other", jail).is_err());
+        assert!(
+            resolve_under_jail("/home/example.com/blog.example.com/../../other", jail).is_err()
+        );
     }
 
     #[test]

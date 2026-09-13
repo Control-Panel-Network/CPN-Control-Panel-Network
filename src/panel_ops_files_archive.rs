@@ -98,8 +98,7 @@ mod tests {
 
     #[test]
     fn rejects_bad_archive_name() {
-        let err =
-            compress_entries("/tmp", &["a".into()], "out.exe", Path::new("/")).unwrap_err();
+        let err = compress_entries("/tmp", &["a".into()], "out.exe", Path::new("/")).unwrap_err();
         assert!(err.contains("Archive name"));
     }
 }

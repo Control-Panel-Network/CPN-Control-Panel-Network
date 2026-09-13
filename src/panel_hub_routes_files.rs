@@ -108,7 +108,16 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
     ))
 }
 
-fn run_op(op: &str, path: &str, names: &[String], new_name: &str, dest: &str, archive_name: &str, content: &str, jail: &Path) -> Result<String, String> {
+fn run_op(
+    op: &str,
+    path: &str,
+    names: &[String],
+    new_name: &str,
+    dest: &str,
+    archive_name: &str,
+    content: &str,
+    jail: &Path,
+) -> Result<String, String> {
     match op {
         "mkdir" => mkdir(path, new_name, jail),
         "create" => create_file(path, new_name, jail),
@@ -129,7 +138,9 @@ fn run_op(op: &str, path: &str, names: &[String], new_name: &str, dest: &str, ar
     }
 }
 
-fn parse_op_form(form: &HashMap<String, String>) -> (String, String, String, String, String, String, Vec<String>) {
+fn parse_op_form(
+    form: &HashMap<String, String>,
+) -> (String, String, String, String, String, String, Vec<String>) {
     let path = form
         .get("path")
         .map(String::as_str)
@@ -379,7 +390,11 @@ pub async fn site_files_op(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let domain = form.get("domain").map(String::as_str).unwrap_or("").to_string();
+    let domain = form
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     let site = match require_manage_site(&user, &domain, SitePerm::Enable) {
         Ok(s) => s,
         Err(err) => return site_redirect(&domain, "/", None, Some(&err)),
@@ -440,7 +455,11 @@ pub async fn site_files_upload(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let domain = form.get("domain").map(String::as_str).unwrap_or("").to_string();
+    let domain = form
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     let site = match require_manage_site(&user, &domain, SitePerm::Enable) {
         Ok(s) => s,
         Err(err) => return site_redirect(&domain, "/", None, Some(&err)),

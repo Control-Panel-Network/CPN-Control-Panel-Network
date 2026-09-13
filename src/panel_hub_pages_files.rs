@@ -211,14 +211,7 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
             notice_block("ok", opts.notice)
         ),
     };
-    feature_shell(
-        opts.crumbs,
-        opts.title,
-        opts.subtitle,
-        &body,
-        None,
-        None,
-    )
+    feature_shell(opts.crumbs, opts.title, opts.subtitle, &body, None, None)
 }
 
 /// Convenience wrapper for admin Root File Manager.
