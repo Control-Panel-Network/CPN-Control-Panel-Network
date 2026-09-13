@@ -40,7 +40,11 @@ pub fn php_extensions_page(
 
     let mut options = String::new();
     for v in &versions {
-        let sel = if v.branch == selected { " selected" } else { "" };
+        let sel = if v.branch == selected {
+            " selected"
+        } else {
+            ""
+        };
         let mark = if v.installed { "" } else { " (not installed)" };
         options.push_str(&format!(
             r#"<option value="{branch}"{sel}>{label}{mark}</option>"#,
@@ -178,10 +182,13 @@ pub fn php_extensions_page(
         ("Selected", selected.as_str()),
         (
             "Package surface",
-            if versions
-                .iter()
-                .any(|v| v.branch == selected && matches!(v.family, crate::panel_ops_php_ext::PhpPackageFamily::LiteSpeed))
-            {
+            if versions.iter().any(|v| {
+                v.branch == selected
+                    && matches!(
+                        v.family,
+                        crate::panel_ops_php_ext::PhpPackageFamily::LiteSpeed
+                    )
+            }) {
                 "LiteSpeed lsphp"
             } else {
                 "System PHP module"

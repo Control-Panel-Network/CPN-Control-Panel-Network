@@ -8,10 +8,10 @@ pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_email::*;
 pub use crate::panel_hub_routes_email_stubs::*;
 pub use crate::panel_hub_routes_passkeys::*;
+pub use crate::panel_hub_routes_php::*;
 pub use crate::panel_hub_routes_profile::*;
 pub use crate::panel_hub_routes_security::*;
 pub use crate::panel_hub_routes_server::*;
-pub use crate::panel_hub_routes_php::*;
 pub use crate::panel_hub_routes_ssl_actions::*;
 
 use crate::panel_hub_pages_hosting::{databases_ftp_hub_main, email_hub_main};

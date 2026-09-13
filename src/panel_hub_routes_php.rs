@@ -83,7 +83,12 @@ pub async fn server_php_extensions_install(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_ext("", "", None, Some("Only the panel admin can install extensions"));
+        return redirect_ext(
+            "",
+            "",
+            None,
+            Some("Only the panel admin can install extensions"),
+        );
     }
     if !same_origin_ok(&http) {
         return redirect_ext("", "", None, Some("Rejected cross-origin form post"));
@@ -158,7 +163,12 @@ pub async fn server_php_extensions_set_default(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_ext("", "", None, Some("Only the panel admin can set the host PHP default"));
+        return redirect_ext(
+            "",
+            "",
+            None,
+            Some("Only the panel admin can set the host PHP default"),
+        );
     }
     if !same_origin_ok(&http) {
         return redirect_ext("", "", None, Some("Rejected cross-origin form post"));
@@ -167,7 +177,12 @@ pub async fn server_php_extensions_set_default(
     if !verify_php_ext_csrf(&user, csrf) {
         return redirect_ext("", "", None, Some("Invalid or expired CSRF token"));
     }
-    let php = form.get("php").map(String::as_str).unwrap_or("").trim().to_string();
+    let php = form
+        .get("php")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
     match tokio::task::spawn_blocking({
         let php = php.clone();
         move || ensure_host_php_default(Some(&php))
@@ -176,6 +191,11 @@ pub async fn server_php_extensions_set_default(
     {
         Ok(Ok(msg)) => redirect_ext(&php, "", Some(&msg), None),
         Ok(Err(err)) => redirect_ext(&php, "", None, Some(&err)),
-        Err(err) => redirect_ext(&php, "", None, Some(&format!("Set-default task failed: {err}"))),
+        Err(err) => redirect_ext(
+            &php,
+            "",
+            None,
+            Some(&format!("Set-default task failed: {err}")),
+        ),
     }
 }

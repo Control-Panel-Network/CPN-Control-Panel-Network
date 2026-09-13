@@ -1,11 +1,11 @@
 //! PHP extension package discovery and install/uninstall (LiteSpeed lsphp preferred).
 
 use crate::litespeed_stack::openlitespeed_installed;
+use crate::panel_session::session_secret;
 use crate::php_defaults::{
     CPN_PHP_FALLBACK_ORDER, CPN_PREFERRED_PHP_BRANCH, default_php_branch_for_sites,
     load_php_default,
 };
-use crate::panel_session::session_secret;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::collections::{BTreeMap, BTreeSet};
@@ -449,11 +449,7 @@ mod tests {
             "php",
             "php-bcmath"
         ));
-        assert!(!package_allowed(
-            PhpPackageFamily::Modular,
-            "php",
-            "nginx"
-        ));
+        assert!(!package_allowed(PhpPackageFamily::Modular, "php", "nginx"));
     }
 
     #[test]
