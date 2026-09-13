@@ -127,6 +127,20 @@ fn login_success_response(
     username: &str,
     next: Option<&str>,
 ) -> HttpResponse {
+    let peer = http.peer_addr().map(|a| a.ip().to_string());
+    crate::panel_firewall_store::record_admin_login_ip(username, peer.as_deref());
+    let _ = crate::panel_firewall_store::ensure_protected_seeds(
+        {
+            let host = crate::panel_host_info::host_sidebar_info();
+            if host.ip == "Unavailable" {
+                None
+            } else {
+                Some(host.ip)
+            }
+        }
+        .as_deref(),
+        peer.as_deref(),
+    );
     let secure = request_secure(http);
     let location = crate::account_security::post_login_security_path(username)
         .map(str::to_string)

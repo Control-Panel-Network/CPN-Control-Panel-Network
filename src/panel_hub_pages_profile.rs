@@ -1,5 +1,6 @@
 //! Account profile view and self-edit form fragments (used by Modify User).
 
+use crate::account::password_policy_hint;
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::list_passkey_summaries;
 use crate::packages::{is_panel_admin, package_for_account};
@@ -98,6 +99,9 @@ pub fn users_self_edit_body(
     } else {
         "Disabled"
     };
+    let policy = boot.password_policy.clone();
+    let policy_hint = password_policy_hint(&policy);
+    let min_len = policy.min_length;
     let mut body = format!(
         r#"
       <p style="margin:0 0 16px;"><a class="btn-secondary" href="/account/users/profile">Back to profile</a></p>
@@ -121,11 +125,12 @@ pub fn users_self_edit_body(
 
       <form method="post" action="/account/users/profile/password" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
         <h3 style="margin:0;">Change password</h3>
+        <p class="muted" style="margin:0;">Password policy: {policy_hint}</p>
         <label>Current password
           <input name="current_password" type="password" required autocomplete="current-password" maxlength="256">
         </label>
         <label>New password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" maxlength="256">
+          <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
         </label>
         <label style="display:flex;align-items:center;gap:8px;">
           <input name="generate" type="checkbox" value="1">
@@ -143,6 +148,8 @@ pub fn users_self_edit_body(
         es_sel = es_sel,
         nb_sel = nb_sel,
         totp_status = totp_status,
+        policy_hint = html_escape(&policy_hint),
+        min_len = min_len,
     );
 
     if let Some(password) = generated_password {

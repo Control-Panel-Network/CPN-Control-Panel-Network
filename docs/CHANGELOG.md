@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Firewall manager** at `/security/firewall` (tabs: `?tab=rules`, `?tab=banned`, `?tab=trusted`): Start/Stop/Reload for firewalld, CPN-managed port rules with import/export, banned IPs (fail closed on trusted addresses), and SSH trusted / never-block IPs. Server IP and first admin login IP are auto-seeded and cannot be banned; panel listen port is kept open. Admin-only POSTs with CSRF + same-origin checks. Persists under `/var/lib/cpn/firewall-manager.json`.
+- Password policy hints on Security hub, Create User, and Change password (min length from policy, max 256, uppercase/number/special required by default, blocked-password list).
+
+### Notes
+
+- Earlier `/security/firewall` was status-only (live firewalld dump + optional Enable http/https) because rule/ban management was deferred. This release adds the CPN-native manager UI.
+
+### Added
+
 - Server **PHP Configurations** (`/server/php/configs`): Basic Settings and Advanced php.ini editor per PHP version, Save Changes (backup under `/var/lib/cpn/php-ini-backups/`), Restart PHP, and **Set as host default** for system php-fpm / phpMyAdmin. Sidebar entry under Server; cross-linked with PHP Extensions. Admin-only POSTs with CSRF + same-origin checks.
 - Installer failure UI **Open GitHub issue** opens `/issues/new` with a prefilled title and body (CPN version, OS, arch, kernel, install mode, failed step, sanitized error). Host IP addresses, MACs, tokens, passwords, and usernames are omitted or redacted. Status now exposes safe `os_pretty_name`, `arch`, and `kernel` on `environment` for that template.
 - Server **PHP Extensions** manager (`/server/php/extensions`): select PHP version (default from `/var/lib/cpn/php-default.json`, prefer 8.5), Load Extensions, searchable install/uninstall table. Prefer an already-installed LiteSpeed `lsphpXX` tree; otherwise Remi/AppStream `php-*` (same surface as php-fpm / phpMyAdmin). Admin-only POSTs with CSRF + same-origin checks. **Set as host default** persists `php-default.json` and retargets php-fpm; does not force-install `lsphp` when Remi PHP is present (shared-path conflicts on EL).

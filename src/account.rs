@@ -9,7 +9,8 @@ use std::{
 };
 
 const MAX_USERNAME_CHARS: usize = 128;
-const MAX_PASSWORD_CHARS: usize = 256;
+/// Hard maximum password length enforced by `password_meets_policy`.
+pub const MAX_PASSWORD_CHARS: usize = 256;
 const MAX_EMAIL_CHARS: usize = 254;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +44,25 @@ pub fn default_password_policy() -> PasswordPolicy {
         require_uppercase: true,
         require_number: true,
     }
+}
+
+/// Short operator-facing summary of panel password rules (for Users / Security UI).
+pub fn password_policy_hint(policy: &PasswordPolicy) -> String {
+    let mut parts = vec![format!(
+        "Min {} characters, max {} characters",
+        policy.min_length, MAX_PASSWORD_CHARS
+    )];
+    if policy.require_uppercase {
+        parts.push("at least one uppercase letter".into());
+    }
+    if policy.require_number {
+        parts.push("at least one number".into());
+    }
+    if policy.require_special {
+        parts.push("at least one special character (non-letter, non-digit)".into());
+    }
+    parts.push("must not match the blocked-password list".into());
+    format!("{}.", parts.join("; "))
 }
 
 /// Data root for panel bootstrap, extra accounts, and site records.

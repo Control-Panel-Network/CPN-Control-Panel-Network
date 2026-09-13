@@ -48,11 +48,15 @@ use cpn_installer::panel_hub_routes::{
     ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
     ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
     passkey_register_finish, passkey_register_start, security_fail2ban, security_firewall,
-    security_firewall_enable, security_malware, security_modsec, security_modsec_rules,
-    security_page, security_rule_packs, security_ssh, security_ssh_toggle, security_ssl,
-    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
-    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
+    security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
+    security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
+    security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
+    security_firewall_rule_delete, security_firewall_rules_import, security_firewall_start,
+    security_firewall_stop, security_firewall_trusted_add, security_firewall_trusted_delete,
+    security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
+    security_ssh, security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
+    security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_mark_custom,
+    security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
     server_dns_nameservers, server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete,
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
     server_files_page, server_litespeed_downgrade, server_litespeed_enterprise_page,
@@ -1079,6 +1083,20 @@ async fn main() -> std::io::Result<()> {
             .service(security_page)
             .service(security_firewall)
             .service(security_firewall_enable)
+            .service(security_firewall_start)
+            .service(security_firewall_stop)
+            .service(security_firewall_reload)
+            .service(security_firewall_rule_add)
+            .service(security_firewall_rule_delete)
+            .service(security_firewall_rules_import)
+            .service(security_firewall_export_rules)
+            .service(security_firewall_ban_add)
+            .service(security_firewall_ban_unban)
+            .service(security_firewall_ban_delete)
+            .service(security_firewall_banned_import)
+            .service(security_firewall_export_banned)
+            .service(security_firewall_trusted_add)
+            .service(security_firewall_trusted_delete)
             .service(security_ssh)
             .service(security_ssh_toggle)
             .service(security_fail2ban)

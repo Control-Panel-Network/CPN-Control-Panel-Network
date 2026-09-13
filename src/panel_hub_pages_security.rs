@@ -5,7 +5,7 @@ use crate::panel_hub_defs::security_hub_sections;
 use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
-use crate::panel_ops_security::{apply_sshd_toggle, fail2ban_status, firewall_status, sshd_status};
+use crate::panel_ops_security::{apply_sshd_toggle, fail2ban_status, sshd_status};
 use crate::panel_ops_security_ssl::{
     hostname_ssl_status, list_modsec_rule_files, mail_ssl_status, malware_scan_status,
     modsec_status, site_ssl_rows,
@@ -32,6 +32,12 @@ pub fn security_hub_main() -> String {
         "Security",
         "Firewall, SSH hardening, fail2ban, WAF, malware scan, and SSL certificates for this CPN node.",
     );
+    let policy = crate::account::default_password_policy();
+    let hint = crate::account::password_policy_hint(&policy);
+    body.push_str(&format!(
+        r#"<p class="muted" style="margin:0 0 16px;">Panel password policy: {}</p>"#,
+        html_escape(&hint)
+    ));
     for (title, tiles) in security_hub_sections() {
         let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
         if filtered.is_empty() {
@@ -43,53 +49,15 @@ pub fn security_hub_main() -> String {
 }
 
 pub fn firewall_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
-    let st = firewall_status();
-    let services = if st.services.is_empty() {
-        "n/a".into()
-    } else {
-        st.services.join(", ")
-    };
-    let kv = status_kv(&[
-        ("Backend", &st.backend),
-        ("Active", if st.active { "yes" } else { "no" }),
-        ("Services", &services),
-    ]);
-    let journal = if st.journal_excerpt.is_empty() {
-        "<p class=\"muted\">No CPN firewall journal yet (written on install or when you enable firewalld here).</p>"
-            .to_string()
-    } else {
-        format!(
-            "<h3>CPN firewall journal</h3>{}",
-            pre_block(&st.journal_excerpt)
-        )
-    };
-    let enable_form = if is_admin && st.backend == "firewalld" && !st.active {
-        r#"<form method="post" action="/security/firewall/enable" style="margin:14px 0;">
-          <button type="submit" class="btn-primary">Enable firewalld (http/https)</button>
-        </form>
-        <p class="muted">Starts firewalld and permanently opens http/https services on AlmaLinux 9.</p>"#
-            .to_string()
-    } else if is_admin && st.backend == "none" {
-        "<p class=\"muted\">Install firewalld (<code>dnf install firewalld</code>), then return here to enable it.</p>"
-            .into()
-    } else {
-        String::new()
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Security", Some("/security")),
-            ("Firewall", None),
-        ],
-        "Firewall",
-        "Live firewalld / ufw / iptables status.",
-        &format!(
-            "{kv}{enable}<h3>Status</h3>{}{journal}<p class=\"muted\">Arbitrary port edits stay admin-gated for a later release. CPN manages journaled http/https rules from install or Enable.</p>",
-            pre_block(&st.detail),
-            enable = enable_form,
-        ),
+    // Legacy entry point kept for callers; manager UI lives in panel_hub_pages_firewall.
+    crate::panel_hub_pages_firewall::firewall_manager_page(
+        "admin",
+        "rules",
         notice,
         error,
+        is_admin,
+        None,
+        None,
     )
 }
 
