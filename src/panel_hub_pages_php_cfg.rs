@@ -313,7 +313,9 @@ pub fn php_configurations_page(
         ],
         "PHP Configurations",
         "Configure PHP settings and choose the host default used by system tools like phpMyAdmin.",
-        &format!("{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}{modal}{script}"),
+        &format!(
+            "{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}{modal}{script}"
+        ),
         notice,
         error,
     )
