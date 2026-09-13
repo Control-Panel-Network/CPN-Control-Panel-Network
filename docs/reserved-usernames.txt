@@ -1,0 +1,28 @@
+# CPN panel reserved usernames (one per line).
+# Live source for installs: fetched from this file on the stable branch.
+# Comments (#) and blank lines are ignored. Matching is case-insensitive.
+admin
+administrator
+root
+sysadmin
+system
+superuser
+superadmin
+webadmin
+serveradmin
+networkadmin
+netadmin
+itadmin
+support
+operator
+manager
+master
+owner
+security
+service
+guest
+admin1
+administrator1
+rootadmin
+localadmin
+domainadmin

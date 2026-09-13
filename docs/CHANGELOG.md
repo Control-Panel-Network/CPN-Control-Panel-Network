@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Live reserved panel usernames list (`docs/reserved-usernames.txt` on `stable`) fetched with 24h disk cache and bundled fallback; blocked at first-admin setup, `cpn account create`, and rename.
+- Live blocked passwords list (`docs/blocked-passwords.txt` on `stable`) with the same cache/fallback pattern; enforced via `password_meets_policy` on install, create, change, reset, and forced first-login change.
+- Install first-admin UX: required non-reserved username; empty password auto-generates a strong secret shown once (CLI end / installer Complete screen); `must_change_password` when generated; panel admins require TOTP/passkey before full dashboard (`totp_required`, migration `0007_account_security_flags`).
+
+### Notes
+
+- GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
+- Generated passwords are never logged; shown once in the installer UI/CLI only.
+
 ## [0.2.6-alpha.38] - 13/09/2026
 
 Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail client defaults, and CPN mail onboarding (Cargo `0.2.6-alpha.38`).

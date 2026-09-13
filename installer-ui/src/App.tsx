@@ -69,6 +69,9 @@ function AppShell() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(
+    null,
+  );
   const reconnectTimer = useRef<number | undefined>(undefined);
   const completionTimer = useRef<number | undefined>(undefined);
   const languageReady = useRef(false);
@@ -360,7 +363,8 @@ function AppShell() {
             <AccountSetupScreen
               initialPolicy={status.password_policy ?? DEFAULT_POLICY}
               language={locale}
-              onCompleted={() => {
+              onCompleted={(info) => {
+                setGeneratedPassword(info.generatedPassword ?? null);
                 setScreen("complete");
               }}
             />
@@ -371,6 +375,7 @@ function AppShell() {
               mail={status.selected_mail}
               message={status.message}
               panelLoginUrl={loginUrl}
+              generatedPassword={generatedPassword}
             />
           )}
         </motion.div>

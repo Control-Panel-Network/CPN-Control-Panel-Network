@@ -51,6 +51,8 @@ fn write_admin_account(password: &str) {
         password_policy: default_password_policy(),
         language: "en".into(),
         created_at_unix: 1,
+        must_change_password: false,
+        totp_required: false,
     };
     let path = crate::account::bootstrap_path();
     write_account_file(&path, &boot).expect("write bootstrap");

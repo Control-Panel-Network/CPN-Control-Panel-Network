@@ -9,7 +9,7 @@ use crate::account::{
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 
-/// Require a non-empty username (CLI mutations; empty does not default to admin).
+/// Require a non-empty username for lookups (existing accounts may be reserved names).
 pub fn require_username(raw: &str) -> Result<String, String> {
     let username = raw.trim();
     if username.is_empty() {
@@ -22,6 +22,13 @@ pub fn require_username(raw: &str) -> Result<String, String> {
         return Err("Username cannot include control characters".into());
     }
     Ok(username.to_string())
+}
+
+/// Require a username that is allowed for new accounts / renames.
+pub fn require_new_username(raw: &str) -> Result<String, String> {
+    let username = require_username(raw)?;
+    crate::reserved_usernames::reject_if_reserved(&username)?;
+    Ok(username)
 }
 
 fn account_file_key(username: &str) -> String {
@@ -117,6 +124,8 @@ fn build_bootstrap(
     password: &str,
     policy: PasswordPolicy,
     language: &str,
+    must_change_password: bool,
+    totp_required: bool,
 ) -> PanelBootstrap {
     let salt = new_password_salt();
     let password_hash = hash_password(password, &salt);
@@ -129,6 +138,8 @@ fn build_bootstrap(
         password_policy: policy,
         language: language.to_string(),
         created_at_unix: now_unix(),
+        must_change_password,
+        totp_required,
     }
 }
 
@@ -161,7 +172,7 @@ pub fn create_account(
     language: &str,
 ) -> Result<AccountSetupResult, String> {
     validate_policy(&policy)?;
-    let username = require_username(username_raw)?;
+    let username = require_new_username(username_raw)?;
     if account_exists(&username) {
         return Err(format!("Account `{username}` already exists"));
     }
@@ -173,14 +184,17 @@ pub fn create_account(
         }
     })?;
     let (password, generated_password) = resolve_password(password_raw, generate, &policy)?;
+    let is_bootstrap = load_bootstrap().is_none();
     let boot = build_bootstrap(
         username.clone(),
         recovery_email.clone(),
         &password,
         policy,
         language,
+        generated_password.is_some(),
+        true,
     );
-    let path = if load_bootstrap().is_none() {
+    let path = if is_bootstrap {
         bootstrap_path()
     } else {
         extra_account_path(&username)
@@ -209,6 +223,9 @@ pub fn reset_account_password(
     let salt = new_password_salt();
     boot.password_salt = salt.clone();
     boot.password_hash = hash_password(&password, &salt);
+    if generated_password.is_some() {
+        boot.must_change_password = true;
+    }
     write_account_file(&path, &boot)?;
     Ok(AccountSetupResult {
         public: AccountPublic {
@@ -300,7 +317,7 @@ pub fn rename_own_account(
     new_username_raw: &str,
 ) -> Result<AccountPublic, String> {
     let (mut boot, old_path) = find_account(current_username_raw)?;
-    let new_username = require_username(new_username_raw)?;
+    let new_username = require_new_username(new_username_raw)?;
     if usernames_equal(&boot.username, &new_username) {
         return Ok(AccountPublic {
             username: boot.username,
@@ -340,9 +357,12 @@ mod tests {
     #[test]
     fn create_reset_delete_account_roundtrip() {
         with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
             let policy = default_password_policy();
             let created = create_account(
-                "admin",
+                "panelowner",
                 None,
                 true,
                 "admin@example.com",
@@ -356,6 +376,10 @@ mod tests {
                 bootstrap_path().display()
             );
             assert!(created.generated_password.is_some());
+            assert!(
+                create_account("admin", None, true, "bad@example.com", policy.clone(), "en",)
+                    .is_err()
+            );
 
             let second = create_account("ops", None, true, "ops@example.com", policy, "en")
                 .expect("create extra");
@@ -368,14 +392,20 @@ mod tests {
 
             delete_account("ops").unwrap();
             assert_eq!(list_accounts().unwrap().len(), 1);
-            delete_account("admin").unwrap();
+            delete_account("panelowner").unwrap();
             assert!(list_accounts().unwrap().is_empty());
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
         });
     }
 
     #[test]
     fn self_service_password_and_email() {
         with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
             let policy = default_password_policy();
             // Ephemeral passwords only (CodeQL: no hard-coded password literals).
             let initial = generate_password(&policy);
@@ -385,7 +415,7 @@ mod tests {
                 wrong = generate_password(&policy);
             }
             let created = create_account(
-                "Admin",
+                "panelowner",
                 Some(&initial),
                 false,
                 "admin@example.com",
@@ -394,13 +424,16 @@ mod tests {
             )
             .expect("create");
             assert!(created.generated_password.is_none());
-            update_own_profile("Admin", Some("ops@example.com"), Some("nb")).unwrap();
-            let (boot, _) = find_account("Admin").unwrap();
+            update_own_profile("panelowner", Some("ops@example.com"), Some("nb")).unwrap();
+            let (boot, _) = find_account("panelowner").unwrap();
             assert_eq!(boot.recovery_email, "ops@example.com");
             assert_eq!(boot.language, "nb");
-            let changed = change_own_password("Admin", &initial, Some(&next), false).unwrap();
+            let changed = change_own_password("panelowner", &initial, Some(&next), false).unwrap();
             assert!(changed.generated_password.is_none());
-            assert!(change_own_password("Admin", &wrong, Some(&next), false).is_err());
+            assert!(change_own_password("panelowner", &wrong, Some(&next), false).is_err());
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
         });
     }
 }

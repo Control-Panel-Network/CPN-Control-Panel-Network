@@ -100,17 +100,18 @@ const en: LocaleMessages = {
   accountEyebrow: "FIRST ACCOUNT",
   accountTitle: "Create the administrator account",
   accountIntro:
-    "This account signs in to the panel. Leave the username empty to use admin. Full UTF-8 names and passwords are supported.",
+    "This account signs in to the panel. Choose a unique username (names like admin/root/support are reserved). Leave the password blank to auto-generate a strong one shown once at the end.",
   usernameLabel: "Username",
   usernameHint:
-    "Optional. Defaults to admin. Letters (including Å), numbers, and symbols are allowed.",
-  usernamePlaceholder: "admin",
+    "Required. Reserved names (admin, root, support, …) are blocked. Letters (including Å), numbers, and symbols are allowed.",
+  usernamePlaceholder: "panelowner",
   passwordLabel: "Password",
   passwordConfirmLabel: "Confirm password",
   passwordHint:
-    "Use at least 12 characters with an uppercase letter, number, and symbol.",
+    "Leave blank to auto-generate. Otherwise use at least 12 characters with an uppercase letter, number, and symbol. Common weak passwords are blocked.",
   generatePassword: "Generate and fill password",
-  useOwnPassword: "I will choose my own password",
+  useOwnPassword:
+    "Leave both password fields empty to auto-generate, or enter your own.",
   generatedPasswordNote: "Copy this password now. It is shown only once.",
   copyPassword: "Copy",
   copied: "Copied",
