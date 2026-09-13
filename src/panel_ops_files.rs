@@ -29,8 +29,9 @@ fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
-fn hmac_hex(secret: &[u8], payload: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC key");
+fn hmac_hex(secret: &str, payload: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(payload.as_bytes());
     mac.finalize()
         .into_bytes()
