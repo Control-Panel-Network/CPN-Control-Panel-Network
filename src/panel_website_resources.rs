@@ -1,6 +1,7 @@
-//! Resource snapshots for Manage Overview (honest server-level when site metrics missing).
+//! Resource snapshots for Manage Overview (host-level when site metrics missing).
 
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cheap approximate disk usage (bytes) with a file walk cap.
 pub fn approx_dir_bytes(root: &Path, max_files: usize) -> Option<u64> {
@@ -48,33 +49,49 @@ pub fn format_bytes(bytes: u64) -> String {
     }
 }
 
+pub fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CpuCounters {
+    pub total: u64,
+    pub idle: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct HostSnapshot {
     pub cpu_pct: Option<f32>,
     pub mem_pct: Option<f32>,
+    pub cpu_counters: Option<CpuCounters>,
     pub detail: String,
 }
 
-/// Best-effort host CPU/memory snapshot (not per-site).
-pub fn host_resource_snapshot() -> HostSnapshot {
+/// Live host CPU/memory (not per-site). CPU uses delta when previous counters are supplied.
+pub fn host_resource_snapshot(prev: Option<CpuCounters>) -> HostSnapshot {
     #[cfg(windows)]
     {
+        let _ = prev;
         HostSnapshot {
             cpu_pct: None,
             mem_pct: None,
+            cpu_counters: None,
             detail: "Host gauges are available on Linux panel hosts.".into(),
         }
     }
     #[cfg(not(windows))]
     {
         let mem_pct = read_mem_pct();
-        let cpu_pct = read_load_as_cpu_hint();
+        let (cpu_pct, cpu_counters) = read_cpu_pct(prev);
         HostSnapshot {
             cpu_pct,
             mem_pct,
-            detail:
-                "Server snapshot (not per-site). Site-level CPU/bandwidth metering ships later."
-                    .into(),
+            cpu_counters,
+            detail: "Host live metrics (not per-site). Site-level CPU metering ships later."
+                .into(),
         }
     }
 }
@@ -104,43 +121,41 @@ fn parse_kb(rest: &str) -> Option<u64> {
 }
 
 #[cfg(not(windows))]
-fn read_load_as_cpu_hint() -> Option<f32> {
-    let raw = std::fs::read_to_string("/proc/loadavg").ok()?;
-    let load1: f32 = raw.split_whitespace().next()?.parse().ok()?;
-    let cpus = std::thread::available_parallelism()
-        .map(|n| n.get() as f32)
-        .unwrap_or(1.0)
-        .max(1.0);
-    Some(((load1 / cpus) * 100.0).min(100.0))
+fn read_cpu_counters() -> Option<CpuCounters> {
+    let raw = std::fs::read_to_string("/proc/stat").ok()?;
+    let values: Vec<u64> = raw
+        .lines()
+        .next()?
+        .split_whitespace()
+        .skip(1)
+        .take(8)
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .ok()?;
+    let total: u64 = values.iter().sum();
+    let idle = *values.get(3)? + values.get(4).copied().unwrap_or(0);
+    (total > 0).then_some(CpuCounters { total, idle })
 }
 
-/// Simple SVG sparkline from a value (0-100) for Overview charts.
-pub fn sparkline_svg(pct: Option<f32>, stroke: &str) -> String {
-    let value = pct.unwrap_or(0.0).clamp(0.0, 100.0);
-    // Synthetic gentle curve ending at current value (visual only).
-    let points = [
-        8.0,
-        18.0,
-        14.0,
-        28.0,
-        22.0,
-        35.0,
-        30.0,
-        (value * 0.7),
-        value,
-    ];
-    let mut d = String::from("M 0 80");
-    let n = points.len().max(1) as f32;
-    for (i, p) in points.iter().enumerate() {
-        let x = (i as f32 / (n - 1.0)) * 320.0;
-        let y = 80.0 - (*p / 100.0) * 70.0;
-        d.push_str(&format!(" L {x:.1} {y:.1}"));
-    }
-    format!(
-        r#"<svg viewBox="0 0 320 88" role="img" aria-label="Resource chart">
-  <path d="{d}" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>"#
-    )
+#[cfg(not(windows))]
+fn read_cpu_pct(prev: Option<CpuCounters>) -> (Option<f32>, Option<CpuCounters>) {
+    let Some(now) = read_cpu_counters() else {
+        return (None, None);
+    };
+    let pct = match prev {
+        Some(prev) if now.total > prev.total => {
+            let dt = now.total - prev.total;
+            let di = now.idle.saturating_sub(prev.idle);
+            let busy = dt.saturating_sub(di);
+            Some(((busy as f64 / dt as f64) * 100.0).clamp(0.0, 100.0) as f32)
+        }
+        _ => {
+            // First sample: since-boot average from /proc/stat (same as dashboard).
+            let busy = now.total.saturating_sub(now.idle);
+            Some(((busy as f64 / now.total as f64) * 100.0).clamp(0.0, 100.0) as f32)
+        }
+    };
+    (pct, Some(now))
 }
 
 #[cfg(test)]
@@ -155,9 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn sparkline_renders() {
-        let svg = sparkline_svg(Some(42.0), "#3b82f6");
-        assert!(svg.contains("<svg"));
-        assert!(svg.contains("#3b82f6"));
+    fn host_snapshot_does_not_panic() {
+        let _ = host_resource_snapshot(None);
     }
 }

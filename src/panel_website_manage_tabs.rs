@@ -1,21 +1,14 @@
-//! Manage dashboard tab bodies (Overview, Domains, Logs, Config, Files, Plugins).
-//! SSL tab: `panel_website_manage_ssl`.
+//! Manage dashboard tab bodies (Domains, Logs, Config, Files, Plugins).
+//! Overview: `panel_website_manage_overview`. SSL: `panel_website_manage_ssl`.
 
+pub use crate::panel_website_manage_overview::tab_overview;
 pub use crate::panel_website_manage_ssl::tab_ssl;
 
-use crate::panel_ops_db::list_databases;
-use crate::panel_ops_ftp::detect_ftp;
 use crate::panel_ops_php::detect_php;
 use crate::panel_website_logs::log_panel_html;
-use crate::panel_website_manage_ui::{html_escape, resource_card, section, ssl_status_card, tile};
-use crate::panel_website_resources::{
-    approx_dir_bytes, format_bytes, host_resource_snapshot, sparkline_svg,
-};
-use crate::service_detect::detect_web_server_label;
-use crate::sites::{
-    SiteRecord, is_legacy_docroot, list_sites, resolve_parent_domain, site_home_from_record,
-};
-use std::path::{Path, PathBuf};
+use crate::panel_website_manage_ui::{html_escape, section, tile};
+use crate::sites::{SiteRecord, list_sites, resolve_parent_domain, site_home_from_record};
+use std::path::PathBuf;
 
 fn child_sites(parent: &str) -> Vec<SiteRecord> {
     let Ok(all) = list_sites() else {
@@ -30,116 +23,6 @@ fn child_sites(parent: &str) -> Vec<SiteRecord> {
                 == Some(parent)
         })
         .collect()
-}
-
-pub fn tab_overview(site: &SiteRecord) -> String {
-    let disk_bytes = approx_dir_bytes(Path::new(&site.docroot), 8_000);
-    let disk = disk_bytes
-        .map(format_bytes)
-        .unwrap_or_else(|| "Unavailable".into());
-    // Soft quota hint: 10 GB visual only until Packages merge.
-    let disk_pct = disk_bytes
-        .map(|b| {
-            let pct = ((b as f64 / (10.0 * 1024.0 * 1024.0 * 1024.0)) * 100.0) as u8;
-            pct.min(100)
-        })
-        .unwrap_or(0);
-
-    let db = list_databases();
-    let db_count = if db.databases.is_empty() && !db.detail.contains("Listed via") {
-        "n/a".into()
-    } else {
-        db.databases.len().to_string()
-    };
-    let ftp = detect_ftp();
-    let ftp_label: String = if ftp.ready {
-        "See FTP hub".to_string()
-    } else {
-        "0".to_string()
-    };
-    let snap = host_resource_snapshot();
-    let cpu_label = snap
-        .cpu_pct
-        .map(|v| format!("{v:.0}%"))
-        .unwrap_or_else(|| "n/a".into());
-    let mem_label = snap
-        .mem_pct
-        .map(|v| format!("{v:.0}%"))
-        .unwrap_or_else(|| "n/a".into());
-
-    let mut cards = String::from(r#"<div class="manage-card-grid">"#);
-    cards.push_str(&resource_card("Disk Usage", &disk, Some(disk_pct)));
-    cards.push_str(&resource_card("Bandwidth", "Not metered", None));
-    cards.push_str(&resource_card("Databases", &db_count, None));
-    cards.push_str(&resource_card("FTP Accounts", &ftp_label, None));
-    cards.push_str("</div>");
-
-    let charts = format!(
-        r#"<div class="manage-charts">
-  <div class="manage-chart">
-    <h3>CPU Usage</h3>
-    <p>{detail} Current load hint: {cpu}</p>
-    {cpu_svg}
-  </div>
-  <div class="manage-chart">
-    <h3>Memory Usage</h3>
-    <p>Host memory in use: {mem}</p>
-    {mem_svg}
-  </div>
-</div>"#,
-        detail = html_escape(&snap.detail),
-        cpu = html_escape(&cpu_label),
-        mem = html_escape(&mem_label),
-        cpu_svg = sparkline_svg(
-            snap.cpu_pct,
-            crate::panel_dashboard::gauge_stroke_for_usage(
-                snap.cpu_pct.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
-            ),
-        ),
-        mem_svg = sparkline_svg(
-            snap.mem_pct,
-            crate::panel_dashboard::gauge_stroke_for_usage(
-                snap.mem_pct.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
-            ),
-        ),
-    );
-
-    let home = site_home_from_record(site);
-    let engine = site
-        .engine
-        .as_deref()
-        .filter(|v| !v.is_empty())
-        .unwrap_or("Not set");
-    let stack = detect_web_server_label();
-    let legacy = if is_legacy_docroot(&site.docroot) {
-        r#"<p class="manage-muted">This site uses a legacy or custom document root. New sites use the domain home under <code>/home/</code>.</p>"#
-    } else {
-        ""
-    };
-    let meta = format!(
-        r#"<p class="manage-muted">Owner: <strong>{owner}</strong> · Docroot: <code>{docroot}</code> · Home: <code>{home}</code> · Engine: {engine} · Stack: {stack}{internal}</p>{legacy}"#,
-        owner = html_escape(&site.owner),
-        docroot = html_escape(&site.docroot),
-        home = html_escape(&home.display().to_string()),
-        engine = html_escape(engine),
-        stack = html_escape(&stack),
-        internal = site
-            .internal_ip
-            .as_deref()
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(|ip| format!(" · Internal IP: <code>{}</code>", html_escape(ip)))
-            .unwrap_or_default(),
-        legacy = legacy,
-    );
-
-    format!(
-        "{cards}{ssl}{charts}{meta}",
-        cards = cards,
-        ssl = ssl_status_card(site),
-        charts = charts,
-        meta = meta,
-    )
 }
 
 pub fn tab_domains(site: &SiteRecord) -> String {
@@ -417,15 +300,6 @@ mod tests {
             suspended_by: None,
             php_version: None,
         }
-    }
-
-    #[test]
-    fn overview_has_resource_cards() {
-        let html = tab_overview(&site());
-        assert!(html.contains("Disk Usage"));
-        assert!(html.contains("Bandwidth"));
-        assert!(!html.to_lowercase().contains("email marketing"));
-        assert!(!html.to_lowercase().contains("cyberpanel"));
     }
 
     #[test]

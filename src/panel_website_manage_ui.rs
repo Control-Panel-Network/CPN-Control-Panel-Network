@@ -81,10 +81,37 @@ pub fn manage_styles() -> &'static str {
 }
 .site-manage .manage-chart {
   background:var(--m-card); border:1px solid var(--m-line); border-radius:14px; padding:14px;
+  text-align:left; color:inherit; width:100%;
+}
+.site-manage .manage-chart-btn {
+  cursor:pointer; font:inherit; appearance:none; -webkit-appearance:none;
+}
+.site-manage .manage-chart-btn:hover, .site-manage .manage-chart-btn:focus-visible {
+  border-color:var(--m-accent); outline:none;
 }
 .site-manage .manage-chart h3 { margin:0 0 4px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--m-muted); }
-.site-manage .manage-chart p { margin:0 0 10px; color:var(--m-muted); font-size:12px; }
-.site-manage .manage-chart svg { width:100%; height:88px; display:block; }
+.site-manage .manage-chart p, .site-manage .manage-chart-summary { margin:0 0 10px; color:var(--m-muted); font-size:12px; line-height:1.4; }
+.site-manage .manage-chart svg, .site-manage .manage-metric-svg { width:100%; height:120px; display:block; }
+.site-manage .manage-stat-hint {
+  display:block; margin-top:6px; font-style:normal; color:var(--m-muted); font-size:11px; line-height:1.35;
+}
+.site-manage .manage-metric-dialog {
+  border:1px solid var(--m-line); border-radius:16px; padding:0; max-width:min(920px,96vw);
+  width:100%; background:var(--m-card); color:var(--m-ink);
+}
+.site-manage .manage-metric-dialog::backdrop { background:rgba(0,0,0,.55); }
+.site-manage .manage-metric-dialog-inner { margin:0; padding:16px; }
+.site-manage .manage-metric-dialog-inner header {
+  display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;
+}
+.site-manage .manage-metric-dialog-inner h2 { margin:0; font-size:18px; }
+.site-manage .manage-metric-dialog-inner svg { width:100%; height:220px; display:block; margin:8px 0 12px; }
+.site-manage .manage-metric-stats {
+  list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px;
+}
+.site-manage .manage-metric-stats li {
+  background:#0b0d12; border:1px solid var(--m-line); border-radius:10px; padding:10px 12px; font-size:13px;
+}
 .site-manage .manage-section-title {
   margin:22px 0 10px; font-size:12px; font-weight:800; letter-spacing:.08em;
   text-transform:uppercase; color:var(--m-muted); border-left:3px solid var(--m-accent); padding-left:10px;
