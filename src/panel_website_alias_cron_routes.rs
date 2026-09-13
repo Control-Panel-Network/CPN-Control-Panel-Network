@@ -4,7 +4,7 @@ use crate::installer::AppState;
 use crate::panel_hub_http::{login_redirect, require_panel_user, urlencoding_simple};
 use crate::panel_ops_site_alias::{add_site_alias, remove_site_alias, verify_alias_csrf};
 use crate::panel_ops_site_cron::{
-    add_site_cron_job, delete_site_cron_job, update_site_cron_job, verify_cron_csrf,
+    CronJobFields, add_site_cron_job, delete_site_cron_job, update_site_cron_job, verify_cron_csrf,
 };
 use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -128,16 +128,16 @@ pub async fn websites_cron_add(
     if let Err(err) = require_manage_site(&user, domain, SitePerm::Enable) {
         return redirect_manage(domain, "cron", None, Some(&err));
     }
-    match add_site_cron_job(
-        domain,
-        form.get("minute").map(String::as_str).unwrap_or("*"),
-        form.get("hour").map(String::as_str).unwrap_or("*"),
-        form.get("day").map(String::as_str).unwrap_or("*"),
-        form.get("month").map(String::as_str).unwrap_or("*"),
-        form.get("weekday").map(String::as_str).unwrap_or("*"),
-        form.get("command").map(String::as_str).unwrap_or(""),
-        form.get("comment").map(String::as_str).unwrap_or(""),
-    ) {
+    let fields = CronJobFields {
+        minute: form.get("minute").map(String::as_str).unwrap_or("*"),
+        hour: form.get("hour").map(String::as_str).unwrap_or("*"),
+        day: form.get("day").map(String::as_str).unwrap_or("*"),
+        month: form.get("month").map(String::as_str).unwrap_or("*"),
+        weekday: form.get("weekday").map(String::as_str).unwrap_or("*"),
+        command: form.get("command").map(String::as_str).unwrap_or(""),
+        comment: form.get("comment").map(String::as_str).unwrap_or(""),
+    };
+    match add_site_cron_job(domain, &fields) {
         Ok((site, msg)) => redirect_manage(&site.domain, "cron", Some(&msg), None),
         Err(err) => redirect_manage(domain, "cron", None, Some(&err)),
     }
@@ -164,16 +164,19 @@ pub async fn websites_cron_update(
         return redirect_manage(domain, "cron", None, Some(&err));
     }
     let enabled = form.get("enabled").map(String::as_str).unwrap_or("") == "1";
+    let fields = CronJobFields {
+        minute: form.get("minute").map(String::as_str).unwrap_or("*"),
+        hour: form.get("hour").map(String::as_str).unwrap_or("*"),
+        day: form.get("day").map(String::as_str).unwrap_or("*"),
+        month: form.get("month").map(String::as_str).unwrap_or("*"),
+        weekday: form.get("weekday").map(String::as_str).unwrap_or("*"),
+        command: form.get("command").map(String::as_str).unwrap_or(""),
+        comment: form.get("comment").map(String::as_str).unwrap_or(""),
+    };
     match update_site_cron_job(
         domain,
         form.get("job_id").map(String::as_str).unwrap_or(""),
-        form.get("minute").map(String::as_str).unwrap_or("*"),
-        form.get("hour").map(String::as_str).unwrap_or("*"),
-        form.get("day").map(String::as_str).unwrap_or("*"),
-        form.get("month").map(String::as_str).unwrap_or("*"),
-        form.get("weekday").map(String::as_str).unwrap_or("*"),
-        form.get("command").map(String::as_str).unwrap_or(""),
-        form.get("comment").map(String::as_str).unwrap_or(""),
+        &fields,
         enabled,
     ) {
         Ok((site, msg)) => redirect_manage(&site.domain, "cron", Some(&msg), None),

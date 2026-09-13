@@ -44,6 +44,18 @@ pub struct SiteCronJob {
     pub updated_at_unix: u64,
 }
 
+/// Schedule + command fields shared by add/update.
+#[derive(Debug, Clone)]
+pub struct CronJobFields<'a> {
+    pub minute: &'a str,
+    pub hour: &'a str,
+    pub day: &'a str,
+    pub month: &'a str,
+    pub weekday: &'a str,
+    pub command: &'a str,
+    pub comment: &'a str,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -360,29 +372,29 @@ pub fn list_site_cron_jobs(domain_raw: &str) -> Result<(SiteRecord, Vec<SiteCron
 
 pub fn add_site_cron_job(
     domain_raw: &str,
-    minute: &str,
-    hour: &str,
-    day: &str,
-    month: &str,
-    weekday: &str,
-    command: &str,
-    comment: &str,
+    fields: &CronJobFields<'_>,
 ) -> Result<(SiteRecord, String), String> {
     let domain = normalize_domain(domain_raw)?;
     let site = load_site(&domain)?;
-    validate_schedule(minute, hour, day, month, weekday)?;
-    let command = validate_cron_command(&site, command)?;
+    validate_schedule(
+        fields.minute,
+        fields.hour,
+        fields.day,
+        fields.month,
+        fields.weekday,
+    )?;
+    let command = validate_cron_command(&site, fields.command)?;
     let now = now_unix();
     let job = SiteCronJob {
         id: new_id(),
         enabled: true,
-        minute: minute.trim().into(),
-        hour: hour.trim().into(),
-        day: day.trim().into(),
-        month: month.trim().into(),
-        weekday: weekday.trim().into(),
+        minute: fields.minute.trim().into(),
+        hour: fields.hour.trim().into(),
+        day: fields.day.trim().into(),
+        month: fields.month.trim().into(),
+        weekday: fields.weekday.trim().into(),
         command,
-        comment: comment.trim().chars().take(120).collect(),
+        comment: fields.comment.trim().chars().take(120).collect(),
         created_at_unix: now,
         updated_at_unix: now,
     };
@@ -400,30 +412,30 @@ pub fn add_site_cron_job(
 pub fn update_site_cron_job(
     domain_raw: &str,
     job_id: &str,
-    minute: &str,
-    hour: &str,
-    day: &str,
-    month: &str,
-    weekday: &str,
-    command: &str,
-    comment: &str,
+    fields: &CronJobFields<'_>,
     enabled: bool,
 ) -> Result<(SiteRecord, String), String> {
     let domain = normalize_domain(domain_raw)?;
     let site = load_site(&domain)?;
-    validate_schedule(minute, hour, day, month, weekday)?;
-    let command = validate_cron_command(&site, command)?;
+    validate_schedule(
+        fields.minute,
+        fields.hour,
+        fields.day,
+        fields.month,
+        fields.weekday,
+    )?;
+    let command = validate_cron_command(&site, fields.command)?;
     let mut file = load_file(&domain);
     let Some(job) = file.jobs.iter_mut().find(|j| j.id == job_id) else {
         return Err("Cron job not found".into());
     };
-    job.minute = minute.trim().into();
-    job.hour = hour.trim().into();
-    job.day = day.trim().into();
-    job.month = month.trim().into();
-    job.weekday = weekday.trim().into();
+    job.minute = fields.minute.trim().into();
+    job.hour = fields.hour.trim().into();
+    job.day = fields.day.trim().into();
+    job.month = fields.month.trim().into();
+    job.weekday = fields.weekday.trim().into();
     job.command = command;
-    job.comment = comment.trim().chars().take(120).collect();
+    job.comment = fields.comment.trim().chars().take(120).collect();
     job.enabled = enabled;
     job.updated_at_unix = now_unix();
     save_file(&file)?;
