@@ -262,7 +262,7 @@ pub(crate) fn names_for_issue(site: &SiteRecord) -> Vec<String> {
         &site.domain,
         site.ssl.provider,
         coverage,
-        true, // SAN mode always includes matching same-provider children
+        site.ssl.include_subdomains_on_cert,
         &kids,
     )
 }

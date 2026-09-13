@@ -1,5 +1,6 @@
 ﻿//! Extra mail features: forwarding, catch-all, DKIM file stores when Postfix exists.
 
+use crate::panel_ops_dkim_keys::{dkim_root, dkim_status_detail, ensure_dkim_root};
 use crate::paths::join_data;
 use crate::postfix_fallback::postfix_is_ready;
 use serde::{Deserialize, Serialize};
@@ -24,10 +25,6 @@ fn forwards_path() -> PathBuf {
 
 fn catchall_path() -> PathBuf {
     join_data("mail-catchall.json")
-}
-
-fn dkim_dir() -> PathBuf {
-    join_data("dkim")
 }
 
 pub fn mail_stack_note() -> String {
@@ -71,32 +68,23 @@ pub fn save_catchall(rows: &[CatchAll]) -> Result<(), String> {
 }
 
 pub fn dkim_status() -> (bool, String) {
-    let dir = dkim_dir();
-    if dir.is_dir() {
-        let count = fs::read_dir(&dir).map(|rd| rd.count()).unwrap_or(0);
-        (
-            true,
-            format!(
-                "DKIM store at {} ({} entries). OpenDKIM signing not auto-wired yet.",
-                dir.display(),
-                count
-            ),
-        )
-    } else {
-        (
-            false,
-            format!(
-                "No DKIM keys yet. Keys will be stored under {} when generated.",
-                dir.display()
-            ),
-        )
-    }
+    dkim_status_detail()
 }
 
 pub fn ensure_dkim_dir() -> Result<PathBuf, String> {
-    let dir = dkim_dir();
-    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create DKIM dir: {e}"))?;
-    Ok(dir)
+    ensure_dkim_root()
+}
+
+pub fn ensure_dkim_store_ready() -> Result<String, String> {
+    let dir = ensure_dkim_root()?;
+    Ok(format!(
+        "DKIM directory ready at {} (keys are generated per domain on site create).",
+        dir.display()
+    ))
+}
+
+pub fn dkim_store_path_display() -> String {
+    dkim_root().display().to_string()
 }
 
 #[cfg(test)]

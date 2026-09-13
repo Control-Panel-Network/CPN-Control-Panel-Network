@@ -53,6 +53,8 @@ pub struct MailAccountCreateForm {
     smtp_username: String,
     #[serde(default)]
     smtp_password: String,
+    #[serde(default)]
+    mailbox_password: String,
 }
 
 impl MailAccountCreateForm {
@@ -96,6 +98,7 @@ impl MailAccountCreateForm {
             smtp_tls,
             smtp_username: self.smtp_username.clone(),
             smtp_password: self.smtp_password.clone(),
+            mailbox_password: self.mailbox_password.clone(),
         })
     }
 }

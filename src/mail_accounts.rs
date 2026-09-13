@@ -38,6 +38,9 @@ pub struct MailAccount {
     /// Stored on disk only; never shown in panel HTML.
     #[serde(default)]
     pub smtp_password: String,
+    /// Mailbox login password for local Postfix/Dovecot (never shown in HTML).
+    #[serde(default)]
+    pub mailbox_password: String,
     pub created_at_unix: u64,
     pub updated_at_unix: u64,
 }
@@ -61,6 +64,7 @@ pub struct MailAccountInput {
     pub smtp_tls: Option<SmtpTlsMode>,
     pub smtp_username: String,
     pub smtp_password: String,
+    pub mailbox_password: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -216,6 +220,7 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
         smtp_tls: input.smtp_tls.unwrap_or_default(),
         smtp_username: input.smtp_username.trim().to_string(),
         smtp_password: input.smtp_password,
+        mailbox_password: input.mailbox_password,
         created_at_unix: now_unix(),
         updated_at_unix: now_unix(),
     };
@@ -232,6 +237,12 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
         .any(|a| a.address.eq_ignore_ascii_case(&account.address))
     {
         return Err(format!("Mailbox `{}` already exists", account.address));
+    }
+    if account.smtp_mode == MailSmtpMode::PostfixLocal && !account.mailbox_password.is_empty() {
+        crate::panel_ops_mailbox_provision::provision_local_mailbox(
+            &account.address,
+            &account.mailbox_password,
+        )?;
     }
     file.accounts.push(account.clone());
     save_file(&file)?;
@@ -270,6 +281,7 @@ mod tests {
             smtp_tls: SmtpTlsMode::Starttls,
             smtp_username: String::new(),
             smtp_password: String::new(),
+            mailbox_password: String::new(),
             created_at_unix: 0,
             updated_at_unix: 0,
         };

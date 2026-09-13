@@ -45,17 +45,72 @@ pub fn design_settings_page(username: &str) -> String {
 }
 
 pub fn setup_wizard_page() -> String {
-    let body = r#"<p>CPN does not ship a separate post-install wizard inside the signed-in panel yet.
-  Use this checklist for first-run onboarding, then the installer UI when you need a fresh or maintenance install.</p>
+    setup_wizard_page_with(None, None)
+}
+
+pub fn setup_wizard_page_with(notice: Option<&str>, error: Option<&str>) -> String {
+    use crate::panel_ops_mail_onboarding::{MailMode, load_mail_onboarding};
+    let cfg = load_mail_onboarding();
+    let local_sel = if cfg.mail_mode == MailMode::Local {
+        " selected"
+    } else {
+        ""
+    };
+    let ext_sel = if cfg.mail_mode == MailMode::External {
+        " selected"
+    } else {
+        ""
+    };
+    let skip_checked = if cfg.skip_rdns { " checked" } else { "" };
+    let notice_html = notice
+        .map(|n| format!(r#"<p class="notice ok">{}</p>"#, html_escape_setup(n)))
+        .unwrap_or_default();
+    let error_html = error
+        .map(|n| format!(r#"<p class="notice error">{}</p>"#, html_escape_setup(n)))
+        .unwrap_or_default();
+    let body = format!(
+        r#"{notice_html}{error_html}
+<article class="section-card" style="max-width:720px;">
+  <h2>SERVER CONFIGURATION</h2>
+  <div class="notice info" style="margin:12px 0;padding:12px 14px;">
+    <p><strong>Choose wisely:</strong> If you are not going to use email service on this server, skip rDNS checks.</p>
+    <p>Ensure that the hostname you provide below is set as rDNS (reverse DNS, also called PTR record) against your IP address. (Only required if you want to use email services on the same server).</p>
+    <p>Make sure that the provided hostname also has an A record pointing to your server's IP address.</p>
+    <p>If the above conditions fail, your server may not function as expected, especially for email services.</p>
+  </div>
+  <form method="post" action="/settings/setup" class="stack-form">
+    <label for="hostname">Hostname</label>
+    <input id="hostname" name="hostname" type="text" placeholder="mail.example.com" value="{hostname}">
+    <label for="mail_mode">Mail system</label>
+    <select id="mail_mode" name="mail_mode">
+      <option value="local"{local_sel}>Local mail on this server (default client settings use each site domain)</option>
+      <option value="external"{ext_sel}>External mail system (custom IMAP/SMTP hosts)</option>
+    </select>
+    <label for="external_imap_host">External IMAP host (optional)</label>
+    <input id="external_imap_host" name="external_imap_host" type="text" value="{imap}" placeholder="imap.provider.com">
+    <label for="external_smtp_host">External SMTP host (optional)</label>
+    <input id="external_smtp_host" name="external_smtp_host" type="text" value="{smtp}" placeholder="smtp.provider.com">
+    <label><input type="checkbox" name="skip_rdns" value="1"{skip_checked}> Skip rDNS/PTR check</label>
+    <p class="muted">Check this if you do not want to use email service on this server. New sites will skip SPF/DKIM/DMARC auto-DNS.</p>
+    <button type="submit" class="btn-primary">Save configuration</button>
+  </form>
+</article>
 <ol class="setup-checklist" style="margin:16px 0;padding-left:1.25rem;line-height:1.6;">
-  <li>Confirm the first admin account can sign in at <a href="/login">/login</a> (no installer token required once bootstrap exists).</li>
-  <li>Add a website under <a href="/websites">Websites</a> and open <strong>Manage</strong> for that site.</li>
-  <li>Install or verify the web stack from the installer when needed (<code>/</code> with the installer token while <code>cpn-installer</code> is running).</li>
-  <li>Configure mail under <a href="/email">Email</a> when you need mailboxes.</li>
+  <li>Confirm the first admin account can sign in at <a href="/login">/login</a>.</li>
+  <li>Add a website under <a href="/websites">Websites</a> (auto Let's Encrypt + mail DNS by default).</li>
+  <li>Review <a href="/email/accounts">Email Accounts</a> mail client settings.</li>
   <li>Set the panel listen port under <a href="/settings/port">Change Port</a> (default <code>2087</code>).</li>
-  <li>Review <a href="/settings/version">Version Management</a> after upgrades.</li>
 </ol>
-<p class="muted">Honest scope: this page is a guided checklist, not an interactive multi-step wizard. The full installer UI remains the path for server/mail recipe installs and upgrade/repair.</p>"#;
+<p class="muted">CPN branding only. This onboarding covers hostname/rDNS guidance and local vs external mail.</p>"#,
+        notice_html = notice_html,
+        error_html = error_html,
+        hostname = html_escape_setup(&cfg.hostname),
+        local_sel = local_sel,
+        ext_sel = ext_sel,
+        imap = html_escape_setup(&cfg.external_imap_host),
+        smtp = html_escape_setup(&cfg.external_smtp_host),
+        skip_checked = skip_checked,
+    );
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -64,10 +119,18 @@ pub fn setup_wizard_page() -> String {
         ],
         "Setup Wizard",
         "Server onboarding",
-        body,
+        &body,
         None,
         None,
     )
+}
+
+fn html_escape_setup(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 pub fn connect_page() -> String {

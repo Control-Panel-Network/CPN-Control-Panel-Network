@@ -6,6 +6,7 @@ use crate::account::now_unix;
 use crate::panel_api_tokens::ensure_store_migrated;
 use crate::panel_ops_cloudflare::ensure_oauth_schema_migrated;
 use crate::panel_ops_cloudflare_oauth::ensure_oauth_stores_migrated;
+use crate::panel_ops_ssl_provider::{SslProvider, load_ssl_defaults, save_ssl_defaults};
 use crate::paths;
 use crate::site_messages::ensure_site_messages_migrated;
 use crate::wordpress::ensure_wordpress_store_migrated;
@@ -17,6 +18,16 @@ const SQL_0002: &str = include_str!("../sql/0002_cloudflare_oauth.sql");
 const SQL_0003: &str = include_str!("../sql/0003_cloudflare_settings_oauth.sql");
 const SQL_0004: &str = include_str!("../sql/0004_wordpress_sites.sql");
 const SQL_0005: &str = include_str!("../sql/0005_site_messages.sql");
+const SQL_0006: &str = include_str!("../sql/0006_mail_onboarding_ssl_defaults.sql");
+
+fn ensure_ssl_defaults_migrated() -> Result<(), String> {
+    let existing = load_ssl_defaults();
+    if existing.updated_at_unix == 0 {
+        save_ssl_defaults(SslProvider::LetsEncrypt)?;
+    }
+    let _ = crate::panel_ops_mail_onboarding::load_mail_onboarding();
+    Ok(())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct MigrationLedger {
@@ -57,6 +68,11 @@ const MIGRATIONS: &[MigrationDef] = &[
         id: "0005_site_messages",
         sql: SQL_0005,
         hook: ensure_site_messages_migrated,
+    },
+    MigrationDef {
+        id: "0006_mail_onboarding_ssl_defaults",
+        sql: SQL_0006,
+        hook: ensure_ssl_defaults_migrated,
     },
 ];
 
@@ -179,14 +195,15 @@ mod tests {
     fn migrations_apply_idempotently() {
         with_test_data_dir(|| {
             let first = run_pending_migrations().unwrap();
-            assert_eq!(first.len(), 5);
+            assert_eq!(first.len(), 6);
             assert!(first.contains(&"0001_panel_api_tokens".to_string()));
             assert!(first.contains(&"0004_wordpress_sites".to_string()));
             assert!(first.contains(&"0005_site_messages".to_string()));
+            assert!(first.contains(&"0006_mail_onboarding_ssl_defaults".to_string()));
             let second = run_pending_migrations().unwrap();
             assert!(second.is_empty());
             let ledger = load_ledger();
-            assert_eq!(ledger.applied.len(), 5);
+            assert_eq!(ledger.applied.len(), 6);
         });
     }
 

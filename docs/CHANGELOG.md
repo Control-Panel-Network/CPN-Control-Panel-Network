@@ -1,11 +1,3 @@
-﻿## [0.2.6-alpha.37] - 13/09/2026
-
-CPN-native WordPress installer and manager under Hosting (WP-CLI install, plugin preinstall, manage tabs, MariaDB provisioning).
-
-### Fixed
-
-- WP-CLI phar runs via `php -d memory_limit=512M` (and `WP_CLI_PHP_ARGS` for system `wp`) so `wp core download` does not die on 128M PHP CLI defaults.
-
 # Changelog
 
 All notable changes to CPN Control Panel Network are documented in this file.
@@ -15,18 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6-alpha.38] - 13/09/2026
+
+Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail client defaults, and CPN mail onboarding (Cargo `0.2.6-alpha.38`).
+
+### Added
+
+- On website create: ensure `/var/lib/cpn/dkim`, generate per-domain DKIM keys, upsert SPF/DKIM/DMARC (and MX/A when IP known) into local DNS zones, push to Cloudflare when configured (add-only).
+- Auto-issue Let's Encrypt (or the install default SSL provider) after create; install `certbot` via dnf/apt when missing; fall back to SAN/HTTP-01 when Cloudflare DNS-01 is unavailable.
+- `cpn site ready --domain` re-runs domain readiness for existing sites.
+- Setup Wizard onboarding: hostname/rDNS notes, local vs external mail, skip rDNS checkbox (CPN branding only).
+- Email Accounts: default Mail Client Configuration (POP3/IMAP/SMTP/Sieve) plus mailbox password for local Postfix/Dovecot provisioning.
+- Migration `0006_mail_onboarding_ssl_defaults` persists Let's Encrypt as the default SSL provider for new sites (after WordPress `0004` and site-messages `0005`).
+
+### Notes
+
+- Cloudflare IP allowlists remain add-only.
+- Coordinates with Email MTA-STS/BIMI plugins for additional DNS records.
+- Lab Let's Encrypt FAIL without public DNS is expected and does not block create/readiness.
+
 ## [0.2.6-alpha.37] - 13/09/2026
 
-phpMyAdmin Open auto-login works from host browsers via panel reverse-proxy (Cargo `0.2.6-alpha.37`).
+WordPress installer plus phpMyAdmin Open auto-login via panel reverse-proxy (Cargo `0.2.6-alpha.37`).
 
 ### Fixed
 
+- WP-CLI phar runs via `php -d memory_limit=512M` (and `WP_CLI_PHP_ARGS` for system `wp`) so `wp core download` does not die on 128M PHP CLI defaults.
 - **Open phpMyAdmin (auto-login)** no longer redirects to guest-only `http://127.0.0.1:8081/` (hangs under VirtualBox NAT). It redirects to same-origin `/phpmyadmin/cpn-signon.php?token=...` on the panel port.
 - Sign-on config is written to distro `/etc/phpMyAdmin/config.inc.php` (EL loads that path, not only the share copy), with `PmaAbsoluteUri=/phpmyadmin/`.
 - Make `/etc/phpMyAdmin` and `config.inc.php` readable by php-fpm (`nobody`) so sign-on auth actually loads (previously root-only, so Open fell back to the cookie login form).
 
 ### Added
 
+- Editable suspend messages and site-ready placeholder under Settings (migration `0005_site_messages`).
+- CPN-native WordPress installer and manager under Hosting (WP-CLI install, plugin preinstall, manage tabs, MariaDB provisioning). Migration `0004_wordpress_sites`.
 - Panel reverse-proxy mount `/phpmyadmin/` to loopback OLS/nginx `:8081` (session required), matching the webmail proxy pattern.
 - Open control uses `target=_blank` so the panel page stays open.
 
@@ -35,10 +49,9 @@ phpMyAdmin Open auto-login works from host browsers via panel reverse-proxy (Car
 - Host `:8081` NAT forward is optional; panel port alone is enough.
 - No CyberPanel branding; secrets are never shown in the Open URL.
 
-
 ### Changed
 
-- **Email â†’ MTA-STS** and **Email â†’ BIMI** are gated behind free Plugin Store packages mtaSts and imi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.
+- **Email -> MTA-STS** and **Email -> BIMI** are gated behind free Plugin Store packages mtaSts and bimi (CPN-Plugins). Sidebar and hub tiles stay hidden until install; direct URLs show an install-from-store message. Policy/DNS behavior is unchanged after unlock.
 
 ## [0.2.6-alpha.36] - 13/09/2026
 

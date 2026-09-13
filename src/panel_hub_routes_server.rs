@@ -16,7 +16,7 @@ use crate::panel_hub_pages_server_net::{
     save_ns_lines,
 };
 use crate::panel_hub_pages_settings::{
-    connect_page, design_settings_page, settings_hub_main, setup_wizard_page,
+    connect_page, design_settings_page, settings_hub_main, setup_wizard_page_with,
     version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
@@ -656,16 +656,76 @@ pub async fn settings_design_page(
 pub async fn settings_setup_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "settings",
         "Setup Wizard",
-        &setup_wizard_page(),
+        &setup_wizard_page_with(notice, error),
     ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SetupOnboardingForm {
+    #[serde(default)]
+    hostname: String,
+    #[serde(default)]
+    mail_mode: String,
+    #[serde(default)]
+    skip_rdns: String,
+    #[serde(default)]
+    external_imap_host: String,
+    #[serde(default)]
+    external_smtp_host: String,
+}
+
+#[post("/settings/setup")]
+pub async fn settings_setup_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SetupOnboardingForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/settings/setup",
+            None,
+            Some("Only the panel admin can change server onboarding."),
+        );
+    }
+    use crate::panel_ops_mail_onboarding::{MailMode, MailOnboarding, save_mail_onboarding};
+    let mail_mode = match form.mail_mode.trim().to_ascii_lowercase().as_str() {
+        "external" => MailMode::External,
+        _ => MailMode::Local,
+    };
+    let cfg = MailOnboarding {
+        schema_version: 1,
+        hostname: form.hostname.trim().to_string(),
+        skip_rdns: matches!(
+            form.skip_rdns.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "on" | "yes"
+        ),
+        mail_mode,
+        external_imap_host: form.external_imap_host.trim().to_string(),
+        external_smtp_host: form.external_smtp_host.trim().to_string(),
+        updated_at_unix: 0,
+    };
+    match save_mail_onboarding(cfg) {
+        Ok(()) => redirect_notice(
+            "/settings/setup",
+            Some("Server mail onboarding saved."),
+            None,
+        ),
+        Err(e) => redirect_notice("/settings/setup", None, Some(&e)),
+    }
 }
 
 #[get("/settings/connect")]

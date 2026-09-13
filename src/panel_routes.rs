@@ -115,7 +115,10 @@ pub async fn websites_create(
                 "Location",
                 format!(
                     "/websites?notice={}",
-                    urlencoding_simple(&format!("Created {} at {}", site.domain, site.docroot))
+                    urlencoding_simple(&format!(
+                        "Created {} at {}. Auto SSL and SPF/DKIM/DMARC were attempted.",
+                        site.domain, site.docroot
+                    ))
                 ),
             ))
             .finish(),

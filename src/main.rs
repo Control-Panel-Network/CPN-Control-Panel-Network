@@ -59,7 +59,7 @@ use cpn_installer::panel_hub_routes::{
     server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
     server_php_extensions, server_php_tuning, server_processes_page, server_services_control,
     server_services_page, settings_connect_page, settings_design_page, settings_page,
-    settings_port_page, settings_setup_page, settings_site_messages_page,
+    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_reset, settings_site_messages_restore_site_ready,
     settings_site_messages_restore_suspend, settings_site_messages_save, settings_version_page,
     users_create_get, users_create_post, users_delete_post, users_list_route, users_modify_get,
@@ -1047,6 +1047,7 @@ async fn main() -> std::io::Result<()> {
             .service(settings_version_page)
             .service(settings_design_page)
             .service(settings_setup_page)
+            .service(settings_setup_save)
             .service(settings_connect_page)
             .service(settings_site_messages_page)
             .service(settings_site_messages_save)
