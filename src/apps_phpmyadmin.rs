@@ -371,10 +371,8 @@ pub fn ensure_fpm_socket_for_ols() -> Result<(), String> {
     let pool_changed = previous != next;
     let sock_ok = Path::new(PMA_FPM_SOCK).exists();
     if systemd_unit_active("php-fpm") && sock_ok {
-        if pool_changed {
-            if !quiet_systemctl(&["reload", "php-fpm"]) {
-                recover_php_fpm();
-            }
+        if pool_changed && !quiet_systemctl(&["reload", "php-fpm"]) {
+            recover_php_fpm();
         }
         if Path::new(PMA_FPM_SOCK).exists() {
             return Ok(());
