@@ -41,6 +41,10 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
     // Always refresh TempDir/upload ownership so OLS/php-fpm (nobody) can write
     // even when the :8081 listener was already up from a prior boot.
     let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    // OLS :8081 can be up while php-fpm is in start-limit-hit (no sock -> 503).
+    if !std::path::Path::new("/run/php-fpm/cpn-phpmyadmin.sock").exists() {
+        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+    }
     if !port_open("127.0.0.1:8081", 200) {
         let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
     }
@@ -70,8 +74,18 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
         }
     };
     match forward_http(method, &target, &req, &body_bytes) {
+        Ok(resp) if resp.status() == StatusCode::SERVICE_UNAVAILABLE => {
+            // LiteSpeed 503 when php-fpm sock is down; heal FPM then retry once.
+            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+            match forward_http(method, &target, &req, &body_bytes) {
+                Ok(retry) => retry,
+                Err(_) => resp,
+            }
+        }
         Ok(resp) => resp,
         Err(err) => {
+            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
             let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
             match forward_http(method, &target, &req, &body_bytes) {
                 Ok(resp) => resp,
