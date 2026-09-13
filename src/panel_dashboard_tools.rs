@@ -95,7 +95,7 @@ const TOOL_GROUPS: &[ToolGroup] = &[
         icon_id: "server",
         tools: &[
             ToolLink {
-                label: "File Manager",
+                label: "Root File Manager",
                 href: "/server/files",
                 icon_id: "server",
             },

@@ -326,6 +326,11 @@ pub(crate) const ACCOUNT: &[NavEntry] = &[
 ];
 
 pub(crate) const ADMINISTRATION: &[NavEntry] = &[
+    NavEntry::Link {
+        id: "root-files",
+        href: "/server/files",
+        label: "Root File Manager",
+    },
     NavEntry::Group {
         id: "server",
         href: "/server",

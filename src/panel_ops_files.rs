@@ -1,7 +1,7 @@
-//! Mutating filesystem ops for Root File Manager (admin-only callers).
+//! Mutating filesystem ops for File Manager (root or site jail).
 
 use crate::panel_ops_path::{
-    is_protected_path, join_child, resolve_under_allowlist, validate_entry_name,
+    is_protected_path, join_child, resolve_under_jail, validate_entry_name,
 };
 use crate::panel_session::session_secret;
 use hmac::{Hmac, KeyInit, Mac};
@@ -91,28 +91,37 @@ pub fn check_rate_limit(username: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_writable_target(path: &Path) -> Result<(), String> {
+fn ensure_writable_target(path: &Path, jail: &Path) -> Result<(), String> {
     if is_protected_path(path) {
         return Err(format!(
             "Refusing to modify protected path {}",
             path.display()
         ));
     }
+    let jail_s = jail.to_string_lossy();
+    let path_s = path.to_string_lossy();
+    if path_s == jail_s {
+        return Err("Refusing to modify the File Manager jail root".into());
+    }
     Ok(())
 }
 
-pub fn mkdir(parent: &str, name: &str) -> Result<String, String> {
-    let parent = resolve_under_allowlist(parent)?;
-    let dest = join_child(&parent, name)?;
-    ensure_writable_target(&dest)?;
+fn resolve(path: &str, jail: &Path) -> Result<PathBuf, String> {
+    resolve_under_jail(path, jail)
+}
+
+pub fn mkdir(parent: &str, name: &str, jail: &Path) -> Result<String, String> {
+    let parent = resolve(parent, jail)?;
+    let dest = join_child(&parent, name, jail)?;
+    ensure_writable_target(&dest, jail)?;
     fs::create_dir(&dest).map_err(|e| format!("mkdir failed: {e}"))?;
     Ok(format!("Created folder {}", dest.display()))
 }
 
-pub fn create_file(parent: &str, name: &str) -> Result<String, String> {
-    let parent = resolve_under_allowlist(parent)?;
-    let dest = join_child(&parent, name)?;
-    ensure_writable_target(&dest)?;
+pub fn create_file(parent: &str, name: &str, jail: &Path) -> Result<String, String> {
+    let parent = resolve(parent, jail)?;
+    let dest = join_child(&parent, name, jail)?;
+    ensure_writable_target(&dest, jail)?;
     if dest.exists() {
         return Err("File already exists".into());
     }
@@ -120,8 +129,8 @@ pub fn create_file(parent: &str, name: &str) -> Result<String, String> {
     Ok(format!("Created file {}", dest.display()))
 }
 
-pub fn read_text(path: &str) -> Result<String, String> {
-    let path = resolve_under_allowlist(path)?;
+pub fn read_text(path: &str, jail: &Path) -> Result<String, String> {
+    let path = resolve(path, jail)?;
     let meta = fs::metadata(&path).map_err(|e| format!("Cannot read: {e}"))?;
     if meta.is_dir() {
         return Err("Cannot edit a directory".into());
@@ -142,9 +151,9 @@ pub fn read_text(path: &str) -> Result<String, String> {
     String::from_utf8(buf).map_err(|_| "File is not valid UTF-8".to_string())
 }
 
-pub fn write_text(path: &str, content: &str) -> Result<String, String> {
-    let path = resolve_under_allowlist(path)?;
-    ensure_writable_target(&path)?;
+pub fn write_text(path: &str, content: &str, jail: &Path) -> Result<String, String> {
+    let path = resolve(path, jail)?;
+    ensure_writable_target(&path, jail)?;
     if content.len() as u64 > MAX_EDIT_BYTES {
         return Err("Content exceeds edit size limit".into());
     }
@@ -154,29 +163,34 @@ pub fn write_text(path: &str, content: &str) -> Result<String, String> {
     Ok(format!("Saved {}", path.display()))
 }
 
-pub fn upload_bytes(parent: &str, filename: &str, data: &[u8]) -> Result<String, String> {
+pub fn upload_bytes(
+    parent: &str,
+    filename: &str,
+    data: &[u8],
+    jail: &Path,
+) -> Result<String, String> {
     if data.len() as u64 > MAX_UPLOAD_BYTES {
         return Err(format!("Upload exceeds {} byte limit", MAX_UPLOAD_BYTES));
     }
-    let parent = resolve_under_allowlist(parent)?;
+    let parent = resolve(parent, jail)?;
     let name = validate_entry_name(filename)?;
-    let dest = join_child(&parent, name)?;
-    ensure_writable_target(&dest)?;
+    let dest = join_child(&parent, name, jail)?;
+    ensure_writable_target(&dest, jail)?;
     let mut f = fs::File::create(&dest).map_err(|e| format!("upload failed: {e}"))?;
     f.write_all(data)
         .map_err(|e| format!("upload failed: {e}"))?;
     Ok(format!("Uploaded {}", dest.display()))
 }
 
-pub fn delete_names(parent: &str, names: &[String]) -> Result<String, String> {
+pub fn delete_names(parent: &str, names: &[String], jail: &Path) -> Result<String, String> {
     if names.is_empty() {
         return Err("Nothing selected".into());
     }
-    let parent = resolve_under_allowlist(parent)?;
+    let parent = resolve(parent, jail)?;
     let mut done = 0usize;
     for name in names {
-        let target = join_child(&parent, name)?;
-        ensure_writable_target(&target)?;
+        let target = join_child(&parent, name, jail)?;
+        ensure_writable_target(&target, jail)?;
         if target.is_dir() {
             fs::remove_dir_all(&target).map_err(|e| format!("delete {}: {e}", target.display()))?;
         } else {
@@ -187,12 +201,12 @@ pub fn delete_names(parent: &str, names: &[String]) -> Result<String, String> {
     Ok(format!("Deleted {done} item(s)"))
 }
 
-pub fn rename_entry(parent: &str, from: &str, to: &str) -> Result<String, String> {
-    let parent = resolve_under_allowlist(parent)?;
-    let src = join_child(&parent, from)?;
-    let dest = join_child(&parent, to)?;
-    ensure_writable_target(&src)?;
-    ensure_writable_target(&dest)?;
+pub fn rename_entry(parent: &str, from: &str, to: &str, jail: &Path) -> Result<String, String> {
+    let parent = resolve(parent, jail)?;
+    let src = join_child(&parent, from, jail)?;
+    let dest = join_child(&parent, to, jail)?;
+    ensure_writable_target(&src, jail)?;
+    ensure_writable_target(&dest, jail)?;
     if dest.exists() {
         return Err("Target name already exists".into());
     }
@@ -217,22 +231,27 @@ fn copy_recursive(src: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn copy_entries(parent: &str, names: &[String], dest_dir: &str) -> Result<String, String> {
+pub fn copy_entries(
+    parent: &str,
+    names: &[String],
+    dest_dir: &str,
+    jail: &Path,
+) -> Result<String, String> {
     if names.is_empty() {
         return Err("Nothing selected".into());
     }
-    let parent = resolve_under_allowlist(parent)?;
-    let dest_dir = resolve_under_allowlist(dest_dir)?;
+    let parent = resolve(parent, jail)?;
+    let dest_dir = resolve(dest_dir, jail)?;
     if !dest_dir.is_dir() {
         return Err("Destination must be a directory".into());
     }
     let mut done = 0usize;
     for name in names {
-        let src = join_child(&parent, name)?;
-        let dest = join_child(&dest_dir, name)?;
-        ensure_writable_target(&dest)?;
+        let src = join_child(&parent, name, jail)?;
+        let dest = join_child(&dest_dir, name, jail)?;
+        ensure_writable_target(&dest, jail)?;
         if dest.exists() {
-            return Err(format!("{} already exists in destination", name));
+            return Err(format!("{name} already exists in destination"));
         }
         copy_recursive(&src, &dest)?;
         done += 1;
@@ -240,23 +259,28 @@ pub fn copy_entries(parent: &str, names: &[String], dest_dir: &str) -> Result<St
     Ok(format!("Copied {done} item(s) to {}", dest_dir.display()))
 }
 
-pub fn move_entries(parent: &str, names: &[String], dest_dir: &str) -> Result<String, String> {
+pub fn move_entries(
+    parent: &str,
+    names: &[String],
+    dest_dir: &str,
+    jail: &Path,
+) -> Result<String, String> {
     if names.is_empty() {
         return Err("Nothing selected".into());
     }
-    let parent = resolve_under_allowlist(parent)?;
-    let dest_dir = resolve_under_allowlist(dest_dir)?;
+    let parent = resolve(parent, jail)?;
+    let dest_dir = resolve(dest_dir, jail)?;
     if !dest_dir.is_dir() {
         return Err("Destination must be a directory".into());
     }
     let mut done = 0usize;
     for name in names {
-        let src = join_child(&parent, name)?;
-        let dest = join_child(&dest_dir, name)?;
-        ensure_writable_target(&src)?;
-        ensure_writable_target(&dest)?;
+        let src = join_child(&parent, name, jail)?;
+        let dest = join_child(&dest_dir, name, jail)?;
+        ensure_writable_target(&src, jail)?;
+        ensure_writable_target(&dest, jail)?;
         if dest.exists() {
-            return Err(format!("{} already exists in destination", name));
+            return Err(format!("{name} already exists in destination"));
         }
         match fs::rename(&src, &dest) {
             Ok(()) => {}
@@ -274,8 +298,8 @@ pub fn move_entries(parent: &str, names: &[String], dest_dir: &str) -> Result<St
     Ok(format!("Moved {done} item(s) to {}", dest_dir.display()))
 }
 
-pub fn resolve_cwd(path: &str) -> Result<PathBuf, String> {
-    resolve_under_allowlist(path)
+pub fn resolve_cwd(path: &str, jail: &Path) -> Result<PathBuf, String> {
+    resolve(path, jail)
 }
 
 #[cfg(test)]

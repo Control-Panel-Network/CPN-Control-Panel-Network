@@ -241,9 +241,9 @@ pub fn tab_files(site: &SiteRecord) -> String {
     let ftp = detect_ftp();
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
     tiles.push_str(&tile(
-        "/server/files",
+        &format!("/websites/files?domain={domain_q}"),
         "File Manager",
-        "Browse allowlisted paths on this host",
+        "Open the full-page site File Manager (jailed to this site home)",
     ));
     tiles.push_str(&tile(
         &format!("/websites/manage?domain={domain_q}&tab=files#basedir"),

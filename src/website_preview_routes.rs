@@ -79,6 +79,7 @@ pub async fn websites_pretty_manage(
             | "prefs"
             | "preview"
             | "site-preview"
+            | "files"
     ) {
         return HttpResponse::NotFound().finish();
     }

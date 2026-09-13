@@ -73,7 +73,8 @@ use cpn_installer::panel_hub_routes::{
     settings_page, settings_port_page, settings_setup_page, settings_setup_save,
     settings_site_messages_page, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_version_page, users_create_get, users_create_post,
+    settings_site_messages_save, settings_version_page, site_filemanager_alias, site_files_op,
+    site_files_page_route, site_files_upload, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
     users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
@@ -964,6 +965,10 @@ async fn main() -> std::io::Result<()> {
             .service(websites_cron_add)
             .service(websites_cron_update)
             .service(websites_cron_delete)
+            .service(site_files_page_route)
+            .service(site_filemanager_alias)
+            .service(site_files_op)
+            .service(site_files_upload)
             .service(websites_preview_redirect)
             .service(websites_pretty_manage)
             .service(preview_mode_page)

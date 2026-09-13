@@ -37,6 +37,11 @@ pub fn search_catalog_json() -> String {
         ("Packages", "/packages", "plans hosting"),
         ("Users & Plans", "/account/users", "accounts"),
         ("Server", "/server", "system services"),
+        (
+            "Root File Manager",
+            "/server/files",
+            "files filesystem root admin",
+        ),
         ("Security", "/security", "firewall ssl"),
         ("Settings", "/settings", "design theme"),
         (

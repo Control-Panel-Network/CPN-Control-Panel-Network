@@ -232,7 +232,7 @@ pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
   <p>Manage your website with powerful tools and real-time monitoring.</p>
   <div class="manage-banner-actions">
     <a class="manage-btn primary" href="{preview}">Preview Website</a>
-    <a class="manage-btn" href="/websites/manage?domain={domain_q}&amp;tab=files">File Manager</a>
+    <a class="manage-btn" href="/websites/files?domain={domain_q}">File Manager</a>
     {design}
   </div>
 </div>"#,

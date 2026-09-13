@@ -177,6 +177,7 @@ mod tests {
         assert!(html.contains("manage-banner"));
         assert!(html.contains("Preview Website"));
         assert!(html.contains("File Manager"));
+        assert!(html.contains("/websites/files?domain="));
         assert!(html.contains("cpn-design-open"));
         assert!(html.contains("manage-tabs"));
         assert!(html.contains("Disk Usage"));
