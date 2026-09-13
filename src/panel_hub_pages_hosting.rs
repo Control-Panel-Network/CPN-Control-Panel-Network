@@ -410,10 +410,10 @@ pub fn phpmyadmin_page(notice: Option<&str>, error: Option<&str>) -> String {
         format!(
             r#"<p>{detail}</p>
       <p style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;">
-        <a class="btn-primary" href="/databases/phpmyadmin/open">Open phpMyAdmin (auto-login)</a>
+        <a class="btn-primary" href="/databases/phpmyadmin/open" target="_blank" rel="noopener noreferrer">Open phpMyAdmin (auto-login)</a>
         <a class="btn-secondary" href="/plugins?view=host">Host packages</a>
       </p>
-      <p class="muted">Auto-login creates a short-lived MariaDB user and sign-on token (never shown). On OpenLiteSpeed hosts CPN wires a loopback listener on <code>127.0.0.1:8081</code>.</p>"#,
+      <p class="muted">Auto-login creates a short-lived MariaDB user and sign-on token (never shown). CPN serves phpMyAdmin under <code>/phpmyadmin/</code> on the panel port (loopback backend <code>127.0.0.1:8081</code>), so VirtualBox NAT and remote browsers do not need a separate host port.</p>"#,
             detail = html_escape(&detail),
         )
     } else {

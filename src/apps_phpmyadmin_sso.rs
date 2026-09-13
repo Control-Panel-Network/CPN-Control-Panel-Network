@@ -150,11 +150,24 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     }
 }
 
+/// Distro packages (EL) load `/etc/phpMyAdmin/config.inc.php`, not only the share copy.
+fn phpmyadmin_config_candidates(share: &Path) -> Vec<PathBuf> {
+    let mut paths = vec![
+        PathBuf::from("/etc/phpMyAdmin/config.inc.php"),
+        PathBuf::from("/etc/phpmyadmin/config.inc.php"),
+        share.join("config.inc.php"),
+    ];
+    paths.dedup();
+    paths
+}
+
 fn write_signon_bridge(share: &Path) -> Result<(), String> {
     let conf_dir = join_data("phpmyadmin");
     fs::create_dir_all(&conf_dir)
         .map_err(|e| format!("Could not create phpmyadmin data dir: {e}"))?;
     let signon_php = conf_dir.join("signon.php");
+    // Location stays root-relative on the loopback backend; the panel proxy
+    // rewrites it to /phpmyadmin/index.php for host browsers.
     let body = r#"<?php
 declare(strict_types=1);
 session_name('CPNPmaSignon');
@@ -185,11 +198,18 @@ exit;
     let web_signon = share.join("cpn-signon.php");
     fs::copy(&signon_php, &web_signon)
         .map_err(|e| format!("Could not publish cpn-signon.php: {e}"))?;
-    ensure_config_includes_signon(&share.join("config.inc.php"), SIGNON_SESSION)?;
+    for conf in phpmyadmin_config_candidates(share) {
+        let _ = ensure_config_includes_signon(&conf, SIGNON_SESSION);
+        ensure_phpmyadmin_config_readable(&conf);
+    }
     Ok(())
 }
 
 fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), String> {
+    let parent = conf_inc.parent().unwrap_or_else(|| Path::new("/"));
+    if !parent.exists() {
+        return Ok(());
+    }
     if !conf_inc.is_file() {
         let body = format!(
             "<?php\n\
@@ -197,35 +217,60 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
              $i++;\n\
              $cfg['Servers'][$i]['auth_type'] = 'signon';\n\
              $cfg['Servers'][$i]['SignonSession'] = '{session}';\n\
-             $cfg['Servers'][$i]['SignonURL'] = '/cpn-signon.php';\n\
+             $cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
              $cfg['Servers'][$i]['host'] = 'localhost';\n\
-             $cfg['BlowfishSecret'] = '{secret}';\n",
+             $cfg['PmaAbsoluteUri'] = '/phpmyadmin/';\n\
+             $cfg['BlowfishSecret'] = '{secret}';\n\
+             $cfg['blowfish_secret'] = '{secret}';\n",
             session = session,
             secret = random_token()
         );
-        fs::write(conf_inc, body).map_err(|e| format!("Could not write config.inc.php: {e}"))?;
+        fs::write(conf_inc, body)
+            .map_err(|e| format!("Could not write {}: {e}", conf_inc.display()))?;
+        ensure_phpmyadmin_config_readable(conf_inc);
         return Ok(());
     }
-    let raw =
-        fs::read_to_string(conf_inc).map_err(|e| format!("Could not read config.inc.php: {e}"))?;
-    if raw.contains("CPN-SIGNON") {
+    let raw = fs::read_to_string(conf_inc)
+        .map_err(|e| format!("Could not read {}: {e}", conf_inc.display()))?;
+    if raw.contains("CPN-SIGNON-PANEL") {
+        ensure_phpmyadmin_config_readable(conf_inc);
         return Ok(());
     }
+    // Append after distro cookie defaults so panel mount + sign-on win.
     let append = format!(
-        "\n// CPN-SIGNON\n\
+        "\n// CPN-SIGNON-PANEL\n\
+         $cfg['PmaAbsoluteUri'] = '/phpmyadmin/';\n\
          if (isset($cfg['Servers'][1])) {{\n\
            $cfg['Servers'][1]['auth_type'] = 'signon';\n\
            $cfg['Servers'][1]['SignonSession'] = '{session}';\n\
-           $cfg['Servers'][1]['SignonURL'] = '/cpn-signon.php';\n\
+           $cfg['Servers'][1]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
          }} elseif (isset($i) && isset($cfg['Servers'][$i])) {{\n\
            $cfg['Servers'][$i]['auth_type'] = 'signon';\n\
            $cfg['Servers'][$i]['SignonSession'] = '{session}';\n\
-           $cfg['Servers'][$i]['SignonURL'] = '/cpn-signon.php';\n\
+           $cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
          }}\n"
     );
     fs::write(conf_inc, format!("{raw}{append}"))
-        .map_err(|e| format!("Could not update config.inc.php: {e}"))?;
+        .map_err(|e| format!("Could not update {}: {e}", conf_inc.display()))?;
+    ensure_phpmyadmin_config_readable(conf_inc);
     Ok(())
+}
+
+/// EL packages ship `/etc/phpMyAdmin` as root-only (700/640). php-fpm runs as
+/// nobody and must be able to read `config.inc.php` or sign-on never applies.
+fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(parent) = conf_inc.parent() {
+            if parent.exists() {
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
+            }
+        }
+        if conf_inc.is_file() {
+            let _ = fs::set_permissions(conf_inc, fs::Permissions::from_mode(0o644));
+        }
+    }
 }
 
 fn create_ephemeral_db_user() -> Result<(String, String), String> {
@@ -313,25 +358,31 @@ pub fn open_phpmyadmin_autologin() -> Result<String, String> {
             .args([owner, &path.display().to_string()])
             .status();
     }
+    // Same-origin panel mount so Windows/NAT browsers never need guest :8081.
     Ok(format!(
-        "{}cpn-signon.php?token={token}",
-        phpmyadmin_health_url()
+        "{}/cpn-signon.php?token={token}",
+        crate::panel_phpmyadmin_proxy::PMA_MOUNT
     ))
 }
 
 pub fn phpmyadmin_open_status() -> (bool, String) {
     let installed = phpmyadmin_share_dir().is_some();
     let listening = port_open("127.0.0.1:8081", 200);
+    let mount = crate::panel_phpmyadmin_proxy::PMA_MOUNT;
     let detail = if !installed {
         "phpMyAdmin packages are not installed.".into()
     } else if listening {
-        format!("Ready at {}", phpmyadmin_health_url())
+        format!(
+            "Ready at {mount}/ (panel reverse-proxy to loopback {}).",
+            phpmyadmin_health_url()
+        )
     } else if openlitespeed_installed() {
-        "phpMyAdmin share present; OLS :8081 listener not responding yet (use Open with auto-login to wire)."
-            .into()
+        format!(
+            "phpMyAdmin share present; OLS :8081 listener not responding yet (use Open with auto-login to wire {mount}/)."
+        )
     } else {
         format!(
-            "Share present; health URL {} (nginx loopback when engine is nginx).",
+            "Share present; open via {mount}/ (backend {}).",
             phpmyadmin_health_url()
         )
     };
