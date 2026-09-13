@@ -14,6 +14,10 @@ const OLS_VHOST: &str = "CPNPhpMyAdmin";
 const LISTENER: &str = "CPNPhpMyAdminHttp";
 const HTTPD_CONF: &str = "/usr/local/lsws/conf/httpd_config.conf";
 const SIGNON_SESSION: &str = "CPNPmaSignon";
+/// Panel route that mints a fresh one-time token while the CPN session is live.
+/// phpMyAdmin SignonURL must point here so php-fpm restarts do not strand users
+/// on `/phpmyadmin/cpn-signon.php` without a token.
+pub const PANEL_PMA_OPEN_URL: &str = "/databases/phpmyadmin/open";
 
 fn now_unix() -> u64 {
     SystemTime::now()
@@ -152,6 +156,19 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     }
 }
 
+/// Refresh cpn-signon.php and migrate SignonURL to the panel remint route.
+/// Safe after host PHP default changes (php-fpm restart) and on Open.
+pub fn refresh_phpmyadmin_signon() -> Result<String, String> {
+    let share = phpmyadmin_share_dir().ok_or_else(|| {
+        "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
+    })?;
+    write_signon_bridge(&share)?;
+    if openlitespeed_installed() {
+        let _ = ensure_ols_phpmyadmin_listener();
+    }
+    Ok("phpMyAdmin sign-on bridge refreshed.".into())
+}
+
 /// Distro packages (EL) load `/etc/phpMyAdmin/config.inc.php`, not only the share copy.
 fn phpmyadmin_config_candidates(share: &Path) -> Vec<PathBuf> {
     let mut paths = vec![
@@ -170,32 +187,37 @@ fn write_signon_bridge(share: &Path) -> Result<(), String> {
     let signon_php = conf_dir.join("signon.php");
     // Location stays root-relative on the loopback backend; the panel proxy
     // rewrites it to /phpmyadmin/index.php for host browsers.
-    let body = r#"<?php
+    // Missing/expired tokens redirect to the panel open route so a live CPN
+    // session remints SSO without requiring a full panel re-login. Location is
+    // rewritten by the panel proxy only for PMA-relative paths.
+    let body = format!(
+        r#"<?php
 declare(strict_types=1);
-session_name('CPNPmaSignon');
+session_name('{session}');
 session_start();
 $token = isset($_GET['token']) ? (string)$_GET['token'] : '';
 $token = preg_replace('/[^a-f0-9]/', '', $token) ?? '';
 $file = __DIR__ . '/cpn-private/tokens/' . $token . '.json';
-if ($token === '' || !is_readable($file)) {
-  http_response_code(403);
-  echo 'Sign-on token missing or expired.';
+if ($token === '' || !is_readable($file)) {{
+  header('Location: {open}');
   exit;
-}
+}}
 $raw = file_get_contents($file);
 @unlink($file);
 $data = json_decode($raw ?: '', true);
-if (!is_array($data) || empty($data['user']) || !isset($data['password']) || empty($data['exp']) || (int)$data['exp'] < time()) {
-  http_response_code(403);
-  echo 'Sign-on token invalid.';
+if (!is_array($data) || empty($data['user']) || !isset($data['password']) || empty($data['exp']) || (int)$data['exp'] < time()) {{
+  header('Location: {open}');
   exit;
-}
+}}
 $_SESSION['PMA_single_signon_user'] = (string)$data['user'];
 $_SESSION['PMA_single_signon_password'] = (string)$data['password'];
 $_SESSION['PMA_single_signon_host'] = $data['host'] ?? 'localhost';
 header('Location: /index.php');
 exit;
-"#;
+"#,
+        session = SIGNON_SESSION,
+        open = PANEL_PMA_OPEN_URL,
+    );
     fs::write(&signon_php, body).map_err(|e| format!("Could not write signon.php: {e}"))?;
     let web_signon = share.join("cpn-signon.php");
     fs::copy(&signon_php, &web_signon)
@@ -219,12 +241,13 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
              $i++;\n\
              $cfg['Servers'][$i]['auth_type'] = 'signon';\n\
              $cfg['Servers'][$i]['SignonSession'] = '{session}';\n\
-             $cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
+             $cfg['Servers'][$i]['SignonURL'] = '{open}';\n\
              $cfg['Servers'][$i]['host'] = 'localhost';\n\
              $cfg['PmaAbsoluteUri'] = '/phpmyadmin/';\n\
              $cfg['BlowfishSecret'] = '{secret}';\n\
              $cfg['blowfish_secret'] = '{secret}';\n",
             session = session,
+            open = PANEL_PMA_OPEN_URL,
             secret = random_token()
         );
         fs::write(conf_inc, body)
@@ -235,27 +258,48 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
     let raw = fs::read_to_string(conf_inc)
         .map_err(|e| format!("Could not read {}: {e}", conf_inc.display()))?;
     if raw.contains("CPN-SIGNON-PANEL") {
+        let updated = rewrite_signon_url_to_panel_open(&raw);
+        if updated != raw {
+            fs::write(conf_inc, updated)
+                .map_err(|e| format!("Could not update {}: {e}", conf_inc.display()))?;
+        }
         ensure_phpmyadmin_config_readable(conf_inc);
         return Ok(());
     }
     // Append after distro cookie defaults so panel mount + sign-on win.
+    // SignonURL is the panel open route so a live CPN session remints tokens
+    // after php-fpm restarts (host PHP default changes).
     let append = format!(
         "\n// CPN-SIGNON-PANEL\n\
          $cfg['PmaAbsoluteUri'] = '/phpmyadmin/';\n\
          if (isset($cfg['Servers'][1])) {{\n\
            $cfg['Servers'][1]['auth_type'] = 'signon';\n\
            $cfg['Servers'][1]['SignonSession'] = '{session}';\n\
-           $cfg['Servers'][1]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
+           $cfg['Servers'][1]['SignonURL'] = '{open}';\n\
          }} elseif (isset($i) && isset($cfg['Servers'][$i])) {{\n\
            $cfg['Servers'][$i]['auth_type'] = 'signon';\n\
            $cfg['Servers'][$i]['SignonSession'] = '{session}';\n\
-           $cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
-         }}\n"
+           $cfg['Servers'][$i]['SignonURL'] = '{open}';\n\
+         }}\n",
+        session = session,
+        open = PANEL_PMA_OPEN_URL,
     );
     fs::write(conf_inc, format!("{raw}{append}"))
         .map_err(|e| format!("Could not update {}: {e}", conf_inc.display()))?;
     ensure_phpmyadmin_config_readable(conf_inc);
     Ok(())
+}
+
+/// Migrate prior SignonURL values that pointed at cpn-signon.php (no remint).
+fn rewrite_signon_url_to_panel_open(raw: &str) -> String {
+    raw.replace(
+        "$cfg['Servers'][1]['SignonURL'] = '/phpmyadmin/cpn-signon.php';",
+        &format!("$cfg['Servers'][1]['SignonURL'] = '{PANEL_PMA_OPEN_URL}';"),
+    )
+    .replace(
+        "$cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';",
+        &format!("$cfg['Servers'][$i]['SignonURL'] = '{PANEL_PMA_OPEN_URL}';"),
+    )
 }
 
 /// EL packages ship `/etc/phpMyAdmin` as root-only (700/640). php-fpm runs as
@@ -331,7 +375,7 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
 
 /// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
-    let _ = ensure_ols_phpmyadmin_listener();
+    let _ = refresh_phpmyadmin_signon();
     let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
     let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     let share = phpmyadmin_share_dir().ok_or_else(|| {
@@ -391,4 +435,19 @@ pub fn phpmyadmin_open_status() -> (bool, String) {
         )
     };
     (installed, detail)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PANEL_PMA_OPEN_URL, rewrite_signon_url_to_panel_open};
+
+    #[test]
+    fn migrates_legacy_signon_url() {
+        let raw = "\
+$cfg['Servers'][1]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n\
+$cfg['Servers'][$i]['SignonURL'] = '/phpmyadmin/cpn-signon.php';\n";
+        let updated = rewrite_signon_url_to_panel_open(raw);
+        assert!(updated.contains(PANEL_PMA_OPEN_URL));
+        assert!(!updated.contains("/phpmyadmin/cpn-signon.php';"));
+    }
 }

@@ -65,16 +65,17 @@ pub fn php_configurations_page(
     }
 
     let version_form = format!(
-        r#"<form method="get" action="/server/php/configs" class="php-cfg-toolbar">
+        r#"<form method="get" action="/server/php/configs" class="php-cfg-toolbar" id="php-cfg-version-form">
       <div class="php-cfg-field">
         <label for="php">Select PHP Version</label>
-        <select id="php" name="php">{options}</select>
+        <select id="php" name="php" data-initial="{php}">{options}</select>
       </div>
-      <input type="hidden" name="tab" value="{tab}">
-      <button type="submit" class="btn-secondary">Load</button>
+      <input type="hidden" name="tab" value="{tab}" id="php-cfg-tab">
+      <noscript><button type="submit" class="btn-secondary">Load</button></noscript>
     </form>"#,
         options = options,
         tab = tab,
+        php = html_escape(&selected),
     );
 
     let set_default = if is_admin {
@@ -166,12 +167,137 @@ pub fn php_configurations_page(
 .php-cfg-footer{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}
 .php-cfg-footer .btn-primary,.php-cfg-footer .btn-secondary{flex:1 1 160px;}
 .php-cfg-cross{margin-top:18px;}
+.php-cfg-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:1200;padding:16px;}
+.php-cfg-modal-backdrop.is-open{display:flex;}
+.php-cfg-modal{background:var(--panel,#fff);color:var(--ink,#0f172a);border-radius:12px;max-width:420px;width:100%;padding:20px 22px;box-shadow:0 18px 50px rgba(15,23,42,.28);}
+.php-cfg-modal h3{margin:0 0 8px;font-size:1.1rem;}
+.php-cfg-modal p{margin:0 0 16px;color:var(--muted,#64748b);line-height:1.45;}
+.php-cfg-modal-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;}
+.php-cfg-modal-actions .btn-primary,.php-cfg-modal-actions .btn-secondary{flex:1 1 auto;min-width:110px;}
 @media (max-width:679.98px){
   .php-cfg-row{flex-direction:column;align-items:stretch;}
   .php-cfg-ctrl input[type=text],.php-cfg-ctrl input[type=number]{width:100%;}
   .php-cfg-footer .btn-primary,.php-cfg-footer .btn-secondary{flex:1 1 100%;}
 }
 </style>"#;
+
+    let modal = r#"<div class="php-cfg-modal-backdrop" id="php-cfg-dirty-modal" role="dialog" aria-modal="true" aria-labelledby="php-cfg-dirty-title" hidden>
+  <div class="php-cfg-modal">
+    <h3 id="php-cfg-dirty-title">Unsaved changes</h3>
+    <p>You have unsaved PHP settings. Save them before switching versions, abandon the changes, or cancel.</p>
+    <div class="php-cfg-modal-actions">
+      <button type="button" class="btn-secondary" id="php-cfg-dirty-cancel">Cancel</button>
+      <button type="button" class="btn-secondary" id="php-cfg-dirty-abandon">Abandon changes</button>
+      <button type="button" class="btn-primary" id="php-cfg-dirty-save">Save first</button>
+    </div>
+  </div>
+</div>"#;
+
+    let script = r#"<script>
+(function () {
+  var select = document.getElementById('php');
+  var versionForm = document.getElementById('php-cfg-version-form');
+  var modal = document.getElementById('php-cfg-dirty-modal');
+  if (!select || !versionForm) return;
+
+  var settingsForm = document.querySelector('form.php-cfg-basic, form[action="/server/php/configs/save-advanced"]');
+  var initialSnapshot = settingsForm ? formSnapshot(settingsForm) : '';
+  var pendingBranch = null;
+  var PENDING_KEY = 'cpn-php-cfg-pending-branch';
+
+  try {
+    var resume = sessionStorage.getItem(PENDING_KEY);
+    if (resume) {
+      sessionStorage.removeItem(PENDING_KEY);
+      if (resume !== (select.getAttribute('data-initial') || '')) {
+        navigateTo(resume);
+        return;
+      }
+    }
+  } catch (e) {}
+
+  function formSnapshot(form) {
+    var data = new FormData(form);
+    var parts = [];
+    data.forEach(function (value, key) {
+      if (key === 'csrf') return;
+      parts.push(key + '=' + String(value));
+    });
+    // Unchecked boxes are absent from FormData; include explicit off state.
+    form.querySelectorAll('input[type=checkbox]').forEach(function (el) {
+      if (!el.name) return;
+      if (!el.checked) parts.push(el.name + '=0');
+    });
+    parts.sort();
+    return parts.join('&');
+  }
+
+  function isDirty() {
+    if (!settingsForm) return false;
+    return formSnapshot(settingsForm) !== initialSnapshot;
+  }
+
+  function navigateTo(branch) {
+    var tabEl = document.getElementById('php-cfg-tab');
+    var tab = tabEl ? tabEl.value : 'basic';
+    var url = '/server/php/configs?php=' + encodeURIComponent(branch) + '&tab=' + encodeURIComponent(tab);
+    window.location.assign(url);
+  }
+
+  function openModal(branch) {
+    pendingBranch = branch;
+    modal.hidden = false;
+    modal.classList.add('is-open');
+  }
+
+  function closeModal() {
+    pendingBranch = null;
+    modal.classList.remove('is-open');
+    modal.hidden = true;
+    var initial = select.getAttribute('data-initial') || select.value;
+    select.value = initial;
+  }
+
+  select.addEventListener('change', function () {
+    var next = select.value;
+    var current = select.getAttribute('data-initial') || '';
+    if (next === current) return;
+    if (isDirty()) {
+      openModal(next);
+      return;
+    }
+    navigateTo(next);
+  });
+
+  if (modal) {
+    document.getElementById('php-cfg-dirty-cancel').addEventListener('click', closeModal);
+    document.getElementById('php-cfg-dirty-abandon').addEventListener('click', function () {
+      if (pendingBranch) navigateTo(pendingBranch);
+    });
+    document.getElementById('php-cfg-dirty-save').addEventListener('click', function () {
+      if (!settingsForm) {
+        closeModal();
+        return;
+      }
+      try {
+        if (pendingBranch) sessionStorage.setItem(PENDING_KEY, pendingBranch);
+      } catch (e) {}
+      closeModal();
+      if (typeof settingsForm.requestSubmit === 'function') {
+        settingsForm.requestSubmit();
+      } else {
+        settingsForm.submit();
+      }
+    });
+    modal.addEventListener('click', function (ev) {
+      if (ev.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+  }
+})();
+</script>"#;
 
     let note = if is_admin {
         "<p class=\"muted\">Saving creates a backup under <code>/var/lib/cpn/php-ini-backups/</code> before writing php.ini. Host default controls system php-fpm (phpMyAdmin), not only per-site handlers.</p>"
@@ -187,7 +313,7 @@ pub fn php_configurations_page(
         ],
         "PHP Configurations",
         "Configure PHP settings and choose the host default used by system tools like phpMyAdmin.",
-        &format!("{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}"),
+        &format!("{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}{modal}{script}"),
         notice,
         error,
     )

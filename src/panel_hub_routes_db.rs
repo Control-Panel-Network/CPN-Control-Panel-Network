@@ -158,9 +158,17 @@ pub async fn databases_phpmyadmin_open(
         return login_redirect(&http);
     };
     match crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin() {
-        Ok(url) => HttpResponse::SeeOther()
-            .append_header(("Location", url))
-            .finish(),
+        Ok(url) => {
+            // Drop stale PMA cookies after php-fpm restarts so the fresh
+            // sign-on token is not fighting an orphaned session cookie.
+            let secure = crate::panel_session::request_https_from_headers(&http);
+            let mut builder = HttpResponse::SeeOther();
+            builder.append_header(("Location", url.as_str()));
+            for cookie in crate::panel_phpmyadmin_proxy::clear_phpmyadmin_cookie_headers(secure) {
+                builder.append_header(("Set-Cookie", cookie));
+            }
+            builder.finish()
+        }
         Err(err) => redirect_notice("/databases/phpmyadmin", None, Some(&err)),
     }
 }

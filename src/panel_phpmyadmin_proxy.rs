@@ -246,10 +246,37 @@ fn rewrite_location(value: &str) -> String {
     if value.starts_with("http://127.0.0.1:8081") {
         return value.replacen("http://127.0.0.1:8081", PMA_MOUNT, 1);
     }
+    // Keep panel routes absolute. SignonURL remints via /databases/phpmyadmin/open
+    // after php-fpm restarts; never prefix those with /phpmyadmin.
+    if is_panel_absolute_location(value) {
+        return value.to_string();
+    }
     if value.starts_with('/') && !value.starts_with(PMA_MOUNT) {
         return format!("{PMA_MOUNT}{value}");
     }
     value.to_string()
+}
+
+fn is_panel_absolute_location(value: &str) -> bool {
+    const PREFIXES: &[&str] = &[
+        "/databases/",
+        "/login",
+        "/logout",
+        "/dashboard",
+        "/server/",
+        "/account/",
+        "/websites/",
+        "/email/",
+        "/ftp/",
+        "/plugins/",
+        "/wordpress/",
+        "/backups/",
+        "/packages",
+        "/settings",
+        "/security",
+        "/api/",
+    ];
+    PREFIXES.iter().any(|p| value == *p || value.starts_with(p))
 }
 
 fn rewrite_set_cookie(value: &str) -> String {
@@ -351,6 +378,11 @@ mod tests {
             rewrite_location("http://127.0.0.1:8081/cpn-signon.php"),
             "/phpmyadmin/cpn-signon.php"
         );
+        assert_eq!(
+            rewrite_location("/databases/phpmyadmin/open"),
+            "/databases/phpmyadmin/open"
+        );
+        assert_eq!(rewrite_location("/login"), "/login");
         assert!(
             rewrite_set_cookie("phpMyAdmin=abc; path=/; HttpOnly").contains("Path=/phpmyadmin")
         );

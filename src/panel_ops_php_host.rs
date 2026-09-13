@@ -157,6 +157,15 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
         );
     }
 
+    // php-fpm restart clears PMA PHP sessions. Refresh TempDir ownership, the
+    // sign-on bridge / SignonURL, and (when OLS owns HTTP) the loopback listener
+    // so Open phpMyAdmin remints SSO from the still-valid CPN panel session.
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    if openlitespeed_installed() {
+        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+    }
+    let _ = crate::apps_phpmyadmin_sso::refresh_phpmyadmin_signon();
+
     Ok(format!("Host PHP default is {} ({})", record.branch, note))
 }
 
