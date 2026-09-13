@@ -6,7 +6,6 @@ use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
 use crate::panel_ops_docker::docker_status;
-use crate::panel_ops_path::{list_dir, resolve_under_allowlist};
 use crate::panel_ops_php::detect_php;
 // PHP Extensions / Configurations live in panel_hub_pages_php_*.
 use crate::panel_ops_pkgmgr::package_manager_status;
@@ -351,83 +350,4 @@ pub fn docker_page(kind: &str) -> String {
         None,
         None,
     )
-}
-
-pub fn files_page(path_q: &str, error: Option<&str>) -> String {
-    let resolved = resolve_under_allowlist(path_q);
-    let body = match resolved {
-        Ok(path) => match list_dir(&path) {
-            Ok(entries) => {
-                let mut t = format!(
-                    r#"<p>Browsing <code>{path}</code> (allowlisted roots only).</p>
-                    <form method="get" action="/server/files" class="stack-form" style="max-width:560px;">
-                      <label for="path">Path</label>
-                      <input id="path" name="path" type="text" value="{path}">
-                      <button type="submit" class="btn-primary">Open</button>
-                    </form>
-                    <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Type</th><th>Size</th></tr></thead><tbody>"#,
-                    path = html_escape(&path.display().to_string()),
-                );
-                if let Some(parent) = path.parent() {
-                    t.push_str(&format!(
-                        r#"<tr><td><a href="/server/files?path={p}">..</a></td><td>dir</td><td></td></tr>"#,
-                        p = urlencoding_simple(&parent.display().to_string()),
-                    ));
-                }
-                for (name, is_dir, size) in entries {
-                    let child = path.join(&name);
-                    if is_dir {
-                        t.push_str(&format!(
-                            r#"<tr><td><a href="/server/files?path={p}">{name}</a></td><td>dir</td><td></td></tr>"#,
-                            p = urlencoding_simple(&child.display().to_string()),
-                            name = html_escape(&name),
-                        ));
-                    } else {
-                        t.push_str(&format!(
-                            r#"<tr><td>{name}</td><td>file</td><td>{size}</td></tr>"#,
-                            name = html_escape(&name),
-                            size = size,
-                        ));
-                    }
-                }
-                t.push_str("</tbody></table></div>");
-                t
-            }
-            Err(err) => format!(
-                "{}{}",
-                not_configured_body(&err, "Pick an existing directory under /home or /var/www."),
-                ""
-            ),
-        },
-        Err(err) => not_configured_body(
-            &err,
-            "Only /home, /var/www, and the CPN data dir are allowed.",
-        ),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("Root File Manager", None),
-        ],
-        "Root File Manager",
-        "Browse allowlisted roots with path traversal guards.",
-        &body,
-        None,
-        error,
-    )
-}
-
-fn urlencoding_simple(value: &str) -> String {
-    let mut out = String::with_capacity(value.len() * 3);
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char)
-            }
-            b' ' => out.push('+'),
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
 }

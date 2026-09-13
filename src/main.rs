@@ -44,8 +44,8 @@ use cpn_installer::panel_hub_routes::{
     email_limits, email_mailscanner, email_marketing, email_mta_sts_push_cf, email_mta_sts_route,
     email_mta_sts_save, email_password, email_pattern_fwd, email_plus, email_queue, email_rspamd,
     email_spamassassin, email_webmail_app_route, email_webmail_regenerate_path,
-    email_webmail_route, email_webmail_settings_save, ftp_accounts_route, ftp_create,
-    ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
+    email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
+    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
     ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
     passkey_register_finish, passkey_register_start, security_fail2ban, security_firewall,
     security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
@@ -59,18 +59,19 @@ use cpn_installer::panel_hub_routes::{
     security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
     server_cloudflare_redirect, server_dns_defaults, server_dns_nameservers,
     server_dns_nameservers_save, server_dns_zones, server_dns_zones_delete, server_dns_zones_save,
-    server_docker_apps, server_docker_containers, server_docker_images, server_files_page,
-    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
-    server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
-    server_litespeed_webadmin_url, server_openlitespeed_guest, server_openlitespeed_guest_remove,
-    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
-    server_packages_page, server_page, server_php_configs, server_php_configs_restart,
-    server_php_configs_save_advanced, server_php_configs_save_basic,
-    server_php_configs_set_default, server_php_extensions, server_php_extensions_install,
-    server_php_extensions_set_default, server_php_extensions_uninstall, server_php_tuning,
-    server_processes_page, server_services_control, server_services_page, settings_connect_page,
-    settings_design_page, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
+    server_docker_apps, server_docker_containers, server_docker_images, server_filemanager_alias,
+    server_files_op, server_files_page, server_files_upload, server_litespeed_downgrade,
+    server_litespeed_enterprise_page, server_litespeed_page, server_litespeed_serial,
+    server_litespeed_tier, server_litespeed_upgrade, server_litespeed_webadmin_url,
+    server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
+    server_openlitespeed_password, server_openlitespeed_reset_cpn, server_packages_page,
+    server_page, server_php_configs, server_php_configs_restart, server_php_configs_save_advanced,
+    server_php_configs_save_basic, server_php_configs_set_default, server_php_extensions,
+    server_php_extensions_install, server_php_extensions_set_default,
+    server_php_extensions_uninstall, server_php_tuning, server_processes_page,
+    server_services_control, server_services_page, settings_connect_page, settings_design_page,
+    settings_page, settings_port_page, settings_setup_page, settings_setup_save,
+    settings_site_messages_page, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
     settings_site_messages_save, settings_version_page, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
@@ -1050,6 +1051,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_containers)
             .service(server_docker_images)
             .service(server_files_page)
+            .service(filemanager_alias)
+            .service(server_filemanager_alias)
+            .service(server_files_op)
+            .service(server_files_upload)
             .service(server_dns_zones)
             .service(server_dns_zones_save)
             .service(server_dns_zones_delete)
