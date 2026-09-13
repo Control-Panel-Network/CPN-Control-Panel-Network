@@ -370,7 +370,8 @@ mod tests {
             assert!(html.contains("Refresh page to update"));
             assert!(html.contains("manage-metrics-snapshot"));
             assert!(html.contains("manage-chart-readout"));
-            assert!(!html.contains("Samples every ~10s"));
+            assert!(!html.contains("Live host load:"));
+            assert!(!html.contains("Live host memory:"));
             assert!(!html.contains('\u{2014}'));
             assert!(!html.contains('\u{2013}'));
         });
