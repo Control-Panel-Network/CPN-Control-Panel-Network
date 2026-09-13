@@ -27,10 +27,7 @@ pub fn log_retention_settings_page_with(
     let error_html = error
         .map(|n| format!(r#"<p class="notice error">{}</p>"#, html_escape(n)))
         .unwrap_or_default();
-    let max_size = prefs
-        .max_size_mb
-        .map(|n| n.to_string())
-        .unwrap_or_default();
+    let max_size = prefs.max_size_mb.map(|n| n.to_string()).unwrap_or_default();
     let body = format!(
         r#"{notice_html}{error_html}
 <article class="section-card" style="max-width:720px;">

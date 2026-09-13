@@ -101,12 +101,9 @@ pub fn path_allowed(site: &SiteRecord, path: &Path) -> bool {
     } else {
         let home_prefix = format!("{}/", home_logs.display());
         if (s.starts_with(&home_prefix) || path.parent() == Some(home_logs.as_path()))
-            && path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| {
-                    matches!(n, "access.log" | "access_log" | "error.log" | "error_log")
-                })
+            && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                matches!(n, "access.log" | "access_log" | "error.log" | "error_log")
+            })
         {
             return true;
         }
@@ -292,10 +289,7 @@ pub fn query_site_log_page(
             total_pages: 1,
             lines: Vec::new(),
             empty: true,
-            message: format!(
-                "No {kind} log file yet. Expected path: {}",
-                path.display()
-            ),
+            message: format!("No {kind} log file yet. Expected path: {}", path.display()),
         });
     }
 
@@ -415,17 +409,13 @@ mod tests {
 
     #[test]
     fn parent_cannot_read_child_home_logs() {
-        let parent = sample_site(
-            "newstargeted.com",
-            "/home/newstargeted.com/public_html",
-        );
+        let parent = sample_site("newstargeted.com", "/home/newstargeted.com/public_html");
         let child = sample_site(
             "test2.newstargeted.com",
             "/home/newstargeted.com/test2.newstargeted.com/public_html",
         );
         let parent_log = Path::new("/home/newstargeted.com/logs/access.log");
-        let child_log =
-            Path::new("/home/newstargeted.com/test2.newstargeted.com/logs/access.log");
+        let child_log = Path::new("/home/newstargeted.com/test2.newstargeted.com/logs/access.log");
         assert!(path_allowed(&parent, parent_log));
         assert!(!path_allowed(&parent, child_log));
         assert!(path_allowed(&child, child_log));

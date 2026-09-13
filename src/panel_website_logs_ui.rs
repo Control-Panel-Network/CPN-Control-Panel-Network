@@ -4,11 +4,7 @@ use crate::panel_website_manage_ui::{html_escape, section};
 use crate::sites::SiteRecord;
 
 fn log_tile_button(kind: &str, title: &str, subtitle: &str) -> String {
-    let icon_href = if kind == "error" {
-        "#error"
-    } else {
-        "#access"
-    };
+    let icon_href = if kind == "error" { "#error" } else { "#access" };
     format!(
         r#"<button type="button" class="manage-tile manage-log-open" data-log-kind="{kind}" aria-haspopup="dialog">
   {icon}

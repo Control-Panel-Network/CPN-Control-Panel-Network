@@ -198,7 +198,8 @@ mod tests {
         let raw = serde_json::to_string_pretty(&prefs).unwrap();
         let path = dir.join("log-retention.json");
         fs::write(&path, &raw).unwrap();
-        let loaded: LogRetentionPrefs = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let loaded: LogRetentionPrefs =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(loaded.retention_days, 14);
         assert_eq!(loaded.max_size_mb, Some(50));
         let _ = fs::remove_dir_all(&dir);
