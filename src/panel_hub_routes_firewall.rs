@@ -183,7 +183,10 @@ pub async fn security_firewall_rule_add(
     let name = form.get("name").map(String::as_str).unwrap_or("");
     let protocol = form.get("protocol").map(String::as_str).unwrap_or("tcp");
     let port = form.get("port").map(String::as_str).unwrap_or("");
-    let source = form.get("source").map(String::as_str).unwrap_or("0.0.0.0/0");
+    let source = form
+        .get("source")
+        .map(String::as_str)
+        .unwrap_or("0.0.0.0/0");
     match add_rule_live(name, protocol, port, source) {
         Ok(msg) => redirect_notice(&tab_base("rules"), Some(&msg), None),
         Err(err) => redirect_notice(&tab_base("rules"), None, Some(&err)),

@@ -51,13 +51,7 @@ pub fn security_hub_main() -> String {
 pub fn firewall_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
     // Legacy entry point kept for callers; manager UI lives in panel_hub_pages_firewall.
     crate::panel_hub_pages_firewall::firewall_manager_page(
-        "admin",
-        "rules",
-        notice,
-        error,
-        is_admin,
-        None,
-        None,
+        "admin", "rules", notice, error, is_admin, None, None,
     )
 }
 

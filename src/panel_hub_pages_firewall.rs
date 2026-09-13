@@ -44,9 +44,15 @@ fn tabs(active: &str) -> String {
     let items = [
         ("rules", "Firewall Rules", "/security/firewall?tab=rules"),
         ("banned", "Banned IPs", "/security/firewall?tab=banned"),
-        ("trusted", "SSH trusted IPs", "/security/firewall?tab=trusted"),
+        (
+            "trusted",
+            "SSH trusted IPs",
+            "/security/firewall?tab=trusted",
+        ),
     ];
-    let mut out = String::from(r#"<nav class="fw-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0;">"#);
+    let mut out = String::from(
+        r#"<nav class="fw-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0;">"#,
+    );
     for (id, label, href) in items {
         let style = if id == active {
             "background:var(--accent,#7c3aed);color:#fff;border-color:transparent;"
@@ -92,7 +98,8 @@ fn status_bar(is_admin: bool, csrf: &str) -> String {
             csrf = html_escape(csrf),
         )
     } else {
-        "<p class=\"muted\">Only the panel admin can start, stop, or change firewall rules.</p>".into()
+        "<p class=\"muted\">Only the panel admin can start, stop, or change firewall rules.</p>"
+            .into()
     };
     let kv = status_kv(&[
         ("Backend", &st.backend),
@@ -230,10 +237,7 @@ fn banned_tab(banned: &[BannedIp], is_admin: bool, csrf: &str, q: &str) -> Strin
     </tr></thead><tbody>"#,
     );
     for b in rows {
-        let expires = b
-            .expires_at
-            .map(fmt_ts)
-            .unwrap_or_else(|| "Never".into());
+        let expires = b.expires_at.map(fmt_ts).unwrap_or_else(|| "Never".into());
         let actions = if is_admin {
             format!(
                 r#"<form method="post" action="/security/firewall/banned/unban" style="display:inline;">
@@ -295,11 +299,8 @@ fn trusted_tab(trusted: &[TrustedIp], is_admin: bool, csrf: &str) -> String {
     </tr></thead><tbody>"#,
     );
     for t in trusted {
-        let can_remove = is_admin
-            && matches!(
-                t.source,
-                crate::panel_firewall_store::TrustedSource::Manual
-            );
+        let can_remove =
+            is_admin && matches!(t.source, crate::panel_firewall_store::TrustedSource::Manual);
         let actions = if can_remove {
             format!(
                 r#"<form method="post" action="/security/firewall/trusted/delete" style="display:inline;" onsubmit="return confirm('Remove this trusted IP?');">
@@ -380,7 +381,8 @@ mod tests {
 
     #[test]
     fn page_has_tabs_not_foreign_brands() {
-        let html = firewall_manager_page("admin", "rules", None, None, true, None, Some("192.0.2.1"));
+        let html =
+            firewall_manager_page("admin", "rules", None, None, true, None, Some("192.0.2.1"));
         assert!(html.contains("Firewall Rules"));
         assert!(html.contains("Banned IPs"));
         assert!(html.contains("never block"));

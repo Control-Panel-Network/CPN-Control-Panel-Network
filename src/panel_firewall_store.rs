@@ -88,10 +88,10 @@ pub fn now_unix() -> u64 {
 }
 
 fn new_id() -> String {
-    format!("r{}", now_unix()).chars().chain(
-        format!("{:x}", now_unix().wrapping_mul(31) % 0xffff)
-            .chars(),
-    ).collect()
+    format!("r{}", now_unix())
+        .chars()
+        .chain(format!("{:x}", now_unix().wrapping_mul(31) % 0xffff).chars())
+        .collect()
 }
 
 /// Normalize and validate a single IP or CIDR (IPv4 / IPv6).
@@ -274,17 +274,28 @@ fn upsert_trusted(store: &mut FirewallManagerStore, ip: &str, label: &str, sourc
 }
 
 /// Seed server IP and first-admin IP into the never-block list.
-pub fn ensure_protected_seeds(server_ip: Option<&str>, login_ip: Option<&str>) -> FirewallManagerStore {
+pub fn ensure_protected_seeds(
+    server_ip: Option<&str>,
+    login_ip: Option<&str>,
+) -> FirewallManagerStore {
     let mut store = load_store();
     let mut changed = false;
 
-    if let Some(sip) = server_ip.map(str::trim).filter(|s| !s.is_empty() && *s != "Unavailable") {
+    if let Some(sip) = server_ip
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "Unavailable")
+    {
         if store.server_ip.as_deref() != Some(sip) {
             store.server_ip = Some(sip.to_string());
             changed = true;
         }
         let before = store.trusted.len();
-        upsert_trusted(&mut store, sip, "Server IP (protected)", TrustedSource::Server);
+        upsert_trusted(
+            &mut store,
+            sip,
+            "Server IP (protected)",
+            TrustedSource::Server,
+        );
         if store.trusted.len() != before
             || store
                 .trusted
@@ -427,7 +438,11 @@ pub fn remove_rule(id: &str) -> Result<FirewallManagerStore, String> {
     Ok(store)
 }
 
-pub fn add_ban(ip: &str, reason: &str, duration_secs: Option<u64>) -> Result<FirewallManagerStore, String> {
+pub fn add_ban(
+    ip: &str,
+    reason: &str,
+    duration_secs: Option<u64>,
+) -> Result<FirewallManagerStore, String> {
     let ip = validate_ip_or_cidr(ip)?;
     if ip.contains('/') {
         // Allow CIDR bans only for /32 or /128 (single host) or explicit networks up to /24 IPv4.
@@ -502,7 +517,10 @@ pub fn remove_trusted(ip: &str) -> Result<FirewallManagerStore, String> {
     let Some(entry) = store.trusted.iter().find(|t| t.ip == ip) else {
         return Err("Trusted IP not found".into());
     };
-    if matches!(entry.source, TrustedSource::Server | TrustedSource::FirstAdmin) {
+    if matches!(
+        entry.source,
+        TrustedSource::Server | TrustedSource::FirstAdmin
+    ) {
         return Err("Cannot remove protected server or first-admin IP".into());
     }
     store.trusted.retain(|t| t.ip != ip);
@@ -544,12 +562,7 @@ mod tests {
         with_test_data_dir(|| {
             let mut store = FirewallManagerStore::default();
             store.server_ip = Some("203.0.113.10".into());
-            upsert_trusted(
-                &mut store,
-                "203.0.113.10",
-                "Server",
-                TrustedSource::Server,
-            );
+            upsert_trusted(&mut store, "203.0.113.10", "Server", TrustedSource::Server);
             save_store(&store).unwrap();
             let err = add_ban("203.0.113.10", "test", None).unwrap_err();
             assert!(err.contains("Refused"));

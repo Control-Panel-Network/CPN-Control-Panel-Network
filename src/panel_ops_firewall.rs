@@ -1,9 +1,9 @@
 //! Host firewalld operations for the CPN firewall manager (no shell strings).
 
-use crate::listen_port::{load_preferred_listen_port, DEFAULT_PORT};
+use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::panel_firewall_store::{
-    self, FirewallManagerStore, FirewallRule, TrustedSource, ensure_protected_seeds, is_protected_ip,
-    load_store, purge_expired_bans, save_store, validate_ip_or_cidr,
+    self, FirewallManagerStore, FirewallRule, TrustedSource, ensure_protected_seeds,
+    is_protected_ip, load_store, purge_expired_bans, save_store, validate_ip_or_cidr,
 };
 use crate::panel_host_info::host_sidebar_info;
 use crate::panel_ops_security::{cmd_ok, firewall_status, which_exists};
@@ -359,7 +359,9 @@ pub fn import_banned_json(raw: &str) -> Result<String, String> {
             count += 1;
         }
     }
-    Ok(format!("Imported {count} banned IP(s); protected addresses skipped"))
+    Ok(format!(
+        "Imported {count} banned IP(s); protected addresses skipped"
+    ))
 }
 
 pub fn status_on() -> bool {
