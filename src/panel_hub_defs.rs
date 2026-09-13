@@ -210,8 +210,8 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
-                    title: "PHP Configs",
-                    subtitle: "php.ini path (read-only)",
+                    title: "PHP Configurations",
+                    subtitle: "php.ini, host default, restart PHP",
                     href: "/server/php/configs",
                     live: true,
                 },

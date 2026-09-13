@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Server **PHP Configurations** (`/server/php/configs`): Basic Settings and Advanced php.ini editor per PHP version, Save Changes (backup under `/var/lib/cpn/php-ini-backups/`), Restart PHP, and **Set as host default** for system php-fpm / phpMyAdmin. Sidebar entry under Server; cross-linked with PHP Extensions. Admin-only POSTs with CSRF + same-origin checks.
 - Installer failure UI **Open GitHub issue** opens `/issues/new` with a prefilled title and body (CPN version, OS, arch, kernel, install mode, failed step, sanitized error). Host IP addresses, MACs, tokens, passwords, and usernames are omitted or redacted. Status now exposes safe `os_pretty_name`, `arch`, and `kernel` on `environment` for that template.
 - Server **PHP Extensions** manager (`/server/php/extensions`): select PHP version (default from `/var/lib/cpn/php-default.json`, prefer 8.5), Load Extensions, searchable install/uninstall table. Prefer an already-installed LiteSpeed `lsphpXX` tree; otherwise Remi/AppStream `php-*` (same surface as php-fpm / phpMyAdmin). Admin-only POSTs with CSRF + same-origin checks. **Set as host default** persists `php-default.json` and retargets php-fpm; does not force-install `lsphp` when Remi PHP is present (shared-path conflicts on EL).
 
 ### Fixed
 
+- Host PHP default **Set as host default** now writes `/var/lib/cpn/php-default.json` before module apply so the Extensions/Configurations UI does not keep showing "not persisted yet" after a successful save. Module/package apply failures still surface as errors while the preference remains on disk.
+- PHP Extensions on narrow viewports: card/stack layout so Install/Uninstall stay visible without horizontal scrolling; toolbar buttons stack instead of forcing an ultra-wide row.
 - GET `/account/security/enroll-2fa/begin` (browser refresh after POST) no longer falls through to the installer SPA ("Could not query the installer"). It redirects to `/account/security/enroll-2fa`. Successful begin uses PRG to the same GET page. Extensionless unknown paths no longer serve installer `index.html`.
 
 ### Fixed

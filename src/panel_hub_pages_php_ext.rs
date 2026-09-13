@@ -14,6 +14,16 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn host_default_label() -> String {
+    match load_php_default() {
+        Some(r) => format!("{} ({})", r.branch, r.stream),
+        None => {
+            let fallback = selected_default_branch();
+            format!("{fallback} (not persisted yet)")
+        }
+    }
+}
+
 /// Render the PHP Extensions manager.
 pub fn php_extensions_page(
     username: &str,
@@ -33,10 +43,7 @@ pub fn php_extensions_page(
         .to_string();
     let search_q = search.unwrap_or("").trim().to_string();
     let csrf = php_ext_csrf_token(username);
-
-    let host_default = load_php_default()
-        .map(|r| format!("{} ({})", r.branch, r.stream))
-        .unwrap_or_else(|| format!("{default_branch} (not persisted yet)"));
+    let host_default = host_default_label();
 
     let mut options = String::new();
     for v in &versions {
@@ -55,9 +62,39 @@ pub fn php_extensions_page(
         ));
     }
 
+    let styles = r#"<style>
+.php-ext-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:8px;max-width:720px;}
+.php-ext-field{flex:1 1 220px;min-width:160px;}
+.php-ext-field label{display:block;margin-bottom:6px;font-weight:600;font-size:.92rem;}
+.php-ext-field select,.php-ext-field input{width:100%;box-sizing:border-box;}
+.php-ext-toolbar .btn-primary,.php-ext-search .btn-secondary,.php-ext-default .btn-secondary{
+  width:auto;max-width:100%;white-space:normal;
+}
+.php-ext-default,.php-ext-search{margin-top:12px;max-width:520px;}
+.php-ext-cross{margin-top:14px;}
+.php-ext-list{display:none;margin-top:16px;gap:12px;}
+.php-ext-card{border:1px solid var(--hairline);border-radius:12px;padding:12px 14px;background:var(--canvas);}
+.php-ext-card-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;}
+.php-ext-card-meta{color:var(--muted);font-size:.88rem;margin:8px 0;}
+.php-ext-card-actions{margin-top:10px;}
+.php-ext-table-wrap{margin-top:16px;}
+@media (max-width:719.98px){
+  .php-ext-table-wrap{display:none;}
+  .php-ext-list{display:grid;}
+  .php-ext-toolbar{max-width:100%;}
+  .php-ext-default,.php-ext-search{max-width:100%;}
+  .php-ext-toolbar .btn-primary,.php-ext-search .btn-secondary,.php-ext-default .btn-secondary{
+    width:100%;
+  }
+}
+@media (min-width:720px){
+  .php-ext-list{display:none !important;}
+}
+</style>"#;
+
     let select_form = format!(
-        r#"<form method="get" action="/server/php/extensions" class="stack-form" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;max-width:720px;">
-      <div style="flex:1;min-width:220px;">
+        r#"<form method="get" action="/server/php/extensions" class="php-ext-toolbar">
+      <div class="php-ext-field">
         <label for="php">Select PHP Version</label>
         <select id="php" name="php">{options}</select>
       </div>
@@ -69,7 +106,7 @@ pub fn php_extensions_page(
 
     let search_form = if loaded {
         format!(
-            r#"<form method="get" action="/server/php/extensions" class="stack-form" style="max-width:420px;margin-top:12px;">
+            r#"<form method="get" action="/server/php/extensions" class="php-ext-search stack-form">
       <input type="hidden" name="php" value="{php}">
       <input type="hidden" name="load" value="1">
       <label for="q">Search extensions</label>
@@ -85,7 +122,7 @@ pub fn php_extensions_page(
 
     let set_default = if is_admin {
         format!(
-            r#"<form method="post" action="/server/php/extensions/set-default" class="stack-form" style="margin-top:12px;max-width:520px;" onsubmit="return confirm('Apply PHP {php} as the host default (php-default.json, Remi/php-fpm, LiteSpeed lsphp when present)?');">
+            r#"<form method="post" action="/server/php/extensions/set-default" class="php-ext-default stack-form" onsubmit="return confirm('Apply PHP {php} as the host default (php-default.json, Remi/php-fpm, LiteSpeed lsphp when present)?');">
       <input type="hidden" name="csrf" value="{csrf}">
       <input type="hidden" name="php" value="{php}">
       <button type="submit" class="btn-secondary">Set PHP {php} as host default</button>
@@ -97,22 +134,28 @@ pub fn php_extensions_page(
         String::new()
     };
 
-    let table = if !loaded {
-        "<p class=\"muted\">Choose a PHP version and click Load Extensions.</p>".to_string()
+    let (table, cards) = if !loaded {
+        (
+            "<p class=\"muted\">Choose a PHP version and click Load Extensions.</p>".to_string(),
+            String::new(),
+        )
     } else {
         match list_extensions(&selected, &search_q) {
-            Ok(rows) if rows.is_empty() => {
+            Ok(rows) if rows.is_empty() => (
                 "<p class=\"empty-state\">No extension packages found for this version.</p>"
-                    .to_string()
-            }
+                    .to_string(),
+                String::new(),
+            ),
             Ok(rows) => {
                 let mut t = String::from(
-                    r#"<div class="table-wrap" style="margin-top:16px;"><table class="data-table"><thead><tr>
+                    r#"<div class="table-wrap php-ext-table-wrap"><table class="data-table"><thead><tr>
                     <th>ID</th><th>PHP version</th><th>Extension</th><th>Description</th><th>Status</th><th>Actions</th>
                     </tr></thead><tbody>"#,
                 );
+                let mut cards =
+                    String::from(r#"<div class="php-ext-list" aria-label="Extensions">"#);
                 for row in rows {
-                    let status = if row.installed {
+                    let status_html = if row.installed {
                         r#"<span class="badge ok">Installed</span>"#
                     } else {
                         r#"<span class="badge">Available</span>"#
@@ -163,16 +206,36 @@ pub fn php_extensions_page(
                         badge = html_escape(&row.branch),
                         name = html_escape(&row.name),
                         desc = html_escape(&row.description),
-                        status = status,
+                        status = status_html,
+                        actions = actions,
+                    ));
+                    cards.push_str(&format!(
+                        r#"<article class="php-ext-card">
+                          <div class="php-ext-card-top">
+                            <strong><code>{name}</code></strong>
+                            {status}
+                          </div>
+                          <p class="php-ext-card-meta">#{id} · PHP {badge}<br>{desc}</p>
+                          <div class="php-ext-card-actions">{actions}</div>
+                        </article>"#,
+                        id = row.id,
+                        badge = html_escape(&row.branch),
+                        name = html_escape(&row.name),
+                        desc = html_escape(&row.description),
+                        status = status_html,
                         actions = actions,
                     ));
                 }
                 t.push_str("</tbody></table></div>");
-                t
+                cards.push_str("</div>");
+                (t, cards)
             }
-            Err(err) => format!(
-                "<p class=\"panel-notice error\">{e}</p>",
-                e = html_escape(&err)
+            Err(err) => (
+                format!(
+                    "<p class=\"panel-notice error\">{e}</p>",
+                    e = html_escape(&err)
+                ),
+                String::new(),
             ),
         }
     };
@@ -202,6 +265,11 @@ pub fn php_extensions_page(
         "<p class=\"muted\">Only the panel admin can install or uninstall PHP extensions.</p>"
     };
 
+    let cross = format!(
+        r#"<p class="muted php-ext-cross">Related: <a href="/server/php/configs?php={php}">PHP Configurations</a> (host default, php.ini, Restart PHP)</p>"#,
+        php = html_escape(&selected),
+    );
+
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -210,7 +278,7 @@ pub fn php_extensions_page(
         ],
         "PHP Extensions",
         "Install or uninstall PHP extensions for each available PHP version.",
-        &format!("{kv}{select_form}{set_default}{search_form}{table}{note}"),
+        &format!("{styles}{kv}{select_form}{set_default}{search_form}{table}{cards}{note}{cross}"),
         notice,
         error,
     )

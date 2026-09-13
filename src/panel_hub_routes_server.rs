@@ -8,8 +8,8 @@ use crate::panel_hub_pages_litespeed::{
     run_set_tier, run_set_webadmin_url, run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    docker_page, files_page, package_manager_page, php_configs_page, php_tuning_page,
-    processes_page, run_service_control, server_hub_main, services_page,
+    docker_page, files_page, package_manager_page, php_tuning_page, processes_page,
+    run_service_control, server_hub_main, services_page,
 };
 use crate::panel_hub_pages_server_net::{
     change_port_page, dns_zones_page, nameservers_page, remove_dns_zone, save_dns_zone,
@@ -336,22 +336,6 @@ pub async fn server_processes_page(
         "server",
         "Top Processes",
         &processes_page(),
-    ))
-}
-
-#[get("/server/php/configs")]
-pub async fn server_php_configs(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "PHP Configs",
-        &php_configs_page(),
     ))
 }
 

@@ -60,11 +60,12 @@ use cpn_installer::panel_hub_routes::{
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
     server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
     server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
-    server_php_extensions, server_php_extensions_install, server_php_extensions_set_default,
-    server_php_extensions_uninstall, server_php_tuning, server_processes_page,
-    server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_page, settings_port_page, settings_setup_page, settings_setup_save,
-    settings_site_messages_page, settings_site_messages_reset,
+    server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_extensions, server_php_extensions_install,
+    server_php_extensions_set_default, server_php_extensions_uninstall, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    settings_design_page, settings_page, settings_port_page, settings_setup_page,
+    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
     settings_site_messages_save, settings_version_page, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
@@ -1034,6 +1035,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_php_extensions_uninstall)
             .service(server_php_extensions_set_default)
             .service(server_php_configs)
+            .service(server_php_configs_set_default)
+            .service(server_php_configs_save_basic)
+            .service(server_php_configs_save_advanced)
+            .service(server_php_configs_restart)
             .service(server_php_tuning)
             .service(server_packages_page)
             .service(server_docker_apps)
