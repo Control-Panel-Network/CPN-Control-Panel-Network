@@ -7,8 +7,8 @@ use crate::panel_hubs::{
 };
 use crate::panel_ops_docker::docker_status;
 use crate::panel_ops_path::{list_dir, resolve_under_allowlist};
-use crate::panel_ops_php::{detect_php, read_php_ini_preview};
-// PHP Extensions manager lives in `panel_hub_pages_php_ext`.
+use crate::panel_ops_php::detect_php;
+// PHP Extensions / Configurations live in panel_hub_pages_php_*.
 use crate::panel_ops_pkgmgr::package_manager_status;
 use crate::panel_ops_process::snapshot_top_processes;
 use crate::panel_ops_services::{control_service, list_known_services};
@@ -126,31 +126,6 @@ pub fn processes_page() -> String {
         ],
         "Top Processes",
         "Snapshot from ps (CPU sorted).",
-        &body,
-        None,
-        None,
-    )
-}
-
-pub fn php_configs_page() -> String {
-    let body = match read_php_ini_preview(12_000) {
-        Ok((path, text)) => format!(
-            r#"<p>Loaded configuration: <code>{path}</code></p>
-            <pre style="max-height:420px;overflow:auto;white-space:pre-wrap;font-size:12px;">{preview}</pre>
-            <p class="muted">Read-only preview (truncated). Writes with backup land in a later release.</p>"#,
-            path = html_escape(&path.display().to_string()),
-            preview = html_escape(&text),
-        ),
-        Err(err) => not_configured_body(&err, "Install PHP CLI so CPN can locate php.ini."),
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("PHP Configs", None),
-        ],
-        "PHP Configs",
-        "Show the loaded php.ini path and a safe preview.",
         &body,
         None,
         None,

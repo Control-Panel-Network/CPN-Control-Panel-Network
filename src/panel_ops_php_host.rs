@@ -2,7 +2,10 @@
 
 use crate::litespeed_stack::openlitespeed_installed;
 use crate::os_support::detect_guest_os;
-use crate::php_defaults::{load_php_default, prepare_and_persist_php, today_ymd};
+use crate::php_defaults::{
+    PhpDefaultRecord, load_php_default, prepare_and_persist_php, save_php_default,
+    stream_for_branch, today_ymd,
+};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -43,6 +46,23 @@ fn branch_to_lsphp_prefix(branch: &str) -> Option<&'static str> {
     }
 }
 
+fn persist_operator_choice(branch: &str, stream: &str, message: &str) -> Result<(), String> {
+    let record = PhpDefaultRecord {
+        branch: branch.trim().to_string(),
+        stream: stream.to_string(),
+        requested: branch.trim().to_string(),
+        message: message.to_string(),
+    };
+    save_php_default(&record)?;
+    if load_php_default().is_none() {
+        return Err(format!(
+            "Wrote php-default.json for PHP {branch} but could not re-read it from {}",
+            crate::paths::default_data_dir().join("php-default.json").display()
+        ));
+    }
+    Ok(())
+}
+
 /// Persist and apply the host PHP default so CLI and php-fpm (phpMyAdmin) align.
 ///
 /// LiteSpeed `lsphpXX` packages share `/var/lib/php/opcache` with Remi modular PHP on
@@ -57,10 +77,43 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
         .map(|v| v.to_string())
         .or_else(|| load_php_default().map(|r| r.requested))
         .filter(|v| !v.is_empty());
-    let record = prepare_and_persist_php(&guest, req.as_deref(), &today_ymd())?;
+
+    // Persist the operator choice first so the UI never claims "not persisted yet"
+    // after a successful Set host default click, even if module enable is slow/noisy.
+    if let Some(branch) = req.as_deref() {
+        let stream = stream_for_branch(&guest, branch)
+            .unwrap_or_else(|| format!("php:remi-{branch}"));
+        persist_operator_choice(
+            branch,
+            &stream,
+            &format!("Operator selected PHP {branch} as host default."),
+        )?;
+    }
+
+    let record = match prepare_and_persist_php(&guest, req.as_deref(), &today_ymd()) {
+        Ok(r) => r,
+        Err(err) => {
+            // Preference is already on disk; surface the enable/install problem clearly.
+            if let Some(branch) = req.as_deref() {
+                let stream = stream_for_branch(&guest, branch)
+                    .unwrap_or_else(|| format!("php:remi-{branch}"));
+                let _ = persist_operator_choice(
+                    branch,
+                    &stream,
+                    &format!(
+                        "Saved PHP {branch} as host default preference; module apply reported: {err}"
+                    ),
+                );
+                return Err(format!(
+                    "Host default PHP {branch} was saved to php-default.json, but applying the module failed: {err}"
+                ));
+            }
+            return Err(err);
+        }
+    };
 
     if dnf_available() && record.stream != "apt" {
-        run_dnf_install(&[
+        if let Err(err) = run_dnf_install(&[
             "php",
             "php-cli",
             "php-fpm",
@@ -68,7 +121,12 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
             "php-mbstring",
             "php-xml",
             "php-json",
-        ])?;
+        ]) {
+            return Err(format!(
+                "Host default PHP {} is persisted, but php-fpm packages could not be installed: {err}",
+                record.branch
+            ));
+        }
         let _ = Command::new("systemctl")
             .args(["restart", "php-fpm"])
             .stdout(Stdio::null())
@@ -89,6 +147,12 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
                 " Skipped auto-install of {prefix} (may conflict with Remi php-fpm); install from PHP Extensions if needed."
             ));
         }
+    }
+
+    if load_php_default().is_none() {
+        return Err(
+            "Host PHP default apply finished but php-default.json could not be re-read".into(),
+        );
     }
 
     Ok(format!("Host PHP default is {} ({})", record.branch, note))

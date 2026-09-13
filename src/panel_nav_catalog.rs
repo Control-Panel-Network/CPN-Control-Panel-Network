@@ -181,6 +181,10 @@ const SERVER_CHILDREN: &[NavChild] = &[
         href: "/server/php/extensions",
     },
     NavChild {
+        label: "PHP Configurations",
+        href: "/server/php/configs",
+    },
+    NavChild {
         label: "Top Processes",
         href: "/server/processes",
     },
