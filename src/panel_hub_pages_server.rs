@@ -177,14 +177,7 @@ fn render_process_rows(rows: &[ProcessRow]) -> (String, String) {
               <td><span class="proc-metric proc-metric-cpu">{cpu}</span></td>
               <td><span class="proc-metric">{mem}</span></td>
               <td><code class="proc-cmd" title="{cmd_full}">{cmd_short}</code></td>
-            </tr>"#,
-            row_class = row_class,
-            user = &user,
-            pid = &pid,
-            cpu = &cpu,
-            mem = &mem,
-            cmd_full = &cmd_full,
-            cmd_short = &cmd_short,
+            </tr>"#
         ));
         cards.push_str(&format!(
             r#"<article class="{card_class}">
@@ -197,14 +190,7 @@ fn render_process_rows(rows: &[ProcessRow]) -> (String, String) {
                 <span>MEM <span class="proc-metric">{mem}%</span></span>
               </div>
               <p class="proc-card-cmd" title="{cmd_full}"><code>{cmd_short}</code></p>
-            </article>"#,
-            card_class = card_class,
-            user = &user,
-            pid = &pid,
-            cpu = &cpu,
-            mem = &mem,
-            cmd_full = &cmd_full,
-            cmd_short = &cmd_short,
+            </article>"#
         ));
     }
     table.push_str("</tbody></table></div>");
