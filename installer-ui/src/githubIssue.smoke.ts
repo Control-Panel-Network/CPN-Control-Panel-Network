@@ -48,7 +48,9 @@ const sample: InstallerStatus = {
 };
 
 assert(
-  sanitizeIssueText("fail at 127.0.0.1 and 10.0.2.15").includes("[redacted-ip]"),
+  sanitizeIssueText("fail at 127.0.0.1 and 10.0.2.15").includes(
+    "[redacted-ip]",
+  ),
   "IPv4 must be redacted",
 );
 assert(
@@ -67,7 +69,9 @@ assert(!body.includes("2001:db8"), "IPv6 must not appear");
 assert(!body.includes("password=secret"), "password must be redacted");
 assert(!body.includes("token=abc123"), "token must be redacted");
 assert(
-  buildSafeSystemLines(sample).every((line) => !/\d+\.\d+\.\d+\.\d+/.test(line)),
+  buildSafeSystemLines(sample).every(
+    (line) => !/\d+\.\d+\.\d+\.\d+/.test(line),
+  ),
   "system lines must not contain IPv4",
 );
 
@@ -76,8 +80,14 @@ assert(url.startsWith("https://github.com/Control-Panel-Network/"), "repo URL");
 assert(url.includes("title="), "title query param");
 assert(url.includes("body="), "body query param");
 assert(url.length <= MAX_ISSUE_URL_LENGTH, "URL under length cap");
-assert(!url.includes("203.0.113"), "encoded URL must not include sample public IP");
-assert(!decodeURIComponent(url).includes("10.0.2.15"), "decoded URL no private IP");
+assert(
+  !url.includes("203.0.113"),
+  "encoded URL must not include sample public IP",
+);
+assert(
+  !decodeURIComponent(url).includes("10.0.2.15"),
+  "decoded URL no private IP",
+);
 
 console.log("githubIssue.smoke.ts: ok");
 console.log(`url_length=${url.length}`);

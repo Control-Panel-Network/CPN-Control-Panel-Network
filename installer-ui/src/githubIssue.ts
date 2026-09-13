@@ -89,19 +89,25 @@ export function buildSafeSystemLines(status: InstallerStatus): string[] {
           : null,
     ),
     line("Firewall", env?.firewall),
-    line("Listen port", env?.port != null ? String(env.port) : status.listen_port != null ? String(status.listen_port) : null),
-    line("UI language", status.language),
     line(
-      "Timestamp (UTC)",
-      new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      "Listen port",
+      env?.port != null
+        ? String(env.port)
+        : status.listen_port != null
+          ? String(status.listen_port)
+          : null,
     ),
+    line("UI language", status.language),
+    line("Timestamp (UTC)", new Date().toISOString().replace(/\.\d{3}Z$/, "Z")),
   ];
   return lines.filter((entry): entry is string => Boolean(entry));
 }
 
 export function buildIssueTitle(status: InstallerStatus): string {
   const step = stepLabel(failedStepFromStatus(status));
-  const err = sanitizeIssueText(status.error || status.message || "unknown error");
+  const err = sanitizeIssueText(
+    status.error || status.message || "unknown error",
+  );
   const short = truncate(err.replace(/\s+/g, " "), 72);
   return sanitizeIssueText(`[Bug]: Installer failed at ${step}: ${short}`);
 }

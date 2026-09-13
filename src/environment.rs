@@ -171,15 +171,13 @@ pub async fn inspect(port: u16) -> EnvironmentInfo {
 
 /// OS / arch / kernel for status and support reports. Never includes IP addresses.
 fn host_identity() -> (Option<String>, Option<String>, Option<String>) {
-    let os_pretty_name = crate::os_support::detect_guest_os()
-        .ok()
-        .map(|guest| {
-            if guest.pretty_name.trim().is_empty() {
-                guest.label
-            } else {
-                guest.pretty_name
-            }
-        });
+    let os_pretty_name = crate::os_support::detect_guest_os().ok().map(|guest| {
+        if guest.pretty_name.trim().is_empty() {
+            guest.label
+        } else {
+            guest.pretty_name
+        }
+    });
     let arch = Some(std::env::consts::ARCH.to_string());
     #[cfg(windows)]
     let kernel = None;

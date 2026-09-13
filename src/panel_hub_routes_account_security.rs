@@ -8,7 +8,9 @@ use crate::account_security::{
     post_login_security_path,
 };
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect, require_panel_user, urlencoding_simple};
+use crate::panel_hub_http::{
+    html_ok, login_redirect, redirect, require_panel_user, urlencoding_simple,
+};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
