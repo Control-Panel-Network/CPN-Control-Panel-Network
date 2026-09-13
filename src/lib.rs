@@ -11,6 +11,7 @@ pub mod apps;
 pub mod apps_control;
 pub mod apps_phpmyadmin;
 pub mod apps_phpmyadmin_sso;
+pub mod apps_phpmyadmin_storage;
 pub mod apps_pkg;
 pub mod apps_postgresql;
 pub mod apps_site;

@@ -103,6 +103,7 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
     let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
     let sock = resolve_fpm_sock();
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{OLS_VHOST}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("Could not create OLS vhost dir: {e}"))?;
@@ -132,6 +133,7 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
         let _ = restart_litespeed();
     }
     write_signon_bridge(&share)?;
+    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     if !systemd_unit_active("php-fpm") {
         let _ = Command::new("systemctl")
             .args(["start", "php-fpm"])
@@ -330,6 +332,8 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
 /// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
     let _ = ensure_ols_phpmyadmin_listener();
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;

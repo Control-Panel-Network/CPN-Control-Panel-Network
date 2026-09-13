@@ -410,6 +410,9 @@ fn logout_response(http: &HttpRequest) -> HttpResponse {
     builder.append_header(("Location", login_location(next.as_deref())));
     builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
     builder.append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)));
+    for cookie in crate::panel_phpmyadmin_proxy::clear_phpmyadmin_cookie_headers(secure) {
+        builder.append_header(("Set-Cookie", cookie));
+    }
     if let Some(ref path) = next
         && let Some(cookie) = login_return_cookie_header(path, secure)
     {

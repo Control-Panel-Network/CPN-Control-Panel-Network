@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.39] - 13/09/2026
+
+phpMyAdmin panel proxy assets, TempDir, and session binding (Cargo `0.2.6-alpha.39`).
+
+### Fixed
+
+- Panel `/phpmyadmin/` proxy no longer UTF-8-decodes response bodies (PNG/theme icons were corrupted to broken images; CSS/layout recovered).
+- Create and chown `/var/lib/phpMyAdmin/{temp,upload,save,cache}` for the php-fpm pool user; set `$cfg['TempDir']` so the TempDir warning clears.
+- Refresh TempDir ownership on every `/phpmyadmin` panel proxy request so a prior listener boot cannot leave dirs missing.
+- Align phpMyAdmin cookie `Max-Age` and `$cfg['LoginCookieValidity']` with the CPN panel session TTL (12 hours).
+
+### Security
+
+- `/phpmyadmin/` continues to require a live CPN panel session.
+- CPN `/logout` clears phpMyAdmin cookies under `/phpmyadmin` so PMA cannot stay open after panel logout.
+
+
 ## [0.2.6-alpha.38] - 13/09/2026
 
 Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail client defaults, and CPN mail onboarding (Cargo `0.2.6-alpha.38`).
@@ -34,12 +51,21 @@ Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail clien
 - Setup Wizard onboarding: hostname/rDNS notes, local vs external mail, skip rDNS checkbox (CPN branding only).
 - Email Accounts: default Mail Client Configuration (POP3/IMAP/SMTP/Sieve) plus mailbox password for local Postfix/Dovecot provisioning.
 - Migration `0006_mail_onboarding_ssl_defaults` persists Let's Encrypt as the default SSL provider for new sites (after WordPress `0004` and site-messages `0005`).
+- Dedicated `/phpmyadmin` and `/phpmyadmin/{path}` panel routes so the mount cannot fall through to the installer SPA (`503 The web interface is not embedded`).
+- phpMyAdmin configuration storage: create `phpmyadmin` DB, `pma__*` tables from `create_tables.sql`, and a local `cpn_pma` controluser. Control password is stored only under `/var/lib/cpn/phpmyadmin/control.secret` (mode 600) and wired into `/etc/phpMyAdmin/config.inc.php`.
+
+### Fixed
+
+- Proxy retries once after re-wiring the OLS `:8081` listener when the backend is briefly unreachable.
 
 ### Notes
 
 - Cloudflare IP allowlists remain add-only.
 - Coordinates with Email MTA-STS/BIMI plugins for additional DNS records.
 - Lab Let's Encrypt FAIL without public DNS is expected and does not block create/readiness.
+- Open auto-login and OLS listener setup both call the phpMyAdmin storage ensure path.
+- No CyberPanel branding; control credentials are never logged or shown in URLs.
+
 
 ## [0.2.6-alpha.37] - 13/09/2026
 

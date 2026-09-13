@@ -308,6 +308,12 @@ fn logout_clears_session_and_keeps_return_path() {
                     .any(|c| c.contains("cpn_panel_mfa_pending") && c.contains("Max-Age=0")),
                 "mfa pending cookie must be cleared: {cookies:?}"
             );
+            assert!(
+                cookies.iter().any(|c| c.contains("phpMyAdmin=")
+                    && c.contains("Max-Age=0")
+                    && c.contains("Path=/phpmyadmin")),
+                "phpMyAdmin cookies must be cleared on logout: {cookies:?}"
+            );
         });
         unsafe {
             std::env::remove_var("CPN_PANEL_SESSION_SECRET");

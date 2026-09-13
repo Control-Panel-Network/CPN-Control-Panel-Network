@@ -578,6 +578,20 @@ fn static_asset_for(requested: &str) -> HttpResponse {
     }
 }
 
+async fn phpmyadmin_mount_proxy(
+    req: HttpRequest,
+    payload: web::Payload,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if !cpn_installer::panel_phpmyadmin_proxy::allowed_proxy_method(req.method()) {
+        return HttpResponse::MethodNotAllowed().finish();
+    }
+    if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
+        return cpn_installer::panel_hub_http::login_redirect(&req);
+    }
+    cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await
+}
+
 async fn panel_catch_all(
     req: HttpRequest,
     payload: web::Payload,
@@ -590,13 +604,7 @@ async fn panel_catch_all(
         return cpn_installer::panel_webmail_proxy::webmail_panel_proxy(req, payload).await;
     }
     if cpn_installer::panel_phpmyadmin_proxy::path_should_proxy_phpmyadmin(req.path()) {
-        if !cpn_installer::panel_phpmyadmin_proxy::allowed_proxy_method(req.method()) {
-            return HttpResponse::MethodNotAllowed().finish();
-        }
-        if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
-            return cpn_installer::panel_hub_http::login_redirect(&req);
-        }
-        return cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await;
+        return phpmyadmin_mount_proxy(req, payload, state).await;
     }
     if matches!(*req.method(), Method::GET | Method::HEAD) {
         return static_asset_for(&path.into_inner());
@@ -1183,6 +1191,33 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .route("/api/events", web::get().to(websocket))
+            // Dedicated phpMyAdmin mount (must not fall through to installer SPA).
+            .route(
+                "/phpmyadmin",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(phpmyadmin_mount_proxy),
+            )
+            .route(
+                "/phpmyadmin/{path:.*}",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(phpmyadmin_mount_proxy),
+            )
             // Use Any/or for methods. Chained .method() guards are AND'd and never match.
             .route(
                 "/{path:.*}",

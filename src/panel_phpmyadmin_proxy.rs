@@ -38,6 +38,9 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
             .content_type("text/plain; charset=utf-8")
             .body("phpMyAdmin is not installed on this host.");
     }
+    // Always refresh TempDir/upload ownership so OLS/php-fpm (nobody) can write
+    // even when the :8081 listener was already up from a prior boot.
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
     if !port_open("127.0.0.1:8081", 200) {
         let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
     }
@@ -68,13 +71,19 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
     };
     match forward_http(method, &target, &req, &body_bytes) {
         Ok(resp) => resp,
-        Err(err) => HttpResponse::BadGateway()
-            .content_type("text/plain; charset=utf-8")
-            .body(format!(
-                "phpMyAdmin proxy could not reach {} ({err}). Health URL: {}.",
-                BACKEND,
-                phpmyadmin_health_url()
-            )),
+        Err(err) => {
+            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+            match forward_http(method, &target, &req, &body_bytes) {
+                Ok(resp) => resp,
+                Err(err2) => HttpResponse::BadGateway()
+                    .content_type("text/plain; charset=utf-8")
+                    .body(format!(
+                        "phpMyAdmin proxy could not reach {} ({err}; retry: {err2}). Health URL: {}.",
+                        BACKEND,
+                        phpmyadmin_health_url()
+                    )),
+            }
+        }
     }
 }
 
@@ -170,10 +179,12 @@ fn forward_http(
 }
 
 fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
-    let text = String::from_utf8_lossy(raw);
-    let (header_block, body) = split_headers_body(&text)
+    // Keep the body as raw bytes. UTF-8 decoding corrupts PNG/GIF/JS themes
+    // (0x89 PNG signature becomes U+FFFD) and breaks the phpMyAdmin UI.
+    let (header_block, body) = split_headers_body_bytes(raw)
         .ok_or_else(|| "Malformed proxy response from phpMyAdmin backend".to_string())?;
-    let mut lines = header_block.lines();
+    let header_text = String::from_utf8_lossy(header_block);
+    let mut lines = header_text.lines();
     let status_line = lines
         .next()
         .ok_or_else(|| "Missing HTTP status from phpMyAdmin backend".to_string())?;
@@ -206,31 +217,28 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
             builder.insert_header((name, value));
         }
     }
-    Ok(builder.body(body.to_string()))
+    Ok(builder.body(body.to_vec()))
 }
 
-fn split_headers_body(text: &str) -> Option<(&str, &str)> {
-    let mut rest = text;
+fn find_header_body_sep(raw: &[u8]) -> Option<(usize, usize)> {
+    raw.windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|i| (i, 4))
+        .or_else(|| raw.windows(2).position(|w| w == b"\n\n").map(|i| (i, 2)))
+}
+
+fn split_headers_body_bytes(raw: &[u8]) -> Option<(&[u8], &[u8])> {
+    let mut rest = raw;
     loop {
-        if let Some(idx) = rest.find("\r\n\r\n") {
-            let headers = &rest[..idx];
-            let body = &rest[idx + 4..];
-            if headers.contains(" 100 ") || headers.starts_with("HTTP/1.1 100") {
-                rest = body;
-                continue;
-            }
-            return Some((headers, body));
+        let (sep_at, sep_len) = find_header_body_sep(rest)?;
+        let headers = &rest[..sep_at];
+        let body = &rest[sep_at + sep_len..];
+        let header_text = String::from_utf8_lossy(headers);
+        if header_text.contains(" 100 ") || header_text.starts_with("HTTP/1.1 100") {
+            rest = body;
+            continue;
         }
-        if let Some(idx) = rest.find("\n\n") {
-            let headers = &rest[..idx];
-            let body = &rest[idx + 2..];
-            if headers.contains(" 100 ") {
-                rest = body;
-                continue;
-            }
-            return Some((headers, body));
-        }
-        return None;
+        return Some((headers, body));
     }
 }
 
@@ -245,20 +253,62 @@ fn rewrite_location(value: &str) -> String {
 }
 
 fn rewrite_set_cookie(value: &str) -> String {
-    // Keep cookies scoped to the panel mount so they do not leak across panel routes.
-    if value.to_ascii_lowercase().contains("path=") {
-        let mut parts = Vec::new();
-        for part in value.split(';') {
-            let trimmed = part.trim();
-            if trimmed.to_ascii_lowercase().starts_with("path=") {
-                parts.push(format!("Path={PMA_MOUNT}"));
-            } else if !trimmed.is_empty() {
-                parts.push(trimmed.to_string());
-            }
+    // Scope cookies to the mount and match CPN panel session TTL (12h).
+    // Proxy access already requires a live cpn_panel_session; cookie Max-Age alone
+    // must not outlive the panel session.
+    let ttl = crate::panel_session::SESSION_TTL_SECONDS;
+    let mut parts = Vec::new();
+    let mut saw_path = false;
+    let mut saw_samesite = false;
+    for part in value.split(';') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
         }
-        return parts.join("; ");
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("path=") {
+            parts.push(format!("Path={PMA_MOUNT}"));
+            saw_path = true;
+        } else if lower.starts_with("max-age=") || lower.starts_with("expires=") {
+            // Drop backend expiry; apply panel-aligned Max-Age below.
+            continue;
+        } else if lower.starts_with("samesite=") {
+            parts.push("SameSite=Lax".into());
+            saw_samesite = true;
+        } else {
+            parts.push(trimmed.to_string());
+        }
     }
-    format!("{value}; Path={PMA_MOUNT}")
+    if !saw_path {
+        parts.push(format!("Path={PMA_MOUNT}"));
+    }
+    parts.push(format!("Max-Age={ttl}"));
+    if !saw_samesite {
+        parts.push("SameSite=Lax".into());
+    }
+    parts.join("; ")
+}
+
+/// Cookie names phpMyAdmin / CPN sign-on commonly set under `/phpmyadmin`.
+pub const PMA_SESSION_COOKIE_NAMES: &[&str] = &[
+    "phpMyAdmin",
+    "phpMyAdmin_https",
+    "pma_lang",
+    "pma_collation_connection",
+    "pmaUser-1",
+    "pmaPass-1",
+    "CPNPmaSignon",
+];
+
+/// Clear phpMyAdmin cookies on CPN logout so a prior PMA session cannot linger.
+pub fn clear_phpmyadmin_cookie_headers(secure: bool) -> Vec<String> {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    PMA_SESSION_COOKIE_NAMES
+        .iter()
+        .map(|name| {
+            format!("{name}=; Path={PMA_MOUNT}; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
+        })
+        .collect()
 }
 
 pub fn allowed_proxy_method(method: &Method) -> bool {
@@ -304,5 +354,30 @@ mod tests {
         assert!(
             rewrite_set_cookie("phpMyAdmin=abc; path=/; HttpOnly").contains("Path=/phpmyadmin")
         );
+        let aligned = rewrite_set_cookie("phpMyAdmin=abc; path=/; Max-Age=999999; HttpOnly");
+        assert!(aligned.contains(&format!(
+            "Max-Age={}",
+            crate::panel_session::SESSION_TTL_SECONDS
+        )));
+        assert!(!aligned.contains("999999"));
+        let cleared = clear_phpmyadmin_cookie_headers(false);
+        assert!(
+            cleared
+                .iter()
+                .any(|c| c.starts_with("phpMyAdmin=") && c.contains("Max-Age=0"))
+        );
+        assert!(cleared.iter().any(|c| c.starts_with("CPNPmaSignon=")));
+    }
+
+    #[test]
+    fn binary_body_survives_header_split() {
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
+        let mut raw = b"HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n\r\n".to_vec();
+        raw.extend_from_slice(png);
+        let (headers, body) = split_headers_body_bytes(&raw).expect("split");
+        assert!(String::from_utf8_lossy(headers).contains("200 OK"));
+        assert_eq!(&body[..8], b"\x89PNG\r\n\x1a\n");
+        let resp = parse_curl_include(&raw).expect("parse");
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 }

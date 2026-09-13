@@ -1,4 +1,4 @@
-//! Authenticated `/wordpress` panel routes.
+﻿//! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};

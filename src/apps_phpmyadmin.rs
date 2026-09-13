@@ -25,6 +25,104 @@ pub fn phpmyadmin_share_dir() -> Option<PathBuf> {
         .find(|path| path.is_dir())
 }
 
+const LIB_DIR: &str = "/var/lib/phpMyAdmin";
+const RUNTIME_SUBDIRS: &[&str] = &["temp", "upload", "save", "cache", "config"];
+
+/// Ensure `$cfg['TempDir']` and related dirs exist and are writable by php-fpm.
+///
+/// Distro packages often ship `apache:apache` mode `750`, while the CPN OLS pool
+/// runs as `nobody`. Without this, phpMyAdmin shows TempDir warnings and slows down.
+pub fn ensure_phpmyadmin_runtime_dirs() -> Result<String, String> {
+    let root = PathBuf::from(LIB_DIR);
+    fs::create_dir_all(&root).map_err(|e| format!("Could not create {LIB_DIR}: {e}"))?;
+    for name in RUNTIME_SUBDIRS {
+        let path = root.join(name);
+        fs::create_dir_all(&path)
+            .map_err(|e| format!("Could not create {}: {e}", path.display()))?;
+    }
+    let (user, group) = php_runtime_owner();
+    let _ = Command::new("chown")
+        .args(["-R", &format!("{user}:{group}"), LIB_DIR])
+        .status();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&root, fs::Permissions::from_mode(0o755));
+        for name in RUNTIME_SUBDIRS {
+            let path = root.join(name);
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o770));
+        }
+    }
+    ensure_tempdir_in_config();
+    Ok(format!(
+        "phpMyAdmin runtime dirs under {LIB_DIR} owned by {user}:{group} (mode 770)."
+    ))
+}
+
+fn php_runtime_owner() -> (String, String) {
+    if let Ok(raw) = fs::read_to_string(FPM_POOL) {
+        let mut user = None;
+        let mut group = None;
+        for line in raw.lines() {
+            let line = line.trim();
+            if let Some(v) = line.strip_prefix("user = ") {
+                user = Some(v.trim().to_string());
+            }
+            if let Some(v) = line.strip_prefix("group = ") {
+                group = Some(v.trim().to_string());
+            }
+        }
+        if let (Some(u), Some(g)) = (user, group) {
+            return (u, g);
+        }
+    }
+    if crate::litespeed_stack::openlitespeed_installed() && user_exists("nobody") {
+        return ("nobody".into(), "nobody".into());
+    }
+    if user_exists("apache") {
+        return ("apache".into(), "apache".into());
+    }
+    if user_exists("nginx") {
+        return ("nginx".into(), "nginx".into());
+    }
+    ("nobody".into(), "nobody".into())
+}
+
+fn ensure_tempdir_in_config() {
+    let candidates = [
+        PathBuf::from("/etc/phpMyAdmin/config.inc.php"),
+        PathBuf::from("/etc/phpmyadmin/config.inc.php"),
+    ];
+    let marker = "CPN-PMA-TEMPDIR";
+    let append = format!(
+        "\n// {marker}\n\
+         $cfg['TempDir'] = '{LIB_DIR}/temp';\n\
+         $cfg['UploadDir'] = '{LIB_DIR}/upload';\n\
+         $cfg['SaveDir'] = '{LIB_DIR}/save';\n\
+         $cfg['LoginCookieValidity'] = {ttl};\n\
+         $cfg['LoginCookieStore'] = {ttl};\n\
+         ini_set('session.gc_maxlifetime', '{ttl}');\n",
+        ttl = crate::panel_session::SESSION_TTL_SECONDS
+    );
+    for conf in candidates {
+        if !conf.is_file() {
+            continue;
+        }
+        let Ok(raw) = fs::read_to_string(&conf) else {
+            continue;
+        };
+        if raw.contains(marker) {
+            continue;
+        }
+        let _ = fs::write(&conf, format!("{raw}{append}"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&conf, fs::Permissions::from_mode(0o644));
+        }
+    }
+}
+
 /// Install packages (EPEL on dnf hosts) and wire a loopback listener when safe.
 pub fn install_and_expose() -> Result<String, String> {
     install_and_expose_for(None)
@@ -52,6 +150,7 @@ pub fn install_and_expose_for(web_server: Option<ServerEngine>) -> Result<String
         )
     })?;
     write_fpm_pool(&share)?;
+    let _ = ensure_phpmyadmin_runtime_dirs();
     ensure_selinux_http_port(8081);
     reload_or_enable_php_fpm();
 
