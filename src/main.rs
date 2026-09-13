@@ -1064,12 +1064,23 @@ async fn main() -> std::io::Result<()> {
             .service(server_php_extensions)
             .service(server_php_extensions_install)
             .service(server_php_extensions_uninstall)
-            .service(server_php_extensions_set_default)
-            .service(server_php_extensions_set_default_get)
-            .service(server_php_configs)
-            .service(server_php_configs_post)
-            .service(server_php_configs_set_default_get)
-            .service(server_php_configs_set_default)
+            // Actix: one Resource per path. Separate #[get]/#[post] .service() calls
+            // drop the second method (POST /configs 404'd while GET worked).
+            .service(
+                web::resource("/server/php/extensions/set-default")
+                    .route(web::get().to(server_php_extensions_set_default_get))
+                    .route(web::post().to(server_php_extensions_set_default)),
+            )
+            .service(
+                web::resource("/server/php/configs")
+                    .route(web::get().to(server_php_configs))
+                    .route(web::post().to(server_php_configs_post)),
+            )
+            .service(
+                web::resource("/server/php/configs/set-default")
+                    .route(web::get().to(server_php_configs_set_default_get))
+                    .route(web::post().to(server_php_configs_set_default)),
+            )
             .service(server_php_configs_save_basic)
             .service(server_php_configs_save_advanced)
             .service(server_php_configs_restart)

@@ -196,7 +196,7 @@ pub async fn server_php_extensions_uninstall(
     }
 }
 
-#[post("/server/php/extensions/set-default")]
+/// POST host-default from PHP Extensions (registered with GET sibling via web::resource).
 pub async fn server_php_extensions_set_default(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -243,7 +243,7 @@ pub async fn server_php_extensions_set_default(
     }
 }
 
-#[get("/server/php/extensions/set-default")]
+/// Accidental GET must 303 to extensions, never a blank 404.
 pub async fn server_php_extensions_set_default_get(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
@@ -257,7 +257,7 @@ pub async fn server_php_extensions_set_default_get(
     )
 }
 
-#[get("/server/php/configs")]
+/// GET PHP Configurations page (paired with POST via web::resource in main).
 pub async fn server_php_configs(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -284,7 +284,6 @@ pub async fn server_php_configs(
 }
 
 /// Accidental GET (refresh, bookmark, automation) must never white-page 404.
-#[get("/server/php/configs/set-default")]
 pub async fn server_php_configs_set_default_get(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
@@ -298,7 +297,7 @@ pub async fn server_php_configs_set_default_get(
     )
 }
 
-#[post("/server/php/configs")]
+/// POST `/server/php/configs` with `op=set-default` (and future ops).
 pub async fn server_php_configs_post(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -369,7 +368,7 @@ async fn apply_configs_set_default(
     }
 }
 
-#[post("/server/php/configs/set-default")]
+/// Legacy POST `/server/php/configs/set-default` (same apply as op=set-default).
 pub async fn server_php_configs_set_default(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
