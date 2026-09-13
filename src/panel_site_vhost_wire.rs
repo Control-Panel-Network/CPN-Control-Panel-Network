@@ -142,9 +142,22 @@ fn ensure_ols_site_vhost(site: &SiteRecord) -> Result<bool, String> {
     if changed {
         fs::write(HTTPD_CONF, conf)
             .map_err(|e| format!("Could not update httpd_config.conf: {e}"))?;
-        let _ = restart_litespeed();
+        // Never block the panel request on a full LiteSpeed restart.
+        reload_litespeed_async();
     }
     Ok(changed)
+}
+
+fn reload_litespeed_async() {
+    std::thread::spawn(|| {
+        if Path::new("/usr/local/lsws/bin/lswsctrl").is_file() {
+            let _ = Command::new("/usr/local/lsws/bin/lswsctrl")
+                .arg("restart")
+                .status();
+            return;
+        }
+        let _ = restart_litespeed();
+    });
 }
 
 fn ensure_nginx_site_logs(site: &SiteRecord) -> Result<bool, String> {
