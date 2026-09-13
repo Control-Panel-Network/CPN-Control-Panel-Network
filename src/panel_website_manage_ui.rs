@@ -165,11 +165,14 @@ pub fn manage_styles() -> &'static str {
 .site-manage .manage-tile span { display:block; color:var(--m-muted); font-size:12px; margin-top:2px; }
 .site-manage .manage-muted { color:var(--m-muted); font-size:13px; }
 .site-manage .manage-log-pre {
-  max-height:360px; overflow:auto; background:#0b0d12; border:1px solid var(--m-line);
+  max-height:min(60vh, 420px); overflow:auto; background:#0b0d12; border:1px solid var(--m-line);
   border-radius:12px; padding:12px; font-size:12px; line-height:1.45; white-space:pre-wrap;
+  word-break:break-word; overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;
 }
 .site-manage .manage-log-panel { margin-bottom:16px; }
 .site-manage .manage-log-panel h3 { margin:0 0 6px; font-size:16px; }
+.site-manage .manage-log-toolbar { margin:0 0 8px; }
+.site-manage .manage-log-toolbar .manage-btn { display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:999px; background:var(--m-card); border:1px solid var(--m-line); color:inherit; text-decoration:none; font-weight:700; font-size:13px; }
 .site-manage code { background:#0b0d12; padding:1px 6px; border-radius:6px; font-size:12px; }
 .site-manage .manage-actions-row { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
 .site-manage .btn-danger, .site-manage .btn-warn, .site-manage .btn-primary {

@@ -193,6 +193,7 @@ pub mod panel_site_git;
 pub mod panel_site_terminal;
 pub mod panel_site_tools_routes;
 pub mod panel_site_tools_security;
+pub mod panel_site_vhost_wire;
 pub mod panel_theme;
 pub mod panel_theme_chrome;
 pub mod panel_theme_routes;
