@@ -39,7 +39,9 @@ fn fmt_clock(ts: u64) -> String {
 fn fmt_clock_short(ts: u64) -> String {
     let full = fmt_clock(ts);
     // Axis ticks stay compact (HH:MM) when we have seconds.
-    if full.len() >= 8 && full.as_bytes().get(2) == Some(&b':') && full.as_bytes().get(5) == Some(&b':')
+    if full.len() >= 8
+        && full.as_bytes().get(2) == Some(&b':')
+        && full.as_bytes().get(5) == Some(&b':')
     {
         return full[..5].to_string();
     }
