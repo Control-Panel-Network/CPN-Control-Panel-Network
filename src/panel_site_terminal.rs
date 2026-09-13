@@ -5,8 +5,8 @@ use crate::installer::AppState;
 use crate::panel_site_tools_security::{
     check_terminal_rate_limit, terminal_csrf_token, verify_terminal_csrf,
 };
-use crate::sites::{SiteRecord, site_home_from_record};
 use crate::site_acl::{SitePerm, require_manage_site};
+use crate::sites::{SiteRecord, site_home_from_record};
 use actix_web::{HttpRequest, HttpResponse, web};
 use futures_util::StreamExt as _;
 use std::path::PathBuf;
@@ -146,9 +146,7 @@ pub async fn websites_terminal_ws(
         let mut child = match shell_command(&home).spawn() {
             Ok(c) => c,
             Err(e) => {
-                let _ = session
-                    .text(format!("Could not start shell: {e}\n"))
-                    .await;
+                let _ = session.text(format!("Could not start shell: {e}\n")).await;
                 let _ = session.close(None).await;
                 return;
             }

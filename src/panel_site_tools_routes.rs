@@ -13,7 +13,12 @@ use std::sync::Arc;
 
 pub use crate::panel_site_terminal::websites_terminal_ws;
 
-fn manage_redirect(domain: &str, tab: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
+fn manage_redirect(
+    domain: &str,
+    tab: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> HttpResponse {
     let base = format!(
         "/websites/manage?domain={}&tab={}",
         urlencoding_simple(domain),
@@ -109,7 +114,12 @@ pub async fn websites_clone_post(
         return crate::panel_hub_http::login_redirect(&http);
     };
     if !same_origin_ok(&http) {
-        return manage_redirect(&form.domain, "clone", None, Some("Same-origin check failed"));
+        return manage_redirect(
+            &form.domain,
+            "clone",
+            None,
+            Some("Same-origin check failed"),
+        );
     }
     if !verify_site_tools_csrf(&user, &form.domain, &form.csrf) {
         return manage_redirect(&form.domain, "clone", None, Some("Invalid CSRF token"));

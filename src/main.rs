@@ -102,14 +102,14 @@ use cpn_installer::panel_routes::{
     websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_reset_placeholder,
     websites_resume, websites_suspend, websites_suspend_message, websites_suspend_message_restore,
 };
+use cpn_installer::panel_site_tools_routes::{
+    websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
+};
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
     panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
-use cpn_installer::panel_site_tools_routes::{
-    websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
-};
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,

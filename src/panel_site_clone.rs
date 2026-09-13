@@ -94,8 +94,8 @@ pub fn suggest_staging_domain(source: &SiteRecord) -> Result<String, String> {
     match normalize_domain(&candidate) {
         Ok(d) => Ok(d),
         Err(_) => {
-            let parent = resolve_parent_domain(&source.domain)?
-                .unwrap_or_else(|| source.domain.clone());
+            let parent =
+                resolve_parent_domain(&source.domain)?.unwrap_or_else(|| source.domain.clone());
             let label = source
                 .domain
                 .split('.')
@@ -109,7 +109,11 @@ pub fn suggest_staging_domain(source: &SiteRecord) -> Result<String, String> {
     }
 }
 
-fn resolve_target_domain(source: &SiteRecord, target_raw: &str, use_staging: bool) -> Result<String, String> {
+fn resolve_target_domain(
+    source: &SiteRecord,
+    target_raw: &str,
+    use_staging: bool,
+) -> Result<String, String> {
     let trimmed = target_raw.trim();
     if use_staging && trimmed.is_empty() {
         return suggest_staging_domain(source);
@@ -120,16 +124,14 @@ fn resolve_target_domain(source: &SiteRecord, target_raw: &str, use_staging: boo
     // Short label: treat as subdomain of parent (or of source when source is primary).
     if !trimmed.contains('.') {
         let label = trimmed.to_ascii_lowercase();
-        if !label
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
             || label.starts_with('-')
             || label.ends_with('-')
         {
             return Err("Subdomain label must be alphanumeric with optional hyphens".into());
         }
-        let parent = resolve_parent_domain(&source.domain)?
-            .unwrap_or_else(|| source.domain.clone());
+        let parent =
+            resolve_parent_domain(&source.domain)?.unwrap_or_else(|| source.domain.clone());
         return normalize_domain(&format!("{label}.{parent}"));
     }
     normalize_domain(trimmed)
@@ -181,7 +183,12 @@ pub fn clone_site_files(
     // Best-effort: also copy common config sitting beside public_html (not nested sites).
     let src_home = site_home_from_record(source);
     let dst_home = site_home_from_record(&created);
-    for name in ["wp-config.php", ".htaccess", "composer.json", "package.json"] {
+    for name in [
+        "wp-config.php",
+        ".htaccess",
+        "composer.json",
+        "package.json",
+    ] {
         let from = src_home.join(name);
         if from.is_file() {
             let to = dst_home.join(name);
@@ -207,8 +214,11 @@ mod tests {
     #[test]
     fn staging_suggestion_and_clone() {
         with_test_data_dir(|| {
-            let home =
-                std::env::temp_dir().join(format!("cpn-clone-{}-{}", std::process::id(), now_unix()));
+            let home = std::env::temp_dir().join(format!(
+                "cpn-clone-{}-{}",
+                std::process::id(),
+                now_unix()
+            ));
             let _ = fs::remove_dir_all(&home);
             fs::create_dir_all(&home).unwrap();
             unsafe {

@@ -62,11 +62,7 @@ pub fn git_workdir(site: &SiteRecord) -> PathBuf {
     if home.join(".git").exists() {
         return home;
     }
-    if doc.is_dir() {
-        doc
-    } else {
-        home
-    }
+    if doc.is_dir() { doc } else { home }
 }
 
 fn sanitize_commit_message(raw: &str) -> Result<String, String> {
@@ -77,7 +73,10 @@ fn sanitize_commit_message(raw: &str) -> Result<String, String> {
     if msg.len() > MAX_COMMIT_MSG {
         return Err(format!("Commit message max {MAX_COMMIT_MSG} characters"));
     }
-    if msg.chars().any(|c| c == '\n' || c == '\r' || c.is_control()) {
+    if msg
+        .chars()
+        .any(|c| c == '\n' || c == '\r' || c.is_control())
+    {
         return Err("Commit message cannot include control characters".into());
     }
     Ok(msg.to_string())
@@ -99,9 +98,9 @@ pub fn validate_remote_url(raw: &str) -> Result<String, String> {
     if lower.starts_with("https://") {
         let rest = &url["https://".len()..];
         if rest.is_empty()
-            || !rest
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '/' | '-' | '_' | ':' | '@'))
+            || !rest.chars().all(|c| {
+                c.is_ascii_alphanumeric() || matches!(c, '.' | '/' | '-' | '_' | ':' | '@')
+            })
         {
             return Err("Remote URL contains unsupported characters".into());
         }
