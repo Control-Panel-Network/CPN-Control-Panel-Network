@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::os_support::GuestOs;
@@ -163,10 +163,69 @@ fn ensure_remi_repo(guest: &GuestOs) -> Result<(), String> {
     run_bash(&script).map_err(|e| format!("Could not install Remi release package: {e}"))
 }
 
-fn try_enable_stream(stream: &str) -> bool {
-    let script =
-        format!("dnf -y module reset php >/dev/null 2>&1 || true; dnf -y module enable '{stream}'");
-    run_bash(&script).is_ok()
+/// Switch the Remi/AppStream `php` module stream and sync installed packages.
+///
+/// `dnf module enable` alone leaves prior stream RPMs in place (e.g. host default
+/// JSON says 8.4 while `php-fpm` remains 8.5). Prefer `module switch-to`, which
+/// enables the stream and upgrades/downgrades modular packages. Fall back to
+/// reset+enable for first-boot hosts with no PHP packages yet.
+fn try_switch_stream(stream: &str) -> bool {
+    let switch = format!("dnf --setopt=lock_timeout=120 -y module switch-to '{stream}'");
+    if run_bash(&switch).is_ok() {
+        return true;
+    }
+    let enable = format!(
+        "dnf -y module reset php >/dev/null 2>&1 || true; dnf --setopt=lock_timeout=120 -y module enable '{stream}'"
+    );
+    run_bash(&enable).is_ok()
+}
+
+/// Major.minor reported by host `php` CLI (empty when php is missing).
+pub fn host_php_cli_branch() -> Option<String> {
+    let out = Command::new("php")
+        .args(["-r", "echo PHP_MAJOR_VERSION, '.', PHP_MINOR_VERSION;"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() || !s.contains('.') {
+        return None;
+    }
+    Some(s)
+}
+
+/// Major.minor reported by `/usr/sbin/php-fpm -v` (phpMyAdmin pool binary).
+pub fn host_php_fpm_branch() -> Option<String> {
+    let bin = if Path::new("/usr/sbin/php-fpm").is_file() {
+        "/usr/sbin/php-fpm"
+    } else {
+        "php-fpm"
+    };
+    let out = Command::new(bin).arg("-v").output().ok()?;
+    if !out.status.success() && out.stdout.is_empty() {
+        return None;
+    }
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // "PHP 8.5.10 (fpm-fcgi) ..."
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("PHP ") {
+            let ver = rest.split_whitespace().next().unwrap_or("");
+            let mut parts = ver.split('.');
+            let maj = parts.next()?.to_string();
+            let min = parts.next()?.to_string();
+            if !maj.is_empty() && !min.is_empty() {
+                return Some(format!("{maj}.{min}"));
+            }
+        }
+    }
+    None
 }
 
 /// Enable the best available PHP module stream for this guest and persist the choice.
@@ -227,14 +286,14 @@ pub fn prepare_and_persist_php(
             streams.push(s);
         }
         for stream in streams {
-            if try_enable_stream(&stream) {
+            if try_switch_stream(&stream) {
                 let fallback = *branch != requested_norm.as_str();
                 let message = if fallback {
                     format!(
-                        "PHP {requested_norm} packages were not available; enabled {stream} (PHP {branch}) instead."
+                        "PHP {requested_norm} packages were not available; switched to {stream} (PHP {branch}) instead."
                     )
                 } else {
-                    format!("Enabled {stream} (PHP {branch}) as the CPN install default.")
+                    format!("Switched host PHP to {stream} (PHP {branch}).")
                 };
                 let record = PhpDefaultRecord {
                     branch: (*branch).to_string(),
@@ -250,7 +309,7 @@ pub fn prepare_and_persist_php(
     }
 
     Err(format!(
-        "Could not enable PHP {}. Tried streams: {}. Install Remi PHP packages or choose another version.",
+        "Could not switch host PHP to {}. Tried streams: {}. Install Remi PHP packages or choose another version.",
         requested_norm,
         attempts.join(", ")
     ))
@@ -373,6 +432,23 @@ mod tests {
     fn candidates_prefer_requested_then_fallback() {
         assert_eq!(candidate_branches("8.5"), vec!["8.5", "8.4", "8.3", "8.2"]);
         assert_eq!(candidate_branches("8.3"), vec!["8.3", "8.5", "8.4", "8.2"]);
+    }
+
+    #[test]
+    fn parses_fpm_version_line() {
+        let sample = "PHP 8.4.25 (fpm-fcgi) (built: Aug 25 2026)\nCopyright";
+        let mut found = None;
+        for line in sample.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("PHP ") {
+                let ver = rest.split_whitespace().next().unwrap_or("");
+                let mut parts = ver.split('.');
+                if let (Some(maj), Some(min)) = (parts.next(), parts.next()) {
+                    found = Some(format!("{maj}.{min}"));
+                }
+            }
+        }
+        assert_eq!(found.as_deref(), Some("8.4"));
     }
 
     #[test]

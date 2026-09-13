@@ -65,13 +65,14 @@ use cpn_installer::panel_hub_routes::{
     server_litespeed_tier, server_litespeed_upgrade, server_litespeed_webadmin_url,
     server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
     server_openlitespeed_password, server_openlitespeed_reset_cpn, server_packages_page,
-    server_page, server_php_configs, server_php_configs_restart, server_php_configs_save_advanced,
-    server_php_configs_save_basic, server_php_configs_set_default, server_php_extensions,
+    server_page, server_php_configs, server_php_configs_post, server_php_configs_restart,
+    server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
     server_php_extensions_install, server_php_extensions_set_default,
-    server_php_extensions_uninstall, server_php_tuning, server_processes_page,
-    server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_page, settings_port_page, settings_setup_page, settings_setup_save,
-    settings_site_messages_page, settings_site_messages_reset,
+    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    settings_design_page, settings_page, settings_port_page, settings_setup_page,
+    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
     settings_site_messages_save, settings_version_page, site_filemanager_alias, site_files_op,
     site_files_page_route, site_files_upload, users_create_get, users_create_post,
@@ -1071,9 +1072,23 @@ async fn main() -> std::io::Result<()> {
             .service(server_php_extensions)
             .service(server_php_extensions_install)
             .service(server_php_extensions_uninstall)
-            .service(server_php_extensions_set_default)
-            .service(server_php_configs)
-            .service(server_php_configs_set_default)
+            // Actix: one Resource per path. Separate #[get]/#[post] .service() calls
+            // drop the second method (POST /configs 404'd while GET worked).
+            .service(
+                web::resource("/server/php/extensions/set-default")
+                    .route(web::get().to(server_php_extensions_set_default_get))
+                    .route(web::post().to(server_php_extensions_set_default)),
+            )
+            .service(
+                web::resource("/server/php/configs")
+                    .route(web::get().to(server_php_configs))
+                    .route(web::post().to(server_php_configs_post)),
+            )
+            .service(
+                web::resource("/server/php/configs/set-default")
+                    .route(web::get().to(server_php_configs_set_default_get))
+                    .route(web::post().to(server_php_configs_set_default)),
+            )
             .service(server_php_configs_save_basic)
             .service(server_php_configs_save_advanced)
             .service(server_php_configs_restart)

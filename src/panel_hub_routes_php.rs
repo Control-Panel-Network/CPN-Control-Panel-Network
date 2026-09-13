@@ -196,7 +196,7 @@ pub async fn server_php_extensions_uninstall(
     }
 }
 
-#[post("/server/php/extensions/set-default")]
+/// POST host-default from PHP Extensions (registered with GET sibling via web::resource).
 pub async fn server_php_extensions_set_default(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -243,7 +243,21 @@ pub async fn server_php_extensions_set_default(
     }
 }
 
-#[get("/server/php/configs")]
+/// Accidental GET must 303 to extensions, never a blank 404.
+pub async fn server_php_extensions_set_default_get(
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let php = query.get("php").map(String::as_str).unwrap_or("");
+    let q = query.get("q").map(String::as_str).unwrap_or("");
+    redirect_ext(
+        php,
+        q,
+        Some("Use Set as host default from the PHP Extensions form (POST)."),
+        None,
+    )
+}
+
+/// GET PHP Configurations page (paired with POST via web::resource in main).
 pub async fn server_php_configs(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -269,8 +283,48 @@ pub async fn server_php_configs(
     ))
 }
 
-#[post("/server/php/configs/set-default")]
-pub async fn server_php_configs_set_default(
+/// Accidental GET (refresh, bookmark, automation) must never white-page 404.
+pub async fn server_php_configs_set_default_get(
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let php = query.get("php").map(String::as_str).unwrap_or("");
+    let tab = query.get("tab").map(String::as_str).unwrap_or("basic");
+    redirect_cfg(
+        php,
+        tab,
+        Some("Use Set as host default from the PHP Configurations form (POST)."),
+        None,
+    )
+}
+
+/// POST `/server/php/configs` with `op=set-default` (and future ops).
+pub async fn server_php_configs_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<HashMap<String, String>>,
+) -> HttpResponse {
+    let op = form
+        .get("op")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match op.as_str() {
+        "set-default" | "set_default" => apply_configs_set_default(http, state, form).await,
+        _ => {
+            let php = form.get("php").map(String::as_str).unwrap_or("");
+            let tab = form.get("tab").map(String::as_str).unwrap_or("basic");
+            redirect_cfg(
+                php,
+                tab,
+                None,
+                Some("Unknown PHP Configurations action. Use the page forms."),
+            )
+        }
+    }
+}
+
+async fn apply_configs_set_default(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     form: web::Form<HashMap<String, String>>,
@@ -312,6 +366,15 @@ pub async fn server_php_configs_set_default(
             Some(&format!("Set-default task failed: {err}")),
         ),
     }
+}
+
+/// Legacy POST `/server/php/configs/set-default` (same apply as op=set-default).
+pub async fn server_php_configs_set_default(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<HashMap<String, String>>,
+) -> HttpResponse {
+    apply_configs_set_default(http, state, form).await
 }
 
 #[post("/server/php/configs/save-basic")]
