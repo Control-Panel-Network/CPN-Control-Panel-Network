@@ -101,6 +101,15 @@ pub struct EnvironmentInfo {
     pub firewall: Option<String>,
     pub port: u16,
     pub addresses: Vec<String>,
+    /// Guest OS pretty name (e.g. AlmaLinux 9.6). Safe for support reports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub os_pretty_name: Option<String>,
+    /// CPU architecture (e.g. x86_64).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
+    /// Kernel release when available (`uname -r`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kernel: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

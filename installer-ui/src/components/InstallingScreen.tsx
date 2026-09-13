@@ -1,4 +1,5 @@
 import { CheckCircle2, Circle, LoaderCircle, XCircle } from "lucide-react";
+import { buildGitHubIssueUrl } from "../githubIssue";
 import type { InstallerStatus } from "../types";
 import { useI18n } from "../i18n";
 
@@ -159,7 +160,7 @@ export function InstallingScreen({ status }: { status: InstallerStatus }) {
             </p>
             <a
               className="issue-link"
-              href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/issues"
+              href={buildGitHubIssueUrl(status)}
               target="_blank"
               rel="noreferrer"
             >

@@ -84,6 +84,9 @@ jobs:
       - name: Comprobar TypeScript
         run: npm run lint
 
+      - name: Smoke GitHub issue URL builder
+        run: npm run smoke:github-issue
+
       - name: Auditoría npm (instalador UI)
         # Registry audit API can return transient 400s; do not block OS/docs merges on that.
         continue-on-error: true
