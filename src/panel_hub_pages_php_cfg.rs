@@ -80,8 +80,9 @@ pub fn php_configurations_page(
 
     let set_default = if is_admin {
         format!(
-            r#"<form method="post" action="/server/php/configs/set-default" class="php-cfg-actions" onsubmit="return confirm('Apply PHP {php} as the host default used by system tools (php-fpm / phpMyAdmin) and new sites?');">
+            r#"<form method="post" action="/server/php/configs" class="php-cfg-actions" onsubmit="return confirm('Apply PHP {php} as the host default used by system tools (php-fpm / phpMyAdmin) and new sites?');">
       <input type="hidden" name="csrf" value="{csrf}">
+      <input type="hidden" name="op" value="set-default">
       <input type="hidden" name="php" value="{php}">
       <input type="hidden" name="tab" value="{tab}">
       <button type="submit" class="btn-secondary">Set PHP {php} as host default</button>

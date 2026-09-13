@@ -243,6 +243,20 @@ pub async fn server_php_extensions_set_default(
     }
 }
 
+#[get("/server/php/extensions/set-default")]
+pub async fn server_php_extensions_set_default_get(
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let php = query.get("php").map(String::as_str).unwrap_or("");
+    let q = query.get("q").map(String::as_str).unwrap_or("");
+    redirect_ext(
+        php,
+        q,
+        Some("Use Set as host default from the PHP Extensions form (POST)."),
+        None,
+    )
+}
+
 #[get("/server/php/configs")]
 pub async fn server_php_configs(
     http: HttpRequest,
@@ -267,6 +281,50 @@ pub async fn server_php_configs(
             is_panel_admin(&user),
         ),
     ))
+}
+
+/// Accidental GET (refresh, bookmark, automation) must never white-page 404.
+#[get("/server/php/configs/set-default")]
+pub async fn server_php_configs_set_default_get(
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let php = query.get("php").map(String::as_str).unwrap_or("");
+    let tab = query.get("tab").map(String::as_str).unwrap_or("basic");
+    redirect_cfg(
+        php,
+        tab,
+        Some("Use Set as host default from the PHP Configurations form (POST)."),
+        None,
+    )
+}
+
+#[post("/server/php/configs")]
+pub async fn server_php_configs_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<HashMap<String, String>>,
+) -> HttpResponse {
+    let op = form
+        .get("op")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match op.as_str() {
+        "set-default" | "set_default" => {
+            server_php_configs_set_default(http, state, form).await
+        }
+        "save-basic" | "save_basic" => server_php_configs_save_basic(http, state, form).await,
+        "save-advanced" | "save_advanced" => {
+            server_php_configs_save_advanced(http, state, form).await
+        }
+        "restart" => server_php_configs_restart(http, state, form).await,
+        _ => {
+            let php = form.get("php").map(String::as_str).unwrap_or("");
+            let tab = form.get("tab").map(String::as_str).unwrap_or("basic");
+            redirect_cfg(php, tab, None, Some("Unknown PHP Configurations action"))
+        }
+    }
 }
 
 #[post("/server/php/configs/set-default")]
