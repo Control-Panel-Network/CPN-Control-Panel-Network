@@ -374,12 +374,21 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
 
 /// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
-    let _ = refresh_phpmyadmin_signon();
-    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
-    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
+    // Refresh sign-on bridge / SignonURL only. Do not force OLS listener
+    // rewrite on every Open (that used to restart php-fpm and hit start-limit).
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
+    write_signon_bridge(&share)?;
+    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    if openlitespeed_installed() {
+        // Heal missing sock / failed unit without rewriting vhconf every time.
+        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+        if !port_open("127.0.0.1:8081", 200) {
+            let _ = ensure_ols_phpmyadmin_listener();
+        }
+    }
+    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     let (user, pass) = create_ephemeral_db_user()?;
     let token = random_token();
     let dir = ensure_token_dir(&share)?;
