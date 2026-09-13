@@ -57,11 +57,11 @@ pub fn metrics_chart_svg(samples: &[MetricSample], kind: &str, stroke: &str) -> 
     for pct in [0.0f32, 25.0, 50.0, 75.0, 100.0] {
         let y = top + plot_h - (pct / 100.0) * plot_h;
         paths.push_str(&format!(
-            r#"<line x1="{left}" y1="{y:.1}" x2="{x2:.1}" y2="{y:.1}" stroke="#2a2f3a" stroke-width="1"/>"#,
+            r#"<line x1="{left}" y1="{y:.1}" x2="{x2:.1}" y2="{y:.1}" stroke="##2a2f3a" stroke-width="1"/>"#,
             x2 = left + plot_w,
         ));
         paths.push_str(&format!(
-            r#"<text x="2" y="{ty:.1}" fill="#98a2b3" font-size="9">{pct:.0}</text>"#,
+            r#"<text x="2" y="{ty:.1}" fill="##98a2b3" font-size="9">{pct:.0}</text>"#,
             ty = y + 3.0,
             pct = pct,
         ));
@@ -69,7 +69,7 @@ pub fn metrics_chart_svg(samples: &[MetricSample], kind: &str, stroke: &str) -> 
 
     if values.is_empty() {
         paths.push_str(&format!(
-            r#"<text x="{cx:.1}" y="{cy:.1}" fill="#98a2b3" font-size="11" text-anchor="middle">Collecting samples...</text>"#,
+            r#"<text x="{cx:.1}" y="{cy:.1}" fill="##98a2b3" font-size="11" text-anchor="middle">Collecting samples...</text>"#,
             cx = left + plot_w / 2.0,
             cy = top + plot_h / 2.0,
         ));
@@ -109,7 +109,7 @@ pub fn metrics_chart_svg(samples: &[MetricSample], kind: &str, stroke: &str) -> 
             };
             let label = html_escape(&fmt_clock(samples[idx].t));
             paths.push_str(&format!(
-                r#"<text x="{x:.1}" y="{y:.1}" fill="#98a2b3" font-size="9" text-anchor="middle">{label}</text>"#,
+                r#"<text x="{x:.1}" y="{y:.1}" fill="##98a2b3" font-size="9" text-anchor="middle">{label}</text>"#,
                 y = height - 6.0,
             ));
         }
