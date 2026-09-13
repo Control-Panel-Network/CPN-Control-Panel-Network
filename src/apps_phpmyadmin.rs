@@ -133,6 +133,10 @@ pub fn install_and_expose() -> Result<String, String> {
 /// When OpenLiteSpeed or Caddy owns HTTP, do **not** start/reload/enable nginx
 /// (default nginx.conf binds :80 and conflicts). Packages + php-fpm still install.
 pub fn install_and_expose_for(web_server: Option<ServerEngine>) -> Result<String, String> {
+    // Align Remi/php-fpm with persisted host default when present (phpMyAdmin uses php-fpm).
+    if crate::php_defaults::load_php_default().is_some() {
+        let _ = crate::panel_ops_php_host::ensure_host_php_default(None);
+    }
     ensure_epel()?;
     install_packages_dnf_or_apt(
         &[

@@ -8,6 +8,7 @@ use crate::panel_hubs::{
 use crate::panel_ops_docker::docker_status;
 use crate::panel_ops_path::{list_dir, resolve_under_allowlist};
 use crate::panel_ops_php::{detect_php, read_php_ini_preview};
+// PHP Extensions manager lives in `panel_hub_pages_php_ext`.
 use crate::panel_ops_pkgmgr::package_manager_status;
 use crate::panel_ops_process::snapshot_top_processes;
 use crate::panel_ops_services::{control_service, list_known_services};
@@ -126,39 +127,6 @@ pub fn processes_page() -> String {
         "Top Processes",
         "Snapshot from ps (CPU sorted).",
         &body,
-        None,
-        None,
-    )
-}
-
-pub fn php_extensions_page() -> String {
-    let info = detect_php();
-    let mods = if info.modules.is_empty() {
-        "<p class=\"empty-state\">No modules listed.</p>".into()
-    } else {
-        let mut ul = String::from("<ul>");
-        for m in &info.modules {
-            ul.push_str(&format!("<li><code>{}</code></li>", html_escape(m)));
-        }
-        ul.push_str("</ul>");
-        ul
-    };
-    let kv = status_kv(&[
-        ("Binary", info.binary.as_deref().unwrap_or("Not found")),
-        ("Version", info.version.as_deref().unwrap_or("-")),
-    ]);
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            ("PHP Extensions", None),
-        ],
-        "PHP Extensions",
-        "Modules reported by the PHP CLI.",
-        &format!(
-            "{kv}<p class=\"muted\">{}</p>{mods}",
-            html_escape(&info.detail)
-        ),
         None,
         None,
     )

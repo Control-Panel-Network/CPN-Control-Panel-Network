@@ -205,7 +205,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
             vec![
                 HubTile {
                     title: "PHP Extensions",
-                    subtitle: "Installed PHP modules",
+                    subtitle: "Install and manage PHP packages",
                     href: "/server/php/extensions",
                     live: true,
                 },
