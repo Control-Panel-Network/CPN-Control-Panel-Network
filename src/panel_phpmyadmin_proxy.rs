@@ -68,13 +68,19 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
     };
     match forward_http(method, &target, &req, &body_bytes) {
         Ok(resp) => resp,
-        Err(err) => HttpResponse::BadGateway()
-            .content_type("text/plain; charset=utf-8")
-            .body(format!(
-                "phpMyAdmin proxy could not reach {} ({err}). Health URL: {}.",
-                BACKEND,
-                phpmyadmin_health_url()
-            )),
+        Err(err) => {
+            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+            match forward_http(method, &target, &req, &body_bytes) {
+                Ok(resp) => resp,
+                Err(err2) => HttpResponse::BadGateway()
+                    .content_type("text/plain; charset=utf-8")
+                    .body(format!(
+                        "phpMyAdmin proxy could not reach {} ({err}; retry: {err2}). Health URL: {}.",
+                        BACKEND,
+                        phpmyadmin_health_url()
+                    )),
+            }
+        }
     }
 }
 

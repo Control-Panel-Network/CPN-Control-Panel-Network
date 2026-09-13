@@ -34,12 +34,21 @@ Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail clien
 - Setup Wizard onboarding: hostname/rDNS notes, local vs external mail, skip rDNS checkbox (CPN branding only).
 - Email Accounts: default Mail Client Configuration (POP3/IMAP/SMTP/Sieve) plus mailbox password for local Postfix/Dovecot provisioning.
 - Migration `0006_mail_onboarding_ssl_defaults` persists Let's Encrypt as the default SSL provider for new sites (after WordPress `0004` and site-messages `0005`).
+- Dedicated `/phpmyadmin` and `/phpmyadmin/{path}` panel routes so the mount cannot fall through to the installer SPA (`503 The web interface is not embedded`).
+- phpMyAdmin configuration storage: create `phpmyadmin` DB, `pma__*` tables from `create_tables.sql`, and a local `cpn_pma` controluser. Control password is stored only under `/var/lib/cpn/phpmyadmin/control.secret` (mode 600) and wired into `/etc/phpMyAdmin/config.inc.php`.
+
+### Fixed
+
+- Proxy retries once after re-wiring the OLS `:8081` listener when the backend is briefly unreachable.
 
 ### Notes
 
 - Cloudflare IP allowlists remain add-only.
 - Coordinates with Email MTA-STS/BIMI plugins for additional DNS records.
 - Lab Let's Encrypt FAIL without public DNS is expected and does not block create/readiness.
+- Open auto-login and OLS listener setup both call the phpMyAdmin storage ensure path.
+- No CyberPanel branding; control credentials are never logged or shown in URLs.
+
 
 ## [0.2.6-alpha.37] - 13/09/2026
 

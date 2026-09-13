@@ -132,6 +132,7 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
         let _ = restart_litespeed();
     }
     write_signon_bridge(&share)?;
+    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     if !systemd_unit_active("php-fpm") {
         let _ = Command::new("systemctl")
             .args(["start", "php-fpm"])
@@ -330,6 +331,7 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
 /// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
     let _ = ensure_ols_phpmyadmin_listener();
+    let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
