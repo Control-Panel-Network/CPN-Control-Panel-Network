@@ -107,6 +107,9 @@ use cpn_installer::panel_theme_routes::{
     panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
 };
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
+use cpn_installer::panel_site_tools_routes::{
+    websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
+};
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,
@@ -982,6 +985,13 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
             .service(websites_manage_metrics)
+            .service(websites_git_post)
+            .service(websites_clone_post)
+            .service(websites_tools_csrf_get)
+            .route(
+                "/api/websites/terminal/ws",
+                web::get().to(websites_terminal_ws),
+            )
             .service(panel_design_get)
             .service(panel_design_save)
             .service(panel_design_preset)
