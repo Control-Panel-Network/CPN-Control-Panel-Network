@@ -113,10 +113,7 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
                     notice_block("ok", opts.notice),
                     notice_block("error", opts.error)
                 );
-                let risk = format!(
-                    r#"<p class="muted">{}</p>"#,
-                    html_escape(opts.risk_note)
-                );
+                let risk = format!(r#"<p class="muted">{}</p>"#, html_escape(opts.risk_note));
                 format!(
                     r#"{styles}
 {risk}
