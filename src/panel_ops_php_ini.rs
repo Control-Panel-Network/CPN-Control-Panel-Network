@@ -80,8 +80,7 @@ pub fn resolve_php_ini_target(branch: &str) -> Result<PhpIniTarget, String> {
         let bin = format!("/usr/local/lsws/{prefix}/bin/lsphp");
         if Path::new(&bin).is_file() {
             let ini = php_ini_from_binary(&bin).or_else(|| {
-                let candidate =
-                    PathBuf::from(format!("/usr/local/lsws/{prefix}/etc/php.ini"));
+                let candidate = PathBuf::from(format!("/usr/local/lsws/{prefix}/etc/php.ini"));
                 candidate.is_file().then_some(candidate)
             });
             if let Some(ini_path) = ini {
@@ -98,14 +97,10 @@ pub fn resolve_php_ini_target(branch: &str) -> Result<PhpIniTarget, String> {
     let bin = "php".to_string();
     let ini_path = php_ini_from_binary(&bin)
         .or_else(|| {
-            [
-                "/etc/php.ini",
-                "/etc/php/php.ini",
-                "/etc/php8/php.ini",
-            ]
-            .iter()
-            .map(PathBuf::from)
-            .find(|p| p.is_file())
+            ["/etc/php.ini", "/etc/php/php.ini", "/etc/php8/php.ini"]
+                .iter()
+                .map(PathBuf::from)
+                .find(|p| p.is_file())
         })
         .ok_or_else(|| {
             format!("Could not locate php.ini for PHP {branch}. Install php-cli first.")
@@ -176,7 +171,9 @@ fn set_ini_directive(raw: &str, key: &str, value: &str) -> String {
         }
     }
     if !replaced {
-        out.push_str(&format!("\n; Added by CPN PHP Configurations\n{key} = {value}\n"));
+        out.push_str(&format!(
+            "\n; Added by CPN PHP Configurations\n{key} = {value}\n"
+        ));
     }
     out
 }
@@ -241,9 +238,10 @@ pub fn apply_basic_settings(
         if cleaned.is_empty() || cleaned.len() > 32 {
             return Err(format!("Invalid value for {key}"));
         }
-        if cleaned.chars().any(|c| {
-            !(c.is_ascii_alphanumeric() || c == 'M' || c == 'G' || c == 'K' || c == '.')
-        }) {
+        if cleaned
+            .chars()
+            .any(|c| !(c.is_ascii_alphanumeric() || c == 'M' || c == 'G' || c == 'K' || c == '.'))
+        {
             return Err(format!("Invalid characters in {key}"));
         }
         raw = set_ini_directive(&raw, key, cleaned);
@@ -254,7 +252,8 @@ pub fn apply_basic_settings(
 /// Restart host PHP (php-fpm and/or LiteSpeed) so php.ini changes apply.
 pub fn restart_php_services(family: PhpPackageFamily) -> Result<String, String> {
     let mut notes = Vec::new();
-    if family == PhpPackageFamily::Modular || Path::new("/usr/lib/systemd/system/php-fpm.service").exists()
+    if family == PhpPackageFamily::Modular
+        || Path::new("/usr/lib/systemd/system/php-fpm.service").exists()
     {
         let status = Command::new("systemctl")
             .args(["restart", "php-fpm"])

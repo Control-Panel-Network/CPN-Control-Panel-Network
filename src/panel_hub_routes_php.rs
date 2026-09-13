@@ -8,8 +8,8 @@ use crate::panel_hub_pages_php_ext::php_extensions_page;
 use crate::panel_ops_php_ext::{install_extension, uninstall_extension, verify_php_ext_csrf};
 use crate::panel_ops_php_host::ensure_host_php_default;
 use crate::panel_ops_php_ini::{
-    BASIC_BOOL_KEYS, BASIC_VALUE_KEYS, apply_basic_settings, restart_php_services,
-    resolve_php_ini_target, write_php_ini_with_backup,
+    BASIC_BOOL_KEYS, BASIC_VALUE_KEYS, apply_basic_settings, resolve_php_ini_target,
+    restart_php_services, write_php_ini_with_backup,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -342,7 +342,9 @@ pub async fn server_php_configs_save_basic(
         .map(|k| {
             (
                 (*k).to_string(),
-                form.get(*k).map(|v| v == "1" || v.eq_ignore_ascii_case("on")).unwrap_or(false),
+                form.get(*k)
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("on"))
+                    .unwrap_or(false),
             )
         })
         .collect();
@@ -439,12 +441,9 @@ pub async fn server_php_configs_restart(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Err(resp) = require_admin_csrf(
-        &http,
-        &user,
-        &form,
-        "Only the panel admin can restart PHP",
-    ) {
+    if let Err(resp) =
+        require_admin_csrf(&http, &user, &form, "Only the panel admin can restart PHP")
+    {
         return resp;
     }
     let php = form

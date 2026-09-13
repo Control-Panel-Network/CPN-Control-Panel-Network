@@ -57,7 +57,9 @@ fn persist_operator_choice(branch: &str, stream: &str, message: &str) -> Result<
     if load_php_default().is_none() {
         return Err(format!(
             "Wrote php-default.json for PHP {branch} but could not re-read it from {}",
-            crate::paths::default_data_dir().join("php-default.json").display()
+            crate::paths::default_data_dir()
+                .join("php-default.json")
+                .display()
         ));
     }
     Ok(())
@@ -81,8 +83,8 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
     // Persist the operator choice first so the UI never claims "not persisted yet"
     // after a successful Set host default click, even if module enable is slow/noisy.
     if let Some(branch) = req.as_deref() {
-        let stream = stream_for_branch(&guest, branch)
-            .unwrap_or_else(|| format!("php:remi-{branch}"));
+        let stream =
+            stream_for_branch(&guest, branch).unwrap_or_else(|| format!("php:remi-{branch}"));
         persist_operator_choice(
             branch,
             &stream,

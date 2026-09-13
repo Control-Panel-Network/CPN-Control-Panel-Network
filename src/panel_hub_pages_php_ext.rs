@@ -152,7 +152,8 @@ pub fn php_extensions_page(
                     <th>ID</th><th>PHP version</th><th>Extension</th><th>Description</th><th>Status</th><th>Actions</th>
                     </tr></thead><tbody>"#,
                 );
-                let mut cards = String::from(r#"<div class="php-ext-list" aria-label="Extensions">"#);
+                let mut cards =
+                    String::from(r#"<div class="php-ext-list" aria-label="Extensions">"#);
                 for row in rows {
                     let status_html = if row.installed {
                         r#"<span class="badge ok">Installed</span>"#
@@ -277,9 +278,7 @@ pub fn php_extensions_page(
         ],
         "PHP Extensions",
         "Install or uninstall PHP extensions for each available PHP version.",
-        &format!(
-            "{styles}{kv}{select_form}{set_default}{search_form}{table}{cards}{note}{cross}"
-        ),
+        &format!("{styles}{kv}{select_form}{set_default}{search_form}{table}{cards}{note}{cross}"),
         notice,
         error,
     )

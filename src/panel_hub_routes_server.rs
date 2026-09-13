@@ -8,8 +8,8 @@ use crate::panel_hub_pages_litespeed::{
     run_set_tier, run_set_webadmin_url, run_upgrade,
 };
 use crate::panel_hub_pages_server::{
-    docker_page, files_page, package_manager_page, php_tuning_page,
-    processes_page, run_service_control, server_hub_main, services_page,
+    docker_page, files_page, package_manager_page, php_tuning_page, processes_page,
+    run_service_control, server_hub_main, services_page,
 };
 use crate::panel_hub_pages_server_net::{
     change_port_page, dns_zones_page, nameservers_page, remove_dns_zone, save_dns_zone,

@@ -100,18 +100,20 @@ pub fn php_configurations_page(
     </div>"#,
         php = html_escape(&selected),
         basic = if tab == "basic" { " is-active" } else { "" },
-        adv = if tab == "advanced" {
-            " is-active"
-        } else {
-            ""
-        },
+        adv = if tab == "advanced" { " is-active" } else { "" },
     );
 
     let editor = match resolve_php_ini_target(&selected) {
         Ok(target) => match read_php_ini_text(&target.ini_path) {
             Ok(raw) => {
                 if tab == "advanced" {
-                    advanced_editor(&target.ini_path.display().to_string(), &raw, &selected, &csrf, is_admin)
+                    advanced_editor(
+                        &target.ini_path.display().to_string(),
+                        &raw,
+                        &selected,
+                        &csrf,
+                        is_admin,
+                    )
                 } else {
                     basic_settings(&raw, &selected, &csrf, is_admin)
                 }
@@ -185,9 +187,7 @@ pub fn php_configurations_page(
         ],
         "PHP Configurations",
         "Configure PHP settings and choose the host default used by system tools like phpMyAdmin.",
-        &format!(
-            "{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}"
-        ),
+        &format!("{styles}{kv}{version_form}{set_default}{tabs}{editor}{note}{cross}"),
         notice,
         error,
     )
