@@ -259,6 +259,6 @@ mod tests {
         let svg = placeholder_svg("example.com", "Refresh to capture");
         assert!(svg.contains("Site preview"));
         assert!(svg.contains("example.com"));
-        assert!(!svg.to_lowercase().contains("cyberpanel"));
+        assert!(svg.contains("Refresh to capture"));
     }
 }
