@@ -71,8 +71,9 @@ use cpn_installer::panel_hub_routes::{
     server_php_extensions_install, server_php_extensions_set_default,
     server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
     server_processes_page, server_services_control, server_services_page, settings_connect_page,
-    settings_design_page, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
+    settings_design_page, settings_logs_page, settings_logs_save, settings_page,
+    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
     settings_site_messages_save, settings_version_page, site_filemanager_alias, site_files_op,
     site_files_page_route, site_files_upload, users_create_get, users_create_post,
@@ -117,6 +118,7 @@ use cpn_installer::panel_website_alias_cron_routes::{
     websites_alias_add, websites_alias_remove, websites_cron_add, websites_cron_delete,
     websites_cron_update,
 };
+use cpn_installer::panel_website_logs_routes::websites_manage_logs;
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
@@ -1007,6 +1009,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
             .service(websites_manage_metrics)
+            .service(websites_manage_logs)
             .service(websites_git_post)
             .service(websites_clone_post)
             .service(websites_tools_csrf_get)
@@ -1133,6 +1136,8 @@ async fn main() -> std::io::Result<()> {
             .service(settings_site_messages_restore_suspend)
             .service(settings_site_messages_restore_site_ready)
             .service(settings_site_messages_reset)
+            .service(settings_logs_page)
+            .service(settings_logs_save)
             .service(settings_port_page)
             .service(security_page)
             .service(security_firewall)

@@ -109,8 +109,9 @@ pub fn website_manage_main(
     };
     let body = tab_body(site, tab, username);
     let styles = format!(
-        "{}{}",
+        "{}{}{}",
         manage_styles(),
+        crate::panel_website_logs_ui::logs_modal_styles(),
         crate::panel_icons::icon_tone_styles()
     );
     format!(
