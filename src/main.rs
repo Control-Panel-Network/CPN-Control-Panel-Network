@@ -587,7 +587,7 @@ async fn panel_catch_all(
             return HttpResponse::MethodNotAllowed().finish();
         }
         if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
-            return cpn_installer::panel_hub_http::login_redirect();
+            return cpn_installer::panel_hub_http::login_redirect(&req);
         }
         return cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await;
     }

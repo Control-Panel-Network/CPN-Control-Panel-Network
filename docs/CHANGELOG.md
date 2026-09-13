@@ -1,6 +1,11 @@
 ﻿## [0.2.6-alpha.37] - 13/09/2026
 
 CPN-native WordPress installer and manager under Hosting (WP-CLI install, plugin preinstall, manage tabs, MariaDB provisioning).
+
+### Fixed
+
+- WP-CLI phar runs via `php -d memory_limit=512M` (and `WP_CLI_PHP_ARGS` for system `wp`) so `wp core download` does not die on 128M PHP CLI defaults.
+
 # Changelog
 
 All notable changes to CPN Control Panel Network are documented in this file.
