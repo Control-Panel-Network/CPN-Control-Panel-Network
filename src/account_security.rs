@@ -1,8 +1,8 @@
 //! First-login security gates: forced password change and mandatory admin 2FA.
 
 use crate::account::{PanelBootstrap, load_bootstrap, write_account_file};
-use crate::account_mgmt::find_account;
 use crate::account_mfa::totp_enabled_for;
+use crate::account_mgmt::find_account;
 use crate::account_passkeys::has_passkeys;
 use std::fs;
 
