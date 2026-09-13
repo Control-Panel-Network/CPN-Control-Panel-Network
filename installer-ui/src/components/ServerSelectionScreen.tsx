@@ -408,8 +408,18 @@ export function ServerSelectionScreen({
               );
             })}
           </div>
-          <div className="phpmyadmin-option mx-auto mt-6" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px" }}>
-            <label htmlFor="cpn-php-version" className="text-[14px] font-medium text-[#1a1c1d]">
+          <div
+            className="phpmyadmin-option mx-auto mt-6"
+            style={{
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: "8px",
+            }}
+          >
+            <label
+              htmlFor="cpn-php-version"
+              className="text-[14px] font-medium text-[#1a1c1d]"
+            >
               {locale === "es"
                 ? "Versión de PHP (predeterminada 8.5)"
                 : locale === "nb"
@@ -421,7 +431,9 @@ export function ServerSelectionScreen({
               className="w-full rounded-md border border-[#e0e0e0] px-3 py-2 text-[14px] text-[#1a1c1d] bg-white"
               value={phpVersion}
               onChange={(event) =>
-                onPhpVersionChange(event.target.value as import("../types").PhpVersion)
+                onPhpVersionChange(
+                  event.target.value as import("../types").PhpVersion,
+                )
               }
             >
               <option value="8.5">PHP 8.5 (recommended)</option>
