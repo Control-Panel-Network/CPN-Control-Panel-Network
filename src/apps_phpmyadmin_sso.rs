@@ -138,10 +138,9 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     }
     write_signon_bridge(&share)?;
     let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
-    if !systemd_unit_active("php-fpm") {
-        let _ = Command::new("systemctl")
-            .args(["start", "php-fpm"])
-            .status();
+    // Heal start-limit-hit / missing sock before OpenLiteSpeed serves PHP.
+    if !systemd_unit_active("php-fpm") || !Path::new(&sock).exists() {
+        crate::apps_phpmyadmin::recover_php_fpm();
     }
     if port_open("127.0.0.1:8081", 500) {
         Ok(format!(

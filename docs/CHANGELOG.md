@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- phpMyAdmin Open auto-login **503** after host PHP default / php-fpm thrash: `ensure_fpm_socket_for_ols` no longer unconditionally restarts php-fpm (reload when healthy; `systemctl reset-failed` + start when in `start-limit-hit`). Panel `/phpmyadmin` proxy heals a missing `cpn-phpmyadmin.sock` and retries once on backend 503 so `cpn-signon.php` reaches the UI again.
 - PHP Configurations unsaved-changes modal: use panel card surface (`--canvas`) so dark mode title/body stay readable; Cancel (secondary) and Abandon (danger) match pill button styles instead of unstyled borders.
 - phpMyAdmin SSO after **Set as host default** (php-fpm restart): SignonURL now remints via `/databases/phpmyadmin/open` while the CPN panel session is valid; `cpn-signon.php` redirects there instead of plain-text "Sign-on token missing or expired." Proxy Location rewrite no longer prefixes panel routes with `/phpmyadmin`. Open clears stale PMA cookies; host-default apply refreshes the sign-on bridge, TempDir ownership, and OLS FPM socket.
 
