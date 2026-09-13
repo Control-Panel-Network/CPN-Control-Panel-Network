@@ -307,10 +307,10 @@ pub fn domain_covered(domain: &str, sans: &[String], subject: &str) -> bool {
         return false;
     }
     let mut names = sans.to_vec();
-    if let Some(cn) = cn_from_subject(subject) {
-        if !names.contains(&cn) {
-            names.push(cn);
-        }
+    if let Some(cn) = cn_from_subject(subject)
+        && !names.contains(&cn)
+    {
+        names.push(cn);
     }
     for name in names {
         if name == host {
@@ -338,10 +338,9 @@ fn shorten_dn(dn: &str) -> String {
         p.strip_prefix("O=")
             .or_else(|| p.strip_prefix("O ="))
             .map(str::trim)
-    }) {
-        if !o.is_empty() {
-            return o.to_string();
-        }
+    }) && !o.is_empty()
+    {
+        return o.to_string();
     }
     if let Some(cn) = cn_from_subject(dn) {
         return cn;

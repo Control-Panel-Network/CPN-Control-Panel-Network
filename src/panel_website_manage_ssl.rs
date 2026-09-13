@@ -15,7 +15,7 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
         let expires = insight
             .expires_display
             .as_deref()
-            .map(|d| html_escape(d))
+            .map(html_escape)
             .unwrap_or_else(|| "n/a".into());
         let issuer = if insight.issuer.is_empty() {
             "n/a".into()
