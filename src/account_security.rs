@@ -4,6 +4,7 @@ use crate::account::{PanelBootstrap, load_bootstrap, write_account_file};
 use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::has_passkeys;
+use crate::panel_webauthn::passkey_client_script;
 use std::fs;
 
 /// True when the account must change password before using the full panel.
@@ -119,6 +120,24 @@ pub fn change_password_gate_main(notice: Option<&str>, error: Option<&str>) -> S
     )
 }
 
+fn enroll_passkey_section_html() -> String {
+    format!(
+        r#"
+  <div id="cpn-passkey-enroll" data-redirect="/dashboard" class="stack-form" style="margin-top:24px;padding-top:20px;border-top:1px solid #e5e5ea;display:grid;gap:12px;">
+    <h2 style="margin:0;font-size:1.1rem;">Passkey</h2>
+    <p class="muted" style="margin:0;">Register a platform or security-key passkey instead of TOTP. Completing either path unlocks the dashboard.</p>
+    <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential.</p>
+    <label>Label (optional)
+      <input id="cpn-passkey-label" type="text" maxlength="64" placeholder="Laptop / YubiKey" autocomplete="off">
+    </label>
+    <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey()">Register passkey</button>
+    <p id="cpn-passkey-status" class="muted" role="status"></p>
+  </div>
+  <script>{script}</script>"#,
+        script = passkey_client_script(),
+    )
+}
+
 /// HTML main body for mandatory 2FA enrollment.
 pub fn enroll_mfa_gate_main(
     notice: Option<&str>,
@@ -169,6 +188,7 @@ pub fn enroll_mfa_gate_main(
     } else if let (Some(secret), Some(qr)) = (enroll_secret, enroll_qr_svg) {
         body.push_str(&format!(
             r#"
+  <h2 style="margin:16px 0 8px;font-size:1.1rem;">Authenticator app (TOTP)</h2>
   <div style="margin:16px 0;">{qr}</div>
   <p class="muted">Secret: <code>{secret}</code></p>
   <form method="post" action="/account/security/enroll-2fa/confirm" class="stack-form" style="display:grid;gap:12px;">
@@ -180,14 +200,16 @@ pub fn enroll_mfa_gate_main(
             qr = qr,
             secret = html_escape(secret),
         ));
+        body.push_str(&enroll_passkey_section_html());
     } else {
         body.push_str(
             r#"
+  <h2 style="margin:16px 0 8px;font-size:1.1rem;">Authenticator app (TOTP)</h2>
   <form method="post" action="/account/security/enroll-2fa/begin" style="margin:16px 0;">
     <button type="submit" class="btn-primary">Start TOTP enrollment</button>
-  </form>
-  <p class="muted">Or enroll a passkey from <a href="/account/users/modify">Modify User</a> after opening that page from this gate once TOTP is active. Prefer TOTP here to finish setup.</p>"#,
+  </form>"#,
         );
+        body.push_str(&enroll_passkey_section_html());
     }
 
     body.push_str("</section>");
@@ -262,5 +284,50 @@ mod tests {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
             }
         });
+    }
+
+    #[test]
+    fn enroll_gate_offers_passkey_alongside_totp() {
+        let start = enroll_mfa_gate_main(None, None, None, None, None);
+        assert!(
+            start.contains("Register passkey"),
+            "start view must offer passkey enrollment"
+        );
+        assert!(
+            start.contains("cpnRegisterPasskey"),
+            "start view must include passkey client script"
+        );
+        assert!(
+            !start.contains("/account/users/modify"),
+            "must not send gated admins to Modify User for passkeys"
+        );
+
+        let mid = enroll_mfa_gate_main(
+            None,
+            None,
+            Some("TESTSECRET"),
+            Some("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"),
+            None,
+        );
+        assert!(
+            mid.contains("Confirm TOTP") && mid.contains("Register passkey"),
+            "TOTP-in-progress view must still offer passkey"
+        );
+
+        let done = enroll_mfa_gate_main(
+            Some("ok"),
+            None,
+            None,
+            None,
+            Some(&[String::from("AAAA-BBBB")]),
+        );
+        assert!(
+            done.contains("Continue to dashboard"),
+            "backup-codes view must continue to dashboard"
+        );
+        assert!(
+            !done.contains("Register passkey"),
+            "backup-codes view is TOTP-complete; no passkey CTA needed"
+        );
     }
 }
