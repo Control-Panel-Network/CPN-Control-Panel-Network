@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Server **PHP Extensions** manager (`/server/php/extensions`): select PHP version (default from `/var/lib/cpn/php-default.json`, prefer 8.5), Load Extensions, searchable install/uninstall table. Prefer LiteSpeed `lsphpXX-*` packages when OpenLiteSpeed is installed; otherwise Remi/AppStream `php-*`. Admin-only POSTs with CSRF + same-origin checks. **Set as host default** persists `php-default.json` and retargets php-fpm (phpMyAdmin) plus matching `lsphp` runtimes.
+- Server **PHP Extensions** manager (`/server/php/extensions`): select PHP version (default from `/var/lib/cpn/php-default.json`, prefer 8.5), Load Extensions, searchable install/uninstall table. Prefer an already-installed LiteSpeed `lsphpXX` tree; otherwise Remi/AppStream `php-*` (same surface as php-fpm / phpMyAdmin). Admin-only POSTs with CSRF + same-origin checks. **Set as host default** persists `php-default.json` and retargets php-fpm; does not force-install `lsphp` when Remi PHP is present (shared-path conflicts on EL).
 
 ### Changed
 

@@ -188,40 +188,37 @@ pub fn selected_default_branch() -> String {
 }
 
 /// Discover PHP versions available on this host for extension management.
+///
+/// Prefer an already-installed LiteSpeed `lsphpXX` tree for that branch. Otherwise use
+/// Remi/AppStream modular `php-*` (the same surface php-fpm / phpMyAdmin uses). This
+/// avoids offering `lsphp85` installs that conflict with Remi `php` on shared paths.
 pub fn list_php_versions() -> Vec<PhpVersionOption> {
-    let prefer_ls = openlitespeed_installed() && dnf_available();
     let mut out = Vec::new();
     for branch in MANAGED_BRANCHES {
-        if prefer_ls {
-            if let Some(prefix) = branch_to_lsphp_prefix(branch) {
-                let installed = lsphp_dir_present(&prefix)
-                    || !dnf_list_names(&format!("{prefix}"), true).is_empty()
-                    || !dnf_list_names(&format!("{prefix}-*"), true).is_empty();
-                let available = installed
-                    || !dnf_list_names(&format!("{prefix}"), false).is_empty()
-                    || !dnf_list_names(&format!("{prefix}-*"), false).is_empty();
-                if available || *branch == CPN_PREFERRED_PHP_BRANCH || *branch == "8.3" {
-                    out.push(PhpVersionOption {
-                        branch: (*branch).to_string(),
-                        label: format!("PHP {branch} (LiteSpeed {prefix})"),
-                        family: PhpPackageFamily::LiteSpeed,
-                        prefix,
-                        installed,
-                        available: available || installed,
-                    });
-                    continue;
-                }
+        if let Some(prefix) = branch_to_lsphp_prefix(branch) {
+            if lsphp_dir_present(&prefix) {
+                out.push(PhpVersionOption {
+                    branch: (*branch).to_string(),
+                    label: format!("PHP {branch} (LiteSpeed {prefix})"),
+                    family: PhpPackageFamily::LiteSpeed,
+                    prefix,
+                    installed: true,
+                    available: true,
+                });
+                continue;
             }
         }
-        // Modular Remi / AppStream path when OLS lsphp is not the package surface.
-        out.push(PhpVersionOption {
-            branch: (*branch).to_string(),
-            label: format!("PHP {branch} (system module)"),
-            family: PhpPackageFamily::Modular,
-            prefix: "php".into(),
-            installed: Path::new("/usr/bin/php").exists(),
-            available: dnf_available(),
-        });
+        if dnf_available() {
+            let installed = Path::new("/usr/bin/php").exists();
+            out.push(PhpVersionOption {
+                branch: (*branch).to_string(),
+                label: format!("PHP {branch} (system module)"),
+                family: PhpPackageFamily::Modular,
+                prefix: "php".into(),
+                installed,
+                available: true,
+            });
+        }
     }
     if out.is_empty() {
         for branch in CPN_PHP_FALLBACK_ORDER {

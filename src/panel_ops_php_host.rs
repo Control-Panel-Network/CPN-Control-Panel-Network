@@ -43,7 +43,12 @@ fn branch_to_lsphp_prefix(branch: &str) -> Option<&'static str> {
     }
 }
 
-/// Persist and apply the host PHP default so CLI, php-fpm (phpMyAdmin), and lsphp align.
+/// Persist and apply the host PHP default so CLI and php-fpm (phpMyAdmin) align.
+///
+/// LiteSpeed `lsphpXX` packages share `/var/lib/php/opcache` with Remi modular PHP on
+/// some EL releases, so CPN does not force-install lsphp for the same branch when
+/// Remi `php`/`php-fpm` are already the host runtime. Manage `lsphp*` separately from
+/// the extensions UI when those packages are already present.
 pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String> {
     let guest = detect_guest_os()?;
     let req = requested
@@ -55,7 +60,7 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
     let record = prepare_and_persist_php(&guest, req.as_deref(), &today_ymd())?;
 
     if dnf_available() && record.stream != "apt" {
-        let _ = run_dnf_install(&[
+        run_dnf_install(&[
             "php",
             "php-cli",
             "php-fpm",
@@ -63,7 +68,7 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
             "php-mbstring",
             "php-xml",
             "php-json",
-        ]);
+        ])?;
         let _ = Command::new("systemctl")
             .args(["restart", "php-fpm"])
             .stdout(Stdio::null())
@@ -71,26 +76,24 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
             .status();
     }
 
+    let mut note = record.message.clone();
     if openlitespeed_installed() {
         if let Some(prefix) = branch_to_lsphp_prefix(&record.branch) {
-            let pkgs = [
-                prefix.to_string(),
-                format!("{prefix}-common"),
-                format!("{prefix}-mysqlnd"),
-                format!("{prefix}-mbstring"),
-                format!("{prefix}-xml"),
-                format!("{prefix}-gd"),
-                format!("{prefix}-process"),
-                format!("{prefix}-pdo"),
-            ];
-            let refs: Vec<&str> = pkgs.iter().map(String::as_str).collect();
-            let _ = run_dnf_install(&refs);
+            let lsphp_bin = format!("/usr/local/lsws/{prefix}/bin/lsphp");
+            if Path::new(&lsphp_bin).is_file() {
+                note.push_str(&format!(" LiteSpeed {prefix} already present."));
+            } else {
+                // Avoid Remi vs lsphp file conflicts on /var/lib/php/opcache.
+                note.push_str(&format!(
+                    " Skipped auto-install of {prefix} (may conflict with Remi php-fpm); install from PHP Extensions if needed."
+                ));
+            }
         }
     }
 
     Ok(format!(
         "Host PHP default is {} ({})",
-        record.branch, record.message
+        record.branch, note
     ))
 }
 
