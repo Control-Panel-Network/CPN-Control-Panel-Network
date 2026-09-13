@@ -1,15 +1,49 @@
 //! Manage site SSL tab (provider, coverage Wildcard/SAN, issue, custom upload).
 
+use crate::panel_ops_ssl_inspect::ssl_status_badge_html;
 use crate::panel_ops_ssl_le::{effective_coverage, ssl_status_for_domain};
 use crate::panel_ops_ssl_provider::{SslCoverageMode, SslProvider};
 use crate::panel_website_manage_ui::{html_escape, section, tile};
 use crate::sites::SiteRecord;
-use crate::website_preview::ssl_material_present;
 
 pub fn tab_ssl(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
     let row = ssl_status_for_domain(&site.domain);
-    let has = ssl_material_present(&site.domain);
+    let insight = crate::panel_ops_ssl_inspect::inspect_domain_ssl(&site.domain);
+    let status_block = {
+        let badge = ssl_status_badge_html(&insight);
+        let expires = insight
+            .expires_display
+            .as_deref()
+            .map(|d| html_escape(d))
+            .unwrap_or_else(|| "n/a".into());
+        let issuer = if insight.issuer.is_empty() {
+            "n/a".into()
+        } else {
+            html_escape(&insight.issuer)
+        };
+        let sans = if insight.sans.is_empty() {
+            "n/a".into()
+        } else {
+            html_escape(&insight.sans.join(", "))
+        };
+        format!(
+            r#"<div class="manage-ssl ssl-{kind}" style="margin-bottom:16px;">
+  <div>
+    {badge}
+    <p class="ssl-meta" style="margin-top:10px;">Expires: <strong>{expires}</strong> · Issuer: <strong>{issuer}</strong></p>
+    <p class="ssl-meta">SANs: <strong>{sans}</strong></p>
+    <p>{detail}</p>
+  </div>
+</div>"#,
+            kind = insight.kind.as_str(),
+            badge = badge,
+            expires = expires,
+            issuer = issuer,
+            sans = sans,
+            detail = html_escape(&insight.detail),
+        )
+    };
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
     tiles.push_str(&tile(
         &format!("/websites/manage?domain={domain_q}&tab=ssl#provider"),
@@ -82,11 +116,7 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
         wild_sel = wild_sel,
         san_sel = san_sel,
         cov = html_escape(coverage.label()),
-        cert = if has {
-            "certificate material on disk"
-        } else {
-            "no certificate files found"
-        },
+        cert = html_escape(row.validity.label()),
         shared = html_escape(row.shared_cert_owner.as_deref().unwrap_or("-")),
         err = if row.last_error.is_empty() {
             String::new()
@@ -137,7 +167,8 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
     );
 
     format!(
-        "{tiles}{provider}{issue}{manual}",
+        "{status}{tiles}{provider}{issue}{manual}",
+        status = status_block,
         tiles = section("SSL", &tiles),
         provider = provider_form,
         issue = issue,

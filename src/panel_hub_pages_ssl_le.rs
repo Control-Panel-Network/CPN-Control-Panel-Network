@@ -58,14 +58,24 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
     }
     let mut body = String::new();
     for r in rows {
-        let status = if r.has_cert {
-            "Certificate on disk"
-        } else if r.needs_issue {
-            "Needs issue"
-        } else if r.provider == "none" {
-            "None (skipped)"
-        } else {
-            "Custom / waiting"
+        let status = match r.validity {
+            crate::panel_ops_ssl_inspect::SslValidityKind::None => {
+                if r.needs_issue {
+                    "Needs issue".to_string()
+                } else if r.provider == "none" {
+                    "None (skipped)".to_string()
+                } else {
+                    "No certificate".to_string()
+                }
+            }
+            kind => {
+                let exp = r
+                    .expires_display
+                    .as_deref()
+                    .map(|d| format!(" (expires {d})"))
+                    .unwrap_or_default();
+                format!("{}{exp}", kind.label())
+            }
         };
         let shared = r
             .shared_cert_owner
@@ -108,7 +118,7 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
 </tr>"#,
             domain = html_escape(&r.domain),
             badge = provider_badge(&r.provider_label),
-            status = html_escape(status),
+            status = html_escape(&status),
             shared = html_escape(&shared),
             opts = provider_options(&r.provider),
             issue = issue_btn,

@@ -4,6 +4,7 @@
 //! domains set to None or Custom. Shared SAN certs only include children that
 //! share the same auto provider and when the owner opts in.
 
+use crate::panel_ops_ssl_inspect::{SslCertInsight, SslValidityKind, inspect_domain_ssl};
 use crate::panel_ops_ssl_provider::{
     SiteSslSettings, SslCoverageMode, SslProvider, custom_cert_paths, names_for_coverage,
     ssl_material_dir,
@@ -28,6 +29,13 @@ pub struct SslStatusRow {
     pub shared_cert_owner: Option<String>,
     pub last_error: String,
     pub needs_issue: bool,
+    /// Parsed validity (Valid / Expiring / Expired / Mismatch / …), not file presence alone.
+    pub validity: SslValidityKind,
+    pub expires_display: Option<String>,
+    pub days_remaining: Option<i64>,
+    pub issuer: String,
+    pub sans_summary: String,
+    pub insight_detail: String,
 }
 
 pub fn certbot_available() -> bool {
@@ -72,7 +80,9 @@ pub(crate) fn child_provider_pairs(parent: &str) -> Vec<(String, SslProvider)> {
 pub fn ssl_status_for_domain(domain: &str) -> SslStatusRow {
     let site = load_site(domain).ok();
     let ssl = site.as_ref().map(|s| s.ssl.clone()).unwrap_or_default();
-    let has = ssl_material_present(domain)
+    let insight: SslCertInsight = inspect_domain_ssl(domain);
+    let has = insight.kind != SslValidityKind::None
+        || ssl_material_present(domain)
         || ssl
             .custom_cert_path
             .as_ref()
@@ -80,6 +90,11 @@ pub fn ssl_status_for_domain(domain: &str) -> SslStatusRow {
             .unwrap_or(false);
     let certbot = certbot_available();
     let needs_issue = ssl.provider.supports_auto_issue() && !has;
+    let sans_summary = if insight.sans.is_empty() {
+        String::new()
+    } else {
+        insight.sans.iter().take(6).cloned().collect::<Vec<_>>().join(", ")
+    };
     SslStatusRow {
         domain: domain.to_string(),
         provider: ssl.provider.as_str().to_string(),
@@ -92,6 +107,12 @@ pub fn ssl_status_for_domain(domain: &str) -> SslStatusRow {
         shared_cert_owner: ssl.shared_cert_owner,
         last_error: ssl.last_error,
         needs_issue,
+        validity: insight.kind,
+        expires_display: insight.expires_display,
+        days_remaining: insight.days_remaining,
+        issuer: insight.issuer,
+        sans_summary,
+        insight_detail: insight.detail,
     }
 }
 
