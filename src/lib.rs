@@ -168,6 +168,7 @@ pub mod panel_ops_security;
 pub mod panel_ops_security_ssl;
 pub mod panel_ops_services;
 pub mod panel_ops_sftp;
+pub mod panel_ops_ssl_inspect;
 pub mod panel_ops_ssl_issue;
 pub mod panel_ops_ssl_le;
 pub mod panel_ops_ssl_provider;
