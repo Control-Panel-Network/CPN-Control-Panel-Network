@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- phpMyAdmin SSO after **Set as host default** (php-fpm restart): SignonURL now remints via `/databases/phpmyadmin/open` while the CPN panel session is valid; `cpn-signon.php` redirects there instead of plain-text "Sign-on token missing or expired." Proxy Location rewrite no longer prefixes panel routes with `/phpmyadmin`. Open clears stale PMA cookies; host-default apply refreshes the sign-on bridge, TempDir ownership, and OLS FPM socket.
+
 ### Changed
 
+- PHP Configurations (`/server/php/configs`): changing **Select PHP Version** auto-loads that version's settings. Unsaved basic/advanced edits show a modal (Cancel / Abandon changes / Save first). Load button remains as a `<noscript>` fallback.
 - Server **Top Processes** (`/server/processes`): card toolbar with Refresh, truncated commands (full path in `title` tooltip), high-CPU highlight, and a stacked card layout under ~720px so CPU/MEM stay readable without horizontal scroll.
 
 ### Added
