@@ -7,8 +7,8 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_dns::{dns_zone_create_page, dns_zone_manage_page, dns_zones_page};
 use crate::panel_hub_pages_dns_ns::{default_nameservers_page, nameservers_manage_page};
 use crate::panel_ops_dns::{
-    add_ns_host, add_zone_record, create_zone, delete_ns_host, delete_zone, delete_zone_record,
-    save_default_nameservers, verify_dns_csrf, write_zone, DnsRecord,
+    DnsRecord, add_ns_host, add_zone_record, create_zone, delete_ns_host, delete_zone,
+    delete_zone_record, save_default_nameservers, verify_dns_csrf, write_zone,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};

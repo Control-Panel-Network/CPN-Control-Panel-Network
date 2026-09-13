@@ -51,7 +51,9 @@ pub fn validate_record(rec: &DnsRecord) -> Result<(), String> {
         return Err("Invalid record content".into());
     }
     // Reject shell metacharacters in content (file store only; no shell used).
-    if content.chars().any(|c| matches!(c, '`' | '$' | ';' | '|' | '&' | '\n' | '\r' | '\0'))
+    if content
+        .chars()
+        .any(|c| matches!(c, '`' | '$' | ';' | '|' | '&' | '\n' | '\r' | '\0'))
         && rtype != "TXT"
         && rtype != "SOA"
     {
@@ -149,7 +151,10 @@ pub fn parse_zone_file(zone: &str, content: &str) -> Result<Vec<DnsRecord>, Stri
         let (priority, weight, port, content_val) = match rtype.as_str() {
             "MX" => {
                 if data.len() < 2 {
-                    return Err(format!("MX needs priority and target on line {}", line_no + 1));
+                    return Err(format!(
+                        "MX needs priority and target on line {}",
+                        line_no + 1
+                    ));
                 }
                 let prio: u16 = data[0]
                     .parse()
@@ -176,10 +181,7 @@ pub fn parse_zone_file(zone: &str, content: &str) -> Result<Vec<DnsRecord>, Stri
             }
             _ => (None, None, None, data.join(" ")),
         };
-        let content_val = content_val
-            .trim()
-            .trim_matches('"')
-            .to_string();
+        let content_val = content_val.trim().trim_matches('"').to_string();
         let rec = DnsRecord {
             id: next_id(idx),
             name,
@@ -302,7 +304,10 @@ pub fn serialize_zone_file(zone: &str, records: &[DnsRecord]) -> String {
                 format!("{owner} {ttl} IN TXT \"{escaped}\"\n")
             }
             "NS" | "CNAME" | "SOA" => {
-                format!("{owner} {ttl} IN {rtype} {}\n", ensure_dot_keep_soa(&rtype, &rec.content))
+                format!(
+                    "{owner} {ttl} IN {rtype} {}\n",
+                    ensure_dot_keep_soa(&rtype, &rec.content)
+                )
             }
             _ => format!("{owner} {ttl} IN {rtype} {}\n", rec.content.trim()),
         };

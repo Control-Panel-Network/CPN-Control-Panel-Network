@@ -3,7 +3,8 @@
 use crate::panel_host_info::host_sidebar_info;
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_dns::{
-    dns_csrf_token, list_zones, load_default_nameservers, load_zone_records, read_zone, ALLOWED_TYPES,
+    ALLOWED_TYPES, dns_csrf_token, list_zones, load_default_nameservers, load_zone_records,
+    read_zone,
 };
 
 fn html_escape(value: &str) -> String {
@@ -73,7 +74,9 @@ pub fn dns_zones_page(username: &str, notice: Option<&str>, error: Option<&str>)
     body.push_str("</div>");
     body.push_str(&feature_cards());
     if zones.is_empty() {
-        body.push_str(r#"<p class="empty-state">No zones yet. Create a DNS zone to get started.</p>"#);
+        body.push_str(
+            r#"<p class="empty-state">No zones yet. Create a DNS zone to get started.</p>"#,
+        );
     } else {
         body.push_str(
             r#"<table class="dns-zone-table"><thead><tr><th>Zone</th><th>Actions</th></tr></thead><tbody>"#,

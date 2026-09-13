@@ -1,8 +1,6 @@
-﻿//! DNS zone store under the CPN data directory (file-backed JSON + zone text).
+//! DNS zone store under the CPN data directory (file-backed JSON + zone text).
 
-use crate::panel_ops_dns_zonefile::{
-    parse_zone_file, serialize_zone_file, validate_record,
-};
+use crate::panel_ops_dns_zonefile::{parse_zone_file, serialize_zone_file, validate_record};
 use crate::panel_session::session_secret;
 use crate::paths::join_data;
 use hmac::{Hmac, KeyInit, Mac};
@@ -14,10 +12,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 type HmacSha256 = Hmac<Sha256>;
 
 pub use crate::panel_ops_dns_ns::{
-    add_ns_host, delete_ns_host, load_default_nameservers, load_nameservers, load_ns_hosts,
-    save_default_nameservers, validate_hostname, validate_ipv4, validate_ipv6, NsHost,
+    NsHost, add_ns_host, delete_ns_host, load_default_nameservers, load_nameservers, load_ns_hosts,
+    save_default_nameservers, validate_hostname, validate_ipv4, validate_ipv6,
 };
-pub use crate::panel_ops_dns_zonefile::{DnsRecord, ALLOWED_TYPES};
+pub use crate::panel_ops_dns_zonefile::{ALLOWED_TYPES, DnsRecord};
 
 fn now_unix() -> u64 {
     SystemTime::now()
@@ -175,7 +173,8 @@ pub fn load_zone_records(name: &str) -> Result<Vec<DnsRecord>, String> {
     let zone = safe_zone_name(name)?;
     let json_path = zone_json_path(&zone)?;
     if json_path.is_file() {
-        let raw = fs::read_to_string(&json_path).map_err(|e| format!("Cannot read records: {e}"))?;
+        let raw =
+            fs::read_to_string(&json_path).map_err(|e| format!("Cannot read records: {e}"))?;
         let records: Vec<DnsRecord> = serde_json::from_str(&raw)
             .map_err(|e| format!("Cannot parse zone records JSON: {e}"))?;
         return Ok(records);
@@ -193,8 +192,8 @@ fn save_zone_records_json(name: &str, records: &[DnsRecord]) -> Result<(), Strin
     let zone = safe_zone_name(name)?;
     ensure_dns_root()?;
     let json_path = zone_json_path(&zone)?;
-    let raw = serde_json::to_string_pretty(records)
-        .map_err(|e| format!("Cannot encode records: {e}"))?;
+    let raw =
+        serde_json::to_string_pretty(records).map_err(|e| format!("Cannot encode records: {e}"))?;
     fs::write(&json_path, raw).map_err(|e| format!("Cannot save records: {e}"))
 }
 
@@ -277,7 +276,10 @@ pub fn create_zone(domain_raw: &str, host_ipv4: Option<&str>) -> Result<String, 
         if !in_zone {
             continue;
         }
-        if let Some(h) = hosts.iter().find(|h| h.hostname.eq_ignore_ascii_case(&host)) {
+        if let Some(h) = hosts
+            .iter()
+            .find(|h| h.hostname.eq_ignore_ascii_case(&host))
+        {
             let label = relative_ns_label(&zone, &host);
             if let Some(ref v4) = h.ipv4 {
                 records.push(DnsRecord {

@@ -104,10 +104,7 @@ pub fn default_nameservers_page(
     } else {
         for h in &hosts {
             let host = html_escape(&h.hostname);
-            let checked = if defaults
-                .iter()
-                .any(|d| d.eq_ignore_ascii_case(&h.hostname))
-            {
+            let checked = if defaults.iter().any(|d| d.eq_ignore_ascii_case(&h.hostname)) {
                 " checked"
             } else {
                 ""

@@ -56,9 +56,7 @@ pub fn validate_ipv4(raw: &str) -> Result<String, String> {
         return Err("Invalid IPv4 address".into());
     }
     for p in &parts {
-        let _: u8 = p
-            .parse()
-            .map_err(|_| "Invalid IPv4 address".to_string())?;
+        let _: u8 = p.parse().map_err(|_| "Invalid IPv4 address".to_string())?;
         if p.len() > 1 && p.starts_with('0') {
             return Err("Invalid IPv4 address".into());
         }
@@ -129,7 +127,11 @@ pub fn save_ns_hosts(hosts: &[NsHost]) -> Result<(), String> {
     fs::write(ns_hosts_path(), raw).map_err(|e| format!("Cannot save NS hosts: {e}"))
 }
 
-pub fn add_ns_host(hostname: &str, ipv4: Option<&str>, ipv6: Option<&str>) -> Result<String, String> {
+pub fn add_ns_host(
+    hostname: &str,
+    ipv4: Option<&str>,
+    ipv6: Option<&str>,
+) -> Result<String, String> {
     let hostname = validate_hostname(hostname)?;
     let ipv4 = match ipv4.map(str::trim).filter(|s| !s.is_empty()) {
         Some(v) => Some(validate_ipv4(v)?),
