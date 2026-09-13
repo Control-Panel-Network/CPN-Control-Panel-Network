@@ -104,7 +104,8 @@ use cpn_installer::panel_routes::{
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
-    panel_design_restore, panel_design_save, panel_themes_apply, panel_themes_catalog,
+    panel_design_restore, panel_design_save, panel_minimalist_mode_get, panel_minimalist_mode_set,
+    panel_themes_apply, panel_themes_catalog,
 };
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
@@ -978,6 +979,8 @@ async fn main() -> std::io::Result<()> {
             .service(wordpress_toggle_password_post)
             .service(panel_color_mode_get)
             .service(panel_color_mode_set)
+            .service(panel_minimalist_mode_get)
+            .service(panel_minimalist_mode_set)
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)

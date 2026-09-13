@@ -47,9 +47,9 @@ impl ManageTab {
     }
 }
 
-fn tab_body(site: &SiteRecord, tab: ManageTab) -> String {
+fn tab_body(site: &SiteRecord, tab: ManageTab, username: &str) -> String {
     match tab {
-        ManageTab::Overview => tab_overview(site),
+        ManageTab::Overview => tab_overview(site, username),
         ManageTab::Domains => tab_domains(site),
         ManageTab::Logs => tab_logs(site),
         ManageTab::Config => tab_config(site),
@@ -84,7 +84,7 @@ pub fn website_manage_main(
             domain = html_escape(&site.domain),
         )
     };
-    let body = tab_body(site, tab);
+    let body = tab_body(site, tab, username);
     let styles = format!(
         "{}{}",
         manage_styles(),

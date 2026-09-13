@@ -5,8 +5,11 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_theme::{
     ColorMode, DesignPreset, DesignTokens, apply_design_preset, design_public_json,
-    load_panel_design, load_user_color_mode, restore_default_design, save_custom_tokens,
-    save_user_color_mode,
+    load_panel_design, restore_default_design, save_custom_tokens,
+};
+use crate::panel_user_prefs::{
+    load_user_color_mode, load_user_minimalist_mode, save_user_color_mode,
+    save_user_minimalist_mode,
 };
 use crate::plugins::format_unix_local;
 use crate::themes_catalog::{
@@ -46,6 +49,12 @@ pub struct ColorModeBody {
     color_mode: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct MinimalistModeBody {
+    #[serde(default)]
+    minimalist_mode: bool,
+}
+
 #[get("/api/panel/color-mode")]
 pub async fn panel_color_mode_get(
     http: HttpRequest,
@@ -78,6 +87,40 @@ pub async fn panel_color_mode_set(
         Ok(saved) => json_ok(serde_json::json!({
             "ok": true,
             "color_mode": saved.as_str(),
+        })),
+        Err(err) => json_err(500, &err),
+    }
+}
+
+#[get("/api/panel/minimalist-mode")]
+pub async fn panel_minimalist_mode_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    let enabled = load_user_minimalist_mode(&user);
+    json_ok(serde_json::json!({
+        "ok": true,
+        "minimalist_mode": enabled,
+        "username": user,
+    }))
+}
+
+#[post("/api/panel/minimalist-mode")]
+pub async fn panel_minimalist_mode_set(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<MinimalistModeBody>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    match save_user_minimalist_mode(&user, body.minimalist_mode) {
+        Ok(saved) => json_ok(serde_json::json!({
+            "ok": true,
+            "minimalist_mode": saved,
         })),
         Err(err) => json_err(500, &err),
     }

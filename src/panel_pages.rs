@@ -251,7 +251,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let main = main_owned.as_str();
     let nav = crate::panel_nav_tree::nav_links_html(active, username);
     let header = crate::panel_sidebar::sidebar_header_html(username);
-    let color_mode = crate::panel_theme::load_user_color_mode(username);
+    let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
         "{}{}{}{}{}{}{}{}{}{}",
