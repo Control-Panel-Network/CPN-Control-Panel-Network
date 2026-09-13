@@ -169,15 +169,41 @@ pub fn php_configurations_page(
 .php-cfg-cross{margin-top:18px;}
 .php-cfg-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:1200;padding:16px;}
 .php-cfg-modal-backdrop.is-open{display:flex;}
-.php-cfg-modal{background:var(--panel,#fff);color:var(--ink,#0f172a);border-radius:12px;max-width:420px;width:100%;padding:20px 22px;box-shadow:0 18px 50px rgba(15,23,42,.28);}
-.php-cfg-modal h3{margin:0 0 8px;font-size:1.1rem;}
-.php-cfg-modal p{margin:0 0 16px;color:var(--muted,#64748b);line-height:1.45;}
+.php-cfg-modal{
+  background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);
+  border-radius:18px;max-width:420px;width:100%;padding:20px 22px;
+  box-shadow:0 18px 50px rgba(15,23,42,.35);
+}
+.php-cfg-modal h3{margin:0 0 8px;font-size:1.1rem;font-weight:700;color:var(--ink);}
+.php-cfg-modal p{margin:0 0 16px;color:var(--muted);line-height:1.45;}
 .php-cfg-modal-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;}
-.php-cfg-modal-actions .btn-primary,.php-cfg-modal-actions .btn-secondary{flex:1 1 auto;min-width:110px;}
+.php-cfg-modal-actions .btn-primary,
+.php-cfg-modal-actions .btn-secondary,
+.php-cfg-modal-actions .btn-danger{
+  flex:1 1 auto;min-width:110px;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:0 16px;border:0;border-radius:999px;
+  font-weight:700;cursor:pointer;text-decoration:none;
+}
+.php-cfg-modal-actions .btn-secondary{
+  background:#f2f4f7;color:#344054;
+}
+.php-cfg-modal-actions .btn-danger{
+  background:#fee4e2;color:#b42318;
+}
+[data-color-mode="dark"] .php-cfg-modal-actions .btn-secondary{
+  background:#334155;color:#f8fafc;
+}
+[data-color-mode="dark"] .php-cfg-modal-actions .btn-danger{
+  background:#3f1d22;color:#fda29b;
+}
 @media (max-width:679.98px){
   .php-cfg-row{flex-direction:column;align-items:stretch;}
   .php-cfg-ctrl input[type=text],.php-cfg-ctrl input[type=number]{width:100%;}
   .php-cfg-footer .btn-primary,.php-cfg-footer .btn-secondary{flex:1 1 100%;}
+  .php-cfg-modal-actions .btn-primary,
+  .php-cfg-modal-actions .btn-secondary,
+  .php-cfg-modal-actions .btn-danger{flex:1 1 100%;}
 }
 </style>"#;
 
@@ -187,7 +213,7 @@ pub fn php_configurations_page(
     <p>You have unsaved PHP settings. Save them before switching versions, abandon the changes, or cancel.</p>
     <div class="php-cfg-modal-actions">
       <button type="button" class="btn-secondary" id="php-cfg-dirty-cancel">Cancel</button>
-      <button type="button" class="btn-secondary" id="php-cfg-dirty-abandon">Abandon changes</button>
+      <button type="button" class="btn-danger" id="php-cfg-dirty-abandon">Abandon changes</button>
       <button type="button" class="btn-primary" id="php-cfg-dirty-save">Save first</button>
     </div>
   </div>
