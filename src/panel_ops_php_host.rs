@@ -3,8 +3,8 @@
 use crate::litespeed_stack::openlitespeed_installed;
 use crate::os_support::detect_guest_os;
 use crate::php_defaults::{
-    PhpDefaultRecord, load_php_default, prepare_and_persist_php, save_php_default,
-    stream_for_branch, today_ymd,
+    PhpDefaultRecord, host_php_cli_branch, host_php_fpm_branch, load_php_default,
+    prepare_and_persist_php, save_php_default, stream_for_branch, today_ymd,
 };
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -115,6 +115,8 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
     };
 
     if dnf_available() && record.stream != "apt" {
+        // switch-to already syncs modular packages; ensure core set is present for
+        // first-boot / missing php-fpm, then restart so PMA picks up the binary.
         if let Err(err) = run_dnf_install(&[
             "php",
             "php-cli",
@@ -130,10 +132,36 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
             ));
         }
         let _ = Command::new("systemctl")
+            .args(["reset-failed", "php-fpm"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let _ = Command::new("systemctl")
             .args(["restart", "php-fpm"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
+
+        // Fail loud if JSON/module claim X but CLI/FPM still run another branch
+        // (the historical bug: enable-only left php-fpm on the previous Remi stream).
+        let fpm_branch = host_php_fpm_branch();
+        let cli_branch = host_php_cli_branch();
+        let runtime = fpm_branch
+            .clone()
+            .or_else(|| cli_branch.clone())
+            .unwrap_or_default();
+        if runtime.is_empty() {
+            return Err(format!(
+                "Host default PHP {} was saved, but php-fpm could not report its version after apply.",
+                record.branch
+            ));
+        }
+        if runtime != record.branch {
+            return Err(format!(
+                "Host default PHP {} was saved (stream {}), but php-fpm still reports PHP {runtime}. Re-run Set as host default or install Remi packages for {}.",
+                record.branch, record.stream, record.branch
+            ));
+        }
     }
 
     let mut note = record.message.clone();
