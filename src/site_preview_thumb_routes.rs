@@ -53,19 +53,19 @@ pub async fn site_preview_image(
     }
 
     let meta = load_meta(&domain);
-    if meta.ok {
-        if let Ok((bytes, ctype)) = read_cached_image(&domain) {
-            let cache = if freshness(&domain) == PreviewFreshness::Fresh {
-                "private, max-age=300"
-            } else {
-                "private, max-age=60"
-            };
-            return HttpResponse::Ok()
-                .content_type(ctype)
-                .append_header(("Cache-Control", cache))
-                .append_header(("X-Content-Type-Options", "nosniff"))
-                .body(bytes);
-        }
+    if meta.ok
+        && let Ok((bytes, ctype)) = read_cached_image(&domain)
+    {
+        let cache = if freshness(&domain) == PreviewFreshness::Fresh {
+            "private, max-age=300"
+        } else {
+            "private, max-age=60"
+        };
+        return HttpResponse::Ok()
+            .content_type(ctype)
+            .append_header(("Cache-Control", cache))
+            .append_header(("X-Content-Type-Options", "nosniff"))
+            .body(bytes);
     }
 
     let detail = if !meta.error.is_empty() {
