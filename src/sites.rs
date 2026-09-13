@@ -83,6 +83,7 @@ pub struct SiteModify {
     /// `Some(None)` clears; `Some(Some(actor))` sets; `None` leaves unchanged.
     pub suspended_by: Option<Option<SuspendActor>>,
     pub php_version: Option<String>,
+    pub vhost_wired: Option<bool>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -282,6 +283,18 @@ pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
             set_dir_mode(parent_home, 0o755);
             try_chown_root(parent_home);
         }
+        let logs = home.join("logs");
+        let _ = fs::create_dir_all(&logs);
+        set_dir_mode(&logs, 0o755);
+        try_chown_root(&logs);
+        for name in ["access.log", "error.log"] {
+            let path = logs.join(name);
+            if !path.is_file() {
+                let _ = fs::write(&path, b"");
+                set_dir_mode(&path, 0o644);
+                try_chown_root(&path);
+            }
+        }
     }
     let index = docroot_path.join("index.html");
     if !index.is_file() {
@@ -425,6 +438,8 @@ pub fn create_site_with_ssl(
         php_version: Some(crate::php_defaults::default_php_branch_for_sites()),
     };
     persist_site(&path, &site)?;
+    // Best-effort: create log files and wire OLS/nginx access/error log paths.
+    let _ = crate::panel_site_vhost_wire::ensure_site_vhost_logging(&site);
     // Best-effort: DKIM, SPF/DKIM/DMARC DNS, auto SSL (never fails site create).
     let _ = crate::panel_ops_domain_ready::after_site_created(&domain);
     // Optional unique internal IP when Nginx front mode is enabled.
@@ -510,6 +525,9 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     }
     if let Some(notes) = patch.notes {
         site.notes = notes;
+    }
+    if let Some(wired) = patch.vhost_wired {
+        site.vhost_wired = wired;
     }
     if let Some(ssl) = patch.ssl {
         site.ssl = ssl;

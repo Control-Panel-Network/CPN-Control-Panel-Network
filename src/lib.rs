@@ -202,6 +202,7 @@ pub mod panel_webmail;
 pub mod panel_webmail_proxy;
 pub mod panel_website_bandwidth;
 pub mod panel_website_logs;
+pub mod panel_site_vhost_wire;
 pub mod panel_website_manage;
 pub mod panel_website_manage_overview;
 pub mod panel_website_manage_ssl;

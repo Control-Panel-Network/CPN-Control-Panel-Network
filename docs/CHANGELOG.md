@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Site Manage **Open Terminal**, **Manage Git**, and **Clone/Staging** (no longer greyed out): web terminal over authenticated WebSocket (`/api/websites/terminal/ws`, xterm.js UI, shell under site home via `script` PTY), Git tab with allowlisted status/pull/push/commit/init/clone (`POST /websites/git`), and file clone to a staging subdomain or custom target (`POST /websites/clone`) with site registry update. CSRF, same-origin, site ACL, and rate limits apply. Database clone is not included (files only; note in UI).
+- Site Manage **Logs** tab: real Access and Error log tails from allowlisted paths under the site home (`…/logs/access.log`, `…/logs/error.log`) plus standard OLS/LSE/nginx locations. New sites get a `logs/` directory; opening Logs (or creating a site) best-effort wires OpenLiteSpeed/LiteSpeed (and nginx when selected) vhost access/error log paths so traffic produces lines. Refresh control, last 400 lines, HTML-escaped output, mobile-friendly wrapping/scroll. Admin/owner ACL unchanged (`require_manage_site`).
 
 ### Fixed
 
