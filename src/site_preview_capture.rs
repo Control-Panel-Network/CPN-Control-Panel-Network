@@ -331,7 +331,11 @@ mod tests {
     #[test]
     fn almalinux_headless_paths_cover_lib64() {
         let paths = almalinux_headless_paths();
-        assert!(paths.iter().any(|p| p.contains("/usr/lib64/chromium-browser/")));
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.contains("/usr/lib64/chromium-browser/"))
+        );
         assert!(paths.iter().any(|p| p.ends_with("headless_shell")));
     }
 }
