@@ -335,12 +335,25 @@ fn admin_other_users_section() -> String {
 #[cfg(test)]
 mod tests {
     use super::users_self_edit_body;
-    use crate::account::with_test_data_dir;
+    use crate::account::{default_password_policy, with_test_data_dir};
+    use crate::account_mgmt::create_account;
 
     #[test]
     fn edit_profile_passkey_section_returns_to_modify() {
         with_test_data_dir(|| {
-            let html = users_self_edit_body("admin", None, None, None, None);
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "panelowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            let html = users_self_edit_body("panelowner", None, None, None, None);
             assert!(
                 html.contains("id=\"cpn-passkey-register\""),
                 "edit profile must mark the passkey register section"
@@ -357,6 +370,9 @@ mod tests {
                 !html.contains("id=\"cpn-passkey-enroll\""),
                 "edit profile must not use the MFA enroll redirect marker"
             );
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
         });
     }
 }
