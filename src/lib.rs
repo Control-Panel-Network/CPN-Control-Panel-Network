@@ -115,6 +115,8 @@ pub mod panel_hub_routes_db;
 pub mod panel_hub_routes_email;
 pub mod panel_hub_routes_email_stubs;
 pub mod panel_hub_routes_files;
+pub mod panel_hub_routes_files_common;
+pub mod panel_hub_routes_site_files;
 pub mod panel_hub_routes_firewall;
 pub mod panel_hub_routes_passkeys;
 pub mod panel_hub_routes_php;
