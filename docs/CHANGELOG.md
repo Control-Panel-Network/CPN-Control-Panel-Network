@@ -15,6 +15,7 @@ phpMyAdmin Open auto-login works from host browsers via panel reverse-proxy (Car
 
 - **Open phpMyAdmin (auto-login)** no longer redirects to guest-only `http://127.0.0.1:8081/` (hangs under VirtualBox NAT). It redirects to same-origin `/phpmyadmin/cpn-signon.php?token=...` on the panel port.
 - Sign-on config is written to distro `/etc/phpMyAdmin/config.inc.php` (EL loads that path, not only the share copy), with `PmaAbsoluteUri=/phpmyadmin/`.
+- Make `/etc/phpMyAdmin` and `config.inc.php` readable by php-fpm (`nobody`) so sign-on auth actually loads (previously root-only, so Open fell back to the cookie login form).
 
 ### Added
 

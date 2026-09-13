@@ -200,6 +200,7 @@ exit;
         .map_err(|e| format!("Could not publish cpn-signon.php: {e}"))?;
     for conf in phpmyadmin_config_candidates(share) {
         let _ = ensure_config_includes_signon(&conf, SIGNON_SESSION);
+        ensure_phpmyadmin_config_readable(&conf);
     }
     Ok(())
 }
@@ -226,11 +227,13 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
         );
         fs::write(conf_inc, body)
             .map_err(|e| format!("Could not write {}: {e}", conf_inc.display()))?;
+        ensure_phpmyadmin_config_readable(conf_inc);
         return Ok(());
     }
     let raw = fs::read_to_string(conf_inc)
         .map_err(|e| format!("Could not read {}: {e}", conf_inc.display()))?;
     if raw.contains("CPN-SIGNON-PANEL") {
+        ensure_phpmyadmin_config_readable(conf_inc);
         return Ok(());
     }
     // Append after distro cookie defaults so panel mount + sign-on win.
@@ -249,7 +252,25 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
     );
     fs::write(conf_inc, format!("{raw}{append}"))
         .map_err(|e| format!("Could not update {}: {e}", conf_inc.display()))?;
+    ensure_phpmyadmin_config_readable(conf_inc);
     Ok(())
+}
+
+/// EL packages ship `/etc/phpMyAdmin` as root-only (700/640). php-fpm runs as
+/// nobody and must be able to read `config.inc.php` or sign-on never applies.
+fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(parent) = conf_inc.parent() {
+            if parent.exists() {
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
+            }
+        }
+        if conf_inc.is_file() {
+            let _ = fs::set_permissions(conf_inc, fs::Permissions::from_mode(0o644));
+        }
+    }
 }
 
 fn create_ephemeral_db_user() -> Result<(String, String), String> {
