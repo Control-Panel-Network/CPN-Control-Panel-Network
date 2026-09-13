@@ -7,8 +7,8 @@ use crate::panel_hub_http::{
 };
 use crate::panel_hub_pages_files::files_page;
 use crate::panel_ops_files::{
-    check_rate_limit, copy_entries, create_file, delete_names, mkdir, move_entries, read_text,
-    rename_entry, upload_bytes, verify_files_csrf, write_text, MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_BYTES, check_rate_limit, copy_entries, create_file, delete_names, mkdir,
+    move_entries, read_text, rename_entry, upload_bytes, verify_files_csrf, write_text,
 };
 use crate::panel_ops_files_archive::{compress_entries, extract_entry};
 use crate::panel_pages::panel_shell;
@@ -147,14 +147,27 @@ pub async fn server_files_op(
         let path = form.get("path").map(String::as_str).unwrap_or("/");
         return files_redirect(path, None, Some(&e));
     }
-    let path = form.get("path").map(String::as_str).unwrap_or("/").to_string();
-    let op = form.get("op").map(String::as_str).unwrap_or("").trim().to_string();
+    let path = form
+        .get("path")
+        .map(String::as_str)
+        .unwrap_or("/")
+        .to_string();
+    let op = form
+        .get("op")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
     let new_name = form
         .get("new_name")
         .map(String::as_str)
         .unwrap_or("")
         .to_string();
-    let dest = form.get("dest").map(String::as_str).unwrap_or("").to_string();
+    let dest = form
+        .get("dest")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     let archive_name = form
         .get("archive_name")
         .map(String::as_str)
@@ -235,11 +248,7 @@ pub async fn server_files_upload(
         .trim()
         .to_string();
     let b64 = form.get("file_b64").map(|s| s.as_str()).unwrap_or("");
-    let cleaned = b64
-        .split(',')
-        .next_back()
-        .unwrap_or(b64)
-        .trim();
+    let cleaned = b64.split(',').next_back().unwrap_or(b64).trim();
     let data = match B64.decode(cleaned) {
         Ok(d) => d,
         Err(_) => return files_redirect(&path, None, Some("Invalid upload encoding")),

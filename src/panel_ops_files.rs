@@ -156,10 +156,7 @@ pub fn write_text(path: &str, content: &str) -> Result<String, String> {
 
 pub fn upload_bytes(parent: &str, filename: &str, data: &[u8]) -> Result<String, String> {
     if data.len() as u64 > MAX_UPLOAD_BYTES {
-        return Err(format!(
-            "Upload exceeds {} byte limit",
-            MAX_UPLOAD_BYTES
-        ));
+        return Err(format!("Upload exceeds {} byte limit", MAX_UPLOAD_BYTES));
     }
     let parent = resolve_under_allowlist(parent)?;
     let name = validate_entry_name(filename)?;

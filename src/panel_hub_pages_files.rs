@@ -212,7 +212,8 @@ fn build_tree_html(current: &str) -> String {
         Ok(v) => v,
         Err(_) => return String::new(),
     };
-    let mut out = String::from(r#"<ul class="fm-tree-list"><li><a href="/server/files?path=%2F">/</a><ul>"#);
+    let mut out =
+        String::from(r#"<ul class="fm-tree-list"><li><a href="/server/files?path=%2F">/</a><ul>"#);
     for ent in roots.into_iter().filter(|e| e.is_dir) {
         let p = format!("/{}", ent.basename);
         let open = current == p || current.starts_with(&(p.clone() + "/"));

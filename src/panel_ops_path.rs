@@ -107,8 +107,18 @@ pub fn is_protected_path(path: &Path) -> bool {
     let s = path.to_string_lossy();
     matches!(
         s.as_ref(),
-        "/" | "/bin" | "/boot" | "/dev" | "/etc" | "/lib" | "/lib64" | "/proc" | "/root" | "/sbin"
-            | "/sys" | "/usr" | "/var"
+        "/" | "/bin"
+            | "/boot"
+            | "/dev"
+            | "/etc"
+            | "/lib"
+            | "/lib64"
+            | "/proc"
+            | "/root"
+            | "/sbin"
+            | "/sys"
+            | "/usr"
+            | "/var"
     ) || s.starts_with("/proc/")
         || s.starts_with("/sys/")
         || s.starts_with("/dev/")

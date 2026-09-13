@@ -1,7 +1,9 @@
 //! Compress and extract helpers for Root File Manager.
 
 use crate::backup_restore_extract::extract_archive_safe;
-use crate::panel_ops_path::{is_protected_path, join_child, resolve_under_allowlist, validate_entry_name};
+use crate::panel_ops_path::{
+    is_protected_path, join_child, resolve_under_allowlist, validate_entry_name,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -74,7 +76,11 @@ pub fn extract_entry(parent: &str, archive_name: &str) -> Result<String, String>
     }
     ensure_writable(&parent)?;
     extract_archive_safe(&archive, &parent)?;
-    Ok(format!("Extracted {} into {}", archive.display(), parent.display()))
+    Ok(format!(
+        "Extracted {} into {}",
+        archive.display(),
+        parent.display()
+    ))
 }
 
 /// Resolve a path for callers that only need allowlist validation.
