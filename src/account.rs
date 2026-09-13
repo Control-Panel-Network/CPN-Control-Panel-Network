@@ -522,7 +522,9 @@ mod tests {
     }
 
     fn ascii_min8_no_special_sample() -> String {
-        ['A', 'b', 'c', 'd', 'e', 'f', 'g', '1'].into_iter().collect()
+        ['A', 'b', 'c', 'd', 'e', 'f', 'g', '1']
+            .into_iter()
+            .collect()
     }
 
     #[test]
