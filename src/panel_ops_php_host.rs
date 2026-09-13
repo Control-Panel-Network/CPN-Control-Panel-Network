@@ -77,17 +77,17 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
     }
 
     let mut note = record.message.clone();
-    if openlitespeed_installed() {
-        if let Some(prefix) = branch_to_lsphp_prefix(&record.branch) {
-            let lsphp_bin = format!("/usr/local/lsws/{prefix}/bin/lsphp");
-            if Path::new(&lsphp_bin).is_file() {
-                note.push_str(&format!(" LiteSpeed {prefix} already present."));
-            } else {
-                // Avoid Remi vs lsphp file conflicts on /var/lib/php/opcache.
-                note.push_str(&format!(
-                    " Skipped auto-install of {prefix} (may conflict with Remi php-fpm); install from PHP Extensions if needed."
-                ));
-            }
+    if openlitespeed_installed()
+        && let Some(prefix) = branch_to_lsphp_prefix(&record.branch)
+    {
+        let lsphp_bin = format!("/usr/local/lsws/{prefix}/bin/lsphp");
+        if Path::new(&lsphp_bin).is_file() {
+            note.push_str(&format!(" LiteSpeed {prefix} already present."));
+        } else {
+            // Avoid Remi vs lsphp file conflicts on /var/lib/php/opcache.
+            note.push_str(&format!(
+                " Skipped auto-install of {prefix} (may conflict with Remi php-fpm); install from PHP Extensions if needed."
+            ));
         }
     }
 

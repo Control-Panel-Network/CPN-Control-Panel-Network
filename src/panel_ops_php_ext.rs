@@ -173,10 +173,10 @@ fn dnf_list_names(pattern: &str, installed: bool) -> BTreeSet<String> {
 
 /// Default branch for the dropdown (php-default.json, else preferred 8.5 / EL8 8.2).
 pub fn selected_default_branch() -> String {
-    if let Some(rec) = load_php_default() {
-        if MANAGED_BRANCHES.contains(&rec.branch.as_str()) {
-            return rec.branch;
-        }
+    if let Some(rec) = load_php_default()
+        && MANAGED_BRANCHES.contains(&rec.branch.as_str())
+    {
+        return rec.branch;
     }
     let preferred = default_php_branch_for_sites();
     if MANAGED_BRANCHES.contains(&preferred.as_str()) {
@@ -194,18 +194,18 @@ pub fn selected_default_branch() -> String {
 pub fn list_php_versions() -> Vec<PhpVersionOption> {
     let mut out = Vec::new();
     for branch in MANAGED_BRANCHES {
-        if let Some(prefix) = branch_to_lsphp_prefix(branch) {
-            if lsphp_dir_present(&prefix) {
-                out.push(PhpVersionOption {
-                    branch: (*branch).to_string(),
-                    label: format!("PHP {branch} (LiteSpeed {prefix})"),
-                    family: PhpPackageFamily::LiteSpeed,
-                    prefix,
-                    installed: true,
-                    available: true,
-                });
-                continue;
-            }
+        if let Some(prefix) = branch_to_lsphp_prefix(branch)
+            && lsphp_dir_present(&prefix)
+        {
+            out.push(PhpVersionOption {
+                branch: (*branch).to_string(),
+                label: format!("PHP {branch} (LiteSpeed {prefix})"),
+                family: PhpPackageFamily::LiteSpeed,
+                prefix,
+                installed: true,
+                available: true,
+            });
+            continue;
         }
         if dnf_available() {
             let installed = Path::new("/usr/bin/php").exists();
