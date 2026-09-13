@@ -3,16 +3,16 @@
 use crate::panel_ops_db::list_databases;
 use crate::panel_ops_ftp::detect_ftp;
 use crate::panel_user_prefs::load_user_minimalist_mode;
-use crate::panel_website_bandwidth::{bandwidth_for_site, BandwidthInfo};
-use crate::panel_website_manage_ui::{html_escape, resource_card, ssl_status_card};
+use crate::panel_website_bandwidth::{BandwidthInfo, bandwidth_for_site};
 use crate::panel_website_manage_overview_script::overview_metrics_script;
+use crate::panel_website_manage_ui::{html_escape, resource_card, ssl_status_card};
 use crate::panel_website_metrics_chart::metrics_chart_svg;
 use crate::panel_website_metrics_ring::{
-    load_samples, record_host_sample, stats_for, MetricSample, WINDOW_SECS,
+    MetricSample, WINDOW_SECS, load_samples, record_host_sample, stats_for,
 };
 use crate::panel_website_resources::{approx_dir_bytes, format_bytes};
 use crate::service_detect::detect_web_server_label;
-use crate::sites::{is_legacy_docroot, site_home_from_record, SiteRecord};
+use crate::sites::{SiteRecord, is_legacy_docroot, site_home_from_record};
 use std::path::Path;
 
 pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
@@ -89,8 +89,8 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let cpu_svg = metrics_chart_svg(&samples, "cpu", cpu_stroke);
     let mem_svg = metrics_chart_svg(&samples, "mem", mem_stroke);
     let snapshot = metrics_snapshot_script(
-        site, &samples, cpu_cur, cpu_avg, cpu_peak, mem_cur, mem_avg, mem_peak, &cpu_svg,
-        &mem_svg, &bw, minimalist,
+        site, &samples, cpu_cur, cpu_avg, cpu_peak, mem_cur, mem_avg, mem_peak, &cpu_svg, &mem_svg,
+        &bw, minimalist,
     );
     let charts = format!(
         r#"<div class="manage-charts" data-metrics-domain="{domain}" data-metrics-poll="{poll}" data-metrics-minimalist="{mini}">
