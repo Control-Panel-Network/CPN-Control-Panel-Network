@@ -41,14 +41,14 @@ pub fn tab_domains(site: &SiteRecord) -> String {
         "Open the Websites registry",
     ));
     tiles.push_str(&tile(
-        &format!("/websites/manage?domain={domain_q}&tab=domains"),
+        &format!("/websites/manage?domain={domain_q}&tab=alias"),
         "Domain Alias",
-        "Alias wiring ships with DNS hub (scaffold)",
+        "Add, list, and remove ServerAlias hostnames",
     ));
     tiles.push_str(&tile(
-        &format!("/websites/manage?domain={domain_q}&tab=domains#cron"),
+        &format!("/websites/manage?domain={domain_q}&tab=cron"),
         "Cron Jobs",
-        "Per-site cron editor ships later (scaffold)",
+        "Per-site schedules jailed to the site home",
     ));
     tiles.push_str("</div>");
 
@@ -82,9 +82,22 @@ pub fn tab_domains(site: &SiteRecord) -> String {
             p = html_escape(&parent),
         ));
     }
-    list.push_str(
-        r#"<p id="cron" class="manage-muted" style="margin-top:16px;">Cron Jobs: schedule UI is not wired yet. Use system crontab on the host for now.</p>"#,
-    );
+    if !site.aliases.is_empty() {
+        list.push_str(
+            r#"<p class="manage-muted" style="margin-top:12px;"><strong>Aliases:</strong> "#,
+        );
+        list.push_str(
+            &site
+                .aliases
+                .iter()
+                .map(|a| format!("<code>{}</code>", html_escape(a)))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+        list.push_str(&format!(
+            r#" · <a href="/websites/manage?domain={domain_q}&amp;tab=alias">Manage</a></p>"#
+        ));
+    }
 
     format!(
         "{tiles}{listed}",
@@ -302,6 +315,7 @@ mod tests {
             owner_suspend_message: String::new(),
             suspended_by: None,
             php_version: None,
+            aliases: Vec::new(),
         }
     }
 
@@ -310,6 +324,9 @@ mod tests {
         let html = tab_domains(&site());
         assert!(html.contains("Add Domains"));
         assert!(html.contains("Cron Jobs"));
+        assert!(html.contains("tab=alias"));
+        assert!(html.contains("tab=cron"));
+        assert!(!html.to_lowercase().contains("scaffold"));
     }
 
     #[test]

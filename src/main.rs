@@ -110,6 +110,10 @@ use cpn_installer::panel_theme_routes::{
     panel_design_restore, panel_design_save, panel_minimalist_mode_get, panel_minimalist_mode_set,
     panel_themes_apply, panel_themes_catalog,
 };
+use cpn_installer::panel_website_alias_cron_routes::{
+    websites_alias_add, websites_alias_remove, websites_cron_add, websites_cron_delete,
+    websites_cron_update,
+};
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
@@ -954,6 +958,11 @@ async fn main() -> std::io::Result<()> {
             .service(dashboard_page)
             .service(websites_page)
             .service(websites_manage)
+            .service(websites_alias_add)
+            .service(websites_alias_remove)
+            .service(websites_cron_add)
+            .service(websites_cron_update)
+            .service(websites_cron_delete)
             .service(websites_preview_redirect)
             .service(websites_pretty_manage)
             .service(preview_mode_page)

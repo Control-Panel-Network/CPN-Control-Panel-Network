@@ -260,7 +260,7 @@ pub fn quick_actions(site: &SiteRecord) -> String {
   <a href="/websites/manage?domain={domain_q}&amp;tab=git" title="Git status, pull, commit, push">Manage Git</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=clone" title="Clone files to staging or new site">Clone/Staging</a>
   <a href="/websites/manage?domain={domain_q}&amp;tab=config" title="{ssh_hint}">SSH/SFTP Access</a>
-  <a href="/websites/manage?domain={domain_q}&amp;tab=domains">Cron Jobs</a>
+  <a href="/websites/manage?domain={domain_q}&amp;tab=cron">Cron Jobs</a>
   <span class="scaffold" title="Stress test ships later">Stress Test</span>
   <span class="manage-muted" style="align-self:center;margin-left:4px;">Home: <code>{home}</code></span>
 </div>"#,
@@ -274,6 +274,8 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
     let tabs = [
         ("overview", "Overview"),
         ("domains", "Domains"),
+        ("alias", "Alias"),
+        ("cron", "Cron"),
         ("logs", "Logs"),
         ("config", "Config"),
         ("ssl", "SSL"),
@@ -287,6 +289,8 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
     let mut out = String::from(r#"<nav class="manage-tabs" aria-label="Website sections">"#);
     let active_norm = match active {
         "apps" | "applications" | "plugin" => "plugins",
+        "aliases" | "domain-alias" => "alias",
+        "crons" | "cronjobs" => "cron",
         "term" | "shell" => "terminal",
         "staging" => "clone",
         other => other,

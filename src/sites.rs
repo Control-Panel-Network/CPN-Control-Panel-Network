@@ -26,7 +26,7 @@ use crate::panel_ops_ssl_provider::{
     SiteSslSettings, SslProvider, initial_provider_for_new_site, load_ssl_defaults,
 };
 
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 
 /// Who last suspended the site (drives which suspend message is shown).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +67,9 @@ pub struct SiteRecord {
     /// Preferred PHP major.minor for this site (from install default when omitted).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub php_version: Option<String>,
+    /// Extra hostnames (ServerAlias / OLS map) served by this site.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -84,6 +87,8 @@ pub struct SiteModify {
     pub suspended_by: Option<Option<SuspendActor>>,
     pub php_version: Option<String>,
     pub vhost_wired: Option<bool>,
+    /// Replace the full alias list when `Some`.
+    pub aliases: Option<Vec<String>>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -436,6 +441,7 @@ pub fn create_site_with_ssl(
         owner_suspend_message: String::new(),
         suspended_by: None,
         php_version: Some(crate::php_defaults::default_php_branch_for_sites()),
+        aliases: Vec::new(),
     };
     persist_site(&path, &site)?;
     // Best-effort: create log files and wire OLS/nginx access/error log paths.
@@ -528,6 +534,9 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     }
     if let Some(wired) = patch.vhost_wired {
         site.vhost_wired = wired;
+    }
+    if let Some(aliases) = patch.aliases {
+        site.aliases = aliases;
     }
     if let Some(ssl) = patch.ssl {
         site.ssl = ssl;
