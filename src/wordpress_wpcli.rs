@@ -2,6 +2,7 @@
 
 use crate::paths;
 use std::{
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -10,12 +11,42 @@ use std::{
 const WP_CLI_PHAR_URL: &str =
     "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar";
 
+/// Raise PHP CLI memory for WP-CLI phar runs (core download OOMs on 128M hosts).
+const WP_CLI_PHP_MEMORY_LIMIT: &str = "512M";
+
 #[derive(Debug, Clone)]
 pub struct WpCliStatus {
     pub available: bool,
     pub binary: Option<String>,
     pub version: Option<String>,
     pub detail: String,
+}
+
+fn php_memory_arg() -> String {
+    format!("-d memory_limit={WP_CLI_PHP_MEMORY_LIMIT}")
+}
+
+/// Build `php -d memory_limit=... /path/to/wp-cli.phar ...`.
+fn php_phar_command(php: &str, phar: impl AsRef<OsStr>) -> Command {
+    let mut cmd = Command::new(php);
+    cmd.arg(php_memory_arg()).arg(phar);
+    cmd
+}
+
+fn apply_wp_cli_php_args(cmd: &mut Command) {
+    // System `wp` wrappers honor WP_CLI_PHP_ARGS for the underlying php binary.
+    let existing = std::env::var("WP_CLI_PHP_ARGS").unwrap_or_default();
+    if existing.contains("memory_limit=") {
+        cmd.env("WP_CLI_PHP_ARGS", existing);
+        return;
+    }
+    let mem = php_memory_arg();
+    let combined = if existing.trim().is_empty() {
+        mem
+    } else {
+        format!("{existing} {mem}")
+    };
+    cmd.env("WP_CLI_PHP_ARGS", combined);
 }
 
 fn which_wp() -> Option<String> {
@@ -95,8 +126,7 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
     if !phar.is_file() {
         download_phar(&phar)?;
     }
-    let out = Command::new(&php)
-        .arg(&phar)
+    let out = php_phar_command(&php, &phar)
         .arg("--version")
         .output()
         .map_err(|e| format!("Failed to run WP-CLI phar: {e}"))?;
@@ -111,7 +141,10 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
         available: true,
         binary: Some(format!("php:{}", phar.display())),
         version: Some(version),
-        detail: format!("WP-CLI phar ready at {} (via {php}).", phar.display()),
+        detail: format!(
+            "WP-CLI phar ready at {} (via {php} -d memory_limit={WP_CLI_PHP_MEMORY_LIMIT}).",
+            phar.display()
+        ),
     })
 }
 
@@ -151,11 +184,11 @@ fn download_phar(dest: &Path) -> Result<(), String> {
 fn run_wp_raw(bin_spec: &str, args: &[&str], path: Option<&Path>) -> Result<String, String> {
     let mut cmd = if let Some(phar) = bin_spec.strip_prefix("php:") {
         let php = php_bin().ok_or_else(|| "PHP CLI not found".to_string())?;
-        let mut c = Command::new(php);
-        c.arg(phar);
-        c
+        php_phar_command(&php, phar)
     } else {
-        Command::new(bin_spec)
+        let mut c = Command::new(bin_spec);
+        apply_wp_cli_php_args(&mut c);
+        c
     };
     if let Some(p) = path {
         cmd.arg(format!("--path={}", p.display()));
@@ -203,5 +236,19 @@ mod tests {
     fn detect_does_not_panic() {
         let status = detect_wp_cli();
         assert!(!status.detail.is_empty());
+    }
+
+    #[test]
+    fn php_phar_command_sets_memory_limit() {
+        let cmd = php_phar_command("php", "/tmp/wp-cli.phar");
+        let rendered = format!("{cmd:?}");
+        assert!(
+            rendered.contains("memory_limit=512M"),
+            "expected memory_limit in {rendered}"
+        );
+        assert!(
+            rendered.contains("wp-cli.phar"),
+            "expected phar path in {rendered}"
+        );
     }
 }
