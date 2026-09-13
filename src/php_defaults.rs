@@ -170,9 +170,7 @@ fn ensure_remi_repo(guest: &GuestOs) -> Result<(), String> {
 /// enables the stream and upgrades/downgrades modular packages. Fall back to
 /// reset+enable for first-boot hosts with no PHP packages yet.
 fn try_switch_stream(stream: &str) -> bool {
-    let switch = format!(
-        "dnf --setopt=lock_timeout=120 -y module switch-to '{stream}'"
-    );
+    let switch = format!("dnf --setopt=lock_timeout=120 -y module switch-to '{stream}'");
     if run_bash(&switch).is_ok() {
         return true;
     }
