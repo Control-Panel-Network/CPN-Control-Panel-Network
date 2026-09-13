@@ -201,15 +201,16 @@ mod tests {
     fn migrations_apply_idempotently() {
         with_test_data_dir(|| {
             let first = run_pending_migrations().unwrap();
-            assert_eq!(first.len(), 6);
+            assert_eq!(first.len(), 7);
             assert!(first.contains(&"0001_panel_api_tokens".to_string()));
             assert!(first.contains(&"0004_wordpress_sites".to_string()));
             assert!(first.contains(&"0005_site_messages".to_string()));
             assert!(first.contains(&"0006_mail_onboarding_ssl_defaults".to_string()));
+            assert!(first.contains(&"0007_account_security_flags".to_string()));
             let second = run_pending_migrations().unwrap();
             assert!(second.is_empty());
             let ledger = load_ledger();
-            assert_eq!(ledger.applied.len(), 6);
+            assert_eq!(ledger.applied.len(), 7);
         });
     }
 

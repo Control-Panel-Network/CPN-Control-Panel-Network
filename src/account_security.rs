@@ -1,10 +1,9 @@
 //! First-login security gates: forced password change and mandatory admin 2FA.
 
 use crate::account::{PanelBootstrap, load_bootstrap, write_account_file};
-use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
+use crate::account_mfa::totp_enabled_for;
 use crate::account_passkeys::has_passkeys;
-use crate::panel_admin::is_panel_admin;
 use std::fs;
 
 /// True when the account must change password before using the full panel.
@@ -17,8 +16,8 @@ pub fn must_change_password(username: &str) -> bool {
 /// True when MFA (TOTP or at least one passkey) is required and not yet enrolled.
 pub fn needs_mfa_enrollment(username: &str) -> bool {
     let requires = find_account(username)
-        .map(|(boot, _)| boot.totp_required || is_panel_admin(username))
-        .unwrap_or_else(|_| is_panel_admin(username));
+        .map(|(boot, _)| boot.totp_required)
+        .unwrap_or(false);
     if !requires {
         return false;
     }

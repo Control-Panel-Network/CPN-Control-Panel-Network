@@ -9,7 +9,7 @@ use crate::account::{
 };
 use crate::model::{AccountPublic, PasswordPolicy};
 
-/// Require a non-empty username (CLI mutations; empty does not default to admin).
+/// Require a non-empty username for lookups (existing accounts may be reserved names).
 pub fn require_username(raw: &str) -> Result<String, String> {
     let username = raw.trim();
     if username.is_empty() {
@@ -21,8 +21,14 @@ pub fn require_username(raw: &str) -> Result<String, String> {
     if username.chars().any(|ch| ch.is_control()) {
         return Err("Username cannot include control characters".into());
     }
-    crate::reserved_usernames::reject_if_reserved(username)?;
     Ok(username.to_string())
+}
+
+/// Require a username that is allowed for new accounts / renames.
+pub fn require_new_username(raw: &str) -> Result<String, String> {
+    let username = require_username(raw)?;
+    crate::reserved_usernames::reject_if_reserved(&username)?;
+    Ok(username)
 }
 
 fn account_file_key(username: &str) -> String {
@@ -166,7 +172,7 @@ pub fn create_account(
     language: &str,
 ) -> Result<AccountSetupResult, String> {
     validate_policy(&policy)?;
-    let username = require_username(username_raw)?;
+    let username = require_new_username(username_raw)?;
     if account_exists(&username) {
         return Err(format!("Account `{username}` already exists"));
     }
@@ -311,7 +317,7 @@ pub fn rename_own_account(
     new_username_raw: &str,
 ) -> Result<AccountPublic, String> {
     let (mut boot, old_path) = find_account(current_username_raw)?;
-    let new_username = require_username(new_username_raw)?;
+    let new_username = require_new_username(new_username_raw)?;
     if usernames_equal(&boot.username, &new_username) {
         return Ok(AccountPublic {
             username: boot.username,
