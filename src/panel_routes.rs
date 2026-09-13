@@ -4,6 +4,7 @@ use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
+use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
@@ -18,7 +19,6 @@ use crate::plugins_settings::{
 };
 use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
 use crate::sites::{SiteModify, SuspendActor, create_site, delete_site, modify_site};
-use crate::panel_admin::is_panel_admin;
 pub use crate::website_preview_routes::{
     preview_content, preview_mode_page, websites_pretty_manage, websites_preview_redirect,
 };
@@ -360,6 +360,53 @@ pub async fn websites_suspend_message(
                     "/websites/manage?domain={}&tab=config&notice={}",
                     urlencoding_simple(&site.domain),
                     urlencoding_simple("Suspend message saved")
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites/manage?domain={}&tab=config&error={}",
+                    urlencoding_simple(form.domain.trim()),
+                    urlencoding_simple(&error)
+                ),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/websites/suspend-message/restore")]
+pub async fn websites_suspend_message_restore(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SiteDeleteForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish();
+    }
+    match modify_site(
+        &form.domain,
+        SiteModify {
+            owner_suspend_message: Some(String::new()),
+            ..Default::default()
+        },
+    ) {
+        Ok(site) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites/manage?domain={}&tab=config&notice={}",
+                    urlencoding_simple(&site.domain),
+                    urlencoding_simple("Suspend message restored to panel default")
                 ),
             ))
             .finish(),

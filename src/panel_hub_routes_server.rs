@@ -21,7 +21,10 @@ use crate::panel_hub_pages_settings::{
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_pages::panel_shell;
-use crate::site_messages::{SiteMessageDefaults, builtin_site_ready_html, load_defaults, save_defaults};
+use crate::site_messages::{
+    SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
+    restore_factory_suspend_message, save_defaults,
+};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -728,6 +731,52 @@ pub async fn settings_site_messages_save(
     defaults.site_ready_html = form.site_ready_html.clone();
     match save_defaults(&defaults) {
         Ok(()) => redirect_notice("/settings/site-messages", Some("Site messages saved"), None),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
+}
+
+#[post("/settings/site-messages/restore-suspend")]
+pub async fn settings_site_messages_restore_suspend(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    match restore_factory_suspend_message() {
+        Ok(()) => redirect_notice(
+            "/settings/site-messages",
+            Some("Factory suspend message restored"),
+            None,
+        ),
+        Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
+    }
+}
+
+#[post("/settings/site-messages/restore-site-ready")]
+pub async fn settings_site_messages_restore_site_ready(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect();
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/settings?error=Admin%20only"))
+            .finish();
+    }
+    match restore_factory_site_ready() {
+        Ok(()) => redirect_notice(
+            "/settings/site-messages",
+            Some("Factory site-ready template restored"),
+            None,
+        ),
         Err(error) => redirect_notice("/settings/site-messages", None, Some(&error)),
     }
 }

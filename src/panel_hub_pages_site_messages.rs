@@ -4,24 +4,31 @@ use crate::panel_hubs::feature_shell;
 use crate::panel_website_manage_ui::html_escape;
 use crate::site_messages::{SiteMessageDefaults, load_defaults};
 
+fn confirm_if_nonempty(field_id: &str, message: &str) -> String {
+    format!(
+        "var el=document.getElementById('{id}'); if(el && el.value.trim()) return confirm('{msg}'); return true;",
+        id = field_id,
+        msg = message.replace('\'', "\\'"),
+    )
+}
+
 pub fn site_messages_settings_page(notice: Option<&str>, error: Option<&str>) -> String {
     let defaults = load_defaults();
     let ok = notice
-        .map(|n| {
-            format!(
-                r#"<p class="notice ok">{}</p>"#,
-                html_escape(n)
-            )
-        })
+        .map(|n| format!(r#"<p class="notice ok">{}</p>"#, html_escape(n)))
         .unwrap_or_default();
     let err = error
-        .map(|e| {
-            format!(
-                r#"<p class="notice error">{}</p>"#,
-                html_escape(e)
-            )
-        })
+        .map(|e| format!(r#"<p class="notice error">{}</p>"#, html_escape(e)))
         .unwrap_or_default();
+    let confirm_suspend = confirm_if_nonempty(
+        "suspend_message_html",
+        "Replace the current default suspend message with the built-in CPN factory text?",
+    );
+    let confirm_ready = confirm_if_nonempty(
+        "site_ready_html",
+        "Replace the current site-ready template with the built-in CPN factory HTML?",
+    );
+    let confirm_both = "var s=document.getElementById('suspend_message_html'); var r=document.getElementById('site_ready_html'); if((s&&s.value.trim())||(r&&r.value.trim())) return confirm('Restore built-in CPN factory defaults for both fields?'); return true;".to_string();
     let body = format!(
         r#"{ok}{err}
 <p class="muted">These defaults apply panel-wide. When a CPN admin suspends a site, visitors see the global suspend message (not the site owner's custom text). Website owners can set their own suspend message on each site's Manage page; that copy is used only when they suspend the site themselves.</p>
@@ -29,18 +36,32 @@ pub fn site_messages_settings_page(notice: Option<&str>, error: Option<&str>) ->
   <label for="suspend_message_html">Default suspend message (plain text)</label>
   <textarea id="suspend_message_html" name="suspend_message_html" rows="4" style="width:100%;font:inherit;">{suspend}</textarea>
   <p class="muted">Shown for admin suspends and as the fallback when an owner has not set a custom message. HTML tags are stripped.</p>
-  <label for="site_ready_html" style="margin-top:1rem;display:block;">Default site-ready template (<code>index.html</code> for new docroots)</label>
+  <div style="margin:8px 0 16px;display:flex;flex-wrap:wrap;gap:8px;">
+    <button type="submit" class="btn-primary">Save site messages</button>
+  </div>
+  <label for="site_ready_html" style="margin-top:0.5rem;display:block;">Default site-ready template (<code>index.html</code> for new docroots)</label>
   <textarea id="site_ready_html" name="site_ready_html" rows="14" style="width:100%;font-family:ui-monospace,monospace;font-size:13px;">{ready}</textarea>
   <p class="muted">Used when CPN creates a new document root (and when an owner resets the placeholder). Existing sites keep their files until reset. Scripts and event handlers are rejected.</p>
   <button type="submit" class="btn-primary" style="margin-top:12px;">Save site messages</button>
 </form>
-<form method="post" action="/settings/site-messages/reset-builtins" style="margin-top:20px;" onsubmit="return confirm('Restore built-in CPN defaults for both fields?');">
-  <button type="submit" class="btn-warn">Restore built-in defaults</button>
-</form>"#,
+<div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;max-width:48rem;">
+  <form method="post" action="/settings/site-messages/restore-suspend" onsubmit="{confirm_suspend}">
+    <button type="submit" class="btn-warn">Restore factory default (suspend)</button>
+  </form>
+  <form method="post" action="/settings/site-messages/restore-site-ready" onsubmit="{confirm_ready}">
+    <button type="submit" class="btn-warn">Restore factory default (site-ready)</button>
+  </form>
+  <form method="post" action="/settings/site-messages/reset-builtins" onsubmit="{confirm_both}">
+    <button type="submit" class="btn-warn">Restore all built-in defaults</button>
+  </form>
+</div>"#,
         ok = ok,
         err = err,
         suspend = html_escape(&defaults.suspend_message_html),
         ready = html_escape(&defaults.site_ready_html),
+        confirm_suspend = confirm_suspend,
+        confirm_ready = confirm_ready,
+        confirm_both = confirm_both,
     );
     feature_shell(
         &[
@@ -59,6 +80,10 @@ pub fn site_messages_settings_page(notice: Option<&str>, error: Option<&str>) ->
 /// Manage-page block: owner suspend message + optional placeholder reset.
 pub fn site_suspend_message_form(domain: &str, owner_message: &str) -> String {
     let domain_q = html_escape(domain);
+    let confirm_restore = confirm_if_nonempty(
+        "owner_suspend_message",
+        "Clear your custom suspend message and use the CPN panel default instead?",
+    );
     format!(
         r#"<div id="suspend-message" class="manage-section">
   <h3>Suspend message</h3>
@@ -67,7 +92,13 @@ pub fn site_suspend_message_form(domain: &str, owner_message: &str) -> String {
     <input type="hidden" name="domain" value="{domain_q}">
     <label for="owner_suspend_message">Your suspend message (plain text)</label>
     <textarea id="owner_suspend_message" name="owner_suspend_message" rows="4" style="width:100%;max-width:40rem;font:inherit;">{msg}</textarea>
-    <button type="submit" class="btn-primary" style="margin-top:8px;">Save suspend message</button>
+    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+      <button type="submit" class="btn-primary">Save suspend message</button>
+    </div>
+  </form>
+  <form method="post" action="/websites/suspend-message/restore" style="margin-top:8px;" onsubmit="{confirm_restore}">
+    <input type="hidden" name="domain" value="{domain_q}">
+    <button type="submit" class="btn-warn">Restore default</button>
   </form>
   <form method="post" action="/websites/reset-placeholder" style="margin-top:16px;" onsubmit="return confirm('Overwrite index.html in this document root with the current CPN site-ready template?');">
     <input type="hidden" name="domain" value="{domain_q}">
@@ -76,6 +107,7 @@ pub fn site_suspend_message_form(domain: &str, owner_message: &str) -> String {
 </div>"#,
         domain_q = domain_q,
         msg = html_escape(owner_message),
+        confirm_restore = confirm_restore,
     )
 }
 
@@ -95,16 +127,22 @@ mod tests {
         assert!(html.contains("suspend_message_html"));
         assert!(html.contains("site_ready_html"));
         assert!(html.contains("admin suspends"));
+        assert!(html.contains("Restore factory default (suspend)"));
+        assert!(html.contains("restore-suspend"));
+        assert!(html.contains("restore-site-ready"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));
     }
 
     #[test]
-    fn manage_form_has_owner_fields() {
+    fn manage_form_has_owner_fields_and_restore() {
         let html = site_suspend_message_form("demo.example", "Back soon");
         assert!(html.contains("owner_suspend_message"));
         assert!(html.contains("Back soon"));
         assert!(html.contains("reset-placeholder"));
+        assert!(html.contains("suspend-message/restore"));
+        assert!(html.contains("Restore default"));
+        assert!(html.contains("confirm("));
     }
 }

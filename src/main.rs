@@ -91,7 +91,7 @@ use cpn_installer::panel_routes::{
     plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
     preview_mode_page, websites_create, websites_delete, websites_manage, websites_page,
     websites_prefs, websites_pretty_manage, websites_preview_redirect, websites_reset_placeholder,
-    websites_resume, websites_suspend, websites_suspend_message,
+    websites_resume, websites_suspend, websites_suspend_message, websites_suspend_message_restore,
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,

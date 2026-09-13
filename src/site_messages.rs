@@ -119,6 +119,24 @@ pub fn builtin_site_ready_html() -> &'static str {
     BUILTIN_SITE_READY
 }
 
+pub fn builtin_suspend_message() -> &'static str {
+    BUILTIN_SUSPEND
+}
+
+/// Restore only the global suspend message to the built-in factory text.
+pub fn restore_factory_suspend_message() -> Result<(), String> {
+    let mut defaults = load_defaults();
+    defaults.suspend_message_html = BUILTIN_SUSPEND.to_string();
+    save_defaults(&defaults)
+}
+
+/// Restore only the site-ready template to the built-in factory HTML.
+pub fn restore_factory_site_ready() -> Result<(), String> {
+    let mut defaults = load_defaults();
+    defaults.site_ready_html = BUILTIN_SITE_READY.to_string();
+    save_defaults(&defaults)
+}
+
 pub fn site_ready_html_for_new_docroot() -> String {
     let defaults = load_defaults();
     if defaults.site_ready_html.trim().is_empty() {
@@ -150,7 +168,9 @@ pub fn sanitize_message_body(raw: &str) -> Result<String, String> {
             "Message is too long (max {MAX_SUSPEND_CHARS} characters)"
         ));
     }
-    if trimmed.chars().any(|ch| ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t')
+    if trimmed
+        .chars()
+        .any(|ch| ch.is_control() && ch != '\n' && ch != '\r' && ch != '\t')
     {
         return Err("Message cannot include control characters".into());
     }
@@ -371,6 +391,21 @@ mod tests {
         );
         assert!(sanitize_site_ready_html("<script>alert(1)</script><h1>x</h1>").is_err());
         assert!(sanitize_site_ready_html(BUILTIN_SITE_READY).is_ok());
+    }
+
+    #[test]
+    fn restore_factory_suspend_only() {
+        with_temp_data(|| {
+            ensure_site_messages_migrated().unwrap();
+            let mut d = load_defaults();
+            d.suspend_message_html = "custom global".into();
+            d.site_ready_html = "<html><body>keep</body></html>".into();
+            save_defaults(&d).unwrap();
+            restore_factory_suspend_message().unwrap();
+            let loaded = load_defaults();
+            assert_eq!(loaded.suspend_message_html, BUILTIN_SUSPEND);
+            assert!(loaded.site_ready_html.contains("keep"));
+        });
     }
 
     #[test]
