@@ -18,7 +18,7 @@ Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail clien
 - `cpn site ready --domain` re-runs domain readiness for existing sites.
 - Setup Wizard onboarding: hostname/rDNS notes, local vs external mail, skip rDNS checkbox (CPN branding only).
 - Email Accounts: default Mail Client Configuration (POP3/IMAP/SMTP/Sieve) plus mailbox password for local Postfix/Dovecot provisioning.
-- Migration `0005_mail_onboarding_ssl_defaults` persists Let's Encrypt as the default SSL provider for new sites (after WordPress `0004`).
+- Migration `0006_mail_onboarding_ssl_defaults` persists Let's Encrypt as the default SSL provider for new sites (after WordPress `0004` and site-messages `0005`).
 
 ### Notes
 
@@ -39,6 +39,7 @@ WordPress installer plus phpMyAdmin Open auto-login via panel reverse-proxy (Car
 
 ### Added
 
+- Editable suspend messages and site-ready placeholder under Settings (migration `0005_site_messages`).
 - CPN-native WordPress installer and manager under Hosting (WP-CLI install, plugin preinstall, manage tabs, MariaDB provisioning). Migration `0004_wordpress_sites`.
 - Panel reverse-proxy mount `/phpmyadmin/` to loopback OLS/nginx `:8081` (session required), matching the webmail proxy pattern.
 - Open control uses `target=_blank` so the panel page stays open.
