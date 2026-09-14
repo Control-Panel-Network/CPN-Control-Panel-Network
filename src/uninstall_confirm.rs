@@ -16,8 +16,7 @@ pub fn confirm_accepted(raw: &str) -> bool {
     )
 }
 
-pub const CONFIRM_REQUIRED_MSG: &str =
-    "Uninstall cancelled: confirmation required. Use the Confirm uninstall dialog (or send confirm=1).";
+pub const CONFIRM_REQUIRED_MSG: &str = "Uninstall cancelled: confirmation required. Use the Confirm uninstall dialog (or send confirm=1).";
 
 /// Host package impacts from catalog metadata (always non-empty).
 pub fn host_uninstall_impacts(id: AppId) -> Vec<String> {
