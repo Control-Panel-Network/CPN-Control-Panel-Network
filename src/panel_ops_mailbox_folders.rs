@@ -143,12 +143,11 @@ namespace inbox {
   }
 }
 "#;
-    if path.is_file() {
-        if let Ok(existing) = fs::read_to_string(path) {
-            if existing == body {
-                return Ok(());
-            }
-        }
+    if path.is_file()
+        && let Ok(existing) = fs::read_to_string(path)
+        && existing == body
+    {
+        return Ok(());
     }
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
