@@ -621,10 +621,14 @@ mod tests {
         ));
         assert!(matches!(
             parse_mail_option("3").unwrap(),
-            Some(MailSystem::Roundcube)
+            Some(MailSystem::Tachyon)
         ));
         assert!(matches!(
             parse_mail_option("4").unwrap(),
+            Some(MailSystem::Roundcube)
+        ));
+        assert!(matches!(
+            parse_mail_option("7").unwrap(),
             Some(MailSystem::Thunderbird)
         ));
         let err = parse_mail_option("info@newstargeted.com").unwrap_err();
