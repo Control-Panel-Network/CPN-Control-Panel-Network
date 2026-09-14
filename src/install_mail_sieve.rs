@@ -149,26 +149,12 @@ fn ensure_sieve_dovecot_config() -> Result<(), String> {
         }
     }
 
-    let conf = r#"# Managed by CPN: ManageSieve for SnappyMail filters
-protocol sieve {
-}
-
+    let conf = r#"# Managed by CPN: ensure ManageSieve listens on 4190.
+# Vendor 20-managesieve.conf / 90-sieve.conf ship with dovecot-pigeonhole.
 service managesieve-login {
   inet_listener sieve {
     port = 4190
   }
-  inet_listener sieve_secure {
-    port = 0
-  }
-}
-
-service managesieve {
-  process_limit = 10
-}
-
-plugin {
-  sieve = file:~/sieve;active=~/.dovecot.sieve
-  sieve_dir = ~/sieve
 }
 "#;
     install_journal::write_file_tracked(STAGE, Path::new(CPN_SIEVE_CONF), conf)?;
