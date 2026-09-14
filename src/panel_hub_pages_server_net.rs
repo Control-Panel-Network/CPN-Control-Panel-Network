@@ -34,37 +34,91 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
           <label for="panel_public_url">External panel URL (emails / NAT)</label>
           <input id="panel_public_url" name="panel_public_url" type="url" value="{puburl}" placeholder="http://127.0.0.1:2089">
           <p class="muted">Optional. Prefer this over hostname for password-reset links when DNS is private or you use VirtualBox host port forwards.</p>
-          <button type="submit" class="btn-primary">Save port</button>
+          <button type="submit" class="btn-primary" id="cpn-port-save">Save port</button>
         </form>
         <p id="cpn-port-status" class="muted" role="status"></p>
         <script>
         (function(){{
           var form = document.getElementById("cpn-port-form");
           if (!form) return;
+          var saveBtn = document.getElementById("cpn-port-save");
+          var status = document.getElementById("cpn-port-status");
+          function setStatus(text, isError) {{
+            status.textContent = text || "";
+            status.style.color = isError ? "#f87171" : "";
+          }}
+          function parseJsonSafe(text) {{
+            if (!text || !String(text).trim()) return null;
+            try {{ return JSON.parse(text); }} catch (e) {{ return null; }}
+          }}
+          function pollThenGo(url, attemptsLeft) {{
+            if (attemptsLeft <= 0) {{
+              setStatus("Restart still in progress. Open " + url + " manually when ready.", true);
+              if (saveBtn) saveBtn.disabled = false;
+              return;
+            }}
+            fetch(url, {{ method: "GET", credentials: "omit", cache: "no-store", mode: "cors" }})
+              .then(function(r) {{
+                if (r.ok || r.status === 401 || r.status === 302 || r.status === 303) {{
+                  window.location.href = url;
+                  return;
+                }}
+                setStatus("Waiting for panel on new port (" + attemptsLeft + ")...");
+                setTimeout(function(){{ pollThenGo(url, attemptsLeft - 1); }}, 1000);
+              }})
+              .catch(function() {{
+                setStatus("Waiting for panel restart (" + attemptsLeft + ")...");
+                setTimeout(function(){{ pollThenGo(url, attemptsLeft - 1); }}, 1000);
+              }});
+          }}
           form.addEventListener("submit", function(ev){{
             ev.preventDefault();
             var port = Number(document.getElementById("port").value);
             var policy = document.getElementById("old_port_policy").value;
             var publicUrl = document.getElementById("panel_public_url").value;
-            var status = document.getElementById("cpn-port-status");
-            status.textContent = "Saving...";
+            if (saveBtn) saveBtn.disabled = true;
+            setStatus("Saving...");
             fetch("/api/listen-port", {{
               method: "POST",
-              headers: {{ "Content-Type": "application/json" }},
+              headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
               credentials: "same-origin",
               body: JSON.stringify({{ port: port, old_port_policy: policy, panel_public_url: publicUrl }})
-            }}).then(function(r){{ return r.json().then(function(j){{ return {{ok:r.ok, j:j}}; }}); }})
-              .then(function(res){{
-                if (res.ok) {{
-                  status.textContent = "Port preference saved. Reopen the panel on the new port if the process rebound.";
-                }} else {{
-                  status.textContent = (res.j && (res.j.error || res.j.message)) || "Save failed";
+            }}).then(function(r){{
+              return r.text().then(function(t){{
+                return {{ ok: r.ok, status: r.status, j: parseJsonSafe(t), raw: t }};
+              }});
+            }}).then(function(res){{
+              var j = res.j || {{}};
+              if (!res.ok) {{
+                var err = (j && (j.error || j.message)) || ("Save failed (HTTP " + res.status + ")");
+                if (!res.j && res.raw === "") {{
+                  err = "Save failed: empty response (HTTP " + res.status + "). Sign in as panel admin and retry.";
                 }}
-              }}).catch(function(e){{ status.textContent = String(e); }});
+                setStatus(err, true);
+                if (saveBtn) saveBtn.disabled = false;
+                return;
+              }}
+              var target = j.redirect_url || ((j.new_url || "").replace(/\/$/, "") + "/settings/port");
+              if (!j.new_url && !j.redirect_url) {{
+                setStatus(j.message || "Port preference saved.");
+                if (saveBtn) saveBtn.disabled = false;
+                return;
+              }}
+              if (j.restart_required || j.restart_scheduled) {{
+                setStatus("Port saved. Restarting panel, then opening " + target + " ...");
+                setTimeout(function(){{ pollThenGo(target, 45); }}, 1200);
+              }} else {{
+                setStatus("Saved. Opening " + target + " ...");
+                setTimeout(function(){{ window.location.href = target; }}, 400);
+              }}
+            }}).catch(function(e){{
+              setStatus(String(e && e.message ? e.message : e), true);
+              if (saveBtn) saveBtn.disabled = false;
+            }});
           }});
         }})();
         </script>
-        <p class="muted">Uses the existing panel port migration API. Restart may be required depending on how the service is supervised.</p>"#,
+        <p class="muted">Uses the panel port migration API. When the listen port changes, the panel service restarts and this page opens on the new URL automatically.</p>"#,
         bind = bind_port,
         pref = preferred,
         base = html_escape(&summary.public_base_url),

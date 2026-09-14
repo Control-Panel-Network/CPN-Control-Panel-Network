@@ -195,6 +195,28 @@ fn host_header_allowed(request: &HttpRequest, allowed_hosts: &[String]) -> bool 
     authority_allowed(host_hdr.trim(), allowed_hosts)
 }
 
+/// Merge live `panel_public_url` (NAT labs, reverse proxies) into the Host/Origin allowlist.
+pub fn extend_allowed_hosts_with_public_url(allowed_hosts: &mut Vec<String>) {
+    let Some(url) = crate::panel_public_url::load_panel_public_url() else {
+        return;
+    };
+    let Some(authority) = extract_authority(&url) else {
+        return;
+    };
+    if !allowed_hosts
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&authority))
+    {
+        allowed_hosts.push(authority);
+    }
+}
+
+fn effective_allowed_hosts(allowed_hosts: &[String]) -> Vec<String> {
+    let mut hosts = allowed_hosts.to_vec();
+    extend_allowed_hosts_with_public_url(&mut hosts);
+    hosts
+}
+
 /// When listening on 0.0.0.0, reject unexpected Host and cross-site Origin/Referer.
 pub fn remote_origin_ok(
     request: &HttpRequest,
@@ -204,7 +226,8 @@ pub fn remote_origin_ok(
     if !allow_remote {
         return true;
     }
-    if !host_header_allowed(request, allowed_hosts) {
+    let allowed = effective_allowed_hosts(allowed_hosts);
+    if !host_header_allowed(request, &allowed) {
         return false;
     }
     let method = request.method().as_str();
@@ -223,7 +246,7 @@ pub fn remote_origin_ok(
     let Some(candidate) = candidate else {
         return true;
     };
-    origin_matches_allowed(candidate, allowed_hosts)
+    origin_matches_allowed(candidate, &allowed)
 }
 
 /// Origin check for WebSocket upgrades when `--allow-remote` is set (issue #1).
@@ -235,7 +258,8 @@ pub fn websocket_origin_ok(
     if !allow_remote {
         return true;
     }
-    if !host_header_allowed(request, allowed_hosts) {
+    let allowed = effective_allowed_hosts(allowed_hosts);
+    if !host_header_allowed(request, &allowed) {
         return false;
     }
     let origin = request
@@ -245,7 +269,7 @@ pub fn websocket_origin_ok(
     let Some(origin) = origin else {
         return true;
     };
-    origin_matches_allowed(origin, allowed_hosts)
+    origin_matches_allowed(origin, &allowed)
 }
 
 /// Build HttpOnly install-session cookie (value is server-generated session_id).
@@ -471,5 +495,25 @@ mod tests {
             .to_http_request();
         assert!(remote_origin_ok(&req, true, &allowed));
         assert!(websocket_origin_ok(&req, true, &allowed));
+    }
+
+    #[test]
+    fn remote_accepts_panel_public_url_nat_host() {
+        use crate::account::with_test_data_dir;
+        with_test_data_dir(|| {
+            crate::panel_public_url::save_panel_public_url("http://127.0.0.1:2090").unwrap();
+            // Bind is guest 2087; host NAT uses 2090 via panel_public_url.
+            let allowed = build_allowed_hosts(2087, &[]);
+            let req = TestRequest::default()
+                .method(actix_web::http::Method::POST)
+                .insert_header((actix_web::http::header::HOST, "127.0.0.1:2090"))
+                .insert_header((
+                    actix_web::http::header::ORIGIN,
+                    "http://127.0.0.1:2090",
+                ))
+                .to_http_request();
+            assert!(remote_origin_ok(&req, true, &allowed));
+            crate::panel_public_url::clear_panel_public_url().unwrap();
+        });
     }
 }
