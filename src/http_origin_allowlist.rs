@@ -76,12 +76,11 @@ fn split_authority_host_port(authority: &str) -> Option<(String, Option<u16>)> {
         // Bare IPv6 without brackets.
         return Some((authority.to_string(), None));
     }
-    if let Some((host, port)) = authority.rsplit_once(':') {
-        if !host.is_empty()
-            && let Ok(port) = port.parse::<u16>()
-        {
-            return Some((host.to_string(), Some(port)));
-        }
+    if let Some((host, port)) = authority.rsplit_once(':')
+        && !host.is_empty()
+        && let Ok(port) = port.parse::<u16>()
+    {
+        return Some((host.to_string(), Some(port)));
     }
     Some((authority.to_string(), None))
 }
