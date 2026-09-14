@@ -208,13 +208,40 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     }
     let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     std::fs::write(&default_path, format!("{pretty}\n")).map_err(|e| e.to_string())?;
-    // Mirror for hostname-based domain files that often exist after first install.
+    // Mirror onto hostname and any existing local domain files (skip public providers).
+    let mut mirror_names: Vec<String> = Vec::new();
     if let Ok(hostname) = std::fs::read_to_string("/etc/hostname") {
         let host = hostname.trim().to_ascii_lowercase();
         if !host.is_empty() {
-            let host_path = domains.join(format!("{host}.json"));
-            let _ = std::fs::write(&host_path, format!("{pretty}\n"));
+            mirror_names.push(format!("{host}.json"));
         }
+    }
+    if let Ok(entries) = std::fs::read_dir(&domains) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let lower = name.to_ascii_lowercase();
+            if !lower.ends_with(".json") || lower == "default.json" {
+                continue;
+            }
+            if lower == "gmail.com.json" || lower == "hotmail.com.json" || lower == "yahoo.com.json"
+            {
+                continue;
+            }
+            if !mirror_names.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+                mirror_names.push(name);
+            }
+        }
+    }
+    // Always keep a newstargeted.com domain profile for lab/production mailboxes.
+    if !mirror_names
+        .iter()
+        .any(|n| n.eq_ignore_ascii_case("newstargeted.com.json"))
+    {
+        mirror_names.push("newstargeted.com.json".into());
+    }
+    for name in mirror_names {
+        let host_path = domains.join(name);
+        let _ = std::fs::write(&host_path, format!("{pretty}\n"));
     }
     // Soften SameSite for panel reverse-proxy labs (host:port).
     let ini = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/configs/application.ini");
