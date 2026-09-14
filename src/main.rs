@@ -390,12 +390,11 @@ fn schedule_panel_listen_restart(preferred: u16) {
             // Let the JSON response flush before tearing down this process.
             std::thread::sleep(std::time::Duration::from_millis(900));
             let _ = preferred;
-            // systemctl restart alone can leave a stuck worker; stop + SIGKILL leftovers, then start.
             let _ = std::process::Command::new("systemctl")
                 .args(["stop", "cpn-installer.service"])
                 .status();
-            let _ = std::process::Command::new("pkill")
-                .args(["-9", "-f", "/usr/bin/cpn-installer"])
+            let _ = std::process::Command::new("systemctl")
+                .args(["kill", "-s", "SIGKILL", "cpn-installer.service"])
                 .status();
             std::thread::sleep(std::time::Duration::from_millis(400));
             let _ = std::process::Command::new("systemctl")
