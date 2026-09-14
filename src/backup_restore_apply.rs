@@ -1,7 +1,9 @@
 //! Format-specific restore apply helpers (WordPress, cPanel, CyberPanel source, CPN).
 
 use crate::backup_restore_extract::copy_tree;
-use crate::panel_ops_db::{create_database, list_databases, local_mariadb_ready, mariadb_client_bin};
+use crate::panel_ops_db::{
+    create_database, list_databases, local_mariadb_ready, mariadb_client_bin,
+};
 use crate::sites::SiteRecord;
 use std::fs;
 use std::io::Write;
@@ -341,8 +343,7 @@ fn import_sql_best_effort(
         return Ok(());
     }
     let bin = mariadb_client_bin().ok_or_else(|| {
-        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB client tools."
-            .to_string()
+        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB client tools.".to_string()
     })?;
 
     let name = sql_path
