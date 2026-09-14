@@ -56,6 +56,44 @@ fn pricing_from_meta(body: &str) -> String {
     "free".into()
 }
 
+fn xml_tag_all(body: &str, tag: &str) -> Vec<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut out = Vec::new();
+    let mut rest = body;
+    while let Some(start_rel) = rest.find(&open) {
+        let start = start_rel + open.len();
+        let after = &rest[start..];
+        let Some(end_rel) = after.find(&close) else {
+            break;
+        };
+        let value = after[..end_rel].trim();
+        if !value.is_empty() {
+            out.push(sanitize_user_text(value));
+        }
+        rest = &after[end_rel + close.len()..];
+    }
+    out
+}
+
+fn uninstall_impacts_from_meta(body: &str) -> Vec<String> {
+    let mut impacts = xml_tag_all(body, "uninstall_impact");
+    if let Some(block) = xml_tag(body, "uninstall_impacts") {
+        impacts.extend(xml_tag_all(&block, "impact"));
+        if impacts.is_empty() {
+            for line in block.lines() {
+                let line = line.trim().trim_start_matches('-').trim();
+                if !line.is_empty() && !line.starts_with('<') {
+                    impacts.push(sanitize_user_text(line));
+                }
+            }
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    impacts.retain(|s| seen.insert(s.clone()));
+    impacts
+}
+
 /// Parse a legacy catalog `meta.xml` into a CPN catalog entry.
 pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, String> {
     let name = xml_tag(body, "name")
@@ -101,6 +139,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         updated_on,
         install_count,
         featured,
+        uninstall_impacts: uninstall_impacts_from_meta(body),
     })
 }
 
@@ -359,5 +398,23 @@ mod tests {
         assert!(entry.featured);
         assert_eq!(format_iso_date_eu("2024-01-15"), "15.01.2024");
         assert!(catalog_entry_is_featured(&entry, &[entry.clone()]));
+    }
+
+    #[test]
+    fn parse_meta_uninstall_impacts() {
+        let xml = r#"
+        <plugin>
+          <name>Fail2ban</name>
+          <type>Security</type>
+          <version>1.2.0</version>
+          <description>Host firewall bans</description>
+          <author>master3395</author>
+          <uninstall_impact>Stops fail2ban.service</uninstall_impact>
+          <uninstall_impact>Removes Security &gt; Fail2ban sidebar</uninstall_impact>
+        </plugin>
+        "#;
+        let entry = parse_meta_xml("fail2ban", xml).unwrap();
+        assert_eq!(entry.uninstall_impacts.len(), 2);
+        assert!(entry.uninstall_impacts[0].contains("fail2ban.service"));
     }
 }

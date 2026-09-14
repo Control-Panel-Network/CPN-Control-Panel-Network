@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (no `/usr/local/CyberCP/` paths).
+- **Uninstall confirmation with impact list**: Installed plugins and Host packages (/plugins?view=host) require a Confirm / Cancel dialog that lists services and features that will stop or become unavailable. POST /plugins/uninstall and /apps/uninstall reject requests without confirm=1. Host impacts live in host_packages_catalog (uninstall_impacts); plugins may declare them in catalog meta.xml (<uninstall_impact>) or cpn-plugin.json, with built-in maps for known ids (fail2ban, mtaSts, bimi, and similar) and a generic fallback otherwise.
+- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is /opt/cpn-webmail/roundcube with panel proxy /roundcube/ (IMAP localhost:143). CLI: cpn app install --name roundcube. The Plugin Store 
+oundcubeWebmail card no longer installs; it redirects operators to Host packages (no CyberPanel paths).
 
 ### Changed
 

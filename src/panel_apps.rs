@@ -11,6 +11,7 @@ use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
 use crate::sites::SiteRecord;
+use crate::uninstall_confirm::{host_uninstall_impacts, uninstall_form_attrs};
 
 fn html_escape(value: &str) -> String {
     value
@@ -157,14 +158,16 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
               {hidden}
               <button type="submit" class="btn-secondary">Reinstall</button>
             </form>
-            <form method="post" action="/apps/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {label}?');">
+            <form method="post" action="/apps/uninstall" {form_attrs}>
               <input type="hidden" name="name" value="{name}">
               {hidden}
+              <input type="hidden" name="confirm" value="">
               <button type="submit" class="btn-danger">Uninstall</button>
             </form>"#,
                 label = html_escape(label),
                 name = html_escape(name),
                 hidden = hidden,
+                form_attrs = uninstall_form_attrs(label, &host_uninstall_impacts(status.id)),
             ));
             out
         }
