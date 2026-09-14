@@ -385,8 +385,18 @@ mod tests {
     fn overview_minimalist_disables_poll() {
         with_test_data_dir(|| {
             save_user_minimalist_mode("Admin", true).unwrap();
+            assert!(
+                crate::panel_user_prefs::load_user_minimalist_mode("Admin"),
+                "prefs must persist before rendering overview"
+            );
             let html = tab_overview(&site(), "Admin");
-            assert!(html.contains("data-metrics-poll=\"0\""));
+            assert!(
+                html.contains("data-metrics-poll=\"0\""),
+                "expected poll=0 in minimalist mode; got snippet around charts: {}",
+                html.find("data-metrics-poll=")
+                    .map(|i| &html[i..html.len().min(i + 80)])
+                    .unwrap_or("(missing data-metrics-poll)")
+            );
             assert!(html.contains("data-metrics-minimalist=\"1\""));
             assert!(html.contains("Snapshot (minimalist)"));
             assert!(html.contains("Refresh page to update"));

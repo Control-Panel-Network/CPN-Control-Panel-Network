@@ -231,9 +231,7 @@ pub fn clear_installer_bootstrap_token() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::account::DATA_DIR_TEST_LOCK;
 
     #[test]
     fn platform_defaults_are_absolute_style() {
@@ -254,11 +252,11 @@ mod tests {
 
     #[test]
     fn remote_startup_aborts_when_token_persist_fails() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let probe = std::env::temp_dir().join(format!("cpn-token-fail-{}", std::process::id()));
         let _ = std::fs::remove_file(&probe);
         std::fs::write(&probe, b"not-a-dir").expect("write probe");
-        // SAFETY: single-threaded under ENV_LOCK for this process's CPN_DATA_DIR.
+        // SAFETY: serialized with other CPN_DATA_DIR tests via DATA_DIR_TEST_LOCK.
         unsafe {
             std::env::set_var("CPN_DATA_DIR", &probe);
         }
@@ -276,7 +274,7 @@ mod tests {
 
     #[test]
     fn local_startup_tolerates_token_persist_failure() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let probe =
             std::env::temp_dir().join(format!("cpn-token-local-fail-{}", std::process::id()));
         let _ = std::fs::remove_file(&probe);
@@ -297,7 +295,7 @@ mod tests {
     fn bootstrap_token_is_created_mode_0600_exclusively() {
         use std::os::unix::fs::PermissionsExt;
 
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("cpn-token-ok-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
@@ -319,7 +317,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn bootstrap_token_refuses_symlink_temp_clobber() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("cpn-token-symlink-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
