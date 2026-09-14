@@ -1,7 +1,7 @@
 //! Markup helpers for the Plugins hub (tabs, installed cards, store catalog).
 
-use crate::panel_plugins_spa::{plugins_hub_styles};
-use crate::plugins::{InstalledPlugin};
+use crate::panel_plugins_spa::plugins_hub_styles;
+use crate::plugins::InstalledPlugin;
 use crate::sites::SiteRecord;
 
 pub(crate) fn html_escape(value: &str) -> String {

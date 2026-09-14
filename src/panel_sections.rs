@@ -149,9 +149,11 @@ pub fn email_accounts_main(
         || (mail_client_ready
             && matches!(
                 selected_mail,
-                Some(crate::model::MailSystem::Snappymail
-                    | crate::model::MailSystem::Tachyon
-                    | crate::model::MailSystem::Roundcube)
+                Some(
+                    crate::model::MailSystem::Snappymail
+                        | crate::model::MailSystem::Tachyon
+                        | crate::model::MailSystem::Roundcube
+                )
             )) {
         let open = crate::panel_webmail::webmail_open_path()
             .unwrap_or_else(|| webmail_health_url().to_string());

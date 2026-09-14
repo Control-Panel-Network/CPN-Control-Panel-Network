@@ -202,10 +202,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
     let dates_html = if dates.is_empty() {
         String::new()
     } else {
-        format!(
-            r#"<p class="plugin-dates">{}</p>"#,
-            html_escape(&dates)
-        )
+        format!(r#"<p class="plugin-dates">{}</p>"#, html_escape(&dates))
     };
     let binding_note = if !domain.is_empty() && is_associable(status.id) {
         let binds = bindings_for_domain(domain);
@@ -216,9 +213,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
         if mine.is_empty() {
             String::new()
         } else {
-            format!(
-                r#"<p class="plugin-meta">Bound to selected site</p>"#
-            )
+            format!(r#"<p class="plugin-meta">Bound to selected site</p>"#)
         }
     } else if is_site_scoped(status.id) {
         r#"<p class="plugin-meta">May drop paths under the selected site home.</p>"#.into()
@@ -260,7 +255,13 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
     )
 }
 
-fn category_pills(apps: &[AppStatus], active: &str, domain: &str, mode: &str, per_page: usize) -> String {
+fn category_pills(
+    apps: &[AppStatus],
+    active: &str,
+    domain: &str,
+    mode: &str,
+    per_page: usize,
+) -> String {
     let cats = host_categories(apps);
     let mut domain_q = format!("&amp;domain={}", urlencoding_simple(domain));
     domain_q.push_str(&format!(

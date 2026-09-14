@@ -123,8 +123,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-11",
             install_count: 20,
             featured: false,
-            description:
-                "Modern SnappyMail fork (Tachyon): mail, contacts, calendars. PHP 8.2+, no DB required.",
+            description: "Modern SnappyMail fork (Tachyon): mail, contacts, calendars. PHP 8.2+, no DB required.",
             install_status: HostInstallStatus::Live,
         },
         AppId::Nextsnapmail => HostPackageMeta {
@@ -135,8 +134,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-08-01",
             install_count: 8,
             featured: false,
-            description:
-                "NextSnapMail is a Nextcloud App Store webmail (SnappyMail fork). CPN does not offer a standalone host install without Nextcloud.",
+            description: "NextSnapMail is a Nextcloud App Store webmail (SnappyMail fork). CPN does not offer a standalone host install without Nextcloud.",
             install_status: HostInstallStatus::RequiresNextcloud,
         },
         AppId::Sogo => HostPackageMeta {
@@ -147,8 +145,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-01",
             install_count: 5,
             featured: false,
-            description:
-                "SOGo groupware (webmail + CalDAV/CardDAV). Full Inverse package install is not LIVE yet; listed for registry and installer selection.",
+            description: "SOGo groupware (webmail + CalDAV/CardDAV). Full Inverse package install is not LIVE yet; listed for registry and installer selection.",
             install_status: HostInstallStatus::Scaffold,
         },
     }
@@ -180,7 +177,10 @@ pub fn host_package_is_featured(id: AppId, all: &[AppStatus]) -> bool {
 pub fn format_host_dates(meta: &HostPackageMeta) -> String {
     let mut parts = Vec::new();
     if !meta.released_on.is_empty() {
-        parts.push(format!("Released: {}", format_iso_date_eu(meta.released_on)));
+        parts.push(format!(
+            "Released: {}",
+            format_iso_date_eu(meta.released_on)
+        ));
     }
     if !meta.updated_on.is_empty() {
         parts.push(format!("Updated: {}", format_iso_date_eu(meta.updated_on)));

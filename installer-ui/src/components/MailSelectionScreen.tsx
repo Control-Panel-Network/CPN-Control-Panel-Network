@@ -33,7 +33,9 @@ function MailIcon({ mail }: { mail: MailSystem }) {
     return <Cloud size={44} strokeWidth={1.6} className="text-[#2563eb]" />;
   }
   if (mail === "sogo") {
-    return <CalendarDays size={44} strokeWidth={1.6} className="text-[#7c3aed]" />;
+    return (
+      <CalendarDays size={44} strokeWidth={1.6} className="text-[#7c3aed]" />
+    );
   }
   return mail === "snappymail" ? (
     <Mails size={44} strokeWidth={1.6} className="text-[#147a62]" />
@@ -63,7 +65,8 @@ export function MailSelectionScreen({
     {
       id: "tachyon",
       name: "Tachyon",
-      description: "Modern SnappyMail fork with calendars and contacts. LIVE install.",
+      description:
+        "Modern SnappyMail fork with calendars and contacts. LIVE install.",
     },
     {
       id: "roundcube",
@@ -116,7 +119,9 @@ export function MailSelectionScreen({
                 {option.description}
               </p>
               {option.note ? (
-                <p className="text-[13px] leading-[1.4] text-[#92400e] mb-5">{option.note}</p>
+                <p className="text-[13px] leading-[1.4] text-[#92400e] mb-5">
+                  {option.note}
+                </p>
               ) : (
                 <div className="mb-5" />
               )}

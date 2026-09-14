@@ -317,10 +317,9 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 warning: None,
             }
         }
-        AppId::Snappymail
-        | AppId::Tachyon
-        | AppId::Nextsnapmail
-        | AppId::Sogo => crate::apps_webmail::detect_webmail_app(id),
+        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => {
+            crate::apps_webmail::detect_webmail_app(id)
+        }
     }
 }
 
@@ -379,10 +378,9 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 enable_now(&["rabbitmq-server"])?;
                 "Installed and started RabbitMQ.".to_string()
             }
-            AppId::Snappymail
-            | AppId::Tachyon
-            | AppId::Nextsnapmail
-            | AppId::Sogo => crate::apps_webmail::install_webmail_app(id)?,
+            AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => {
+                crate::apps_webmail::install_webmail_app(id)?
+            }
         };
         messages.push(msg);
     } else {
@@ -458,10 +456,9 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
             remove_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
             "Uninstalled RabbitMQ.".to_string()
         }
-        AppId::Snappymail
-        | AppId::Tachyon
-        | AppId::Nextsnapmail
-        | AppId::Sogo => crate::apps_webmail::uninstall_webmail_app(id)?,
+        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => {
+            crate::apps_webmail::uninstall_webmail_app(id)?
+        }
     };
     messages.push(msg);
     Ok(messages.join(" "))
