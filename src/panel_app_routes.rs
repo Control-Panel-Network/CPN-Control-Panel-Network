@@ -97,6 +97,9 @@ pub struct AppNameForm {
     name: String,
     #[serde(default)]
     domain: String,
+    /// Must be `1` from the uninstall confirm dialog (ignored by other actions).
+    #[serde(default)]
+    confirm: String,
 }
 
 #[post("/apps/install")]
@@ -174,6 +177,18 @@ pub async fn apps_uninstall(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::uninstall_confirm::confirm_accepted(&form.confirm) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(
+                    &form.domain,
+                    None,
+                    Some(crate::uninstall_confirm::CONFIRM_REQUIRED_MSG),
+                ),
+            ))
+            .finish();
+    }
     let domain = match optional_domain_for_user(&user, &form.domain, SitePerm::Uninstall) {
         Ok(v) => v,
         Err(error) => {

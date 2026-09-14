@@ -3,6 +3,7 @@
 use crate::panel_plugins_spa::plugins_hub_styles;
 use crate::plugins::InstalledPlugin;
 use crate::sites::SiteRecord;
+use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
 
 pub(crate) fn html_escape(value: &str) -> String {
     value
@@ -237,6 +238,8 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
         let m = &item.manifest;
         let active = if m.enabled { "Yes" } else { "No" };
         let toggle = toggle_form(m.enabled, &m.id, domain);
+        let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+        let form_attrs = uninstall_form_attrs(&m.name, &impacts);
         cards.push_str(&format!(
             r#"<article class="plugin-card">
           <h3>{name}</h3>
@@ -250,9 +253,10 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
           <div class="plugin-actions">
             <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
             {toggle}
-            <form method="post" action="/plugins/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {name}?');">
+            <form method="post" action="/plugins/uninstall" {form_attrs}>
               <input type="hidden" name="id" value="{id}">
               <input type="hidden" name="domain" value="{domain}">
+              <input type="hidden" name="confirm" value="">
               <button type="submit" class="btn-danger">Uninstall</button>
             </form>
           </div>
@@ -270,6 +274,7 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
             desc = html_escape(&m.description),
             active = active,
             toggle = toggle,
+            form_attrs = form_attrs,
             domain = html_escape(domain),
             domain_q = urlencoding_simple(domain),
             help = urlencoding_simple(&format!(
@@ -322,6 +327,8 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
         let m = &item.manifest;
         let active = if m.enabled { "Active" } else { "Inactive" };
         let toggle = toggle_form(m.enabled, &m.id, domain);
+        let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+        let form_attrs = uninstall_form_attrs(&m.name, &impacts);
         rows.push_str(&format!(
             r#"<tr>
             <td><strong>{name}</strong><div class="muted">{id}</div></td>
@@ -331,9 +338,10 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
             <td class="plugin-actions">
               <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
               {toggle}
-              <form method="post" action="/plugins/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {name}?');">
+              <form method="post" action="/plugins/uninstall" {form_attrs}>
                 <input type="hidden" name="id" value="{id}">
                 <input type="hidden" name="domain" value="{domain}">
+                <input type="hidden" name="confirm" value="">
                 <button type="submit" class="btn-danger">Uninstall</button>
               </form>
             </td>
@@ -344,6 +352,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
             ver = html_escape(&m.version),
             active = active,
             toggle = toggle,
+            form_attrs = form_attrs,
             domain = html_escape(domain),
             domain_q = urlencoding_simple(domain),
         ));

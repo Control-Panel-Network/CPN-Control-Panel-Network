@@ -714,6 +714,9 @@ pub struct PluginIdForm {
     id: String,
     #[serde(default)]
     domain: String,
+    /// Must be `1` from the uninstall confirm dialog (ignored by other actions).
+    #[serde(default)]
+    confirm: String,
 }
 
 fn plugins_redirect(domain: &str, view: &str, notice: Option<&str>, error: Option<&str>) -> String {
@@ -778,6 +781,19 @@ pub async fn plugins_uninstall(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::uninstall_confirm::confirm_accepted(&form.confirm) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    None,
+                    Some(crate::uninstall_confirm::CONFIRM_REQUIRED_MSG),
+                ),
+            ))
+            .finish();
+    }
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Uninstall) {
         return HttpResponse::SeeOther()
             .append_header((

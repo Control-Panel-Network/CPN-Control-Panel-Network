@@ -15,6 +15,8 @@ pub struct HostPackageMeta {
     pub description: &'static str,
     /// LIVE install vs honest non-LIVE status note shown on the card.
     pub install_status: HostInstallStatus,
+    /// Services / features that stop or become unavailable on uninstall.
+    pub uninstall_impacts: &'static [&'static str],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +50,12 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "Default MariaDB server for CPN hosting (MySQL-compatible; CPN does not install Oracle MySQL).",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops and removes the mariadb systemd unit",
+                "Local MariaDB databases and :3306 become unavailable",
+                "phpMyAdmin and panel database tools lose the MariaDB backend",
+                "Sites using this host MariaDB will fail to connect until MariaDB is reinstalled",
+            ],
         },
         AppId::Postgresql => HostPackageMeta {
             category: "Database",
@@ -59,6 +67,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: false,
             description: "Opt-in PostgreSQL. Can coexist with MariaDB.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops and removes the PostgreSQL systemd unit",
+                "PostgreSQL databases on this host become unavailable",
+                "Apps and sites depending on local Postgres will fail to connect",
+            ],
         },
         AppId::Phpmyadmin => HostPackageMeta {
             category: "Utility",
@@ -70,6 +83,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "phpMyAdmin UI reverse-proxied under the panel for MariaDB.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Removes the /phpmyadmin/ reverse-proxy and Open phpMyAdmin links",
+                "Panel MariaDB Manager via phpMyAdmin becomes unavailable",
+                "Does not remove MariaDB itself (databases remain if MariaDB stays installed)",
+            ],
         },
         AppId::Email => HostPackageMeta {
             category: "Email",
@@ -81,6 +99,12 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "Postfix + Dovecot IMAP/SMTP stack used by webmail clients.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops Postfix and Dovecot (local MTA / IMAP)",
+                "IMAP, SMTP, and ManageSieve ports for local mail stop serving",
+                "Webmail clients (SnappyMail, Tachyon, and similar) cannot authenticate to local mailboxes",
+                "Email hub features that depend on the local mail stack may fail until Email is reinstalled",
+            ],
         },
         AppId::Rabbitmq => HostPackageMeta {
             category: "Utility",
@@ -92,6 +116,10 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: false,
             description: "RabbitMQ message broker (AMQP) as an optional host package.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops and removes rabbitmq-server",
+                "AMQP messaging for apps using this broker stops",
+            ],
         },
         AppId::Snappymail => HostPackageMeta {
             category: "Email",
@@ -103,6 +131,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "Optional CPN webmail (SnappyMail) under /opt/cpn-webmail. Use Set as active to switch the panel proxy.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Removes SnappyMail under /opt/cpn-webmail and the /snappymail/ panel proxy",
+                "Open SnappyMail links and Email hub webmail cards stop working",
+                "Does not uninstall Postfix/Dovecot (use the Email host package for that)",
+            ],
         },
         AppId::Tachyon => HostPackageMeta {
             category: "Email",
@@ -114,6 +147,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "Default CPN webmail (Tachyon): modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+, no DB required.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Removes the Tachyon webmail install and related panel proxy paths",
+                "Tachyon UI (mail, contacts, calendars) becomes unavailable",
+                "Does not uninstall Postfix/Dovecot by itself",
+            ],
         },
         AppId::Nextcloud => HostPackageMeta {
             category: "Apps",
@@ -125,6 +163,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: false,
             description: "Nextcloud files under /opt/nextcloud (dependency for NextSnapMail). Finish OCC/web setup after install.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Does not auto-remove /opt/nextcloud (manual cleanup if needed)",
+                "NextSnapMail and other Nextcloud apps become unavailable without Nextcloud files",
+                "OCC/web setup state under /opt/nextcloud is left for the operator",
+            ],
         },
         AppId::Roundcube => HostPackageMeta {
             category: "Email",
@@ -136,6 +179,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: true,
             description: "Optional Roundcube webmail under /opt/cpn-webmail/roundcube with panel proxy at /roundcube/ (IMAP localhost:143).",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Removes Roundcube under /opt/cpn-webmail/roundcube and the /roundcube/ panel proxy",
+                "Open Roundcube / webmail links for this package stop working",
+                "Does not uninstall Postfix/Dovecot (use the Email host package for that)",
+            ],
         },
         AppId::Nextsnapmail => HostPackageMeta {
             category: "Email",
@@ -147,6 +195,11 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: false,
             description: "NextSnapMail Nextcloud app (SnappyMail fork). Install auto-provisions Nextcloud under /opt/nextcloud when missing, then drops apps/nextsnapmail.",
             install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Removes NextSnapMail from Nextcloud apps/nextsnapmail when present",
+                "Does not remove Nextcloud itself (use the Nextcloud host package / manual /opt/nextcloud cleanup)",
+                "Active preference may fall back to Tachyon, SnappyMail, or Roundcube if NextSnapMail was active",
+            ],
         },
         AppId::Sogo => HostPackageMeta {
             category: "Email",
@@ -158,6 +211,10 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             featured: false,
             description: "SOGo groupware (webmail + CalDAV/CardDAV). Full Inverse package install is not LIVE yet; listed for registry and installer selection.",
             install_status: HostInstallStatus::Scaffold,
+            uninstall_impacts: &[
+                "Removes SOGo from the CPN host package registry on this panel",
+                "Any partial SOGo packages or CalDAV/CardDAV endpoints become unavailable if present",
+            ],
         },
     }
 }
