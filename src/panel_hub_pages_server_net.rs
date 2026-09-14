@@ -15,8 +15,9 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
     let preferred = preferred_listen_port_or_default();
     let summary = network_public(bind_port, None);
     let public_url = summary.panel_public_url.as_deref().unwrap_or("");
+    // Use r## so CSS/JS color literals like "#f87171" cannot terminate the raw string.
     let form = format!(
-        r#"<ul class="kv-list">
+        r##"<ul class="kv-list">
           <li><span>Current bind</span><strong>{bind}</strong></li>
           <li><span>Preferred</span><strong>{pref}</strong></li>
           <li><span>Public base</span><strong>{base}</strong></li>
@@ -118,7 +119,7 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
           }});
         }})();
         </script>
-        <p class="muted">Uses the panel port migration API. When the listen port changes, the panel service restarts and this page opens on the new URL automatically.</p>"#,
+        <p class="muted">Uses the panel port migration API. When the listen port changes, the panel service restarts and this page opens on the new URL automatically.</p>"##,
         bind = bind_port,
         pref = preferred,
         base = html_escape(&summary.public_base_url),
