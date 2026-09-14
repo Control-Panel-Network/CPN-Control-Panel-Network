@@ -615,11 +615,11 @@ mod tests {
         assert!(parse_mail_option("1").unwrap().is_none());
         assert!(matches!(
             parse_mail_option("2").unwrap(),
-            Some(MailSystem::Snappymail)
+            Some(MailSystem::Tachyon)
         ));
         assert!(matches!(
             parse_mail_option("3").unwrap(),
-            Some(MailSystem::Tachyon)
+            Some(MailSystem::Snappymail)
         ));
         assert!(matches!(
             parse_mail_option("4").unwrap(),

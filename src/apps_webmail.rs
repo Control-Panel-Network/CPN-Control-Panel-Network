@@ -1,4 +1,4 @@
-//! Webmail host packages: SnappyMail, Tachyon (LIVE), NextSnapMail (Nextcloud chain), SOGo gate.
+//! Webmail host packages: SnappyMail, Tachyon, Roundcube (LIVE), NextSnapMail (Nextcloud chain), SOGo gate.
 
 use crate::active_webmail::{
     client_files_present, default_webmail_client, docroot_for, load_active_pref, mail_to_id,
@@ -25,10 +25,16 @@ fn path_installed(rel: &str) -> bool {
     root.is_dir() && root.join("index.php").is_file()
 }
 
+fn roundcube_installed() -> bool {
+    Path::new("/opt/cpn-webmail/roundcube/public_html/index.php").is_file()
+        || Path::new("/opt/cpn-webmail/roundcube/index.php").is_file()
+}
+
 pub fn mail_for_app(id: AppId) -> Result<MailSystem, String> {
     match id {
         AppId::Snappymail => Ok(MailSystem::Snappymail),
         AppId::Tachyon => Ok(MailSystem::Tachyon),
+        AppId::Roundcube => Ok(MailSystem::Roundcube),
         AppId::Nextsnapmail => Ok(MailSystem::Nextsnapmail),
         AppId::Sogo => Ok(MailSystem::Sogo),
         AppId::Nextcloud => Err("Nextcloud is not a panel-proxied webmail client.".into()),
@@ -97,6 +103,29 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
                 (
                     AppStateKind::NotInstalled,
                     "Tachyon not detected under /opt/cpn-webmail.".into(),
+                )
+            };
+            AppStatus {
+                id,
+                state,
+                detail,
+                warning: None,
+            }
+        }
+        AppId::Roundcube => {
+            let installed = roundcube_installed();
+            let (state, detail) = if installed {
+                (
+                    AppStateKind::Running,
+                    format!(
+                        "Roundcube files present under /opt/cpn-webmail/roundcube.{}",
+                        active_suffix(id)
+                    ),
+                )
+            } else {
+                (
+                    AppStateKind::NotInstalled,
+                    "Roundcube not detected under /opt/cpn-webmail.".into(),
                 )
             };
             AppStatus {
@@ -271,7 +300,7 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
             "SOGo install is SCAFFOLD (not LIVE). Use Inverse SOGo packages manually for now; CPN will wire a full recipe in a later release."
                 .into(),
         ),
-        AppId::Snappymail | AppId::Tachyon => {
+        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube => {
             let mail = mail_for_app(id)?;
             let engine = detect_server_engine().ok_or_else(|| {
                 "No supported web server detected (OpenLiteSpeed, Nginx, or Caddy). Install a web server before webmail."
@@ -319,22 +348,19 @@ pub fn activate_webmail_app(id: AppId) -> Result<String, String> {
         let state = quiet_app_state(engine);
         block_on_runtime(configure_webmail_runtime(&state, docroot, engine))?;
         Ok(format!(
-            "Active panel webmail is now {} (proxy {} → {}). Mailboxes on Postfix/Dovecot are unchanged.",
+            "Active panel webmail is now {} (proxy {} -> {}). Mailboxes on Postfix/Dovecot are unchanged.",
             id.label(),
             cfg.public_path,
             docroot
         ))
     } else if mail == MailSystem::Nextsnapmail {
-        // Keep existing panel proxy/docroot for Tachyon/SnappyMail; preference marks NextSnapMail active in Host packages.
+        // Keep existing panel proxy/docroot for Tachyon/SnappyMail/Roundcube; preference marks NextSnapMail active in Host packages.
         Ok(
-            "Active webmail preference set to NextSnapMail (runs inside Nextcloud under apps/nextsnapmail). Open it from Nextcloud after OCC setup. Panel /tachyon and /snappymail proxies stay on the last panel client so mailboxes keep working."
+            "Active webmail preference set to NextSnapMail (runs inside Nextcloud under apps/nextsnapmail). Open it from Nextcloud after OCC setup. Panel /tachyon, /snappymail, and /roundcube proxies stay on the last panel client so mailboxes keep working."
                 .into(),
         )
     } else {
-        Err(format!(
-            "{} cannot be activated as panel webmail.",
-            id.label()
-        ))
+        Err(format!("{} cannot be activated as panel webmail.", id.label()))
     }
 }
 
@@ -355,6 +381,13 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
             }
             format!("Removed Tachyon files from {dir}.")
         }
+        AppId::Roundcube => {
+            let dir = "/opt/cpn-webmail/roundcube";
+            if Path::new(dir).exists() {
+                std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove {dir}: {e}"))?;
+            }
+            format!("Removed Roundcube files from {dir}.")
+        }
         AppId::Nextsnapmail => uninstall_nextsnapmail_app()?,
         AppId::Nextcloud => {
             return Err(
@@ -369,9 +402,14 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
     };
     if was_active {
         // Prefer remaining panel client; fall back to default preference when none left.
-        let fallback = [AppId::Tachyon, AppId::Snappymail, AppId::Nextsnapmail]
-            .into_iter()
-            .find(|cand| *cand != id && mail_for_app(*cand).ok().is_some_and(client_files_present));
+        let fallback = [
+            AppId::Tachyon,
+            AppId::Snappymail,
+            AppId::Roundcube,
+            AppId::Nextsnapmail,
+        ]
+        .into_iter()
+        .find(|cand| *cand != id && mail_for_app(*cand).ok().is_some_and(client_files_present));
         if let Some(cand) = fallback {
             let _ = activate_webmail_app(cand);
         } else if load_active_pref().is_some_and(|m| mail_to_id(m) == id.as_str()) {
@@ -384,7 +422,12 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
 pub fn is_webmail_app(id: AppId) -> bool {
     matches!(
         id,
-        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo | AppId::Nextcloud
+        AppId::Snappymail
+            | AppId::Tachyon
+            | AppId::Roundcube
+            | AppId::Nextsnapmail
+            | AppId::Sogo
+            | AppId::Nextcloud
     )
 }
 
@@ -395,6 +438,7 @@ mod tests {
     #[test]
     fn mail_mapping() {
         assert_eq!(mail_for_app(AppId::Tachyon).unwrap(), MailSystem::Tachyon);
+        assert_eq!(mail_for_app(AppId::Roundcube).unwrap(), MailSystem::Roundcube);
         assert!(mail_for_app(AppId::Nextcloud).is_err());
     }
 }

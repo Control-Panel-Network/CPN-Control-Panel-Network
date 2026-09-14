@@ -51,7 +51,7 @@ pub enum AppCommands {
         #[arg(long)]
         yes: bool,
     },
-    /// Set the active panel webmail client (SnappyMail / Tachyon / NextSnapMail)
+    /// Set the active panel webmail client (SnappyMail / Tachyon / Roundcube / NextSnapMail)
     Activate {
         #[arg(long)]
         name: String,

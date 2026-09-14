@@ -126,6 +126,17 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             description: "Nextcloud files under /opt/nextcloud (dependency for NextSnapMail). Finish OCC/web setup after install.",
             install_status: HostInstallStatus::Live,
         },
+        AppId::Roundcube => HostPackageMeta {
+            category: "Email",
+            version: "1.7.3",
+            pricing: "free",
+            released_on: "2024-08-01",
+            updated_on: "2026-09-14",
+            install_count: 70,
+            featured: true,
+            description: "Optional Roundcube webmail under /opt/cpn-webmail/roundcube with panel proxy at /roundcube/ (IMAP localhost:143).",
+            install_status: HostInstallStatus::Live,
+        },
         AppId::Nextsnapmail => HostPackageMeta {
             category: "Email",
             version: "app",

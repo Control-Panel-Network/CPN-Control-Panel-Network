@@ -92,6 +92,7 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
         status.id,
         crate::apps::AppId::Snappymail
             | crate::apps::AppId::Tachyon
+            | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
     );
     let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
@@ -229,6 +230,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
         status.id,
         crate::apps::AppId::Snappymail
             | crate::apps::AppId::Tachyon
+            | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
     ) && crate::apps_webmail::is_active_webmail(status.id)
     {
@@ -447,7 +449,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> · <code>cpn app activate --name snappymail</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> · <code>cpn app activate --name roundcube</code></p>
         {picker}
       </article>
       <p class="plugin-count">{count} host packages</p>
@@ -485,6 +487,7 @@ mod tests {
     #[test]
     fn parse_known_webmail_ids() {
         assert_eq!(AppId::parse("tachyon").unwrap(), AppId::Tachyon);
+        assert_eq!(AppId::parse("roundcube").unwrap(), AppId::Roundcube);
         assert_eq!(AppId::parse("nextsnapmail").unwrap(), AppId::Nextsnapmail);
         assert_eq!(AppId::parse("sogo").unwrap(), AppId::Sogo);
     }

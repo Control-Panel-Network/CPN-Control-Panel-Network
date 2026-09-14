@@ -38,6 +38,7 @@ pub fn start_app(id: AppId) -> Result<String, String> {
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
         AppId::Snappymail
         | AppId::Tachyon
+        | AppId::Roundcube
         | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => Err(format!(
@@ -75,6 +76,7 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
         AppId::Snappymail
         | AppId::Tachyon
+        | AppId::Roundcube
         | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => Err(format!(

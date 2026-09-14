@@ -208,6 +208,7 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
         }
         AppId::Snappymail
         | AppId::Tachyon
+        | AppId::Roundcube
         | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => Ok(format!(
