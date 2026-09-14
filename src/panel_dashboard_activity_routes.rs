@@ -18,26 +18,18 @@ pub struct SshReviewSnoozeForm {
     days: Option<u32>,
 }
 
-fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, HttpResponse> {
-    let Some(user) = require_panel_user(state, http) else {
-        return Err(login_redirect(http));
-    };
-    if !is_panel_admin(&user) {
-        return Err(redirect(DASH_SSH_LOGS));
-    }
-    Ok(user)
-}
-
 #[post("/dashboard/activity/ssh-security-review/snooze")]
 pub async fn dashboard_ssh_security_review_snooze(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     form: web::Form<SshReviewSnoozeForm>,
 ) -> HttpResponse {
-    let user = match require_admin_user(&state, &http) {
-        Ok(u) => u,
-        Err(resp) => return resp,
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
     };
+    if !is_panel_admin(&user) {
+        return redirect(DASH_SSH_LOGS);
+    }
     let days = form.days.unwrap_or(SSH_SECURITY_REVIEW_SNOOZE_DEFAULT_DAYS);
     let _ = snooze_ssh_security_review(&user, days);
     redirect(DASH_SSH_LOGS)
@@ -48,10 +40,12 @@ pub async fn dashboard_ssh_security_review_show(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
-    let user = match require_admin_user(&state, &http) {
-        Ok(u) => u,
-        Err(resp) => return resp,
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
     };
+    if !is_panel_admin(&user) {
+        return redirect(DASH_SSH_LOGS);
+    }
     let _ = clear_ssh_security_review_snooze(&user);
     redirect(DASH_SSH_LOGS)
 }
