@@ -393,8 +393,7 @@ mod tests {
             assert!(
                 html.contains("data-metrics-poll=\"0\""),
                 "expected poll=0 in minimalist mode; got snippet around charts: {}",
-                html
-                    .find("data-metrics-poll=")
+                html.find("data-metrics-poll=")
                     .map(|i| &html[i..html.len().min(i + 80)])
                     .unwrap_or("(missing data-metrics-poll)")
             );
