@@ -132,19 +132,17 @@ fn ensure_domain_sieve_enabled() -> Result<(), String> {
         let Ok(mut data) = serde_json::from_str::<Value>(&raw) else {
             continue;
         };
-        let sieve = data
-            .as_object_mut()
-            .map(|o| o.entry("Sieve".into()).or_insert_with(|| Value::Object(Default::default())));
+        let sieve = data.as_object_mut().map(|o| {
+            o.entry("Sieve".into())
+                .or_insert_with(|| Value::Object(Default::default()))
+        });
         if let Some(Value::Object(obj)) = sieve {
             obj.insert("enabled".into(), Value::Bool(true));
             obj.insert("host".into(), Value::String("127.0.0.1".into()));
             obj.insert("port".into(), serde_json::json!(4190));
             obj.insert("shortLogin".into(), Value::Bool(true));
             obj.insert("lowerLogin".into(), Value::Bool(true));
-            obj.insert(
-                "sasl".into(),
-                serde_json::json!(["PLAIN", "LOGIN"]),
-            );
+            obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
         if let Ok(pretty) = serde_json::to_string_pretty(&data) {
             let _ = std::fs::write(&path, format!("{pretty}\n"));

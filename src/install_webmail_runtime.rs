@@ -209,25 +209,17 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     }
     // Enable ManageSieve so Filters work in SnappyMail.
     {
-        let sieve = data
-            .as_object_mut()
-            .map(|o| {
-                o.entry("Sieve".into())
-                    .or_insert_with(|| serde_json::Value::Object(Default::default()))
-            });
+        let sieve = data.as_object_mut().map(|o| {
+            o.entry("Sieve".into())
+                .or_insert_with(|| serde_json::Value::Object(Default::default()))
+        });
         if let Some(serde_json::Value::Object(obj)) = sieve {
             obj.insert("enabled".into(), serde_json::Value::Bool(true));
-            obj.insert(
-                "host".into(),
-                serde_json::Value::String("127.0.0.1".into()),
-            );
+            obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
             obj.insert("port".into(), serde_json::json!(4190));
             obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
             obj.insert("lowerLogin".into(), serde_json::Value::Bool(true));
-            obj.insert(
-                "sasl".into(),
-                serde_json::json!(["PLAIN", "LOGIN"]),
-            );
+            obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
     }
     let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;

@@ -75,7 +75,9 @@ pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
             JournalAction::Note,
             "managesieve:4190",
             None,
-            Some("Sieve packages installed; ManageSieve not yet listening (check dovecot -n)".into()),
+            Some(
+                "Sieve packages installed; ManageSieve not yet listening (check dovecot -n)".into(),
+            ),
         )?;
     } else {
         install_journal::record(
@@ -128,10 +130,7 @@ fn ensure_sieve_dovecot_config() -> Result<(), String> {
         let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
         let mut changed = false;
         if let Some(idx) = raw.find("protocols =") {
-            let line_end = raw[idx..]
-                .find('\n')
-                .map(|n| idx + n)
-                .unwrap_or(raw.len());
+            let line_end = raw[idx..].find('\n').map(|n| idx + n).unwrap_or(raw.len());
             let line = &raw[idx..line_end];
             if !line.contains("sieve") {
                 let new_line = if line.contains("imap") {
