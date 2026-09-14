@@ -318,11 +318,6 @@ fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
     }
 }
 
-fn create_ephemeral_db_user() -> Result<(String, String), String> {
-    create_ephemeral_db_user_scoped(None)
-}
-
-/// When `db_names` is Some, grants are limited to those databases (domain jail).
 fn create_ephemeral_db_user_scoped(
     db_names: Option<&[String]>,
 ) -> Result<(String, String), String> {
