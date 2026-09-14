@@ -98,13 +98,12 @@ fn load_or_create_secret(client_id: &str) -> Result<ContactsDbSecret, String> {
     let path = secrets_path(client_id);
     if path.is_file() {
         let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        if let Ok(existing) = serde_json::from_str::<ContactsDbSecret>(&raw) {
-            if !existing.db_password.is_empty()
-                && existing.db_name.starts_with("cpn_")
-                && existing.client_id == client_id
-            {
-                return Ok(existing);
-            }
+        if let Ok(existing) = serde_json::from_str::<ContactsDbSecret>(&raw)
+            && !existing.db_password.is_empty()
+            && existing.db_name.starts_with("cpn_")
+            && existing.client_id == client_id
+        {
+            return Ok(existing);
         }
     }
 
