@@ -34,10 +34,8 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
     let _ = Command::new("bash")
         .args([
             "-c",
-            &format!(
-                "chown -R cpn-webmail:cpn-webmail /var/lib/cpn-webmail/snappy-repo 2>/dev/null || true; \
-                 chmod -R u=rwX,g=rX,o= /var/lib/cpn-webmail/snappy-repo 2>/dev/null || true"
-            ),
+            "chown -R cpn-webmail:cpn-webmail /var/lib/cpn-webmail/snappy-repo 2>/dev/null || true; \
+             chmod -R u=rwX,g=rX,o= /var/lib/cpn-webmail/snappy-repo 2>/dev/null || true",
         ])
         .status();
 
