@@ -340,17 +340,17 @@ fn listen_port_authorized(
     state: &AppState,
     query: &TokenQuery,
     http: &HttpRequest,
-) -> Result<(), HttpResponse> {
+) -> Option<HttpResponse> {
     if authorized_request(state, query, http) {
-        return Ok(());
+        return None;
     }
     match panel_user_from_request(state, http) {
-        Some(user) if is_panel_admin(&user) => Ok(()),
-        Some(_) => Err(listen_port_json_err(
+        Some(user) if is_panel_admin(&user) => None,
+        Some(_) => Some(listen_port_json_err(
             403,
             "Only the panel admin can change the listen port",
         )),
-        None => Err(listen_port_json_err(401, "Login required")),
+        None => Some(listen_port_json_err(401, "Login required")),
     }
 }
 
@@ -407,7 +407,7 @@ async fn set_listen_port(
     query: web::Query<TokenQuery>,
     request: web::Json<ListenPortRequest>,
 ) -> HttpResponse {
-    if let Err(resp) = listen_port_authorized(&state, &query, &http) {
+    if let Some(resp) = listen_port_authorized(&state, &query, &http) {
         return resp;
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
