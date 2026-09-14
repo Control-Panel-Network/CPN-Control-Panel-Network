@@ -472,6 +472,7 @@ pub fn setup_account(
     let _ = crate::litespeed_webadmin_users::maybe_align_webadmin_after_account_setup(
         &username, &password,
     );
+    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
     Ok(AccountSetupResult {
         public: AccountPublic {
             username,

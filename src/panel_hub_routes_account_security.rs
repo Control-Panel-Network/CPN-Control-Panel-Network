@@ -105,7 +105,9 @@ fn set_forced_password(username: &str, password: &str) -> Result<(), String> {
     boot.password_hash = hash_password(password, &salt);
     boot.password_policy = policy;
     boot.must_change_password = false;
-    write_account_file(&path, &boot)
+    write_account_file(&path, &boot)?;
+    let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(password);
+    Ok(())
 }
 
 #[get("/account/security/enroll-2fa")]

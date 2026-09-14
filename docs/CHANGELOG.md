@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dovecot ManageSieve / Pigeonhole** installs with the local mail stack (port **4190**). SnappyMail domain profiles enable Sieve at `127.0.0.1:4190` with `shortLogin` so Filters work for local Maildir users. Upgrade/redeploy heals missing packages and config.
+
+### Changed
+
+- **SnappyMail defaults** for all accounts: **Convert HTML to Markdown** and **Allow styles** (`AllowStyles` / `<style>` CSS) default On (user-overridable). Existing accounts migrate once; later toggles are preserved.
+- **SnappyMail admin password** (`/?admin`) stays in sync with the password set via **Email > Change Password** (`/email/password`), and also when the CPN panel account password changes (forced change, profile change, reset, or first-account setup). Same operator password for panel mail ops and SnappyMail admin.
+
+### Added
+
 - **Email hub LIVE tools** (former SCAFFOLD cards): Pattern Forwarding (`/email/pattern-forwarding` with Postfix virtual maps), Email Limits (`/email/limits`), Change Password (`/email/password`), Email Debugger (`/email/debugger`), Mail Queue (`/email/queue` via allowlisted `postqueue`/`postsuper`), SpamAssassin / Rspamd / MailScanner status+enable pages, Email Marketing MVP (`/email/marketing`), and Plus-Addressing (`/email/plus-addressing` via `recipient_delimiter`). Admin ACL + CSRF on POSTs; MailScanner may show Unavailable on AlmaLinux 9 when the package is missing.
 - **DNS Zones** create/manage UX at `/server/dns/zones` and `/server/dns/zones/create`: domain-only create (strips `http`/`www`), auto-seed SOA + NS from Default Nameservers plus apex A when the host IP is known, structured record table (A, AAAA, CNAME, MX, TXT, NS, SRV) with add/delete, optional Advanced raw zone editor. Zones persist as JSON + `.zone` under the CPN DNS data directory. Admin-only POSTs with CSRF and same-origin checks.
 - **Nameservers** (`/server/dns/nameservers`): create/list/delete NS hostnames with glue A/AAAA.
@@ -25,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **SnappyMail IMAP login on SELinux hosts**: enable `httpd_can_network_connect`, set Dovecot `auth_username_format = %Ln` (email local-part for PAM), prefer `ssl = yes` over `required`, and point SnappyMail domain defaults at `127.0.0.1` with `shortLogin` so webmail can authenticate local Maildir users.
-- **PHP-FPM IMAP `name_connect`**: ship local SELinux module `cpn_webmail_imap` so `httpd_t` may connect to Dovecot `pop_port_t` (143/993) and Postfix `smtp_port_t`. On AlmaLinux 9 the network-connect boolean alone still denied dest=143 (SnappyMail: Can't connect to host tcp://localhost:143).
+- **PHP-FPM IMAP `name_connect`**: ship local SELinux module `cpn_webmail_imap` so `httpd_t` may connect to Dovecot `pop_port_t` (143/993) and Postfix `smtp_port_t`. On AlmaLinux 9 the network-connect boolean alone still denied dest=143 (SnappyMail: Can't connect to host tcp://localhost:143). Module **1.1** also allows `sieve_port_t` (ManageSieve 4190).
 - **Webmail panel proxy**: parse curl responses as raw bytes so WOFF/fonts and other binary assets are not UTF-8-corrupted; preserve multiple `Set-Cookie` headers.
 - **Change Password PRG**: `/email/password/save` redirects to clean `/email/password` with an HttpOnly flash cookie notice (no long `?notice=` query wall); Open Webmail links use `/snappymail/` instead of forcing `index.php`.
 

@@ -229,6 +229,9 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         Some("SELinux: allow PHP-FPM to reach local IMAP/SMTP (boolean + cpn_webmail_imap)".into()),
     )?;
 
+    // ManageSieve (4190) so SnappyMail can manage filters.
+    crate::install_mail_sieve::ensure_dovecot_sieve(state).await?;
+
     Ok(())
 }
 
