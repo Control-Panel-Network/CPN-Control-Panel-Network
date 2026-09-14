@@ -78,12 +78,19 @@ fn forward_http(
     // Use curl for portable proxying without adding an HTTP client crate.
     // Enough for SnappyMail/Roundcube HTML, assets, and form posts in lab/production.
     let mut cmd = Command::new("curl");
+    // Admin Json package/core checks must not hang the panel worker when the
+    // upstream SnappyMail repository is unreachable (browser aborts ~30s).
+    let max_time = if target.contains("admin/Json") || target.contains("?admin") {
+        "35"
+    } else {
+        "120"
+    };
     cmd.args([
         "--silent",
         "--show-error",
         "--include",
         "--max-time",
-        "120",
+        max_time,
         "-X",
         method,
         "--path-as-is",

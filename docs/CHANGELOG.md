@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **SnappyMail Extensions / About repository hang**: upstream `snappymail.eu` package repo is often unreachable (connect timeout). Admin UI then waited until the browser aborted (~30s RequestTimeout / blank Extensions list). CPN now ships a local stub under `/var/lib/cpn-webmail/snappy-repo/v2/` and patches `Repository::get()` to read it first so installed plugins still list and core update checks return quickly. SELinux module `cpn_webmail_imap` **1.2** also allows `httpd_t` → `http_port_t` (HTTPS 443) for when the upstream repo returns. Webmail PHP-FPM sets `default_socket_timeout=8`; panel proxy caps admin Json at 35s.
+
 ### Added
 
 - **Dovecot ManageSieve / Pigeonhole** installs with the local mail stack (port **4190**). SnappyMail domain profiles enable Sieve at `127.0.0.1:4190` with `shortLogin` so Filters work for local Maildir users. Upgrade/redeploy heals missing packages and config.
@@ -37,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **SnappyMail IMAP login on SELinux hosts**: enable `httpd_can_network_connect`, set Dovecot `auth_username_format = %Ln` (email local-part for PAM), prefer `ssl = yes` over `required`, and point SnappyMail domain defaults at `127.0.0.1` with `shortLogin` so webmail can authenticate local Maildir users.
-- **PHP-FPM IMAP `name_connect`**: ship local SELinux module `cpn_webmail_imap` so `httpd_t` may connect to Dovecot `pop_port_t` (143/993) and Postfix `smtp_port_t`. On AlmaLinux 9 the network-connect boolean alone still denied dest=143 (SnappyMail: Can't connect to host tcp://localhost:143). Module **1.1** also allows `sieve_port_t` (ManageSieve 4190).
+- **PHP-FPM IMAP `name_connect`**: ship local SELinux module `cpn_webmail_imap` so `httpd_t` may connect to Dovecot `pop_port_t` (143/993) and Postfix `smtp_port_t`. On AlmaLinux 9 the network-connect boolean alone still denied dest=143 (SnappyMail: Can't connect to host tcp://localhost:143). Module **1.1** allows `sieve_port_t` (ManageSieve 4190); **1.2** also allows `http_port_t` (HTTPS 443 for the package repository).
 - **Webmail panel proxy**: parse curl responses as raw bytes so WOFF/fonts and other binary assets are not UTF-8-corrupted; preserve multiple `Set-Cookie` headers.
 - **Change Password PRG**: `/email/password/save` redirects to clean `/email/password` with an HttpOnly flash cookie notice (no long `?notice=` query wall); Open Webmail links use `/snappymail/` instead of forcing `index.php`.
 
