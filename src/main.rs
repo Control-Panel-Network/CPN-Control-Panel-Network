@@ -2,6 +2,7 @@ use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, guard, http::Method, post, route, web,
 };
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
+use cpn_installer::auth_api::panel_user_from_request;
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, apple_touch_icon, cpn_brand_mark, cpn_logo,
     dashboard_page, favicon_ico, favicon_svg, login_mfa_page, login_mfa_submit, login_page,
@@ -12,9 +13,10 @@ use cpn_installer::auth_password_reset_api::{
     forgot_password_page, forgot_password_submit, reset_password_page, reset_password_submit,
 };
 use cpn_installer::http_helpers::{
-    VERSION, authorized_request, build_allowed_hosts, enrich_status, install_finished,
-    install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
-    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
+    VERSION, authorized_request, build_allowed_hosts, enrich_status,
+    extend_allowed_hosts_with_public_url, install_finished, install_session_cookie_header,
+    normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
+    wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
@@ -24,6 +26,7 @@ use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
+use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
@@ -322,6 +325,92 @@ async fn set_language(
     HttpResponse::Ok().json(payload)
 }
 
+fn listen_port_json_err(status: u16, message: &str) -> HttpResponse {
+    let body = serde_json::json!({ "ok": false, "error": message });
+    match status {
+        401 => HttpResponse::Unauthorized().json(body),
+        403 => HttpResponse::Forbidden().json(body),
+        400 => HttpResponse::BadRequest().json(body),
+        _ => HttpResponse::InternalServerError().json(body),
+    }
+}
+
+/// Installer bootstrap token, or signed-in panel admin (Change Port UI).
+fn listen_port_authorized(
+    state: &AppState,
+    query: &TokenQuery,
+    http: &HttpRequest,
+) -> Option<HttpResponse> {
+    if authorized_request(state, query, http) {
+        return None;
+    }
+    match panel_user_from_request(state, http) {
+        Some(user) if is_panel_admin(&user) => None,
+        Some(_) => Some(listen_port_json_err(
+            403,
+            "Only the panel admin can change the listen port",
+        )),
+        None => Some(listen_port_json_err(401, "Login required")),
+    }
+}
+
+/// Public base the browser should open after a port/public-URL change.
+fn listen_port_new_url(preferred: u16, http: &HttpRequest) -> String {
+    if let Some(url) = cpn_installer::panel_public_url::load_panel_public_url() {
+        return url.trim_end_matches('/').to_string();
+    }
+    if let Some(host_hdr) = http
+        .headers()
+        .get(actix_web::http::header::HOST)
+        .and_then(|value| value.to_str().ok())
+    {
+        let host = host_hdr.trim();
+        let hostname = host
+            .rsplit_once(':')
+            .filter(|(_, port)| port.parse::<u16>().is_ok())
+            .map(|(name, _)| name)
+            .unwrap_or(host);
+        if !hostname.is_empty() {
+            if preferred == 443 {
+                return format!("https://{hostname}");
+            }
+            if preferred == 80 {
+                return format!("http://{hostname}");
+            }
+            return format!("http://{hostname}:{preferred}");
+        }
+    }
+    cpn_installer::panel_public_url::local_listen_base_url(preferred)
+}
+
+fn schedule_panel_listen_restart(preferred: u16) {
+    #[cfg(unix)]
+    {
+        std::thread::spawn(move || {
+            // Let the JSON response flush before tearing down this process.
+            std::thread::sleep(std::time::Duration::from_millis(900));
+            let _ = preferred;
+            let _ = std::process::Command::new("systemctl")
+                .args(["stop", "cpn-installer.service"])
+                .status();
+            let _ = std::process::Command::new("systemctl")
+                .args(["kill", "-s", "SIGKILL", "cpn-installer.service"])
+                .status();
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let _ = std::process::Command::new("systemctl")
+                .args(["reset-failed", "cpn-installer.service"])
+                .status();
+            let _ = std::process::Command::new("systemctl")
+                .args(["start", "cpn-installer.service"])
+                .status();
+        });
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = preferred;
+    }
+}
+
 #[post("/api/listen-port")]
 async fn set_listen_port(
     http: HttpRequest,
@@ -329,16 +418,16 @@ async fn set_listen_port(
     query: web::Query<TokenQuery>,
     request: web::Json<ListenPortRequest>,
 ) -> HttpResponse {
-    if !authorized_request(&state, &query, &http) {
-        return HttpResponse::Unauthorized().finish();
+    if let Some(resp) = listen_port_authorized(&state, &query, &http) {
+        return resp;
     }
     if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+        return listen_port_json_err(403, "Origin not allowed");
     }
     let port = match validate_listen_port(request.port) {
         Ok(value) => value,
         Err(error) => {
-            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            return listen_port_json_err(400, &error);
         }
     };
     let policy = match request.old_port_policy.as_deref() {
@@ -346,7 +435,7 @@ async fn set_listen_port(
         Some(raw) => match OldPortPolicy::parse(raw) {
             Ok(value) => Some(value),
             Err(error) => {
-                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+                return listen_port_json_err(400, &error);
             }
         },
     };
@@ -362,7 +451,7 @@ async fn set_listen_port(
         match apply_network_change(port, state.bind_port, policy, hostname_update) {
             Ok(value) => value,
             Err(error) => {
-                return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+                return listen_port_json_err(400, &error);
             }
         };
 
@@ -374,9 +463,11 @@ async fn set_listen_port(
             save_panel_public_url(trimmed)
         };
         if let Err(error) = result {
-            return HttpResponse::BadRequest().json(serde_json::json!({"error": error}));
+            return listen_port_json_err(400, &error);
         }
     }
+
+    let _ = cpn_installer::panel_ops_firewall::ensure_panel_port_open();
 
     let restart_required = preferred != state.bind_port;
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
@@ -388,31 +479,40 @@ async fn set_listen_port(
         current.panel_login_url = None;
     }
     let payload = enrich_status(current.clone(), &state.token);
+    let new_url = listen_port_new_url(preferred, &http);
+    let redirect_url = format!("{new_url}/settings/port");
     let note = if restart_required {
         let policy_note = migration
             .as_ref()
             .map(|value| {
                 format!(
-                    " Old-port policy: {} (expires unix {}). Restart to bind the new port; redirect helper starts automatically when policy is redirect_*.",
+                    " Old-port policy: {} (expires unix {}). Panel service restart scheduled; redirect helper starts automatically when policy is redirect_*.",
                     value.mode.as_str(),
                     value.expires_at
                 )
             })
             .unwrap_or_default();
         format!(
-            "Preferred listen port {preferred} saved. Restart with: cpn-installer --port {preferred} (current session stays on {}).{policy_note}",
+            "Preferred listen port {preferred} saved. Rebinding from {} to {preferred}.{policy_note}",
             state.bind_port
         )
     } else {
         format!("Listen port {preferred} confirmed for this session")
     };
     let network = network_public(state.bind_port, None);
+    if restart_required {
+        schedule_panel_listen_restart(preferred);
+    }
     HttpResponse::Ok().json(serde_json::json!({
+        "ok": true,
         "status": payload,
         "listen_port": state.bind_port,
         "preferred_listen_port": preferred,
         "restart_required": restart_required,
+        "restart_scheduled": restart_required,
         "message": note,
+        "new_url": new_url,
+        "redirect_url": redirect_url,
         "network": network,
         "port_migration": migration,
     }))
@@ -866,7 +966,9 @@ async fn main() -> std::io::Result<()> {
     if let Some(hostname) = startup_hostname.as_ref() {
         host_seeds.push(hostname.clone());
     }
-    let allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
+    let mut allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
+    // NAT / reverse-proxy public URL (for example host 2090 -> guest 2087).
+    extend_allowed_hosts_with_public_url(&mut allowed_hosts);
     let state = Arc::new(AppState {
         status: std::sync::RwLock::new(initial),
         events,
