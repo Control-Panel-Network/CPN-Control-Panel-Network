@@ -446,16 +446,7 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
             let _ = configure_snappymail_external_data(docroot);
         }
         let _ = ensure_snappymail_local_imap_defaults();
-        let _ = std::process::Command::new("bash")
-            .args([
-                "-c",
-                "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true; \
-                 command -v semanage >/dev/null 2>&1 && \
-                 (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
-                  semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
-                 restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
-            ])
-            .status();
+        crate::install_selinux_mail::ensure_webmail_selinux();
     }
     Ok(())
 }

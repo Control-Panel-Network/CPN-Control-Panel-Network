@@ -219,20 +219,14 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         .status()
         .await;
 
-    // PHP-FPM runs as httpd_t; allow outbound TCP to Dovecot IMAP/SMTP on the host.
-    let _ = Command::new("bash")
-        .args([
-            "-c",
-            "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true",
-        ])
-        .status()
-        .await;
+    // PHP-FPM runs as httpd_t; boolean alone still denied dest=143 on AL9 labs.
+    crate::install_selinux_mail::ensure_httpd_mail_ports();
     install_journal::record(
         STAGE,
         JournalAction::Note,
         "httpd_can_network_connect",
         None,
-        Some("SELinux: allow PHP-FPM to reach local IMAP/SMTP".into()),
+        Some("SELinux: allow PHP-FPM to reach local IMAP/SMTP (boolean + cpn_webmail_imap)".into()),
     )?;
 
     Ok(())
