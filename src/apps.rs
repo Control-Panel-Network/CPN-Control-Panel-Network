@@ -21,6 +21,7 @@ pub enum AppId {
     Snappymail,
     Tachyon,
     Roundcube,
+    Nextcloud,
     Nextsnapmail,
     Sogo,
 }
@@ -40,10 +41,11 @@ impl AppId {
             "snappymail" | "snappy" => Ok(Self::Snappymail),
             "tachyon" => Ok(Self::Tachyon),
             "roundcube" | "roundcubewebmail" => Ok(Self::Roundcube),
+            "nextcloud" => Ok(Self::Nextcloud),
             "nextsnapmail" | "next-snapmail" | "nextcloud-snappymail" => Ok(Self::Nextsnapmail),
             "sogo" => Ok(Self::Sogo),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, roundcube, nextsnapmail, sogo"
+                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, roundcube, nextcloud, nextsnapmail, sogo"
             )),
         }
     }
@@ -58,6 +60,7 @@ impl AppId {
             Self::Snappymail => "snappymail",
             Self::Tachyon => "tachyon",
             Self::Roundcube => "roundcube",
+            Self::Nextcloud => "nextcloud",
             Self::Nextsnapmail => "nextsnapmail",
             Self::Sogo => "sogo",
         }
@@ -73,6 +76,7 @@ impl AppId {
             Self::Snappymail => "SnappyMail",
             Self::Tachyon => "Tachyon",
             Self::Roundcube => "Roundcube",
+            Self::Nextcloud => "Nextcloud",
             Self::Nextsnapmail => "NextSnapMail",
             Self::Sogo => "SOGo",
         }
@@ -96,6 +100,7 @@ impl AppId {
             Self::Snappymail,
             Self::Tachyon,
             Self::Roundcube,
+            Self::Nextcloud,
             Self::Nextsnapmail,
             Self::Sogo,
         ]
@@ -294,6 +299,7 @@ pub fn detect_app(id: AppId) -> AppStatus {
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
+        | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => crate::apps_webmail::detect_webmail_app(id),
     }
@@ -347,6 +353,7 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
             AppId::Snappymail
             | AppId::Tachyon
             | AppId::Roundcube
+            | AppId::Nextcloud
             | AppId::Nextsnapmail
             | AppId::Sogo => crate::apps_webmail::install_webmail_app(id)?,
         };
@@ -418,6 +425,7 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
+        | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => crate::apps_webmail::uninstall_webmail_app(id)?,
     };

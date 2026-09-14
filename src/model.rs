@@ -28,7 +28,7 @@ pub enum ServerEngine {
     Caddy,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum MailSystem {
     Snappymail,

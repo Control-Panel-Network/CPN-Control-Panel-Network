@@ -24,30 +24,42 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
     Ok(())
 }
 
-/// Set SnappyMail `/?admin` password to match the given plaintext (CPN / mailbox flow).
+/// Set SnappyMail / Tachyon `/?admin` password to match the given plaintext (CPN / mailbox flow).
 ///
-/// Product intent: one password for panel mail ops and SnappyMail admin. Call from
-/// `/email/password` and when the CPN panel account password changes.
+/// Product intent: one password for panel mail ops and the active SnappyMail-lineage admin.
+/// Syncs both data dirs when present so switching active clients keeps parity.
 pub fn sync_snappymail_admin_password(password: &str) -> Result<(), String> {
     if password.len() < 8 {
-        return Err("SnappyMail admin password must be at least 8 characters".into());
-    }
-    let ini = application_ini_path();
-    if !ini.is_file() {
-        return Ok(());
+        return Err("Webmail admin password must be at least 8 characters".into());
     }
     let hash = php_password_hash(password)?;
-    let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
-    let updated = replace_ini_quoted(&raw, "admin_password", &hash);
-    if updated != raw {
-        std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
+    let mut synced = 0u32;
+    for data_dir in [SNAPPYMAIL_DATA_DIR, "/var/lib/cpn-webmail/tachyon/"] {
+        let ini = Path::new(data_dir).join("_data_/_default_/configs/application.ini");
+        if !ini.is_file() {
+            continue;
+        }
+        let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
+        let updated = replace_ini_quoted(&raw, "admin_password", &hash);
+        if updated != raw {
+            std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
+        }
+        let txt = Path::new(data_dir).join("_data_/_default_/admin_password.txt");
+        if txt.is_file() {
+            let _ = std::fs::remove_file(&txt);
+        }
+        synced += 1;
     }
-    // Drop one-time plaintext so only the bcrypt hash is authoritative.
-    let txt = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/admin_password.txt");
-    if txt.is_file() {
-        let _ = std::fs::remove_file(&txt);
+    if synced > 0 {
+        let _ = chown_snappy_data();
+        let _ = Command::new("chown")
+            .args([
+                "-R",
+                "cpn-webmail:cpn-webmail",
+                "/var/lib/cpn-webmail/tachyon",
+            ])
+            .status();
     }
-    let _ = chown_snappy_data();
     Ok(())
 }
 

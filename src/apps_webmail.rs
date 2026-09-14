@@ -1,10 +1,20 @@
-//! Webmail host packages: SnappyMail, Tachyon, Roundcube (LIVE), NextSnapMail / SOGo (honest gates).
+//! Webmail host packages: SnappyMail, Tachyon, Roundcube (LIVE), NextSnapMail (Nextcloud chain), SOGo gate.
 
+use crate::active_webmail::{
+    client_files_present, default_webmail_client, docroot_for, load_active_pref, mail_to_id,
+    public_path_for, save_active_pref,
+};
 use crate::apps::{AppId, AppStateKind, AppStatus};
+use crate::apps_nextcloud::{
+    detect_nextcloud_status, install_nextcloud_files, install_nextsnapmail_app,
+    nextsnapmail_app_present, uninstall_nextsnapmail_app,
+};
 use crate::host_packages_catalog::{HostInstallStatus, meta_for};
 use crate::install_webmail::install_webmail;
+use crate::install_webmail_runtime::configure_webmail_runtime;
 use crate::installer::{AppState, InstallLogDetail};
 use crate::model::{InstallerStatus, MailSystem, ServerEngine};
+use crate::panel_webmail::{load_webmail_config, save_webmail_config};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, RwLock, atomic::AtomicBool};
@@ -20,6 +30,39 @@ fn roundcube_installed() -> bool {
         || Path::new("/opt/cpn-webmail/roundcube/index.php").is_file()
 }
 
+pub fn mail_for_app(id: AppId) -> Result<MailSystem, String> {
+    match id {
+        AppId::Snappymail => Ok(MailSystem::Snappymail),
+        AppId::Tachyon => Ok(MailSystem::Tachyon),
+        AppId::Roundcube => Ok(MailSystem::Roundcube),
+        AppId::Nextsnapmail => Ok(MailSystem::Nextsnapmail),
+        AppId::Sogo => Ok(MailSystem::Sogo),
+        AppId::Nextcloud => Err("Nextcloud is not a panel-proxied webmail client.".into()),
+        _ => Err("Not a webmail host package.".into()),
+    }
+}
+
+pub fn is_active_webmail(id: AppId) -> bool {
+    let Ok(mail) = mail_for_app(id) else {
+        return false;
+    };
+    if !client_files_present(mail) {
+        return false;
+    }
+    if let Some(pref) = load_active_pref() {
+        return pref == mail;
+    }
+    crate::panel_webmail::detect_webmail_client() == Some(mail)
+}
+
+fn active_suffix(id: AppId) -> String {
+    if is_active_webmail(id) {
+        " Active panel webmail.".into()
+    } else {
+        String::new()
+    }
+}
+
 pub fn detect_webmail_app(id: AppId) -> AppStatus {
     let meta = meta_for(id);
     match id {
@@ -28,7 +71,10 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
             let (state, detail) = if installed {
                 (
                     AppStateKind::Running,
-                    "SnappyMail files present under /opt/cpn-webmail/snappymail.".into(),
+                    format!(
+                        "SnappyMail files present under /opt/cpn-webmail/snappymail.{}",
+                        active_suffix(id)
+                    ),
                 )
             } else {
                 (
@@ -48,7 +94,10 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
             let (state, detail) = if installed {
                 (
                     AppStateKind::Running,
-                    "Tachyon files present under /opt/cpn-webmail/tachyon.".into(),
+                    format!(
+                        "Tachyon files present under /opt/cpn-webmail/tachyon.{}",
+                        active_suffix(id)
+                    ),
                 )
             } else {
                 (
@@ -68,7 +117,10 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
             let (state, detail) = if installed {
                 (
                     AppStateKind::Running,
-                    "Roundcube files present under /opt/cpn-webmail/roundcube.".into(),
+                    format!(
+                        "Roundcube files present under /opt/cpn-webmail/roundcube.{}",
+                        active_suffix(id)
+                    ),
                 )
             } else {
                 (
@@ -83,15 +135,60 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
                 warning: None,
             }
         }
-        AppId::Nextsnapmail => AppStatus {
-            id,
-            state: AppStateKind::NotInstalled,
-            detail: meta.description.into(),
-            warning: Some(
-                "NextSnapMail requires Nextcloud. Install Nextcloud first, then add NextSnapMail from the Nextcloud App Store (apps.nextcloud.com/apps/nextsnapmail)."
-                    .into(),
-            ),
-        },
+        AppId::Nextsnapmail => {
+            let (nc_ok, nc_detail) = detect_nextcloud_status();
+            if nextsnapmail_app_present() {
+                AppStatus {
+                    id,
+                    state: AppStateKind::Running,
+                    detail: format!(
+                        "NextSnapMail app present under Nextcloud apps/. {nc_detail}{}",
+                        active_suffix(id)
+                    ),
+                    warning: None,
+                }
+            } else if nc_ok {
+                AppStatus {
+                    id,
+                    state: AppStateKind::NotInstalled,
+                    detail: format!(
+                        "Nextcloud is present. Install NextSnapMail into apps/nextsnapmail. {nc_detail}"
+                    ),
+                    warning: None,
+                }
+            } else {
+                AppStatus {
+                    id,
+                    state: AppStateKind::NotInstalled,
+                    detail: meta.description.into(),
+                    warning: Some(
+                        "NextSnapMail requires Nextcloud. Use Install to provision Nextcloud files under /opt/nextcloud, then NextSnapMail into apps/."
+                            .into(),
+                    ),
+                }
+            }
+        }
+        AppId::Nextcloud => {
+            let (ok, detail) = detect_nextcloud_status();
+            let state = if ok {
+                AppStateKind::Running
+            } else {
+                AppStateKind::NotInstalled
+            };
+            AppStatus {
+                id,
+                state,
+                detail,
+                warning: if ok {
+                    Some(
+                        "CPN installs Nextcloud files under /opt/nextcloud. Finish OCC/web setup (database + admin) for a production Nextcloud site."
+                            .into(),
+                    )
+                } else {
+                    None
+                },
+            }
+        }
         AppId::Sogo => {
             let pkgs = crate::apps_pkg::rpm_or_dpkg_installed(&["sogo", "sogo-activesync"]);
             let running = crate::service_detect::systemd_unit_active("sogo");
@@ -129,13 +226,6 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
             warning: None,
         },
     }
-}
-
-fn nextcloud_present() -> bool {
-    Path::new("/var/www/nextcloud").is_dir()
-        || Path::new("/usr/share/nextcloud").is_dir()
-        || Path::new("/opt/nextcloud").is_dir()
-        || std::env::var_os("CPN_NEXTCLOUD_ROOT").is_some()
 }
 
 fn detect_server_engine() -> Option<ServerEngine> {
@@ -186,78 +276,175 @@ fn quiet_app_state(engine: ServerEngine) -> Arc<AppState> {
     })
 }
 
-fn mail_for_app(id: AppId) -> Result<MailSystem, String> {
-    match id {
-        AppId::Snappymail => Ok(MailSystem::Snappymail),
-        AppId::Tachyon => Ok(MailSystem::Tachyon),
-        AppId::Roundcube => Ok(MailSystem::Roundcube),
-        AppId::Nextsnapmail => Ok(MailSystem::Nextsnapmail),
-        AppId::Sogo => Ok(MailSystem::Sogo),
-        _ => Err("Not a webmail host package.".into()),
-    }
+fn block_on_runtime<F, T>(fut: F) -> Result<T, String>
+where
+    F: std::future::Future<Output = Result<T, String>>,
+{
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("Could not start install runtime: {e}"))?;
+    rt.block_on(fut)
 }
 
 /// Sync install for Host packages / `cpn app install` (no installer progress UI).
 pub fn install_webmail_app(id: AppId) -> Result<String, String> {
-    match meta_for(id).install_status {
-        HostInstallStatus::RequiresNextcloud => {
-            if !nextcloud_present() {
-                return Err(
-                    "NextSnapMail needs Nextcloud on this host. CPN will not ship a broken standalone stub. Install Nextcloud, then install NextSnapMail from the Nextcloud App Store."
-                        .into(),
-                );
-            }
-            Err(
-                "Nextcloud was detected, but CPN does not auto-install NextSnapMail into the Nextcloud apps tree yet. Install from https://apps.nextcloud.com/apps/nextsnapmail (or oe79/NextSnapMail)."
-                    .into(),
-            )
+    match id {
+        AppId::Nextcloud => install_nextcloud_files(),
+        AppId::Nextsnapmail => {
+            let msg = install_nextsnapmail_app()?;
+            // Do not auto-steal active panel proxy; operator uses Set as active.
+            Ok(msg)
         }
-        HostInstallStatus::Scaffold => Err(
+        AppId::Sogo => Err(
             "SOGo install is SCAFFOLD (not LIVE). Use Inverse SOGo packages manually for now; CPN will wire a full recipe in a later release."
                 .into(),
         ),
-        HostInstallStatus::Live => {
+        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube => {
             let mail = mail_for_app(id)?;
             let engine = detect_server_engine().ok_or_else(|| {
                 "No supported web server detected (OpenLiteSpeed, Nginx, or Caddy). Install a web server before webmail."
                     .to_string()
             })?;
             let state = quiet_app_state(engine);
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("Could not start install runtime: {e}"))?;
-            rt.block_on(install_webmail(&state, mail, engine))?;
+            block_on_runtime(install_webmail(&state, mail, engine))?;
+            // Install already configured runtime + current symlink; persist preference + public path.
+            save_active_pref(mail)?;
+            let mut cfg = load_webmail_config();
+            cfg.public_path = public_path_for(mail).to_string();
+            let _ = save_webmail_config(&cfg);
             Ok(format!(
-                "Installed {} under /opt/cpn-webmail and configured the webmail runtime.",
-                id.label()
+                "Installed {} under /opt/cpn-webmail and set it as the active panel webmail ({}).",
+                id.label(),
+                cfg.public_path
             ))
         }
+        _ => match meta_for(id).install_status {
+            HostInstallStatus::RequiresNextcloud => install_nextsnapmail_app(),
+            HostInstallStatus::Scaffold => Err(format!("{} install is SCAFFOLD.", id.label())),
+            HostInstallStatus::Live => Err("Unexpected webmail install path.".into()),
+        },
+    }
+}
+
+/// Switch active panel webmail without reinstalling (mailboxes stay on Postfix/Dovecot).
+pub fn activate_webmail_app(id: AppId) -> Result<String, String> {
+    let mail = mail_for_app(id)?;
+    if !client_files_present(mail) {
+        return Err(format!(
+            "{} is not installed. Install it first, then set it as active.",
+            id.label()
+        ));
+    }
+    save_active_pref(mail)?;
+    let mut cfg = load_webmail_config();
+    cfg.public_path = public_path_for(mail).to_string();
+    save_webmail_config(&cfg)?;
+
+    if let Some(docroot) = docroot_for(mail) {
+        let engine = detect_server_engine().ok_or_else(|| {
+            "No supported web server detected (OpenLiteSpeed, Nginx, or Caddy).".to_string()
+        })?;
+        let state = quiet_app_state(engine);
+        block_on_runtime(configure_webmail_runtime(&state, docroot, engine))?;
+        Ok(format!(
+            "Active panel webmail is now {} (proxy {} -> {}). Mailboxes on Postfix/Dovecot are unchanged.",
+            id.label(),
+            cfg.public_path,
+            docroot
+        ))
+    } else if mail == MailSystem::Nextsnapmail {
+        // Keep existing panel proxy/docroot for Tachyon/SnappyMail/Roundcube; preference marks NextSnapMail active in Host packages.
+        Ok(
+            "Active webmail preference set to NextSnapMail (runs inside Nextcloud under apps/nextsnapmail). Open it from Nextcloud after OCC setup. Panel /tachyon, /snappymail, and /roundcube proxies stay on the last panel client so mailboxes keep working."
+                .into(),
+        )
+    } else {
+        Err(format!(
+            "{} cannot be activated as panel webmail.",
+            id.label()
+        ))
     }
 }
 
 pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
-    let dir = match id {
-        AppId::Snappymail => "/opt/cpn-webmail/snappymail",
-        AppId::Tachyon => "/opt/cpn-webmail/tachyon",
-        AppId::Roundcube => "/opt/cpn-webmail/roundcube",
-        AppId::Nextsnapmail | AppId::Sogo => {
-            return Err(format!(
-                "{} was not installed by CPN (gate/scaffold only).",
-                id.label()
-            ));
+    let was_active = is_active_webmail(id);
+    let msg = match id {
+        AppId::Snappymail => {
+            let dir = "/opt/cpn-webmail/snappymail";
+            if Path::new(dir).exists() {
+                std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove {dir}: {e}"))?;
+            }
+            format!("Removed SnappyMail files from {dir}.")
+        }
+        AppId::Tachyon => {
+            let dir = "/opt/cpn-webmail/tachyon";
+            if Path::new(dir).exists() {
+                std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove {dir}: {e}"))?;
+            }
+            format!("Removed Tachyon files from {dir}.")
+        }
+        AppId::Roundcube => {
+            let dir = "/opt/cpn-webmail/roundcube";
+            if Path::new(dir).exists() {
+                std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove {dir}: {e}"))?;
+            }
+            format!("Removed Roundcube files from {dir}.")
+        }
+        AppId::Nextsnapmail => uninstall_nextsnapmail_app()?,
+        AppId::Nextcloud => {
+            return Err(
+                "Uninstall Nextcloud from Host packages is not automated yet (removes a full app stack). Remove /opt/nextcloud manually if needed."
+                    .into(),
+            );
+        }
+        AppId::Sogo => {
+            return Err("SOGo was not installed by CPN (scaffold only).".into());
         }
         _ => return Err("Not a webmail host package.".into()),
     };
-    if Path::new(dir).exists() {
-        std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove {dir}: {e}"))?;
+    if was_active {
+        // Prefer remaining panel client; fall back to default preference when none left.
+        let fallback = [
+            AppId::Tachyon,
+            AppId::Snappymail,
+            AppId::Roundcube,
+            AppId::Nextsnapmail,
+        ]
+        .into_iter()
+        .find(|cand| *cand != id && mail_for_app(*cand).ok().is_some_and(client_files_present));
+        if let Some(cand) = fallback {
+            let _ = activate_webmail_app(cand);
+        } else if load_active_pref().is_some_and(|m| mail_to_id(m) == id.as_str()) {
+            let _ = save_active_pref(default_webmail_client());
+        }
     }
-    Ok(format!("Removed {} files from {dir}.", id.label()))
+    Ok(msg)
 }
 
 pub fn is_webmail_app(id: AppId) -> bool {
     matches!(
         id,
-        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail | AppId::Sogo
+        AppId::Snappymail
+            | AppId::Tachyon
+            | AppId::Roundcube
+            | AppId::Nextsnapmail
+            | AppId::Sogo
+            | AppId::Nextcloud
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mail_mapping() {
+        assert_eq!(mail_for_app(AppId::Tachyon).unwrap(), MailSystem::Tachyon);
+        assert_eq!(
+            mail_for_app(AppId::Roundcube).unwrap(),
+            MailSystem::Roundcube
+        );
+        assert!(mail_for_app(AppId::Nextcloud).is_err());
+    }
 }

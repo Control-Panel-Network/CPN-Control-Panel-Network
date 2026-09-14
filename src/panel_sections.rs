@@ -173,10 +173,10 @@ pub fn email_accounts_main(
         selected_mail,
         Some(crate::model::MailSystem::Nextsnapmail | crate::model::MailSystem::Sogo)
     ) {
-        "<p class=\"muted\">Selected webmail is gated or SCAFFOLD (NextSnapMail needs Nextcloud; SOGo is not LIVE yet). Prefer SnappyMail or Tachyon for panel webmail.</p>"
+        "<p class=\"muted\">Selected webmail is gated or SCAFFOLD (NextSnapMail needs Nextcloud files; SOGo is not LIVE yet). Prefer Tachyon (default) or SnappyMail for panel webmail.</p>"
             .into()
     } else {
-        "<p class=\"muted\">Install SnappyMail, Tachyon, or Roundcube (installer mail stage or Host packages) to enable Open Webmail.</p>"
+        "<p class=\"muted\">Install Tachyon (default), SnappyMail, or Roundcube (installer mail stage or Host packages) to enable Open Webmail. Use Set as active to switch clients without orphaning mailboxes.</p>"
             .into()
     };
 

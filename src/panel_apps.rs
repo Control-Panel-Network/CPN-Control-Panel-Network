@@ -89,10 +89,16 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
     let label = status.id.label();
     let hidden = domain_hidden(domain);
     let meta = meta_for(status.id);
-    if matches!(
-        meta.install_status,
-        HostInstallStatus::RequiresNextcloud | HostInstallStatus::Scaffold
-    ) && status.state == AppStateKind::NotInstalled
+    let is_webmail = matches!(
+        status.id,
+        crate::apps::AppId::Snappymail
+            | crate::apps::AppId::Tachyon
+            | crate::apps::AppId::Roundcube
+            | crate::apps::AppId::Nextsnapmail
+    );
+    let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
+    if matches!(meta.install_status, HostInstallStatus::Scaffold)
+        && status.state == AppStateKind::NotInstalled
     {
         return format!(
             r#"<span class="plugin-badge" title="{title}">{badge}</span>
@@ -105,6 +111,26 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
             badge = html_escape(meta.install_status.badge()),
             label = html_escape(label),
             name = html_escape(name),
+            hidden = hidden,
+        );
+    }
+    // NextSnapMail without Nextcloud: Install still runs the dependency chain.
+    if status.id == crate::apps::AppId::Nextsnapmail
+        && status.state == AppStateKind::NotInstalled
+        && !crate::apps_nextcloud::nextcloud_present()
+    {
+        return format!(
+            r#"<span class="plugin-badge">Needs Nextcloud</span>
+            <form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install Nextcloud files under /opt/nextcloud, then NextSnapMail into apps/?');">
+              <input type="hidden" name="name" value="nextsnapmail">
+              {hidden}
+              <button type="submit" class="btn-primary">Install Nextcloud + NextSnapMail</button>
+            </form>
+            <form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install Nextcloud files only under /opt/nextcloud?');">
+              <input type="hidden" name="name" value="nextcloud">
+              {hidden}
+              <button type="submit" class="btn-secondary">Install Nextcloud first</button>
+            </form>"#,
             hidden = hidden,
         );
     }
@@ -127,6 +153,22 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
         ),
         AppStateKind::Installed | AppStateKind::Running => {
             let mut out = String::new();
+            if is_webmail {
+                if active {
+                    out.push_str(r#"<span class="plugin-badge featured">Active</span>"#);
+                } else {
+                    out.push_str(&format!(
+                        r#"<form method="post" action="/apps/activate" class="inline-form" onsubmit="return confirm('Set {label} as the active panel webmail? Mailboxes stay on Postfix/Dovecot.');">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-primary">Set as active</button>
+            </form>"#,
+                        label = html_escape(label),
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                }
+            }
             if status.id.supports_service_control() {
                 if status.state == AppStateKind::Installed {
                     out.push_str(&format!(
@@ -182,6 +224,23 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
     } else {
         ""
     };
+    let default_badge = if status.id == crate::apps::AppId::Tachyon {
+        r#"<span class="plugin-badge featured">Default</span>"#
+    } else {
+        ""
+    };
+    let active_badge = if matches!(
+        status.id,
+        crate::apps::AppId::Snappymail
+            | crate::apps::AppId::Tachyon
+            | crate::apps::AppId::Roundcube
+            | crate::apps::AppId::Nextsnapmail
+    ) && crate::apps_webmail::is_active_webmail(status.id)
+    {
+        r#"<span class="plugin-badge featured">Active</span>"#
+    } else {
+        ""
+    };
     let status_badge = format!(
         r#"<span class="plugin-badge">{}</span>"#,
         html_escape(meta.install_status.badge())
@@ -231,6 +290,8 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
             <span class="plugin-badge">v{ver}</span>
             {pricing}
             {featured}
+            {default_badge}
+            {active_badge}
             {status_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
@@ -246,6 +307,8 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
         ver = html_escape(meta.version),
         pricing = pricing,
         featured = featured_badge,
+        default_badge = default_badge,
+        active_badge = active_badge,
         status_badge = status_badge,
         desc = html_escape(meta.description),
         state = html_escape(status.state.label()),
@@ -389,7 +452,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name roundcube</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> · <code>cpn app activate --name roundcube</code></p>
         {picker}
       </article>
       <p class="plugin-count">{count} host packages</p>

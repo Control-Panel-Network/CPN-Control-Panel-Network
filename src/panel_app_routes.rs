@@ -238,6 +238,31 @@ pub async fn apps_start(
     }
 }
 
+#[post("/apps/activate")]
+pub async fn apps_activate(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<AppNameForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match AppId::parse(&form.name).and_then(crate::apps_webmail::activate_webmail_app) {
+        Ok(message) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), Some(&message), None),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                apps_redirect(form.domain.trim(), None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
 #[post("/apps/stop")]
 pub async fn apps_stop(
     http: HttpRequest,

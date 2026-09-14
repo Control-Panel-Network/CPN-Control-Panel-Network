@@ -51,6 +51,11 @@ pub enum AppCommands {
         #[arg(long)]
         yes: bool,
     },
+    /// Set the active panel webmail client (SnappyMail / Tachyon / Roundcube / NextSnapMail)
+    Activate {
+        #[arg(long)]
+        name: String,
+    },
 }
 
 fn optional_site(
@@ -130,6 +135,10 @@ pub fn run(
             let site = optional_site(domain, subdomain)?;
             uninstall(&name, site.as_deref())
         }
+        AppCommands::Activate { name } => {
+            require_root()?;
+            activate(&name)
+        }
     }
 }
 
@@ -183,6 +192,13 @@ pub fn reinstall(name: &str, domain: Option<&str>) -> Result<(), String> {
 pub fn uninstall(name: &str, domain: Option<&str>) -> Result<(), String> {
     let id = AppId::parse(name)?;
     let msg = uninstall_app_on(id, domain)?;
+    println!("{msg}");
+    Ok(())
+}
+
+pub fn activate(name: &str) -> Result<(), String> {
+    let id = AppId::parse(name)?;
+    let msg = crate::apps_webmail::activate_webmail_app(id)?;
     println!("{msg}");
     Ok(())
 }

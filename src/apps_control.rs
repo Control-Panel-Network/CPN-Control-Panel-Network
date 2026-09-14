@@ -39,6 +39,7 @@ pub fn start_app(id: AppId) -> Result<String, String> {
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
+        | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => Err(format!(
             "{} does not support Start/Stop from Apps.",
@@ -76,6 +77,7 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
+        | AppId::Nextcloud
         | AppId::Nextsnapmail
         | AppId::Sogo => Err(format!(
             "{} does not support Start/Stop from Apps.",
