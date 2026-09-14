@@ -223,8 +223,8 @@ mod tests {
     fn ssh_security_review_snooze_clamps_to_max_days() {
         with_test_data_dir(|| {
             let until = snooze_ssh_security_review("Admin", 999).unwrap();
-            let max_until =
-                now_epoch_secs().saturating_add(i64::from(SSH_SECURITY_REVIEW_SNOOZE_MAX_DAYS) * 86_400);
+            let max_until = now_epoch_secs()
+                .saturating_add(i64::from(SSH_SECURITY_REVIEW_SNOOZE_MAX_DAYS) * 86_400);
             // Allow a few seconds of clock skew between calls.
             assert!(until <= max_until + 5);
             assert!(until >= max_until - 5);

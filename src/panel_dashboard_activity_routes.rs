@@ -38,9 +38,7 @@ pub async fn dashboard_ssh_security_review_snooze(
         Ok(u) => u,
         Err(resp) => return resp,
     };
-    let days = form
-        .days
-        .unwrap_or(SSH_SECURITY_REVIEW_SNOOZE_DEFAULT_DAYS);
+    let days = form.days.unwrap_or(SSH_SECURITY_REVIEW_SNOOZE_DEFAULT_DAYS);
     let _ = snooze_ssh_security_review(&user, days);
     redirect(DASH_SSH_LOGS)
 }
