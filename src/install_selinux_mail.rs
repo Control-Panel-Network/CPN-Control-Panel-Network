@@ -5,13 +5,14 @@ use std::path::Path;
 use std::process::Command;
 
 const MODULE: &str = "cpn_webmail_imap";
-const MODULE_VER: &str = "1.1";
+const MODULE_VER: &str = "1.2";
 
 /// Allow httpd_t to connect to pop_port_t (IMAP 143/993), smtp_port_t (25/587),
-/// and sieve_port_t (ManageSieve 4190).
+/// sieve_port_t (ManageSieve 4190), and http_port_t (HTTPS 443 package repo).
 ///
 /// `httpd_can_network_connect` alone still denied name_connect to pop_port_t on
-/// AlmaLinux 9 lab (AVC: php-fpm dest=143). A tiny local policy module closes that gap.
+/// AlmaLinux 9 lab (AVC: php-fpm dest=143). The same hosts also denied dest=443
+/// (`http_port_t`) when SnappyMail fetched `packages.json` / core updates.
 pub fn ensure_httpd_mail_ports() {
     let _ = Command::new("bash")
         .args([
@@ -47,11 +48,13 @@ require {{
     type pop_port_t;
     type smtp_port_t;
     type sieve_port_t;
+    type http_port_t;
     class tcp_socket name_connect;
 }}
 allow httpd_t pop_port_t:tcp_socket name_connect;
 allow httpd_t smtp_port_t:tcp_socket name_connect;
 allow httpd_t sieve_port_t:tcp_socket name_connect;
+allow httpd_t http_port_t:tcp_socket name_connect;
 "#
     );
 
@@ -116,12 +119,14 @@ pub fn ensure_webmail_selinux() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn te_source_mentions_pop_smtp_sieve() {
+    fn te_source_mentions_pop_smtp_sieve_http() {
         let te = r#"allow httpd_t pop_port_t:tcp_socket name_connect;
 allow httpd_t smtp_port_t:tcp_socket name_connect;
-allow httpd_t sieve_port_t:tcp_socket name_connect;"#;
+allow httpd_t sieve_port_t:tcp_socket name_connect;
+allow httpd_t http_port_t:tcp_socket name_connect;"#;
         assert!(te.contains("pop_port_t"));
         assert!(te.contains("smtp_port_t"));
         assert!(te.contains("sieve_port_t"));
+        assert!(te.contains("http_port_t"));
     }
 }

@@ -35,6 +35,7 @@ pub async fn configure_webmail_runtime(
     reset_current_link(Path::new(docroot))?;
     if is_snappymail_docroot(docroot) {
         configure_snappymail_external_data(docroot)?;
+        let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
     }
     write_php_fpm_pool(docroot)?;
     harden_permissions(docroot).await?;
@@ -345,6 +346,7 @@ fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
          chdir = {docroot}\n\
          security.limit_extensions = .php\n\
          php_admin_value[open_basedir] = {open_basedir}\n\
+         php_admin_value[default_socket_timeout] = 8\n\
          php_admin_flag[allow_url_fopen] = off\n"
     );
     install_journal::write_file_tracked(STAGE, Path::new(FPM_POOL), &pool)?;
@@ -446,7 +448,9 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
     if is_snappymail_docroot(docroot) {
         if Path::new(FPM_POOL).is_file() {
             let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
-            if !raw.contains("/var/lib/cpn-webmail") {
+            if !raw.contains("/var/lib/cpn-webmail")
+                || !raw.contains("default_socket_timeout")
+            {
                 write_php_fpm_pool(docroot)?;
                 let _ = std::process::Command::new("systemctl")
                     .args(["restart", "php-fpm"])
@@ -464,6 +468,7 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
         let _ = ensure_snappymail_local_imap_defaults();
         let _ = crate::install_mail_sieve::ensure_dovecot_sieve_sync();
         let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
+        let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
         crate::install_selinux_mail::ensure_webmail_selinux();
     }
     Ok(())

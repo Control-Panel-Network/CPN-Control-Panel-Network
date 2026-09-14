@@ -44,6 +44,7 @@ pub mod install_mail_backend;
 pub mod install_mail_sieve;
 pub mod install_recipes;
 pub mod install_selinux_mail;
+pub mod install_snappymail_repo;
 pub mod install_server;
 pub mod install_snappymail_prefs;
 pub mod install_webmail;
