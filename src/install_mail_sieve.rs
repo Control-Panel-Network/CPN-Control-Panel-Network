@@ -133,11 +133,7 @@ fn ensure_sieve_dovecot_config() -> Result<(), String> {
             let line_end = raw[idx..].find('\n').map(|n| idx + n).unwrap_or(raw.len());
             let line = &raw[idx..line_end];
             if !line.contains("sieve") {
-                let new_line = if line.contains("imap") {
-                    "protocols = imap sieve"
-                } else {
-                    "protocols = imap sieve"
-                };
+                let new_line = "protocols = imap sieve";
                 raw.replace_range(idx..line_end, new_line);
                 changed = true;
             }
