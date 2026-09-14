@@ -26,6 +26,7 @@ pub struct PluginsPageQuery<'a> {
     pub page: usize,
     pub per_page: usize,
     pub sites: &'a [SiteRecord],
+    pub username: &'a str,
 }
 
 fn wrap_hub(inner: String) -> String {
@@ -67,13 +68,14 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
             mode,
             page,
             per_page,
+            username: query.username,
         });
         return format!(
             r#"{heading}
       {tabs}
       <article class="section-card">
         <h2>Host packages</h2>
-        <p class="muted">Former Apps page: databases, phpMyAdmin, Email stack, and webmail clients. CLI <code>cpn app</code> remains an alias.</p>
+        <p class="muted">Former Apps page: databases, phpMyAdmin, Email stack, and webmail clients. Panel admin installs on the Host; sites Activate when the host package is already present. CLI <code>cpn app</code> remains an alias.</p>
         {apps_body}
       </article>"#,
             heading = section_heading(
@@ -109,6 +111,12 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
     }
 
     let installed = list_installed(&domain).unwrap_or_default();
+    let mut installed = installed;
+    for act in crate::plugin_activation::activated_as_installed(&domain) {
+        if !installed.iter().any(|p| p.manifest.id == act.manifest.id) {
+            installed.push(act);
+        }
+    }
     let installed_count = installed.len();
     let active_count = installed.iter().filter(|p| p.manifest.enabled).count();
     let install_path = plugins_install_path_display(Some(&domain));
@@ -150,7 +158,7 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
         grid = if layout == "grid" { " active" } else { "" },
         table = if layout == "table" { " active" } else { "" },
         domain_q = domain_q,
-        cards = installed_cards(&installed, layout, &domain),
+        cards = installed_cards(&installed, layout, &domain, query.username),
     )
 }
 
@@ -166,7 +174,13 @@ fn render_store(
     let installed = if domain.is_empty() {
         Vec::new()
     } else {
-        list_installed(domain).unwrap_or_default()
+        let mut installed = list_installed(domain).unwrap_or_default();
+        for act in crate::plugin_activation::activated_as_installed(domain) {
+            if !installed.iter().any(|p| p.manifest.id == act.manifest.id) {
+                installed.push(act);
+            }
+        }
+        installed
     };
     let ids: Vec<String> = installed.iter().map(|p| p.manifest.id.clone()).collect();
     let install_path = if domain.is_empty() {
@@ -218,6 +232,7 @@ fn render_store(
                             mode,
                             page,
                             per_page,
+                            username: query.username,
                         },
                     ),
                 ),
@@ -249,7 +264,7 @@ fn render_store(
       <article class="section-card">
         <h2>Plugin Store</h2>
         {picker}
-        <p class="plugin-store-meta">Install into <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
+        <p class="plugin-store-meta">Site plugins install under <code>{path}</code>. Host-scoped Security packages install once on the Host; sites Activate. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
         <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install. Fail2ban and other Security plugins appear here from Control-Panel-Network/CPN-Plugins.</p>
         {body}
       </article>"#,

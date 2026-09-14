@@ -67,6 +67,9 @@ pub struct CatalogEntry {
     /// Services / features that stop or become unavailable on uninstall.
     #[serde(default)]
     pub uninstall_impacts: Vec<String>,
+    /// Host-scoped: one host install, per-site Activate (from meta `<scope>host</scope>`).
+    #[serde(default)]
+    pub host_scoped: bool,
 }
 
 #[derive(Debug, Clone)]

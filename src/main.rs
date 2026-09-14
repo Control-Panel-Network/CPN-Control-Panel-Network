@@ -104,11 +104,13 @@ use cpn_installer::panel_package_routes::{
 };
 use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
-    apps_activate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall,
-    backups_page, backups_run, databases_create, databases_ftp_create, databases_install_mariadb,
-    databases_page, email_account_create, email_account_disable, email_account_enable, email_page,
-    plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
-    plugins_settings_page, plugins_settings_save, plugins_uninstall, preview_content,
+    apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
+    apps_uninstall, backups_page, backups_run, databases_create, databases_ftp_create,
+    databases_install_mariadb, databases_page, email_account_create, email_account_disable,
+    email_account_enable, email_page, plugins_activate_host, plugins_dashboard_page,
+    plugins_deactivate_host, plugins_disable, plugins_enable, plugins_install, plugins_install_host,
+    plugins_page, plugins_settings_page, plugins_settings_save, plugins_uninstall,
+    plugins_uninstall_host, preview_content,
     preview_mode_page, site_preview_image, site_preview_refresh, websites_create, websites_delete,
     websites_manage, websites_page, websites_prefs, websites_pretty_manage,
     websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
@@ -1052,9 +1054,10 @@ async fn main() -> std::io::Result<()> {
             .service(packages_assign)
             .service(apps_page)
             .service(apps_install)
+            .service(apps_activate)
+            .service(apps_deactivate)
             .service(apps_reinstall)
             .service(apps_uninstall)
-            .service(apps_activate)
             .service(apps_start)
             .service(apps_stop)
             .service(backups_page)
@@ -1290,7 +1293,11 @@ async fn main() -> std::io::Result<()> {
             .service(plugins_settings_save)
             .service(plugins_dashboard_page)
             .service(plugins_install)
+            .service(plugins_install_host)
+            .service(plugins_activate_host)
+            .service(plugins_deactivate_host)
             .service(plugins_uninstall)
+            .service(plugins_uninstall_host)
             .service(plugins_enable)
             .service(plugins_disable)
             .service(panel_alias)

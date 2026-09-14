@@ -13,6 +13,10 @@ use crate::panel_plugin_settings::{
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{run_mariadb_install, set_websites_docroot_pref, websites_main};
 use crate::panel_website_manage::website_manage_main;
+use crate::plugin_activation::{
+    activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
+    is_host_owned_install, is_host_scoped_plugin, uninstall_host_plugin,
+};
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
     declared_settings_fields, load_plugin_settings, save_plugin_settings,
@@ -27,7 +31,8 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
 pub use crate::panel_app_routes::{
-    apps_activate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall,
+    apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
+    apps_uninstall,
 };
 pub use crate::panel_backup_routes::{backups_page, backups_run};
 pub use crate::panel_mail_routes::{
@@ -701,6 +706,7 @@ pub async fn plugins_page(
         page,
         per_page,
         sites: &sites,
+        username: &user,
     });
     if partial {
         return html_ok(body);
@@ -743,6 +749,84 @@ pub async fn plugins_install(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    // Host-scoped: never full-copy under a site when host install exists (or is required).
+    if is_host_scoped_plugin(&form.id) {
+        if crate::plugin_activation::host_plugin_installed(&form.id) {
+            if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+                return HttpResponse::SeeOther()
+                    .append_header((
+                        "Location",
+                        plugins_redirect(&form.domain, "store", None, Some(&error)),
+                    ))
+                    .finish();
+            }
+            return match activate_host_plugin_for_domain(&form.domain, &form.id) {
+                Ok(manifest) => HttpResponse::SeeOther()
+                    .append_header((
+                        "Location",
+                        plugins_redirect(
+                            &form.domain,
+                            "installed",
+                            Some(&format!("Activated {}", manifest.name)),
+                            None,
+                        ),
+                    ))
+                    .finish(),
+                Err(error) => HttpResponse::SeeOther()
+                    .append_header((
+                        "Location",
+                        plugins_redirect(&form.domain, "store", None, Some(&error)),
+                    ))
+                    .finish(),
+            };
+        }
+        if !is_panel_admin(&user) {
+            return HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(
+                        &form.domain,
+                        "store",
+                        None,
+                        Some(
+                            "This is a Host package. Ask the panel admin to Install on Host first.",
+                        ),
+                    ),
+                ))
+                .finish();
+        }
+        return match install_host_plugin(&form.id) {
+            Ok(manifest) => {
+                let notice = if form.domain.trim().is_empty() {
+                    format!("Installed {} on Host", manifest.name)
+                } else {
+                    match activate_host_plugin_for_domain(&form.domain, &form.id) {
+                        Ok(_) => format!(
+                            "Installed {} on Host and activated for {}",
+                            manifest.name,
+                            form.domain.trim()
+                        ),
+                        Err(err) => format!(
+                            "Installed {} on Host, but site activate failed: {}",
+                            manifest.name, err
+                        ),
+                    }
+                };
+                HttpResponse::SeeOther()
+                    .append_header((
+                        "Location",
+                        plugins_redirect(&form.domain, "store", Some(&notice), None),
+                    ))
+                    .finish()
+            }
+            Err(error) => HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "store", None, Some(&error)),
+                ))
+                .finish(),
+        };
+    }
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Install) {
         return HttpResponse::SeeOther()
             .append_header((
@@ -772,6 +856,195 @@ pub async fn plugins_install(
     }
 }
 
+#[post("/plugins/install-host")]
+pub async fn plugins_install_host(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "store",
+                    None,
+                    Some("Only the panel admin can install Host plugins"),
+                ),
+            ))
+            .finish();
+    }
+    match install_host_plugin(&form.id) {
+        Ok(manifest) => {
+            let notice = if form.domain.trim().is_empty() {
+                format!("Installed {} on Host", manifest.name)
+            } else if require_manage_site(&user, &form.domain, SitePerm::Enable).is_ok() {
+                match activate_host_plugin_for_domain(&form.domain, &form.id) {
+                    Ok(_) => format!(
+                        "Installed {} on Host and activated for {}",
+                        manifest.name,
+                        form.domain.trim()
+                    ),
+                    Err(err) => format!(
+                        "Installed {} on Host, but site activate failed: {}",
+                        manifest.name, err
+                    ),
+                }
+            } else {
+                format!("Installed {} on Host", manifest.name)
+            };
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "store", Some(&notice), None),
+                ))
+                .finish()
+        }
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/activate-host")]
+pub async fn plugins_activate_host(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish();
+    }
+    match activate_host_plugin_for_domain(&form.domain, &form.id) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Activated {}", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/deactivate-host")]
+pub async fn plugins_deactivate_host(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
+            ))
+            .finish();
+    }
+    match deactivate_host_plugin_for_domain(&form.domain, &form.id) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    Some(&format!("Deactivated {}", form.id.trim())),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "installed", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/uninstall-host")]
+pub async fn plugins_uninstall_host(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "store",
+                    None,
+                    Some("Only the panel admin can uninstall Host plugins"),
+                ),
+            ))
+            .finish();
+    }
+    if !crate::uninstall_confirm::confirm_accepted(&form.confirm) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "store",
+                    None,
+                    Some(crate::uninstall_confirm::CONFIRM_REQUIRED_MSG),
+                ),
+            ))
+            .finish();
+    }
+    match uninstall_host_plugin(&form.id) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "store",
+                    Some(&format!("Uninstalled host plugin {}", form.id.trim())),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
 #[post("/plugins/uninstall")]
 pub async fn plugins_uninstall(
     http: HttpRequest,
@@ -781,6 +1054,21 @@ pub async fn plugins_uninstall(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if is_host_owned_install(&form.domain, &form.id) && !is_panel_admin(&user) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "installed",
+                    None,
+                    Some(
+                        "This plugin is installed on the Host. Use Deactivate, or ask the admin to uninstall from Host.",
+                    ),
+                ),
+            ))
+            .finish();
+    }
     if !crate::uninstall_confirm::confirm_accepted(&form.confirm) {
         return HttpResponse::SeeOther()
             .append_header((
@@ -793,6 +1081,27 @@ pub async fn plugins_uninstall(
                 ),
             ))
             .finish();
+    }
+    if is_host_owned_install(&form.domain, &form.id) && is_panel_admin(&user) {
+        return match uninstall_host_plugin(&form.id) {
+            Ok(()) => HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(
+                        &form.domain,
+                        "store",
+                        Some(&format!("Uninstalled host plugin {}", form.id.trim())),
+                        None,
+                    ),
+                ))
+                .finish(),
+            Err(error) => HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", None, Some(&error)),
+                ))
+                .finish(),
+        };
     }
     if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Uninstall) {
         return HttpResponse::SeeOther()

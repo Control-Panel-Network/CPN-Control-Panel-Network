@@ -1,6 +1,8 @@
 //! Markup helpers for the Plugins hub (tabs, installed cards, store catalog).
 
+use crate::panel_admin::is_panel_admin;
 use crate::panel_plugins_spa::plugins_hub_styles;
+use crate::plugin_activation::is_host_owned_install;
 use crate::plugins::InstalledPlugin;
 use crate::sites::SiteRecord;
 use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
@@ -225,21 +227,61 @@ fn badge_pricing(pricing: &str) -> String {
     }
 }
 
-pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain: &str) -> String {
+pub(crate) fn installed_cards(
+    plugins: &[InstalledPlugin],
+    layout: &str,
+    domain: &str,
+    username: &str,
+) -> String {
     if plugins.is_empty() {
         return r#"<p class="empty-state">No plugins installed for this site yet. Open the Plugin Store to install from the community catalog.</p>"#
             .into();
     }
     if layout == "table" {
-        return installed_table(plugins, domain);
+        return installed_table(plugins, domain, username);
     }
+    let admin = is_panel_admin(username);
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
     for item in plugins {
         let m = &item.manifest;
+        let host_owned = is_host_owned_install(domain, &m.id)
+            || m.source == "host-activation";
         let active = if m.enabled { "Yes" } else { "No" };
-        let toggle = toggle_form(m.enabled, &m.id, domain);
-        let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
-        let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+        let status = if host_owned {
+            "Activated (host)"
+        } else {
+            "Installed"
+        };
+        let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
+        let uninstall = if host_owned && !admin {
+            String::new()
+        } else if host_owned && admin {
+            let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+            let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+            format!(
+                r#"<form method="post" action="/plugins/uninstall-host" {form_attrs}>
+              <input type="hidden" name="id" value="{id}">
+              <input type="hidden" name="confirm" value="">
+              <button type="submit" class="btn-danger">Uninstall from Host</button>
+            </form>"#,
+                form_attrs = form_attrs,
+                id = html_escape(&m.id),
+            )
+        } else {
+            let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+            let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+            format!(
+                r#"<form method="post" action="/plugins/uninstall" {form_attrs}>
+              <input type="hidden" name="id" value="{id}">
+              <input type="hidden" name="domain" value="{domain}">
+              <input type="hidden" name="confirm" value="">
+              <button type="submit" class="btn-danger">Uninstall</button>
+            </form>"#,
+                form_attrs = form_attrs,
+                id = html_escape(&m.id),
+                domain = html_escape(domain),
+            )
+        };
         cards.push_str(&format!(
             r#"<article class="plugin-card">
           <h3>{name}</h3>
@@ -249,16 +291,11 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
             {pricing}
           </div>
           <p class="plugin-desc">{desc}</p>
-          <p class="plugin-meta">Status: Installed · Active: {active}</p>
+          <p class="plugin-meta">Status: {status} · Active: {active}</p>
           <div class="plugin-actions">
             <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
             {toggle}
-            <form method="post" action="/plugins/uninstall" {form_attrs}>
-              <input type="hidden" name="id" value="{id}">
-              <input type="hidden" name="domain" value="{domain}">
-              <input type="hidden" name="confirm" value="">
-              <button type="submit" class="btn-danger">Uninstall</button>
-            </form>
+            {uninstall}
           </div>
           <div class="plugin-links">
             <a href="/plugins/dashboard?domain={domain_q}&amp;id={id}">Dashboard</a>
@@ -272,10 +309,10 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
             ver = html_escape(&m.version),
             pricing = badge_pricing(&m.pricing),
             desc = html_escape(&m.description),
+            status = status,
             active = active,
             toggle = toggle,
-            form_attrs = form_attrs,
-            domain = html_escape(domain),
+            uninstall = uninstall,
             domain_q = urlencoding_simple(domain),
             help = urlencoding_simple(&format!(
                 "Help for {}: see plugin docs in the install folder.",
@@ -294,41 +331,80 @@ pub(crate) fn installed_cards(plugins: &[InstalledPlugin], layout: &str, domain:
     cards
 }
 
-fn toggle_form(enabled: bool, id: &str, domain: &str) -> String {
-    if enabled {
-        format!(
-            r#"<form method="post" action="/plugins/disable" class="inline-form">
-            <input type="hidden" name="id" value="{id}">
-            <input type="hidden" name="domain" value="{domain}">
-            <button type="submit" class="btn-warn">Deactivate</button>
-          </form>"#,
-            id = html_escape(id),
-            domain = html_escape(domain),
-        )
+fn toggle_form(enabled: bool, id: &str, domain: &str, host_owned: bool) -> String {
+    let (action, label, cls) = if enabled {
+        if host_owned {
+            ("/plugins/deactivate-host", "Deactivate", "btn-warn")
+        } else {
+            ("/plugins/disable", "Deactivate", "btn-warn")
+        }
+    } else if host_owned {
+        ("/plugins/activate-host", "Activate", "btn-primary")
     } else {
-        format!(
-            r#"<form method="post" action="/plugins/enable" class="inline-form">
+        ("/plugins/enable", "Activate", "btn-primary")
+    };
+    format!(
+        r#"<form method="post" action="{action}" class="inline-form">
             <input type="hidden" name="id" value="{id}">
             <input type="hidden" name="domain" value="{domain}">
-            <button type="submit" class="btn-primary">Activate</button>
+            <button type="submit" class="{cls}">{label}</button>
           </form>"#,
-            id = html_escape(id),
-            domain = html_escape(domain),
-        )
-    }
+        action = action,
+        id = html_escape(id),
+        domain = html_escape(domain),
+        cls = cls,
+        label = label,
+    )
 }
 
-fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
+fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) -> String {
+    let admin = is_panel_admin(username);
     let mut rows = String::from(
         r#"<div class="table-wrap"><table class="data-table">
         <thead><tr><th>Plugin</th><th>Category</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody>"#,
     );
     for item in plugins {
         let m = &item.manifest;
-        let active = if m.enabled { "Active" } else { "Inactive" };
-        let toggle = toggle_form(m.enabled, &m.id, domain);
-        let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
-        let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+        let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
+        let active = if m.enabled {
+            if host_owned {
+                "Activated (host)"
+            } else {
+                "Active"
+            }
+        } else {
+            "Inactive"
+        };
+        let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
+        let uninstall = if host_owned && !admin {
+            String::new()
+        } else if host_owned && admin {
+            let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+            let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+            format!(
+                r#"<form method="post" action="/plugins/uninstall-host" {form_attrs}>
+                <input type="hidden" name="id" value="{id}">
+                <input type="hidden" name="confirm" value="">
+                <button type="submit" class="btn-danger">Uninstall from Host</button>
+              </form>"#,
+                form_attrs = form_attrs,
+                id = html_escape(&m.id),
+            )
+        } else {
+            let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
+            let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+            format!(
+                r#"<form method="post" action="/plugins/uninstall" {form_attrs}>
+                <input type="hidden" name="id" value="{id}">
+                <input type="hidden" name="domain" value="{domain}">
+                <input type="hidden" name="confirm" value="">
+                <button type="submit" class="btn-danger">Uninstall</button>
+              </form>"#,
+                form_attrs = form_attrs,
+                id = html_escape(&m.id),
+                domain = html_escape(domain),
+            )
+        };
         rows.push_str(&format!(
             r#"<tr>
             <td><strong>{name}</strong><div class="muted">{id}</div></td>
@@ -338,12 +414,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
             <td class="plugin-actions">
               <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
               {toggle}
-              <form method="post" action="/plugins/uninstall" {form_attrs}>
-                <input type="hidden" name="id" value="{id}">
-                <input type="hidden" name="domain" value="{domain}">
-                <input type="hidden" name="confirm" value="">
-                <button type="submit" class="btn-danger">Uninstall</button>
-              </form>
+              {uninstall}
             </td>
           </tr>"#,
             name = html_escape(&m.name),
@@ -352,8 +423,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
             ver = html_escape(&m.version),
             active = active,
             toggle = toggle,
-            form_attrs = form_attrs,
-            domain = html_escape(domain),
+            uninstall = uninstall,
             domain_q = urlencoding_simple(domain),
         ));
     }
