@@ -145,11 +145,7 @@ pub fn is_site_scoped(app: AppId) -> bool {
 pub fn is_associable(app: AppId) -> bool {
     matches!(
         app,
-        AppId::Mariadb
-            | AppId::Postgresql
-            | AppId::Rabbitmq
-            | AppId::Phpmyadmin
-            | AppId::Email
+        AppId::Mariadb | AppId::Postgresql | AppId::Rabbitmq | AppId::Phpmyadmin | AppId::Email
     )
 }
 
