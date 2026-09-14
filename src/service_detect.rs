@@ -239,7 +239,14 @@ mod tests {
     #[test]
     fn web_detect_unit_list_includes_lsws() {
         // Keep in sync with detect_web_server_label unit order (compile-time reminder).
-        let units = ["nginx", "lsws", "lshttpd", "openlitespeed", "caddy", "httpd"];
+        let units = [
+            "nginx",
+            "lsws",
+            "lshttpd",
+            "openlitespeed",
+            "caddy",
+            "httpd",
+        ];
         assert!(units.contains(&"lsws"));
         assert!(units.contains(&"lshttpd"));
     }
