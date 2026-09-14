@@ -55,7 +55,12 @@ pub fn firewall_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) 
     )
 }
 
-pub fn secure_ssh_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
+pub fn secure_ssh_page(
+    username: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    is_admin: bool,
+) -> String {
     let st = sshd_status();
     let kv = status_kv(&[
         ("Config", &st.config_path),
@@ -85,6 +90,30 @@ pub fn secure_ssh_page(notice: Option<&str>, error: Option<&str>, is_admin: bool
     } else {
         "<p class=\"muted\">sshd_config was not found; read-only probes only.</p>".into()
     };
+    let review_block = if is_admin {
+        match crate::panel_user_prefs::ssh_security_review_snooze_until(username) {
+            Some(until) => {
+                let until_label = crate::panel_user_prefs::format_epoch_dd_mm_yyyy(until);
+                format!(
+                    r#"<div class="stack-form" style="max-width:560px;margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline,#e5e5ea);">
+                  <h3 style="margin:0 0 8px;font-size:16px;">Activity Board SSH review</h3>
+                  <p class="muted" style="margin:0 0 12px;">The SSH security best practices banner is hidden until <strong>{until}</strong>. Hiding only snoozes the banner; the tips still apply.</p>
+                  <form method="post" action="/security/ssh/show-security-review">
+                    <button type="submit" class="btn-secondary">Show review again</button>
+                  </form>
+                </div>"#,
+                    until = html_escape(&until_label),
+                )
+            }
+            None => r#"<div class="stack-form" style="max-width:560px;margin-top:24px;padding-top:16px;border-top:1px solid var(--hairline,#e5e5ea);">
+                  <h3 style="margin:0 0 8px;font-size:16px;">Activity Board SSH review</h3>
+                  <p class="muted" style="margin:0;">The SSH security best practices banner is visible on Dashboard, Recent SSH Logs. You can hide it there for up to 1 month.</p>
+                </div>"#
+                .to_string(),
+        }
+    } else {
+        String::new()
+    };
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -93,7 +122,7 @@ pub fn secure_ssh_page(notice: Option<&str>, error: Option<&str>, is_admin: bool
         ],
         "Secure SSH",
         "Harden sshd with allowlisted toggles.",
-        &format!("{kv}{form}"),
+        &format!("{kv}{form}{review_block}"),
         notice,
         error,
     )

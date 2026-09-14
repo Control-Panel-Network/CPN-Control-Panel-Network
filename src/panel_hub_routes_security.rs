@@ -9,6 +9,7 @@ use crate::panel_hub_pages_security::{
 };
 use crate::panel_hub_pages_ssl_le::manage_ssl_page as manage_ssl_providers_page;
 use crate::panel_pages::panel_shell;
+use crate::panel_user_prefs::clear_ssh_security_review_snooze;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -39,6 +40,7 @@ pub async fn security_ssh(
         "security",
         "Secure SSH",
         &secure_ssh_page(
+            &user,
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
             is_panel_admin(&user),
@@ -65,6 +67,31 @@ pub async fn security_ssh_toggle(
     };
     match run_sshd_toggle(&user, form.key.trim(), form.value.trim()) {
         Ok(msg) => redirect_notice("/security/ssh", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssh", None, Some(&err)),
+    }
+}
+
+#[post("/security/ssh/show-security-review")]
+pub async fn security_ssh_show_review(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/ssh",
+            None,
+            Some("Only the panel admin can change the SSH security review visibility."),
+        );
+    }
+    match clear_ssh_security_review_snooze(&user) {
+        Ok(()) => redirect_notice(
+            "/security/ssh",
+            Some("SSH security review will show again on the Activity Board."),
+            None,
+        ),
         Err(err) => redirect_notice("/security/ssh", None, Some(&err)),
     }
 }
