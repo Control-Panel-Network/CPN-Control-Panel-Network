@@ -232,6 +232,19 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
     // ManageSieve (4190) so SnappyMail can manage filters.
     crate::install_mail_sieve::ensure_dovecot_sieve(state).await?;
 
+    // Auto-create/subscribe Sent/Drafts/Junk/Spam/Trash/Archive with SPECIAL-USE.
+    let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
+    let healed = crate::panel_ops_mailbox_folders::heal_all_maildir_system_folders().unwrap_or(0);
+    install_journal::record(
+        STAGE,
+        JournalAction::Note,
+        "99-cpn-mailboxes.conf",
+        None,
+        Some(format!(
+            "IMAP system folders auto=subscribe; healed {healed} Maildir(s)"
+        )),
+    )?;
+
     Ok(())
 }
 

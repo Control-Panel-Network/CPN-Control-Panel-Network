@@ -106,8 +106,11 @@ pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, 
         }
         set_password(&user, password)?;
         ensure_maildir(&user)?;
+        let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
+        let _ = crate::panel_ops_mailbox_folders::ensure_imap_system_folders(&user);
+        let _ = crate::install_snappymail_folders::seed_settings_local_for_address(address);
         Ok(format!(
-            "Local mailbox ready for `{address}` (system user `{user}`, Maildir)."
+            "Local mailbox ready for `{address}` (system user `{user}`, Maildir + system folders)."
         ))
     }
 }

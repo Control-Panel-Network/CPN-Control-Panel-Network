@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **SnappyMail system folders**: mailbox create / email install / SnappyMail heal now create IMAP **Sent**, **Drafts**, **Junk**, **Spam**, **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill SnappyMail `settings_local` mappings (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
+
 ### Added
 
 - **Uninstall confirmation with impact list**: Installed plugins and Host packages (/plugins?view=host) require a Confirm / Cancel dialog that lists services and features that will stop or become unavailable. POST /plugins/uninstall and /apps/uninstall reject requests without confirm=1. Host impacts live in host_packages_catalog (uninstall_impacts); plugins may declare them in catalog meta.xml (<uninstall_impact>) or cpn-plugin.json, with built-in maps for known ids (fail2ban, mtaSts, bimi, and similar) and a generic fallback otherwise.

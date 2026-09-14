@@ -20,6 +20,8 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
     let _ = ensure_user_settings_defaults();
     let _ = ensure_login_and_branding_defaults();
     let _ = ensure_contacts_defaults();
+    // IMAP system folders + SnappyMail Sent/Drafts/Junk/Trash/Archive mappings.
+    let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
     let _ = chown_snappy_data();
     Ok(())
 }
