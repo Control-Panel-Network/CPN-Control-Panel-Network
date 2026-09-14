@@ -290,6 +290,7 @@ mod tests {
             updated_on: String::new(),
             install_count: 0,
             featured: false,
+            uninstall_impacts: vec![],
         }
     }
 

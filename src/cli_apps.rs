@@ -116,10 +116,17 @@ pub fn run(
             yes,
         } => {
             require_root()?;
-            confirm(
-                &format!("Uninstall app `{name}`? This removes packages and stops services."),
-                yes,
-            )?;
+            let id = AppId::parse(&name)?;
+            let impacts = crate::uninstall_confirm::host_uninstall_impacts(id);
+            let mut msg = format!(
+                "Uninstall app `{}` ({})?\nIf you continue, these services/features stop or become unavailable:\n",
+                name,
+                id.label()
+            );
+            for line in &impacts {
+                msg.push_str(&format!("  - {line}\n"));
+            }
+            confirm(&msg, yes)?;
             let site = optional_site(domain, subdomain)?;
             uninstall(&name, site.as_deref())
         }

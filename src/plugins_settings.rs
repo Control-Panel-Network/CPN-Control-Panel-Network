@@ -64,28 +64,38 @@ struct ManifestExtras {
     show_in_sidebar: Option<bool>,
     #[serde(default)]
     has_dashboard: bool,
+    /// Human-readable impacts shown in the uninstall confirm dialog.
+    #[serde(default)]
+    uninstall_impacts: Vec<String>,
+}
+
+fn empty_extras() -> ManifestExtras {
+    ManifestExtras {
+        settings_fields: Vec::new(),
+        show_in_sidebar: None,
+        has_dashboard: false,
+        uninstall_impacts: Vec::new(),
+    }
 }
 
 fn load_manifest_extras(domain: &str, plugin_id: &str) -> ManifestExtras {
     let Ok(path) = manifest_path(domain, plugin_id) else {
-        return ManifestExtras {
-            settings_fields: Vec::new(),
-            show_in_sidebar: None,
-            has_dashboard: false,
-        };
+        return empty_extras();
     };
     let Ok(raw) = fs::read_to_string(&path) else {
-        return ManifestExtras {
-            settings_fields: Vec::new(),
-            show_in_sidebar: None,
-            has_dashboard: false,
-        };
+        return empty_extras();
     };
-    serde_json::from_str(&raw).unwrap_or(ManifestExtras {
-        settings_fields: Vec::new(),
-        show_in_sidebar: None,
-        has_dashboard: false,
-    })
+    serde_json::from_str(&raw).unwrap_or_else(|_| empty_extras())
+}
+
+/// Declared uninstall impacts from installed `cpn-plugin.json` (may be empty).
+pub fn manifest_uninstall_impacts(domain: &str, plugin_id: &str) -> Vec<String> {
+    load_manifest_extras(domain, plugin_id)
+        .uninstall_impacts
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 /// Built-in settings for known webmail plugins when the catalog manifest is sparse.
@@ -320,6 +330,7 @@ mod tests {
                 source: "test".into(),
                 catalog_repo: "Control-Panel-Network/CPN-Plugins".into(),
                 domain: "example.com".into(),
+                uninstall_impacts: vec![],
             };
             let raw = serde_json::to_string_pretty(&serde_json::json!({
                 "schema_version": manifest.schema_version,

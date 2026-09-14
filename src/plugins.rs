@@ -38,6 +38,9 @@ pub struct CpnPluginManifest {
     /// Domain this plugin is bound to (omitted on very old manifests).
     #[serde(default)]
     pub domain: String,
+    /// Services / features that stop or become unavailable on uninstall.
+    #[serde(default)]
+    pub uninstall_impacts: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +64,9 @@ pub struct CatalogEntry {
     /// Explicit Featured flag from catalog metadata.
     #[serde(default)]
     pub featured: bool,
+    /// Services / features that stop or become unavailable on uninstall.
+    #[serde(default)]
+    pub uninstall_impacts: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -275,6 +281,7 @@ fn list_installed_in_dir(domain: &str, dir: &Path) -> Result<Vec<InstalledPlugin
                         source: "compat".into(),
                         catalog_repo: CATALOG_REPO.into(),
                         domain: domain.to_string(),
+                        uninstall_impacts: entry.uninstall_impacts,
                     };
                     let _ = write_manifest(domain, &manifest);
                     out.push(InstalledPlugin {
@@ -459,6 +466,7 @@ pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginMani
         source: "catalog".into(),
         catalog_repo: CATALOG_REPO.into(),
         domain: domain.clone(),
+        uninstall_impacts: entry.uninstall_impacts,
     };
     write_manifest(&domain, &manifest)?;
     sync_email_auth_feature_flags(&id);
@@ -543,6 +551,7 @@ mod tests {
                 source: "test".into(),
                 catalog_repo: CATALOG_REPO.into(),
                 domain: "example.com".into(),
+                uninstall_impacts: vec![],
             };
             write_manifest("example.com", &manifest).unwrap();
             assert_eq!(list_installed("example.com").unwrap().len(), 1);

@@ -31,8 +31,10 @@ pub struct PluginsPageQuery<'a> {
 fn wrap_hub(inner: String) -> String {
     format!(
         r#"<div id="plugins-hub" data-plugins-hub="1">{inner}</div>
+{dialog}
 {script}"#,
         inner = inner,
+        dialog = crate::uninstall_confirm::uninstall_dialog_bundle(),
         script = plugins_hub_script(),
     )
 }
