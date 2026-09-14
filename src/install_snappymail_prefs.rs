@@ -133,7 +133,7 @@ fn ensure_domain_sieve_enabled() -> Result<(), String> {
             continue;
         };
         let sieve = data.as_object_mut().map(|o| {
-            o.entry("Sieve".into())
+            o.entry("Sieve".to_string())
                 .or_insert_with(|| Value::Object(Default::default()))
         });
         if let Some(Value::Object(obj)) = sieve {

@@ -210,7 +210,7 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     // Enable ManageSieve so Filters work in SnappyMail.
     {
         let sieve = data.as_object_mut().map(|o| {
-            o.entry("Sieve".into())
+            o.entry("Sieve".to_string())
                 .or_insert_with(|| serde_json::Value::Object(Default::default()))
         });
         if let Some(serde_json::Value::Object(obj)) = sieve {
