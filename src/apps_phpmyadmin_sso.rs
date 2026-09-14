@@ -323,15 +323,15 @@ fn create_ephemeral_db_user() -> Result<(String, String), String> {
 }
 
 /// When `db_names` is Some, grants are limited to those databases (domain jail).
-fn create_ephemeral_db_user_scoped(db_names: Option<&[String]>) -> Result<(String, String), String> {
+fn create_ephemeral_db_user_scoped(
+    db_names: Option<&[String]>,
+) -> Result<(String, String), String> {
     let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
     let user = format!("cpn_pma_{}", &random_token()[..8]);
     let pass = random_password();
     let pass_sql = pass.replace('\'', "''");
     let grants = match db_names {
-        None => format!(
-            "GRANT ALL PRIVILEGES ON *.* TO '{user}'@'localhost' WITH GRANT OPTION;"
-        ),
+        None => format!("GRANT ALL PRIVILEGES ON *.* TO '{user}'@'localhost' WITH GRANT OPTION;"),
         Some([]) => format!("GRANT USAGE ON *.* TO '{user}'@'localhost';"),
         Some(names) => {
             let mut parts = vec![format!("GRANT USAGE ON *.* TO '{user}'@'localhost';")];

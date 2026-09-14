@@ -154,7 +154,8 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
     match status.state {
         AppStateKind::NotInstalled => {
             if !is_admin {
-                return r#"<span class="muted">Ask the panel admin to Install on Host</span>"#.into();
+                return r#"<span class="muted">Ask the panel admin to Install on Host</span>"#
+                    .into();
             }
             format!(
                 r#"<form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install {label} on this host?');">

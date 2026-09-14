@@ -195,11 +195,7 @@ pub async fn apps_activate(
             return HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    apps_redirect(
-                        "",
-                        None,
-                        Some("Select a domain or subdomain to Activate"),
-                    ),
+                    apps_redirect("", None, Some("Select a domain or subdomain to Activate")),
                 ))
                 .finish();
         }

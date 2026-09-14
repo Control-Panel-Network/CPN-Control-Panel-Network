@@ -5,9 +5,7 @@ use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
-use crate::plugin_activation::{
-    catalog_entry_is_host_scoped, host_plugin_installed, is_activated,
-};
+use crate::plugin_activation::{catalog_entry_is_host_scoped, host_plugin_installed, is_activated};
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured, format_iso_date_eu};
 
 pub(crate) struct StoreListOpts<'a> {
@@ -169,7 +167,15 @@ fn store_card(
         ""
     };
     let dates = dates_line(&entry.released_on, &entry.updated_on);
-    let action = store_action_html(entry, domain, installed, host_scoped, on_host, activated, admin);
+    let action = store_action_html(
+        entry,
+        domain,
+        installed,
+        host_scoped,
+        on_host,
+        activated,
+        admin,
+    );
     format!(
         r#"<article class="plugin-card">
           <h3>{name}</h3>

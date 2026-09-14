@@ -244,8 +244,7 @@ pub(crate) fn installed_cards(
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
     for item in plugins {
         let m = &item.manifest;
-        let host_owned = is_host_owned_install(domain, &m.id)
-            || m.source == "host-activation";
+        let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
         let active = if m.enabled { "Yes" } else { "No" };
         let status = if host_owned {
             "Activated (host)"

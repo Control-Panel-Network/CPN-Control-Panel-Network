@@ -116,9 +116,10 @@ pub fn is_activated(domain_raw: &str, plugin_id: &str) -> bool {
     if domain.is_empty() || id.is_empty() {
         return false;
     }
-    load_activations().activations.iter().any(|a| {
-        a.domain.eq_ignore_ascii_case(domain) && a.plugin_id.eq_ignore_ascii_case(id)
-    })
+    load_activations()
+        .activations
+        .iter()
+        .any(|a| a.domain.eq_ignore_ascii_case(domain) && a.plugin_id.eq_ignore_ascii_case(id))
 }
 
 pub fn list_activations_for_domain(domain_raw: &str) -> Vec<PluginActivation> {
@@ -256,10 +257,7 @@ pub fn uninstall_host_plugin(plugin_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn write_site_activation_stub(
-    domain: &str,
-    entry: &CpnPluginManifest,
-) -> Result<PathBuf, String> {
+fn write_site_activation_stub(domain: &str, entry: &CpnPluginManifest) -> Result<PathBuf, String> {
     let site = load_site(domain)?;
     let dest = site_plugins_dir(&site).join(&entry.id);
     fs::create_dir_all(&dest).map_err(|e| format!("Could not create {}: {e}", dest.display()))?;
@@ -357,10 +355,7 @@ pub fn activate_host_plugin_for_domain(
     Ok(out)
 }
 
-pub fn deactivate_host_plugin_for_domain(
-    domain_raw: &str,
-    plugin_id: &str,
-) -> Result<(), String> {
+pub fn deactivate_host_plugin_for_domain(domain_raw: &str, plugin_id: &str) -> Result<(), String> {
     let site = load_site(domain_raw)?;
     let id = normalize_plugin_id(plugin_id)?;
     if !is_activated(&site.domain, &id) {
@@ -438,11 +433,8 @@ mod tests {
     #[test]
     fn activate_deactivate_roundtrip_without_catalog() {
         with_test_data_dir(|| {
-            let home = std::env::temp_dir().join(format!(
-                "cpn-act-{}-{}",
-                std::process::id(),
-                now_unix()
-            ));
+            let home =
+                std::env::temp_dir().join(format!("cpn-act-{}-{}", std::process::id(), now_unix()));
             let _ = fs::remove_dir_all(&home);
             fs::create_dir_all(&home).unwrap();
             unsafe {
