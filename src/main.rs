@@ -33,6 +33,7 @@ use cpn_installer::panel_hub_routes::{
     backups_destinations_save, backups_gdrive_route, backups_remote_route, backups_restore_route,
     backups_restore_run, backups_schedule_route, backups_schedule_save, cloudflare_add_post,
     cloudflare_delete_post, cloudflare_dns_get, cloudflare_oauth_callback_get,
+    dashboard_ssh_security_review_show, dashboard_ssh_security_review_snooze,
     cloudflare_oauth_client_post, cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post,
     cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
     cloudflare_update_post, databases_all_route, databases_create_get, databases_create_post,
@@ -58,7 +59,8 @@ use cpn_installer::panel_hub_routes::{
     security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
     security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
     security_firewall_trusted_delete, security_malware, security_modsec, security_modsec_rules,
-    security_page, security_rule_packs, security_ssh, security_ssh_toggle, security_ssl,
+    security_page, security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle,
+    security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
     security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
     security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
@@ -967,6 +969,8 @@ async fn main() -> std::io::Result<()> {
             .service(passkey_login_start)
             .service(passkey_login_finish)
             .service(dashboard_page)
+            .service(dashboard_ssh_security_review_snooze)
+            .service(dashboard_ssh_security_review_show)
             .service(websites_page)
             .service(websites_manage)
             .service(websites_alias_add)
@@ -1172,6 +1176,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_firewall_trusted_delete)
             .service(security_ssh)
             .service(security_ssh_toggle)
+            .service(security_ssh_show_review)
             .service(security_fail2ban)
             .service(security_modsec)
             .service(security_modsec_rules)

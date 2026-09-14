@@ -4,9 +4,8 @@ use crate::packages::is_panel_admin;
 use crate::panel_dashboard_activity_list::{
     activity_list_script, activity_list_styles, wrap_activity_table,
 };
-use crate::panel_ops_activity::{
-    ActivityLogRow, SshSecurityAnalysis, recent_ssh_logins, recent_ssh_logs, ssh_security_analysis,
-};
+use crate::panel_dashboard_activity_ssh::ssh_logs_panel;
+use crate::panel_ops_activity::{ActivityLogRow, recent_ssh_logins, ssh_security_analysis};
 use crate::panel_ops_activity_host::{
     cpu_activity, disk_io_snapshot, format_bytes, network_traffic,
 };
@@ -73,6 +72,19 @@ pub fn activity_board_styles() -> String {
 .activity-sec-meta span { color:var(--muted); display:block; font-size:11px; }
 .activity-tip {
   margin:10px 0 0; padding:8px 10px; border-radius:8px; background:#f2f4f7; font-size:13px;
+}
+.activity-sec-actions {
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0 0;
+}
+.activity-sec-actions form { margin:0; }
+.activity-sec-actions button {
+  min-height:34px; padding:0 12px; border-radius:999px; border:1px solid var(--hairline);
+  background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:700; cursor:pointer;
+}
+.activity-sec-actions .muted { margin:0; font-size:12px; }
+.activity-sec-snoozed {
+  margin:0 0 14px; padding:10px 12px; border-radius:10px; border:1px dashed var(--hairline);
+  font-size:13px; color:var(--muted);
 }
 .activity-board .data-table th {
   background:rgba(37,99,235,.12); color:var(--ink); border-top:0;
@@ -164,68 +176,6 @@ fn ssh_logins_panel() -> String {
         r#"<div class="activity-panel-head"><h3>Recent SSH Logins</h3>
         <p class="muted" style="margin:0;">Accepted sessions from auth logs / journal.</p></div>
         {table}"#,
-        table = table,
-    )
-}
-
-fn ssh_logs_panel(analysis: &SshSecurityAnalysis) -> String {
-    let (rows, _analyzed) = recent_ssh_logs(200);
-    let tips: String = analysis
-        .tips
-        .iter()
-        .map(|t| {
-            format!(
-                r#"<div class="activity-tip">{tip}</div>"#,
-                tip = html_escape(t)
-            )
-        })
-        .collect();
-    let alert_title = if analysis.alert_count > 0 {
-        format!("Security notices ({n})", n = analysis.alert_count)
-    } else {
-        "SSH security review".into()
-    };
-    let table = wrap_activity_table(
-        "ssh-logs",
-        "Filter timestamp or message",
-        &log_table(
-            &rows,
-            "No SSH log lines available (need readable auth logs or journalctl).",
-        ),
-    );
-    format!(
-        r#"<div class="activity-panel-head">
-          <h3>SSH Security Analysis</h3>
-          <a class="btn-secondary" href="/dashboard#activity-ssh-logs" style="min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--hairline);display:inline-flex;align-items:center;text-decoration:none;font-weight:700;font-size:13px;">Refresh analysis</a>
-        </div>
-        <div class="activity-sec-box">
-          <h4>{alert_title}</h4>
-          <div class="activity-sec-card">
-            <strong>SSH security best practices</strong>
-            <span class="badge-info">INFO</span>
-            <p style="margin:8px 0 0;font-size:13px;">While no immediate compromise is claimed from this sample, consider the hardening tips below.</p>
-            <div class="activity-sec-meta">
-              <div><span>Status</span><strong>{status}</strong></div>
-              <div><span>Logs analyzed</span><strong>{logs}</strong></div>
-              <div><span>Firewall</span><strong>{fw}</strong></div>
-            </div>
-            <div class="activity-sec-meta" style="margin-top:8px;">
-              <div><span>Failed logins (sample)</span><strong>{failed}</strong></div>
-              <div><span>Accepted logins (sample)</span><strong>{ok}</strong></div>
-              <div><span>Manage</span><strong><a href="/security/ssh">SSH settings</a></strong></div>
-            </div>
-            {tips}
-          </div>
-        </div>
-        <h3 style="margin:0 0 8px;font-size:15px;">Recent SSH Logs</h3>
-        {table}"#,
-        alert_title = html_escape(&alert_title),
-        status = html_escape(&analysis.status_label),
-        logs = analysis.logs_analyzed,
-        fw = html_escape(&analysis.firewall_label),
-        failed = analysis.failed_logins,
-        ok = analysis.accepted_logins,
-        tips = tips,
         table = table,
     )
 }
@@ -372,6 +322,11 @@ fn activity_script() -> String {
   var hash=(location.hash||'').replace(/^#/,'');
   var want=null;
   if(hash.indexOf('activity-')===0) want=hash.slice('activity-'.length);
+  try{
+    var q=new URLSearchParams(location.search||'');
+    var qAct=q.get('activity');
+    if(qAct) want=qAct;
+  }catch(e){}
   if(want && root.querySelector('[data-activity-tab="'+want+'"]')) activate(want);
 })();
 "#,
@@ -415,7 +370,7 @@ pub fn activity_board_html(username: &str) -> String {
 
     let panels = [
         panel("ssh-logins", false, &ssh_logins_panel()),
-        panel("ssh-logs", true, &ssh_logs_panel(&analysis)),
+        panel("ssh-logs", true, &ssh_logs_panel(username, &analysis)),
         panel("top-process", true, &top_process_panel()),
         panel("traffic", true, &traffic_panel()),
         panel("disk-io", true, &disk_io_panel()),
