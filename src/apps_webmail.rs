@@ -360,7 +360,10 @@ pub fn activate_webmail_app(id: AppId) -> Result<String, String> {
                 .into(),
         )
     } else {
-        Err(format!("{} cannot be activated as panel webmail.", id.label()))
+        Err(format!(
+            "{} cannot be activated as panel webmail.",
+            id.label()
+        ))
     }
 }
 
@@ -438,7 +441,10 @@ mod tests {
     #[test]
     fn mail_mapping() {
         assert_eq!(mail_for_app(AppId::Tachyon).unwrap(), MailSystem::Tachyon);
-        assert_eq!(mail_for_app(AppId::Roundcube).unwrap(), MailSystem::Roundcube);
+        assert_eq!(
+            mail_for_app(AppId::Roundcube).unwrap(),
+            MailSystem::Roundcube
+        );
         assert!(mail_for_app(AppId::Nextcloud).is_err());
     }
 }
