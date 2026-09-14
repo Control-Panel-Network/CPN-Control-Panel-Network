@@ -258,10 +258,6 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
 pub fn is_webmail_app(id: AppId) -> bool {
     matches!(
         id,
-        AppId::Snappymail
-            | AppId::Tachyon
-            | AppId::Roundcube
-            | AppId::Nextsnapmail
-            | AppId::Sogo
+        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail | AppId::Sogo
     )
 }
