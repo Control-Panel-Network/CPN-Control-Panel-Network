@@ -175,7 +175,8 @@ pub fn parse_ini_quoted_value(raw: &str, key: &str) -> Option<String> {
     None
 }
 
-fn client_id_for_data_dir(data_dir: &str) -> String {
+/// Map a data dir or docroot path to a stable client id (`snappymail`, `tachyon`, `nextsnapmail`).
+pub fn client_id_for_data_dir(data_dir: &str) -> String {
     let lower = data_dir.to_ascii_lowercase();
     if lower.contains("tachyon") {
         "tachyon".into()

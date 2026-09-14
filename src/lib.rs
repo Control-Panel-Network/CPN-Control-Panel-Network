@@ -49,6 +49,7 @@ pub mod install_mail_sieve;
 pub mod install_recipes;
 pub mod install_selinux_mail;
 pub mod install_server;
+pub mod install_snappymail_contacts;
 pub mod install_snappymail_folders;
 pub mod install_snappymail_lineage;
 pub mod install_snappymail_prefs;

@@ -145,7 +145,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-14",
             install_count: 40,
             featured: true,
-            description: "Default CPN webmail (Tachyon): modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+, no DB required.",
+            description: "Default CPN webmail (Tachyon): modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Removes the Tachyon webmail install and related panel proxy paths",
