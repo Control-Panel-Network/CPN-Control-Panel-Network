@@ -288,6 +288,15 @@ fn category_pills(
         },
         domain_q = domain_q,
     ));
+    out.push_str(&format!(
+        r#"<a class="{cls}" href="/plugins?view=host&amp;category=Paid{domain_q}">Paid</a>"#,
+        cls = if active.eq_ignore_ascii_case("paid") {
+            "active"
+        } else {
+            ""
+        },
+        domain_q = domain_q,
+    ));
     for cat in cats {
         let cls = if cat.eq_ignore_ascii_case(active) {
             "active"

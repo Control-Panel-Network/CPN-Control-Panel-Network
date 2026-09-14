@@ -1,4 +1,4 @@
-//! Plugin Store catalog list: cards, Featured filter, release/updated dates.
+//! Plugin Store catalog list: cards, Featured/Paid filters, release/updated dates.
 
 use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
 use crate::panel_plugins_spa::{
@@ -15,29 +15,47 @@ pub(crate) struct StoreListOpts<'a> {
     pub per_page: usize,
 }
 
-fn badge_pricing(pricing: &str) -> String {
+fn pricing_is_paid(pricing: &str) -> bool {
     let lower = pricing.to_ascii_lowercase();
-    if lower.contains("paid") || lower.contains("premium") {
+    lower.contains("paid") || lower.contains("premium")
+}
+
+/// Exact `q=paid` / `q=free` (and `premium`) act as pricing filters, not full-text.
+fn exact_pricing_query(query: &str) -> Option<&'static str> {
+    match query.trim().to_ascii_lowercase().as_str() {
+        "paid" | "premium" => Some("paid"),
+        "free" => Some("free"),
+        _ => None,
+    }
+}
+
+fn badge_pricing(pricing: &str) -> String {
+    if pricing_is_paid(pricing) {
         r#"<span class="plugin-badge paid">Paid</span>"#.into()
     } else {
         r#"<span class="plugin-badge free">Free</span>"#.into()
     }
 }
 
-pub(crate) fn store_catalog(
-    entries: &[CatalogEntry],
-    installed_ids: &[String],
-    opts: StoreListOpts<'_>,
-) -> String {
-    let q = opts.query.trim().to_ascii_lowercase();
-    let cat = opts.category.trim().to_ascii_lowercase();
-    let filtered: Vec<&CatalogEntry> = entries
+pub(crate) fn filter_store_entries<'a>(
+    entries: &'a [CatalogEntry],
+    query: &str,
+    category: &str,
+) -> Vec<&'a CatalogEntry> {
+    let q = query.trim().to_ascii_lowercase();
+    let cat = category.trim().to_ascii_lowercase();
+    let pricing_q = exact_pricing_query(&q);
+    entries
         .iter()
         .filter(|entry| {
             let cat_ok = if cat.is_empty() || cat == "all" {
                 true
             } else if cat == "featured" {
                 catalog_entry_is_featured(entry, entries)
+            } else if cat == "paid" {
+                pricing_is_paid(&entry.pricing)
+            } else if cat == "free" {
+                !pricing_is_paid(&entry.pricing)
             } else {
                 entry.category.to_ascii_lowercase() == cat
             };
@@ -47,11 +65,26 @@ pub(crate) fn store_catalog(
             if q.is_empty() {
                 return true;
             }
+            if let Some(want) = pricing_q {
+                return match want {
+                    "paid" => pricing_is_paid(&entry.pricing),
+                    "free" => !pricing_is_paid(&entry.pricing),
+                    _ => false,
+                };
+            }
             entry.name.to_ascii_lowercase().contains(&q)
                 || entry.description.to_ascii_lowercase().contains(&q)
                 || entry.id.to_ascii_lowercase().contains(&q)
         })
-        .collect();
+        .collect()
+}
+
+pub(crate) fn store_catalog(
+    entries: &[CatalogEntry],
+    installed_ids: &[String],
+    opts: StoreListOpts<'_>,
+) -> String {
+    let filtered = filter_store_entries(entries, opts.query, opts.category);
     let total = filtered.len();
     if total == 0 {
         return format!(
@@ -213,6 +246,15 @@ pub(crate) fn category_pills(
         },
         domain_q = domain_q,
     ));
+    out.push_str(&format!(
+        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Paid{domain_q}">Paid</a>"#,
+        cls = if active.eq_ignore_ascii_case("paid") {
+            "active"
+        } else {
+            ""
+        },
+        domain_q = domain_q,
+    ));
     for cat in cats {
         let cls = if cat.eq_ignore_ascii_case(active) {
             "active"
@@ -229,4 +271,84 @@ pub(crate) fn category_pills(
     }
     out.push_str("</div>");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str, pricing: &str, description: &str) -> CatalogEntry {
+        CatalogEntry {
+            id: id.into(),
+            name: id.into(),
+            category: "Security".into(),
+            version: "1.0.0".into(),
+            description: description.into(),
+            author: "master3395".into(),
+            pricing: pricing.into(),
+            released_on: String::new(),
+            updated_on: String::new(),
+            install_count: 0,
+            featured: false,
+        }
+    }
+
+    #[test]
+    fn q_paid_filters_by_pricing_not_description() {
+        let entries = vec![
+            entry(
+                "clamav",
+                "free",
+                "Free malware scanner. No third-party paid brands.",
+            ),
+            entry("commerce", "paid", "Paid CPN hosting commerce."),
+            entry("malwareApi", "paid", "News Targeted malware API."),
+        ];
+        let paid = filter_store_entries(&entries, "paid", "");
+        let ids: Vec<&str> = paid.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, vec!["commerce", "malwareApi"]);
+        assert!(!ids.contains(&"clamav"));
+    }
+
+    #[test]
+    fn category_paid_shows_only_paid() {
+        let entries = vec![
+            entry("clamav", "free", "mentions paid in description"),
+            entry("commerce", "paid", "commerce"),
+        ];
+        let paid = filter_store_entries(&entries, "", "Paid");
+        assert_eq!(paid.len(), 1);
+        assert_eq!(paid[0].id, "commerce");
+    }
+
+    #[test]
+    fn q_free_filters_by_pricing() {
+        let entries = vec![
+            entry("clamav", "free", "scanner"),
+            entry("commerce", "paid", "Paid plan"),
+        ];
+        let free = filter_store_entries(&entries, "FREE", "");
+        assert_eq!(free.len(), 1);
+        assert_eq!(free[0].id, "clamav");
+    }
+
+    #[test]
+    fn longer_query_still_full_text() {
+        let entries = vec![
+            entry("clamav", "free", "No third-party paid brands."),
+            entry("commerce", "paid", "Paid CPN hosting commerce."),
+        ];
+        let hits = filter_store_entries(&entries, "paid brands", "");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "clamav");
+    }
+
+    #[test]
+    fn paid_pill_present_in_markup() {
+        let entries = vec![entry("commerce", "paid", "commerce")];
+        let html = category_pills(&entries, "Paid", "example.com", "page", 4);
+        assert!(html.contains("category=Paid"));
+        assert!(html.contains(">Paid</a>"));
+        assert!(html.contains(r#"class="active""#) || html.contains("class=\"active\""));
+    }
 }
