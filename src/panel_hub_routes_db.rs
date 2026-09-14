@@ -153,11 +153,28 @@ pub async fn databases_phpmyadmin_route(
 pub async fn databases_phpmyadmin_open(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin() {
+    let domain = query.get("domain").map(|s| s.trim()).unwrap_or("");
+    let open = if !domain.is_empty() {
+        if let Err(err) =
+            crate::site_acl::require_manage_site(&user, domain, crate::site_acl::SitePerm::Enable)
+        {
+            return redirect_notice("/databases/phpmyadmin", None, Some(&err));
+        }
+        crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin_for_domain(domain)
+    } else if crate::panel_admin::is_panel_admin(&user) {
+        crate::apps_phpmyadmin_sso::open_phpmyadmin_autologin()
+    } else {
+        Err(
+            "Select a domain to open phpMyAdmin with a jailed database list, or ask the panel admin for Host open."
+                .into(),
+        )
+    };
+    match open {
         Ok(url) => {
             // Drop stale PMA cookies after php-fpm restarts so the fresh
             // sign-on token is not fighting an orphaned session cookie.

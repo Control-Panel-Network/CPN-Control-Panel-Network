@@ -1,9 +1,11 @@
 //! Plugin Store catalog list: cards, Featured/Paid filters, release/updated dates.
 
+use crate::panel_admin::is_panel_admin;
 use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
+use crate::plugin_activation::{catalog_entry_is_host_scoped, host_plugin_installed, is_activated};
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured, format_iso_date_eu};
 
 pub(crate) struct StoreListOpts<'a> {
@@ -13,6 +15,8 @@ pub(crate) struct StoreListOpts<'a> {
     pub mode: &'a str,
     pub page: usize,
     pub per_page: usize,
+    /// Signed-in panel username (RBAC for Host Install vs Activate).
+    pub username: &'a str,
 }
 
 fn pricing_is_paid(pricing: &str) -> bool {
@@ -117,7 +121,13 @@ pub(crate) fn store_catalog(
     let page_items = &filtered[start..end];
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
     for entry in page_items {
-        cards.push_str(&store_card(entry, entries, installed_ids, opts.domain));
+        cards.push_str(&store_card(
+            entry,
+            entries,
+            installed_ids,
+            opts.domain,
+            opts.username,
+        ));
     }
     cards.push_str("</div>");
     let scroll_cls = if mode == "scroll" {
@@ -138,30 +148,34 @@ fn store_card(
     all: &[CatalogEntry],
     installed_ids: &[String],
     domain: &str,
+    username: &str,
 ) -> String {
     let installed = installed_ids.iter().any(|id| id == &entry.id);
+    let host_scoped = catalog_entry_is_host_scoped(entry);
+    let on_host = host_scoped && host_plugin_installed(&entry.id);
+    let activated = !domain.is_empty() && is_activated(domain, &entry.id);
+    let admin = is_panel_admin(username);
     let featured = catalog_entry_is_featured(entry, all);
     let featured_badge = if featured {
         r#"<span class="plugin-badge featured">Featured</span>"#
     } else {
         ""
     };
-    let dates = dates_line(&entry.released_on, &entry.updated_on);
-    let action = if installed {
-        r#"<span class="plugin-badge installed">Installed</span>"#.to_string()
-    } else if domain.is_empty() {
-        r#"<span class="muted">Select a domain to install</span>"#.to_string()
+    let host_badge = if host_scoped {
+        r#"<span class="plugin-badge">Host</span>"#
     } else {
-        format!(
-            r#"<form method="post" action="/plugins/install" class="inline-form">
-            <input type="hidden" name="id" value="{id}">
-            <input type="hidden" name="domain" value="{domain}">
-            <button type="submit" class="btn-primary">Install</button>
-          </form>"#,
-            id = html_escape(&entry.id),
-            domain = html_escape(domain),
-        )
+        ""
     };
+    let dates = dates_line(&entry.released_on, &entry.updated_on);
+    let action = store_action_html(
+        entry,
+        domain,
+        installed,
+        host_scoped,
+        on_host,
+        activated,
+        admin,
+    );
     format!(
         r#"<article class="plugin-card">
           <h3>{name}</h3>
@@ -170,6 +184,7 @@ fn store_card(
             <span class="plugin-badge">v{ver}</span>
             {pricing}
             {featured}
+            {host}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Author: {author}</p>
@@ -182,9 +197,116 @@ fn store_card(
         ver = html_escape(&entry.version),
         pricing = badge_pricing(&entry.pricing),
         featured = featured_badge,
+        host = host_badge,
         author = html_escape(&entry.author),
         dates = dates,
         action = action,
+    )
+}
+
+fn store_action_html(
+    entry: &CatalogEntry,
+    domain: &str,
+    installed: bool,
+    host_scoped: bool,
+    on_host: bool,
+    activated: bool,
+    admin: bool,
+) -> String {
+    let id = html_escape(&entry.id);
+    let domain_e = html_escape(domain);
+    // Roundcube is a Host package (not a catalog file install under host-plugins/).
+    if entry.id.eq_ignore_ascii_case("roundcubeWebmail")
+        || entry.id.eq_ignore_ascii_case("roundcube")
+    {
+        let domain_q = if domain.is_empty() {
+            String::new()
+        } else {
+            format!("&amp;domain={}", urlencoding_simple(domain))
+        };
+        return format!(
+            r#"<span class="muted">Host package</span>
+            <a class="btn-primary" href="/plugins?view=host{domain_q}&amp;q=roundcube">Open Host packages</a>"#,
+            domain_q = domain_q,
+        );
+    }
+    if host_scoped {
+        if on_host {
+            if domain.is_empty() {
+                if admin {
+                    return format!(
+                        r#"<span class="plugin-badge installed">Installed on Host</span>
+            <form method="post" action="/plugins/uninstall-host" class="inline-form" onsubmit="return confirm('Uninstall host plugin {name}? This removes it for all sites.');">
+              <input type="hidden" name="id" value="{id}">
+              <button type="submit" class="btn-danger">Uninstall from Host</button>
+            </form>"#,
+                        name = html_escape(&entry.name),
+                        id = id,
+                    );
+                }
+                return r#"<span class="plugin-badge installed">Installed on Host</span>"#.into();
+            }
+            if activated || installed {
+                return format!(
+                    r#"<span class="plugin-badge installed">Activated</span>
+            <form method="post" action="/plugins/deactivate-host" class="inline-form">
+              <input type="hidden" name="id" value="{id}">
+              <input type="hidden" name="domain" value="{domain}">
+              <button type="submit" class="btn-warn">Deactivate</button>
+            </form>"#,
+                    id = id,
+                    domain = domain_e,
+                );
+            }
+            return format!(
+                r#"<form method="post" action="/plugins/activate-host" class="inline-form">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <button type="submit" class="btn-primary">Activate</button>
+          </form>"#,
+                id = id,
+                domain = domain_e,
+            );
+        }
+        // Not on host yet.
+        if admin {
+            let domain_field = if domain.is_empty() {
+                String::new()
+            } else {
+                format!(r#"<input type="hidden" name="domain" value="{domain}">"#)
+            };
+            let activate_note = if domain.is_empty() {
+                ""
+            } else {
+                " (then activate for this site)"
+            };
+            return format!(
+                r#"<form method="post" action="/plugins/install-host" class="inline-form">
+            <input type="hidden" name="id" value="{id}">
+            {domain_field}
+            <button type="submit" class="btn-primary">Install on Host{note}</button>
+          </form>"#,
+                id = id,
+                domain_field = domain_field,
+                note = activate_note,
+            );
+        }
+        return r#"<span class="muted">Ask the panel admin to Install on Host first</span>"#.into();
+    }
+    if installed {
+        return r#"<span class="plugin-badge installed">Installed</span>"#.into();
+    }
+    if domain.is_empty() {
+        return r#"<span class="muted">Select a domain to install</span>"#.into();
+    }
+    format!(
+        r#"<form method="post" action="/plugins/install" class="inline-form">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <button type="submit" class="btn-primary">Install</button>
+          </form>"#,
+        id = id,
+        domain = domain_e,
     )
 }
 
@@ -291,6 +413,7 @@ mod tests {
             install_count: 0,
             featured: false,
             uninstall_impacts: vec![],
+            host_scoped: false,
         }
     }
 

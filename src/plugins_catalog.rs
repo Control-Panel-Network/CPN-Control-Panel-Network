@@ -127,6 +127,11 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
     let featured = xml_tag(body, "featured")
         .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
         .unwrap_or(false);
+    let scope = xml_tag(body, "scope")
+        .or_else(|| xml_tag(body, "install_scope"))
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let host_scoped = scope == "host" || scope == "host-package" || scope == "shared";
     Ok(CatalogEntry {
         id: plugin_id.to_string(),
         name: sanitize_user_text(&name),
@@ -140,6 +145,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         install_count,
         featured,
         uninstall_impacts: uninstall_impacts_from_meta(body),
+        host_scoped,
     })
 }
 

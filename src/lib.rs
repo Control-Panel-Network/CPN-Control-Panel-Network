@@ -264,6 +264,7 @@ pub mod panel_wordpress_ui;
 pub mod paths;
 pub mod php_defaults;
 pub mod php_lifecycle;
+pub mod plugin_activation;
 pub mod plugins;
 pub mod plugins_catalog;
 pub mod plugins_settings;

@@ -318,14 +318,32 @@ fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
     }
 }
 
-fn create_ephemeral_db_user() -> Result<(String, String), String> {
+fn create_ephemeral_db_user_scoped(
+    db_names: Option<&[String]>,
+) -> Result<(String, String), String> {
     let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
     let user = format!("cpn_pma_{}", &random_token()[..8]);
     let pass = random_password();
     let pass_sql = pass.replace('\'', "''");
+    let grants = match db_names {
+        None => format!("GRANT ALL PRIVILEGES ON *.* TO '{user}'@'localhost' WITH GRANT OPTION;"),
+        Some([]) => format!("GRANT USAGE ON *.* TO '{user}'@'localhost';"),
+        Some(names) => {
+            let mut parts = vec![format!("GRANT USAGE ON *.* TO '{user}'@'localhost';")];
+            for name in names {
+                let safe = name.replace('`', "``");
+                if safe.is_empty() {
+                    continue;
+                }
+                parts.push(format!(
+                    "GRANT ALL PRIVILEGES ON `{safe}`.* TO '{user}'@'localhost';"
+                ));
+            }
+            parts.join(" ")
+        }
+    };
     let sql = format!(
-        "CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; \
-         GRANT ALL PRIVILEGES ON *.* TO '{user}'@'localhost' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+        "CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; {grants} FLUSH PRIVILEGES;"
     );
     let out = Command::new(bin)
         .args(["-e", &sql])
@@ -372,24 +390,40 @@ fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Create a short-lived sign-on token and return the Open URL (loopback). Never returns the DB password.
+/// Create a short-lived sign-on token and return the Open URL. Never returns the DB password.
 pub fn open_phpmyadmin_autologin() -> Result<String, String> {
-    // Refresh sign-on bridge / SignonURL only. Do not force OLS listener
-    // rewrite on every Open (that used to restart php-fpm and hit start-limit).
+    mint_phpmyadmin_open_url(None)
+}
+
+/// Domain-jailed Open: ephemeral user only sees databases registered for `domain`.
+pub fn open_phpmyadmin_autologin_for_domain(domain_raw: &str) -> Result<String, String> {
+    let domain = domain_raw.trim();
+    if domain.is_empty() {
+        return open_phpmyadmin_autologin();
+    }
+    let _ = crate::sites::load_site(domain)?;
+    let dbs: Vec<String> = crate::resource_accounts::list_databases()
+        .into_iter()
+        .filter(|d| d.domain.eq_ignore_ascii_case(domain))
+        .map(|d| d.name)
+        .collect();
+    mint_phpmyadmin_open_url(Some(&dbs))
+}
+
+fn mint_phpmyadmin_open_url(db_names: Option<&[String]>) -> Result<String, String> {
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
     write_signon_bridge(&share)?;
     let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
     if openlitespeed_installed() {
-        // Heal missing sock / failed unit without rewriting vhconf every time.
         let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
         if !port_open("127.0.0.1:8081", 200) {
             let _ = ensure_ols_phpmyadmin_listener();
         }
     }
     let _ = crate::apps_phpmyadmin_storage::ensure_phpmyadmin_configuration_storage();
-    let (user, pass) = create_ephemeral_db_user()?;
+    let (user, pass) = create_ephemeral_db_user_scoped(db_names)?;
     let token = random_token();
     let dir = ensure_token_dir(&share)?;
     let exp = now_unix() + 120;
@@ -414,7 +448,6 @@ pub fn open_phpmyadmin_autologin() -> Result<String, String> {
             .args([owner, &path.display().to_string()])
             .status();
     }
-    // Same-origin panel mount so Windows/NAT browsers never need guest :8081.
     Ok(format!(
         "{}/cpn-signon.php?token={token}",
         crate::panel_phpmyadmin_proxy::PMA_MOUNT

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Host install + per-site Activate**: panel admin installs Host packages (`/plugins?view=host`) and host-scoped catalog plugins once. Sites and subdomains **Activate** / **Deactivate** the shared host install (no second full copy). Non-admins cannot **Uninstall** host-owned packages (Deactivate only). Domain lists stay jailed via existing site ACL.
+- **phpMyAdmin domain jail**: `/databases/phpmyadmin/open?domain=` mints an ephemeral MariaDB user granted only databases registered for that domain. Host open without `domain=` remains admin-only with full grants.
 - **Active webmail switching**: Host packages and `cpn app activate --name <client>` switch the active panel webmail among Tachyon, SnappyMail, Roundcube, and NextSnapMail (when installed). Preference is stored in `/var/lib/cpn/active-webmail.json`; panel-proxied clients also update `/opt/cpn-webmail/current`, `webmail-panel.json` public path, and PHP-FPM/proxy. Postfix/Dovecot mailboxes are unchanged.
 - **Nextcloud host package + NextSnapMail dependency chain**: `cpn app install --name nextcloud` (or Install Nextcloud first / Install Nextcloud + NextSnapMail on the NextSnapMail card) downloads Nextcloud under `/opt/nextcloud`, then installs the NextSnapMail app into `apps/nextsnapmail`. OCC/web setup remains an operator step for production.
 - **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube` · `cpn app activate --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (no CyberPanel paths).
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Default CPN webmail is Tachyon** (not SnappyMail) for fresh installer/CLI/Host packages copy. Existing labs keep the current active client when preference or `/opt/cpn-webmail/current` is already set.
 - **SnappyMail-lineage admin password sync** also updates Tachyon data under `/var/lib/cpn-webmail/tachyon/` when present.
+
 
 ### Changed
 

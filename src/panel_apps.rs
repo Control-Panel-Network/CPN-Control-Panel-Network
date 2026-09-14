@@ -84,7 +84,7 @@ fn urlencoding_simple(value: &str) -> String {
     out
 }
 
-fn action_buttons(status: &AppStatus, domain: &str) -> String {
+fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
     let name = status.id.as_str();
     let label = status.id.label();
     let hidden = domain_hidden(domain);
@@ -97,9 +97,26 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
             | crate::apps::AppId::Nextsnapmail
     );
     let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
-    if matches!(meta.install_status, HostInstallStatus::Scaffold)
-        && status.state == AppStateKind::NotInstalled
+    let bound = if !domain.is_empty() && is_associable(status.id) {
+        bindings_for_domain(domain)
+            .iter()
+            .any(|b| b.app == status.id.as_str())
+    } else {
+        false
+    };
+    if matches!(
+        meta.install_status,
+        HostInstallStatus::RequiresNextcloud | HostInstallStatus::Scaffold
+    ) && status.state == AppStateKind::NotInstalled
     {
+        if !is_admin {
+            return format!(
+                r#"<span class="plugin-badge" title="{title}">{badge}</span>
+            <span class="muted">Ask the panel admin to install on Host</span>"#,
+                title = html_escape(meta.description),
+                badge = html_escape(meta.install_status.badge()),
+            );
+        }
         return format!(
             r#"<span class="plugin-badge" title="{title}">{badge}</span>
             <form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('{label}: {title}. Continue anyway?');">
@@ -134,23 +151,23 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
             hidden = hidden,
         );
     }
-    let scope_hint = if domain.is_empty() {
-        "on this host"
-    } else {
-        "for the selected domain/subdomain"
-    };
     match status.state {
-        AppStateKind::NotInstalled => format!(
-            r#"<form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install {label} {scope_hint}?');">
+        AppStateKind::NotInstalled => {
+            if !is_admin {
+                return r#"<span class="muted">Ask the panel admin to Install on Host</span>"#
+                    .into();
+            }
+            format!(
+                r#"<form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install {label} on this host?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
-              <button type="submit" class="btn-primary">Install</button>
+              <button type="submit" class="btn-primary">Install on Host</button>
             </form>"#,
-            label = html_escape(label),
-            scope_hint = scope_hint,
-            name = html_escape(name),
-            hidden = hidden,
-        ),
+                label = html_escape(label),
+                name = html_escape(name),
+                hidden = hidden,
+            )
+        }
         AppStateKind::Installed | AppStateKind::Running => {
             let mut out = String::new();
             if is_webmail {
@@ -169,7 +186,7 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
                     ));
                 }
             }
-            if status.id.supports_service_control() {
+            if status.id.supports_service_control() && is_admin {
                 if status.state == AppStateKind::Installed {
                     out.push_str(&format!(
                         r#"<form method="post" action="/apps/start" class="inline-form" onsubmit="return confirm('Start {label}?');">
@@ -194,8 +211,35 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
                     ));
                 }
             }
-            out.push_str(&format!(
-                r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
+            if !domain.is_empty() && is_associable(status.id) {
+                if bound {
+                    out.push_str(&format!(
+                        r#"<span class="plugin-badge installed">Activated</span>
+            <form method="post" action="/apps/deactivate" class="inline-form">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-warn">Deactivate</button>
+            </form>"#,
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        r#"<form method="post" action="/apps/activate" class="inline-form">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-primary">Activate</button>
+            </form>"#,
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                }
+            } else if domain.is_empty() && !is_webmail {
+                out.push_str(r#"<span class="plugin-badge installed">Installed on Host</span>"#);
+            }
+            if is_admin {
+                out.push_str(&format!(
+                    r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <button type="submit" class="btn-secondary">Reinstall</button>
@@ -204,19 +248,20 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <input type="hidden" name="confirm" value="">
-              <button type="submit" class="btn-danger">Uninstall</button>
+              <button type="submit" class="btn-danger">Uninstall from Host</button>
             </form>"#,
-                label = html_escape(label),
-                name = html_escape(name),
-                hidden = hidden,
-                form_attrs = uninstall_form_attrs(label, &host_uninstall_impacts(status.id)),
-            ));
+                    label = html_escape(label),
+                    name = html_escape(name),
+                    hidden = hidden,
+                    form_attrs = uninstall_form_attrs(label, &host_uninstall_impacts(status.id)),
+                ));
+            }
             out
         }
     }
 }
 
-fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
+fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool) -> String {
     let meta = meta_for(status.id);
     let featured = host_package_is_featured(status.id, all);
     let featured_badge = if featured {
@@ -317,7 +362,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
         dates = dates_html,
         binding = binding_note,
         warn = warn,
-        actions = action_buttons(status, domain),
+        actions = action_buttons(status, domain, is_admin),
     )
 }
 
@@ -391,6 +436,7 @@ pub struct AppsPageQuery<'a> {
     pub mode: &'a str,
     pub page: usize,
     pub per_page: usize,
+    pub username: &'a str,
 }
 
 pub fn apps_main(q: AppsPageQuery<'_>) -> String {
@@ -419,8 +465,9 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
         )
     };
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
+    let is_admin = crate::panel_admin::is_panel_admin(q.username);
     for status in page_items {
-        cards.push_str(&host_card(status, domain, &apps));
+        cards.push_str(&host_card(status, domain, &apps, is_admin));
     }
     cards.push_str("</div>");
     if total == 0 {
