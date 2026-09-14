@@ -60,13 +60,18 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
             notice: query.notice,
             error: query.error,
             sites,
+            q: query.q,
+            category: query.category,
+            mode,
+            page,
+            per_page,
         });
         return format!(
             r#"{heading}
       {tabs}
       <article class="section-card">
         <h2>Host packages</h2>
-        <p class="muted">Former Apps page: MariaDB, phpMyAdmin, PostgreSQL, Email, RabbitMQ. CLI <code>cpn app</code> remains an alias.</p>
+        <p class="muted">Former Apps page: databases, phpMyAdmin, Email stack, and webmail clients. CLI <code>cpn app</code> remains an alias.</p>
         {apps_body}
       </article>"#,
             heading = section_heading(

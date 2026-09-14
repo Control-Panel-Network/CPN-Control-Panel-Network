@@ -11,10 +11,28 @@ fn curated_fallbacks() -> Vec<MailReleaseInfo> {
             released_on: "2024-10-09".into(),
         },
         MailReleaseInfo {
+            id: "tachyon".into(),
+            label: "Tachyon".into(),
+            version: "4.2.3".into(),
+            released_on: "2026-09-11".into(),
+        },
+        MailReleaseInfo {
             id: "roundcube".into(),
             label: "Roundcube".into(),
             version: "1.7.3".into(),
             released_on: "2026-08-09".into(),
+        },
+        MailReleaseInfo {
+            id: "nextsnapmail".into(),
+            label: "NextSnapMail".into(),
+            version: "nextcloud-app".into(),
+            released_on: "2025-06-01".into(),
+        },
+        MailReleaseInfo {
+            id: "sogo".into(),
+            label: "SOGo".into(),
+            version: "scaffold".into(),
+            released_on: "2025-01-01".into(),
         },
         MailReleaseInfo {
             id: "thunderbird".into(),
@@ -101,6 +119,11 @@ async fn refresh_one(id: &str, label: &str, fallback: &MailReleaseInfo) -> MailR
             let body =
                 curl_json("https://api.github.com/repos/the-djmaze/snappymail/releases/latest")
                     .await;
+            body.as_deref().and_then(parse_github_release)
+        }
+        "tachyon" => {
+            let body =
+                curl_json("https://api.github.com/repos/kimusan/Tachyon/releases/latest").await;
             body.as_deref().and_then(parse_github_release)
         }
         "roundcube" => {

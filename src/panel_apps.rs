@@ -1,8 +1,15 @@
-//! Panel Apps page HTML (session-gated; domain/subdomain picker for site scope).
+//! Panel Host packages page: store-like card grid (search, categories, pagination).
 
-use crate::apps::{AppId, AppStateKind, AppStatus, list_apps};
+use crate::apps::{AppStateKind, AppStatus, list_apps};
 use crate::apps_site::{bindings_for_domain, is_associable, is_site_scoped};
 use crate::backups::is_subdomain_site;
+use crate::host_packages_catalog::{
+    HostInstallStatus, filter_host_packages, format_host_dates, host_categories,
+    host_package_is_featured, meta_for,
+};
+use crate::panel_plugins_spa::{
+    list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
+};
 use crate::sites::SiteRecord;
 
 fn html_escape(value: &str) -> String {
@@ -62,10 +69,44 @@ fn domain_hidden(domain: &str) -> String {
     }
 }
 
+fn urlencoding_simple(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() * 3);
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 fn action_buttons(status: &AppStatus, domain: &str) -> String {
     let name = status.id.as_str();
     let label = status.id.label();
     let hidden = domain_hidden(domain);
+    let meta = meta_for(status.id);
+    if matches!(
+        meta.install_status,
+        HostInstallStatus::RequiresNextcloud | HostInstallStatus::Scaffold
+    ) && status.state == AppStateKind::NotInstalled
+    {
+        return format!(
+            r#"<span class="plugin-badge" title="{title}">{badge}</span>
+            <form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('{label}: {title}. Continue anyway?');">
+              <input type="hidden" name="name" value="{name}">
+              {hidden}
+              <button type="submit" class="btn-secondary">Try install</button>
+            </form>"#,
+            title = html_escape(meta.description),
+            badge = html_escape(meta.install_status.badge()),
+            label = html_escape(label),
+            name = html_escape(name),
+            hidden = hidden,
+        );
+    }
     let scope_hint = if domain.is_empty() {
         "on this host"
     } else {
@@ -102,7 +143,7 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
                         r#"<form method="post" action="/apps/stop" class="inline-form" onsubmit="return confirm('Stop {label}?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
-              <button type="submit" class="btn-secondary" style="min-height:44px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Stop</button>
+              <button type="submit" class="btn-secondary">Stop</button>
             </form>"#,
                         label = html_escape(label),
                         name = html_escape(name),
@@ -114,7 +155,7 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
                 r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
-              <button type="submit" class="btn-secondary" style="min-height:44px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">Reinstall</button>
+              <button type="submit" class="btn-secondary">Reinstall</button>
             </form>
             <form method="post" action="/apps/uninstall" class="inline-form" onsubmit="return confirm('Uninstall {label}?');">
               <input type="hidden" name="name" value="{name}">
@@ -130,35 +171,40 @@ fn action_buttons(status: &AppStatus, domain: &str) -> String {
     }
 }
 
-fn app_card(status: &AppStatus, domain: &str) -> String {
+fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
+    let meta = meta_for(status.id);
+    let featured = host_package_is_featured(status.id, all);
+    let featured_badge = if featured {
+        r#"<span class="plugin-badge featured">Featured</span>"#
+    } else {
+        ""
+    };
+    let status_badge = format!(
+        r#"<span class="plugin-badge">{}</span>"#,
+        html_escape(meta.install_status.badge())
+    );
+    let pricing = if meta.pricing.eq_ignore_ascii_case("paid") {
+        r#"<span class="plugin-badge paid">Paid</span>"#
+    } else {
+        r#"<span class="plugin-badge free">Free</span>"#
+    };
     let warn = status
         .warning
         .as_ref()
         .map(|w| {
             format!(
-                r#"<p class="panel-notice error" style="margin-top:12px;">{msg}</p>"#,
+                r#"<p class="panel-notice error" style="margin:8px 0 0;">{msg}</p>"#,
                 msg = html_escape(w)
             )
         })
         .unwrap_or_default();
-    let xor_note = match status.id {
-        AppId::Mariadb | AppId::Mysql => {
-            r#"<p class="muted" style="margin-top:8px;">Hosts typically run MariaDB XOR MySQL. CPN refuses installing one while the other is present. Engines stay system-wide.</p>"#
-        }
-        AppId::Postgresql => {
-            r#"<p class="muted" style="margin-top:8px;">Opt-in only. Default stack remains MariaDB + phpMyAdmin. PostgreSQL can coexist with MariaDB/MySQL.</p>
-        <p class="muted" style="margin-top:8px;"><a href="/databases">Open Databases hub</a> (MariaDB-focused today). A dedicated Postgres Manager plugin is optional and not required for this install.</p>"#
-        }
-        _ => "",
-    };
-    let scope_note = if is_site_scoped(status.id) {
-        "<p class=\"muted\" style=\"margin-top:8px;\">Site-scoped paths land under <code>/home/&lt;domain&gt;/apps/</code> (nested for subdomains) when a site is selected.</p>"
-    } else if is_associable(status.id) {
-        "<p class=\"muted\" style=\"margin-top:8px;\">System service on the host. Optional domain association is for ACL/display only.</p>"
+    let dates = format_host_dates(&meta);
+    let dates_html = if dates.is_empty() {
+        String::new()
     } else {
-        ""
+        format!(r#"<p class="plugin-dates">{}</p>"#, html_escape(&dates))
     };
-    let binding_note = if !domain.is_empty() {
+    let binding_note = if !domain.is_empty() && is_associable(status.id) {
         let binds = bindings_for_domain(domain);
         let mine: Vec<_> = binds
             .iter()
@@ -167,50 +213,97 @@ fn app_card(status: &AppStatus, domain: &str) -> String {
         if mine.is_empty() {
             String::new()
         } else {
-            let paths: Vec<String> = mine
-                .iter()
-                .map(|b| {
-                    if b.path.is_empty() {
-                        format!("associated with {}", b.domain)
-                    } else {
-                        b.path.clone()
-                    }
-                })
-                .collect();
-            format!(
-                r#"<p class="muted" style="margin-top:8px;">Binding: <code>{}</code></p>"#,
-                html_escape(&paths.join("; "))
-            )
+            r#"<p class="plugin-meta">Bound to selected site</p>"#.to_string()
         }
+    } else if is_site_scoped(status.id) {
+        r#"<p class="plugin-meta">May drop paths under the selected site home.</p>"#.into()
     } else {
         String::new()
     };
     format!(
-        r#"<article class="section-card" style="margin-top:18px;">
-        <h2>{label}</h2>
-        <ul class="kv-list">
-          <li><span>Status</span><strong>{state}</strong></li>
-          <li><span>Id</span><strong><code>{id}</code></strong></li>
-        </ul>
-        <p>{detail}</p>
-        {warn}
-        {xor}
-        {scope}
-        {binding}
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
-          {actions}
-        </div>
-      </article>"#,
+        r#"<article class="plugin-card">
+          <h3>{label}</h3>
+          <div class="plugin-badges">
+            <span class="plugin-badge cat">{cat}</span>
+            <span class="plugin-badge">v{ver}</span>
+            {pricing}
+            {featured}
+            {status_badge}
+          </div>
+          <p class="plugin-desc">{desc}</p>
+          <p class="plugin-meta">Status: {state} · Id: <code>{id}</code></p>
+          <p class="plugin-meta">{detail}</p>
+          {dates}
+          {binding}
+          {warn}
+          <div class="plugin-actions">{actions}</div>
+        </article>"#,
         label = html_escape(status.id.label()),
+        cat = html_escape(meta.category),
+        ver = html_escape(meta.version),
+        pricing = pricing,
+        featured = featured_badge,
+        status_badge = status_badge,
+        desc = html_escape(meta.description),
         state = html_escape(status.state.label()),
         id = html_escape(status.id.as_str()),
         detail = html_escape(&status.detail),
-        warn = warn,
-        xor = xor_note,
-        scope = scope_note,
+        dates = dates_html,
         binding = binding_note,
+        warn = warn,
         actions = action_buttons(status, domain),
     )
+}
+
+fn category_pills(
+    apps: &[AppStatus],
+    active: &str,
+    domain: &str,
+    mode: &str,
+    per_page: usize,
+) -> String {
+    let cats = host_categories(apps);
+    let mut domain_q = format!("&amp;domain={}", urlencoding_simple(domain));
+    domain_q.push_str(&format!(
+        "&amp;mode={}&amp;per_page={}",
+        urlencoding_simple(mode),
+        per_page
+    ));
+    let mut out = String::from(r#"<div class="category-pills">"#);
+    out.push_str(&format!(
+        r#"<a class="{cls}" href="/plugins?view=host{domain_q}">All categories</a>"#,
+        cls = if active.is_empty() || active.eq_ignore_ascii_case("all") {
+            "active"
+        } else {
+            ""
+        },
+        domain_q = domain_q,
+    ));
+    out.push_str(&format!(
+        r#"<a class="{cls}" href="/plugins?view=host&amp;category=Featured{domain_q}">Featured</a>"#,
+        cls = if active.eq_ignore_ascii_case("featured") {
+            "active"
+        } else {
+            ""
+        },
+        domain_q = domain_q,
+    ));
+    for cat in cats {
+        let cls = if cat.eq_ignore_ascii_case(active) {
+            "active"
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            r#"<a class="{cls}" href="/plugins?view=host&amp;category={enc}{domain_q}">{label}</a>"#,
+            cls = cls,
+            enc = urlencoding_simple(cat),
+            domain_q = domain_q,
+            label = html_escape(cat),
+        ));
+    }
+    out.push_str("</div>");
+    out
 }
 
 pub struct AppsPageQuery<'a> {
@@ -218,20 +311,61 @@ pub struct AppsPageQuery<'a> {
     pub error: Option<&'a str>,
     pub domain: &'a str,
     pub sites: &'a [SiteRecord],
+    pub q: &'a str,
+    pub category: &'a str,
+    pub mode: &'a str,
+    pub page: usize,
+    pub per_page: usize,
 }
 
 pub fn apps_main(q: AppsPageQuery<'_>) -> String {
     let domain = q.domain.trim();
     let apps = list_apps();
-    let cards: String = apps.iter().map(|a| app_card(a, domain)).collect();
+    let mode = list_mode_from_query(q.mode);
+    let per_page = per_page_from_query(&q.per_page.to_string());
+    let filtered = filter_host_packages(&apps, q.q, q.category);
+    let total = filtered.len();
+    let (page_items, page, total_pages, toolbar_per) = if mode == "scroll" {
+        (filtered.as_slice(), 1usize, 1usize, total.max(1))
+    } else {
+        let total_pages = total.div_ceil(per_page).max(1);
+        let page = page_from_query(&q.page.to_string()).min(total_pages);
+        let start = (page - 1) * per_page;
+        let end = (start + per_page).min(total);
+        (
+            if start < end {
+                &filtered[start..end]
+            } else {
+                &filtered[..0]
+            },
+            page,
+            total_pages,
+            per_page.max(4),
+        )
+    };
+    let mut cards = String::from(r#"<div class="plugin-grid">"#);
+    for status in page_items {
+        cards.push_str(&host_card(status, domain, &apps));
+    }
+    cards.push_str("</div>");
+    if total == 0 {
+        cards = r#"<p class="empty-state">No host packages match this search.</p>"#.into();
+    }
+    let scroll_cls = if mode == "scroll" {
+        "plugin-grid-scroll is-scroll"
+    } else {
+        "plugin-grid-scroll"
+    };
     let picker = if q.sites.is_empty() {
-        r#"<p class="muted">No manageable sites yet. Create a website (or subdomain) you own to attach site-scoped app paths. Host engines can still be installed without a site.</p>"#.into()
+        r#"<p class="muted">No manageable sites yet. Host engines and webmail can still be installed without a site.</p>"#.into()
     } else {
         format!(
-            r#"<form method="get" action="/plugins" class="stack-form" style="max-width:560px;">
+            r#"<form method="get" action="/plugins" class="domain-picker">
           <input type="hidden" name="view" value="host">
-          <label for="domain">Domain or subdomain</label>
-          <select id="domain" name="domain" onchange="this.form.submit()">{opts}</select>
+          <div>
+            <label for="domain"><strong>Domain or subdomain</strong></label><br>
+            <select id="domain" name="domain" onchange="this.form.submit()">{opts}</select>
+          </div>
           <noscript><button type="submit" class="btn-secondary">Apply</button></noscript>
         </form>
         <p class="muted">Selected site paths use <code>/home/&lt;domain&gt;/...</code> (subdomains nest under the parent home).</p>"#,
@@ -241,16 +375,47 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
     format!(
         r#"{ok}
       {err}
-      <article class="section-card">
+      <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, MySQL, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin and Email can also drop paths under the selected domain or subdomain home. Only sites you own or are granted appear below.</p>
-        <p class="muted">CLI alias: <code>cpn app install --name postgresql</code> or <code>cpn app install --name phpmyadmin --domain example.com</code></p>
+        <p>MariaDB, MySQL, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name tachyon</code></p>
         {picker}
       </article>
-      {cards}"#,
+      <p class="plugin-count">{count} host packages</p>
+      <form method="get" action="/plugins" class="plugin-search-row">
+        <input type="hidden" name="view" value="host">
+        <input type="hidden" name="domain" value="{domain}">
+        <input type="hidden" name="mode" value="{mode}">
+        <input type="hidden" name="per_page" value="{per_page}">
+        <label for="hq">Search</label>
+        <input class="plugin-search" id="hq" name="q" type="search" value="{q}" placeholder="Search host packages by name or description...">
+        <button type="submit" class="btn-primary">Search</button>
+      </form>
+      {pills}
+      {toolbar}
+      <div class="{scroll_cls}">{cards}</div>"#,
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
         picker = picker,
+        count = total,
+        domain = html_escape(domain),
+        mode = html_escape(mode),
+        per_page = toolbar_per,
+        q = html_escape(q.q),
+        pills = category_pills(&apps, q.category, domain, mode, toolbar_per),
+        toolbar = store_list_toolbar(mode, toolbar_per, page, total_pages, total),
+        scroll_cls = scroll_cls,
         cards = cards,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::apps::AppId;
+
+    #[test]
+    fn parse_known_webmail_ids() {
+        assert_eq!(AppId::parse("tachyon").unwrap(), AppId::Tachyon);
+        assert_eq!(AppId::parse("nextsnapmail").unwrap(), AppId::Nextsnapmail);
+        assert_eq!(AppId::parse("sogo").unwrap(), AppId::Sogo);
+    }
 }

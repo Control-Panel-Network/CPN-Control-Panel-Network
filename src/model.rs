@@ -34,6 +34,9 @@ pub enum MailSystem {
     Snappymail,
     Roundcube,
     Thunderbird,
+    Tachyon,
+    Nextsnapmail,
+    Sogo,
 }
 
 /// Database engine installed with the web server stage (default: MariaDB).
@@ -78,6 +81,9 @@ impl MailSystem {
             Self::Snappymail => "SnappyMail",
             Self::Roundcube => "Roundcube",
             Self::Thunderbird => "Thunderbird",
+            Self::Tachyon => "Tachyon",
+            Self::Nextsnapmail => "NextSnapMail",
+            Self::Sogo => "SOGo",
         }
     }
 }

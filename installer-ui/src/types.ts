@@ -8,7 +8,13 @@ export type ScreenType =
   | "complete";
 
 export type ServerEngine = "openlitespeed" | "nginx" | "caddy";
-export type MailSystem = "snappymail" | "roundcube" | "thunderbird";
+export type MailSystem =
+  | "snappymail"
+  | "tachyon"
+  | "roundcube"
+  | "nextsnapmail"
+  | "sogo"
+  | "thunderbird";
 export type DatabaseEngine = "mariadb" | "mysql" | "none";
 export type PhpVersion = "8.5" | "8.4" | "8.3" | "8.2";
 

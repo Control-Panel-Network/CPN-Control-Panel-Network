@@ -20,8 +20,17 @@ pub fn webmail_health_url() -> &'static str {
     WEBMAIL_URL
 }
 
-fn is_snappymail_docroot(docroot: &str) -> bool {
-    docroot.contains("snappymail")
+fn is_snappy_lineage_docroot(docroot: &str) -> bool {
+    docroot.contains("snappymail") || docroot.contains("tachyon")
+}
+
+/// SnappyMail / Tachyon application data outside the HTTP docroot.
+pub fn snappy_lineage_data_dir(docroot: &str) -> &'static str {
+    if docroot.contains("tachyon") {
+        "/var/lib/cpn-webmail/tachyon/"
+    } else {
+        SNAPPYMAIL_DATA_DIR
+    }
 }
 
 /// Ensure service user exists, then configure PHP-FPM + selected engine proxy.
@@ -33,7 +42,7 @@ pub async fn configure_webmail_runtime(
     install_journal::ensure_journal_dirs()?;
     ensure_webmail_user(state).await?;
     reset_current_link(Path::new(docroot))?;
-    if is_snappymail_docroot(docroot) {
+    if is_snappy_lineage_docroot(docroot) {
         configure_snappymail_external_data(docroot)?;
         let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
     }
@@ -155,12 +164,13 @@ pub async fn configure_webmail_runtime(
 }
 
 fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
-    std::fs::create_dir_all(SNAPPYMAIL_DATA_DIR).map_err(|error| error.to_string())?;
-    // Prefer include.php APP_DATA_FOLDER_PATH (official SnappyMail hardening).
+    let data_dir = snappy_lineage_data_dir(docroot);
+    std::fs::create_dir_all(data_dir).map_err(|error| error.to_string())?;
+    // Prefer include.php APP_DATA_FOLDER_PATH (official SnappyMail / Tachyon hardening).
     let include = format!(
         "<?php\n\
          // Managed by CPN: keep application data outside the HTTP docroot.\n\
-         define('APP_DATA_FOLDER_PATH', '{SNAPPYMAIL_DATA_DIR}');\n"
+         define('APP_DATA_FOLDER_PATH', '{data_dir}');\n"
     );
     let include_path = Path::new(docroot).join("include.php");
     install_journal::write_file_tracked(STAGE, &include_path, &include)?;
@@ -169,21 +179,27 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
     if web_data.exists() {
         let _ = std::fs::remove_dir_all(&web_data);
     }
-    let _ = ensure_snappymail_local_imap_defaults();
-    let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
+    let _ = ensure_snappy_lineage_local_imap_defaults(data_dir);
+    if docroot.contains("snappymail") {
+        let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
+    }
     install_journal::record(
         STAGE,
         JournalAction::Note,
-        SNAPPYMAIL_DATA_DIR,
+        data_dir,
         None,
-        Some("SnappyMail APP_DATA_FOLDER_PATH outside docroot".into()),
+        Some("Webmail APP_DATA_FOLDER_PATH outside docroot".into()),
     )?;
     Ok(())
 }
 
 /// Point default + local host domain at 127.0.0.1 IMAP with shortLogin for PAM users.
 pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
-    let domains = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/domains");
+    ensure_snappy_lineage_local_imap_defaults(SNAPPYMAIL_DATA_DIR)
+}
+
+fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), String> {
+    let domains = Path::new(data_dir).join("_data_/_default_/domains");
     if !domains.is_dir() {
         return Ok(());
     }
@@ -261,7 +277,7 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
         let _ = std::fs::write(&host_path, format!("{pretty}\n"));
     }
     // Soften SameSite for panel reverse-proxy labs (host:port).
-    let ini = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/configs/application.ini");
+    let ini = Path::new(data_dir).join("_data_/_default_/configs/application.ini");
     if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
         let updated = ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
         if updated != ini_raw {
@@ -272,7 +288,7 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
         .args([
             "-R",
             "cpn-webmail:cpn-webmail",
-            &format!("{SNAPPYMAIL_DATA_DIR}_data_"),
+            &format!("{data_dir}_data_"),
         ])
         .status();
     Ok(())
@@ -327,7 +343,7 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
 }
 
 fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
-    let open_basedir = if is_snappymail_docroot(docroot) {
+    let open_basedir = if is_snappy_lineage_docroot(docroot) {
         "/opt/cpn-webmail:/var/lib/cpn-webmail:/tmp"
     } else {
         "/opt/cpn-webmail:/tmp"
@@ -357,9 +373,10 @@ fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
 }
 
 async fn harden_permissions(docroot: &str) -> Result<(), String> {
-    let snappy = if is_snappymail_docroot(docroot) {
+    let snappy = if is_snappy_lineage_docroot(docroot) {
+        let data_dir = snappy_lineage_data_dir(docroot);
         format!(
-            "mkdir -p {SNAPPYMAIL_DATA_DIR} && \
+            "mkdir -p {data_dir} && \
              chown -R cpn-webmail:cpn-webmail /var/lib/cpn-webmail && \
              find /var/lib/cpn-webmail -type d -exec chmod 750 {{}} + && \
              find /var/lib/cpn-webmail -type f -exec chmod 640 {{}} + && \
@@ -445,7 +462,7 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
     }
     // SnappyMail data lives under /var/lib/cpn-webmail; stale pools that omit it show
     // "Permission denied!" instead of the login form.
-    if is_snappymail_docroot(docroot) {
+    if is_snappy_lineage_docroot(docroot) {
         if Path::new(FPM_POOL).is_file() {
             let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
             if !raw.contains("/var/lib/cpn-webmail") || !raw.contains("default_socket_timeout") {
@@ -521,10 +538,11 @@ fn configure_ols_proxy(docroot: &str) -> Result<(), String> {
 
 /// Fail if PHP/code paths under docroot are writable by cpn-webmail.
 pub fn verify_code_not_writable_by_service(docroot: &str) -> Result<(), String> {
-    let runtime_check = if is_snappymail_docroot(docroot) {
+    let runtime_check = if is_snappy_lineage_docroot(docroot) {
+        let data_dir = snappy_lineage_data_dir(docroot);
         format!(
-            "su -s /bin/bash cpn-webmail -c \"test -w '{SNAPPYMAIL_DATA_DIR}'\" || {{ echo 'snappy data not writable'; exit 1; }}\n\
-             if [ -e '{docroot}/data' ]; then echo 'docroot data must not exist for SnappyMail'; exit 1; fi\n"
+            "su -s /bin/bash cpn-webmail -c \"test -w '{data_dir}'\" || {{ echo 'webmail data not writable'; exit 1; }}\n\
+             if [ -e '{docroot}/data' ]; then echo 'docroot data must not exist for SnappyMail/Tachyon'; exit 1; fi\n"
         )
     } else {
         format!(

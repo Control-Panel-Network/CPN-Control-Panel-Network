@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Dovecot ManageSieve / Pigeonhole** installs with the local mail stack (port **4190**). SnappyMail domain profiles enable Sieve at `127.0.0.1:4190` with `shortLogin` so Filters work for local Maildir users. Upgrade/redeploy heals missing packages and config.
+- **Host packages store-like UI** (`/plugins?view=host`): card grid with category pills (including Featured), search, and pagination/scrollbar controls matching the Plugin Store. Domain scope stays a header control.
+- **Plugin Store metadata**: Released and Updated dates (`dd.mm.yyyy`), Featured badge, and Featured category filter. Featured = explicit `featured` in catalog meta, or `install_count >= 25`, or top 5 by `install_count`.
+- **Webmail host packages / installer options**: SnappyMail (LIVE), Tachyon (LIVE, SnappyMail-lineage install under `/opt/cpn-webmail/tachyon`), NextSnapMail (honest Nextcloud gate, not standalone LIVE), SOGo (SCAFFOLD registry/UI). Wired through `cpn app install` and installer mail selection.
 
 ### Changed
 

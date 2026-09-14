@@ -1,10 +1,7 @@
 //! Markup helpers for the Plugins hub (tabs, installed cards, store catalog).
 
-use crate::panel_plugins_spa::{
-    list_mode_from_query, page_from_query, per_page_from_query, plugins_hub_styles,
-    store_list_toolbar,
-};
-use crate::plugins::{CatalogEntry, InstalledPlugin};
+use crate::panel_plugins_spa::plugins_hub_styles;
+use crate::plugins::InstalledPlugin;
 use crate::sites::SiteRecord;
 
 pub(crate) fn html_escape(value: &str) -> String {
@@ -101,10 +98,12 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
           border-radius:999px; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
           background:#eef2f6; color:#0f172a;
         }}
+        .plugin-badge.featured {{ background:#fef3c7; color:#92400e; }}
         .plugin-badge.free {{ background:#dcfce7; color:#14532d; }}
         .plugin-badge.paid {{ background:#ede9fe; color:#4c1d95; }}
         .plugin-badge.cat {{ background:#dbeafe; color:#1e3a8a; }}
         .plugin-badge.installed {{ background:#dbeafe; color:#1e3a8a; }}
+        .plugin-dates {{ margin:0; color:var(--ink); opacity:.75; font-size:12px; line-height:1.4; }}
         .plugin-actions {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; }}
         .btn-secondary, .btn-warn {{
           display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 14px;
@@ -158,6 +157,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         [data-color-mode="dark"] .btn-secondary {{ background:#334155; color:#f8fafc; }}
         [data-color-mode="dark"] .btn-warn {{ background:#7f1d1d; color:#fef2f2; border-color:#f87171; }}
         [data-color-mode="dark"] .plugin-badge {{ background:#334155; color:#f8fafc; }}
+        [data-color-mode="dark"] .plugin-badge.featured {{ background:rgba(245,158,11,.28); color:#fde68a; }}
         [data-color-mode="dark"] .plugin-badge.free {{ background:rgba(22,163,74,.28); color:#bbf7d0; }}
         [data-color-mode="dark"] .plugin-badge.paid {{ background:rgba(124,58,237,.28); color:#ddd6fe; }}
         [data-color-mode="dark"] .plugin-badge.cat,
@@ -352,165 +352,4 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str) -> String {
     rows
 }
 
-pub(crate) struct StoreListOpts<'a> {
-    pub query: &'a str,
-    pub category: &'a str,
-    pub domain: &'a str,
-    pub mode: &'a str,
-    pub page: usize,
-    pub per_page: usize,
-}
-
-pub(crate) fn store_catalog(
-    entries: &[CatalogEntry],
-    installed_ids: &[String],
-    opts: StoreListOpts<'_>,
-) -> String {
-    let q = opts.query.trim().to_ascii_lowercase();
-    let cat = opts.category.trim().to_ascii_lowercase();
-    let filtered: Vec<&CatalogEntry> = entries
-        .iter()
-        .filter(|entry| {
-            let cat_ok =
-                cat.is_empty() || cat == "all" || entry.category.to_ascii_lowercase() == cat;
-            if !cat_ok {
-                return false;
-            }
-            if q.is_empty() {
-                return true;
-            }
-            entry.name.to_ascii_lowercase().contains(&q)
-                || entry.description.to_ascii_lowercase().contains(&q)
-                || entry.id.to_ascii_lowercase().contains(&q)
-        })
-        .collect();
-    let total = filtered.len();
-    if total == 0 {
-        return format!(
-            r#"{toolbar}<p class="empty-state">No plugins match this search.</p>"#,
-            toolbar = store_list_toolbar(opts.mode, opts.per_page, 1, 1, 0),
-        );
-    }
-    let mode = list_mode_from_query(opts.mode);
-    let per_page = if mode == "scroll" {
-        total.max(1)
-    } else {
-        per_page_from_query(&opts.per_page.to_string())
-    };
-    let total_pages = if mode == "scroll" {
-        1
-    } else {
-        total.div_ceil(per_page).max(1)
-    };
-    let page = page_from_query(&opts.page.to_string()).min(total_pages);
-    let start = if mode == "scroll" {
-        0
-    } else {
-        (page - 1) * per_page
-    };
-    let end = if mode == "scroll" {
-        total
-    } else {
-        (start + per_page).min(total)
-    };
-    let page_items = &filtered[start..end];
-    let mut cards = String::from(r#"<div class="plugin-grid">"#);
-    for entry in page_items {
-        cards.push_str(&store_card(entry, installed_ids, opts.domain));
-    }
-    cards.push_str("</div>");
-    let scroll_cls = if mode == "scroll" {
-        "plugin-grid-scroll is-scroll"
-    } else {
-        "plugin-grid-scroll"
-    };
-    format!(
-        r#"{toolbar}<div class="{scroll_cls}">{cards}</div>"#,
-        toolbar = store_list_toolbar(mode, opts.per_page.max(4), page, total_pages, total),
-        scroll_cls = scroll_cls,
-        cards = cards,
-    )
-}
-
-fn store_card(entry: &CatalogEntry, installed_ids: &[String], domain: &str) -> String {
-    let installed = installed_ids.iter().any(|id| id == &entry.id);
-    let action = if installed {
-        r#"<span class="plugin-badge installed">Installed</span>"#.to_string()
-    } else if domain.is_empty() {
-        r#"<span class="muted">Select a domain to install</span>"#.to_string()
-    } else {
-        format!(
-            r#"<form method="post" action="/plugins/install" class="inline-form">
-            <input type="hidden" name="id" value="{id}">
-            <input type="hidden" name="domain" value="{domain}">
-            <button type="submit" class="btn-primary">Install</button>
-          </form>"#,
-            id = html_escape(&entry.id),
-            domain = html_escape(domain),
-        )
-    };
-    format!(
-        r#"<article class="plugin-card">
-          <h3>{name}</h3>
-          <div class="plugin-badges">
-            <span class="plugin-badge cat">{cat}</span>
-            <span class="plugin-badge">v{ver}</span>
-            {pricing}
-          </div>
-          <p class="plugin-desc">{desc}</p>
-          <p class="plugin-meta">Author: {author}</p>
-          <div class="plugin-actions">{action}</div>
-        </article>"#,
-        name = html_escape(&entry.name),
-        desc = html_escape(&entry.description),
-        cat = html_escape(&entry.category),
-        ver = html_escape(&entry.version),
-        pricing = badge_pricing(&entry.pricing),
-        author = html_escape(&entry.author),
-        action = action,
-    )
-}
-
-pub(crate) fn category_pills(
-    entries: &[CatalogEntry],
-    active: &str,
-    domain: &str,
-    mode: &str,
-    per_page: usize,
-) -> String {
-    let mut cats: Vec<String> = entries.iter().map(|e| e.category.clone()).collect();
-    cats.sort_by_key(|c| c.to_ascii_lowercase());
-    cats.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-    let mut domain_q = format!("&amp;domain={}", urlencoding_simple(domain));
-    domain_q.push_str(&format!(
-        "&amp;mode={}&amp;per_page={}",
-        urlencoding_simple(mode),
-        per_page
-    ));
-    let mut out = String::from(r#"<div class="category-pills">"#);
-    out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=store{domain_q}">All categories</a>"#,
-        cls = if active.is_empty() || active.eq_ignore_ascii_case("all") {
-            "active"
-        } else {
-            ""
-        },
-        domain_q = domain_q,
-    ));
-    for cat in cats {
-        let cls = if cat.eq_ignore_ascii_case(active) {
-            "active"
-        } else {
-            ""
-        };
-        out.push_str(&format!(
-            r#"<a class="{cls}" href="/plugins?view=store&amp;category={enc}{domain_q}">{label}</a>"#,
-            cls = cls,
-            enc = urlencoding_simple(&cat),
-            domain_q = domain_q,
-            label = html_escape(&cat),
-        ));
-    }
-    out.push_str("</div>");
-    out
-}
+pub(crate) use crate::panel_plugins_store::{StoreListOpts, category_pills, store_catalog};

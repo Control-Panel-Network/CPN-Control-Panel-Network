@@ -9,6 +9,7 @@ use tokio::{io::AsyncReadExt, process::Command};
 
 const SNAPPYMAIL_SHA256: &str = "71f1d8a9065cc9cf7ddd064f5c47cc7b255cb70e6a56713647fc73d4b79e33ec";
 const ROUNDCUBE_SHA256: &str = "443cde2ea03b840ce4701fe23c273f01e68702f176d282e60248236bbb5f5f85";
+const TACHYON_SHA256: &str = "d776c2e05e1898f7819b8570715c669383693511c6edfe7ae8f287e68a6200e0";
 
 fn ephemeral_download_path(filename: &str) -> Result<EphemeralDownload, String> {
     EphemeralDownload::create(filename)
@@ -346,6 +347,45 @@ pub(crate) async fn install_webmail(
             }
             configure_webmail_runtime(state, "/opt/cpn-webmail/roundcube/public_html", engine)
                 .await?;
+        }
+        MailSystem::Tachyon => {
+            std::fs::create_dir_all("/opt/cpn-webmail/tachyon")
+                .map_err(|error| error.to_string())?;
+            let download_area = ephemeral_download_path("tachyon.tar.gz")?;
+            let archive = download_area.as_str().to_string();
+            download(
+                state,
+                "https://github.com/kimusan/Tachyon/releases/download/v4.2.3/tachyon-4.2.3.tar.gz",
+                &archive,
+                "Tachyon",
+                2,
+                36,
+            )
+            .await?;
+            verify_sha256(&archive, TACHYON_SHA256)?;
+            install_php_runtime(state, "PHP for Tachyon").await?;
+            extract_archive(
+                state,
+                "tar",
+                &["xzf", &archive, "-C", "/opt/cpn-webmail/tachyon"],
+                "Extracting Tachyon",
+                80,
+            )
+            .await?;
+            drop(download_area);
+            configure_webmail_runtime(state, "/opt/cpn-webmail/tachyon", engine).await?;
+        }
+        MailSystem::Nextsnapmail => {
+            return Err(
+                "NextSnapMail is a Nextcloud app (oe79/NextSnapMail). CPN does not install a standalone host package without Nextcloud. Install Nextcloud, then add NextSnapMail from the Nextcloud App Store."
+                    .into(),
+            );
+        }
+        MailSystem::Sogo => {
+            return Err(
+                "SOGo groupware install is not LIVE yet (SCAFFOLD). Inverse SOGo packages are not auto-provisioned by CPN in this release."
+                    .into(),
+            );
         }
         MailSystem::Thunderbird => unreachable!(),
     }

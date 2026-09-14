@@ -74,6 +74,21 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
     let author = xml_tag(body, "author")
         .or_else(|| xml_tag(body, "Author"))
         .unwrap_or_else(|| "unknown".into());
+    let released_on = xml_tag(body, "released")
+        .or_else(|| xml_tag(body, "released_on"))
+        .or_else(|| xml_tag(body, "Released"))
+        .unwrap_or_default();
+    let updated_on = xml_tag(body, "updated")
+        .or_else(|| xml_tag(body, "updated_on"))
+        .or_else(|| xml_tag(body, "Updated"))
+        .unwrap_or_else(|| released_on.clone());
+    let install_count = xml_tag(body, "install_count")
+        .or_else(|| xml_tag(body, "installs"))
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(0);
+    let featured = xml_tag(body, "featured")
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
+        .unwrap_or(false);
     Ok(CatalogEntry {
         id: plugin_id.to_string(),
         name: sanitize_user_text(&name),
@@ -82,7 +97,56 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         description: sanitize_user_text(&description),
         author: sanitize_user_text(&author),
         pricing: pricing_from_meta(body),
+        released_on,
+        updated_on,
+        install_count,
+        featured,
     })
+}
+
+/// Top-N by install_count, or explicit `featured`, or install_count >= threshold.
+pub const FEATURED_TOP_N: usize = 5;
+pub const FEATURED_MIN_INSTALLS: u64 = 25;
+
+pub fn catalog_entry_is_featured(entry: &CatalogEntry, all: &[CatalogEntry]) -> bool {
+    if entry.featured {
+        return true;
+    }
+    if entry.install_count >= FEATURED_MIN_INSTALLS {
+        return true;
+    }
+    if entry.install_count == 0 {
+        return false;
+    }
+    let mut ranked: Vec<&CatalogEntry> = all.iter().filter(|e| e.install_count > 0).collect();
+    ranked.sort_by(|a, b| {
+        b.install_count
+            .cmp(&a.install_count)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    ranked
+        .into_iter()
+        .take(FEATURED_TOP_N)
+        .any(|e| e.id == entry.id)
+}
+
+/// Format ISO `YYYY-MM-DD` as European `dd.mm.yyyy` (matches panel cache timestamps).
+pub fn format_iso_date_eu(iso: &str) -> String {
+    let raw = iso.trim();
+    if raw.len() >= 10 {
+        let y = &raw[0..4];
+        let m = &raw[5..7];
+        let d = &raw[8..10];
+        if y.chars().all(|c| c.is_ascii_digit())
+            && m.chars().all(|c| c.is_ascii_digit())
+            && d.chars().all(|c| c.is_ascii_digit())
+            && raw.as_bytes().get(4) == Some(&b'-')
+            && raw.as_bytes().get(7) == Some(&b'-')
+        {
+            return format!("{d}.{m}.{y}");
+        }
+    }
+    raw.to_string()
 }
 
 pub(crate) fn curl_bytes(url: &str) -> Result<Vec<u8>, String> {
@@ -268,5 +332,32 @@ mod tests {
                 .contains("cyberpanel")
         );
         assert_eq!(entry.pricing, "free");
+        assert_eq!(entry.install_count, 0);
+        assert!(!entry.featured);
+    }
+
+    #[test]
+    fn parse_meta_dates_and_featured() {
+        let xml = r#"
+        <plugin>
+          <name>Fail2ban</name>
+          <type>Security</type>
+          <version>1.2.0</version>
+          <description>Host firewall bans</description>
+          <author>master3395</author>
+          <paid>false</paid>
+          <released>2024-01-15</released>
+          <updated>2026-08-01</updated>
+          <install_count>120</install_count>
+          <featured>true</featured>
+        </plugin>
+        "#;
+        let entry = parse_meta_xml("fail2ban", xml).unwrap();
+        assert_eq!(entry.released_on, "2024-01-15");
+        assert_eq!(entry.updated_on, "2026-08-01");
+        assert_eq!(entry.install_count, 120);
+        assert!(entry.featured);
+        assert_eq!(format_iso_date_eu("2024-01-15"), "15.01.2024");
+        assert!(catalog_entry_is_featured(&entry, &[entry.clone()]));
     }
 }

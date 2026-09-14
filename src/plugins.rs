@@ -49,6 +49,18 @@ pub struct CatalogEntry {
     pub description: String,
     pub author: String,
     pub pricing: String,
+    /// ISO date `YYYY-MM-DD` when the plugin was first released (optional).
+    #[serde(default)]
+    pub released_on: String,
+    /// ISO date `YYYY-MM-DD` of the latest catalog update (optional).
+    #[serde(default)]
+    pub updated_on: String,
+    /// Curated or reported install popularity (Featured ranking).
+    #[serde(default)]
+    pub install_count: u64,
+    /// Explicit Featured flag from catalog metadata.
+    #[serde(default)]
+    pub featured: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -474,7 +486,10 @@ pub fn set_plugin_enabled(
 }
 
 // Re-exports used by panel + CLI.
-pub use crate::plugins_catalog::{catalog_next_refresh_unix, fetch_catalog, format_unix_local};
+pub use crate::plugins_catalog::{
+    catalog_entry_is_featured, catalog_next_refresh_unix, fetch_catalog, format_iso_date_eu,
+    format_unix_local,
+};
 
 #[cfg(test)]
 mod tests {

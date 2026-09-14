@@ -149,7 +149,11 @@ pub fn email_accounts_main(
         || (mail_client_ready
             && matches!(
                 selected_mail,
-                Some(crate::model::MailSystem::Snappymail | crate::model::MailSystem::Roundcube)
+                Some(
+                    crate::model::MailSystem::Snappymail
+                        | crate::model::MailSystem::Tachyon
+                        | crate::model::MailSystem::Roundcube
+                )
             )) {
         let open = crate::panel_webmail::webmail_open_path()
             .unwrap_or_else(|| webmail_health_url().to_string());
@@ -165,8 +169,14 @@ pub fn email_accounts_main(
     } else if matches!(selected_mail, Some(crate::model::MailSystem::Thunderbird)) {
         "<p class=\"muted\">Thunderbird is a desktop client only. No local webmail URL is provisioned.</p>"
             .into()
+    } else if matches!(
+        selected_mail,
+        Some(crate::model::MailSystem::Nextsnapmail | crate::model::MailSystem::Sogo)
+    ) {
+        "<p class=\"muted\">Selected webmail is gated or SCAFFOLD (NextSnapMail needs Nextcloud; SOGo is not LIVE yet). Prefer SnappyMail or Tachyon for panel webmail.</p>"
+            .into()
     } else {
-        "<p class=\"muted\">Install SnappyMail or Roundcube (installer mail stage) to enable Open Webmail.</p>"
+        "<p class=\"muted\">Install SnappyMail, Tachyon, or Roundcube (installer mail stage or Host packages) to enable Open Webmail.</p>"
             .into()
     };
 

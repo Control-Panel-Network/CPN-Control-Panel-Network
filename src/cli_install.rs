@@ -180,10 +180,13 @@ fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
     match raw {
         "1" | "skip" | "none" | "n" => Ok(None),
         "2" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
-        "3" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
-        "4" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
+        "3" | "tachyon" => Ok(Some(MailSystem::Tachyon)),
+        "4" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
+        "5" | "nextsnapmail" | "next-snapmail" => Ok(Some(MailSystem::Nextsnapmail)),
+        "6" | "sogo" => Ok(Some(MailSystem::Sogo)),
+        "7" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
         other => Err(format!(
-            "Unknown mail option `{other}`. Enter 1 (skip), 2, 3, or 4 (not an email address)."
+            "Unknown mail option `{other}`. Enter 1 (skip), 2 SnappyMail, 3 Tachyon, 4 Roundcube, 5 NextSnapMail, 6 SOGo, or 7 Thunderbird."
         )),
     }
 }
@@ -191,11 +194,14 @@ fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
 fn prompt_mail() -> Result<Option<MailSystem>, String> {
     println!("\nMail / webmail (optional; can skip):");
     println!("  1) Skip");
-    println!("  2) SnappyMail");
-    println!("  3) Roundcube");
-    println!("  4) Thunderbird (desktop client package only)");
-    println!("Enter a menu number 1-4 (not an email address). Empty uses 1 (Skip).");
-    prompt_menu("Enter 1-4 for mail option", "1", parse_mail_option)
+    println!("  2) SnappyMail (default webmail)");
+    println!("  3) Tachyon (modern SnappyMail fork, LIVE)");
+    println!("  4) Roundcube");
+    println!("  5) NextSnapMail (requires Nextcloud; not standalone LIVE)");
+    println!("  6) SOGo (SCAFFOLD; not LIVE yet)");
+    println!("  7) Thunderbird (desktop client package only)");
+    println!("Enter a menu number 1-7 (not an email address). Empty uses 1 (Skip).");
+    prompt_menu("Enter 1-7 for mail option", "1", parse_mail_option)
 }
 
 fn prompt_port(default: u16) -> Result<u16, String> {
@@ -615,13 +621,17 @@ mod tests {
         ));
         assert!(matches!(
             parse_mail_option("3").unwrap(),
-            Some(MailSystem::Roundcube)
+            Some(MailSystem::Tachyon)
         ));
         assert!(matches!(
             parse_mail_option("4").unwrap(),
+            Some(MailSystem::Roundcube)
+        ));
+        assert!(matches!(
+            parse_mail_option("7").unwrap(),
             Some(MailSystem::Thunderbird)
         ));
         let err = parse_mail_option("info@newstargeted.com").unwrap_err();
-        assert!(err.contains("not an email address"));
+        assert!(err.contains("Unknown mail option"), "unexpected err: {err}");
     }
 }

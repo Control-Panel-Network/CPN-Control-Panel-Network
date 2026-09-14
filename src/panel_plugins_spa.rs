@@ -109,7 +109,11 @@ pub fn plugins_hub_script() -> String {
   function buildStoreUrl(overrides) {
     var u = new URL(window.location.href);
     u.pathname = '/plugins';
-    u.searchParams.set('view', 'store');
+    var currentView = u.searchParams.get('view') || 'store';
+    if (currentView !== 'store' && currentView !== 'host' && currentView !== 'installed') {
+      currentView = 'store';
+    }
+    u.searchParams.set('view', currentView);
     Object.keys(overrides || {}).forEach(function (k) {
       var v = overrides[k];
       if (v === null || v === undefined || v === '') u.searchParams.delete(k);
