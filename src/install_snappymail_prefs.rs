@@ -34,10 +34,7 @@ pub fn sync_snappymail_admin_password(password: &str) -> Result<(), String> {
     }
     let hash = php_password_hash(password)?;
     let mut synced = 0u32;
-    for data_dir in [
-        SNAPPYMAIL_DATA_DIR,
-        "/var/lib/cpn-webmail/tachyon/",
-    ] {
+    for data_dir in [SNAPPYMAIL_DATA_DIR, "/var/lib/cpn-webmail/tachyon/"] {
         let ini = Path::new(data_dir).join("_data_/_default_/configs/application.ini");
         if !ini.is_file() {
             continue;

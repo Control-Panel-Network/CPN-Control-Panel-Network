@@ -331,7 +331,10 @@ pub fn activate_webmail_app(id: AppId) -> Result<String, String> {
                 .into(),
         )
     } else {
-        Err(format!("{} cannot be activated as panel webmail.", id.label()))
+        Err(format!(
+            "{} cannot be activated as panel webmail.",
+            id.label()
+        ))
     }
 }
 
@@ -366,13 +369,9 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
     };
     if was_active {
         // Prefer remaining panel client; fall back to default preference when none left.
-        let fallback = [
-            AppId::Tachyon,
-            AppId::Snappymail,
-            AppId::Nextsnapmail,
-        ]
-        .into_iter()
-        .find(|cand| *cand != id && mail_for_app(*cand).ok().is_some_and(client_files_present));
+        let fallback = [AppId::Tachyon, AppId::Snappymail, AppId::Nextsnapmail]
+            .into_iter()
+            .find(|cand| *cand != id && mail_for_app(*cand).ok().is_some_and(client_files_present));
         if let Some(cand) = fallback {
             let _ = activate_webmail_app(cand);
         } else if load_active_pref().is_some_and(|m| mail_to_id(m) == id.as_str()) {
@@ -385,11 +384,7 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
 pub fn is_webmail_app(id: AppId) -> bool {
     matches!(
         id,
-        AppId::Snappymail
-            | AppId::Tachyon
-            | AppId::Nextsnapmail
-            | AppId::Sogo
-            | AppId::Nextcloud
+        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo | AppId::Nextcloud
     )
 }
 

@@ -66,7 +66,8 @@ export function MailSelectionScreen({
     {
       id: "snappymail",
       name: "SnappyMail",
-      description: "Optional panel webmail. IMAP, SMTP, Sieve, OpenPGP. Switch active later in Host packages.",
+      description:
+        "Optional panel webmail. IMAP, SMTP, Sieve, OpenPGP. Switch active later in Host packages.",
     },
     {
       id: "roundcube",

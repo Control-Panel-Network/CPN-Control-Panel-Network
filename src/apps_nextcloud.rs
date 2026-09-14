@@ -5,10 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 pub const NEXTCLOUD_ROOT: &str = "/opt/nextcloud";
-const NEXTCLOUD_URL: &str =
-    "https://download.nextcloud.com/server/releases/latest.tar.bz2";
-const NEXTSNAP_ZIP: &str =
-    "https://github.com/oe79/NextSnapMail/archive/refs/heads/master.zip";
+const NEXTCLOUD_URL: &str = "https://download.nextcloud.com/server/releases/latest.tar.bz2";
+const NEXTSNAP_ZIP: &str = "https://github.com/oe79/NextSnapMail/archive/refs/heads/master.zip";
 
 pub fn nextcloud_present() -> bool {
     Path::new(NEXTCLOUD_ROOT).join("version.php").is_file()
@@ -24,11 +22,7 @@ pub fn nextcloud_root() -> PathBuf {
             return p;
         }
     }
-    for candidate in [
-        NEXTCLOUD_ROOT,
-        "/var/www/nextcloud",
-        "/usr/share/nextcloud",
-    ] {
+    for candidate in [NEXTCLOUD_ROOT, "/var/www/nextcloud", "/usr/share/nextcloud"] {
         let p = Path::new(candidate);
         if p.join("version.php").is_file() {
             return p.to_path_buf();
@@ -49,10 +43,7 @@ pub fn detect_nextcloud_status() -> (bool, String) {
     if nextcloud_present() {
         (
             true,
-            format!(
-                "Nextcloud detected at {}.",
-                nextcloud_root().display()
-            ),
+            format!("Nextcloud detected at {}.", nextcloud_root().display()),
         )
     } else {
         (
@@ -131,12 +122,7 @@ pub fn install_nextcloud_files() -> Result<String, String> {
     fs::create_dir_all(&extract_parent).map_err(|e| e.to_string())?;
     run_checked(
         "tar",
-        &[
-            "xjf",
-            &archive_s,
-            "-C",
-            &extract_parent.to_string_lossy(),
-        ],
+        &["xjf", &archive_s, "-C", &extract_parent.to_string_lossy()],
         "Extracting Nextcloud",
     )?;
     let extracted = extract_parent.join("nextcloud");
@@ -222,9 +208,12 @@ pub fn install_nextsnapmail_app() -> Result<String, String> {
         for ent in rd.flatten() {
             let p = ent.path();
             if p.is_dir()
-                && (p.join("appinfo").is_dir() || p.file_name().is_some_and(|n| {
-                    n.to_string_lossy().to_ascii_lowercase().contains("nextsnap")
-                }))
+                && (p.join("appinfo").is_dir()
+                    || p.file_name().is_some_and(|n| {
+                        n.to_string_lossy()
+                            .to_ascii_lowercase()
+                            .contains("nextsnap")
+                    }))
             {
                 source = Some(p);
                 break;
@@ -246,7 +235,10 @@ pub fn install_nextsnapmail_app() -> Result<String, String> {
         if status.success() {
             Ok(())
         } else {
-            Err(format!("Could not copy NextSnapMail into {}", dest.display()))
+            Err(format!(
+                "Could not copy NextSnapMail into {}",
+                dest.display()
+            ))
         }
     })?;
     let _ = fs::remove_dir_all(&work);
@@ -270,7 +262,8 @@ pub fn install_nextsnapmail_app() -> Result<String, String> {
 pub fn uninstall_nextsnapmail_app() -> Result<String, String> {
     let dest = nextcloud_root().join("apps/nextsnapmail");
     if dest.exists() {
-        fs::remove_dir_all(&dest).map_err(|e| format!("Could not remove {}: {e}", dest.display()))?;
+        fs::remove_dir_all(&dest)
+            .map_err(|e| format!("Could not remove {}: {e}", dest.display()))?;
         Ok(format!("Removed NextSnapMail from {}.", dest.display()))
     } else {
         Ok("NextSnapMail app was not present.".into())

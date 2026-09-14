@@ -56,7 +56,8 @@ pub fn load_active_pref() -> Option<MailSystem> {
 pub fn save_active_pref(mail: MailSystem) -> Result<(), String> {
     let path = pref_path();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
     }
     let pref = ActiveWebmailPref {
         client: mail_to_id(mail).to_string(),
@@ -78,9 +79,7 @@ pub fn clear_active_pref() {
 
 pub fn client_files_present(mail: MailSystem) -> bool {
     match mail {
-        MailSystem::Snappymail => {
-            Path::new("/opt/cpn-webmail/snappymail/index.php").is_file()
-        }
+        MailSystem::Snappymail => Path::new("/opt/cpn-webmail/snappymail/index.php").is_file(),
         MailSystem::Tachyon => Path::new("/opt/cpn-webmail/tachyon/index.php").is_file(),
         MailSystem::Roundcube => {
             Path::new("/opt/cpn-webmail/roundcube/public_html/index.php").is_file()
