@@ -1,4 +1,4 @@
-//! Webmail host packages: SnappyMail, Tachyon (LIVE), NextSnapMail / SOGo (honest gates).
+//! Webmail host packages: SnappyMail, Tachyon, Roundcube (LIVE), NextSnapMail / SOGo (honest gates).
 
 use crate::apps::{AppId, AppStateKind, AppStatus};
 use crate::host_packages_catalog::{HostInstallStatus, meta_for};
@@ -13,6 +13,11 @@ use tokio::sync::broadcast;
 fn path_installed(rel: &str) -> bool {
     let root = Path::new("/opt/cpn-webmail").join(rel);
     root.is_dir() && root.join("index.php").is_file()
+}
+
+fn roundcube_installed() -> bool {
+    Path::new("/opt/cpn-webmail/roundcube/public_html/index.php").is_file()
+        || Path::new("/opt/cpn-webmail/roundcube/index.php").is_file()
 }
 
 pub fn detect_webmail_app(id: AppId) -> AppStatus {
@@ -49,6 +54,26 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
                 (
                     AppStateKind::NotInstalled,
                     "Tachyon not detected under /opt/cpn-webmail.".into(),
+                )
+            };
+            AppStatus {
+                id,
+                state,
+                detail,
+                warning: None,
+            }
+        }
+        AppId::Roundcube => {
+            let installed = roundcube_installed();
+            let (state, detail) = if installed {
+                (
+                    AppStateKind::Running,
+                    "Roundcube files present under /opt/cpn-webmail/roundcube.".into(),
+                )
+            } else {
+                (
+                    AppStateKind::NotInstalled,
+                    "Roundcube not detected under /opt/cpn-webmail.".into(),
                 )
             };
             AppStatus {
@@ -165,6 +190,7 @@ fn mail_for_app(id: AppId) -> Result<MailSystem, String> {
     match id {
         AppId::Snappymail => Ok(MailSystem::Snappymail),
         AppId::Tachyon => Ok(MailSystem::Tachyon),
+        AppId::Roundcube => Ok(MailSystem::Roundcube),
         AppId::Nextsnapmail => Ok(MailSystem::Nextsnapmail),
         AppId::Sogo => Ok(MailSystem::Sogo),
         _ => Err("Not a webmail host package.".into()),
@@ -214,6 +240,7 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
     let dir = match id {
         AppId::Snappymail => "/opt/cpn-webmail/snappymail",
         AppId::Tachyon => "/opt/cpn-webmail/tachyon",
+        AppId::Roundcube => "/opt/cpn-webmail/roundcube",
         AppId::Nextsnapmail | AppId::Sogo => {
             return Err(format!(
                 "{} was not installed by CPN (gate/scaffold only).",
@@ -231,6 +258,6 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
 pub fn is_webmail_app(id: AppId) -> bool {
     matches!(
         id,
-        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo
+        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail | AppId::Sogo
     )
 }

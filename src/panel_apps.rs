@@ -386,7 +386,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name tachyon</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name roundcube</code></p>
         {picker}
       </article>
       <p class="plugin-count">{count} host packages</p>
@@ -424,6 +424,7 @@ mod tests {
     #[test]
     fn parse_known_webmail_ids() {
         assert_eq!(AppId::parse("tachyon").unwrap(), AppId::Tachyon);
+        assert_eq!(AppId::parse("roundcube").unwrap(), AppId::Roundcube);
         assert_eq!(AppId::parse("nextsnapmail").unwrap(), AppId::Nextsnapmail);
         assert_eq!(AppId::parse("sogo").unwrap(), AppId::Sogo);
     }
