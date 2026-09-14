@@ -27,9 +27,8 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
 
     let version = detect_snappymail_version(docroot).unwrap_or_else(|| "2.38.2".into());
     let core = Path::new(LOCAL_REPO_DIR).join("core.json");
-    let core_body = format!(
-        "{{\n  \"version\": \"{version}\",\n  \"file\": \"\",\n  \"warnings\": []\n}}\n"
-    );
+    let core_body =
+        format!("{{\n  \"version\": \"{version}\",\n  \"file\": \"\",\n  \"warnings\": []\n}}\n");
     fs::write(&core, core_body).map_err(|e| format!("core.json: {e}"))?;
 
     let _ = Command::new("bash")
@@ -141,12 +140,13 @@ fn patch_repository_get(path: &Path) -> Result<(), String> {
         (false, needle)
     };
     if !found {
-        return Err(format!(
-            "Repository::get not found in {}",
-            path.display()
-        ));
+        return Err(format!("Repository::get not found in {}", path.display()));
     }
-    let patched = raw.replacen(use_needle, &format!("{use_needle}{}", local_repo_snippet()), 1);
+    let patched = raw.replacen(
+        use_needle,
+        &format!("{use_needle}{}", local_repo_snippet()),
+        1,
+    );
     fs::write(path, patched).map_err(|e| format!("write {}: {e}", path.display()))?;
     Ok(())
 }

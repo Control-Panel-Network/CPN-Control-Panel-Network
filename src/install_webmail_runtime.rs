@@ -448,9 +448,7 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
     if is_snappymail_docroot(docroot) {
         if Path::new(FPM_POOL).is_file() {
             let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
-            if !raw.contains("/var/lib/cpn-webmail")
-                || !raw.contains("default_socket_timeout")
-            {
+            if !raw.contains("/var/lib/cpn-webmail") || !raw.contains("default_socket_timeout") {
                 write_php_fpm_pool(docroot)?;
                 let _ = std::process::Command::new("systemctl")
                     .args(["restart", "php-fpm"])
