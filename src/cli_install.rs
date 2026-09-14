@@ -145,15 +145,13 @@ fn prompt_server() -> Result<ServerEngine, String> {
 
 fn prompt_database() -> Result<DatabaseEngine, String> {
     println!("\nDatabase defaults (installed with the web server):");
-    println!("  1) MariaDB   (default)");
-    println!("  2) MySQL");
-    println!("  3) None      (skip local database packages)");
-    prompt_menu("Enter 1-3 for database", "1", |raw| match raw {
-        "1" | "mariadb" | "maria" => Ok(DatabaseEngine::Mariadb),
-        "2" | "mysql" => Ok(DatabaseEngine::Mysql),
-        "3" | "none" | "skip" => Ok(DatabaseEngine::None),
+    println!("  1) MariaDB   (default, MySQL-compatible)");
+    println!("  2) None      (skip local database packages)");
+    prompt_menu("Enter 1-2 for database", "1", |raw| match raw {
+        "1" | "mariadb" | "maria" | "mysql" => Ok(DatabaseEngine::Mariadb),
+        "2" | "none" | "skip" => Ok(DatabaseEngine::None),
         other => Err(format!(
-            "Unknown database `{other}`. Enter 1 (MariaDB), 2 (MySQL), or 3 (none)."
+            "Unknown database `{other}`. Enter 1 (MariaDB) or 2 (none). Legacy `mysql` uses MariaDB."
         )),
     })
 }

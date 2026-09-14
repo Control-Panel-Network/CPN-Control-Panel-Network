@@ -47,9 +47,8 @@ const nb: LocaleMessages = {
   nothingInstallsYet: "Ingenting installeres for du trykker Fortsett.",
   databaseTitle: "Database-standarder",
   databaseHint:
-    "MariaDB og phpMyAdmin installeres som standard med webserveren. Velg MySQL i stedet, eller hopp over. Verter kjorer vanligvis MariaDB XOR MySQL.",
+    "MariaDB og phpMyAdmin installeres som standard med webserveren. Du kan hoppe over begge. CPN bruker MariaDB som eneste MySQL-kompatible vert-database.",
   databaseMariadb: "MariaDB (standard)",
-  databaseMysql: "MySQL (i stedet for MariaDB)",
   databaseNone: "Hopp over lokal database-motor",
   databasePhpmyadmin: "Installer ogsa phpMyAdmin (pa som standard)",
   phpVersionTitle: "PHP-versjon",

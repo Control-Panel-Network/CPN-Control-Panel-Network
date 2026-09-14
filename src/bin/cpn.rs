@@ -83,7 +83,7 @@ enum Commands {
         #[command(subcommand)]
         command: PluginCommands,
     },
-    /// Host applications (MariaDB, MySQL, PostgreSQL, phpMyAdmin, Email, RabbitMQ)
+    /// Host applications (MariaDB, PostgreSQL, phpMyAdmin, Email, RabbitMQ, webmail)
     App {
         #[command(subcommand)]
         command: cli_apps::AppCommands,
@@ -250,7 +250,7 @@ fn run() -> Result<(), String> {
             println!("network  Manage listen port, hostname, public URL, and port migration");
             println!("plugin   Manage per-site plugins under /home/<domain>/plugins");
             println!(
-                "app      Manage host apps (mariadb, mysql, postgresql, phpmyadmin, email, rabbitmq)"
+                "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, ...)"
             );
             println!("package  Manage hosting packages and account assignments");
             println!("version  Print CLI version");

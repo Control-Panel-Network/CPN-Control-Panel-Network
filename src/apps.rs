@@ -1,8 +1,8 @@
 //! Host app lifecycle: detect, install, start, stop, reinstall, uninstall via dnf/apt.
 //!
-//! Supported apps: MariaDB, MySQL, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ.
-//! MariaDB and MySQL are treated as mutually exclusive on one host.
-//! PostgreSQL is opt-in and may coexist with MariaDB/MySQL.
+//! Supported apps: MariaDB, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ, webmail.
+//! CPN installs MariaDB only as the MySQL-compatible host database (not Oracle MySQL).
+//! PostgreSQL is opt-in and may coexist with MariaDB.
 
 use crate::apps_pkg::{
     disable_now, enable_now, install_packages_dnf_or_apt, remove_packages_dnf_or_apt,
@@ -14,7 +14,6 @@ use crate::service_detect::{first_active_service, port_open, systemd_unit_active
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppId {
     Mariadb,
-    Mysql,
     Postgresql,
     Phpmyadmin,
     Email,
@@ -29,7 +28,10 @@ impl AppId {
     pub fn parse(raw: &str) -> Result<Self, String> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "mariadb" => Ok(Self::Mariadb),
-            "mysql" => Ok(Self::Mysql),
+            "mysql" => Err(
+                "MySQL is not a CPN host package. Use `mariadb` (MariaDB is the supported MySQL-compatible server)."
+                    .into(),
+            ),
             "postgresql" | "postgres" | "pgsql" => Ok(Self::Postgresql),
             "phpmyadmin" | "php-myadmin" => Ok(Self::Phpmyadmin),
             "email" | "mail" => Ok(Self::Email),
@@ -39,7 +41,7 @@ impl AppId {
             "nextsnapmail" | "next-snapmail" | "nextcloud-snappymail" => Ok(Self::Nextsnapmail),
             "sogo" => Ok(Self::Sogo),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, mysql, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, nextsnapmail, sogo"
+                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, nextsnapmail, sogo"
             )),
         }
     }
@@ -47,7 +49,6 @@ impl AppId {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Mariadb => "mariadb",
-            Self::Mysql => "mysql",
             Self::Postgresql => "postgresql",
             Self::Phpmyadmin => "phpmyadmin",
             Self::Email => "email",
@@ -62,7 +63,6 @@ impl AppId {
     pub fn label(self) -> &'static str {
         match self {
             Self::Mariadb => "MariaDB",
-            Self::Mysql => "MySQL",
             Self::Postgresql => "PostgreSQL",
             Self::Phpmyadmin => "phpMyAdmin",
             Self::Email => "Email (Postfix + Dovecot)",
@@ -78,14 +78,13 @@ impl AppId {
     pub fn supports_service_control(self) -> bool {
         matches!(
             self,
-            Self::Mariadb | Self::Mysql | Self::Postgresql | Self::Email | Self::Rabbitmq
+            Self::Mariadb | Self::Postgresql | Self::Email | Self::Rabbitmq
         )
     }
 
     pub fn all() -> &'static [AppId] {
         &[
             Self::Mariadb,
-            Self::Mysql,
             Self::Postgresql,
             Self::Phpmyadmin,
             Self::Email,
@@ -153,11 +152,7 @@ fn mysql_present() -> bool {
 fn conflict_warning(id: AppId) -> Option<String> {
     match id {
         AppId::Mariadb if mysql_present() => Some(
-            "MySQL appears installed on this host. MariaDB and MySQL typically conflict; uninstall MySQL first or keep only one."
-                .into(),
-        ),
-        AppId::Mysql if mariadb_present() => Some(
-            "MariaDB appears installed on this host. MySQL and MariaDB typically conflict; uninstall MariaDB first or keep only one."
+            "Oracle MySQL packages appear installed on this host. CPN supports MariaDB only; uninstall MySQL server packages before installing MariaDB."
                 .into(),
         ),
         _ => None,
@@ -182,32 +177,6 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 )
             } else {
                 (AppStateKind::NotInstalled, "MariaDB not detected.".into())
-            };
-            AppStatus {
-                id,
-                state,
-                detail,
-                warning,
-            }
-        }
-        AppId::Mysql => {
-            // Do not treat MariaDB's mysql/mysqld unit aliases as MySQL.
-            let running = mysql_present()
-                && (systemd_unit_active("mysqld") || systemd_unit_active("mysql"))
-                && port_open("127.0.0.1:3306", 250);
-            let installed = mysql_present();
-            let (state, detail) = if running {
-                (
-                    AppStateKind::Running,
-                    "MySQL unit active and :3306 accepting connections.".into(),
-                )
-            } else if installed {
-                (
-                    AppStateKind::Installed,
-                    "MySQL packages or unit present, but not fully running on :3306.".into(),
-                )
-            } else {
-                (AppStateKind::NotInstalled, "MySQL not detected.".into())
             };
             AppStatus {
                 id,
@@ -327,14 +296,10 @@ pub fn list_apps() -> Vec<AppStatus> {
     AppId::all().iter().copied().map(detect_app).collect()
 }
 
-fn enforce_db_xor(id: AppId) -> Result<(), String> {
+fn enforce_mariadb_only(id: AppId) -> Result<(), String> {
     match id {
         AppId::Mariadb if mysql_present() => Err(
-            "Refuse to install MariaDB while MySQL is present. Uninstall MySQL first (hosts typically run MariaDB XOR MySQL)."
-                .into(),
-        ),
-        AppId::Mysql if mariadb_present() => Err(
-            "Refuse to install MySQL while MariaDB is present. Uninstall MariaDB first (hosts typically run MariaDB XOR MySQL)."
+            "Refuse to install MariaDB while Oracle MySQL is present. Uninstall mysql-server packages first; CPN supports MariaDB only."
                 .into(),
         ),
         _ => Ok(()),
@@ -347,7 +312,7 @@ pub fn install_app(id: AppId) -> Result<String, String> {
 
 /// Install host packages and optionally associate/drop site-scoped pieces under a domain home.
 pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
-    enforce_db_xor(id)?;
+    enforce_mariadb_only(id)?;
     let current = detect_app(id);
     let mut messages = Vec::new();
     if current.state != AppStateKind::Running {
@@ -356,12 +321,6 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 install_packages_dnf_or_apt(&["mariadb-server"], &["mariadb-server"])?;
                 enable_now(&["mariadb"])?;
                 "Installed and started MariaDB.".to_string()
-            }
-            AppId::Mysql => {
-                install_packages_dnf_or_apt(&["mysql-server"], &["mysql-server"])?;
-                let _ = enable_now(&["mysqld"]);
-                let _ = enable_now(&["mysql"]);
-                "Installed and started MySQL.".to_string()
             }
             AppId::Postgresql => install_postgresql()?,
             AppId::Phpmyadmin => crate::apps_phpmyadmin::install_and_expose()?,
@@ -429,15 +388,6 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
             remove_packages_dnf_or_apt(&["mariadb-server"], &["mariadb-server"])?;
             "Uninstalled MariaDB.".to_string()
         }
-        AppId::Mysql => {
-            disable_now(&["mysqld"])?;
-            disable_now(&["mysql"])?;
-            remove_packages_dnf_or_apt(
-                &["mysql-server", "mysql-community-server"],
-                &["mysql-server"],
-            )?;
-            "Uninstalled MySQL.".to_string()
-        }
         AppId::Postgresql => uninstall_postgresql()?,
         AppId::Phpmyadmin => {
             remove_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
@@ -474,6 +424,7 @@ mod tests {
         assert_eq!(AppId::parse("php-myadmin").unwrap(), AppId::Phpmyadmin);
         assert_eq!(AppId::parse("postgres").unwrap(), AppId::Postgresql);
         assert_eq!(AppId::parse("PostgreSQL").unwrap(), AppId::Postgresql);
+        assert!(AppId::parse("mysql").is_err());
         assert!(AppId::parse("nginx").is_err());
     }
 

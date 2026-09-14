@@ -123,7 +123,7 @@ Usage:
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
   cpn-installer --allow-remote  Bind 0.0.0.0 for the web UI (HTTP without TLS; operator opt-in)
   cpn-installer --bypass        With --upgrade: refresh CPN-managed Docker compose/stacks only (preserves volumes; never touches unlabeled user containers)
-  cpn-installer --ensure-database-defaults [--database mariadb|mysql|none] [--skip-phpmyadmin]
+  cpn-installer --ensure-database-defaults [--database mariadb|none] [--skip-phpmyadmin]
                                  Install MariaDB (default) + phpMyAdmin on Linux without the UI
 
 Notes:

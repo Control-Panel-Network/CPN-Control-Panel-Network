@@ -5,7 +5,7 @@ export default function AppsPage() {
     <SectionPage
       title="Apps"
       active="apps"
-      blurb="Install and manage MariaDB, MySQL, phpMyAdmin, Email, and RabbitMQ on this host."
+      blurb="Install and manage MariaDB, PostgreSQL, phpMyAdmin, Email, and RabbitMQ on this host."
     />
   );
 }

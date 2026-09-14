@@ -55,7 +55,6 @@ export interface LocaleMessages {
   databaseTitle: string;
   databaseHint: string;
   databaseMariadb: string;
-  databaseMysql: string;
   databaseNone: string;
   databasePhpmyadmin: string;
   phpVersionTitle: string;

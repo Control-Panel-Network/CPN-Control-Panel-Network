@@ -353,7 +353,7 @@ pub fn databases_create_page(notice: Option<&str>, error: Option<&str>) -> Strin
       <input id="name" name="name" type="text" required pattern="[A-Za-z0-9_]+" maxlength="64">
       <button type="submit" class="btn-primary">Create database</button>
     </form>
-    <p class="muted">Uses local MariaDB/MySQL client auth. Letters, digits, and underscore only.</p>"#;
+    <p class="muted">Uses local MariaDB client auth. Letters, digits, and underscore only.</p>"#;
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),

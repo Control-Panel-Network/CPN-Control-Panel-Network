@@ -24,7 +24,7 @@ pub fn search_catalog_json() -> String {
             "wordpress install plugins",
         ),
         ("Email", "/email", "mail postfix"),
-        ("Databases & FTP", "/databases", "mariadb mysql ftp"),
+        ("Databases & FTP", "/databases", "mariadb ftp"),
         ("MariaDB Manager", "/databases/manager", "database"),
         ("Backups", "/backups", "restore"),
         ("Create Backup", "/backups/create", "backup"),

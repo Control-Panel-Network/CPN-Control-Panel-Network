@@ -431,7 +431,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
     .await;
 }
 
-/// Web server install plus optional MariaDB/MySQL + phpMyAdmin defaults.
+/// Web server install plus optional MariaDB + phpMyAdmin defaults.
 ///
 /// `php_version`: optional major.minor (`8.5`, `8.4`, …) or `auto`/None for preferred 8.5 on EL9+.
 pub async fn install_with_database(

@@ -1,7 +1,7 @@
 //! MariaDB + phpMyAdmin as the default database stack for Linux installs.
 //!
-//! Operators may choose MySQL instead, or skip the database / phpMyAdmin.
-//! MariaDB and MySQL remain mutually exclusive (XOR).
+//! Operators may skip the database / phpMyAdmin. CPN installs MariaDB only
+//! (MySQL-compatible). Legacy `mysql` CLI/UI values map to MariaDB.
 
 use crate::apps::{AppId, install_app};
 use crate::model::{DatabaseEngine, ServerEngine};
@@ -11,7 +11,6 @@ use crate::service_detect::detect_database;
 /// Install the default (or operator-selected) database stack after the web server stage.
 ///
 /// - `DatabaseEngine::Mariadb` (default): install/start MariaDB unless already present.
-/// - `DatabaseEngine::Mysql`: install/start MySQL (refuses if MariaDB is present).
 /// - `DatabaseEngine::None`: skip the database engine.
 /// - `install_phpmyadmin`: when true (default), install phpMyAdmin packages.
 /// - `web_server`: when set, phpMyAdmin skips starting nginx under OLS/Caddy.
@@ -52,9 +51,6 @@ pub fn ensure_database_defaults(
         DatabaseEngine::Mariadb => {
             notes.push(ensure_mariadb()?);
         }
-        DatabaseEngine::Mysql => {
-            notes.push(ensure_mysql()?);
-        }
     }
 
     if install_phpmyadmin {
@@ -77,27 +73,11 @@ fn ensure_mariadb() -> Result<String, String> {
     }
     if status.service_label.starts_with("MySQL") || status.service_label.starts_with("mysqld") {
         return Err(
-            "MySQL appears installed on this host. MariaDB and MySQL typically conflict; uninstall MySQL first or pass --database mysql / database=mysql."
+            "Oracle MySQL appears installed on this host. CPN supports MariaDB only; uninstall MySQL server packages first, then re-run with --database mariadb."
                 .into(),
         );
     }
     install_app(AppId::Mariadb)
-}
-
-fn ensure_mysql() -> Result<String, String> {
-    let status = detect_database();
-    if (status.service_label.starts_with("MySQL") || status.service_label.starts_with("mysqld"))
-        && status.listening_3306
-    {
-        return Ok("MySQL already running on :3306.".into());
-    }
-    if status.service_label.starts_with("MariaDB") {
-        return Err(
-            "MariaDB appears installed on this host. MySQL and MariaDB typically conflict; uninstall MariaDB first or keep the MariaDB default."
-                .into(),
-        );
-    }
-    install_app(AppId::Mysql)
 }
 
 fn ensure_phpmyadmin(web_server: Option<ServerEngine>) -> Result<String, String> {
@@ -121,7 +101,7 @@ mod tests {
         );
         assert_eq!(
             DatabaseEngine::parse_cli("mysql").unwrap(),
-            DatabaseEngine::Mysql
+            DatabaseEngine::Mariadb
         );
         assert_eq!(
             DatabaseEngine::parse_cli("none").unwrap(),
