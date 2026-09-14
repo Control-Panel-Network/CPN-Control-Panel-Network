@@ -143,6 +143,27 @@ pub fn create_database_with_user(
     db_user: &str,
     db_password: &str,
 ) -> Result<String, String> {
+    ensure_database_with_hosts(db_name, db_user, db_password, &["localhost"])
+}
+
+/// Create database plus user grants for socket (`localhost`) and TCP (`127.0.0.1`).
+///
+/// SnappyMail-family Contacts PDO DSN uses `host=127.0.0.1`, which is TCP auth on
+/// MariaDB (distinct from unix-socket `localhost`).
+pub fn create_database_with_user_tcp(
+    db_name: &str,
+    db_user: &str,
+    db_password: &str,
+) -> Result<String, String> {
+    ensure_database_with_hosts(db_name, db_user, db_password, &["localhost", "127.0.0.1"])
+}
+
+fn ensure_database_with_hosts(
+    db_name: &str,
+    db_user: &str,
+    db_password: &str,
+    hosts: &[&str],
+) -> Result<String, String> {
     let name = sanitize_db_ident(db_name)?;
     let user = sanitize_db_ident(db_user)?;
     let pass = sanitize_db_password(db_password)?;
@@ -152,36 +173,45 @@ pub fn create_database_with_user(
             .to_string()
     })?;
 
-    let modern_sql = format!(
-        "CREATE DATABASE IF NOT EXISTS `{name}`; \
-         CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; \
-         GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'localhost'; \
-         FLUSH PRIVILEGES;"
-    );
+    let mut user_sql = String::new();
+    for host in hosts {
+        user_sql.push_str(&format!(
+            "CREATE USER IF NOT EXISTS '{user}'@'{host}' IDENTIFIED BY '{pass_sql}'; \
+             ALTER USER '{user}'@'{host}' IDENTIFIED BY '{pass_sql}'; \
+             GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'{host}'; "
+        ));
+    }
+    let modern_sql =
+        format!("CREATE DATABASE IF NOT EXISTS `{name}`; {user_sql} FLUSH PRIVILEGES;");
     let out = Command::new(bin)
         .args(["-e", &modern_sql])
         .output()
         .map_err(|e| format!("Failed to run {bin}: {e}"))?;
     if out.status.success() {
+        let host_list = hosts.join(", ");
         return Ok(format!(
-            "Created database `{name}` with user `{user}`@localhost"
+            "Created database `{name}` with user `{user}`@[{host_list}]"
         ));
     }
 
     let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    let legacy_sql = format!(
-        "CREATE DATABASE IF NOT EXISTS `{name}`; \
-         CREATE USER '{user}'@'localhost' IDENTIFIED BY '{pass_sql}'; \
-         GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'localhost'; \
-         FLUSH PRIVILEGES;"
-    );
+    let mut legacy_user_sql = String::new();
+    for host in hosts {
+        legacy_user_sql.push_str(&format!(
+            "CREATE USER '{user}'@'{host}' IDENTIFIED BY '{pass_sql}'; \
+             GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'{host}'; "
+        ));
+    }
+    let legacy_sql =
+        format!("CREATE DATABASE IF NOT EXISTS `{name}`; {legacy_user_sql} FLUSH PRIVILEGES;");
     let legacy = Command::new(bin)
         .args(["-e", &legacy_sql])
         .output()
         .map_err(|e| format!("Failed to run {bin}: {e}"))?;
     if legacy.status.success() {
+        let host_list = hosts.join(", ");
         return Ok(format!(
-            "Created database `{name}` with user `{user}`@localhost (legacy user create)"
+            "Created database `{name}` with user `{user}`@[{host_list}] (legacy user create)"
         ));
     }
     Err(format!(

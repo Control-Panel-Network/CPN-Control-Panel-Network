@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const MARKER_DEFAULTS: &str = "_data_/_default_/.cpn-user-defaults-v1";
-const MARKER_CONTACTS_DB: &str = "_data_/_default_/.cpn-contacts-db-v1";
 
 const CPN_PAGE_TITLE: &str = "CPN Webmail";
 const CPN_LOADING_DESCRIPTION: &str = "CPN Panel";
@@ -24,7 +23,7 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
         let _ = ensure_domain_sieve_enabled(&data_dir);
         let _ = ensure_user_settings_defaults(&data_dir);
         let _ = ensure_login_and_branding_defaults(&data_dir);
-        let _ = ensure_contacts_defaults(&data_dir);
+        let _ = crate::install_snappymail_contacts::ensure_contacts_defaults(&data_dir);
         let _ = chown_data_tree(&data_dir);
     }
     let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
@@ -57,124 +56,6 @@ fn ensure_login_and_branding_defaults(data_dir: &str) -> Result<(), String> {
     if updated != raw {
         std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
     }
-    Ok(())
-}
-
-fn ensure_contacts_defaults(data_dir: &str) -> Result<(), String> {
-    let ini = application_ini_path(data_dir);
-    if !ini.is_file() {
-        return Ok(());
-    }
-    let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
-    let updated = patch_contacts_section(&raw, data_dir);
-    if updated != raw {
-        std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
-    }
-    ensure_contacts_sqlite_ready(data_dir)?;
-    Ok(())
-}
-
-fn patch_contacts_section(raw: &str, data_dir: &str) -> String {
-    let Some(start) = raw.find("[contacts]") else {
-        return raw.to_string();
-    };
-    let after = &raw[start + "[contacts]".len()..];
-    let end_rel = after.find("\n[").map(|i| i + 1).unwrap_or(after.len());
-    let section_body = &after[..end_rel];
-    let rest = &after[end_rel..];
-    let mut body = section_body.to_string();
-    body = replace_ini_bool(&body, "enable", true);
-    body = replace_ini_quoted(&body, "type", "sqlite");
-    let use_global = !per_user_addressbooks_exist(data_dir);
-    body = replace_ini_bool(&body, "sqlite_global", use_global);
-    format!("{}[contacts]{}{}", &raw[..start], body, rest)
-}
-
-fn per_user_addressbooks_exist(data_dir: &str) -> bool {
-    let storage = Path::new(data_dir).join("_data_/_default_/storage");
-    if !storage.is_dir() {
-        return false;
-    }
-    find_addressbook_sqlite(&storage)
-}
-
-fn find_addressbook_sqlite(dir: &Path) -> bool {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return false;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            if find_addressbook_sqlite(&path) {
-                return true;
-            }
-            continue;
-        }
-        if path.file_name().and_then(|n| n.to_str()) == Some("AddressBook.sqlite") {
-            return true;
-        }
-    }
-    false
-}
-
-fn ensure_contacts_sqlite_ready(data_dir: &str) -> Result<(), String> {
-    let check = Command::new("php")
-        .args(["-r", "exit(extension_loaded('pdo_sqlite') ? 0 : 1);"])
-        .status()
-        .map_err(|e| format!("php pdo_sqlite check failed: {e}"))?;
-    if !check.success() {
-        return Err("PHP pdo_sqlite extension required for webmail Contacts".into());
-    }
-
-    let db = Path::new(data_dir).join("_data_/_default_/AddressBook.sqlite");
-    if let Some(parent) = db.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-
-    let output = Command::new("php")
-        .args([
-            "-r",
-            r#"
-$dbPath = getenv('CPN_SNAPPY_AB_DB');
-if (!$dbPath) { fwrite(STDERR, "missing CPN_SNAPPY_AB_DB\n"); exit(1); }
-$pdo = new PDO('sqlite:' . $dbPath);
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$pdo->exec("CREATE TABLE IF NOT EXISTS rainloop_system (sys_name text NOT NULL, value_int integer NOT NULL DEFAULT 0)");
-$pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS ui_rainloop_system_sys_name ON rainloop_system (sys_name)");
-$pdo->exec("CREATE TABLE IF NOT EXISTS rainloop_users (id_user integer NOT NULL PRIMARY KEY, rl_email text NOT NULL DEFAULT '')");
-$pdo->exec("CREATE INDEX IF NOT EXISTS rl_email_rainloop_users_index ON rainloop_users (rl_email)");
-$pdo->exec("CREATE TABLE IF NOT EXISTS rainloop_ab_contacts (id_contact integer NOT NULL PRIMARY KEY, id_contact_str text NOT NULL DEFAULT '', id_user integer NOT NULL, display text NOT NULL DEFAULT '', changed integer NOT NULL DEFAULT 0, deleted integer NOT NULL DEFAULT 0, etag text NOT NULL DEFAULT '')");
-$pdo->exec("CREATE INDEX IF NOT EXISTS id_user_rainloop_ab_contacts_index ON rainloop_ab_contacts (id_user)");
-$pdo->exec("CREATE TABLE IF NOT EXISTS rainloop_ab_properties (id_prop integer NOT NULL PRIMARY KEY, id_contact integer NOT NULL, id_user integer NOT NULL, prop_type integer NOT NULL, prop_type_str text NOT NULL DEFAULT '', prop_value text NOT NULL DEFAULT '', prop_value_custom text NOT NULL DEFAULT '', prop_frec integer NOT NULL DEFAULT 0)");
-$pdo->exec("CREATE INDEX IF NOT EXISTS id_user_rainloop_ab_properties_index ON rainloop_ab_properties (id_user)");
-$pdo->exec("CREATE INDEX IF NOT EXISTS id_user_id_contact_rainloop_ab_properties_index ON rainloop_ab_properties (id_user, id_contact)");
-$haveLower = false;
-foreach ($pdo->query("PRAGMA table_info(rainloop_ab_properties)") as $c) {
-  if (($c['name'] ?? '') === 'prop_value_lower') { $haveLower = true; break; }
-}
-if (!$haveLower) {
-  $pdo->exec("ALTER TABLE rainloop_ab_properties ADD COLUMN prop_value_lower text NOT NULL DEFAULT ''");
-}
-$st = $pdo->prepare("INSERT OR REPLACE INTO rainloop_system (sys_name, value_int) VALUES (?, ?)");
-$st->execute(["sqlite-ab-version", 2]);
-echo "ok";
-"#,
-        ])
-        .env("CPN_SNAPPY_AB_DB", db.to_string_lossy().as_ref())
-        .output()
-        .map_err(|e| format!("contacts sqlite init failed to start: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "contacts sqlite init failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let marker = Path::new(data_dir).join(MARKER_CONTACTS_DB);
-    let _ = std::fs::write(
-        &marker,
-        "cpn snappymail-family contacts sqlite v1: enable + AddressBook schema\n",
-    );
     Ok(())
 }
 
@@ -330,7 +211,6 @@ fn patch_settings_file(path: &Path, force: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::patch_contacts_section;
     use crate::install_snappymail_lineage::replace_ini_bool;
 
     #[test]
@@ -338,27 +218,5 @@ mod tests {
         let raw = "[login]\ndetermine_user_domain = Off\n";
         let out = replace_ini_bool(raw, "determine_user_domain", true);
         assert!(out.contains("determine_user_domain = On"));
-    }
-
-    #[test]
-    fn patches_contacts_enable_and_type() {
-        let raw = r#"[webmail]
-title = "SnappyMail Webmail"
-
-[contacts]
-; Enable contacts
-enable = Off
-type = "mysql"
-sqlite_global = Off
-
-[security]
-admin_login = "admin"
-"#;
-        let out = patch_contacts_section(raw, "/tmp/cpn-missing-webmail-data");
-        assert!(out.contains("[contacts]"));
-        assert!(out.contains("enable = On"));
-        assert!(out.contains("type = \"sqlite\""));
-        assert!(out.contains("title = \"SnappyMail Webmail\""));
-        assert!(out.contains("admin_login = \"admin\""));
     }
 }

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **SnappyMail-family Contacts**: install/heal provisions a dedicated local **MariaDB** database and user per client (`cpn_snappymail_ab`, `cpn_tachyon_ab`, and NextSnapMail when present). Admin UI Storage type remains **MySQL** (PDO) pointed at `127.0.0.1:3306`; credentials are stored only under `/var/lib/cpn/webmail-contacts/` (mode 600). Branding stays on the webmail Admin **Branding** sidebar tab (`/?admin#/branding`); heal still sets title/loading/favicon to CPN Webmail / CPN Panel on every lineage data root. SQLite is used only when MariaDB is unavailable.
 - **Email > Change Password** (`/email/password`): mailbox dropdown includes a **Webmail admin** option (label shows live `admin_login` from each installed SnappyMail-family client). Selecting Admin updates bcrypt admin passwords for SnappyMail, Tachyon, and NextSnapMail when present (`/snappymail/?admin`, `/tachyon/?admin`, and NextSnapMail data). Selecting a mailbox only resets that mailbox. Copy is family-wide (not SnappyMail-only). Reloading the page heals lineage prefs and re-reads admin usernames from `application.ini`.
 - **SnappyMail-family operator defaults** (Markdown, AllowStyles, Sieve/ManageSieve domain prefs, branding, Contacts, system folders) apply via a shared helper to every installed data root under `/var/lib/cpn-webmail/{snappymail,tachyon,…}` and discovered NextSnapMail data. Tachyon install/heal now receives the same defaults as SnappyMail (not SnappyMail-only). Roundcube is unchanged.
 
@@ -56,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SnappyMail admin password** (`/?admin`) stays in sync with the password set via **Email > Change Password** (`/email/password`), and also when the CPN panel account password changes (forced change, profile change, reset, or first-account setup). Same operator password for panel mail ops and SnappyMail admin.
 - **SnappyMail Login**: **Try to determine user domain** defaults On (short login + multi-domain). Language selection / determine-language stay On.
 - **SnappyMail Branding**: page title **CPN Webmail**, loading text **CPN Panel**, favicon `/favicon.ico` (panel logo). Applied on install and heal/upgrade (never CyberPanel strings).
-- **SnappyMail Contacts**: enabled by default with SQLite AddressBook schema created under webmail data (`AddressBook.sqlite`). Operators may disable Contacts later in admin; fresh installs use a shared DB when no per-user books exist yet.
+- **SnappyMail Contacts**: enabled by default; prefer dedicated MariaDB AddressBook databases per lineage client (see Unreleased). Older releases used SQLite `AddressBook.sqlite` under webmail data.
 
 ### Added
 
