@@ -169,6 +169,7 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
         let _ = std::fs::remove_dir_all(&web_data);
     }
     let _ = ensure_snappymail_local_imap_defaults();
+    let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
     install_journal::record(
         STAGE,
         JournalAction::Note,
@@ -205,6 +206,21 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     }
     if let Some(smtp) = data.get_mut("SMTP").and_then(|v| v.as_object_mut()) {
         smtp.insert("port".into(), serde_json::json!(25));
+    }
+    // Enable ManageSieve so Filters work in SnappyMail.
+    {
+        let sieve = data.as_object_mut().map(|o| {
+            o.entry("Sieve".to_string())
+                .or_insert_with(|| serde_json::Value::Object(Default::default()))
+        });
+        if let Some(serde_json::Value::Object(obj)) = sieve {
+            obj.insert("enabled".into(), serde_json::Value::Bool(true));
+            obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
+            obj.insert("port".into(), serde_json::json!(4190));
+            obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
+            obj.insert("lowerLogin".into(), serde_json::Value::Bool(true));
+            obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
+        }
     }
     let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     std::fs::write(&default_path, format!("{pretty}\n")).map_err(|e| e.to_string())?;
@@ -446,6 +462,8 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
             let _ = configure_snappymail_external_data(docroot);
         }
         let _ = ensure_snappymail_local_imap_defaults();
+        let _ = crate::install_mail_sieve::ensure_dovecot_sieve_sync();
+        let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
         crate::install_selinux_mail::ensure_webmail_selinux();
     }
     Ok(())

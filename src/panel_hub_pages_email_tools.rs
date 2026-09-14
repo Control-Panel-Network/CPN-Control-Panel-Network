@@ -154,7 +154,7 @@ pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>
         ));
     }
     let body = format!(
-        r#"<p class="muted">Resets the mailbox login password in the panel registry and hashes it into the local system mailbox store when Postfix/Dovecot provisioning is available.</p>
+        r#"<p class="muted">Resets the mailbox login password in the panel registry and hashes it into the local system mailbox store when Postfix/Dovecot provisioning is available. The same password is applied to SnappyMail admin (<code>/snappymail/?admin</code>) so one change covers both.</p>
         <form method="post" action="/email/password/save" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="csrf" value="{csrf}">
           <label for="mailbox">Mailbox</label>

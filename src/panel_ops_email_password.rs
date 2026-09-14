@@ -75,16 +75,27 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     account.updated_at_unix = crate::account::now_unix();
     save_accounts_file(&file)?;
     match provision_local_mailbox(&address, new_password) {
-        Ok(_provision) => Ok(format!(
-            "Password updated for `{address}`. Local mailbox ready."
-        )),
+        Ok(_provision) => {
+            let snappy = sync_snappy_admin(new_password);
+            Ok(format!(
+                "Password updated for `{address}`. Local mailbox ready.{snappy}"
+            ))
+        }
         Err(err) => {
             // Registry is authoritative for panel UI; local system provision may be
             // unavailable in CI or when the panel lacks useradd privileges.
+            let snappy = sync_snappy_admin(new_password);
             Ok(format!(
-                "Password updated for `{address}` in the panel registry. Local provision: {err}"
+                "Password updated for `{address}` in the panel registry. Local provision: {err}.{snappy}"
             ))
         }
+    }
+}
+
+fn sync_snappy_admin(password: &str) -> String {
+    match crate::install_snappymail_prefs::sync_snappymail_admin_password(password) {
+        Ok(()) => " SnappyMail admin password synced.".to_string(),
+        Err(err) => format!(" SnappyMail admin sync skipped: {err}"),
     }
 }
 
