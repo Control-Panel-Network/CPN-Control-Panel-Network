@@ -53,18 +53,18 @@ fn detect_default_public_path() -> String {
 
 /// Which webmail tree is present on disk (prefer `/opt/cpn-webmail/current` symlink).
 pub fn detect_webmail_client() -> Option<MailSystem> {
-    if Path::new("/opt/cpn-webmail/current").exists() {
-        if let Ok(target) = fs::read_link("/opt/cpn-webmail/current") {
-            let s = target.to_string_lossy().to_ascii_lowercase();
-            if s.contains("tachyon") {
-                return Some(MailSystem::Tachyon);
-            }
-            if s.contains("roundcube") {
-                return Some(MailSystem::Roundcube);
-            }
-            if s.contains("snappy") {
-                return Some(MailSystem::Snappymail);
-            }
+    if Path::new("/opt/cpn-webmail/current").exists()
+        && let Ok(target) = fs::read_link("/opt/cpn-webmail/current")
+    {
+        let s = target.to_string_lossy().to_ascii_lowercase();
+        if s.contains("tachyon") {
+            return Some(MailSystem::Tachyon);
+        }
+        if s.contains("roundcube") {
+            return Some(MailSystem::Roundcube);
+        }
+        if s.contains("snappy") {
+            return Some(MailSystem::Snappymail);
         }
     }
     if Path::new("/opt/cpn-webmail/tachyon").is_dir() {

@@ -213,7 +213,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus]) -> String {
         if mine.is_empty() {
             String::new()
         } else {
-            format!(r#"<p class="plugin-meta">Bound to selected site</p>"#)
+            r#"<p class="plugin-meta">Bound to selected site</p>"#.to_string()
         }
     } else if is_site_scoped(status.id) {
         r#"<p class="plugin-meta">May drop paths under the selected site home.</p>"#.into()

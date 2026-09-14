@@ -143,8 +143,10 @@ fn detect_server_engine() -> Option<ServerEngine> {
 
 fn quiet_app_state(engine: ServerEngine) -> Arc<AppState> {
     let (tx, _) = broadcast::channel(32);
-    let mut status = InstallerStatus::default();
-    status.selected_server = Some(engine);
+    let status = InstallerStatus {
+        selected_server: Some(engine),
+        ..Default::default()
+    };
     Arc::new(AppState {
         status: RwLock::new(status),
         events: tx,
