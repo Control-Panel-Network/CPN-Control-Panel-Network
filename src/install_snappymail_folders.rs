@@ -185,7 +185,11 @@ fn chown_data_tree(data_dir: &str) -> Result<(), String> {
     let tree = PathBuf::from(data_dir).join("_data_");
     if tree.is_dir() {
         let _ = std::process::Command::new("chown")
-            .args(["-R", "cpn-webmail:cpn-webmail", tree.to_string_lossy().as_ref()])
+            .args([
+                "-R",
+                "cpn-webmail:cpn-webmail",
+                tree.to_string_lossy().as_ref(),
+            ])
             .status();
     }
     Ok(())
