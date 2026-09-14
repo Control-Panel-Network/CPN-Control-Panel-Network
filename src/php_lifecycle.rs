@@ -27,11 +27,15 @@ pub fn webmail_php_compat(mail: MailSystem) -> Option<PhpCompatRange> {
             min: "8.1",
             max: "8.5",
         }),
+        MailSystem::Tachyon => Some(PhpCompatRange {
+            min: "8.2",
+            max: "8.5",
+        }),
         MailSystem::Roundcube => Some(PhpCompatRange {
             min: "8.1",
             max: "8.5",
         }),
-        MailSystem::Thunderbird => None,
+        MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => None,
     }
 }
 
@@ -148,6 +152,10 @@ mod tests {
         let roundcube = webmail_php_compat(MailSystem::Roundcube).expect("range");
         assert_eq!(roundcube.max, "8.5");
         assert!(webmail_php_compat(MailSystem::Thunderbird).is_none());
+        let tachyon = webmail_php_compat(MailSystem::Tachyon).expect("range");
+        assert_eq!(tachyon.min, "8.2");
+        assert!(webmail_php_compat(MailSystem::Nextsnapmail).is_none());
+        assert!(webmail_php_compat(MailSystem::Sogo).is_none());
     }
 
     #[test]

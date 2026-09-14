@@ -119,7 +119,7 @@ fn clean_obsolete_webmail_code_trees(report: &mut CleanupReport) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
     };
-    let keep = ["snappymail", "roundcube", "current"];
+    let keep = ["snappymail", "roundcube", "tachyon", "current"];
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
@@ -133,6 +133,7 @@ fn clean_obsolete_webmail_code_trees(report: &mut CleanupReport) {
         // Only remove clearly superseded extract/staging names.
         let obsolete = name.starts_with("snappymail-")
             || name.starts_with("roundcube-")
+            || name.starts_with("tachyon-")
             || name.starts_with("extract-")
             || name.starts_with("staging-")
             || name.ends_with(".bak")

@@ -19,6 +19,10 @@ pub enum AppId {
     Phpmyadmin,
     Email,
     Rabbitmq,
+    Snappymail,
+    Tachyon,
+    Nextsnapmail,
+    Sogo,
 }
 
 impl AppId {
@@ -30,8 +34,12 @@ impl AppId {
             "phpmyadmin" | "php-myadmin" => Ok(Self::Phpmyadmin),
             "email" | "mail" => Ok(Self::Email),
             "rabbitmq" => Ok(Self::Rabbitmq),
+            "snappymail" | "snappy" => Ok(Self::Snappymail),
+            "tachyon" => Ok(Self::Tachyon),
+            "nextsnapmail" | "next-snapmail" | "nextcloud-snappymail" => Ok(Self::Nextsnapmail),
+            "sogo" => Ok(Self::Sogo),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, mysql, postgresql, phpmyadmin, email, rabbitmq"
+                "Unknown app `{other}`. Use: mariadb, mysql, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, nextsnapmail, sogo"
             )),
         }
     }
@@ -44,6 +52,10 @@ impl AppId {
             Self::Phpmyadmin => "phpmyadmin",
             Self::Email => "email",
             Self::Rabbitmq => "rabbitmq",
+            Self::Snappymail => "snappymail",
+            Self::Tachyon => "tachyon",
+            Self::Nextsnapmail => "nextsnapmail",
+            Self::Sogo => "sogo",
         }
     }
 
@@ -55,6 +67,10 @@ impl AppId {
             Self::Phpmyadmin => "phpMyAdmin",
             Self::Email => "Email (Postfix + Dovecot)",
             Self::Rabbitmq => "RabbitMQ",
+            Self::Snappymail => "SnappyMail",
+            Self::Tachyon => "Tachyon",
+            Self::Nextsnapmail => "NextSnapMail",
+            Self::Sogo => "SOGo",
         }
     }
 
@@ -74,6 +90,10 @@ impl AppId {
             Self::Phpmyadmin,
             Self::Email,
             Self::Rabbitmq,
+            Self::Snappymail,
+            Self::Tachyon,
+            Self::Nextsnapmail,
+            Self::Sogo,
         ]
     }
 }
@@ -297,6 +317,10 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 warning: None,
             }
         }
+        AppId::Snappymail
+        | AppId::Tachyon
+        | AppId::Nextsnapmail
+        | AppId::Sogo => crate::apps_webmail::detect_webmail_app(id),
     }
 }
 
@@ -355,6 +379,10 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 enable_now(&["rabbitmq-server"])?;
                 "Installed and started RabbitMQ.".to_string()
             }
+            AppId::Snappymail
+            | AppId::Tachyon
+            | AppId::Nextsnapmail
+            | AppId::Sogo => crate::apps_webmail::install_webmail_app(id)?,
         };
         messages.push(msg);
     } else {
@@ -430,6 +458,10 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
             remove_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
             "Uninstalled RabbitMQ.".to_string()
         }
+        AppId::Snappymail
+        | AppId::Tachyon
+        | AppId::Nextsnapmail
+        | AppId::Sogo => crate::apps_webmail::uninstall_webmail_app(id)?,
     };
     messages.push(msg);
     Ok(messages.join(" "))

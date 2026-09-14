@@ -211,6 +211,11 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
                 site.domain
             ))
         }
+        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => Ok(format!(
+            "{} is a host webmail package (not site-scoped under {}).",
+            app.label(),
+            site.domain
+        )),
     }
 }
 

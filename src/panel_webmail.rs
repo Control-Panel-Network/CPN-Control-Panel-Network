@@ -46,21 +46,19 @@ fn config_path() -> PathBuf {
 fn detect_default_public_path() -> String {
     match detect_webmail_client() {
         Some(MailSystem::Roundcube) => "/roundcube".into(),
+        Some(MailSystem::Tachyon) => "/tachyon".into(),
         _ => "/snappymail".into(),
     }
 }
 
-/// Which webmail tree is present on disk (SnappyMail preferred when both exist).
+/// Which webmail tree is present on disk (prefer `/opt/cpn-webmail/current` symlink).
 pub fn detect_webmail_client() -> Option<MailSystem> {
-    if Path::new("/opt/cpn-webmail/snappymail").is_dir() {
-        return Some(MailSystem::Snappymail);
-    }
-    if Path::new("/opt/cpn-webmail/roundcube").is_dir() {
-        return Some(MailSystem::Roundcube);
-    }
     if Path::new("/opt/cpn-webmail/current").exists() {
         if let Ok(target) = fs::read_link("/opt/cpn-webmail/current") {
             let s = target.to_string_lossy().to_ascii_lowercase();
+            if s.contains("tachyon") {
+                return Some(MailSystem::Tachyon);
+            }
             if s.contains("roundcube") {
                 return Some(MailSystem::Roundcube);
             }
@@ -68,7 +66,15 @@ pub fn detect_webmail_client() -> Option<MailSystem> {
                 return Some(MailSystem::Snappymail);
             }
         }
+    }
+    if Path::new("/opt/cpn-webmail/tachyon").is_dir() {
+        return Some(MailSystem::Tachyon);
+    }
+    if Path::new("/opt/cpn-webmail/snappymail").is_dir() {
         return Some(MailSystem::Snappymail);
+    }
+    if Path::new("/opt/cpn-webmail/roundcube").is_dir() {
+        return Some(MailSystem::Roundcube);
     }
     None
 }
@@ -156,6 +162,7 @@ pub fn regenerate_webmail_path() -> Result<WebmailPanelConfig, String> {
         .to_ascii_lowercase();
     let prefix = match detect_webmail_client() {
         Some(MailSystem::Roundcube) => "roundcube",
+        Some(MailSystem::Tachyon) => "tachyon",
         _ => "snappymail",
     };
     cfg.public_path = format!("/{prefix}-{suffix}");
@@ -174,10 +181,11 @@ fn panel_base_for_links(listen_port: u16, host_hint: Option<&str>) -> String {
     format!("http://{host}:{listen_port}")
 }
 
-/// Docroot the loopback webmail frontend should serve (SnappyMail preferred when both exist).
+/// Docroot the loopback webmail frontend should serve.
 pub fn webmail_backend_docroot() -> Option<&'static str> {
     match detect_webmail_client()? {
         MailSystem::Snappymail => Some("/opt/cpn-webmail/snappymail"),
+        MailSystem::Tachyon => Some("/opt/cpn-webmail/tachyon"),
         MailSystem::Roundcube => {
             if Path::new("/opt/cpn-webmail/roundcube/public_html").is_dir() {
                 Some("/opt/cpn-webmail/roundcube/public_html")
@@ -185,7 +193,7 @@ pub fn webmail_backend_docroot() -> Option<&'static str> {
                 Some("/opt/cpn-webmail/roundcube")
             }
         }
-        MailSystem::Thunderbird => None,
+        MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => None,
     }
 }
 
@@ -200,23 +208,22 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
     let client = detect_webmail_client()?;
     let mut url = match client {
         // Login form first; #/mailbox/INBOX only applies after a successful session.
-        // Prefer clean `/snappymail/` (panel proxy maps `/` to index.php).
-        MailSystem::Snappymail => format!("{base}{path}/"),
+        MailSystem::Snappymail | MailSystem::Tachyon => format!("{base}{path}/"),
         MailSystem::Roundcube => format!("{base}{path}/"),
-        MailSystem::Thunderbird => return None,
+        MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => return None,
     };
     if !cfg.auto_login_account.is_empty() {
         let email = urlencoding_form(&cfg.auto_login_account);
         let sep = if url.contains('?') { "&" } else { "?" };
         match client {
-            MailSystem::Snappymail => {
+            MailSystem::Snappymail | MailSystem::Tachyon => {
                 // Best-effort Email prefill. True SSO needs a stored mailbox secret (not wired).
                 url = format!("{url}{sep}Email={email}");
             }
             MailSystem::Roundcube => {
                 url = format!("{url}{sep}_user={email}");
             }
-            MailSystem::Thunderbird => {}
+            MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => {}
         }
     }
     Some(url)
@@ -230,7 +237,7 @@ pub fn webmail_open_path() -> Option<String> {
     let cfg = load_webmail_config();
     let path = cfg.public_path.trim_end_matches('/');
     match detect_webmail_client()? {
-        MailSystem::Snappymail => {
+        MailSystem::Snappymail | MailSystem::Tachyon => {
             if cfg.auto_login_account.is_empty() {
                 Some(format!("{path}/"))
             } else {
@@ -250,7 +257,7 @@ pub fn webmail_open_path() -> Option<String> {
                 ))
             }
         }
-        MailSystem::Thunderbird => None,
+        MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => None,
     }
 }
 
@@ -261,9 +268,9 @@ pub fn webmail_admin_path() -> Option<String> {
     let cfg = load_webmail_config();
     let path = cfg.public_path.trim_end_matches('/');
     match detect_webmail_client()? {
-        MailSystem::Snappymail => Some(format!("{path}/?admin")),
+        MailSystem::Snappymail | MailSystem::Tachyon => Some(format!("{path}/?admin")),
         MailSystem::Roundcube => Some(format!("{path}/?_task=settings")),
-        MailSystem::Thunderbird => None,
+        MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => None,
     }
 }
 
@@ -271,6 +278,7 @@ pub fn webmail_label() -> &'static str {
     match detect_webmail_client() {
         Some(MailSystem::Roundcube) => "Roundcube",
         Some(MailSystem::Snappymail) => "SnappyMail",
+        Some(MailSystem::Tachyon) => "Tachyon",
         _ => "Webmail",
     }
 }
@@ -305,11 +313,17 @@ pub fn path_matches_webmail_mount(req_path: &str) -> bool {
         || req_path == format!("{mount}/")
 }
 
-/// SnappyMail HTML uses absolute `/snappymail/v/{ver}/static|themes/...` asset URLs.
-/// Those must proxy even when the panel mount was regenerated away from `/snappymail`.
+/// SnappyMail / Tachyon HTML uses absolute `/snappymail|tachyon/v/{ver}/static|themes/...` asset URLs.
 pub fn path_is_snappymail_app_asset(req_path: &str) -> bool {
-    matches!(detect_webmail_client(), Some(MailSystem::Snappymail))
-        && (req_path.starts_with("/snappymail/v/") || req_path == "/snappymail/v")
+    match detect_webmail_client() {
+        Some(MailSystem::Snappymail) => {
+            req_path.starts_with("/snappymail/v/") || req_path == "/snappymail/v"
+        }
+        Some(MailSystem::Tachyon) => {
+            req_path.starts_with("/tachyon/v/") || req_path == "/tachyon/v"
+        }
+        _ => false,
+    }
 }
 
 /// True when the panel catch-all should reverse-proxy to loopback webmail.
@@ -342,15 +356,16 @@ pub fn backend_path_for_webmail_proxy(req_path: &str) -> Option<String> {
         return Some(req_path.to_string());
     }
     let stripped = strip_webmail_mount(req_path)?;
-    if matches!(detect_webmail_client(), Some(MailSystem::Snappymail)) {
-        return Some(remap_snappymail_stripped_asset(&stripped));
+    match detect_webmail_client() {
+        Some(MailSystem::Snappymail) => Some(remap_lineage_stripped_asset(&stripped, "snappymail")),
+        Some(MailSystem::Tachyon) => Some(remap_lineage_stripped_asset(&stripped, "tachyon")),
+        _ => Some(stripped),
     }
-    Some(stripped)
 }
 
-fn remap_snappymail_stripped_asset(stripped: &str) -> String {
+fn remap_lineage_stripped_asset(stripped: &str, prefix: &str) -> String {
     if stripped.starts_with("/v/") || stripped == "/v" {
-        format!("/snappymail{stripped}")
+        format!("/{prefix}{stripped}")
     } else {
         stripped.to_string()
     }
@@ -398,12 +413,22 @@ mod tests {
     #[test]
     fn snappymail_asset_paths_keep_app_prefix() {
         assert_eq!(
-            remap_snappymail_stripped_asset("/v/2.38.2/static/js/min/libs.min.js"),
+            remap_lineage_stripped_asset("/v/2.38.2/static/js/min/libs.min.js", "snappymail"),
             "/snappymail/v/2.38.2/static/js/min/libs.min.js"
         );
-        assert_eq!(remap_snappymail_stripped_asset("/index.php"), "/index.php");
-        assert_eq!(remap_snappymail_stripped_asset("/v"), "/snappymail/v");
-        assert_eq!(remap_snappymail_stripped_asset("/"), "/");
+        assert_eq!(
+            remap_lineage_stripped_asset("/index.php", "snappymail"),
+            "/index.php"
+        );
+        assert_eq!(
+            remap_lineage_stripped_asset("/v", "snappymail"),
+            "/snappymail/v"
+        );
+        assert_eq!(remap_lineage_stripped_asset("/", "snappymail"), "/");
+        assert_eq!(
+            remap_lineage_stripped_asset("/v/4.2.3/static/js/min/app.min.js", "tachyon"),
+            "/tachyon/v/4.2.3/static/js/min/app.min.js"
+        );
     }
 
     #[test]
@@ -428,10 +453,11 @@ mod tests {
                 Some("/v/2.38.2/static/js/min/libs.min.js")
             );
             assert_eq!(
-                remap_snappymail_stripped_asset(
+                remap_lineage_stripped_asset(
                     strip_webmail_mount("/snappymail/v/2.38.2/static/js/min/libs.min.js")
                         .as_deref()
-                        .unwrap()
+                        .unwrap(),
+                    "snappymail"
                 ),
                 "/snappymail/v/2.38.2/static/js/min/libs.min.js"
             );

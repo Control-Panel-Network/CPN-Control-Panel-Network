@@ -1,4 +1,4 @@
-import { ArrowRight, Mail, Mails } from "lucide-react";
+import { ArrowRight, Mail, Mails, Cloud, CalendarDays } from "lucide-react";
 import { siRoundcube, siThunderbird } from "simple-icons";
 import type { MailSystem } from "../types";
 import { useI18n } from "../i18n";
@@ -26,6 +26,15 @@ function MailIcon({ mail }: { mail: MailSystem }) {
       </svg>
     );
   }
+  if (mail === "tachyon") {
+    return <Mails size={44} strokeWidth={1.6} className="text-[#0f766e]" />;
+  }
+  if (mail === "nextsnapmail") {
+    return <Cloud size={44} strokeWidth={1.6} className="text-[#2563eb]" />;
+  }
+  if (mail === "sogo") {
+    return <CalendarDays size={44} strokeWidth={1.6} className="text-[#7c3aed]" />;
+  }
   return mail === "snappymail" ? (
     <Mails size={44} strokeWidth={1.6} className="text-[#147a62]" />
   ) : (
@@ -44,17 +53,34 @@ export function MailSelectionScreen({
     id: MailSystem;
     name: string;
     description: string;
-    legacy?: boolean;
+    note?: string;
   }> = [
     {
       id: "snappymail",
       name: "SnappyMail",
-      description: "IMAP, SMTP, Sieve, OpenPGP.",
+      description: "Default CPN webmail. IMAP, SMTP, Sieve, OpenPGP.",
+    },
+    {
+      id: "tachyon",
+      name: "Tachyon",
+      description: "Modern SnappyMail fork with calendars and contacts. LIVE install.",
     },
     {
       id: "roundcube",
       name: "Roundcube",
       description: "Plugins, contacts, filters.",
+    },
+    {
+      id: "nextsnapmail",
+      name: "NextSnapMail",
+      description: "SnappyMail fork for Nextcloud App Store.",
+      note: "Requires Nextcloud (not a standalone host package).",
+    },
+    {
+      id: "sogo",
+      name: "SOGo",
+      description: "Groupware webmail with CalDAV and CardDAV.",
+      note: "SCAFFOLD: full Inverse package install is not LIVE yet.",
     },
     {
       id: "thunderbird",
@@ -85,13 +111,15 @@ export function MailSelectionScreen({
               <div className="h-12 flex items-center mb-5">
                 <MailIcon mail={option.id} />
               </div>
-              <h2 className="text-[17px] font-semibold mb-1">
-                {option.name}
-                {option.legacy ? " (legacy)" : ""}
-              </h2>
-              <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-7 flex-1">
+              <h2 className="text-[17px] font-semibold mb-1">{option.name}</h2>
+              <p className="text-[14px] leading-[1.43] text-[#5f5e60] mb-2 flex-1">
                 {option.description}
               </p>
+              {option.note ? (
+                <p className="text-[13px] leading-[1.4] text-[#92400e] mb-5">{option.note}</p>
+              ) : (
+                <div className="mb-5" />
+              )}
               <button
                 type="button"
                 onClick={(event) => {
