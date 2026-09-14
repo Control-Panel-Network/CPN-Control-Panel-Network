@@ -632,6 +632,9 @@ mod tests {
             Some(MailSystem::Thunderbird)
         ));
         let err = parse_mail_option("info@newstargeted.com").unwrap_err();
-        assert!(err.contains("not an email address"));
+        assert!(
+            err.contains("Unknown mail option"),
+            "unexpected err: {err}"
+        );
     }
 }
