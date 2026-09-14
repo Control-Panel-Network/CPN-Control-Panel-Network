@@ -151,10 +151,7 @@ fn patch_contacts_section(raw: &str) -> String {
         return raw.to_string();
     };
     let after = &raw[start + "[contacts]".len()..];
-    let end_rel = after
-        .find("\n[")
-        .map(|i| i + 1)
-        .unwrap_or(after.len());
+    let end_rel = after.find("\n[").map(|i| i + 1).unwrap_or(after.len());
     let section_body = &after[..end_rel];
     let rest = &after[end_rel..];
     let mut body = section_body.to_string();
