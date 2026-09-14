@@ -146,6 +146,7 @@ jobs:
           bash -n
           scripts/build-rpm.sh
           scripts/build-deb.sh
+          scripts/cleanup-old-build-trees.sh
           scripts/docker-build-rpm.sh
           scripts/docker-build-deb.sh
           scripts/docker-run.sh

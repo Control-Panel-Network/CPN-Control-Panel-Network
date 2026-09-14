@@ -4,6 +4,13 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ui_dir="$project_dir/installer-ui"
 rpm_root="$project_dir/target/rpmbuild"
+cleanup_script="$project_dir/scripts/cleanup-old-build-trees.sh"
+
+# Free disk before compile: drop abandoned /home/cpn/cpn-build-* trees and
+# stale /tmp|/var/tmp cpn-* extract dirs. Never deletes this project_dir.
+if [[ -f "$cleanup_script" ]]; then
+  bash "$cleanup_script" --keep "$project_dir" --keep-count 0 || true
+fi
 
 if [[ ! -f /etc/os-release ]]; then
   echo "Could not identify the operating system (/etc/os-release)." >&2
@@ -62,5 +69,10 @@ if cmp -s <(head -c 3 "$spec_dst") <(printf '\xef\xbb\xbf'); then
   exit 1
 fi
 rpmbuild --define "_topdir $rpm_root" -bb "$spec_dst"
+
+# After a successful RPM build, keep only this tree (plus any in-use builds).
+if [[ -f "$cleanup_script" ]]; then
+  bash "$cleanup_script" --keep "$project_dir" --keep-count 0 || true
+fi
 
 find "$rpm_root/RPMS" -type f -name '*.rpm' -print

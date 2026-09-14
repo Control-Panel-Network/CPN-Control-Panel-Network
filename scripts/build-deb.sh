@@ -6,6 +6,12 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ui_dir="$project_dir/installer-ui"
 out_dir="$project_dir/target/deb"
+cleanup_script="$project_dir/scripts/cleanup-old-build-trees.sh"
+
+# Free disk before compile: drop abandoned cpn-build-* trees (see cleanup script).
+if [[ -f "$cleanup_script" ]]; then
+  bash "$cleanup_script" --keep "$project_dir" --keep-count 0 || true
+fi
 
 if [[ ! -f /etc/os-release ]]; then
   echo "Missing /etc/os-release." >&2
@@ -92,4 +98,9 @@ EOF
 chmod 0755 "$pkg_root/DEBIAN/postrm"
 
 dpkg-deb --build "$pkg_root" "$out_dir/cpn-installer_${deb_version}_${arch}.deb"
+
+if [[ -f "$cleanup_script" ]]; then
+  bash "$cleanup_script" --keep "$project_dir" --keep-count 0 || true
+fi
+
 find "$out_dir" -type f -name '*.deb' -print
