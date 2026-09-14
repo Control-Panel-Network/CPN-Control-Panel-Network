@@ -151,16 +151,16 @@ pub fn install_nextcloud_files() -> Result<String, String> {
         fs::remove_dir_all(NEXTCLOUD_ROOT)
             .map_err(|e| format!("Could not replace {NEXTCLOUD_ROOT}: {e}"))?;
     }
-    fs::rename(&extracted, NEXTCLOUD_ROOT).map_err(|e| {
+    if fs::rename(&extracted, NEXTCLOUD_ROOT).is_err() {
         // Cross-device rename fallback.
-        let copy = Command::new("cp")
+        let status = Command::new("cp")
             .args(["-a", &extracted.to_string_lossy(), NEXTCLOUD_ROOT])
-            .status();
-        match copy {
-            Ok(s) if s.success() => Ok(()),
-            _ => Err(format!("Could not move Nextcloud into {NEXTCLOUD_ROOT}: {e}")),
+            .status()
+            .map_err(|e| format!("Could not copy Nextcloud into {NEXTCLOUD_ROOT}: {e}"))?;
+        if !status.success() {
+            return Err(format!("Could not move Nextcloud into {NEXTCLOUD_ROOT}"));
         }
-    })?;
+    }
     let _ = fs::remove_dir_all(&work);
     Ok(format!(
         "Installed Nextcloud files under {NEXTCLOUD_ROOT}. Finish OCC/web setup (DB, admin) before enabling apps in production. NextSnapMail can be installed next."
