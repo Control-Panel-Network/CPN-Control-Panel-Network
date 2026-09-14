@@ -200,7 +200,8 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
     let client = detect_webmail_client()?;
     let mut url = match client {
         // Login form first; #/mailbox/INBOX only applies after a successful session.
-        MailSystem::Snappymail => format!("{base}{path}/index.php"),
+        // Prefer clean `/snappymail/` (panel proxy maps `/` to index.php).
+        MailSystem::Snappymail => format!("{base}{path}/"),
         MailSystem::Roundcube => format!("{base}{path}/"),
         MailSystem::Thunderbird => return None,
     };
@@ -231,10 +232,10 @@ pub fn webmail_open_path() -> Option<String> {
     match detect_webmail_client()? {
         MailSystem::Snappymail => {
             if cfg.auto_login_account.is_empty() {
-                Some(format!("{path}/index.php"))
+                Some(format!("{path}/"))
             } else {
                 Some(format!(
-                    "{path}/index.php?Email={}",
+                    "{path}/?Email={}",
                     urlencoding_form(&cfg.auto_login_account)
                 ))
             }

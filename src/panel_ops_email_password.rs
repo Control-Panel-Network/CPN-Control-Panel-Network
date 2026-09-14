@@ -75,7 +75,9 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     account.updated_at_unix = crate::account::now_unix();
     save_accounts_file(&file)?;
     match provision_local_mailbox(&address, new_password) {
-        Ok(provision) => Ok(format!("Password updated for `{address}`. {provision}")),
+        Ok(_provision) => Ok(format!(
+            "Password updated for `{address}`. Local mailbox ready."
+        )),
         Err(err) => {
             // Registry is authoritative for panel UI; local system provision may be
             // unavailable in CI or when the panel lacks useradd privileges.

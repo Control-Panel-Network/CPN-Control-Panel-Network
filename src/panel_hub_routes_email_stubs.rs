@@ -1,7 +1,9 @@
 //! GET routes for Email tools (formerly scaffolds).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    flash_messages, html_ok, html_ok_pop_flash, login_redirect, require_panel_user,
+};
 use crate::panel_hub_pages_email_deliver::{
     email_debugger_page, email_marketing_page, email_queue_page, mailscanner_page, rspamd_page,
     spamassassin_page,
@@ -65,16 +67,24 @@ pub async fn email_password(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "Change Password",
-        &email_password_page(
+    let (notice, error) = flash_messages(
+        &http,
+        query.get("notice").map(String::as_str),
+        query.get("error").map(String::as_str),
+    );
+    html_ok_pop_flash(
+        &http,
+        panel_shell(
             &user,
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
+            "email",
+            "Change Password",
+            &email_password_page(
+                &user,
+                notice.as_deref(),
+                error.as_deref(),
+            ),
         ),
-    ))
+    )
 }
 
 #[get("/email/debugger")]

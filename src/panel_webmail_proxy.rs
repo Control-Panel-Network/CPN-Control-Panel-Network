@@ -152,10 +152,11 @@ fn forward_http(
 }
 
 fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
-    let text = String::from_utf8_lossy(raw);
-    let (header_block, body) = split_headers_body(&text)
+    // Binary-safe: never decode the body as UTF-8 (WOFF/JS would corrupt).
+    let (header_block, body) = split_headers_body_bytes(raw)
         .ok_or_else(|| "Malformed proxy response from webmail backend".to_string())?;
-    let mut lines = header_block.lines();
+    let header_text = String::from_utf8_lossy(header_block);
+    let mut lines = header_text.lines();
     let status_line = lines
         .next()
         .ok_or_else(|| "Missing HTTP status from webmail backend".to_string())?;
@@ -185,36 +186,46 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
                 builder.insert_header((name, rewrite_location(value, &mount)));
                 continue;
             }
+            // Multiple Set-Cookie headers must not collapse via insert_header.
+            if lower == "set-cookie" {
+                builder.append_header((name, value));
+                continue;
+            }
             builder.insert_header((name, value));
         }
     }
-    Ok(builder.body(body.to_string()))
+    Ok(builder.body(body.to_vec()))
 }
 
-fn split_headers_body(text: &str) -> Option<(&str, &str)> {
+fn split_headers_body_bytes(raw: &[u8]) -> Option<(&[u8], &[u8])> {
     // curl --include may chain 100 Continue; take the last header block.
-    let mut rest = text;
+    let mut rest = raw;
     loop {
-        if let Some(idx) = rest.find("\r\n\r\n") {
-            let headers = &rest[..idx];
-            let body = &rest[idx + 4..];
-            if headers.contains(" 100 ") || headers.starts_with("HTTP/1.1 100") {
-                rest = body;
-                continue;
-            }
-            return Some((headers, body));
+        let sep = find_header_sep(rest)?;
+        let headers = &rest[..sep.0];
+        let body = &rest[sep.1..];
+        let header_text = String::from_utf8_lossy(headers);
+        if header_text.contains(" 100 ") || header_text.starts_with("HTTP/1.1 100") {
+            rest = body;
+            continue;
         }
-        if let Some(idx) = rest.find("\n\n") {
-            let headers = &rest[..idx];
-            let body = &rest[idx + 2..];
-            if headers.contains(" 100 ") {
-                rest = body;
-                continue;
-            }
-            return Some((headers, body));
-        }
-        return None;
+        return Some((headers, body));
     }
+}
+
+fn find_header_sep(raw: &[u8]) -> Option<(usize, usize)> {
+    if let Some(idx) = find_subslice(raw, b"\r\n\r\n") {
+        return Some((idx, idx + 4));
+    }
+    if let Some(idx) = find_subslice(raw, b"\n\n") {
+        return Some((idx, idx + 2));
+    }
+    None
+}
+
+fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    hay.windows(needle.len())
+        .position(|w| w == needle)
 }
 
 fn rewrite_location(value: &str, mount: &str) -> String {
@@ -251,5 +262,14 @@ mod tests {
     fn allowed_methods_cover_forms() {
         assert!(allowed_proxy_method(&Method::POST));
         assert!(!allowed_proxy_method(&Method::OPTIONS));
+    }
+
+    #[test]
+    fn binary_body_survives_header_split() {
+        let mut raw = b"HTTP/1.1 200 OK\r\nContent-Type: font/woff2\r\n\r\n".to_vec();
+        raw.extend_from_slice(&[0xff, 0x00, 0xfe, 0x01]);
+        let (headers, body) = split_headers_body_bytes(&raw).expect("split");
+        assert!(String::from_utf8_lossy(headers).contains("200"));
+        assert_eq!(body, &[0xff, 0x00, 0xfe, 0x01]);
     }
 }
