@@ -1,4 +1,8 @@
 //! MariaDB database listing helpers (CLI; no stored credentials).
+//!
+//! CPN's host database is MariaDB. Client/dump helpers prefer MariaDB binaries
+//! (`mariadb`, `mariadb-dump`) and fall back to MySQL-compatible names that
+//! MariaDB and cPanel-style tooling often ship as aliases (`mysql`, `mysqldump`).
 
 use crate::service_detect::detect_database;
 use std::process::Command;
@@ -11,14 +15,44 @@ pub struct DbListStatus {
     pub detail: String,
 }
 
-fn mariadb_cli() -> Option<&'static str> {
-    ["mariadb", "mysql"].into_iter().find(|&candidate| {
+/// Preferred MariaDB/MySQL-compatible client binaries (MariaDB first).
+pub fn client_bin_candidates() -> &'static [&'static str] {
+    &["mariadb", "mysql"]
+}
+
+/// Preferred dump binaries for CPN backups (MariaDB first).
+pub fn dump_bin_candidates() -> &'static [&'static str] {
+    &["mariadb-dump", "mysqldump"]
+}
+
+fn first_working_bin(candidates: &[&'static str]) -> Option<&'static str> {
+    candidates.iter().copied().find(|&candidate| {
         Command::new(candidate)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
     })
+}
+
+fn mariadb_cli() -> Option<&'static str> {
+    first_working_bin(client_bin_candidates())
+}
+
+/// Public MariaDB client binary for restore/import paths (`mariadb`, else `mysql`).
+pub fn mariadb_client_bin() -> Option<&'static str> {
+    mariadb_cli()
+}
+
+/// Dump binary for selective backups (`mariadb-dump`, else `mysqldump`).
+pub fn mariadb_dump_bin() -> Option<&'static str> {
+    first_working_bin(dump_bin_candidates())
+}
+
+/// True when a local MariaDB-compatible server is detected for backup/restore SQL.
+pub fn local_mariadb_ready() -> bool {
+    let detected = detect_database();
+    detected.listening_3306 || detected.service_label != "Not detected"
 }
 
 pub fn list_databases() -> DbListStatus {
@@ -28,7 +62,7 @@ pub fn list_databases() -> DbListStatus {
             engine_label: detected.service_label,
             listening: detected.listening_3306,
             databases: vec![],
-            detail: "MariaDB/MySQL client not found. Install MariaDB to manage databases from the panel."
+            detail: "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages to manage databases from the panel."
                 .into(),
         };
     };
@@ -69,7 +103,10 @@ pub fn list_databases() -> DbListStatus {
 
 pub fn create_database(name: &str) -> Result<String, String> {
     let name = sanitize_db_ident(name)?;
-    let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
+    let bin = mariadb_cli().ok_or_else(|| {
+        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages."
+            .to_string()
+    })?;
     let sql = format!("CREATE DATABASE IF NOT EXISTS `{name}`;");
     let out = Command::new(bin)
         .args(["-e", &sql])
@@ -100,7 +137,7 @@ fn sql_escape_password(pass: &str) -> String {
     pass.replace('\\', "\\\\").replace('\'', "''")
 }
 
-/// Create database, dedicated user, and grants (local MariaDB/MySQL socket auth).
+/// Create database, dedicated user, and grants (local MariaDB socket auth).
 pub fn create_database_with_user(
     db_name: &str,
     db_user: &str,
@@ -110,7 +147,10 @@ pub fn create_database_with_user(
     let user = sanitize_db_ident(db_user)?;
     let pass = sanitize_db_password(db_password)?;
     let pass_sql = sql_escape_password(&pass);
-    let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
+    let bin = mariadb_cli().ok_or_else(|| {
+        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages."
+            .to_string()
+    })?;
 
     let modern_sql = format!(
         "CREATE DATABASE IF NOT EXISTS `{name}`; \
@@ -159,7 +199,10 @@ pub fn drop_database(name: &str) -> Result<String, String> {
     ) {
         return Err("Refusing to drop a system database".into());
     }
-    let bin = mariadb_cli().ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
+    let bin = mariadb_cli().ok_or_else(|| {
+        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages."
+            .to_string()
+    })?;
     let sql = format!("DROP DATABASE IF EXISTS `{name}`;");
     let out = Command::new(bin)
         .args(["-e", &sql])
@@ -200,5 +243,13 @@ mod tests {
     #[test]
     fn refuses_system_drop() {
         assert!(drop_database("mysql").is_err());
+    }
+
+    #[test]
+    fn prefers_mariadb_binaries_over_mysql_aliases() {
+        assert_eq!(client_bin_candidates(), &["mariadb", "mysql"]);
+        assert_eq!(dump_bin_candidates(), &["mariadb-dump", "mysqldump"]);
+        assert_eq!(client_bin_candidates()[0], "mariadb");
+        assert_eq!(dump_bin_candidates()[0], "mariadb-dump");
     }
 }

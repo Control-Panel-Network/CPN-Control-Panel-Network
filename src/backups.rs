@@ -1,7 +1,6 @@
 //! Selective backup archives under `/home/.../backups/`.
 
 use crate::paths::panel_backups_dir;
-use crate::service_detect::detect_database;
 use crate::sites::{load_site, site_backups_dir, site_home_from_record};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -292,20 +291,28 @@ fn stage_panel_config(staging: &Path) -> Result<(), String> {
 }
 
 fn stage_database_dump(staging: &Path) -> Result<(), String> {
-    let db = detect_database();
-    if !db.listening_3306 && db.service_label == "Not detected" {
-        return Err("No local database detected for dump.".into());
+    if !crate::panel_ops_db::local_mariadb_ready() {
+        return Err(
+            "No local MariaDB detected for dump. Install MariaDB from Host packages or Databases (CPN does not use Oracle MySQL as a host package)."
+                .into(),
+        );
     }
+    let dump_bin = crate::panel_ops_db::mariadb_dump_bin().ok_or_else(|| {
+        "Neither mariadb-dump nor mysqldump found. Install MariaDB client tools; CPN backups use MariaDB as the host database."
+            .to_string()
+    })?;
     let dump_path = staging.join("databases.sql");
     let file = fs::File::create(&dump_path).map_err(|e| format!("dump file: {e}"))?;
-    let status = Command::new("mysqldump")
+    let status = Command::new(dump_bin)
         .args(["--all-databases", "--single-transaction", "--routines"])
         .stdout(file)
         .status();
     match status {
         Ok(code) if code.success() => Ok(()),
-        Ok(_) => Err("mysqldump failed (check local DB auth / socket access).".into()),
-        Err(error) => Err(format!("mysqldump not available: {error}")),
+        Ok(_) => Err(format!(
+            "{dump_bin} failed (check local MariaDB auth / socket access)."
+        )),
+        Err(error) => Err(format!("{dump_bin} not available: {error}")),
     }
 }
 

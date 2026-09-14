@@ -100,7 +100,7 @@ pub fn backups_restore_page(
     }
     body.push_str(
         r#"<p>Restore a CPN archive, or import WordPress / cPanel / CyberPanel source backups into a chosen site. Place the archive under that site's <code>backups/</code> folder first.</p>
-        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql</code>; CyberPanel classic with <code>meta.xml</code>. Email import is best-effort only. CPN is not CyberPanel; CyberPanel is a supported source format only.</p>"#,
+        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); CyberPanel classic with <code>meta.xml</code>. SQL restore uses the local MariaDB host database (not Oracle MySQL). Email import is best-effort only. CPN is not CyberPanel; CyberPanel is a supported source format only.</p>"#,
     );
     body.push_str(&format!(
         r#"<form method="get" action="/backups/restore" class="stack-form" style="max-width:560px;">

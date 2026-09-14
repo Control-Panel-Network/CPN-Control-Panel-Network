@@ -1,8 +1,7 @@
 //! Format-specific restore apply helpers (WordPress, cPanel, CyberPanel source, CPN).
 
 use crate::backup_restore_extract::copy_tree;
-use crate::panel_ops_db::{create_database, list_databases};
-use crate::service_detect::detect_database;
+use crate::panel_ops_db::{create_database, list_databases, local_mariadb_ready, mariadb_client_bin};
 use crate::sites::SiteRecord;
 use std::fs;
 use std::io::Write;
@@ -224,7 +223,10 @@ pub(crate) fn restore_cpanel(
     sqls.sort();
     sqls.dedup();
     if sqls.is_empty() {
-        warnings.push("No MySQL dumps found under mysql/.".into());
+        warnings.push(
+            "No SQL dumps found under the cPanel `mysql/` folder (compatibility path; imports run against MariaDB)."
+                .into(),
+        );
     } else {
         for sql in sqls {
             import_sql_best_effort(&sql, None, warnings)?;
@@ -328,10 +330,9 @@ fn import_sql_best_effort(
     prefer_db: Option<&str>,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
-    let db = detect_database();
-    if !db.listening_3306 && db.service_label == "Not detected" {
+    if !local_mariadb_ready() {
         warnings.push(format!(
-            "Skipped SQL import `{}`: no local MariaDB/MySQL detected.",
+            "Skipped SQL import `{}`: no local MariaDB detected. Install MariaDB from Host packages (CPN does not offer Oracle MySQL as a host database).",
             sql_path
                 .file_name()
                 .and_then(|v| v.to_str())
@@ -339,16 +340,10 @@ fn import_sql_best_effort(
         ));
         return Ok(());
     }
-    let bin = ["mariadb", "mysql"]
-        .into_iter()
-        .find(|&c| {
-            Command::new(c)
-                .arg("--version")
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        })
-        .ok_or_else(|| "MariaDB/MySQL client not found".to_string())?;
+    let bin = mariadb_client_bin().ok_or_else(|| {
+        "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB client tools."
+            .to_string()
+    })?;
 
     let name = sql_path
         .file_name()
@@ -392,11 +387,11 @@ fn import_sql_best_effort(
     }
     let status = child.wait().map_err(|e| format!("wait for {bin}: {e}"))?;
     if status.success() {
-        warnings.push(format!("Imported SQL `{name}`."));
+        warnings.push(format!("Imported SQL `{name}` into MariaDB."));
         let _ = list_databases();
     } else {
         warnings.push(format!(
-            "SQL import of `{name}` failed (check dump format and local DB auth)."
+            "SQL import of `{name}` failed (check dump format and local MariaDB auth)."
         ));
     }
     Ok(())
@@ -421,6 +416,24 @@ mod tests {
             guess_db_name_from_wp_config(&cfg).as_deref(),
             Some("my_wp_db")
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn finds_cpanel_mysql_dump_layout() {
+        let dir = std::env::temp_dir().join(format!("cpn-cpanel-mysql-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mysql = dir.join("mysql");
+        fs::create_dir_all(&mysql).unwrap();
+        let sql = mysql.join("user_wp.sql");
+        fs::write(&sql, "CREATE TABLE t (id INT);\n").unwrap();
+        assert_eq!(
+            find_dir_named(&dir, "mysql").as_deref(),
+            Some(mysql.as_path())
+        );
+        let collected = collect_sql_files(&mysql);
+        assert_eq!(collected.len(), 1);
+        assert!(collected[0].ends_with("user_wp.sql"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

@@ -129,7 +129,7 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
     }
     if cpanel {
         notes.push(
-            "cPanel layout: homedir/public_html maps to the site docroot; mysql dumps import when present. Email accounts are best-effort."
+            "cPanel layout: homedir/public_html maps to the site docroot; dumps under mysql/ import into local MariaDB when present. Email accounts are best-effort."
                 .into(),
         );
     }
@@ -211,6 +211,12 @@ mod tests {
         ];
         let d = detect_from_members("cpmove-user.tar.gz", &members);
         assert_eq!(d.format, BackupFormat::Cpanel);
+        assert!(d.has_sql);
+        assert!(
+            d.notes
+                .iter()
+                .any(|n| n.contains("MariaDB") && n.contains("mysql/"))
+        );
     }
 
     #[test]
