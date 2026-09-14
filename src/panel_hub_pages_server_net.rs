@@ -33,8 +33,9 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
             <option value="deny">Deny old port</option>
           </select>
           <label for="panel_public_url">External panel URL (emails / NAT)</label>
-          <input id="panel_public_url" name="panel_public_url" type="url" value="{puburl}" placeholder="http://127.0.0.1:2089">
+          <input id="panel_public_url" name="panel_public_url" type="url" value="{puburl}" placeholder="http://127.0.0.1:2089" data-bind-port="{bind}">
           <p class="muted">Optional. Prefer this over hostname for password-reset links when DNS is private or you use VirtualBox host port forwards.</p>
+          <p id="cpn-nat-hint" class="muted" role="note" style="display:none;color:#fbbf24;"></p>
           <button type="submit" class="btn-primary" id="cpn-port-save">Save port</button>
         </form>
         <p id="cpn-port-status" class="muted" role="status"></p>
@@ -44,6 +45,9 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
           if (!form) return;
           var saveBtn = document.getElementById("cpn-port-save");
           var status = document.getElementById("cpn-port-status");
+          var publicInput = document.getElementById("panel_public_url");
+          var portInput = document.getElementById("port");
+          var natHint = document.getElementById("cpn-nat-hint");
           function setStatus(text, isError) {{
             status.textContent = text || "";
             status.style.color = isError ? "#f87171" : "";
@@ -52,6 +56,51 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
             if (!text || !String(text).trim()) return null;
             try {{ return JSON.parse(text); }} catch (e) {{ return null; }}
           }}
+          function urlPort(raw) {{
+            try {{
+              var u = new URL(String(raw || "").trim());
+              if (!u.port) {{
+                return u.protocol === "https:" ? 443 : 80;
+              }}
+              return Number(u.port);
+            }} catch (e) {{
+              return null;
+            }}
+          }}
+          function updateNatHint() {{
+            if (!natHint || !publicInput) return;
+            var listenPort = Number((portInput && portInput.value) || publicInput.getAttribute("data-bind-port") || 0);
+            var external = String(publicInput.value || "").trim();
+            if (!external) {{
+              natHint.style.display = "none";
+              natHint.textContent = "";
+              return;
+            }}
+            var extPort = urlPort(external);
+            if (!extPort || !listenPort) {{
+              natHint.style.display = "none";
+              natHint.textContent = "";
+              return;
+            }}
+            if (extPort === listenPort) {{
+              natHint.style.display = "block";
+              natHint.style.color = "#fbbf24";
+              natHint.textContent = "On VirtualBox NAT labs, the host port often differs from the guest listen port. Setting External URL to the guest port (for example 2087) can cause ERR_CONNECTION_REFUSED from Windows. Use the host forward port (for example http://127.0.0.1:2090 for clean2) unless you added a matching NAT rule.";
+              return;
+            }}
+            natHint.style.display = "block";
+            natHint.style.color = "";
+            natHint.textContent = "External URL port (" + extPort + ") differs from listen port (" + listenPort + "). That is expected when VirtualBox/NAT forwards host:" + extPort + " to guest:" + listenPort + ".";
+          }}
+          if (publicInput) {{
+            publicInput.addEventListener("input", updateNatHint);
+            publicInput.addEventListener("change", updateNatHint);
+          }}
+          if (portInput) {{
+            portInput.addEventListener("input", updateNatHint);
+            portInput.addEventListener("change", updateNatHint);
+          }}
+          updateNatHint();
           function pollThenGo(url, attemptsLeft) {{
             if (attemptsLeft <= 0) {{
               setStatus("Restart still in progress. Open " + url + " manually when ready.", true);
@@ -77,6 +126,17 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
             var port = Number(document.getElementById("port").value);
             var policy = document.getElementById("old_port_policy").value;
             var publicUrl = document.getElementById("panel_public_url").value;
+            var extPort = urlPort(publicUrl);
+            if (publicUrl && extPort && extPort === port) {{
+              var okSame = window.confirm(
+                "External URL uses the same port as the guest listen port (" + port + ").\\n\\n" +
+                "On VirtualBox NAT, Windows often needs the host forward port instead (for example 2090 on clean2). Continue only if that host port is forwarded to the guest."
+              );
+              if (!okSame) {{
+                setStatus("Save cancelled. Keep External URL on the host NAT port.", true);
+                return;
+              }}
+            }}
             if (saveBtn) saveBtn.disabled = true;
             setStatus("Saving...");
             fetch("/api/listen-port", {{
