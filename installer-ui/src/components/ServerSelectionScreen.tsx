@@ -106,16 +106,6 @@ export function ServerSelectionScreen({
             : "MySQL-compatible and recommended for most installations.",
     },
     {
-      id: "mysql",
-      name: t.databaseMysql,
-      description:
-        locale === "es"
-          ? "Elige MySQL cuando tu aplicación requiera específicamente este motor."
-          : locale === "nb"
-            ? "Velg MySQL når programmet ditt spesifikt krever denne motoren."
-            : "Choose MySQL when your application specifically requires this engine.",
-    },
-    {
       id: "none",
       name: t.databaseNone,
       description:

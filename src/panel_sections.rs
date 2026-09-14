@@ -344,7 +344,7 @@ pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> Strin
         <p>{detail}</p>
         <p class="muted">phpMyAdmin: {pma_detail} Local URL when wired: <code>{pma_url}</code>.</p>
         {install}
-        <p class="muted">Default stack is MariaDB (not MySQL) plus phpMyAdmin. Hosts typically run MariaDB XOR MySQL.</p>
+        <p class="muted">Default stack is MariaDB plus phpMyAdmin. CPN does not install Oracle MySQL as a host package.</p>
         <p class="muted">Registry entries below count toward package quotas. Full MariaDB user grants land in a later release.</p>
         <h3 style="margin:18px 0 8px;font-size:15px;">Register database (quota)</h3>
         <form method="post" action="/databases/create" class="stack-form" style="display:grid;gap:10px;max-width:420px;">
@@ -363,7 +363,7 @@ pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> Strin
       </article>"#,
         heading = section_heading(
             "MariaDB Manager",
-            "Honest detection of local MariaDB/MySQL and phpMyAdmin. No credentials are stored here.",
+            "Honest detection of local MariaDB and phpMyAdmin. No credentials are stored here.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),

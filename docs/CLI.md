@@ -143,7 +143,7 @@ sudo cpn plugin migrate --domain example.com
 
 ## Apps
 
-Supported app IDs currently include MariaDB, MySQL, PostgreSQL, phpMyAdmin, Email, and RabbitMQ.
+Supported app IDs currently include MariaDB, PostgreSQL, phpMyAdmin, Email, RabbitMQ, and webmail packages (SnappyMail, Tachyon, and related). CPN does not offer Oracle MySQL as a host package.
 
 ```bash
 cpn app list
@@ -229,7 +229,7 @@ Port resolution order is:
 
 For remote installation with the web UI, SSH forwarding is safer than exposing the temporary installer directly. See the root [README](../README.md) for installation and first-access steps.
 
-The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/MySQL/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). Installation logging is always fully detailed and persists in `/var/lib/cpn/installation.log`, ready to attach to a GitHub issue. Advanced web-only UI options remain available via `--web`.
+The SSH/CLI path covers the main AlmaLinux install decisions (web engine, MariaDB/none, phpMyAdmin, panel port, optional hostname, optional mail, first account). Installation logging is always fully detailed and persists in `/var/lib/cpn/installation.log`, ready to attach to a GitHub issue. Advanced web-only UI options remain available via `--web`.
 
 Installer progress includes explicit command verification results. The selected/detected account language is saved for the panel.
 

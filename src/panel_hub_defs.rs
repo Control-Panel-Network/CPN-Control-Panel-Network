@@ -275,7 +275,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 },
                 HubTile {
                     title: "MariaDB Manager",
-                    subtitle: "MariaDB first (MySQL alias)",
+                    subtitle: "MariaDB + phpMyAdmin",
                     href: "/databases/manager",
                     live: true,
                 },

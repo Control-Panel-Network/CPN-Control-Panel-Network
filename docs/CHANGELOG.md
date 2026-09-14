@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Host database policy**: CPN installs **MariaDB only** as the MySQL-compatible host database. Oracle MySQL is no longer a Host packages card, installer option, or `cpn app` target. Legacy `--database mysql` / JSON `mysql` map to MariaDB. PostgreSQL remains an opt-in coexistence package. phpMyAdmin continues to target MariaDB.
+
 ### Fixed
 
 - **SnappyMail Extensions / About repository hang**: upstream `snappymail.eu` package repo is often unreachable (connect timeout). Admin UI then waited until the browser aborted (~30s RequestTimeout / blank Extensions list). CPN now ships a local stub under `/var/lib/cpn-webmail/snappy-repo/v2/` and patches `Repository::get()` to read it first so installed plugins still list and core update checks return quickly. SELinux module `cpn_webmail_imap` **1.2** also allows `httpd_t` → `http_port_t` (HTTPS 443) for when the upstream repo returns. Webmail PHP-FPM sets `default_socket_timeout=8`; panel proxy caps admin Json at 35s.

@@ -46,18 +46,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-08-15",
             install_count: 200,
             featured: true,
-            description: "Default MariaDB server for CPN hosting (XOR with MySQL on one host).",
-            install_status: HostInstallStatus::Live,
-        },
-        AppId::Mysql => HostPackageMeta {
-            category: "Database",
-            version: "system",
-            pricing: "free",
-            released_on: "2024-06-01",
-            updated_on: "2026-08-15",
-            install_count: 40,
-            featured: false,
-            description: "Optional MySQL server. Mutually exclusive with MariaDB on one host.",
+            description: "Default MariaDB server for CPN hosting (MySQL-compatible; CPN does not install Oracle MySQL).",
             install_status: HostInstallStatus::Live,
         },
         AppId::Postgresql => HostPackageMeta {
@@ -68,7 +57,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-07-20",
             install_count: 35,
             featured: false,
-            description: "Opt-in PostgreSQL. Can coexist with MariaDB or MySQL.",
+            description: "Opt-in PostgreSQL. Can coexist with MariaDB.",
             install_status: HostInstallStatus::Live,
         },
         AppId::Phpmyadmin => HostPackageMeta {
@@ -79,7 +68,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-01",
             install_count: 180,
             featured: true,
-            description: "phpMyAdmin UI reverse-proxied under the panel for MariaDB/MySQL.",
+            description: "phpMyAdmin UI reverse-proxied under the panel for MariaDB.",
             install_status: HostInstallStatus::Live,
         },
         AppId::Email => HostPackageMeta {

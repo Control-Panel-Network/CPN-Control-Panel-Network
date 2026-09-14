@@ -43,9 +43,10 @@ pub enum MailSystem {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseEngine {
+    /// MariaDB (MySQL-compatible). Legacy JSON/CLI value `mysql` deserializes here.
     #[default]
+    #[serde(alias = "mysql")]
     Mariadb,
-    Mysql,
     /// Skip installing a local database engine.
     None,
 }
@@ -54,18 +55,16 @@ impl DatabaseEngine {
     pub fn label(self) -> &'static str {
         match self {
             Self::Mariadb => "MariaDB",
-            Self::Mysql => "MySQL",
             Self::None => "None",
         }
     }
 
     pub fn parse_cli(raw: &str) -> Result<Self, String> {
         match raw.trim().to_ascii_lowercase().as_str() {
-            "mariadb" | "maria" => Ok(Self::Mariadb),
-            "mysql" => Ok(Self::Mysql),
+            "mariadb" | "maria" | "mysql" => Ok(Self::Mariadb),
             "none" | "skip" | "off" => Ok(Self::None),
             other => Err(format!(
-                "Unknown database `{other}`. Use: mariadb (default), mysql, or none."
+                "Unknown database `{other}`. Use: mariadb (default), or none. (Legacy `mysql` maps to MariaDB.)"
             )),
         }
     }

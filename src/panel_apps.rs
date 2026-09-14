@@ -377,7 +377,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, MySQL, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name tachyon</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (SnappyMail, Tachyon, NextSnapMail, SOGo) appear as store-style cards below. CLI: <code>cpn app install --name tachyon</code></p>
         {picker}
       </article>
       <p class="plugin-count">{count} host packages</p>

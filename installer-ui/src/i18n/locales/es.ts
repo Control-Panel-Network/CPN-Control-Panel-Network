@@ -50,9 +50,8 @@ const es: LocaleMessages = {
   nothingInstallsYet: "Nada se instalara hasta que pulses Continuar.",
   databaseTitle: "Valores predeterminados de base de datos",
   databaseHint:
-    "MariaDB y phpMyAdmin se instalan por defecto con el servidor web. Puedes elegir MySQL o omitir cualquiera. En un host suele haber MariaDB XOR MySQL.",
+    "MariaDB y phpMyAdmin se instalan por defecto con el servidor web. Puedes omitir cualquiera. CPN usa MariaDB como unico motor compatible con MySQL en el host.",
   databaseMariadb: "MariaDB (predeterminado)",
-  databaseMysql: "MySQL (en lugar de MariaDB)",
   databaseNone: "Omitir motor de base de datos local",
   databasePhpmyadmin: "Instalar tambien phpMyAdmin (activado por defecto)",
   phpVersionTitle: "Version de PHP",

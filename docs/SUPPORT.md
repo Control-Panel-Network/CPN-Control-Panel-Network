@@ -38,7 +38,7 @@ Current behavior includes:
 - Nginx, Caddy, and OpenLiteSpeed recipes detect an existing selected server and reuse it instead of deliberately installing a second copy.
 - Existing Caddy/LiteSpeed repository files that CPN must change are backed up through the install journal.
 - OpenLiteSpeed configuration changes are journaled, and CPN avoids deleting administrator-owned systemd units while adopting an existing installation.
-- MariaDB/MySQL defaults detect an existing database service and avoid replacing it with a conflicting engine.
+- MariaDB defaults detect an existing Oracle MySQL service and refuse to install MariaDB until that conflict is cleared.
 - PHP setup keeps a sufficiently new existing PHP installation instead of blindly switching module streams.
 - Firewall cleanup removes only rules CPN recorded as its own; pre-existing firewalld/UFW rules remain operator-owned.
 

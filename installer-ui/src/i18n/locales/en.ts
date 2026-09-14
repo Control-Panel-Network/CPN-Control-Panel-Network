@@ -47,9 +47,8 @@ const en: LocaleMessages = {
   nothingInstallsYet: "Nothing is installed until you press Continue.",
   databaseTitle: "Database defaults",
   databaseHint:
-    "MariaDB and phpMyAdmin install by default with the web server. Choose MySQL instead, or skip either. Hosts typically run MariaDB XOR MySQL.",
+    "MariaDB and phpMyAdmin install by default with the web server. You can skip either. CPN uses MariaDB as the only MySQL-compatible host database.",
   databaseMariadb: "MariaDB (default)",
-  databaseMysql: "MySQL (instead of MariaDB)",
   databaseNone: "Skip local database engine",
   databasePhpmyadmin: "Also install phpMyAdmin (default on)",
   phpVersionTitle: "PHP version",
