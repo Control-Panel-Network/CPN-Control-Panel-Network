@@ -42,6 +42,7 @@ pub mod db_defaults;
 pub mod environment;
 pub mod host_packages_catalog;
 pub mod http_helpers;
+pub mod http_origin_allowlist;
 pub mod install_http_ports;
 pub mod install_journal;
 pub mod install_mail_backend;
