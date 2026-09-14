@@ -10,13 +10,12 @@ use std::process::{Command, Stdio};
 /// Folder name + optional RFC 6154 SPECIAL-USE flag (Dovecot `15-mailboxes` / doveadm).
 ///
 /// `Junk` carries `\Junk` (SnappyMail junk role / UI label "Spam").
-/// `Spam` is also created and subscribed so filters and clients that expect that
-/// name have a mailbox; SPECIAL-USE stays on `Junk` only to avoid two junk roles.
+/// A separate `Spam` mailbox is not created: that would duplicate the Spam entry in
+/// SnappyMail/Tachyon sidebars. Filters can still deliver to `Junk`.
 const SYSTEM_FOLDERS: &[(&str, Option<&str>)] = &[
     ("Sent", Some(r"\Sent")),
     ("Drafts", Some(r"\Drafts")),
     ("Junk", Some(r"\Junk")),
-    ("Spam", None),
     ("Trash", Some(r"\Trash")),
     ("Archive", Some(r"\Archive")),
 ];
@@ -120,7 +119,7 @@ pub fn heal_all_maildir_system_folders() -> Result<usize, String> {
 pub fn ensure_dovecot_system_mailboxes_conf() -> Result<(), String> {
     let path = Path::new("/etc/dovecot/conf.d/99-cpn-mailboxes.conf");
     let body = r#"# Managed by CPN: auto-create/subscribe IMAP system folders for webmail.
-# Junk carries \Junk (SnappyMail Spam role). Spam is also subscribed without a second \Junk.
+# Junk carries \Junk (SnappyMail / Tachyon Spam role). Prefer Junk over a second Spam mailbox.
 namespace inbox {
   mailbox Drafts {
     special_use = \Drafts
@@ -128,9 +127,6 @@ namespace inbox {
   }
   mailbox Junk {
     special_use = \Junk
-    auto = subscribe
-  }
-  mailbox Spam {
     auto = subscribe
   }
   mailbox Trash {
@@ -172,10 +168,10 @@ mod tests {
     use super::SYSTEM_FOLDERS;
 
     #[test]
-    fn includes_junk_and_spam() {
+    fn includes_junk_sent_archive() {
         let names: Vec<&str> = SYSTEM_FOLDERS.iter().map(|(n, _)| *n).collect();
         assert!(names.contains(&"Junk"));
-        assert!(names.contains(&"Spam"));
+        assert!(!names.contains(&"Spam"));
         assert!(names.contains(&"Sent"));
         assert!(names.contains(&"Archive"));
         let junk_flag = SYSTEM_FOLDERS
@@ -183,10 +179,5 @@ mod tests {
             .find(|(n, _)| *n == "Junk")
             .and_then(|(_, f)| *f);
         assert_eq!(junk_flag, Some(r"\Junk"));
-        let spam_flag = SYSTEM_FOLDERS
-            .iter()
-            .find(|(n, _)| *n == "Spam")
-            .and_then(|(_, f)| *f);
-        assert_eq!(spam_flag, None);
     }
 }
