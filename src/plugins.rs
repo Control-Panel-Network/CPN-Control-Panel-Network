@@ -400,6 +400,13 @@ fn find_plugin_in_extract(root: &Path, plugin_id: &str) -> Option<PathBuf> {
 pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginManifest, String> {
     let domain = require_domain(domain_raw)?;
     let id = normalize_plugin_id(plugin_id)?;
+    // Roundcube is a first-class Email host package. Do not deploy legacy CyberPanel paths.
+    if id.eq_ignore_ascii_case("roundcubeWebmail") || id.eq_ignore_ascii_case("roundcube") {
+        return Err(
+            "Roundcube Webmail is a host package, not a site plugin. Install from Plugins > Host packages (Email), or run: cpn app install --name roundcube. Files land under /opt/cpn-webmail/roundcube with panel proxy /roundcube/."
+                .into(),
+        );
+    }
     let _ = migrate_legacy_plugins(&domain);
     if manifest_path(&domain, &id)?.is_file() {
         return Err(format!("Plugin `{id}` is already installed on `{domain}`"));

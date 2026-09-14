@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (no `/usr/local/CyberCP/` paths).
+
 ### Changed
 
 - **Host database policy**: CPN installs **MariaDB only** as the MySQL-compatible host database. Oracle MySQL is no longer a Host packages card, installer option, or `cpn app` target. Legacy `--database mysql` / JSON `mysql` map to MariaDB. PostgreSQL remains an opt-in coexistence package. phpMyAdmin continues to target MariaDB.

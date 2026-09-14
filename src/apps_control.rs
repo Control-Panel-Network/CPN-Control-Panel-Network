@@ -36,7 +36,11 @@ pub fn start_app(id: AppId) -> Result<String, String> {
             Ok("Started RabbitMQ.".into())
         }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
-        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => Err(format!(
+        AppId::Snappymail
+        | AppId::Tachyon
+        | AppId::Roundcube
+        | AppId::Nextsnapmail
+        | AppId::Sogo => Err(format!(
             "{} does not support Start/Stop from Apps.",
             id.label()
         )),
@@ -69,7 +73,11 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
             Ok("Stopped RabbitMQ.".into())
         }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
-        AppId::Snappymail | AppId::Tachyon | AppId::Nextsnapmail | AppId::Sogo => Err(format!(
+        AppId::Snappymail
+        | AppId::Tachyon
+        | AppId::Roundcube
+        | AppId::Nextsnapmail
+        | AppId::Sogo => Err(format!(
             "{} does not support Start/Stop from Apps.",
             id.label()
         )),
