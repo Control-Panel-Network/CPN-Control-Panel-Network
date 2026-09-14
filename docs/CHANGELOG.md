@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Backup / restore with MariaDB-only host DB**: selective database backups prefer `mariadb-dump` (fallback `mysqldump`); SQL restore/import uses the MariaDB client and Host packages MariaDB (no Oracle MySQL app id). cPanel-style `mysql/` dump folders still import into MariaDB; UI copy clarifies compatibility paths.
 - **SnappyMail Extensions / About repository hang**: upstream `snappymail.eu` package repo is often unreachable (connect timeout). Admin UI then waited until the browser aborted (~30s RequestTimeout / blank Extensions list). CPN now ships a local stub under `/var/lib/cpn-webmail/snappy-repo/v2/` and patches `Repository::get()` to read it first so installed plugins still list and core update checks return quickly. SELinux module `cpn_webmail_imap` **1.2** also allows `httpd_t` → `http_port_t` (HTTPS 443) for when the upstream repo returns. Webmail PHP-FPM sets `default_socket_timeout=8`; panel proxy caps admin Json at 35s.
 
 ### Added

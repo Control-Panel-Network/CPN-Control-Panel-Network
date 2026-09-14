@@ -205,9 +205,9 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
                 false,
                 !db_available,
                 if db_available {
-                    "mysqldump of local MariaDB/MySQL when available."
+                    "MariaDB dump (mariadb-dump / mysqldump) of the local host database when available."
                 } else {
-                    "No local database detected yet."
+                    "No local MariaDB detected yet. Install MariaDB from Host packages."
                 }
             ),
         ),
@@ -222,9 +222,9 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
                 false,
                 !db_available,
                 if db_available {
-                    "mysqldump when a local DB exists."
+                    "MariaDB dump (mariadb-dump / mysqldump) when a local host database exists."
                 } else {
-                    "No local database detected yet."
+                    "No local MariaDB detected yet. Install MariaDB from Host packages."
                 }
             ),
             checkbox(
