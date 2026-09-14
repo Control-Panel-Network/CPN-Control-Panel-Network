@@ -167,3 +167,20 @@ sudo cpn panel url          # print login URL from live config
 ```
 
 See also [Releases and Verification](RELEASES.md), [CLI](CLI.md), and [Changelog](CHANGELOG.md).
+
+## Lab / source builds (disk cleanup)
+
+Parallel agent or maintainer checkouts under `/home/cpn/cpn-build-*` can fill the guest disk. Prefer a single worktree, and always clean abandoned trees:
+
+```bash
+# Standalone (keeps newest 1 idle tree by default; never touches the main clone)
+./scripts/cleanup-old-build-trees.sh
+
+# Before/after a named lab tree (recommended for agents)
+CPN_KEEP_BUILD=/home/cpn/cpn-build-my-feature ./scripts/cleanup-old-build-trees.sh --keep-count 0
+
+# Preview
+./scripts/cleanup-old-build-trees.sh --dry-run
+```
+
+`scripts/build-rpm.sh` and `scripts/build-deb.sh` invoke the same helper automatically (keep current project dir, delete other idle `cpn-build-*` trees, prune stale `/tmp` and `/var/tmp` `cpn-*` dirs). Never deletes `/var/lib/cpn`, mail, databases, or `~/CPN-Control-Panel-Network`.
