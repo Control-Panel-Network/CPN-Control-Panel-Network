@@ -507,10 +507,7 @@ mod tests {
             let req = TestRequest::default()
                 .method(actix_web::http::Method::POST)
                 .insert_header((actix_web::http::header::HOST, "127.0.0.1:2090"))
-                .insert_header((
-                    actix_web::http::header::ORIGIN,
-                    "http://127.0.0.1:2090",
-                ))
+                .insert_header((actix_web::http::header::ORIGIN, "http://127.0.0.1:2090"))
                 .to_http_request();
             assert!(remote_origin_ok(&req, true, &allowed));
             crate::panel_public_url::clear_panel_public_url().unwrap();
