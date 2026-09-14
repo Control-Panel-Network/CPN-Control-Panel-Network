@@ -190,6 +190,7 @@ fn write_host_manifest(plugin_id: &str, entry: &CatalogEntry) -> Result<CpnPlugi
         source: "host-catalog".into(),
         catalog_repo: CATALOG_REPO.into(),
         domain: String::new(),
+        uninstall_impacts: entry.uninstall_impacts.clone(),
     };
     let dest = host_plugin_path(plugin_id);
     let path = dest.join("cpn-plugin.json");
@@ -318,6 +319,7 @@ fn load_host_manifest(plugin_id: &str) -> Result<CpnPluginManifest, String> {
         source: "host-catalog".into(),
         catalog_repo: CATALOG_REPO.into(),
         domain: String::new(),
+        uninstall_impacts: entry.uninstall_impacts,
     })
 }
 
