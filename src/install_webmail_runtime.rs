@@ -180,7 +180,7 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
         let _ = std::fs::remove_dir_all(&web_data);
     }
     let _ = ensure_snappy_lineage_local_imap_defaults(data_dir);
-    if docroot.contains("snappymail") {
+    if is_snappy_lineage_docroot(docroot) {
         let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
     }
     install_journal::record(
@@ -195,6 +195,10 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
 
 /// Point default + local host domain at 127.0.0.1 IMAP with shortLogin for PAM users.
 pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
+    for data_dir in crate::install_snappymail_lineage::lineage_data_dirs() {
+        let _ = ensure_snappy_lineage_local_imap_defaults(&data_dir);
+    }
+    // Always try the canonical SnappyMail path even if the dir was just created.
     ensure_snappy_lineage_local_imap_defaults(SNAPPYMAIL_DATA_DIR)
 }
 

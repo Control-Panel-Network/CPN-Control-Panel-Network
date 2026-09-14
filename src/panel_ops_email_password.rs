@@ -1,5 +1,7 @@
 //! Mailbox password reset (panel registry + local system hash via chpasswd).
+//! Webmail admin password sync for SnappyMail-family clients.
 
+use crate::install_snappymail_lineage::{WEBMAIL_ADMIN_CHOICE, webmail_admin_option_label};
 use crate::mail_accounts::{MailAccount, list_accounts};
 use crate::panel_ops_mailbox_provision::provision_local_mailbox;
 use crate::paths::join_data;
@@ -43,14 +45,21 @@ fn save_accounts_file(file: &AccountsPatch) -> Result<(), String> {
     Ok(())
 }
 
+/// Mailbox dropdown choices: Webmail admin first, then registry mailboxes.
 pub fn mailbox_choices() -> Vec<(String, String)> {
-    list_accounts()
-        .into_iter()
-        .map(|a| (a.id, a.address))
-        .collect()
+    let mut out = vec![(
+        WEBMAIL_ADMIN_CHOICE.to_string(),
+        webmail_admin_option_label(),
+    )];
+    out.extend(
+        list_accounts()
+            .into_iter()
+            .map(|a| (a.id, a.address)),
+    );
+    out
 }
 
-/// Reset mailbox password: update registry hash field and provision local system user.
+/// Reset mailbox password, or SnappyMail-family admin when `address_or_id` is the Admin choice.
 pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result<String, String> {
     if new_password.len() < 8 {
         return Err("Password must be at least 8 characters".into());
@@ -58,44 +67,51 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     if new_password.len() > 256 {
         return Err("Password is too long".into());
     }
-    let key = address_or_id.trim().to_ascii_lowercase();
+    let key = address_or_id.trim();
     if key.is_empty() {
         return Err("Select a mailbox".into());
     }
+    if key.eq_ignore_ascii_case(WEBMAIL_ADMIN_CHOICE) {
+        return reset_webmail_admin_password(new_password);
+    }
+    let key_lc = key.to_ascii_lowercase();
     let mut file = load_accounts_file();
     let Some(account) = file
         .accounts
         .iter_mut()
-        .find(|a| a.id.eq_ignore_ascii_case(&key) || a.address.eq_ignore_ascii_case(&key))
+        .find(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc))
     else {
-        return Err(format!("Mailbox `{key}` not found in the panel registry"));
+        return Err(format!("Mailbox `{key_lc}` not found in the panel registry"));
     };
     let address = account.address.clone();
     account.mailbox_password = new_password.to_string();
     account.updated_at_unix = crate::account::now_unix();
     save_accounts_file(&file)?;
     match provision_local_mailbox(&address, new_password) {
-        Ok(_provision) => {
-            let snappy = sync_snappy_admin(new_password);
-            Ok(format!(
-                "Password updated for `{address}`. Local mailbox ready.{snappy}"
-            ))
-        }
+        Ok(_provision) => Ok(format!(
+            "Password updated for `{address}`. Local mailbox ready."
+        )),
         Err(err) => {
             // Registry is authoritative for panel UI; local system provision may be
             // unavailable in CI or when the panel lacks useradd privileges.
-            let snappy = sync_snappy_admin(new_password);
             Ok(format!(
-                "Password updated for `{address}` in the panel registry. Local provision: {err}.{snappy}"
+                "Password updated for `{address}` in the panel registry. Local provision: {err}."
             ))
         }
     }
 }
 
-fn sync_snappy_admin(password: &str) -> String {
-    match crate::install_snappymail_prefs::sync_snappymail_admin_password(password) {
-        Ok(()) => " SnappyMail admin password synced.".to_string(),
-        Err(err) => format!(" SnappyMail admin sync skipped: {err}"),
+/// Update bcrypt admin password on every installed SnappyMail-family client.
+pub fn reset_webmail_admin_password(new_password: &str) -> Result<String, String> {
+    match crate::install_snappymail_lineage::sync_lineage_admin_password(new_password) {
+        Ok(0) => Ok(
+            "No SnappyMail-family application.ini found yet. Open webmail once, then retry Admin password sync."
+                .into(),
+        ),
+        Ok(n) => Ok(format!(
+            "Webmail admin password updated on {n} SnappyMail-family client(s) (SnappyMail, Tachyon, and/or NextSnapMail when installed)."
+        )),
+        Err(err) => Err(err),
     }
 }
 
@@ -125,5 +141,10 @@ mod tests {
             let msg = reset_mailbox_password("demo@example.com", "newpassword1").unwrap();
             assert!(msg.contains("demo@example.com"));
         });
+    }
+
+    #[test]
+    fn admin_choice_constant() {
+        assert_eq!(WEBMAIL_ADMIN_CHOICE, "__webmail_admin__");
     }
 }

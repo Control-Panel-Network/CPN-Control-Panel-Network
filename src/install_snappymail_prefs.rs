@@ -1,6 +1,9 @@
-//! SnappyMail operator defaults: Markdown, AllowStyles, Sieve, branding, login, contacts, admin sync.
+//! SnappyMail-family operator defaults: Markdown, AllowStyles, Sieve, branding, login, contacts.
 
-use crate::install_webmail_runtime::SNAPPYMAIL_DATA_DIR;
+use crate::install_snappymail_lineage::{
+    self, application_ini_path, chown_data_tree, lineage_data_dirs, lineage_docroots,
+    replace_ini_bool, replace_ini_quoted,
+};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,130 +13,42 @@ const MARKER_CONTACTS_DB: &str = "_data_/_default_/.cpn-contacts-db-v1";
 
 const CPN_PAGE_TITLE: &str = "CPN Webmail";
 const CPN_LOADING_DESCRIPTION: &str = "CPN Panel";
-/// Panel-served favicon (same origin as `/snappymail` proxy).
 const CPN_FAVICON_URL: &str = "/favicon.ico";
 
-/// Apply IMAP/SMTP/Sieve domain defaults, Markdown + AllowStyles, branding, login, contacts, and heal Actions.php.
-pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
-    let _ = ensure_domain_sieve_enabled();
-    let _ = ensure_actions_php_defaults();
-    let _ = ensure_user_settings_defaults();
-    let _ = ensure_login_and_branding_defaults();
-    let _ = ensure_contacts_defaults();
-    // IMAP system folders + SnappyMail Sent/Drafts/Junk/Trash/Archive mappings.
-    let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
-    let _ = chown_snappy_data();
-    Ok(())
-}
-
-/// Set SnappyMail / Tachyon `/?admin` password to match the given plaintext (CPN / mailbox flow).
+/// Apply IMAP/SMTP/Sieve domain defaults, Markdown + AllowStyles, branding, login, contacts.
 ///
-/// Product intent: one password for panel mail ops and the active SnappyMail-lineage admin.
-/// Syncs both data dirs when present so switching active clients keeps parity.
+/// Runs for every installed SnappyMail-family data root (SnappyMail, Tachyon, NextSnapMail).
+pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
+    let _ = ensure_actions_php_defaults();
+    for data_dir in lineage_data_dirs() {
+        let _ = ensure_domain_sieve_enabled(&data_dir);
+        let _ = ensure_user_settings_defaults(&data_dir);
+        let _ = ensure_login_and_branding_defaults(&data_dir);
+        let _ = ensure_contacts_defaults(&data_dir);
+        let _ = chown_data_tree(&data_dir);
+    }
+    let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
+    Ok(())
+}
+
+/// Set SnappyMail-family `/?admin` password (all installed data roots with application.ini).
 pub fn sync_snappymail_admin_password(password: &str) -> Result<(), String> {
-    if password.len() < 8 {
-        return Err("Webmail admin password must be at least 8 characters".into());
-    }
-    let hash = php_password_hash(password)?;
-    let mut synced = 0u32;
-    for data_dir in [SNAPPYMAIL_DATA_DIR, "/var/lib/cpn-webmail/tachyon/"] {
-        let ini = Path::new(data_dir).join("_data_/_default_/configs/application.ini");
-        if !ini.is_file() {
-            continue;
-        }
-        let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
-        let updated = replace_ini_quoted(&raw, "admin_password", &hash);
-        if updated != raw {
-            std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
-        }
-        let txt = Path::new(data_dir).join("_data_/_default_/admin_password.txt");
-        if txt.is_file() {
-            let _ = std::fs::remove_file(&txt);
-        }
-        synced += 1;
-    }
-    if synced > 0 {
-        let _ = chown_snappy_data();
-        let _ = Command::new("chown")
-            .args([
-                "-R",
-                "cpn-webmail:cpn-webmail",
-                "/var/lib/cpn-webmail/tachyon",
-            ])
-            .status();
+    let synced = install_snappymail_lineage::sync_lineage_admin_password(password)?;
+    if synced == 0 {
+        // No application.ini yet (first visit pending). Not a hard failure.
+        return Ok(());
     }
     Ok(())
 }
 
-fn application_ini_path() -> PathBuf {
-    Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/configs/application.ini")
-}
-
-fn php_password_hash(password: &str) -> Result<String, String> {
-    // Avoid shell quoting: pass password via env to php -r.
-    let output = Command::new("php")
-        .args([
-            "-r",
-            "echo password_hash(getenv('CPN_SNAPPY_PASS'), PASSWORD_DEFAULT);",
-        ])
-        .env("CPN_SNAPPY_PASS", password)
-        .output()
-        .map_err(|e| format!("php password_hash failed to start: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "php password_hash failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !hash.starts_with("$2y$") && !hash.starts_with("$2a$") && !hash.starts_with("$argon") {
-        return Err("php password_hash returned unexpected output".into());
-    }
-    Ok(hash)
-}
-
-fn replace_ini_line(raw: &str, key: &str, new_line: &str) -> String {
-    let prefix_eq = format!("{key} =");
-    let prefix_nospace = format!("{key}=");
-    let mut out = String::with_capacity(raw.len() + new_line.len());
-    let mut replaced = false;
-    for line in raw.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with(&prefix_eq) || trimmed.starts_with(&prefix_nospace) {
-            out.push_str(new_line);
-            out.push('\n');
-            replaced = true;
-        } else {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    if !replaced {
-        out.push_str(new_line);
-        out.push('\n');
-    }
-    out
-}
-
-fn replace_ini_quoted(raw: &str, key: &str, value: &str) -> String {
-    replace_ini_line(raw, key, &format!("{key} = \"{value}\""))
-}
-
-fn replace_ini_bool(raw: &str, key: &str, on: bool) -> String {
-    let word = if on { "On" } else { "Off" };
-    replace_ini_line(raw, key, &format!("{key} = {word}"))
-}
-
-/// Login determine-domain On + CPN page title / loading / favicon (heal every time).
-fn ensure_login_and_branding_defaults() -> Result<(), String> {
-    let ini = application_ini_path();
+fn ensure_login_and_branding_defaults(data_dir: &str) -> Result<(), String> {
+    let ini = application_ini_path(data_dir);
     if !ini.is_file() {
         return Ok(());
     }
     let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
     let mut updated = raw.clone();
     updated = replace_ini_bool(&updated, "determine_user_domain", true);
-    // Keep language login defaults sensible when present; do not force Off.
     updated = replace_ini_bool(&updated, "allow_languages_on_login", true);
     updated = replace_ini_bool(&updated, "determine_user_language", true);
     updated = replace_ini_quoted(&updated, "title", CPN_PAGE_TITLE);
@@ -145,22 +60,21 @@ fn ensure_login_and_branding_defaults() -> Result<(), String> {
     Ok(())
 }
 
-/// Enable Contacts with SQLite and ensure the AddressBook database exists.
-fn ensure_contacts_defaults() -> Result<(), String> {
-    let ini = application_ini_path();
+fn ensure_contacts_defaults(data_dir: &str) -> Result<(), String> {
+    let ini = application_ini_path(data_dir);
     if !ini.is_file() {
         return Ok(());
     }
     let raw = std::fs::read_to_string(&ini).map_err(|e| e.to_string())?;
-    let updated = patch_contacts_section(&raw);
+    let updated = patch_contacts_section(&raw, data_dir);
     if updated != raw {
         std::fs::write(&ini, updated).map_err(|e| e.to_string())?;
     }
-    ensure_contacts_sqlite_ready()?;
+    ensure_contacts_sqlite_ready(data_dir)?;
     Ok(())
 }
 
-fn patch_contacts_section(raw: &str) -> String {
+fn patch_contacts_section(raw: &str, data_dir: &str) -> String {
     let Some(start) = raw.find("[contacts]") else {
         return raw.to_string();
     };
@@ -169,17 +83,15 @@ fn patch_contacts_section(raw: &str) -> String {
     let section_body = &after[..end_rel];
     let rest = &after[end_rel..];
     let mut body = section_body.to_string();
-    // SnappyMail stores contacts enable as bare `enable` under [contacts].
     body = replace_ini_bool(&body, "enable", true);
     body = replace_ini_quoted(&body, "type", "sqlite");
-    // Prefer a shared AddressBook when no per-user DBs exist yet; otherwise keep per-user.
-    let use_global = !per_user_addressbooks_exist();
+    let use_global = !per_user_addressbooks_exist(data_dir);
     body = replace_ini_bool(&body, "sqlite_global", use_global);
     format!("{}[contacts]{}{}", &raw[..start], body, rest)
 }
 
-fn per_user_addressbooks_exist() -> bool {
-    let storage = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/storage");
+fn per_user_addressbooks_exist(data_dir: &str) -> bool {
+    let storage = Path::new(data_dir).join("_data_/_default_/storage");
     if !storage.is_dir() {
         return false;
     }
@@ -205,27 +117,20 @@ fn find_addressbook_sqlite(dir: &Path) -> bool {
     false
 }
 
-fn contacts_global_db_path() -> PathBuf {
-    Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/AddressBook.sqlite")
-}
-
-/// Create / upgrade the global SQLite AddressBook so Contacts Test and first use succeed.
-fn ensure_contacts_sqlite_ready() -> Result<(), String> {
-    // Confirm PDO SQLite is available (required for Contacts).
+fn ensure_contacts_sqlite_ready(data_dir: &str) -> Result<(), String> {
     let check = Command::new("php")
         .args(["-r", "exit(extension_loaded('pdo_sqlite') ? 0 : 1);"])
         .status()
         .map_err(|e| format!("php pdo_sqlite check failed: {e}"))?;
     if !check.success() {
-        return Err("PHP pdo_sqlite extension required for SnappyMail Contacts".into());
+        return Err("PHP pdo_sqlite extension required for webmail Contacts".into());
     }
 
-    let db = contacts_global_db_path();
+    let db = Path::new(data_dir).join("_data_/_default_/AddressBook.sqlite");
     if let Some(parent) = db.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
 
-    // Always ensure global schema exists (used when sqlite_global=On; harmless otherwise).
     let output = Command::new("php")
         .args([
             "-r",
@@ -255,10 +160,7 @@ $st->execute(["sqlite-ab-version", 2]);
 echo "ok";
 "#,
         ])
-        .env(
-            "CPN_SNAPPY_AB_DB",
-            db.to_string_lossy().as_ref(),
-        )
+        .env("CPN_SNAPPY_AB_DB", db.to_string_lossy().as_ref())
         .output()
         .map_err(|e| format!("contacts sqlite init failed to start: {e}"))?;
     if !output.status.success() {
@@ -268,17 +170,16 @@ echo "ok";
         ));
     }
 
-    let marker = Path::new(SNAPPYMAIL_DATA_DIR).join(MARKER_CONTACTS_DB);
+    let marker = Path::new(data_dir).join(MARKER_CONTACTS_DB);
     let _ = std::fs::write(
         &marker,
-        "cpn snappymail contacts sqlite v1: enable + AddressBook schema\n",
+        "cpn snappymail-family contacts sqlite v1: enable + AddressBook schema\n",
     );
     Ok(())
 }
 
-/// Enable ManageSieve on local SnappyMail domain profiles (127.0.0.1:4190).
-fn ensure_domain_sieve_enabled() -> Result<(), String> {
-    let domains = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/domains");
+fn ensure_domain_sieve_enabled(data_dir: &str) -> Result<(), String> {
+    let domains = Path::new(data_dir).join("_data_/_default_/domains");
     if !domains.is_dir() {
         return Ok(());
     }
@@ -334,44 +235,44 @@ fn ensure_domain_sieve_enabled() -> Result<(), String> {
 
 /// Patch installed Actions.php so new sessions default markdown + AllowStyles On.
 fn ensure_actions_php_defaults() -> Result<(), String> {
-    let root = Path::new("/opt/cpn-webmail/snappymail");
-    if !root.is_dir() {
-        return Ok(());
-    }
-    let output = Command::new("bash")
-        .args([
-            "-c",
-            r#"find /opt/cpn-webmail/snappymail -path '*/libraries/RainLoop/Actions.php' -type f 2>/dev/null"#,
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let path = Path::new(line.trim());
-        if !path.is_file() {
-            continue;
-        }
-        let Ok(raw) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let updated = raw
-            .replace("'AllowStyles' => false,", "'AllowStyles' => true,")
-            .replace("'markdown' => false,", "'markdown' => true,");
-        if updated != raw {
-            let _ = std::fs::write(path, updated);
+    for root in lineage_docroots() {
+        let find_cmd = format!(
+            "find {} -path '*/libraries/RainLoop/Actions.php' -type f 2>/dev/null",
+            shell_single_quote(&root)
+        );
+        let output = Command::new("bash")
+            .args(["-c", &find_cmd])
+            .output()
+            .map_err(|e| e.to_string())?;
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let path = Path::new(line.trim());
+            if !path.is_file() {
+                continue;
+            }
+            let Ok(raw) = std::fs::read_to_string(path) else {
+                continue;
+            };
+            let updated = raw
+                .replace("'AllowStyles' => false,", "'AllowStyles' => true,")
+                .replace("'markdown' => false,", "'markdown' => true,");
+            if updated != raw {
+                let _ = std::fs::write(path, updated);
+            }
         }
     }
     Ok(())
 }
 
-/// Seed or migrate per-account settings JSON so Markdown and AllowStyles are On.
-///
-/// After the marker exists, only accounts missing those keys get defaults (user toggles stick).
-fn ensure_user_settings_defaults() -> Result<(), String> {
-    let storage = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/storage");
+fn shell_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn ensure_user_settings_defaults(data_dir: &str) -> Result<(), String> {
+    let storage = Path::new(data_dir).join("_data_/_default_/storage");
     if !storage.is_dir() {
         return Ok(());
     }
-    let marker = Path::new(SNAPPYMAIL_DATA_DIR).join(MARKER_DEFAULTS);
+    let marker = Path::new(data_dir).join(MARKER_DEFAULTS);
     let force_once = !marker.is_file();
     walk_settings(&storage, force_once)?;
     if force_once {
@@ -380,7 +281,7 @@ fn ensure_user_settings_defaults() -> Result<(), String> {
         }
         let _ = std::fs::write(
             &marker,
-            "cpn snappymail user defaults v1: markdown + AllowStyles\n",
+            "cpn snappymail-family user defaults v1: markdown + AllowStyles\n",
         );
     }
     Ok(())
@@ -427,28 +328,10 @@ fn patch_settings_file(path: &Path, force: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn chown_snappy_data() -> Result<(), String> {
-    let _ = Command::new("chown")
-        .args([
-            "-R",
-            "cpn-webmail:cpn-webmail",
-            &format!("{SNAPPYMAIL_DATA_DIR}_data_"),
-        ])
-        .status();
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{patch_contacts_section, replace_ini_bool, replace_ini_quoted};
-
-    #[test]
-    fn replaces_admin_password_line() {
-        let raw = "[security]\nadmin_login = \"admin\"\nadmin_password = \"old\"\n";
-        let out = replace_ini_quoted(raw, "admin_password", "$2y$10$abc");
-        assert!(out.contains("admin_password = \"$2y$10$abc\""));
-        assert!(out.contains("admin_login = \"admin\""));
-    }
+    use super::patch_contacts_section;
+    use crate::install_snappymail_lineage::replace_ini_bool;
 
     #[test]
     fn sets_determine_user_domain_on() {
@@ -471,7 +354,7 @@ sqlite_global = Off
 [security]
 admin_login = "admin"
 "#;
-        let out = patch_contacts_section(raw);
+        let out = patch_contacts_section(raw, "/tmp/cpn-missing-webmail-data");
         assert!(out.contains("[contacts]"));
         assert!(out.contains("enable = On"));
         assert!(out.contains("type = \"sqlite\""));
