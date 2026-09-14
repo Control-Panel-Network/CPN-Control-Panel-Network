@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Active webmail switching**: Host packages and `cpn app activate --name <client>` switch the active panel webmail among Tachyon, SnappyMail, and NextSnapMail (when installed). Preference is stored in `/var/lib/cpn/active-webmail.json`; panel-proxied clients also update `/opt/cpn-webmail/current`, `webmail-panel.json` public path, and PHP-FPM/proxy. Postfix/Dovecot mailboxes are unchanged.
+- **Nextcloud host package + NextSnapMail dependency chain**: `cpn app install --name nextcloud` (or Install Nextcloud first / Install Nextcloud + NextSnapMail on the NextSnapMail card) downloads Nextcloud under `/opt/nextcloud`, then installs the NextSnapMail app into `apps/nextsnapmail`. OCC/web setup remains an operator step for production.
+
+### Changed
+
+- **Default CPN webmail is Tachyon** (not SnappyMail) for fresh installer/CLI/Host packages copy. Existing labs keep the current active client when preference or `/opt/cpn-webmail/current` is already set.
+- **SnappyMail-lineage admin password sync** also updates Tachyon data under `/var/lib/cpn-webmail/tachyon/` when present.
+
 ### Changed
 
 - **Host database policy**: CPN installs **MariaDB only** as the MySQL-compatible host database. Oracle MySQL is no longer a Host packages card, installer option, or `cpn app` target. Legacy `--database mysql` / JSON `mysql` map to MariaDB. PostgreSQL remains an opt-in coexistence package. phpMyAdmin continues to target MariaDB.

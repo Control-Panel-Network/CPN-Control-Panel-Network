@@ -76,11 +76,13 @@ pub fn phpmyadmin_installed() -> bool {
     !matches!(status.state, AppStateKind::NotInstalled)
 }
 
-/// True when SnappyMail/Roundcube webmail files are present under /opt/cpn-webmail.
+/// True when a panel-proxied or Nextcloud webmail client is present.
 pub fn webmail_installed() -> bool {
     Path::new("/opt/cpn-webmail/snappymail").is_dir()
+        || Path::new("/opt/cpn-webmail/tachyon").is_dir()
         || Path::new("/opt/cpn-webmail/roundcube").is_dir()
         || Path::new("/opt/cpn-webmail/current").exists()
+        || crate::apps_nextcloud::nextsnapmail_app_present()
 }
 
 pub fn mta_sts_unlocked() -> bool {

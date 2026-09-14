@@ -58,15 +58,15 @@ export function MailSelectionScreen({
     note?: string;
   }> = [
     {
-      id: "snappymail",
-      name: "SnappyMail",
-      description: "Default CPN webmail. IMAP, SMTP, Sieve, OpenPGP.",
-    },
-    {
       id: "tachyon",
       name: "Tachyon",
       description:
-        "Modern SnappyMail fork with calendars and contacts. LIVE install.",
+        "Default CPN webmail. Modern SnappyMail fork with calendars and contacts. LIVE install.",
+    },
+    {
+      id: "snappymail",
+      name: "SnappyMail",
+      description: "Optional panel webmail. IMAP, SMTP, Sieve, OpenPGP. Switch active later in Host packages.",
     },
     {
       id: "roundcube",
@@ -76,8 +76,8 @@ export function MailSelectionScreen({
     {
       id: "nextsnapmail",
       name: "NextSnapMail",
-      description: "SnappyMail fork for Nextcloud App Store.",
-      note: "Requires Nextcloud (not a standalone host package).",
+      description: "SnappyMail fork as a Nextcloud app.",
+      note: "Install provisions Nextcloud under /opt/nextcloud when missing, then apps/nextsnapmail.",
     },
     {
       id: "sogo",

@@ -177,14 +177,14 @@ fn prompt_php_version() -> Result<String, String> {
 fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
     match raw {
         "1" | "skip" | "none" | "n" => Ok(None),
-        "2" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
-        "3" | "tachyon" => Ok(Some(MailSystem::Tachyon)),
+        "2" | "tachyon" => Ok(Some(MailSystem::Tachyon)),
+        "3" | "snappymail" | "snappy" => Ok(Some(MailSystem::Snappymail)),
         "4" | "roundcube" => Ok(Some(MailSystem::Roundcube)),
         "5" | "nextsnapmail" | "next-snapmail" => Ok(Some(MailSystem::Nextsnapmail)),
         "6" | "sogo" => Ok(Some(MailSystem::Sogo)),
         "7" | "thunderbird" => Ok(Some(MailSystem::Thunderbird)),
         other => Err(format!(
-            "Unknown mail option `{other}`. Enter 1 (skip), 2 SnappyMail, 3 Tachyon, 4 Roundcube, 5 NextSnapMail, 6 SOGo, or 7 Thunderbird."
+            "Unknown mail option `{other}`. Enter 1 (skip), 2 Tachyon (default), 3 SnappyMail, 4 Roundcube, 5 NextSnapMail, 6 SOGo, or 7 Thunderbird."
         )),
     }
 }
@@ -192,10 +192,10 @@ fn parse_mail_option(raw: &str) -> Result<Option<MailSystem>, String> {
 fn prompt_mail() -> Result<Option<MailSystem>, String> {
     println!("\nMail / webmail (optional; can skip):");
     println!("  1) Skip");
-    println!("  2) SnappyMail (default webmail)");
-    println!("  3) Tachyon (modern SnappyMail fork, LIVE)");
+    println!("  2) Tachyon (default CPN webmail, LIVE)");
+    println!("  3) SnappyMail (optional panel webmail)");
     println!("  4) Roundcube");
-    println!("  5) NextSnapMail (requires Nextcloud; not standalone LIVE)");
+    println!("  5) NextSnapMail (installs Nextcloud files if missing, then the Nextcloud app)");
     println!("  6) SOGo (SCAFFOLD; not LIVE yet)");
     println!("  7) Thunderbird (desktop client package only)");
     println!("Enter a menu number 1-7 (not an email address). Empty uses 1 (Skip).");

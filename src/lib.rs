@@ -1,5 +1,6 @@
 //! Shared library for cpn-installer and the cpn operator CLI.
 
+pub mod active_webmail;
 pub mod account;
 pub mod account_mfa;
 pub mod account_mgmt;
@@ -9,6 +10,7 @@ pub mod account_security;
 pub mod account_totp;
 pub mod apps;
 pub mod apps_control;
+pub mod apps_nextcloud;
 pub mod apps_phpmyadmin;
 pub mod apps_phpmyadmin_sso;
 pub mod apps_phpmyadmin_storage;

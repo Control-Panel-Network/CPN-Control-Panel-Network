@@ -104,7 +104,7 @@ use cpn_installer::panel_package_routes::{
 };
 use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
-    apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
+    apps_activate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop, apps_uninstall, backups_page,
     backups_run, databases_create, databases_ftp_create, databases_install_mariadb, databases_page,
     email_account_create, email_account_disable, email_account_enable, email_page,
     plugins_dashboard_page, plugins_disable, plugins_enable, plugins_install, plugins_page,
@@ -1054,6 +1054,7 @@ async fn main() -> std::io::Result<()> {
             .service(apps_install)
             .service(apps_reinstall)
             .service(apps_uninstall)
+            .service(apps_activate)
             .service(apps_start)
             .service(apps_stop)
             .service(backups_page)

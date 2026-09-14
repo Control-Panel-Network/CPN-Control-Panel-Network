@@ -51,8 +51,19 @@ fn detect_default_public_path() -> String {
     }
 }
 
-/// Which webmail tree is present on disk (prefer `/opt/cpn-webmail/current` symlink).
+/// Which webmail tree drives the panel proxy (preference for panel clients → symlink → trees).
+/// NextSnapMail preference is UI-only; panel proxy keeps the last SnappyMail-lineage docroot.
 pub fn detect_webmail_client() -> Option<MailSystem> {
+    if let Some(pref) = crate::active_webmail::load_active_pref() {
+        match pref {
+            MailSystem::Snappymail | MailSystem::Tachyon | MailSystem::Roundcube
+                if crate::active_webmail::client_files_present(pref) =>
+            {
+                return Some(pref);
+            }
+            _ => {}
+        }
+    }
     if Path::new("/opt/cpn-webmail/current").exists()
         && let Ok(target) = fs::read_link("/opt/cpn-webmail/current")
     {
@@ -67,14 +78,22 @@ pub fn detect_webmail_client() -> Option<MailSystem> {
             return Some(MailSystem::Snappymail);
         }
     }
-    if Path::new("/opt/cpn-webmail/tachyon").is_dir() {
+    // Prefer Tachyon as product default when both panel clients exist and no preference/symlink.
+    if Path::new("/opt/cpn-webmail/tachyon").is_dir()
+        && Path::new("/opt/cpn-webmail/tachyon/index.php").is_file()
+    {
         return Some(MailSystem::Tachyon);
     }
-    if Path::new("/opt/cpn-webmail/snappymail").is_dir() {
+    if Path::new("/opt/cpn-webmail/snappymail").is_dir()
+        && Path::new("/opt/cpn-webmail/snappymail/index.php").is_file()
+    {
         return Some(MailSystem::Snappymail);
     }
     if Path::new("/opt/cpn-webmail/roundcube").is_dir() {
         return Some(MailSystem::Roundcube);
+    }
+    if crate::apps_nextcloud::nextsnapmail_app_present() {
+        return Some(MailSystem::Nextsnapmail);
     }
     None
 }
@@ -210,6 +229,7 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
         // Login form first; #/mailbox/INBOX only applies after a successful session.
         MailSystem::Snappymail | MailSystem::Tachyon => format!("{base}{path}/"),
         MailSystem::Roundcube => format!("{base}{path}/"),
+        // NextSnapMail is not panel-proxied; operators open it from Nextcloud Apps after OCC setup.
         MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo => return None,
     };
     if !cfg.auto_login_account.is_empty() {
@@ -279,6 +299,7 @@ pub fn webmail_label() -> &'static str {
         Some(MailSystem::Roundcube) => "Roundcube",
         Some(MailSystem::Snappymail) => "SnappyMail",
         Some(MailSystem::Tachyon) => "Tachyon",
+        Some(MailSystem::Nextsnapmail) => "NextSnapMail",
         _ => "Webmail",
     }
 }
