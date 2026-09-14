@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **SnappyMail system folders**: mailbox create / email install / SnappyMail heal now create IMAP **Sent**, **Drafts**, **Junk**, **Spam**, **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill SnappyMail `settings_local` mappings (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
+- **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk**, **Spam**, **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
 
 ### Added
 
