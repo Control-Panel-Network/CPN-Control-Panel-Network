@@ -176,7 +176,9 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
             if !raw.ends_with('\n') {
                 raw.push('\n');
             }
-            raw.push_str("# CPN: local-part only for PAM system mailboxes\nauth_username_format = %Ln\n");
+            raw.push_str(
+                "# CPN: local-part only for PAM system mailboxes\nauth_username_format = %Ln\n",
+            );
             changed = true;
         }
         if changed {

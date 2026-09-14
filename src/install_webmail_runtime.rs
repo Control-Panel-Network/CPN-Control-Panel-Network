@@ -197,10 +197,7 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
         if let Some(obj) = data.get_mut(key).and_then(|v| v.as_object_mut()) {
             obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
             obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
-            obj.insert(
-                "sasl".into(),
-                serde_json::json!(["PLAIN", "LOGIN"]),
-            );
+            obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
     }
     if let Some(imap) = data.get_mut("IMAP").and_then(|v| v.as_object_mut()) {
@@ -224,10 +221,8 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     if ini.is_file() {
         if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
             if ini_raw.contains("cookie_samesite = \"Strict\"") {
-                let updated = ini_raw.replace(
-                    "cookie_samesite = \"Strict\"",
-                    "cookie_samesite = \"Lax\"",
-                );
+                let updated =
+                    ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
                 let _ = std::fs::write(&ini, updated);
             }
         }

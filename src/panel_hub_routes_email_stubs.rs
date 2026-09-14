@@ -78,11 +78,7 @@ pub async fn email_password(
             &user,
             "email",
             "Change Password",
-            &email_password_page(
-                &user,
-                notice.as_deref(),
-                error.as_deref(),
-            ),
+            &email_password_page(&user, notice.as_deref(), error.as_deref()),
         ),
     )
 }

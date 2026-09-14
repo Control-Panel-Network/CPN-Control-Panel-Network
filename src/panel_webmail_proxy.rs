@@ -224,8 +224,7 @@ fn find_header_sep(raw: &[u8]) -> Option<(usize, usize)> {
 }
 
 fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    hay.windows(needle.len())
-        .position(|w| w == needle)
+    hay.windows(needle.len()).position(|w| w == needle)
 }
 
 fn rewrite_location(value: &str, mount: &str) -> String {
