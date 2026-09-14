@@ -188,6 +188,20 @@ pub fn format_host_dates(meta: &HostPackageMeta) -> String {
     parts.join(" · ")
 }
 
+fn host_pricing_is_paid(pricing: &str) -> bool {
+    let lower = pricing.to_ascii_lowercase();
+    lower.contains("paid") || lower.contains("premium")
+}
+
+/// Exact `q=paid` / `q=free` (and `premium`) act as pricing filters, not full-text.
+fn host_exact_pricing_query(query: &str) -> Option<&'static str> {
+    match query.trim().to_ascii_lowercase().as_str() {
+        "paid" | "premium" => Some("paid"),
+        "free" => Some("free"),
+        _ => None,
+    }
+}
+
 pub fn filter_host_packages<'a>(
     apps: &'a [AppStatus],
     query: &str,
@@ -195,6 +209,7 @@ pub fn filter_host_packages<'a>(
 ) -> Vec<&'a AppStatus> {
     let q = query.trim().to_ascii_lowercase();
     let cat = category.trim().to_ascii_lowercase();
+    let pricing_q = host_exact_pricing_query(&q);
     apps.iter()
         .filter(|status| {
             let meta = meta_for(status.id);
@@ -202,6 +217,10 @@ pub fn filter_host_packages<'a>(
                 true
             } else if cat == "featured" {
                 host_package_is_featured(status.id, apps)
+            } else if cat == "paid" {
+                host_pricing_is_paid(meta.pricing)
+            } else if cat == "free" {
+                !host_pricing_is_paid(meta.pricing)
             } else {
                 meta.category.eq_ignore_ascii_case(category.trim())
             };
@@ -210,6 +229,13 @@ pub fn filter_host_packages<'a>(
             }
             if q.is_empty() {
                 return true;
+            }
+            if let Some(want) = pricing_q {
+                return match want {
+                    "paid" => host_pricing_is_paid(meta.pricing),
+                    "free" => !host_pricing_is_paid(meta.pricing),
+                    _ => false,
+                };
             }
             status.id.label().to_ascii_lowercase().contains(&q)
                 || status.id.as_str().contains(&q)
@@ -228,4 +254,49 @@ pub fn host_categories(apps: &[AppStatus]) -> Vec<&'static str> {
 
 pub fn state_label(state: AppStateKind) -> &'static str {
     state.label()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apps::AppStateKind;
+
+    fn stub(id: AppId) -> AppStatus {
+        AppStatus {
+            id,
+            state: AppStateKind::NotInstalled,
+            detail: String::new(),
+            warning: None,
+        }
+    }
+
+    #[test]
+    fn q_paid_does_not_match_free_description_word() {
+        // NextSnapMail description does not contain "paid"; ClamAV-style issue is plugin-store.
+        // All current host packages are free, so q=paid must return empty (not full-text hits).
+        let apps = vec![stub(AppId::Mariadb), stub(AppId::Email)];
+        let paid = filter_host_packages(&apps, "paid", "");
+        assert!(paid.is_empty());
+    }
+
+    #[test]
+    fn q_free_returns_free_host_packages() {
+        let apps = vec![stub(AppId::Mariadb), stub(AppId::Email)];
+        let free = filter_host_packages(&apps, "free", "");
+        assert_eq!(free.len(), 2);
+    }
+
+    #[test]
+    fn category_paid_empty_when_all_free() {
+        let apps = vec![stub(AppId::Mariadb), stub(AppId::Phpmyadmin)];
+        let paid = filter_host_packages(&apps, "", "Paid");
+        assert!(paid.is_empty());
+    }
+
+    #[test]
+    fn category_free_returns_all_current_host_packages() {
+        let apps = vec![stub(AppId::Mariadb), stub(AppId::Email)];
+        let free = filter_host_packages(&apps, "", "Free");
+        assert_eq!(free.len(), 2);
+    }
 }
