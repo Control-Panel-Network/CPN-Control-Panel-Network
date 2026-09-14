@@ -181,9 +181,8 @@ fn ensure_database_with_hosts(
              GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'{host}'; "
         ));
     }
-    let modern_sql = format!(
-        "CREATE DATABASE IF NOT EXISTS `{name}`; {user_sql} FLUSH PRIVILEGES;"
-    );
+    let modern_sql =
+        format!("CREATE DATABASE IF NOT EXISTS `{name}`; {user_sql} FLUSH PRIVILEGES;");
     let out = Command::new(bin)
         .args(["-e", &modern_sql])
         .output()
@@ -203,9 +202,8 @@ fn ensure_database_with_hosts(
              GRANT ALL PRIVILEGES ON `{name}`.* TO '{user}'@'{host}'; "
         ));
     }
-    let legacy_sql = format!(
-        "CREATE DATABASE IF NOT EXISTS `{name}`; {legacy_user_sql} FLUSH PRIVILEGES;"
-    );
+    let legacy_sql =
+        format!("CREATE DATABASE IF NOT EXISTS `{name}`; {legacy_user_sql} FLUSH PRIVILEGES;");
     let legacy = Command::new(bin)
         .args(["-e", &legacy_sql])
         .output()

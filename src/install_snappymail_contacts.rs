@@ -252,7 +252,10 @@ echo "ok";
     Ok(())
 }
 
-fn maybe_migrate_sqlite_into_mariadb(data_dir: &str, secret: &ContactsDbSecret) -> Result<(), String> {
+fn maybe_migrate_sqlite_into_mariadb(
+    data_dir: &str,
+    secret: &ContactsDbSecret,
+) -> Result<(), String> {
     let sqlite = Path::new(data_dir).join("_data_/_default_/AddressBook.sqlite");
     if !sqlite.is_file() {
         return Ok(());
