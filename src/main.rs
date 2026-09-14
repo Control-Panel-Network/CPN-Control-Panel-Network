@@ -2,6 +2,7 @@ use actix_web::{
     App, HttpRequest, HttpResponse, HttpServer, Responder, guard, http::Method, post, route, web,
 };
 use cpn_installer::account::{account_public_from_disk, default_password_policy};
+use cpn_installer::auth_api::panel_user_from_request;
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, apple_touch_icon, cpn_brand_mark, cpn_logo,
     dashboard_page, favicon_ico, favicon_svg, login_mfa_page, login_mfa_submit, login_page,
@@ -11,14 +12,12 @@ use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::auth_password_reset_api::{
     forgot_password_page, forgot_password_submit, reset_password_page, reset_password_submit,
 };
-use cpn_installer::auth_api::panel_user_from_request;
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status,
     extend_allowed_hosts_with_public_url, install_finished, install_session_cookie_header,
     normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
     wants_html, websocket_origin_ok,
 };
-use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
@@ -27,6 +26,7 @@ use cpn_installer::model::{
     InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
+use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
