@@ -176,7 +176,11 @@ fn origin_matches_request_host(candidate: &str, request: &HttpRequest) -> bool {
     authorities_equivalent(&authority, &host_hdr)
 }
 
-fn origin_or_same_host_ok(candidate: &str, request: &HttpRequest, allowed_hosts: &[String]) -> bool {
+fn origin_or_same_host_ok(
+    candidate: &str,
+    request: &HttpRequest,
+    allowed_hosts: &[String],
+) -> bool {
     origin_matches_allowed(candidate, allowed_hosts)
         || origin_matches_request_host(candidate, request)
 }
@@ -362,10 +366,7 @@ mod tests {
         let req = TestRequest::default()
             .method(actix_web::http::Method::POST)
             .insert_header((actix_web::http::header::HOST, "panel.example:2087"))
-            .insert_header((
-                actix_web::http::header::ORIGIN,
-                "http://panel.example:2087",
-            ))
+            .insert_header((actix_web::http::header::ORIGIN, "http://panel.example:2087"))
             .to_http_request();
         assert!(remote_origin_ok(&req, true, &allowed));
     }
