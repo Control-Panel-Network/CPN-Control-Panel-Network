@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **SnappyMail defaults** for all accounts: **Convert HTML to Markdown** and **Allow styles** (`AllowStyles` / `<style>` CSS) default On (user-overridable). Existing accounts migrate once; later toggles are preserved.
 - **SnappyMail admin password** (`/?admin`) stays in sync with the password set via **Email > Change Password** (`/email/password`), and also when the CPN panel account password changes (forced change, profile change, reset, or first-account setup). Same operator password for panel mail ops and SnappyMail admin.
+- **SnappyMail Login**: **Try to determine user domain** defaults On (short login + multi-domain). Language selection / determine-language stay On.
+- **SnappyMail Branding**: page title **CPN Webmail**, loading text **CPN Panel**, favicon `/favicon.ico` (panel logo). Applied on install and heal/upgrade (never CyberPanel strings).
+- **SnappyMail Contacts**: enabled by default with SQLite AddressBook schema created under webmail data (`AddressBook.sqlite`). Operators may disable Contacts later in admin; fresh installs use a shared DB when no per-user books exist yet.
 
 ### Added
 
