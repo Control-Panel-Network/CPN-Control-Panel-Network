@@ -143,6 +143,8 @@ pub fn email_limits_page(user: &str, notice: Option<&str>, error: Option<&str>) 
 }
 
 pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    // Live-heal lineage prefs and refresh admin_login from application.ini for the dropdown.
+    let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
     let csrf = html_escape(&email_csrf_token(user));
     let choices = mailbox_choices();
     let mut opts = String::from(r#"<option value="">Select mailbox</option>"#);
@@ -153,8 +155,9 @@ pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>
             html_escape(addr)
         ));
     }
+    let admin_paths = crate::install_snappymail_lineage::webmail_admin_paths_summary();
     let body = format!(
-        r#"<p class="muted">Resets the mailbox login password in the panel registry and hashes it into the local system mailbox store when Postfix/Dovecot provisioning is available. The same password is applied to SnappyMail admin (<code>/snappymail/?admin</code>) so one change covers both.</p>
+        r#"<p class="muted">Resets the mailbox login password in the panel registry and hashes it into the local system mailbox store when Postfix/Dovecot provisioning is available. Choose <strong>Webmail admin</strong> to set the admin password for every installed SnappyMail-family client ({admin_paths}). Mailbox rows only change that mailbox. Roundcube is not included.</p>
         <form method="post" action="/email/password/save" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="csrf" value="{csrf}">
           <label for="mailbox">Mailbox</label>
@@ -167,6 +170,7 @@ pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>
         </form>"#,
         csrf = csrf,
         opts = opts,
+        admin_paths = admin_paths,
     );
     feature_shell(
         &[
@@ -175,7 +179,7 @@ pub fn email_password_page(user: &str, notice: Option<&str>, error: Option<&str>
             ("Change Password", None),
         ],
         "Change Password",
-        "Reset mailbox password.",
+        "Reset mailbox or webmail admin password.",
         &body,
         notice,
         error,

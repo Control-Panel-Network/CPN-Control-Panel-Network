@@ -1,11 +1,11 @@
-//! Pre-map SnappyMail / Tachyon system folders (settings_local) so send is not blocked.
+//! Pre-map SnappyMail-family system folders (settings_local) so send is not blocked.
 
+use crate::install_snappymail_lineage::{chown_data_tree, lineage_data_dirs};
 use crate::install_webmail_runtime::SNAPPYMAIL_DATA_DIR;
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const MARKER_FOLDERS: &str = "_data_/_default_/.cpn-system-folders-v1";
-const TACHYON_DATA_DIR: &str = "/var/lib/cpn-webmail/tachyon/";
 
 /// Default IMAP folder names CPN creates (see `panel_ops_mailbox_folders`).
 const DEFAULT_SENT: &str = "Sent";
@@ -14,19 +14,12 @@ const DEFAULT_JUNK: &str = "Junk";
 const DEFAULT_TRASH: &str = "Trash";
 const DEFAULT_ARCHIVE: &str = "Archive";
 
-/// SnappyMail and Tachyon each keep their own APP_DATA tree under /var/lib/cpn-webmail.
-fn lineage_data_dirs() -> Vec<&'static str> {
-    let mut dirs = vec![SNAPPYMAIL_DATA_DIR, TACHYON_DATA_DIR];
-    dirs.dedup();
-    dirs
-}
-
 /// Ensure IMAP folders exist on disk and webmail `settings_local` mappings are filled.
 pub fn ensure_snappymail_system_folders() -> Result<(), String> {
     let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
     let _ = crate::panel_ops_mailbox_folders::heal_all_maildir_system_folders();
     for data_dir in lineage_data_dirs() {
-        let _ = ensure_settings_local_mappings_in(data_dir);
+        let _ = ensure_settings_local_mappings_in(&data_dir);
     }
     Ok(())
 }
@@ -41,18 +34,18 @@ pub fn seed_settings_local_for_address(address: &str) -> Result<(), String> {
         return Ok(());
     }
     for data_dir in lineage_data_dirs() {
-        let dir = Path::new(data_dir)
+        let dir = Path::new(&data_dir)
             .join("_data_/_default_/storage")
             .join(domain)
             .join(local);
         // Only create under trees that already exist (or SnappyMail default always).
-        if data_dir != SNAPPYMAIL_DATA_DIR && !Path::new(data_dir).is_dir() {
+        if data_dir != SNAPPYMAIL_DATA_DIR && !Path::new(&data_dir).is_dir() {
             continue;
         }
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("settings_local");
         patch_settings_local_file(&path, true)?;
-        let _ = chown_data_tree(data_dir);
+        let _ = chown_data_tree(&data_dir);
     }
     let _ = crate::panel_ops_mailbox_folders::ensure_imap_system_folders(local);
     Ok(())
@@ -179,20 +172,6 @@ fn set_junk_folder(obj: &mut serde_json::Map<String, Value>) -> bool {
     }
     obj.insert("JunkFolder".into(), Value::String(DEFAULT_JUNK.into()));
     true
-}
-
-fn chown_data_tree(data_dir: &str) -> Result<(), String> {
-    let tree = PathBuf::from(data_dir).join("_data_");
-    if tree.is_dir() {
-        let _ = std::process::Command::new("chown")
-            .args([
-                "-R",
-                "cpn-webmail:cpn-webmail",
-                tree.to_string_lossy().as_ref(),
-            ])
-            .status();
-    }
-    Ok(())
 }
 
 #[cfg(test)]

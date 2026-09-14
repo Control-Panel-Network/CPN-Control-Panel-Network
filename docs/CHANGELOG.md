@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Email > Change Password** (`/email/password`): mailbox dropdown includes a **Webmail admin** option (label shows live `admin_login` from each installed SnappyMail-family client). Selecting Admin updates bcrypt admin passwords for SnappyMail, Tachyon, and NextSnapMail when present (`/snappymail/?admin`, `/tachyon/?admin`, and NextSnapMail data). Selecting a mailbox only resets that mailbox. Copy is family-wide (not SnappyMail-only). Reloading the page heals lineage prefs and re-reads admin usernames from `application.ini`.
+- **SnappyMail-family operator defaults** (Markdown, AllowStyles, Sieve/ManageSieve domain prefs, branding, Contacts, system folders) apply via a shared helper to every installed data root under `/var/lib/cpn-webmail/{snappymail,tachyon,…}` and discovered NextSnapMail data. Tachyon install/heal now receives the same defaults as SnappyMail (not SnappyMail-only). Roundcube is unchanged.
+
 ### Fixed
 
 - **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk** (Spam role), **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
