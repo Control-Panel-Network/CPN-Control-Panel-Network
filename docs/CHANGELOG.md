@@ -24,7 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Site preview capture discovers AlmaLinux **`chromium-headless`** at `/usr/lib64/chromium-browser/headless_shell` (and related lib paths) without requiring manual `/usr/bin` symlinks; registers `/websites/site-preview/*` before the `/websites/{domain}` alias.
+- **SnappyMail IMAP login on SELinux hosts**: enable `httpd_can_network_connect`, set Dovecot `auth_username_format = %Ln` (email local-part for PAM), prefer `ssl = yes` over `required`, and point SnappyMail domain defaults at `127.0.0.1` with `shortLogin` so webmail can authenticate local Maildir users.
+- **Webmail panel proxy**: parse curl responses as raw bytes so WOFF/fonts and other binary assets are not UTF-8-corrupted; preserve multiple `Set-Cookie` headers.
+- **Change Password PRG**: `/email/password/save` redirects to clean `/email/password` with an HttpOnly flash cookie notice (no long `?notice=` query wall); Open Webmail links use `/snappymail/` instead of forcing `index.php`.
+
 - **Set as host default** now runs `dnf module switch-to` (not enable-only) so Remi php/php-fpm packages actually upgrade or downgrade with the chosen stream. After apply, CPN verifies `php-fpm -v` matches the persisted branch so phpMyAdmin cannot stay on 8.5 while `/var/lib/cpn/php-default.json` claims 8.4.
 - PHP Configurations **Set as host default** no longer leaves a blank 404 on `/server/php/configs/set-default`: the form POSTs to `/server/php/configs` with `op=set-default` (PRG back to the configs page), GET on the legacy `/set-default` path 303-redirects, and Actix registers GET+POST on one `web::resource` so the second method is not dropped.
 - phpMyAdmin Open auto-login **503** after host PHP default / php-fpm thrash: `ensure_fpm_socket_for_ols` no longer unconditionally restarts php-fpm (reload when healthy; `systemctl reset-failed` + start when in `start-limit-hit`). Panel `/phpmyadmin` proxy heals a missing `cpn-phpmyadmin.sock` and retries once on backend 503 so `cpn-signon.php` reaches the UI again. Open auto-login no longer runs a full OLS listener refresh on every remint (that restart loop hit start-limit when SignonURL pointed at `/databases/phpmyadmin/open`).

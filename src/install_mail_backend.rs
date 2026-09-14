@@ -156,22 +156,84 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
     .await?;
     install_journal::record(STAGE, JournalAction::EnabledService, "dovecot", None, None)?;
 
-    // Ensure cleartext IMAP is available on loopback for Roundcube defaults.
+    // Ensure cleartext IMAP is available on loopback for webmail defaults.
     let auth = "/etc/dovecot/conf.d/10-auth.conf";
     if std::path::Path::new(auth).exists() {
-        let raw = std::fs::read_to_string(auth).unwrap_or_default();
+        let mut raw = std::fs::read_to_string(auth).unwrap_or_default();
+        let mut changed = false;
         if raw.contains("disable_plaintext_auth = yes") {
-            let updated = raw.replace(
+            raw = raw.replace(
                 "disable_plaintext_auth = yes",
                 "disable_plaintext_auth = no",
             );
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(auth), &updated)?;
-            let _ = Command::new("systemctl")
-                .args(["reload", "dovecot"])
-                .status()
-                .await;
+            changed = true;
+        }
+        // Strip @domain so SnappyMail full-address logins map to system users (PAM).
+        if !raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("auth_username_format"))
+        {
+            if !raw.ends_with('\n') {
+                raw.push('\n');
+            }
+            raw.push_str(
+                "# CPN: local-part only for PAM system mailboxes\nauth_username_format = %Ln\n",
+            );
+            changed = true;
+        }
+        if changed {
+            install_journal::write_file_tracked(STAGE, std::path::Path::new(auth), &raw)?;
         }
     }
+
+    // Prefer ssl=yes (not required) so localhost:143 cleartext works for webmail.
+    let ssl = "/etc/dovecot/conf.d/10-ssl.conf";
+    if std::path::Path::new(ssl).exists() {
+        let raw = std::fs::read_to_string(ssl).unwrap_or_default();
+        if raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("ssl = required"))
+        {
+            let updated = raw
+                .lines()
+                .map(|l| {
+                    if l.trim_start().starts_with("ssl = required") {
+                        "ssl = yes"
+                    } else {
+                        l
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let updated = if raw.ends_with('\n') {
+                format!("{updated}\n")
+            } else {
+                updated
+            };
+            install_journal::write_file_tracked(STAGE, std::path::Path::new(ssl), &updated)?;
+        }
+    }
+
+    let _ = Command::new("systemctl")
+        .args(["reload", "dovecot"])
+        .status()
+        .await;
+
+    // PHP-FPM runs as httpd_t; allow outbound TCP to Dovecot IMAP/SMTP on the host.
+    let _ = Command::new("bash")
+        .args([
+            "-c",
+            "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true",
+        ])
+        .status()
+        .await;
+    install_journal::record(
+        STAGE,
+        JournalAction::Note,
+        "httpd_can_network_connect",
+        None,
+        Some("SELinux: allow PHP-FPM to reach local IMAP/SMTP".into()),
+    )?;
 
     Ok(())
 }

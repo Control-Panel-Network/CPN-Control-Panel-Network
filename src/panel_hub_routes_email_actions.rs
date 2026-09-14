@@ -1,7 +1,7 @@
 //! POST actions for Email tools (admin ACL + CSRF).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{login_redirect, redirect_flash, redirect_notice, require_panel_user};
 use crate::panel_ops_email_acl::require_email_admin_csrf;
 use crate::panel_ops_email_antispam::{enable_mailscanner, enable_rspamd, enable_spamassassin};
 use crate::panel_ops_email_limits::{add_send_limit, remove_send_limit};
@@ -135,11 +135,11 @@ pub async fn email_password_save(
     let password = form.get("password").map(String::as_str).unwrap_or("");
     let password2 = form.get("password2").map(String::as_str).unwrap_or("");
     if password != password2 {
-        return redirect_notice("/email/password", None, Some("Passwords do not match"));
+        return redirect_flash("/email/password", None, Some("Passwords do not match"));
     }
     match reset_mailbox_password(mailbox, password) {
-        Ok(msg) => redirect_notice("/email/password", Some(&msg), None),
-        Err(err) => redirect_notice("/email/password", None, Some(&err)),
+        Ok(msg) => redirect_flash("/email/password", Some(&msg), None),
+        Err(err) => redirect_flash("/email/password", None, Some(&err)),
     }
 }
 

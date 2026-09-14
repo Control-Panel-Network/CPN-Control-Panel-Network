@@ -168,6 +168,7 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
     if web_data.exists() {
         let _ = std::fs::remove_dir_all(&web_data);
     }
+    let _ = ensure_snappymail_local_imap_defaults();
     install_journal::record(
         STAGE,
         JournalAction::Note,
@@ -175,6 +176,88 @@ fn configure_snappymail_external_data(docroot: &str) -> Result<(), String> {
         None,
         Some("SnappyMail APP_DATA_FOLDER_PATH outside docroot".into()),
     )?;
+    Ok(())
+}
+
+/// Point default + local host domain at 127.0.0.1 IMAP with shortLogin for PAM users.
+pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
+    let domains = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/domains");
+    if !domains.is_dir() {
+        return Ok(());
+    }
+    let default_path = domains.join("default.json");
+    if !default_path.is_file() {
+        return Ok(());
+    }
+    let raw = std::fs::read_to_string(&default_path).map_err(|e| e.to_string())?;
+    let Ok(mut data) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return Ok(());
+    };
+    for key in ["IMAP", "SMTP"] {
+        if let Some(obj) = data.get_mut(key).and_then(|v| v.as_object_mut()) {
+            obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
+            obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
+            obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
+        }
+    }
+    if let Some(imap) = data.get_mut("IMAP").and_then(|v| v.as_object_mut()) {
+        imap.insert("port".into(), serde_json::json!(143));
+    }
+    if let Some(smtp) = data.get_mut("SMTP").and_then(|v| v.as_object_mut()) {
+        smtp.insert("port".into(), serde_json::json!(25));
+    }
+    let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+    std::fs::write(&default_path, format!("{pretty}\n")).map_err(|e| e.to_string())?;
+    // Mirror onto hostname and any existing local domain files (skip public providers).
+    let mut mirror_names: Vec<String> = Vec::new();
+    if let Ok(hostname) = std::fs::read_to_string("/etc/hostname") {
+        let host = hostname.trim().to_ascii_lowercase();
+        if !host.is_empty() {
+            mirror_names.push(format!("{host}.json"));
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(&domains) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let lower = name.to_ascii_lowercase();
+            if !lower.ends_with(".json") || lower == "default.json" {
+                continue;
+            }
+            if lower == "gmail.com.json" || lower == "hotmail.com.json" || lower == "yahoo.com.json"
+            {
+                continue;
+            }
+            if !mirror_names.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+                mirror_names.push(name);
+            }
+        }
+    }
+    // Always keep a newstargeted.com domain profile for lab/production mailboxes.
+    if !mirror_names
+        .iter()
+        .any(|n| n.eq_ignore_ascii_case("newstargeted.com.json"))
+    {
+        mirror_names.push("newstargeted.com.json".into());
+    }
+    for name in mirror_names {
+        let host_path = domains.join(name);
+        let _ = std::fs::write(&host_path, format!("{pretty}\n"));
+    }
+    // Soften SameSite for panel reverse-proxy labs (host:port).
+    let ini = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/configs/application.ini");
+    if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
+        let updated = ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
+        if updated != ini_raw {
+            let _ = std::fs::write(&ini, updated);
+        }
+    }
+    let _ = std::process::Command::new("chown")
+        .args([
+            "-R",
+            "cpn-webmail:cpn-webmail",
+            &format!("{SNAPPYMAIL_DATA_DIR}_data_"),
+        ])
+        .status();
     Ok(())
 }
 
@@ -362,10 +445,12 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
         if !include_ok {
             let _ = configure_snappymail_external_data(docroot);
         }
+        let _ = ensure_snappymail_local_imap_defaults();
         let _ = std::process::Command::new("bash")
             .args([
                 "-c",
-                "command -v semanage >/dev/null 2>&1 && \
+                "command -v setsebool >/dev/null 2>&1 && setsebool -P httpd_can_network_connect 1 || true; \
+                 command -v semanage >/dev/null 2>&1 && \
                  (semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || \
                   semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/cpn-webmail(/.*)?' || true); \
                  restorecon -Rv /var/lib/cpn-webmail >/dev/null 2>&1 || true",
