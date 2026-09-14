@@ -218,13 +218,11 @@ pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     }
     // Soften SameSite for panel reverse-proxy labs (host:port).
     let ini = Path::new(SNAPPYMAIL_DATA_DIR).join("_data_/_default_/configs/application.ini");
-    if ini.is_file() {
-        if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
-            if ini_raw.contains("cookie_samesite = \"Strict\"") {
-                let updated =
-                    ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
-                let _ = std::fs::write(&ini, updated);
-            }
+    if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
+        let updated =
+            ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
+        if updated != ini_raw {
+            let _ = std::fs::write(&ini, updated);
         }
     }
     let _ = std::process::Command::new("chown")
