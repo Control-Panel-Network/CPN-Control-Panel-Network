@@ -51,11 +51,7 @@ pub fn mailbox_choices() -> Vec<(String, String)> {
         WEBMAIL_ADMIN_CHOICE.to_string(),
         webmail_admin_option_label(),
     )];
-    out.extend(
-        list_accounts()
-            .into_iter()
-            .map(|a| (a.id, a.address)),
-    );
+    out.extend(list_accounts().into_iter().map(|a| (a.id, a.address)));
     out
 }
 
@@ -81,7 +77,9 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
         .iter_mut()
         .find(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc))
     else {
-        return Err(format!("Mailbox `{key_lc}` not found in the panel registry"));
+        return Err(format!(
+            "Mailbox `{key_lc}` not found in the panel registry"
+        ));
     };
     let address = account.address.clone();
     account.mailbox_password = new_password.to_string();

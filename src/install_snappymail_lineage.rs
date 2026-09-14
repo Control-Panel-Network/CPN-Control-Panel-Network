@@ -33,9 +33,7 @@ pub fn any_lineage_installed() -> bool {
     if crate::apps_nextcloud::nextsnapmail_app_present() {
         return true;
     }
-    lineage_data_dirs()
-        .iter()
-        .any(|d| Path::new(d).is_dir())
+    lineage_data_dirs().iter().any(|d| Path::new(d).is_dir())
 }
 
 /// Application data directories for every installed SnappyMail-family client.
@@ -202,7 +200,10 @@ pub fn list_admin_identities() -> Vec<LineageAdminIdentity> {
     for data_dir in lineage_data_dirs() {
         let login = read_admin_login(&data_dir).unwrap_or_else(|| "admin".into());
         let client_id = client_id_for_data_dir(&data_dir);
-        if out.iter().any(|i: &LineageAdminIdentity| i.client_id == client_id) {
+        if out
+            .iter()
+            .any(|i: &LineageAdminIdentity| i.client_id == client_id)
+        {
             continue;
         }
         out.push(LineageAdminIdentity {
@@ -395,7 +396,10 @@ mod tests {
 
     #[test]
     fn client_id_from_paths() {
-        assert_eq!(client_id_for_data_dir("/var/lib/cpn-webmail/tachyon/"), "tachyon");
+        assert_eq!(
+            client_id_for_data_dir("/var/lib/cpn-webmail/tachyon/"),
+            "tachyon"
+        );
         assert_eq!(
             client_id_for_data_dir("/opt/nextcloud/data/appdata_x/nextsnapmail"),
             "nextsnapmail"
