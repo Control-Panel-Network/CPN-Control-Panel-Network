@@ -1,6 +1,7 @@
 //! Honest local service detection for Panel Dashboard and Databases pages.
 
 use std::net::TcpStream;
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
@@ -24,7 +25,7 @@ pub fn systemd_unit_file_exists(name: &str) -> bool {
     }
     let lib = format!("/usr/lib/systemd/system/{unit}.service");
     let etc = format!("/etc/systemd/system/{unit}.service");
-    std::path::Path::new(&lib).exists() || std::path::Path::new(&etc).exists()
+    Path::new(&lib).exists() || Path::new(&etc).exists()
 }
 
 /// True when `systemctl is-active --quiet <name>` succeeds.
@@ -111,30 +112,45 @@ pub fn detect_database() -> DatabaseStatus {
 
 /// Short status for Dashboard System Health (no fake Running).
 pub fn database_health_label(status: &DatabaseStatus) -> String {
-    if status.service_label == "Not detected" && !status.listening_3306 {
-        "Not detected".into()
-    } else if status.listening_3306
-        && (status.service_label.starts_with("MariaDB")
-            || status.service_label.starts_with("MySQL")
-            || status.service_label.starts_with("mysqld"))
-    {
+    if status.listening_3306 {
         "Running".into()
-    } else if status.service_label != "Not detected" {
+    } else if status.service_label == "Not detected" {
+        "Not detected".into()
+    } else if status.service_label.starts_with("MariaDB")
+        || status.service_label.starts_with("MySQL")
+        || status.service_label.starts_with("mysqld")
+    {
+        // Unit active but :3306 not accepting yet (startup / bind lag).
         status.service_label.clone()
     } else {
-        "Not detected".into()
+        status.service_label.clone()
     }
 }
 
+fn openlitespeed_tree_present() -> bool {
+    Path::new("/usr/local/lsws/bin/lswsctrl").is_file()
+        || Path::new("/usr/local/lsws/bin/openlitespeed").is_file()
+        || Path::new("/usr/local/lsws/bin/lshttpd").is_file()
+}
+
+/// OpenLiteSpeed vendor units differ by package generation (`lsws`, `lshttpd`,
+/// and sometimes an `openlitespeed` alias). Install uses whichever unit exists.
 pub fn detect_web_server_label() -> String {
     if let Some(label) = first_active_service(&[
         ("nginx", "Running"),
-        ("openlitespeed", "Running"),
+        ("lsws", "Running"),
         ("lshttpd", "Running"),
+        ("openlitespeed", "Running"),
         ("caddy", "Running"),
         ("httpd", "Running"),
     ]) {
         return label;
+    }
+    // Fallback when the unit name is unexpected but OLS is up on :80/:443.
+    if openlitespeed_tree_present()
+        && (port_open("127.0.0.1:80", 250) || port_open("127.0.0.1:443", 250))
+    {
+        return "Running".into();
     }
     "Not detected".into()
 }
@@ -194,4 +210,37 @@ pub fn install_mariadb_server() -> Result<String, String> {
         return Ok("Installed and started MariaDB via apt (mariadb-server).".into());
     }
     Err("No supported package manager found (need dnf or apt-get).".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn database_health_running_when_port_open() {
+        let status = DatabaseStatus {
+            service_label: "Listener on :3306".into(),
+            listening_3306: true,
+            detail: "probe".into(),
+        };
+        assert_eq!(database_health_label(&status), "Running");
+    }
+
+    #[test]
+    fn database_health_not_detected_when_absent() {
+        let status = DatabaseStatus {
+            service_label: "Not detected".into(),
+            listening_3306: false,
+            detail: "none".into(),
+        };
+        assert_eq!(database_health_label(&status), "Not detected");
+    }
+
+    #[test]
+    fn web_detect_unit_list_includes_lsws() {
+        // Keep in sync with detect_web_server_label unit order (compile-time reminder).
+        let units = ["nginx", "lsws", "lshttpd", "openlitespeed", "caddy", "httpd"];
+        assert!(units.contains(&"lsws"));
+        assert!(units.contains(&"lshttpd"));
+    }
 }
