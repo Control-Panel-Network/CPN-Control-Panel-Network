@@ -42,6 +42,7 @@ pub mod install_http_ports;
 pub mod install_journal;
 pub mod install_mail_backend;
 pub mod install_recipes;
+pub mod install_selinux_mail;
 pub mod install_server;
 pub mod install_webmail;
 pub mod install_webmail_health;
