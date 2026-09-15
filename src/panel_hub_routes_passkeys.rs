@@ -1,7 +1,7 @@
 //! Passkey (WebAuthn) HTTP routes: register, list/delete, and login ceremonies.
 
 use crate::account_mgmt::find_account;
-use crate::account_passkeys::{delete_passkey, list_passkey_summaries};
+use crate::account_passkeys::{delete_passkey, list_passkey_summaries, rename_passkey};
 use crate::installer::AppState;
 use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
@@ -63,6 +63,14 @@ pub struct PasskeyRegisterFinishBody {
 pub struct PasskeyDeleteForm {
     #[serde(default)]
     id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRenameForm {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    label: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,6 +161,21 @@ pub async fn passkey_delete_post(
     };
     match delete_passkey(&user, form.id.trim()) {
         Ok(()) => redirect_notice("/account/users/modify", Some("Passkey removed"), None),
+        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+    }
+}
+
+#[post("/account/users/profile/passkey/rename")]
+pub async fn passkey_rename_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PasskeyRenameForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match rename_passkey(&user, form.id.trim(), form.label.trim()) {
+        Ok(()) => redirect_notice("/account/users/modify", Some("Passkey renamed"), None),
         Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }

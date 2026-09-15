@@ -153,6 +153,68 @@ pub fn delete_passkey(username: &str, id: &str) -> Result<(), String> {
     save_passkeys(&store)
 }
 
+/// Update the display label for a stored passkey (max 64 chars).
+pub fn rename_passkey(username: &str, id: &str, new_label: &str) -> Result<(), String> {
+    let trimmed = new_label.trim();
+    if trimmed.is_empty() {
+        return Err("Label is required".into());
+    }
+    let label: String = trimmed.chars().take(64).collect();
+    let mut store = load_passkeys(username);
+    let Some(entry) = store.credentials.iter_mut().find(|c| c.id == id) else {
+        return Err("Passkey not found".into());
+    };
+    entry.label = label;
+    save_passkeys(&store)
+}
+
+/// Format a unix timestamp as `dd/mm/yyyy HH:MM` (local when `date` is available).
+pub fn format_passkey_timestamp(ts: u64) -> String {
+    if ts == 0 {
+        return "-".into();
+    }
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        if let Ok(out) = Command::new("date")
+            .args(["-d", &format!("@{ts}"), "+%d/%m/%Y %H:%M"])
+            .output()
+        {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !text.is_empty() {
+                    return text;
+                }
+            }
+        }
+    }
+    format_passkey_timestamp_utc(ts)
+}
+
+fn format_passkey_timestamp_utc(ts: u64) -> String {
+    let days = ts / 86_400;
+    let rem = ts % 86_400;
+    let hours = rem / 3_600;
+    let mins = (rem % 3_600) / 60;
+    let (y, m, d) = civil_from_days(days as i64);
+    format!("{d:02}/{m:02}/{y} {hours:02}:{mins:02}")
+}
+
+/// Howard Hinnant civil_from_days (proleptic Gregorian).
+fn civil_from_days(days: i64) -> (i32, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m as u32, d as u32)
+}
+
 /// Remove every registered passkey for an account. Returns how many were removed.
 pub fn clear_all_passkeys(username: &str) -> Result<usize, String> {
     let store = load_passkeys(username);
@@ -282,5 +344,23 @@ mod tests {
             assert!(!path.exists());
             assert!(!has_passkeys("admin"));
         });
+    }
+
+    #[test]
+    fn rename_missing_and_empty_label_errors() {
+        with_test_data_dir(|| {
+            let missing = rename_passkey("admin", "no-such-id", "Laptop").unwrap_err();
+            assert!(missing.contains("not found"));
+            let empty = rename_passkey("admin", "any", "   ").unwrap_err();
+            assert!(empty.contains("required"));
+        });
+    }
+
+    #[test]
+    fn format_passkey_timestamp_utc_style() {
+        assert_eq!(format_passkey_timestamp(0), "-");
+        // 15/09/2026 17:11:37 UTC (1789492297)
+        let formatted = format_passkey_timestamp_utc(1_789_492_297);
+        assert_eq!(formatted, "15/09/2026 17:11");
     }
 }
