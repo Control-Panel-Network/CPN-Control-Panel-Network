@@ -313,28 +313,30 @@ pub fn finish_authentication(
         CeremonyKind::Authenticate { state } => {
             let result = webauthn
                 .finish_passkey_authentication(credential, &state)
-                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
-            let username =
-                passkey_owner(result.cred_id()).ok_or_else(|| {
-                    "That passkey is not registered for this panel.".to_string()
+                .map_err(|_| {
+                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
                 })?;
+            let username = passkey_owner(result.cred_id())
+                .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
             (username, result)
         }
         CeremonyKind::Discoverable(state) => {
             let (_, credential_id) = webauthn
                 .identify_discoverable_authentication(credential)
-                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
-            let username =
-                passkey_owner(credential_id).ok_or_else(|| {
-                    "That passkey is not registered for this panel.".to_string()
+                .map_err(|_| {
+                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
                 })?;
+            let username = passkey_owner(credential_id)
+                .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
             let keys = passkeys_for_auth(&username)
                 .iter()
                 .map(DiscoverableKey::from)
                 .collect::<Vec<_>>();
             let result = webauthn
                 .finish_discoverable_authentication(credential, state, &keys)
-                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
+                .map_err(|_| {
+                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
+                })?;
             (username, result)
         }
         CeremonyKind::Register(_) => return Err("Passkey ceremony type mismatch".into()),

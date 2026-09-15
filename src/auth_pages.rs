@@ -124,7 +124,8 @@ pub fn panel_login_html_with_gate(
             msg = html_escape(gate.warnings.first().map(String::as_str).unwrap_or(""))
         )
     } else {
-        r#"<p class="notice" id="cpn-login-services" role="status" data-ready="1" hidden></p>"#.into()
+        r#"<p class="notice" id="cpn-login-services" role="status" data-ready="1" hidden></p>"#
+            .into()
     };
     let error_block = match error {
         Some(message) if !message.is_empty() => format!(
@@ -576,7 +577,7 @@ pub fn installer_token_required_html() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{forgot_password_html, panel_login_html, panel_mfa_html, MfaPageOptions};
+    use super::{MfaPageOptions, forgot_password_html, panel_login_html, panel_mfa_html};
     use crate::model::InstallerStatus;
 
     #[test]

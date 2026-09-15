@@ -6,12 +6,12 @@ use crate::installer::AppState;
 use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
 use crate::panel_session::{
-    create_session_token, read_mfa_pending_cookie, request_https_from_headers,
-    session_secret, verify_mfa_pending_token,
+    create_session_token, read_mfa_pending_cookie, request_https_from_headers, session_secret,
+    verify_mfa_pending_token,
 };
 use crate::panel_webauthn::{
-    finish_authentication, finish_registration, start_authentication, start_authentication_for_user,
-    start_registration, webauthn_for_request,
+    finish_authentication, finish_registration, start_authentication,
+    start_authentication_for_user, start_registration, webauthn_for_request,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::Deserialize;
@@ -164,10 +164,7 @@ fn services_unavailable_json() -> HttpResponse {
     } else {
         gate.message
     };
-    json_err(
-        actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
-        &message,
-    )
+    json_err(actix_web::http::StatusCode::SERVICE_UNAVAILABLE, &message)
 }
 
 fn json_session_ok(
@@ -178,8 +175,7 @@ fn json_session_ok(
 ) -> HttpResponse {
     let secret = session_secret(Some(&state.token));
     let token = create_session_token(session_user, &secret);
-    let response =
-        crate::auth_api::login_success_response(http, &token, session_user, next);
+    let response = crate::auth_api::login_success_response(http, &token, session_user, next);
     let location = response
         .headers()
         .get(actix_web::http::header::LOCATION)
@@ -187,7 +183,10 @@ fn json_session_ok(
         .unwrap_or("/dashboard")
         .to_string();
     let mut builder = HttpResponse::Ok();
-    for cookie_hdr in response.headers().get_all(actix_web::http::header::SET_COOKIE) {
+    for cookie_hdr in response
+        .headers()
+        .get_all(actix_web::http::header::SET_COOKIE)
+    {
         builder.append_header((actix_web::http::header::SET_COOKIE, cookie_hdr.clone()));
     }
     builder.json(serde_json::json!({
@@ -274,10 +273,7 @@ fn mfa_pending_username(http: &HttpRequest, state: &AppState) -> Option<String> 
 }
 
 #[post("/login/2fa/passkey/start")]
-pub async fn passkey_mfa_start(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
+pub async fn passkey_mfa_start(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(username) = mfa_pending_username(&http, &state) else {
         return json_err(
             actix_web::http::StatusCode::UNAUTHORIZED,

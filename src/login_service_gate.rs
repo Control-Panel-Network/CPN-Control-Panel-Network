@@ -35,10 +35,7 @@ pub struct ServiceSlice {
 }
 
 fn web_stack_installed() -> bool {
-    if load_manifest()
-        .and_then(|m| m.selected_server)
-        .is_some()
-    {
+    if load_manifest().and_then(|m| m.selected_server).is_some() {
         return true;
     }
     if openlitespeed_tree_present() {
@@ -66,9 +63,7 @@ fn database_stack_installed() -> bool {
 }
 
 fn mail_stack_expected() -> bool {
-    load_manifest()
-        .and_then(|m| m.selected_mail)
-        .is_some()
+    load_manifest().and_then(|m| m.selected_mail).is_some()
         || ["postfix", "exim4", "exim", "dovecot"]
             .iter()
             .any(|unit| systemd_unit_file_exists(unit))
@@ -140,8 +135,7 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
         }
         if !web_expected && !db_expected {
             warnings.push(
-                "No managed web server or MariaDB install was detected. Sign-in is allowed."
-                    .into(),
+                "No managed web server or MariaDB install was detected. Sign-in is allowed.".into(),
             );
         }
 
@@ -218,7 +212,12 @@ mod tests {
         let json = serde_json::to_value(&status).expect("json");
         assert_eq!(json["ready"], false);
         assert!(json["blocking"].as_array().unwrap().len() == 2);
-        assert!(json["message"].as_str().unwrap().contains("Sign-in is disabled"));
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("Sign-in is disabled")
+        );
     }
 
     #[test]

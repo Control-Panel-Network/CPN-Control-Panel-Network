@@ -8,9 +8,8 @@ use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::has_passkeys;
 use crate::auth_pages::{
-    installer_token_required_html, panel_login_html, panel_mfa_html, MfaPageOptions,
+    MfaPageOptions, installer_token_required_html, panel_login_html, panel_mfa_html,
 };
-use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
     panel_login_url_for, smtp_status_public, token_matches,
@@ -21,6 +20,7 @@ use crate::login_next::{
     mfa_location, post_login_location, read_login_return_cookie, referer_return_path,
     request_return_path,
 };
+use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
@@ -348,8 +348,8 @@ pub async fn login_mfa_page(
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
     let secret = session_secret(Some(&state.token));
-    let pending_user = read_mfa_pending_cookie(cookie)
-        .and_then(|token| verify_mfa_pending_token(&token, &secret));
+    let pending_user =
+        read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret));
     let next = first_safe_next(&[query.get("next").map(String::as_str)]);
     let Some(username) = pending_user else {
         return HttpResponse::SeeOther()
@@ -419,7 +419,12 @@ pub async fn login_mfa_submit(
             )),
         Err(error) => HttpResponse::TooManyRequests()
             .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(&payload, Some(&error), next.as_deref(), options)),
+            .body(panel_mfa_html(
+                &payload,
+                Some(&error),
+                next.as_deref(),
+                options,
+            )),
     }
 }
 
