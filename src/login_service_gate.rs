@@ -176,6 +176,11 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
             } else {
                 warnings.first().cloned().unwrap_or_default()
             }
+        } else if blocking.len() == 1 {
+            format!(
+                "Panel services are still starting. Sign-in is disabled until {} is running.",
+                blocking[0]
+            )
         } else {
             let list = blocking.join(" and ");
             format!(
