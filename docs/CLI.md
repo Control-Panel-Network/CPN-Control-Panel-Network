@@ -80,6 +80,21 @@ Options used by account commands:
 - `--generate` — generate a password that satisfies the default password policy.
 - `--yes` — skip destructive-operation confirmation where supported.
 
+## Passkeys
+
+Manage WebAuthn passkeys for panel accounts from SSH (no web UI). Output never includes credential secrets; only id, label, and timestamps.
+
+```bash
+sudo cpn passkey list --username admin
+sudo cpn passkey remove --username admin --id <credential-id>
+sudo cpn passkey clear --username admin --yes
+```
+
+- `list`: print registered passkeys for the account (`id`, `label`, `created_unix`, `last_used_unix`).
+- `remove`: delete one passkey by `--id` from `list`.
+- `clear`: delete every passkey for the account; requires `--yes`.
+- All mutations and list require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir.
+
 ## Sites
 
 ```bash
