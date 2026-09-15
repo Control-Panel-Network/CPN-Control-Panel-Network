@@ -280,38 +280,68 @@ pub fn start_authentication(
     Ok((id, rcr))
 }
 
+/// Start a passkey assertion limited to one account (2FA step after password).
+pub fn start_authentication_for_user(
+    webauthn: &Webauthn,
+    username: &str,
+) -> Result<(String, RequestChallengeResponse), String> {
+    let keys = passkeys_for_auth(username);
+    if keys.is_empty() {
+        return Err("No passkey is registered for this account.".into());
+    }
+    let (rcr, state) = webauthn
+        .start_passkey_authentication(&keys)
+        .map_err(|_| "Could not start passkey authentication.".to_string())?;
+    let id = new_ceremony_id();
+    save_ceremony(&CeremonyRecord {
+        id: id.clone(),
+        username: username.to_string(),
+        created_at_unix: now_unix(),
+        kind: CeremonyKind::Authenticate { state },
+    })?;
+    Ok((id, rcr))
+}
+
 pub fn finish_authentication(
     webauthn: &Webauthn,
     ceremony_id: &str,
     credential: &PublicKeyCredential,
 ) -> Result<String, String> {
     let record = take_ceremony(ceremony_id)?;
+    let expected_user = record.username.clone();
     let (username, result) = match record.kind {
         CeremonyKind::Authenticate { state } => {
             let result = webauthn
                 .finish_passkey_authentication(credential, &state)
-                .map_err(|_| "Incorrect passkey".to_string())?;
+                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
             let username =
-                passkey_owner(result.cred_id()).ok_or_else(|| "Incorrect passkey".to_string())?;
+                passkey_owner(result.cred_id()).ok_or_else(|| {
+                    "That passkey is not registered for this panel.".to_string()
+                })?;
             (username, result)
         }
         CeremonyKind::Discoverable(state) => {
             let (_, credential_id) = webauthn
                 .identify_discoverable_authentication(credential)
-                .map_err(|_| "Incorrect passkey".to_string())?;
+                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
             let username =
-                passkey_owner(credential_id).ok_or_else(|| "Incorrect passkey".to_string())?;
+                passkey_owner(credential_id).ok_or_else(|| {
+                    "That passkey is not registered for this panel.".to_string()
+                })?;
             let keys = passkeys_for_auth(&username)
                 .iter()
                 .map(DiscoverableKey::from)
                 .collect::<Vec<_>>();
             let result = webauthn
                 .finish_discoverable_authentication(credential, state, &keys)
-                .map_err(|_| "Incorrect passkey".to_string())?;
+                .map_err(|_| "Incorrect passkey. Try again or use another sign-in method.".to_string())?;
             (username, result)
         }
         CeremonyKind::Register(_) => return Err("Passkey ceremony type mismatch".into()),
     };
+    if !expected_user.is_empty() && !expected_user.eq_ignore_ascii_case(&username) {
+        return Err("That passkey belongs to a different account.".into());
+    }
     // Persist counter / credential updates when the library reports a change.
     let mut creds = passkeys_for_auth(&username);
     if let Some(pk) = creds.iter_mut().find(|c| c.cred_id() == result.cred_id()) {
@@ -382,24 +412,83 @@ async function cpnJson(url,body){
 function cpnStripUrls(text){
   return String(text||'').replace(/https?:\/\/\S+/gi,'').replace(/\s{2,}/g,' ').replace(/\s+([.,;:!?])/g,'$1').trim();
 }
+function cpnShowPasskeyError(message){
+  const msg=cpnStripUrls(message)||'Passkey sign-in failed.';
+  const banner=document.getElementById('i18n-login-error');
+  if(banner){
+    banner.hidden=false;
+    banner.removeAttribute('hidden');
+    banner.setAttribute('role','alert');
+    banner.textContent=msg;
+    try{ banner.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  }
+  const status=document.getElementById('cpn-passkey-login-status')
+    ||document.getElementById('cpn-passkey-status');
+  if(status){
+    status.textContent=msg;
+    status.style.color='#991b1b';
+    status.style.fontWeight='650';
+  }
+  if(!banner && !status){
+    try{ window.alert(msg); }catch(e){}
+  }
+}
+function cpnClearPasskeyError(){
+  const banner=document.getElementById('i18n-login-error');
+  if(banner && !document.body.getAttribute('data-login-error')){
+    banner.hidden=true;
+    banner.textContent='';
+  }
+  const status=document.getElementById('cpn-passkey-login-status')
+    ||document.getElementById('cpn-passkey-status');
+  if(status){
+    status.textContent='';
+    status.style.color='';
+    status.style.fontWeight='';
+  }
+}
 function cpnPasskeyUserMessage(err,kind){
   const name=String((err&&err.name)||'');
   const raw=String((err&&err.message)||err||'');
-  const cancelled=name==='NotAllowedError'||name==='AbortError'
+  const lower=raw.toLowerCase();
+  if(/does not support passkeys/i.test(raw)){
+    return 'This browser does not support passkeys.';
+  }
+  if(/open this page as http:\/\/localhost/i.test(raw) || /not 127\.0\.0\.1/i.test(raw)){
+    return cpnStripUrls(raw) || 'Open this page as http://localhost (not 127.0.0.1) for passkeys.';
+  }
+  if(/no passkey is registered/i.test(raw) || /no passkeys registered/i.test(raw)){
+    return 'No passkey is registered for this account.';
+  }
+  if(/services are still starting|sign-in is disabled/i.test(raw)){
+    return cpnStripUrls(raw) || 'Panel services are still starting. Sign-in is temporarily disabled.';
+  }
+  if(name==='NotAllowedError'||name==='AbortError'
     ||/not allowed|timed out|timeout|abort|cancel+ed/i.test(raw)
-    ||/w3\.org\/TR\/webauthn/i.test(raw);
-  if(cancelled){
+    ||/w3\.org\/TR\/webauthn/i.test(raw)){
     return kind==='login'
-      ? 'Passkey sign-in was cancelled or timed out.'
-      : 'Passkey registration was cancelled or timed out.';
+      ? 'Passkey sign-in was cancelled or timed out. Try again.'
+      : 'Passkey registration was cancelled or timed out. Try again.';
+  }
+  if(name==='InvalidStateError' || /already registered|invalid state/i.test(lower)){
+    return kind==='login'
+      ? 'This passkey cannot be used right now. Try another device or authenticator.'
+      : 'This passkey is already registered.';
+  }
+  if(name==='SecurityError' || /relying party|rp id|securityerror/i.test(lower)){
+    return 'Passkey could not run for this site address. Prefer http://localhost with the same port, or your panel hostname.';
+  }
+  if(/incorrect passkey|not registered|different account|unknown credential/i.test(lower)){
+    return cpnStripUrls(raw) || 'Incorrect passkey. Try again or use another sign-in method.';
   }
   const cleaned=cpnStripUrls(raw);
   if(cleaned) return cleaned;
-  return kind==='login' ? 'Passkey sign-in failed.' : 'Passkey registration failed.';
+  return kind==='login' ? 'Passkey sign-in failed. Try again.' : 'Passkey registration failed. Try again.';
 }
 async function cpnRegisterPasskey(){
   const status=document.getElementById('cpn-passkey-status');
   try{
+    cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     // Browsers bind RP ID to the page host; use localhost (not 127.0.0.1) for create().
     if(location.hostname==='127.0.0.1'||location.hostname==='[::1]'||location.hostname==='::1'){
@@ -424,7 +513,9 @@ async function cpnRegisterPasskey(){
     if(go){ location.href=go; return; }
     location.reload();
   }catch(err){
-    if(status) status.textContent=cpnPasskeyUserMessage(err,'register');
+    const msg=cpnPasskeyUserMessage(err,'register');
+    cpnShowPasskeyError(msg);
+    if(status) status.textContent=msg;
   }
 }
 function cpnPasskeyRegisterNext(){
@@ -453,8 +544,12 @@ function cpnPasskeyRegisterNext(){
 async function cpnLoginPasskey(){
   const status=document.getElementById('cpn-passkey-login-status');
   try{
+    cpnClearPasskeyError();
+    if(document.body && document.body.getAttribute('data-services-ready')==='0'){
+      throw new Error('Panel services are still starting. Sign-in is disabled until Web server and MariaDB are running.');
+    }
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    if(status) status.textContent='Waiting for authenticator...';
+    if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
     const start=await cpnJson('/login/passkey/start',{});
     const pk=await cpnDecodeGetOptions(start.publicKey);
     const cred=await navigator.credentials.get({publicKey:pk});
@@ -466,7 +561,27 @@ async function cpnLoginPasskey(){
     });
     location.href=finish.redirect||'/dashboard';
   }catch(err){
-    if(status) status.textContent=cpnPasskeyUserMessage(err,'login');
+    cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
+  }
+}
+async function cpnMfaPasskey(){
+  const status=document.getElementById('cpn-passkey-login-status');
+  try{
+    cpnClearPasskeyError();
+    if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
+    if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
+    const start=await cpnJson('/login/2fa/passkey/start',{});
+    const pk=await cpnDecodeGetOptions(start.publicKey);
+    const cred=await navigator.credentials.get({publicKey:pk});
+    if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
+    const finish=await cpnJson('/login/2fa/passkey/finish',{
+      ceremony_id:start.ceremony_id,
+      credential:cpnCredToJson(cred),
+      next:(document.body&&document.body.getAttribute('data-login-next'))||new URLSearchParams(location.search).get('next')||''
+    });
+    location.href=finish.redirect||'/dashboard';
+  }catch(err){
+    cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
   }
 }
 "#
@@ -495,6 +610,14 @@ mod tests {
         assert!(
             script.contains("finish.redirect||next"),
             "client must honor server redirect"
+        );
+        assert!(
+            script.contains("function cpnShowPasskeyError"),
+            "login/2FA must surface high-contrast passkey errors"
+        );
+        assert!(
+            script.contains("function cpnMfaPasskey"),
+            "2FA page must offer passkey assertion"
         );
     }
 

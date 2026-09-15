@@ -6,7 +6,7 @@ use cpn_installer::auth_api::panel_user_from_request;
 use cpn_installer::auth_api::{
     account_setup, api_logout_get, api_logout_post, apple_touch_icon, cpn_brand_mark, cpn_logo,
     dashboard_page, favicon_ico, favicon_svg, login_mfa_page, login_mfa_submit, login_page,
-    login_submit, logout_get, logout_post, panel_alias,
+    login_services_status, login_submit, logout_get, logout_post, panel_alias,
 };
 use cpn_installer::auth_pages::installer_token_required_html;
 use cpn_installer::auth_password_reset_api::{
@@ -55,7 +55,8 @@ use cpn_installer::panel_hub_routes::{
     email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
     filemanager_alias, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
     ftp_delete_post, ftp_reset, ftp_reset_password_post, ftp_reset_post, passkey_delete_post,
-    passkey_login_finish, passkey_login_start, passkey_register_finish, passkey_register_start,
+    passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
+    passkey_register_finish, passkey_register_start,
     security_fail2ban, security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
     security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
     security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
@@ -1062,6 +1063,7 @@ async fn main() -> std::io::Result<()> {
             .service(api_status)
             .service(status_page)
             .service(login_page)
+            .service(login_services_status)
             .service(cpn_logo)
             .service(favicon_ico)
             .service(favicon_svg)
@@ -1072,6 +1074,8 @@ async fn main() -> std::io::Result<()> {
             .service(login_mfa_submit)
             .service(passkey_login_start)
             .service(passkey_login_finish)
+            .service(passkey_mfa_start)
+            .service(passkey_mfa_finish)
             .service(dashboard_page)
             .service(dashboard_ssh_security_review_snooze)
             .service(dashboard_ssh_security_review_show)

@@ -6,7 +6,11 @@ use crate::account::{
 };
 use crate::account_mfa::totp_enabled_for;
 use crate::account_mgmt::find_account;
-use crate::auth_pages::{installer_token_required_html, panel_login_html, panel_mfa_html};
+use crate::account_passkeys::has_passkeys;
+use crate::auth_pages::{
+    installer_token_required_html, panel_login_html, panel_mfa_html, MfaPageOptions,
+};
+use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::http_helpers::{
     authorized_request, enrich_status, install_finished, normalize_language, panel_account_ready,
     panel_login_url_for, smtp_status_public, token_matches,
@@ -121,7 +125,7 @@ fn maybe_upgrade_password_hash(
     let _ = write_account_file(path, boot);
 }
 
-fn login_success_response(
+pub(crate) fn login_success_response(
     http: &HttpRequest,
     token: &str,
     username: &str,
@@ -200,6 +204,26 @@ pub async fn login_page(
     builder.body(panel_login_html(&payload, None, next.as_deref()))
 }
 
+#[get("/api/login/services")]
+pub async fn login_services_status() -> HttpResponse {
+    HttpResponse::Ok().json(evaluate_login_services())
+}
+
+fn services_not_ready_login(
+    payload: &crate::model::InstallerStatus,
+    next: Option<&str>,
+) -> HttpResponse {
+    let gate = evaluate_login_services();
+    HttpResponse::ServiceUnavailable()
+        .content_type("text/html; charset=utf-8")
+        .body(crate::auth_pages::panel_login_html_with_gate(
+            payload,
+            Some(gate.message.as_str()),
+            next,
+            &gate,
+        ))
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct LoginForm {
     #[serde(default)]
@@ -234,11 +258,15 @@ pub async fn login_submit(
     }
 
     let payload = enrich_status(status, &state.token);
+    let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
+    if !login_services_ready() {
+        return services_not_ready_login(&payload, next.as_deref());
+    }
+
     let locale = payload.language.as_str();
     let username = form.username.trim();
     let password = form.password.as_str();
     let _remember_me = form.remember_me.trim() == "1";
-    let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
 
     let authed = if username.is_empty() || password.is_empty() {
         None
@@ -268,8 +296,9 @@ pub async fn login_submit(
 
     let secret = session_secret(Some(&state.token));
     let secure = request_secure(&http);
+    let needs_mfa = totp_enabled_for(&session_user) || has_passkeys(&session_user);
 
-    if totp_enabled_for(&session_user) {
+    if needs_mfa {
         let pending = create_mfa_pending_token(&session_user, &secret);
         let mut builder = HttpResponse::SeeOther();
         builder.append_header(("Location", mfa_location(next.as_deref())));
@@ -295,6 +324,13 @@ struct MfaForm {
     next: String,
 }
 
+fn mfa_options_for(username: &str) -> MfaPageOptions {
+    MfaPageOptions {
+        totp_available: totp_enabled_for(username),
+        passkey_available: has_passkeys(username),
+    }
+}
+
 #[get("/login/2fa")]
 pub async fn login_mfa_page(
     http: HttpRequest,
@@ -312,18 +348,22 @@ pub async fn login_mfa_page(
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
     let secret = session_secret(Some(&state.token));
-    let pending_ok = read_mfa_pending_cookie(cookie)
-        .and_then(|token| verify_mfa_pending_token(&token, &secret))
-        .is_some();
+    let pending_user = read_mfa_pending_cookie(cookie)
+        .and_then(|token| verify_mfa_pending_token(&token, &secret));
     let next = first_safe_next(&[query.get("next").map(String::as_str)]);
-    if !pending_ok {
+    let Some(username) = pending_user else {
         return HttpResponse::SeeOther()
             .append_header(("Location", login_location(next.as_deref())))
             .finish();
-    }
+    };
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(panel_mfa_html(&payload, None, next.as_deref()))
+        .body(panel_mfa_html(
+            &payload,
+            None,
+            next.as_deref(),
+            mfa_options_for(&username),
+        ))
 }
 
 #[post("/login/2fa")]
@@ -352,6 +392,18 @@ pub async fn login_mfa_submit(
             .finish();
     };
 
+    let options = mfa_options_for(&username);
+    if !options.totp_available {
+        return HttpResponse::Unauthorized()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_mfa_html(
+                &payload,
+                Some("Use a passkey to finish sign-in for this account."),
+                next.as_deref(),
+                options,
+            ));
+    }
+
     match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
         Ok(true) => {
             let token = create_session_token(&username, &secret);
@@ -363,10 +415,11 @@ pub async fn login_mfa_submit(
                 &payload,
                 Some("Invalid authenticator or backup code."),
                 next.as_deref(),
+                options,
             )),
         Err(error) => HttpResponse::TooManyRequests()
             .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(&payload, Some(&error), next.as_deref())),
+            .body(panel_mfa_html(&payload, Some(&error), next.as_deref(), options)),
     }
 }
 
