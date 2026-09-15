@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Activity Board / dashboard hang on EL10**: when `firewalld` is installed but inactive, `firewall-cmd` can block forever on D-Bus (`Waiting on dbus connection...`). That blocked the whole `/dashboard` render after Activity Board started calling `firewall_status()`. Probes now check `systemctl is-active firewalld` first and apply a short timeout to host command helpers. Package `%posttrans` also `try-restart`s `cpn-installer` so RPM upgrades do not leave a deleted-inode process serving old UI.
+
 ### Added
 
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.

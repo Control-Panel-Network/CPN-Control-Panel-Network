@@ -2,19 +2,65 @@
 
 use crate::paths::default_data_dir;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
+
+/// Default wall-clock budget for host probe commands (firewalld D-Bus can hang when inactive).
+const CMD_TIMEOUT: Duration = Duration::from_secs(3);
+
+fn run_command_timed(bin: &str, args: &[&str], timeout: Duration) -> Option<Output> {
+    let mut child = Command::new(bin)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                if let Some(mut pipe) = child.stdout.take() {
+                    let _ = pipe.read_to_end(&mut stdout);
+                }
+                let mut stderr = Vec::new();
+                if let Some(mut pipe) = child.stderr.take() {
+                    let _ = pipe.read_to_end(&mut stderr);
+                }
+                return Some(Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
 
 pub(crate) fn cmd_ok(bin: &str, args: &[&str]) -> bool {
-    Command::new(bin)
-        .args(args)
-        .output()
+    run_command_timed(bin, args, CMD_TIMEOUT)
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
 
 pub(crate) fn cmd_stdout(bin: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new(bin).args(args).output().ok()?;
+    let out = run_command_timed(bin, args, CMD_TIMEOUT)?;
     if !out.status.success() {
         return None;
     }
@@ -51,6 +97,18 @@ pub fn firewall_status() -> FirewallStatus {
         .unwrap_or_default();
 
     if which_exists("firewall-cmd") {
+        // When firewalld is stopped, firewall-cmd can block forever on D-Bus
+        // ("Waiting on dbus connection..."). Prefer systemctl, then timed probes.
+        let unit = systemctl_active("firewalld");
+        if unit != "active" {
+            return FirewallStatus {
+                backend: "firewalld".into(),
+                active: false,
+                detail: format!("firewalld unit: {unit}"),
+                services: Vec::new(),
+                journal_excerpt,
+            };
+        }
         let state = cmd_stdout("firewall-cmd", &["--state"]).unwrap_or_else(|| "unknown".into());
         let active = state.eq_ignore_ascii_case("running");
         let services = cmd_stdout("firewall-cmd", &["--list-services"])
@@ -368,5 +426,16 @@ mod tests {
     fn sshd_toggle_rejects_unknown() {
         let err = apply_sshd_toggle("AllowUsers", "root").unwrap_err();
         assert!(err.contains("allowlisted"));
+    }
+
+    #[test]
+    fn timed_command_kills_slow_child() {
+        let start = Instant::now();
+        let out = run_command_timed("sleep", &["5"], Duration::from_millis(200));
+        assert!(out.is_none(), "slow sleep should time out");
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "timeout path should return quickly"
+        );
     }
 }

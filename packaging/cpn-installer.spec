@@ -33,6 +33,15 @@ install -Dpm 0755 %{SOURCE3} %{buildroot}/etc/profile.d/cpn-motd.sh
 %post
 systemctl daemon-reload >/dev/null 2>&1 || :
 
+%posttrans
+# Replace the running binary after rpm -U; without restart the old inode keeps
+# serving until reboot (Activity Board and other UI stay stale).
+systemctl daemon-reload >/dev/null 2>&1 || :
+if systemctl is-enabled cpn-installer.service >/dev/null 2>&1; then
+  systemctl try-restart cpn-installer.service >/dev/null 2>&1 || \
+    systemctl restart cpn-installer.service >/dev/null 2>&1 || :
+fi
+
 %postun
 systemctl daemon-reload >/dev/null 2>&1 || :
 
