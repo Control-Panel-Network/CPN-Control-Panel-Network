@@ -48,6 +48,28 @@ fn ceremony_path(id: &str) -> PathBuf {
     ceremonies_dir().join(format!("{id}.json"))
 }
 
+/// Remove pending WebAuthn ceremony files (login/register challenges). Returns count removed.
+pub fn clear_all_ceremonies() -> Result<usize, String> {
+    let dir = ceremonies_dir();
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Ok(0);
+    };
+    let mut removed = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => removed = removed.saturating_add(1),
+            Err(err) => {
+                return Err(format!("Could not remove ceremony {}: {err}", path.display()));
+            }
+        }
+    }
+    Ok(removed)
+}
+
 fn write_secret_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)

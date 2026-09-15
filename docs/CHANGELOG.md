@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CLI MFA management**: `cpn totp status|disable|clear --username <user>` and `cpn mfa clear --username <user> --yes` clear TOTP and/or passkeys (plus pending WebAuthn ceremonies) from SSH without printing secrets. Passkey clear alone does not remove TOTP; use these when `/login/2fa` Authenticator code should stop after password sign-in.
+
 ### Fixed
 
 - **Activity Board / dashboard hang on EL10**: when `firewalld` is installed but inactive, `firewall-cmd` can block forever on D-Bus (`Waiting on dbus connection...`). That blocked the whole `/dashboard` render after Activity Board started calling `firewall_status()`. Probes now check `systemctl is-active firewalld` first and apply a short timeout to host command helpers. Package `%posttrans` also `try-restart`s `cpn-installer` so RPM upgrades do not leave a deleted-inode process serving old UI.

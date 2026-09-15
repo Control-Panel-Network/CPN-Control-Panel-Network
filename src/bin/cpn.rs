@@ -14,8 +14,10 @@ use cpn_installer::cli_common::{
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
 use cpn_installer::cli_panel::{PanelCommands, run_panel};
+use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_passkeys::{PasskeyCommands, run as run_passkeys};
 use cpn_installer::cli_plugins;
+use cpn_installer::cli_totp::{TotpCommands, run as run_totp};
 use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::panel_ops_ssl_provider::SslProvider;
 use cpn_installer::paths;
@@ -73,6 +75,16 @@ enum Commands {
     Passkey {
         #[command(subcommand)]
         command: PasskeyCommands,
+    },
+    /// TOTP authenticator for panel accounts (status / disable / clear)
+    Totp {
+        #[command(subcommand)]
+        command: TotpCommands,
+    },
+    /// Combined MFA clear (TOTP + passkeys + ceremonies)
+    Mfa {
+        #[command(subcommand)]
+        command: MfaCommands,
     },
     /// Website records (JSON under $CPN_DATA_DIR/sites)
     Site {
@@ -249,6 +261,8 @@ fn run() -> Result<(), String> {
             println!("info     Alias for: cpn panel status");
             println!("account  Manage panel / operator accounts");
             println!("passkey  List, remove, or clear WebAuthn passkeys for an account");
+            println!("totp     Show or clear TOTP authenticator for an account");
+            println!("mfa      Clear all MFA (TOTP + passkeys) for an account");
             println!("password Reset a panel password from this terminal");
             println!(
                 "site     Manage website records under {}/sites",
@@ -350,6 +364,12 @@ fn run() -> Result<(), String> {
         },
         Commands::Passkey { command } => {
             run_passkeys(command, require_root_for_mutation, confirm_delete)
+        }
+        Commands::Totp { command } => {
+            run_totp(command, require_root_for_mutation, confirm_delete)
+        }
+        Commands::Mfa { command } => {
+            run_mfa(command, require_root_for_mutation, confirm_delete)
         }
         Commands::Site { command } => match command {
             SiteCommands::Ready { domain } => {
