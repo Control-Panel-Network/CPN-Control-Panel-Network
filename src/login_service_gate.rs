@@ -1,13 +1,16 @@
 //! Gate panel password/passkey sign-in until critical host services are ready.
 //!
-//! Critical by default: web server + MariaDB when those stacks were installed.
+//! Critical by default: web server + MariaDB when those stacks were installed
+//! (CPN manifest, OpenLiteSpeed tree, enabled systemd units, or server binaries).
 //! Mail is informational only (never blocks login). Installer/bootstrap token
 //! routes stay reachable outside this gate.
+//!
+//! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
     database_health_label, detect_database, detect_mail_service_label, detect_web_server_label,
-    openlitespeed_tree_present, systemd_unit_file_exists,
+    openlitespeed_tree_present, systemd_unit_enabled,
 };
 use serde::Serialize;
 use std::path::Path;
@@ -34,6 +37,45 @@ pub struct ServiceSlice {
     pub label: String,
 }
 
+fn gate_disabled_by_env() -> bool {
+    match std::env::var("CPN_LOGIN_SERVICE_GATE") {
+        Ok(raw) => matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "0" | "off" | "false" | "no" | "disable" | "disabled"
+        ),
+        Err(_) => false,
+    }
+}
+
+fn ready_status_unrestricted(message: &str) -> LoginServiceStatus {
+    LoginServiceStatus {
+        ready: true,
+        message: message.to_string(),
+        web: ServiceSlice {
+            expected: false,
+            running: true,
+            label: "n/a".into(),
+        },
+        database: ServiceSlice {
+            expected: false,
+            running: true,
+            label: "n/a".into(),
+        },
+        mail: ServiceSlice {
+            expected: false,
+            running: true,
+            label: "n/a".into(),
+        },
+        blocking: Vec::new(),
+        warnings: if message.is_empty() {
+            Vec::new()
+        } else {
+            vec![message.to_string()]
+        },
+    }
+}
+
+/// True when CPN or the host clearly installed a web stack meant to run.
 fn web_stack_installed() -> bool {
     if load_manifest().and_then(|m| m.selected_server).is_some() {
         return true;
@@ -41,6 +83,7 @@ fn web_stack_installed() -> bool {
     if openlitespeed_tree_present() {
         return true;
     }
+    // Enabled (not merely present) units: GitHub CI images ship unused unit files.
     [
         "nginx",
         "lsws",
@@ -50,23 +93,26 @@ fn web_stack_installed() -> bool {
         "httpd",
     ]
     .iter()
-    .any(|unit| systemd_unit_file_exists(unit))
+    .any(|unit| systemd_unit_enabled(unit))
 }
 
 fn database_stack_installed() -> bool {
-    ["mariadb", "mysql", "mysqld"]
-        .iter()
-        .any(|unit| systemd_unit_file_exists(unit))
-        || Path::new("/usr/sbin/mariadbd").is_file()
+    if Path::new("/usr/sbin/mariadbd").is_file()
         || Path::new("/usr/libexec/mariadbd").is_file()
         || Path::new("/usr/sbin/mysqld").is_file()
+    {
+        return true;
+    }
+    ["mariadb", "mysql", "mysqld"]
+        .iter()
+        .any(|unit| systemd_unit_enabled(unit))
 }
 
 fn mail_stack_expected() -> bool {
     load_manifest().and_then(|m| m.selected_mail).is_some()
         || ["postfix", "exim4", "exim", "dovecot"]
             .iter()
-            .any(|unit| systemd_unit_file_exists(unit))
+            .any(|unit| systemd_unit_enabled(unit))
 }
 
 fn is_running_label(label: &str) -> bool {
@@ -78,29 +124,13 @@ fn is_running_label(label: &str) -> bool {
 /// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
 /// are not locked out.
 pub fn evaluate_login_services() -> LoginServiceStatus {
+    if gate_disabled_by_env() {
+        return ready_status_unrestricted("");
+    }
+
     #[cfg(not(unix))]
     {
-        return LoginServiceStatus {
-            ready: true,
-            message: String::new(),
-            web: ServiceSlice {
-                expected: false,
-                running: true,
-                label: "n/a".into(),
-            },
-            database: ServiceSlice {
-                expected: false,
-                running: true,
-                label: "n/a".into(),
-            },
-            mail: ServiceSlice {
-                expected: false,
-                running: true,
-                label: "n/a".into(),
-            },
-            blocking: Vec::new(),
-            warnings: Vec::new(),
-        };
+        return ready_status_unrestricted("");
     }
 
     #[cfg(unix)]
@@ -223,9 +253,20 @@ mod tests {
     #[test]
     fn evaluate_returns_struct_without_panic() {
         let status = evaluate_login_services();
-        // On the developer Windows host this is always ready; on Linux labs it
-        // reflects live detection. Either way the call must succeed.
         let _ = status.ready;
         let _ = serde_json::to_string(&status).expect("serialize");
+    }
+
+    #[test]
+    fn env_can_disable_gate() {
+        unsafe {
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
+        }
+        let status = evaluate_login_services();
+        unsafe {
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
+        }
+        assert!(status.ready);
+        assert!(status.blocking.is_empty());
     }
 }
