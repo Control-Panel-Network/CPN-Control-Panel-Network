@@ -127,7 +127,7 @@ pub fn database_health_label(status: &DatabaseStatus) -> String {
     }
 }
 
-fn openlitespeed_tree_present() -> bool {
+pub fn openlitespeed_tree_present() -> bool {
     Path::new("/usr/local/lsws/bin/lswsctrl").is_file()
         || Path::new("/usr/local/lsws/bin/openlitespeed").is_file()
         || Path::new("/usr/local/lsws/bin/lshttpd").is_file()

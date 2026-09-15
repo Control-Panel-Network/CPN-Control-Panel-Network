@@ -87,6 +87,7 @@ fn login_valid_sets_session_and_redirects() {
         let session_secret = ephemeral_session_secret();
         unsafe {
             std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
         }
         write_admin_account(&password);
         runtime().block_on(async {
@@ -125,6 +126,7 @@ fn login_valid_sets_session_and_redirects() {
         });
         unsafe {
             std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
         }
     });
 }
@@ -137,6 +139,7 @@ fn login_invalid_returns_401_without_session_cookie() {
         let session_secret = ephemeral_session_secret();
         unsafe {
             std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
         }
         write_admin_account(&password);
         runtime().block_on(async {
@@ -168,6 +171,7 @@ fn login_invalid_returns_401_without_session_cookie() {
         });
         unsafe {
             std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
         }
     });
 }
@@ -202,6 +206,7 @@ fn login_honors_safe_next_and_rejects_external() {
         let session_secret = ephemeral_session_secret();
         unsafe {
             std::env::set_var("CPN_PANEL_SESSION_SECRET", &session_secret);
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
         }
         write_admin_account(&password);
         runtime().block_on(async {
@@ -249,6 +254,7 @@ fn login_honors_safe_next_and_rejects_external() {
         });
         unsafe {
             std::env::remove_var("CPN_PANEL_SESSION_SECRET");
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
         }
     });
 }

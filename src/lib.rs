@@ -65,6 +65,7 @@ pub mod listen_port;
 pub mod litespeed_stack;
 pub mod litespeed_webadmin_users;
 pub mod login_next;
+pub mod login_service_gate;
 pub mod mail_accounts;
 pub mod mail_outbound;
 pub mod mail_releases;
