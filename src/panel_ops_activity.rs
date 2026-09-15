@@ -114,14 +114,30 @@ fn auth_log_candidates() -> [&'static str; 4] {
     ]
 }
 
-fn tail_file(path: &Path, lines: usize) -> Option<String> {
-    let out = Command::new("tail")
-        .args(["-n", &lines.to_string()])
-        .arg(path)
+fn timed_output(bin: &str, args: &[&str], timeout_secs: u64) -> Option<std::process::Output> {
+    // Prefer coreutils timeout so hung journalctl/tail cannot block the dashboard.
+    let timeout_arg = timeout_secs.to_string();
+    if let Ok(out) = Command::new("timeout")
+        .arg(&timeout_arg)
+        .arg(bin)
+        .args(args)
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
-        .ok()?;
+    {
+        return Some(out);
+    }
+    Command::new(bin)
+        .args(args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+}
+
+fn tail_file(path: &Path, lines: usize) -> Option<String> {
+    let n = lines.to_string();
+    let out = timed_output("tail", &["-n", n.as_str(), path.to_str()?], 3)?;
     if !out.status.success() {
         return None;
     }
@@ -146,10 +162,12 @@ fn read_file_tail(path: &Path, lines: usize) -> Option<String> {
 }
 
 fn journal_auth_excerpt(lines: usize) -> Option<String> {
-    let out = Command::new("journalctl")
-        .args([
+    let n = lines.to_string();
+    let out = timed_output(
+        "journalctl",
+        &[
             "-n",
-            &lines.to_string(),
+            n.as_str(),
             "--no-pager",
             "-o",
             "short-iso",
@@ -158,11 +176,9 @@ fn journal_auth_excerpt(lines: usize) -> Option<String> {
             "_COMM=ssh",
             "+",
             "SYSLOG_IDENTIFIER=sshd",
-        ])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+        ],
+        5,
+    )?;
     if !out.status.success() {
         return None;
     }
