@@ -1,7 +1,10 @@
-//! `cpn passkey` subcommands: list / remove / clear WebAuthn credentials (no secrets).
+//! `cpn passkey` subcommands: list / rename / remove / clear WebAuthn credentials (no secrets).
 
 use crate::account_mgmt::find_account;
-use crate::account_passkeys::{clear_all_passkeys, delete_passkey, list_passkey_summaries};
+use crate::account_passkeys::{
+    clear_all_passkeys, delete_passkey, format_passkey_timestamp, list_passkey_summaries,
+    rename_passkey,
+};
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
@@ -10,6 +13,16 @@ pub enum PasskeyCommands {
     List {
         #[arg(long)]
         username: String,
+    },
+    /// Rename a passkey label by credential id
+    Rename {
+        #[arg(long)]
+        username: String,
+        /// Credential id from `cpn passkey list` (never a secret material dump)
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        label: String,
     },
     /// Remove one passkey by credential id
     Remove {
@@ -49,9 +62,26 @@ pub fn run(
             }
             for (id, label, created, last_used) in rows {
                 println!(
-                    "id={id}\tlabel={label}\tcreated_unix={created}\tlast_used_unix={last_used}"
+                    "id={id}\tlabel={label}\tcreated={}\tlast_used={}",
+                    format_passkey_timestamp(created),
+                    format_passkey_timestamp(last_used),
                 );
             }
+            Ok(())
+        }
+        PasskeyCommands::Rename {
+            username,
+            id,
+            label,
+        } => {
+            require_root()?;
+            let username = resolve_username(&username)?;
+            let id = id.trim();
+            if id.is_empty() {
+                return Err("Passkey --id is required".into());
+            }
+            rename_passkey(&username, id, &label)?;
+            println!("renamed passkey ok");
             Ok(())
         }
         PasskeyCommands::Remove { username, id } => {
@@ -134,6 +164,24 @@ mod tests {
             assert_eq!(username, "admin");
             let rows = list_passkey_summaries(&username);
             assert!(rows.is_empty());
+        });
+    }
+
+    #[test]
+    fn rename_missing_id_errors() {
+        with_test_data_dir(|| {
+            seed_account("admin");
+            let err = run(
+                PasskeyCommands::Rename {
+                    username: "admin".into(),
+                    id: "missing".into(),
+                    label: "New label".into(),
+                },
+                || Ok(()),
+                |_, _| Ok(()),
+            )
+            .unwrap_err();
+            assert!(err.contains("not found"));
         });
     }
 }

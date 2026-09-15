@@ -56,7 +56,8 @@ use cpn_installer::panel_hub_routes::{
     filemanager_alias, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
     ftp_delete_post, ftp_reset, ftp_reset_password_post, ftp_reset_post, passkey_delete_post,
     passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
-    passkey_register_finish, passkey_register_start, security_fail2ban, security_firewall,
+    passkey_register_finish, passkey_register_start, passkey_rename_post, security_fail2ban,
+    security_firewall,
     security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
     security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
     security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
@@ -1318,6 +1319,7 @@ async fn main() -> std::io::Result<()> {
             .service(passkey_register_start)
             .service(passkey_register_finish)
             .service(passkey_delete_post)
+            .service(passkey_rename_post)
             .service(users_list_route)
             .service(users_create_get)
             .service(users_create_post)

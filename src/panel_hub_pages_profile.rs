@@ -223,10 +223,18 @@ pub fn users_self_edit_body(
     } else {
         body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Label</th><th>Created</th><th></th></tr></thead><tbody>"#);
         for (id, label, created, _) in &keys {
+            let created_fmt = crate::account_passkeys::format_passkey_timestamp(*created);
             body.push_str(&format!(
                 r#"<tr>
-              <td><strong>{label}</strong></td>
-              <td>{created}</td>
+              <td>
+                <form method="post" action="/account/users/profile/passkey/rename" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;">
+                  <input type="hidden" name="id" value="{id}">
+                  <input name="label" type="text" maxlength="64" value="{label}" required
+                         aria-label="Passkey label" style="min-width:10rem;max-width:16rem;">
+                  <button type="submit" class="linkish" style="background:none;border:0;color:var(--cpn-accent,#2563eb);font-weight:600;cursor:pointer;padding:0;">Rename</button>
+                </form>
+              </td>
+              <td>{created_fmt}</td>
               <td>
                 <form method="post" action="/account/users/profile/passkey/delete" style="display:inline;"
                       onsubmit="return confirm('Remove this passkey?');">
@@ -236,7 +244,7 @@ pub fn users_self_edit_body(
               </td>
             </tr>"#,
                 label = html_escape(label),
-                created = created,
+                created_fmt = html_escape(&created_fmt),
                 id = html_escape(id),
             ));
         }
