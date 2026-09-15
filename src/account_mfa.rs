@@ -380,6 +380,30 @@ pub fn disable_totp(username: &str, code_or_backup: &str) -> Result<(), String> 
     Ok(())
 }
 
+/// Operator CLI: clear TOTP and pending enrollment without an authenticator code.
+/// Does not print or return secrets. Returns whether TOTP was previously enabled.
+pub fn clear_totp_force(username: &str) -> Result<bool, String> {
+    if username.trim().is_empty() {
+        return Err("Username is required".into());
+    }
+    let was_enabled = load_mfa(username).totp_enabled;
+    let path = mfa_record_path(username);
+    if path.is_file() {
+        fs::remove_file(&path).map_err(|err| format!("Could not remove MFA record: {err}"))?;
+    } else {
+        // Ensure no stale empty file; write-then-remove is avoided when absent.
+    }
+    let _ = fs::remove_file(pending_path(username));
+    Ok(was_enabled)
+}
+
+/// Whether TOTP is enabled and whether a pending enrollment file exists (no secrets).
+pub fn totp_status_for(username: &str) -> (bool, bool) {
+    let enabled = totp_enabled_for(username);
+    let pending = pending_path(username).is_file();
+    (enabled, pending)
+}
+
 /// Persist only backup-code fields by patching the on-disk JSON object.
 fn persist_backup_code_lists(
     path: &Path,
@@ -564,6 +588,24 @@ mod tests {
             let code3 = format!("{:06}", totp_code_at(&secret, now_unix()));
             disable_totp(user, &code3).unwrap();
             assert!(!totp_enabled_for(user));
+        });
+    }
+
+    #[test]
+    fn clear_totp_force_without_code() {
+        with_test_data_dir(|| {
+            let user = "admin";
+            let (secret_b32, _uri, _svg) = begin_totp_enroll(user).unwrap();
+            let secret = decode_totp_secret(&secret_b32).unwrap();
+            let code = format!("{:06}", totp_code_at(&secret, now_unix()));
+            confirm_totp_enroll(user, &code).unwrap();
+            assert!(totp_enabled_for(user));
+            let was = clear_totp_force(user).unwrap();
+            assert!(was);
+            assert!(!totp_enabled_for(user));
+            let (enabled, pending) = totp_status_for(user);
+            assert!(!enabled);
+            assert!(!pending);
         });
     }
 
