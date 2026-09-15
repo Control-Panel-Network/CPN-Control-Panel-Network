@@ -14,6 +14,7 @@ use cpn_installer::cli_common::{
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
 use cpn_installer::cli_panel::{PanelCommands, run_panel};
+use cpn_installer::cli_passkeys::{PasskeyCommands, run as run_passkeys};
 use cpn_installer::cli_plugins;
 use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::panel_ops_ssl_provider::SslProvider;
@@ -67,6 +68,11 @@ enum Commands {
     Account {
         #[command(subcommand)]
         command: AccountCommands,
+    },
+    /// WebAuthn passkeys for panel accounts (list / remove / clear)
+    Passkey {
+        #[command(subcommand)]
+        command: PasskeyCommands,
     },
     /// Website records (JSON under $CPN_DATA_DIR/sites)
     Site {
@@ -242,6 +248,7 @@ fn run() -> Result<(), String> {
             println!("panel    Live login URL, panel status, and MOTD install helper");
             println!("info     Alias for: cpn panel status");
             println!("account  Manage panel / operator accounts");
+            println!("passkey  List, remove, or clear WebAuthn passkeys for an account");
             println!("password Reset a panel password from this terminal");
             println!(
                 "site     Manage website records under {}/sites",
@@ -341,6 +348,9 @@ fn run() -> Result<(), String> {
                 Ok(())
             }
         },
+        Commands::Passkey { command } => {
+            run_passkeys(command, require_root_for_mutation, confirm_delete)
+        }
         Commands::Site { command } => match command {
             SiteCommands::Ready { domain } => {
                 require_root_for_mutation()?;

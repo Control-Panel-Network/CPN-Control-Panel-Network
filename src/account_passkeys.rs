@@ -147,7 +147,26 @@ pub fn delete_passkey(username: &str, id: &str) -> Result<(), String> {
     if store.credentials.len() == before {
         return Err("Passkey not found".into());
     }
+    if store.credentials.is_empty() {
+        return remove_passkey_store_file(username);
+    }
     save_passkeys(&store)
+}
+
+/// Remove every registered passkey for an account. Returns how many were removed.
+pub fn clear_all_passkeys(username: &str) -> Result<usize, String> {
+    let store = load_passkeys(username);
+    let count = store.credentials.len();
+    remove_passkey_store_file(username)?;
+    Ok(count)
+}
+
+fn remove_passkey_store_file(username: &str) -> Result<(), String> {
+    let path = store_path(username);
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(&path).map_err(|err| format!("Could not remove {}: {err}", path.display()))
 }
 
 pub fn passkeys_for_auth(username: &str) -> Vec<Passkey> {
@@ -248,6 +267,20 @@ mod tests {
             let store = load_passkeys("Admin");
             assert!(store.credentials.is_empty());
             assert!(!has_passkeys("Admin"));
+        });
+    }
+
+    #[test]
+    fn clear_all_removes_empty_store_file() {
+        with_test_data_dir(|| {
+            let store = empty_store("admin");
+            save_passkeys(&store).expect("save");
+            let path = store_path("admin");
+            assert!(path.is_file());
+            let removed = clear_all_passkeys("admin").expect("clear");
+            assert_eq!(removed, 0);
+            assert!(!path.exists());
+            assert!(!has_passkeys("admin"));
         });
     }
 }
