@@ -179,12 +179,11 @@ pub fn format_passkey_timestamp(ts: u64) -> String {
         if let Ok(out) = Command::new("date")
             .args(["-d", &format!("@{ts}"), "+%d/%m/%Y %H:%M"])
             .output()
+            && out.status.success()
         {
-            if out.status.success() {
-                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !text.is_empty() {
-                    return text;
-                }
+            let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !text.is_empty() {
+                return text;
             }
         }
     }
