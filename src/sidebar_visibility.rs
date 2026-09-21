@@ -250,7 +250,7 @@ fn catalog_href_map() -> Vec<(&'static str, &'static str)> {
             }
         }
     }
-    pairs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    pairs.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     pairs
 }
 
