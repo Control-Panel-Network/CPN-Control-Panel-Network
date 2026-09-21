@@ -646,15 +646,33 @@ pub async fn plugins_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    // Legacy Host packages tab: send bookmarks to unified Store Host category.
+    if matches!(
+        query.get("view").map(String::as_str),
+        Some("host") | Some("apps")
+    ) {
+        let mut loc = String::from("/plugins?view=store&category=Host");
+        for (key, value) in query.iter() {
+            if key == "view" || key == "category" {
+                continue;
+            }
+            if value.trim().is_empty() {
+                continue;
+            }
+            loc.push('&');
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&urlencoding_simple(value));
+        }
+        return HttpResponse::MovedPermanently()
+            .append_header(("Location", loc))
+            .finish();
+    }
     let view = if query.contains_key("view-store")
         || query.get("view").map(String::as_str) == Some("store")
         || query.get("view").map(String::as_str) == Some("view-store")
     {
         "store".to_string()
-    } else if query.get("view").map(String::as_str) == Some("host")
-        || query.get("view").map(String::as_str) == Some("apps")
-    {
-        "host".to_string()
     } else {
         query
             .get("view")

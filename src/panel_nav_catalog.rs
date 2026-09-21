@@ -305,10 +305,6 @@ const PLUGINS_CHILDREN: &[NavChild] = &[
         label: "Store",
         href: "/plugins?view=store",
     },
-    NavChild {
-        label: "Host packages",
-        href: "/plugins?view=store&category=Host",
-    },
 ];
 
 pub(crate) const HOSTING: &[NavEntry] = &[
