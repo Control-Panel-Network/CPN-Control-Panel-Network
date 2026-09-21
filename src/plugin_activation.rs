@@ -98,6 +98,42 @@ pub fn host_plugin_installed(plugin_id: &str) -> bool {
         || host_plugin_path(id).join("meta.xml").is_file()
 }
 
+/// List plugins installed once for the whole host under `$CPN_DATA_DIR/host-plugins/`.
+pub fn list_host_installed_plugins() -> Vec<InstalledPlugin> {
+    let root = host_plugins_dir();
+    let Ok(entries) = fs::read_dir(&root) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().to_string();
+        if id.is_empty() || id.starts_with('.') {
+            continue;
+        }
+        if !host_plugin_installed(&id) {
+            continue;
+        }
+        if let Ok(manifest) = load_host_manifest(&id) {
+            out.push(InstalledPlugin {
+                manifest,
+                path: path.clone(),
+                domain: String::new(),
+            });
+        }
+    }
+    out.sort_by(|a, b| {
+        a.manifest
+            .name
+            .to_lowercase()
+            .cmp(&b.manifest.name.to_lowercase())
+    });
+    out
+}
+
 pub fn is_host_scoped_plugin(id: &str) -> bool {
     let id = id.trim();
     !id.is_empty()

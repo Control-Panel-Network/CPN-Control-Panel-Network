@@ -264,7 +264,7 @@ pub fn create_dns_record(
         body["proxied"] = json!(proxied);
     }
     if let Some(p) = priority
-        && matches!(rtype.as_str(), "MX" | "SRV")
+        && crate::panel_ops_cloudflare::record_type_uses_priority(&rtype)
     {
         body["priority"] = json!(p);
     }
@@ -319,11 +319,13 @@ pub fn update_dns_record(
     if matches!(rtype.as_str(), "A" | "AAAA" | "CNAME") {
         patch["proxied"] = json!(proxied);
     }
-    if matches!(rtype.as_str(), "MX" | "SRV") {
+    if crate::panel_ops_cloudflare::record_type_uses_priority(&rtype) {
         if let Some(p) = priority {
             patch["priority"] = json!(p);
         } else if let Some(p) = existing.get("priority").and_then(|v| v.as_u64()) {
-            patch["priority"] = json!(p);
+            patch["priority"] = json!(p as u16);
+        } else {
+            return Err(format!("{rtype} records require a priority"));
         }
     }
     let payload = serde_json::to_string(&patch).map_err(|e| e.to_string())?;

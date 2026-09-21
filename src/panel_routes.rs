@@ -665,6 +665,7 @@ pub async fn plugins_page(
     let layout = query.get("layout").map(String::as_str).unwrap_or("grid");
     let q = query.get("q").map(String::as_str).unwrap_or("");
     let category = query.get("category").map(String::as_str).unwrap_or("");
+    let status = query.get("status").map(String::as_str).unwrap_or("");
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
@@ -698,6 +699,7 @@ pub async fn plugins_page(
         layout,
         q,
         category,
+        status,
         domain,
         notice,
         error,
@@ -723,6 +725,9 @@ pub struct PluginIdForm {
     /// Must be `1` from the uninstall confirm dialog (ignored by other actions).
     #[serde(default)]
     confirm: String,
+    /// When `installed`, prefer Installed hub after host uninstall.
+    #[serde(default)]
+    return_view: String,
 }
 
 fn plugins_redirect(domain: &str, view: &str, notice: Option<&str>, error: Option<&str>) -> String {
@@ -998,13 +1003,18 @@ pub async fn plugins_uninstall_host(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let view = if form.return_view.trim().eq_ignore_ascii_case("installed") {
+        "installed"
+    } else {
+        "store"
+    };
     if !is_panel_admin(&user) {
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 plugins_redirect(
                     &form.domain,
-                    "store",
+                    view,
                     None,
                     Some("Only the panel admin can uninstall Host plugins"),
                 ),
@@ -1017,7 +1027,7 @@ pub async fn plugins_uninstall_host(
                 "Location",
                 plugins_redirect(
                     &form.domain,
-                    "store",
+                    view,
                     None,
                     Some(crate::uninstall_confirm::CONFIRM_REQUIRED_MSG),
                 ),
@@ -1030,7 +1040,7 @@ pub async fn plugins_uninstall_host(
                 "Location",
                 plugins_redirect(
                     &form.domain,
-                    "store",
+                    view,
                     Some(&format!("Uninstalled host plugin {}", form.id.trim())),
                     None,
                 ),
@@ -1039,7 +1049,7 @@ pub async fn plugins_uninstall_host(
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                plugins_redirect(&form.domain, "store", None, Some(&error)),
+                plugins_redirect(&form.domain, view, None, Some(&error)),
             ))
             .finish(),
     }

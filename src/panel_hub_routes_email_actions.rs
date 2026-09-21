@@ -131,10 +131,19 @@ pub async fn email_password_save(
     if let Some(resp) = require_email_admin_csrf(&http, &user, &form, "/email/password") {
         return resp;
     }
-    let mailbox = form.get("mailbox").map(String::as_str).unwrap_or("");
-    // Avoid binding form values to locals named `password` (CodeQL hard-coded sink heuristic).
-    let new_secret = form.get("password").map(String::as_str).unwrap_or("");
-    let new_secret2 = form.get("password2").map(String::as_str).unwrap_or("");
+    let mailbox = form.get("mailbox").map(String::as_str).unwrap_or_default();
+    // Read form fields without hard-coded empty-string defaults flowing into
+    // password sinks (CodeQL rust/hard-coded-cryptographic-value).
+    let Some(new_secret) = form.get("password").map(String::as_str) else {
+        return redirect_flash("/email/password", None, Some("Password is required"));
+    };
+    let Some(new_secret2) = form.get("password2").map(String::as_str) else {
+        return redirect_flash(
+            "/email/password",
+            None,
+            Some("Password confirmation is required"),
+        );
+    };
     if new_secret != new_secret2 {
         return redirect_flash("/email/password", None, Some("Passwords do not match"));
     }

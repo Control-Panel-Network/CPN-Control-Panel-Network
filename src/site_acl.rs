@@ -133,6 +133,9 @@ fn grant_allows(grant: &SiteAclGrant, perm: SitePerm) -> bool {
 
 /// True when the session user owns the site or holds a matching team grant.
 pub fn can_manage_site(username: &str, domain_raw: &str, perm: SitePerm) -> Result<bool, String> {
+    if crate::panel_admin::is_panel_admin(username) {
+        return Ok(true);
+    }
     let site = load_site(domain_raw)?;
     if names_equal(&site.owner, username) {
         return Ok(true);
@@ -171,8 +174,12 @@ pub fn require_manage_site(
 }
 
 /// Sites the session user may manage (owner or grant).
+/// Panel admin (bootstrap owner) sees every registered site.
 pub fn sites_manageable_by(username: &str) -> Result<Vec<SiteRecord>, String> {
     let all = list_sites()?;
+    if crate::panel_admin::is_panel_admin(username) {
+        return Ok(all);
+    }
     let mut out = Vec::new();
     for site in all {
         if can_manage_site(username, &site.domain, SitePerm::Install)?

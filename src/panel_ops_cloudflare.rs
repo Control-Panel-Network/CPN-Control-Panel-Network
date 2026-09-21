@@ -309,6 +309,14 @@ pub const RECORD_TYPES: &[&str] = &[
     "A", "AAAA", "CNAME", "MX", "TXT", "SPF", "NS", "SOA", "SRV", "CAA",
 ];
 
+/// Cloudflare DNS types in this panel that accept a priority field (MX, SRV).
+pub fn record_type_uses_priority(record_type: &str) -> bool {
+    matches!(
+        record_type.trim().to_ascii_uppercase().as_str(),
+        "MX" | "SRV"
+    )
+}
+
 pub fn normalize_record_type(raw: &str) -> Result<String, String> {
     let t = raw.trim().to_ascii_uppercase();
     if RECORD_TYPES.iter().any(|x| *x == t) {

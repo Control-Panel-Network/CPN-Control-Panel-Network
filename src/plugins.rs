@@ -410,12 +410,19 @@ fn find_plugin_in_extract(root: &Path, plugin_id: &str) -> Option<PathBuf> {
 pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginManifest, String> {
     let domain = require_domain(domain_raw)?;
     let id = normalize_plugin_id(plugin_id)?;
-    // Roundcube is a first-class Email host package. Do not deploy legacy CyberPanel paths.
+    // Roundcube is a first-class Email host package (cpn app), not a catalog site copy.
     if id.eq_ignore_ascii_case("roundcubeWebmail") || id.eq_ignore_ascii_case("roundcube") {
         return Err(
-            "Roundcube Webmail is a host package, not a site plugin. Install from Plugins > Host packages (Email), or run: cpn app install --name roundcube. Files land under /opt/cpn-webmail/roundcube with panel proxy /roundcube/."
+            "Roundcube Webmail is a host package, not a site plugin. Install from Plugins > Store (Host category), or run: cpn app install --name roundcube. Files land under /opt/cpn-webmail/roundcube with panel proxy /roundcube/."
                 .into(),
         );
+    }
+    // Host-scoped Security packages install once under host-plugins/, then Activate per site.
+    if crate::plugin_activation::is_host_scoped_plugin(&id) {
+        if !crate::plugin_activation::host_plugin_installed(&id) {
+            crate::plugin_activation::install_host_plugin(&id)?;
+        }
+        return crate::plugin_activation::activate_host_plugin_for_domain(&domain, &id);
     }
     let _ = migrate_legacy_plugins(&domain);
     if manifest_path(&domain, &id)?.is_file() {
