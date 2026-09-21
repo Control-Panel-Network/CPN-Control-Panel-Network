@@ -4,7 +4,7 @@ use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-const DEFAULT_REPO: &str = "Control-Panel-Network/CPN-Control-Panel-Network";
+pub const OFFICIAL_GITHUB_REPO: &str = "Control-Panel-Network/CPN-Control-Panel-Network";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseAsset {
@@ -59,10 +59,19 @@ pub struct VersionCheck {
     pub retry_after_secs: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_note: Option<String>,
+    #[serde(default)]
+    pub using_fork: bool,
+    #[serde(default)]
+    pub token_configured: bool,
+    pub upstream_repo: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_latest_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_latest_tag: Option<String>,
 }
 
 pub fn github_repo() -> String {
-    std::env::var("CPN_GITHUB_REPO").unwrap_or_else(|_| DEFAULT_REPO.into())
+    crate::releases_source::configured_github_repo()
 }
 
 pub fn package_source_label() -> String {
@@ -290,8 +299,9 @@ pub(crate) fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
 }
 
 pub use crate::releases_fetch::{
-    find_release, list_releases, list_releases_cached, version_check, version_check_with_options,
+    find_release, list_releases, list_releases_cached, list_releases_for_repo,
 };
+pub use crate::releases_version_check::{version_check, version_check_with_options};
 
 #[cfg(test)]
 mod tests {

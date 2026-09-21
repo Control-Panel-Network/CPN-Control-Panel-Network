@@ -1,10 +1,12 @@
 //! Client script for Version Management (live retry countdown + release picker).
 
+use crate::panel_hub_pages_version_source_script::version_fetch_helpers_script;
+
 /// Inline `<script>` for `/settings/version`. `can_manage` gates upgrade/repair UI.
 pub fn version_page_script(can_manage: bool) -> String {
     let can_manage_js = if can_manage { "true" } else { "false" };
     format!(
-        r#"<script>
+        r#"{helpers}<script>
 (function () {{
   var canManage = {can_manage_js};
   var statusEl = document.getElementById("cpn-version-status");
@@ -12,6 +14,8 @@ pub fn version_page_script(can_manage: bool) -> String {
   var btn = document.getElementById("cpn-version-refresh");
   var runningEl = document.getElementById("cpn-version-running");
   var latestEl = document.getElementById("cpn-version-latest");
+  var sourceTipEl = document.getElementById("cpn-version-source-tip");
+  var upstreamTipEl = document.getElementById("cpn-version-upstream-tip");
   var installedEl = document.getElementById("cpn-version-installed");
   var searchEl = document.getElementById("cpn-version-search");
   var resultsEl = document.getElementById("cpn-version-results");
@@ -35,6 +39,9 @@ pub fn version_page_script(can_manage: bool) -> String {
 
   function esc(s) {{
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }}
+  function friendlyFetchError(err, context) {{
+    return window.cpnFriendlyFetchError(err, context);
   }}
   function norm(v) {{
     return String(v || "").replace(/^v/i, "").trim();
@@ -225,6 +232,22 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (runningEl && info.running_version) runningEl.textContent = info.running_version;
     if (installedEl && info.installed_version) installedEl.textContent = info.installed_version;
     if (latestEl) latestEl.textContent = info.latest_version || info.latest_tag || "-";
+    var sourceTip = info.latest_version || info.latest_tag || "-";
+    if (sourceTipEl) {{
+      if (info.using_fork) {{
+        sourceTipEl.textContent = "fork tip " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
+      }} else {{
+        sourceTipEl.textContent = "official " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
+      }}
+    }}
+    if (upstreamTipEl) {{
+      if (info.using_fork) {{
+        var up = info.upstream_latest_version || info.upstream_latest_tag || "-";
+        upstreamTipEl.textContent = up + (info.upstream_repo ? (" (" + info.upstream_repo + ")") : "");
+      }} else {{
+        upstreamTipEl.textContent = sourceTip + (info.upstream_repo ? (" (" + info.upstream_repo + ")") : "");
+      }}
+    }}
     var hasTip = !!(info.latest_version || info.latest_tag || (info.releases && info.releases.length));
     var wait = Math.max(0, Math.floor(Number(info.retry_after_secs) || 0));
     var liveRetry = wait > 0;
@@ -248,8 +271,13 @@ pub fn version_page_script(can_manage: bool) -> String {
       }}
     }}
     var lines = [];
-    if (info.repo) lines.push("Repo: " + info.repo);
+    if (info.repo) lines.push("Configured repo: " + info.repo);
     if (info.source) lines.push("Source: " + info.source);
+    if (info.using_fork) lines.push("Using fork source for upgrades");
+    if (info.token_configured) lines.push("GitHub token: configured");
+    if (info.using_fork && (info.upstream_latest_version || info.upstream_latest_tag)) {{
+      lines.push("Upstream official: " + (info.upstream_latest_version || info.upstream_latest_tag));
+    }}
     if (info.latest_tag) lines.push("Latest tag: " + info.latest_tag);
     if (info.from_cache) lines.push("Release list: cached" + (info.cache_age_secs != null ? (" (" + info.cache_age_secs + "s old)") : ""));
     if (info.cache_note && !liveRetry) lines.push(info.cache_note);
@@ -271,10 +299,11 @@ pub fn version_page_script(can_manage: bool) -> String {
       return res.json();
     }}).then(render).catch(function (err) {{
       stopRetryCountdown();
-      statusEl.textContent = "Update check failed: " + (err && err.message ? err.message : String(err));
+      statusEl.textContent = friendlyFetchError(err, "Update check");
       if (latestEl && !latestEl.textContent) latestEl.textContent = "-";
     }});
   }}
+  window.cpnVersionRecheck = check;
   var pollFailCount = 0;
   var pollBackoffMs = 500;
   var POLL_FAIL_SOFT_MAX = 8;
@@ -337,9 +366,8 @@ pub fn version_page_script(can_manage: bool) -> String {
       if (pollFailCount >= POLL_FAIL_HARD_MAX) {{
         finishPollOk();
         if (opError) {{
-          opError.textContent = "Status poll failed after retries: " +
-            (err && err.message ? err.message : String(err)) +
-            ". If the package already matches tip, refresh this page.";
+          opError.textContent = friendlyFetchError(err, "Status poll") +
+            " If the package already matches tip, refresh this page.";
         }}
         check(false);
         return;
@@ -385,7 +413,7 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}).catch(function (err) {{
       busy = false;
       setActionsEnabled(true);
-      if (opError) opError.textContent = err && err.message ? err.message : String(err);
+      if (opError) opError.textContent = friendlyFetchError(err, "Start maintenance");
       if (progressLabel) progressLabel.textContent = "Not started.";
     }});
   }}
@@ -446,6 +474,7 @@ pub fn version_page_script(can_manage: bool) -> String {
   check(false);
 }})();
 </script>"#,
+        helpers = version_fetch_helpers_script(),
         can_manage_js = can_manage_js
     )
 }
@@ -460,6 +489,8 @@ mod tests {
         assert!(js.contains("data-retry-after"));
         assert!(js.contains("startRetryCountdown"));
         assert!(js.contains("retry_after_secs"));
+        assert!(js.contains("cpnFriendlyFetchError"));
+        assert!(js.contains("cpn-version-source-tip"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

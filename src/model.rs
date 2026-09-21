@@ -215,6 +215,15 @@ pub struct MaintenanceInfo {
     pub retry_after_secs: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_note: Option<String>,
+    #[serde(default)]
+    pub using_fork: bool,
+    #[serde(default)]
+    pub token_configured: bool,
+    pub upstream_repo: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_latest_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_latest_tag: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
