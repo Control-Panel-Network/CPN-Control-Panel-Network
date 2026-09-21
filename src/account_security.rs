@@ -81,6 +81,94 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Theme-aware backup codes panel with Copy to clipboard and Download (.txt).
+/// `hint` is the parenthetical after "Backup codes", e.g. "store securely; shown once".
+pub fn backup_codes_panel_html(codes: &[String], hint: &str) -> String {
+    let mut html = format!(
+        r#"<div class="mfa-codes-panel" data-mfa-codes>
+  <div class="mfa-codes-head">
+    <p class="mfa-codes-label"><strong>Backup codes</strong> ({hint}):</p>
+    <div class="mfa-codes-actions">
+      <button type="button" class="btn-secondary mfa-codes-copy">Copy to clipboard</button>
+      <button type="button" class="btn-secondary mfa-codes-download">Download</button>
+    </div>
+  </div>
+  <ul>"#,
+        hint = html_escape(hint),
+    );
+    for code in codes {
+        html.push_str(&format!("<li><code>{}</code></li>", html_escape(code)));
+    }
+    html.push_str(
+        r#"</ul>
+  <p class="muted mfa-codes-status" role="status" aria-live="polite"></p>
+</div>
+<script>
+(function () {
+  var panel = document.querySelector("[data-mfa-codes]");
+  if (!panel || panel.getAttribute("data-mfa-wired") === "1") return;
+  panel.setAttribute("data-mfa-wired", "1");
+  var statusEl = panel.querySelector(".mfa-codes-status");
+  var copyBtn = panel.querySelector(".mfa-codes-copy");
+  var dlBtn = panel.querySelector(".mfa-codes-download");
+  function codesText() {
+    return Array.prototype.map.call(panel.querySelectorAll("ul code"), function (el) {
+      return (el.textContent || "").trim();
+    }).filter(Boolean).join("\n");
+  }
+  function setStatus(msg) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || "";
+  }
+  function copyFallback(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copyCodes() {
+    var text = codesText();
+    if (!text) { setStatus("No codes to copy."); return; }
+    function done() { setStatus("Copied to clipboard."); }
+    function fail() {
+      if (copyFallback(text)) done();
+      else setStatus("Copy failed. Select the codes manually.");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fail);
+    } else {
+      fail();
+    }
+  }
+  function downloadCodes() {
+    var text = codesText();
+    if (!text) { setStatus("No codes to download."); return; }
+    var blob = new Blob([text + "\n"], { type: "text/plain;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "cpn-backup-codes.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setStatus("Download started (cpn-backup-codes.txt).");
+  }
+  if (copyBtn) copyBtn.addEventListener("click", copyCodes);
+  if (dlBtn) dlBtn.addEventListener("click", downloadCodes);
+})();
+</script>"#,
+    );
+    html
+}
+
 /// HTML main body for forced password change (no current-password field).
 pub fn change_password_gate_main(notice: Option<&str>, error: Option<&str>) -> String {
     let notice_html = notice
@@ -123,7 +211,7 @@ pub fn change_password_gate_main(notice: Option<&str>, error: Option<&str>) -> S
 fn enroll_passkey_section_html() -> String {
     format!(
         r#"
-  <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form" style="margin-top:24px;padding-top:20px;border-top:1px solid #e5e5ea;display:grid;gap:12px;">
+  <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form mfa-passkey-section">
     <h2 style="margin:0;font-size:1.1rem;">Passkey</h2>
     <p class="muted" style="margin:0;">Register a platform or security-key passkey instead of TOTP. Completing either path returns you to Modify User so you can add more factors.</p>
     <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential.</p>
@@ -175,13 +263,10 @@ pub fn enroll_mfa_gate_main(
     );
 
     if let Some(codes) = backup_codes {
-        body.push_str(
-            r#"<div class="panel-card" style="margin:16px 0;background:#f5f5f7;"><p><strong>Backup codes</strong> (store securely; shown once):</p><ul>"#,
-        );
-        for code in codes {
-            body.push_str(&format!("<li><code>{}</code></li>", html_escape(code)));
-        }
-        body.push_str("</ul></div>");
+        body.push_str(&backup_codes_panel_html(
+            codes,
+            "store securely; shown once",
+        ));
         body.push_str(
             r#"<p><a class="btn-primary" href="/account/users/modify">Continue to Modify User</a></p>"#,
         );
@@ -189,14 +274,16 @@ pub fn enroll_mfa_gate_main(
         body.push_str(&format!(
             r#"
   <h2 style="margin:16px 0 8px;font-size:1.1rem;">Authenticator app (TOTP)</h2>
-  <div style="margin:16px 0;">{qr}</div>
-  <p class="muted">Secret: <code>{secret}</code></p>
-  <form method="post" action="/account/security/enroll-2fa/confirm" class="stack-form" style="display:grid;gap:12px;">
-    <label>Authenticator code
-      <input type="text" name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]*" maxlength="12">
-    </label>
-    <button type="submit" class="btn-primary">Confirm TOTP</button>
-  </form>"#,
+  <div class="mfa-totp-setup" style="margin:16px 0;">
+    <div class="mfa-qr-wrap">{qr}</div>
+    <p class="mfa-secret">Secret: <code style="user-select:all;">{secret}</code></p>
+    <form method="post" action="/account/security/enroll-2fa/confirm" class="stack-form" style="display:grid;gap:12px;margin-top:0;max-width:100%;">
+      <label>Authenticator code
+        <input type="text" name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]*" maxlength="12">
+      </label>
+      <button type="submit" class="btn-primary">Confirm TOTP</button>
+    </form>
+  </div>"#,
             qr = qr,
             secret = html_escape(secret),
         ));
@@ -328,6 +415,18 @@ mod tests {
         assert!(
             done.contains("href=\"/account/users/modify\""),
             "backup-codes continue link must target Modify User"
+        );
+        assert!(
+            done.contains("Copy to clipboard") && done.contains("Download"),
+            "backup-codes view must offer copy and download"
+        );
+        assert!(
+            done.contains("cpn-backup-codes.txt"),
+            "download must use cpn-backup-codes.txt filename"
+        );
+        assert!(
+            done.contains("mfa-codes-panel") && done.contains("AAAA-BBBB"),
+            "backup codes must render in theme-aware panel"
         );
         assert!(
             !done.contains("Register passkey"),

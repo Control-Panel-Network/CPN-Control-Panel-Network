@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Upgrade panel restart on labs**: post-upgrade verification stops orphan foreground `cpn-installer` listeners (AddrInUse) before `systemctl restart`, so a leftover `sudo cpn-installer --web` no longer fails `cpn-installer.service is not active after restart` when the package apply already succeeded.
+- **TOTP / 2FA enroll dark mode contrast**: form labels use `var(--ink)` instead of hardcoded slate; backup-codes and TOTP setup panels use theme-aware `.mfa-codes-panel` / `.mfa-totp-setup` (readable in light and dark). Applies to `/account/security/enroll-2fa` and Edit profile TOTP enrollment. Backup codes confirm adds **Copy to clipboard** (`navigator.clipboard` with `execCommand` fallback) and **Download** (`cpn-backup-codes.txt` via Blob).
 
 ### Added
 

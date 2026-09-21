@@ -319,9 +319,48 @@ html[data-color-mode="dark"] .mobile-header,
 [data-color-mode="dark"] .btn-danger { background:#3f1d22; color:#fda29b; }
 [data-color-mode="dark"] .hub-badge.live { background:rgba(6,118,71,.22); color:#6ce9a6; }
 [data-color-mode="dark"] .hub-badge.scaffold { background:#2a2f3a; color:#98a2b3; }
-[data-color-mode="dark"] .stack-form input {
-  background:#1a1d26; border-color:#2a2f3a; color:var(--ink);
+[data-color-mode="dark"] .stack-form label,
+html[data-color-mode="dark"] .stack-form label {
+  color:#f2f4f7;
 }
+[data-color-mode="dark"] .stack-form input,
+[data-color-mode="dark"] .stack-form select,
+[data-color-mode="dark"] .stack-form textarea,
+html[data-color-mode="dark"] .stack-form input,
+html[data-color-mode="dark"] .stack-form select,
+html[data-color-mode="dark"] .stack-form textarea {
+  background:var(--canvas,#1a1d26); border-color:var(--hairline,#2a2f3a); color:#f2f4f7;
+}
+[data-color-mode="dark"] .mfa-codes-panel,
+[data-color-mode="dark"] .mfa-totp-setup,
+html[data-color-mode="dark"] .mfa-codes-panel,
+html[data-color-mode="dark"] .mfa-totp-setup {
+  background:var(--surface-soft,#161922); border-color:var(--hairline,#2a2f3a); color:#f2f4f7;
+}
+[data-color-mode="dark"] .mfa-codes-label,
+[data-color-mode="dark"] .mfa-codes-panel ul,
+[data-color-mode="dark"] .mfa-codes-panel code,
+[data-color-mode="dark"] .mfa-totp-setup,
+[data-color-mode="dark"] .mfa-totp-setup p,
+[data-color-mode="dark"] .mfa-totp-setup strong,
+[data-color-mode="dark"] .mfa-totp-setup code,
+[data-color-mode="dark"] .mfa-totp-setup label,
+[data-color-mode="dark"] .mfa-totp-setup .muted,
+[data-color-mode="dark"] .mfa-totp-setup p.muted,
+[data-color-mode="dark"] .mfa-secret,
+html[data-color-mode="dark"] .mfa-codes-label,
+html[data-color-mode="dark"] .mfa-totp-setup label,
+html[data-color-mode="dark"] .mfa-secret {
+  color:#f2f4f7;
+}
+[data-color-mode="dark"] .mfa-codes-actions .btn-secondary,
+[data-color-mode="dark"] .btn-secondary,
+html[data-color-mode="dark"] .mfa-codes-actions .btn-secondary,
+html[data-color-mode="dark"] .btn-secondary {
+  background:var(--canvas,#1a1d26); border-color:var(--hairline,#2a2f3a); color:#f2f4f7;
+}
+[data-color-mode="dark"] a.btn-primary,
+html[data-color-mode="dark"] a.btn-primary { color:#fff; }
 .theme-toggle {
   display:inline-grid; place-items:center; cursor:pointer; color:var(--muted);
 }

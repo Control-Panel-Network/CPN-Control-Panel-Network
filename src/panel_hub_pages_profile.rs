@@ -3,6 +3,7 @@
 use crate::account::password_policy_hint;
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::list_passkey_summaries;
+use crate::account_security::backup_codes_panel_html;
 use crate::packages::{is_panel_admin, package_for_account};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_webauthn::passkey_client_script;
@@ -159,25 +160,16 @@ pub fn users_self_edit_body(
         ));
     }
     if let Some(codes) = backup_codes {
-        body.push_str(
-            r#"<p class="panel-notice ok" role="status"><strong>Backup codes</strong> (copy now; each works once):</p><ul>"#,
-        );
-        for code in codes {
-            body.push_str(&format!(
-                r#"<li><code style="user-select:all;">{c}</code></li>"#,
-                c = html_escape(code)
-            ));
-        }
-        body.push_str("</ul>");
+        body.push_str(&backup_codes_panel_html(codes, "copy now; each works once"));
     }
     if let (Some(secret), Some(svg)) = (enroll_secret, enroll_qr_svg) {
         body.push_str(&format!(
             r#"
-        <div style="display:grid;gap:10px;padding:12px;border:1px solid var(--border,#334155);border-radius:10px;">
+        <div class="mfa-totp-setup">
           <p style="margin:0;">Scan this QR with your authenticator app, or enter the secret manually.</p>
-          <div style="background:#fff;padding:8px;border-radius:8px;width:fit-content;">{svg}</div>
-          <p style="margin:0;"><strong>Secret:</strong> <code style="user-select:all;">{secret}</code></p>
-          <form method="post" action="/account/users/profile/totp/confirm" class="stack-form" style="display:grid;gap:10px;">
+          <div class="mfa-qr-wrap">{svg}</div>
+          <p class="mfa-secret"><strong>Secret:</strong> <code style="user-select:all;">{secret}</code></p>
+          <form method="post" action="/account/users/profile/totp/confirm" class="stack-form" style="display:grid;gap:10px;margin-top:0;max-width:100%;">
             <label>Authenticator code
               <input name="code" type="text" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code">
             </label>
