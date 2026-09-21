@@ -76,20 +76,100 @@ pub fn read_password_confirmed(
     Ok(result)
 }
 
+/// True for clear affirmative answers (case-insensitive, trimmed).
+///
+/// Accepted: `y`, `yes`, `yeah`, `yep`, `ok`, `okay`, `true`, `1`.
+pub fn is_affirmative_reply(raw: &str) -> bool {
+    matches!(
+        normalize_confirm_reply(raw).as_str(),
+        "y" | "yes" | "yeah" | "yep" | "ok" | "okay" | "true" | "1"
+    )
+}
+
+/// True for clear negative / abort answers (case-insensitive, trimmed).
+///
+/// Accepted: empty input, `n`, `no`, `nope`, `cancel`, `abort`, `false`, `0`.
+pub fn is_negative_reply(raw: &str) -> bool {
+    let normalized = normalize_confirm_reply(raw);
+    normalized.is_empty()
+        || matches!(
+            normalized.as_str(),
+            "n" | "no" | "nope" | "cancel" | "abort" | "false" | "0"
+        )
+}
+
+fn normalize_confirm_reply(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase()
+}
+
+/// Confirm a destructive CLI action.
+///
+/// When `yes` is true (`--yes` / `-y`), skips the prompt. Otherwise reads a line from
+/// stdin and accepts flexible yes/no replies via [`is_affirmative_reply`] /
+/// [`is_negative_reply`].
 pub fn confirm_delete(prompt: &str, yes: bool) -> Result<(), String> {
     if yes {
         return Ok(());
     }
-    eprint!("{prompt} Type YES to confirm: ");
+    eprint!("{prompt} Type yes or y to confirm (no or n to abort): ");
     let _ = io::stderr().flush();
     let mut line = String::new();
     io::stdin()
         .read_line(&mut line)
         .map_err(|error| format!("Failed to read confirmation: {error}"))?;
-    if line.trim() == "YES" {
+    if is_affirmative_reply(&line) {
         Ok(())
+    } else if is_negative_reply(&line) {
+        Err("Aborted".into())
     } else {
-        Err("Aborted (confirmation was not YES)".into())
+        Err(format!(
+            "Aborted (unrecognized confirmation {:?}; type yes/y or no/n, or pass --yes)",
+            line.trim()
+        ))
+    }
+}
+
+#[cfg(test)]
+mod confirm_reply_tests {
+    use super::{is_affirmative_reply, is_negative_reply};
+
+    #[test]
+    fn affirmative_accepts_common_yes_forms() {
+        for sample in [
+            "yes", "YES", "Yes", " yEs ", "y", "Y", "yeah", "yep", "ok", "OKAY", "true", "1",
+        ] {
+            assert!(
+                is_affirmative_reply(sample),
+                "expected affirmative for {sample:?}"
+            );
+            assert!(
+                !is_negative_reply(sample),
+                "affirmative must not also be negative: {sample:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn negative_accepts_common_no_and_empty() {
+        for sample in ["", "   ", "no", "NO", "No", "n", "N", "nope", "cancel", "abort", "false", "0"]
+        {
+            assert!(
+                is_negative_reply(sample),
+                "expected negative for {sample:?}"
+            );
+            assert!(
+                !is_affirmative_reply(sample),
+                "negative must not also be affirmative: {sample:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ambiguous_replies_are_neither() {
+        for sample in ["maybe", "sure", "ye", "ya", "please", "confirm"] {
+            assert!(!is_affirmative_reply(sample), "{sample:?}");
+            assert!(!is_negative_reply(sample), "{sample:?}");
+        }
     }
 }
 

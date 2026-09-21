@@ -11,17 +11,19 @@ pub enum TotpCommands {
         #[arg(long)]
         username: String,
     },
-    /// Disable TOTP for an account without an authenticator code (requires --yes)
+    /// Disable TOTP for an account without an authenticator code (prompt, or --yes to skip)
     Disable {
         #[arg(long)]
         username: String,
+        /// Skip interactive confirmation
         #[arg(long)]
         yes: bool,
     },
-    /// Alias of disable: remove TOTP secret and pending enroll (requires --yes)
+    /// Alias of disable: remove TOTP secret and pending enroll (prompt, or --yes to skip)
     Clear {
         #[arg(long)]
         username: String,
+        /// Skip interactive confirmation
         #[arg(long)]
         yes: bool,
     },

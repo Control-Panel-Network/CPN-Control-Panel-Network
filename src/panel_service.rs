@@ -194,6 +194,25 @@ fn unit_is_active() -> bool {
         .unwrap_or(false)
 }
 
+/// Stop non-systemd `cpn-installer` processes that can hold the listen port.
+///
+/// VirtualBox labs often leave a foreground `sudo cpn-installer --web ...`
+/// running outside the unit. `systemctl restart` then fails with AddrInUse and
+/// upgrade verification reports a false failure. Safe to call before restart:
+/// systemd-managed MainPID is stopped via `systemctl stop` first when active.
+pub fn stop_orphan_panel_listeners() -> Result<(), String> {
+    if cfg!(windows) || !is_root() {
+        return Ok(());
+    }
+    // Prefer a clean systemd stop so KillMode/cgroup cleanup runs.
+    let _ = systemctl(&["stop", UNIT_NAME]);
+    // Kill remaining packaged binaries (foreground sudo wrappers / stragglers).
+    let _ = Command::new("pkill").args(["-x", "cpn-installer"]).status();
+    // Brief pause so the kernel releases the listen socket.
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    Ok(())
+}
+
 /// English operator hints (no passwords). Used by end-of-install banners.
 pub fn post_install_service_hints(port: u16, allow_remote: bool) -> Vec<String> {
     let mut lines = vec![
