@@ -23,8 +23,10 @@ pub(crate) struct FlatItem {
     pub scope: Scope,
     pub domain: String,
     pub name: String,
+    #[allow(dead_code)] // retained for Installed filters / future SPA payloads
     pub id: String,
     pub category: String,
+    #[allow(dead_code)] // retained for Installed status filters / future SPA payloads
     pub active: bool,
     pub card_html: String,
 }

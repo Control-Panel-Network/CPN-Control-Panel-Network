@@ -83,6 +83,8 @@ pub(crate) fn filter_store_entries<'a>(
         .collect()
 }
 
+/// Legacy Store catalog markup (hub UI uses [`crate::panel_plugins_unified::unified_store_catalog`]).
+#[allow(dead_code)]
 pub(crate) fn store_catalog(
     entries: &[CatalogEntry],
     installed_ids: &[String],
@@ -204,6 +206,7 @@ pub(crate) fn render_catalog_card(
     )
 }
 
+#[allow(dead_code)] // called from legacy store_catalog
 fn store_card(
     entry: &CatalogEntry,
     all: &[CatalogEntry],
@@ -343,6 +346,8 @@ fn dates_line(released_on: &str, updated_on: &str) -> String {
     )
 }
 
+/// Legacy category pills (hub UI uses [`crate::panel_plugins_unified::unified_category_pills`]).
+#[allow(dead_code)]
 pub(crate) fn category_pills(
     entries: &[CatalogEntry],
     active: &str,

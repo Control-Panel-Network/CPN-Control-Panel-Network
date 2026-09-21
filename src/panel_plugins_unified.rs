@@ -88,7 +88,7 @@ fn collect_unified<'a>(
         }
     }
 
-    out.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
+    out.sort_by_key(|a| sort_key(a));
     out
 }
 
