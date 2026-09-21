@@ -224,9 +224,11 @@ pub async fn users_profile_totp_begin(
         return login_redirect(&http);
     };
     match begin_totp_enroll(&user) {
-        Ok((_secret, _uri, _svg)) => {
-            redirect_notice("/account/users/modify?enroll=1", Some("Scan the QR and confirm with a code"), None)
-        }
+        Ok((_secret, _uri, _svg)) => redirect_notice(
+            "/account/users/modify?enroll=1",
+            Some("Scan the QR and confirm with a code"),
+            None,
+        ),
         Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }

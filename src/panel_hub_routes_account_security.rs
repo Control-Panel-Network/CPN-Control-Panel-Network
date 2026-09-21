@@ -14,7 +14,7 @@ use crate::panel_hub_http::{
     html_ok, login_redirect, redirect, require_panel_user, urlencoding_simple,
 };
 use crate::panel_pages::panel_shell;
-use actix_web::{get, post, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
 fn gate_shell(user: &str, title: &str, main: &str) -> HttpResponse {
