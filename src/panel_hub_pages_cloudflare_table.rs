@@ -3,7 +3,7 @@
 use crate::panel_hub_pages_cloudflare_pager::{
     CfTableOpts, dns_list_toolbar, dns_mode_from_query, list_state_hiddens, manage_list_url,
 };
-use crate::panel_ops_cloudflare::RECORD_TYPES;
+use crate::panel_ops_cloudflare::{RECORD_TYPES, record_type_uses_priority};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
 
 fn html_escape(value: &str) -> String {
@@ -78,13 +78,20 @@ fn render_record_rows(domain: &str, records: &[&CfDnsRecord], opts: &CfTableOpts
         } else {
             r#"<input type="hidden" name="proxied" value="0"><span class="muted">n/a</span>"#.into()
         };
-        let pri_edit = if matches!(r.record_type.as_str(), "MX" | "SRV") {
+        // Match Add form: always show Priority. MX/SRV are editable and saved;
+        // other types stay empty/disabled (Cloudflare ignores priority for them).
+        let pri_edit = if record_type_uses_priority(&r.record_type) {
+            let v = if pri_val.is_empty() {
+                "10".to_string()
+            } else {
+                pri_val.clone()
+            };
             format!(
-                r#"<input class="cf-edit-input" name="priority" type="number" value="{v}" min="0">"#,
-                v = html_escape(&pri_val),
+                r#"<input class="cf-edit-input" name="priority" type="number" value="{v}" min="0" max="65535" required>"#,
+                v = html_escape(&v),
             )
         } else {
-            r#"<span class="muted">-</span>"#.into()
+            r#"<input class="cf-edit-input" name="priority" type="number" value="" min="0" max="65535" placeholder="10" disabled title="Priority applies to MX and SRV records"><span class="muted" style="margin-left:4px;">(MX/SRV)</span>"#.into()
         };
         rows.push_str(&format!(
             r#"<tr class="cf-row-view" data-rtype="{ty}" data-rid="{id}">
