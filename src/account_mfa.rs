@@ -27,6 +27,8 @@ const BACKUP_CODE_COUNT: usize = 10;
 const RATE_MAX_ATTEMPTS: u32 = 5;
 const RATE_LOCK_SECS: u64 = 300;
 const PENDING_TTL_SECS: u64 = 600;
+/// One-time plaintext backup codes shown after TOTP confirm (PRG to Modify User).
+const ONCE_CODES_TTL_SECS: u64 = 300;
 
 /// MFA at-rest record. No `Debug`: never log or print this struct (CodeQL / secrets).
 #[derive(Clone, Serialize, Deserialize)]
@@ -49,6 +51,13 @@ pub struct MfaRecord {
 struct PendingTotp {
     username: String,
     secret_base32: String,
+    created_at_unix: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct OnceBackupCodes {
+    username: String,
+    codes: Vec<String>,
     created_at_unix: u64,
 }
 
@@ -99,6 +108,20 @@ fn pending_path(username: &str) -> PathBuf {
         })
         .collect();
     mfa_dir().join(format!("pending-{key}.json"))
+}
+
+fn once_codes_path(username: &str) -> PathBuf {
+    let key: String = username
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    mfa_dir().join(format!("once-codes-{key}.json"))
 }
 
 fn rate_path() -> PathBuf {
@@ -367,6 +390,42 @@ pub fn confirm_totp_enroll(username: &str, code: &str) -> Result<Vec<String>, St
     Ok(backup_codes)
 }
 
+/// Persist plaintext backup codes once for the next Modify User GET (PRG after confirm).
+pub fn store_once_backup_codes(username: &str, codes: &[String]) -> Result<(), String> {
+    if username.trim().is_empty() {
+        return Err("Username is required".into());
+    }
+    if codes.is_empty() {
+        return Ok(());
+    }
+    let payload = OnceBackupCodes {
+        username: username.to_string(),
+        codes: codes.to_vec(),
+        created_at_unix: now_unix(),
+    };
+    let json = serde_json::to_string_pretty(&payload)
+        .map_err(|err| format!("Could not serialize backup codes flash: {err}"))?;
+    write_secret_file(&once_codes_path(username), json.as_bytes())
+}
+
+/// Load and delete one-time backup codes for display (or None if missing/expired).
+pub fn take_once_backup_codes(username: &str) -> Option<Vec<String>> {
+    let path = once_codes_path(username);
+    let raw = fs::read_to_string(&path).ok()?;
+    let _ = fs::remove_file(&path);
+    let payload: OnceBackupCodes = serde_json::from_str(&raw).ok()?;
+    if now_unix().saturating_sub(payload.created_at_unix) > ONCE_CODES_TTL_SECS {
+        return None;
+    }
+    if !payload.username.eq_ignore_ascii_case(username) {
+        return None;
+    }
+    if payload.codes.is_empty() {
+        return None;
+    }
+    Some(payload.codes)
+}
+
 pub fn disable_totp(username: &str, code_or_backup: &str) -> Result<(), String> {
     if !load_mfa(username).totp_enabled {
         return Err("TOTP is not enabled".into());
@@ -377,6 +436,7 @@ pub fn disable_totp(username: &str, code_or_backup: &str) -> Result<(), String> 
     // Persist a fresh empty record (do not rewrite a loaded secret-bearing struct).
     save_mfa(&empty_record(username))?;
     let _ = fs::remove_file(pending_path(username));
+    let _ = fs::remove_file(once_codes_path(username));
     Ok(())
 }
 
@@ -394,6 +454,7 @@ pub fn clear_totp_force(username: &str) -> Result<bool, String> {
         // Ensure no stale empty file; write-then-remove is avoided when absent.
     }
     let _ = fs::remove_file(pending_path(username));
+    let _ = fs::remove_file(once_codes_path(username));
     Ok(was_enabled)
 }
 
