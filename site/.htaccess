@@ -1,0 +1,30 @@
+Options -Indexes
+
+# Keep bootstrap scripts as scripts (not HTML) for curl / wget one-liners.
+<IfModule mod_headers.c>
+  <FilesMatch "^(install\.sh|upgrade\.sh|preUpgrade\.sh|cpn-bootstrap-lib\.sh)$">
+    Header set Content-Type "text/plain; charset=utf-8"
+    Header set Content-Disposition "inline"
+    Header set X-Content-Type-Options nosniff
+    Header set Cache-Control "no-cache, max-age=300"
+  </FilesMatch>
+
+  Header always set X-Content-Type-Options nosniff
+  Header always set X-Frame-Options DENY
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Redirect /index.html to /
+  RewriteCond %{THE_REQUEST} \s/+index\.html[\s?] [NC]
+  RewriteRule ^ /? [R=301,L]
+
+  # Trailing slash cleanup (keep real files)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.+)/$ /$1 [R=301,L]
+</IfModule>

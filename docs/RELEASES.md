@@ -18,6 +18,8 @@ bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b 1.0.0-dev
 bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) --bypass
 ```
 
+Landing page (HTML): https://cpn.newstargeted.com/ (source: `site/`; see [HOST-SITE.md](HOST-SITE.md)).
+
 Script sources:
 
 - https://cpn.newstargeted.com/install.sh (primary; mirrors `scripts/install.sh`)

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPN Control Panel Network | News Targeted</title>
+  <meta name="description" content="CPN is an alpha hosting control panel from News Targeted. Install on AlmaLinux and friends with one-liners for install.sh and upgrade.sh.">
+  <link rel="canonical" href="https://cpn.newstargeted.com/">
+  <meta name="theme-color" content="#070b10">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cpn.newstargeted.com/">
+  <meta property="og:title" content="CPN Control Panel Network">
+  <meta property="og:description" content="Alpha hosting control panel from News Targeted. Sites, mail, databases, SSL, and more.">
+  <meta property="og:image" content="https://cpn.newstargeted.com/assets/product/cpn-dashboard.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@450;550;650;750&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@650;750;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "CPN Control Panel Network",
+    "url": "https://cpn.newstargeted.com/",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux",
+    "softwareVersion": "0.2.6-alpha",
+    "creator": {
+      "@type": "Organization",
+      "name": "News Targeted",
+      "url": "https://newstargeted.com"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#install">Skip to install</a>
+
+  <header class="site-nav">
+    <a class="brand" href="/">
+      <img src="/assets/brand/cpn-brand-mark.svg" width="34" height="34" alt="CPN">
+      <span class="brand-text">
+        <strong>CPN</strong>
+        <span>News Targeted</span>
+      </span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#install">Install</a>
+      <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/INSTALL.md">Docs</a>
+      <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-atmosphere" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <p class="hero-kicker reveal">
+          <span class="dot" aria-hidden="true"></span>
+          Alpha product line 0.2.x
+        </p>
+        <h1 id="hero-title" class="hero-brand reveal reveal-delay-1">
+          CPN
+          <span>Control Panel Network</span>
+        </h1>
+        <p class="hero-lead reveal reveal-delay-2">
+          A Rust hosting control panel from News Targeted: sites, mail, databases, SSL, and day-to-day ops on AlmaLinux and friends.
+        </p>
+        <div class="hero-actions reveal reveal-delay-3">
+          <a class="btn btn-primary" href="#install">Get the install command</a>
+          <a class="btn btn-ghost" href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">View on GitHub</a>
+        </div>
+        <p class="alpha-note reveal reveal-delay-3">
+          Alpha only. Tip tracks 0.2.6-alpha (not a stable 1.x). Prefer a disposable VPS or VM, keep backups, and read the platform support notes before important hosts.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install and upgrade</h2>
+      <p class="lede">
+        Official one-liners hit this host first, then fall back to GitHub raw on <code>stable</code>. Scripts stay at plain URLs so <code>curl -fsSL</code> keeps working.
+      </p>
+
+      <div class="install-block">
+        <div class="install-label">
+          <strong>Install</strong>
+          <span>Run as root or with sudo available</span>
+        </div>
+        <div class="command-row">
+          <pre id="cmd-install">bash &lt;(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)</pre>
+          <button type="button" class="copy-btn" data-copy-target="cmd-install">Copy</button>
+        </div>
+      </div>
+
+      <div class="install-block">
+        <div class="install-label">
+          <strong>Upgrade</strong>
+          <span>Package upgrade, then auto panel maintenance when installed</span>
+        </div>
+        <div class="command-row">
+          <pre id="cmd-upgrade">bash &lt;(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)</pre>
+          <button type="button" class="copy-btn" data-copy-target="cmd-upgrade">Copy</button>
+        </div>
+      </div>
+
+      <div class="install-block">
+        <div class="install-label">
+          <strong>Pin a release</strong>
+          <span><code>-b</code> / <code>--ref</code> example</span>
+        </div>
+        <div class="command-row">
+          <pre id="cmd-pin">bash &lt;(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.39</pre>
+          <button type="button" class="copy-btn" data-copy-target="cmd-pin">Copy</button>
+        </div>
+      </div>
+
+      <ul class="script-links">
+        <li><a href="/install.sh">/install.sh</a></li>
+        <li><a href="/upgrade.sh">/upgrade.sh</a></li>
+        <li><a href="/cpn-bootstrap-lib.sh">/cpn-bootstrap-lib.sh</a></li>
+        <li><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/INSTALL.md">INSTALL.md</a></li>
+        <li><a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/SUPPORT.md">Platform support</a></li>
+      </ul>
+    </section>
+
+    <figure class="shot-plane">
+      <img src="/assets/product/cpn-dashboard.png" width="1400" height="820" alt="CPN panel dashboard showing host overview metrics and activity">
+    </figure>
+    <p class="shot-caption">Panel overview on a live CPN install. Screenshot from the open-source project docs.</p>
+
+    <section class="section" aria-labelledby="about-title">
+      <h2 id="about-title">Built for operators</h2>
+      <p class="lede">
+        CPN is its own product. Branding, packages, and docs stay News Targeted / Control Panel Network (never CyberPanel product naming).
+      </p>
+      <div class="facts">
+        <div>
+          <h3>Native packages</h3>
+          <p>Install from GitHub Releases with checksums and optional GPG. EL9 and EL10 RPM assets ship while the line is alpha-only.</p>
+        </div>
+        <div>
+          <h3>Panel + CLI</h3>
+          <p>Web UI on port 2087 by default, plus <code>cpn</code> and <code>cpn-installer</code> for SSH recovery and host maintenance.</p>
+        </div>
+        <div>
+          <h3>Open source</h3>
+          <p>GPL-3.0 on GitHub under Control-Panel-Network/CPN-Control-Panel-Network. Issues and PRs welcome on the <code>stable</code> branch.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="inner">
+      <p>CPN by <a href="https://newstargeted.com">News Targeted</a>. Alpha software.</p>
+      <p>
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
+        ·
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/CHANGELOG.md">Changelog</a>
+        ·
+        <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/SECURITY.md">Security</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="/assets/js/site.js" defer></script>
+</body>
+</html>
