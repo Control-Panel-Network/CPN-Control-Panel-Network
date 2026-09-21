@@ -276,7 +276,7 @@ pub fn enroll_mfa_gate_main(
   <h2 style="margin:16px 0 8px;font-size:1.1rem;">Authenticator app (TOTP)</h2>
   <div class="mfa-totp-setup" style="margin:16px 0;">
     <div class="mfa-qr-wrap">{qr}</div>
-    <p class="muted" style="margin:0;">Secret: <code style="user-select:all;">{secret}</code></p>
+    <p class="mfa-secret">Secret: <code style="user-select:all;">{secret}</code></p>
     <form method="post" action="/account/security/enroll-2fa/confirm" class="stack-form" style="display:grid;gap:12px;margin-top:0;max-width:100%;">
       <label>Authenticator code
         <input type="text" name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]*" maxlength="12">

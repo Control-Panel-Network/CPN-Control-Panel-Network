@@ -216,8 +216,8 @@ code { font-size:.9em; word-break:break-word; }
   border:1px solid var(--hairline); border-radius:10px;
   background:var(--surface-soft); color:var(--ink);
 }
-.mfa-totp-setup p, .mfa-totp-setup strong, .mfa-totp-setup code { color:var(--ink); }
-.mfa-totp-setup .muted, .mfa-totp-setup p.muted { color:var(--muted); }
+.mfa-totp-setup p, .mfa-totp-setup strong, .mfa-totp-setup code, .mfa-totp-setup label { color:var(--ink); }
+.mfa-totp-setup .mfa-secret { margin:0; color:var(--ink); }
 .mfa-totp-setup .mfa-qr-wrap {
   background:#fff; padding:8px; border-radius:8px; width:fit-content;
 }

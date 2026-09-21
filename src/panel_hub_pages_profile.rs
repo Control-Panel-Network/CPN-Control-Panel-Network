@@ -168,7 +168,7 @@ pub fn users_self_edit_body(
         <div class="mfa-totp-setup">
           <p style="margin:0;">Scan this QR with your authenticator app, or enter the secret manually.</p>
           <div class="mfa-qr-wrap">{svg}</div>
-          <p style="margin:0;"><strong>Secret:</strong> <code style="user-select:all;">{secret}</code></p>
+          <p class="mfa-secret"><strong>Secret:</strong> <code style="user-select:all;">{secret}</code></p>
           <form method="post" action="/account/users/profile/totp/confirm" class="stack-form" style="display:grid;gap:10px;margin-top:0;max-width:100%;">
             <label>Authenticator code
               <input name="code" type="text" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" required autocomplete="one-time-code">
