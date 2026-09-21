@@ -8,16 +8,41 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 /// Default wall-clock budget for host probe commands (firewalld D-Bus can hang when inactive).
-const CMD_TIMEOUT: Duration = Duration::from_secs(3);
+/// Keep short: every authenticated panel page used to call firewall-cmd probes via the sidebar
+/// feature gate; a long hang × 3 probes blanked `/server/files` and login redirects.
+const CMD_TIMEOUT: Duration = Duration::from_secs(2);
+
+fn kill_timed_child(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        // firewall-cmd is a Python wrapper; kill the process group so D-Bus waiters die too.
+        let pid = child.id() as i32;
+        if pid > 1 {
+            let _ = Command::new("kill")
+                .args(["-9", &format!("-{pid}")])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
 
 fn run_command_timed(bin: &str, args: &[&str], timeout: Duration) -> Option<Output> {
-    let mut child = Command::new(bin)
-        .args(args)
+    let mut cmd = Command::new(bin);
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // New process group so timeout can SIGKILL the whole tree (firewall-cmd + helpers).
+        cmd.process_group(0);
+    }
+    let mut child = cmd.spawn().ok()?;
     let start = Instant::now();
     loop {
         match child.try_wait() {
@@ -38,15 +63,13 @@ fn run_command_timed(bin: &str, args: &[&str], timeout: Duration) -> Option<Outp
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    kill_timed_child(&mut child);
                     return None;
                 }
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(40));
             }
             Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_timed_child(&mut child);
                 return None;
             }
         }
@@ -68,9 +91,12 @@ pub(crate) fn cmd_stdout(bin: &str, args: &[&str]) -> Option<String> {
 }
 
 pub(crate) fn which_exists(bin: &str) -> bool {
-    cmd_ok("which", &[bin])
-        || Path::new(&format!("/usr/sbin/{bin}")).exists()
+    // Prefer path probes first so optional tools never pay for a `which` spawn on every page.
+    Path::new(&format!("/usr/sbin/{bin}")).exists()
         || Path::new(&format!("/usr/bin/{bin}")).exists()
+        || Path::new(&format!("/bin/{bin}")).exists()
+        || Path::new(&format!("/sbin/{bin}")).exists()
+        || cmd_ok("which", &[bin])
 }
 
 pub(crate) fn systemctl_active(unit: &str) -> String {
@@ -437,5 +463,11 @@ mod tests {
             start.elapsed() < Duration::from_secs(2),
             "timeout path should return quickly"
         );
+    }
+
+    #[test]
+    fn which_exists_accepts_common_unix_paths() {
+        // On CI/dev hosts `sh` is almost always present under /bin or /usr/bin.
+        assert!(which_exists("sh") || which_exists("cmd.exe") || which_exists("powershell"));
     }
 }
