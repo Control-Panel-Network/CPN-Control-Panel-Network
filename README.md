@@ -56,6 +56,8 @@ sudo cpn password            # reset an account password from the terminal
 
 ## Docs
 
+Host landing + script mirror: **[https://cpn.newstargeted.com/](https://cpn.newstargeted.com/)** (source `site/`, deploy notes [docs/HOST-SITE.md](docs/HOST-SITE.md)).
+
 All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/tree/stable/docs)**
 
 | Doc | Topic |
