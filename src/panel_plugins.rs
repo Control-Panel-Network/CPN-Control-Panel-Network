@@ -70,10 +70,7 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
 
     if view == "store" {
         return render_store(
-            PluginsPageQuery {
-                category,
-                ..query
-            },
+            PluginsPageQuery { category, ..query },
             &domain,
             &picker,
             mode,
@@ -135,9 +132,8 @@ fn render_store(
             );
             let host_n = apps.len();
             let plugin_n = entries.len();
-            let count_label = format!(
-                "{host_n} host packages + {plugin_n} community plugins (one catalog)"
-            );
+            let count_label =
+                format!("{host_n} host packages + {plugin_n} community plugins (one catalog)");
             let body = format!(
                 r#"<p class="plugin-count">{count}</p>
           <form method="get" action="/plugins" class="plugin-search-row">

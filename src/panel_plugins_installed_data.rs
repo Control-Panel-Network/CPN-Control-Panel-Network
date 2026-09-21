@@ -72,7 +72,10 @@ fn host_active(status: &crate::apps::AppStatus) -> bool {
     ) {
         return is_active_webmail(status.id);
     }
-    matches!(status.state, AppStateKind::Running | AppStateKind::Installed)
+    matches!(
+        status.state,
+        AppStateKind::Running | AppStateKind::Installed
+    )
 }
 
 fn host_card_html(status: &crate::apps::AppStatus, is_admin: bool) -> String {
@@ -208,7 +211,12 @@ pub(crate) fn collect_installed_flat(
         if !category_match(category, meta.category, true) {
             continue;
         }
-        if !text_match(q, status_app.id.label(), status_app.id.as_str(), meta.category) {
+        if !text_match(
+            q,
+            status_app.id.label(),
+            status_app.id.as_str(),
+            meta.category,
+        ) {
             continue;
         }
         out.push(FlatItem {

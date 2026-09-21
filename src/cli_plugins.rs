@@ -99,7 +99,8 @@ pub fn install(domain: Option<&str>, id: &str, force_host: bool) -> Result<(), S
 }
 
 pub fn remove(domain: Option<&str>, id: &str, from_host: bool) -> Result<(), String> {
-    if from_host || (domain.map(|d| d.trim().is_empty()).unwrap_or(true) && is_host_scoped_plugin(id))
+    if from_host
+        || (domain.map(|d| d.trim().is_empty()).unwrap_or(true) && is_host_scoped_plugin(id))
     {
         uninstall_host_plugin(id)?;
         println!("removed host plugin {id}");
@@ -108,7 +109,9 @@ pub fn remove(domain: Option<&str>, id: &str, from_host: bool) -> Result<(), Str
     let domain = domain
         .map(str::trim)
         .filter(|d| !d.is_empty())
-        .ok_or_else(|| "Domain is required (or pass --host to remove a host-scoped plugin)".to_string())?;
+        .ok_or_else(|| {
+            "Domain is required (or pass --host to remove a host-scoped plugin)".to_string()
+        })?;
     uninstall_plugin(domain, id)?;
     println!("removed plugin {id} from {domain}");
     Ok(())

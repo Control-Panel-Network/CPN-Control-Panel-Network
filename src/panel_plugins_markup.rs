@@ -229,11 +229,7 @@ fn badge_pricing(pricing: &str) -> String {
     }
 }
 
-pub(crate) fn installed_one_card(
-    item: &InstalledPlugin,
-    domain: &str,
-    username: &str,
-) -> String {
+pub(crate) fn installed_one_card(item: &InstalledPlugin, domain: &str, username: &str) -> String {
     let html = installed_cards(std::slice::from_ref(item), "grid", domain, username);
     html.replace(r#"<div class="plugin-grid">"#, "")
         .replacen("</div>", "", 1)
@@ -275,8 +271,7 @@ pub(crate) fn installed_cards(
         };
         let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
         let can_uninstall_site = !host_owned
-            && (admin
-                || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
+            && (admin || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
         // Host-installed packages: Uninstall from Host is panel-admin only.
         // Site plugins: Uninstall only with site Uninstall ACL (owners always allowed).
         let uninstall = if host_owned && !admin {
@@ -409,8 +404,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
         };
         let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
         let can_uninstall_site = !host_owned
-            && (admin
-                || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
+            && (admin || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
         let uninstall = if host_owned && !admin {
             String::new()
         } else if host_owned && admin {
@@ -467,4 +461,3 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
     rows.push_str("</tbody></table></div>");
     rows
 }
-

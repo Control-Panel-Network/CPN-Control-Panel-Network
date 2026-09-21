@@ -129,7 +129,8 @@ pub async fn apps_install(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, 
+                apps_redirect_to(
+                    &form.return_view,
                     &form.domain,
                     None,
                     Some("Only the panel admin can install Host packages"),
@@ -141,7 +142,10 @@ pub async fn apps_install(
         Ok(v) => v,
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header(("Location", apps_redirect_to(&form.return_view, &form.domain, None, Some(&error))))
+                .append_header((
+                    "Location",
+                    apps_redirect_to(&form.return_view, &form.domain, None, Some(&error)),
+                ))
                 .finish();
         }
     };
@@ -149,13 +153,23 @@ pub async fn apps_install(
         Ok(message) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, domain.as_deref().unwrap_or(""), Some(&message), None),
+                apps_redirect_to(
+                    &form.return_view,
+                    domain.as_deref().unwrap_or(""),
+                    Some(&message),
+                    None,
+                ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, domain.as_deref().unwrap_or(""), None, Some(&error)),
+                apps_redirect_to(
+                    &form.return_view,
+                    domain.as_deref().unwrap_or(""),
+                    None,
+                    Some(&error),
+                ),
             ))
             .finish(),
     }
@@ -207,13 +221,21 @@ pub async fn apps_activate(
             return HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    apps_redirect_to(&form.return_view, "", None, Some("Select a domain or subdomain to Activate")),
+                    apps_redirect_to(
+                        &form.return_view,
+                        "",
+                        None,
+                        Some("Select a domain or subdomain to Activate"),
+                    ),
                 ))
                 .finish();
         }
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header(("Location", apps_redirect_to(&form.return_view, &form.domain, None, Some(&error))))
+                .append_header((
+                    "Location",
+                    apps_redirect_to(&form.return_view, &form.domain, None, Some(&error)),
+                ))
                 .finish();
         }
     };
@@ -231,10 +253,16 @@ pub async fn apps_activate(
         apply_site_scope(parsed, &domain)
     })() {
         Ok(message) => HttpResponse::SeeOther()
-            .append_header(("Location", apps_redirect_to(&form.return_view, &domain, Some(&message), None)))
+            .append_header((
+                "Location",
+                apps_redirect_to(&form.return_view, &domain, Some(&message), None),
+            ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header(("Location", apps_redirect_to(&form.return_view, &domain, None, Some(&error))))
+            .append_header((
+                "Location",
+                apps_redirect_to(&form.return_view, &domain, None, Some(&error)),
+            ))
             .finish(),
     }
 }
@@ -254,22 +282,36 @@ pub async fn apps_deactivate(
             return HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    apps_redirect_to(&form.return_view, "", None, Some("Select a domain to Deactivate")),
+                    apps_redirect_to(
+                        &form.return_view,
+                        "",
+                        None,
+                        Some("Select a domain to Deactivate"),
+                    ),
                 ))
                 .finish();
         }
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header(("Location", apps_redirect_to(&form.return_view, &form.domain, None, Some(&error))))
+                .append_header((
+                    "Location",
+                    apps_redirect_to(&form.return_view, &form.domain, None, Some(&error)),
+                ))
                 .finish();
         }
     };
     match AppId::parse(&form.name).and_then(|id| clear_site_scope(id, &domain)) {
         Ok(message) => HttpResponse::SeeOther()
-            .append_header(("Location", apps_redirect_to(&form.return_view, &domain, Some(&message), None)))
+            .append_header((
+                "Location",
+                apps_redirect_to(&form.return_view, &domain, Some(&message), None),
+            ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header(("Location", apps_redirect_to(&form.return_view, &domain, None, Some(&error))))
+            .append_header((
+                "Location",
+                apps_redirect_to(&form.return_view, &domain, None, Some(&error)),
+            ))
             .finish(),
     }
 }
@@ -287,7 +329,8 @@ pub async fn apps_reinstall(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, 
+                apps_redirect_to(
+                    &form.return_view,
                     &form.domain,
                     None,
                     Some("Only the panel admin can reinstall Host packages"),
@@ -299,7 +342,10 @@ pub async fn apps_reinstall(
         Ok(v) => v,
         Err(error) => {
             return HttpResponse::SeeOther()
-                .append_header(("Location", apps_redirect_to(&form.return_view, &form.domain, None, Some(&error))))
+                .append_header((
+                    "Location",
+                    apps_redirect_to(&form.return_view, &form.domain, None, Some(&error)),
+                ))
                 .finish();
         }
     };
@@ -307,13 +353,23 @@ pub async fn apps_reinstall(
         Ok(message) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, domain.as_deref().unwrap_or(""), Some(&message), None),
+                apps_redirect_to(
+                    &form.return_view,
+                    domain.as_deref().unwrap_or(""),
+                    Some(&message),
+                    None,
+                ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, domain.as_deref().unwrap_or(""), None, Some(&error)),
+                apps_redirect_to(
+                    &form.return_view,
+                    domain.as_deref().unwrap_or(""),
+                    None,
+                    Some(&error),
+                ),
             ))
             .finish(),
     }
@@ -346,7 +402,8 @@ pub async fn apps_uninstall(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, 
+                apps_redirect_to(
+                    &form.return_view,
                     &form.domain,
                     None,
                     Some(crate::uninstall_confirm::CONFIRM_REQUIRED_MSG),

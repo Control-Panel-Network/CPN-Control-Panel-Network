@@ -26,8 +26,7 @@ fn sort_key(item: &UnifiedItem<'_>) -> String {
 
 fn skip_catalog_duplicate(entry: &CatalogEntry) -> bool {
     // Roundcube is the Email host package (cpn app), not a second catalog install.
-    entry.id.eq_ignore_ascii_case("roundcubeWebmail")
-        || entry.id.eq_ignore_ascii_case("roundcube")
+    entry.id.eq_ignore_ascii_case("roundcubeWebmail") || entry.id.eq_ignore_ascii_case("roundcube")
 }
 
 fn collect_unified<'a>(
@@ -58,7 +57,11 @@ fn collect_unified<'a>(
 
     let include_catalog = cat != "host";
     if include_catalog {
-        let catalog_cat = if cat == "host" { "___none___" } else { category };
+        let catalog_cat = if cat == "host" {
+            "___none___"
+        } else {
+            category
+        };
         for entry in filter_store_entries(entries, query, catalog_cat) {
             if skip_catalog_duplicate(entry) {
                 continue;

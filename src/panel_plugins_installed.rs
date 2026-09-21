@@ -39,10 +39,7 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
         qs.push_str(&format!("&amp;q={}", urlencoding_simple(opts.q)));
     }
     if !opts.status.trim().is_empty() {
-        qs.push_str(&format!(
-            "&amp;status={}",
-            urlencoding_simple(opts.status)
-        ));
+        qs.push_str(&format!("&amp;status={}", urlencoding_simple(opts.status)));
     }
     let mut out = String::from(r#"<div class="category-pills">"#);
     for (label, cat) in [("All", ""), ("Host", "Host"), ("Site", "Site")] {
@@ -244,8 +241,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
     } else {
         ""
     };
-    let host_only_page =
-        !host_items.is_empty() && domain_items.is_empty() && sub_items.is_empty();
+    let host_only_page = !host_items.is_empty() && domain_items.is_empty() && sub_items.is_empty();
     // Show empty Domain/Sub placeholders on scroll or page 1 so scope stays clear.
     let show_empty_scopes = mode == "scroll" || page <= 1;
 

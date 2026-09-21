@@ -317,7 +317,12 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
     host_action_buttons(status, domain, is_admin, "")
 }
 
-pub(crate) fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool) -> String {
+pub(crate) fn host_card(
+    status: &AppStatus,
+    domain: &str,
+    all: &[AppStatus],
+    is_admin: bool,
+) -> String {
     let meta = meta_for(status.id);
     let featured = host_package_is_featured(status.id, all);
     let featured_badge = if featured {
@@ -339,7 +344,10 @@ pub(crate) fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_
     ) && crate::apps_webmail::is_active_webmail(status.id)
     {
         r#"<span class="plugin-badge featured">Active</span>"#
-    } else if matches!(status.state, AppStateKind::Running | AppStateKind::Installed) {
+    } else if matches!(
+        status.state,
+        AppStateKind::Running | AppStateKind::Installed
+    ) {
         r#"<span class="plugin-badge installed">Active</span>"#
     } else {
         r#"<span class="plugin-badge">Not installed</span>"#
