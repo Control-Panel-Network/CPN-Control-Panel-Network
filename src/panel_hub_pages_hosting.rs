@@ -417,7 +417,7 @@ pub fn phpmyadmin_page(notice: Option<&str>, error: Option<&str>) -> String {
             r#"<p>{detail}</p>
       <p style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;">
         <a class="btn-primary" href="/databases/phpmyadmin/open" target="_blank" rel="noopener noreferrer">Open phpMyAdmin (auto-login)</a>
-        <a class="btn-secondary" href="/plugins?view=host">Host packages</a>
+        <a class="btn-secondary" href="/plugins?view=store&amp;category=Host">Host packages</a>
       </p>
       <p class="muted">Auto-login creates a short-lived MariaDB user and sign-on token (never shown). Panel admin Host open may use full grants. Site open with <code>?domain=</code> jails grants to databases registered for that domain only. CPN serves phpMyAdmin under <code>/phpmyadmin/</code> on the panel port (loopback backend <code>127.0.0.1:8081</code>).</p>"#,
             detail = html_escape(&detail),
@@ -425,7 +425,7 @@ pub fn phpmyadmin_page(notice: Option<&str>, error: Option<&str>) -> String {
     } else {
         format!(
             r#"<p>{detail}</p>
-      <p><a class="btn-primary" href="/plugins?view=host">Install via Host packages</a></p>
+      <p><a class="btn-primary" href="/plugins?view=store&amp;category=Host">Install via Host packages</a></p>
       <p class="muted">MariaDB is the default database engine. phpMyAdmin is the default companion UI when installed.</p>"#,
             detail = html_escape(&detail),
         )

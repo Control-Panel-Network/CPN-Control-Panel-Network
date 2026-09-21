@@ -232,8 +232,10 @@ fn prompt_account(
         }
         match crate::reserved_usernames::reject_if_reserved(username.trim()) {
             Ok(()) => break username.trim().to_string(),
-            Err(error) => {
-                eprintln!("error: {error}");
+            Err(_error) => {
+                // Fixed message only: do not echo reserved-username details to stderr
+                // (CodeQL cleartext-logging on reserved_username_error).
+                eprintln!("error: That username is reserved. Choose a different name.");
             }
         }
     };

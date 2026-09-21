@@ -191,6 +191,9 @@ pub async fn login_page(
     }
     let payload = enrich_status(status, &state.token);
     let next = first_safe_next(&[query.next.as_deref()]);
+    if let Some(session_user) = panel_user_from_request(&state, &http) {
+        return redirect_authed_after_login(&session_user, next.as_deref());
+    }
     let secure = request_secure(&http);
     let mut builder = HttpResponse::Ok();
     builder.content_type("text/html; charset=utf-8");
@@ -331,6 +334,31 @@ fn mfa_options_for(username: &str) -> MfaPageOptions {
     }
 }
 
+fn mfa_factors_available(options: &MfaPageOptions) -> bool {
+    options.totp_available || options.passkey_available
+}
+
+/// When MFA was cleared after password auth (empty passkey store + no TOTP),
+/// finish sign-in instead of trapping the user on a passkey-only challenge.
+fn finish_pending_without_mfa_factors(
+    http: &HttpRequest,
+    secret: &str,
+    username: &str,
+    next: Option<&str>,
+) -> HttpResponse {
+    let token = create_session_token(username, secret);
+    login_success_response(http, &token, username, next)
+}
+
+fn redirect_authed_after_login(username: &str, next: Option<&str>) -> HttpResponse {
+    let location = crate::account_security::post_login_security_path(username)
+        .map(str::to_string)
+        .unwrap_or_else(|| post_login_location(next));
+    HttpResponse::SeeOther()
+        .append_header(("Location", location))
+        .finish()
+}
+
 #[get("/login/2fa")]
 pub async fn login_mfa_page(
     http: HttpRequest,
@@ -352,18 +380,22 @@ pub async fn login_mfa_page(
         read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret));
     let next = first_safe_next(&[query.get("next").map(String::as_str)]);
     let Some(username) = pending_user else {
+        // Opaque-redirect login JS always lands here. If password login already
+        // issued a session (no MFA enrolled), continue to enroll/dashboard.
+        if let Some(session_user) = panel_user_from_request(&state, &http) {
+            return redirect_authed_after_login(&session_user, next.as_deref());
+        }
         return HttpResponse::SeeOther()
             .append_header(("Location", login_location(next.as_deref())))
             .finish();
     };
+    let options = mfa_options_for(&username);
+    if !mfa_factors_available(&options) {
+        return finish_pending_without_mfa_factors(&http, &secret, &username, next.as_deref());
+    }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(panel_mfa_html(
-            &payload,
-            None,
-            next.as_deref(),
-            mfa_options_for(&username),
-        ))
+        .body(panel_mfa_html(&payload, None, next.as_deref(), options))
 }
 
 #[post("/login/2fa")]
@@ -393,6 +425,9 @@ pub async fn login_mfa_submit(
     };
 
     let options = mfa_options_for(&username);
+    if !mfa_factors_available(&options) {
+        return finish_pending_without_mfa_factors(&http, &secret, &username, next.as_deref());
+    }
     if !options.totp_available {
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")

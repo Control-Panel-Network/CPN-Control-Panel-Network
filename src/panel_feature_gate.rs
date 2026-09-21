@@ -16,6 +16,18 @@ use crate::panel_ops_security::{fail2ban_status, firewall_status};
 use crate::panel_ops_security_ssl::malware_scan_status;
 use crate::plugins::plugin_id_enabled_anywhere;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// Avoid re-running host probes (firewall-cmd, fail2ban, clam) on every HTML shell render.
+const FEATURE_DETECT_TTL: Duration = Duration::from_secs(45);
+
+struct FeatureDetectCache {
+    at: Instant,
+    value: InstalledOptionalFeatures,
+}
+
+static FEATURE_DETECT_CACHE: Mutex<Option<FeatureDetectCache>> = Mutex::new(None);
 
 /// Detected optional software that backs specific nav/hub links.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +46,23 @@ pub struct InstalledOptionalFeatures {
 
 impl InstalledOptionalFeatures {
     pub fn detect() -> Self {
+        if let Ok(guard) = FEATURE_DETECT_CACHE.lock()
+            && let Some(cached) = guard.as_ref()
+            && cached.at.elapsed() < FEATURE_DETECT_TTL
+        {
+            return cached.value;
+        }
+        let value = Self::detect_uncached();
+        if let Ok(mut guard) = FEATURE_DETECT_CACHE.lock() {
+            *guard = Some(FeatureDetectCache {
+                at: Instant::now(),
+                value,
+            });
+        }
+        value
+    }
+
+    fn detect_uncached() -> Self {
         let fw = firewall_status();
         let f2b = fail2ban_status();
         let mal = malware_scan_status();
@@ -64,7 +93,7 @@ impl InstalledOptionalFeatures {
             "/security/fail2ban" => self.fail2ban,
             "/security/firewall" => self.firewall,
             "/security/malware-scan" => self.malware,
-            "/apps" => false, // folded into Plugins (host packages tab)
+            "/apps" => false, // folded into Plugins Store (Host category)
             _ => true,
         }
     }

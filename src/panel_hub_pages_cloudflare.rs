@@ -1,9 +1,11 @@
 //! Cloudflare DNS panel pages (Manage DNS + API Settings). UX inspired by common
 //! hosting panels; CPN branding only (never CyberPanel).
 
+use crate::panel_hub_pages_cloudflare_api::api_settings_body;
+use crate::panel_hub_pages_cloudflare_pager::CfTableOpts;
 use crate::panel_hub_pages_cloudflare_table::records_table;
 use crate::panel_hubs::feature_shell;
-use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public, format_verify_time};
+use crate::panel_ops_cloudflare::{RECORD_TYPES, cloudflare_public};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
 use crate::panel_ops_cloudflare_oauth::oauth_public;
 use crate::panel_ops_cloudflare_verify::list_accessible_zones;
@@ -66,30 +68,104 @@ fn tab_bar(active: &str) -> String {
     )
 }
 
-fn domain_options(selected: &str) -> String {
-    let mut out = String::from(r#"<option value="">Choose a domain...</option>"#);
-    let mut domains: Vec<String> = list_sites()
+/// Domains for Manage DNS: local CPN websites plus Cloudflare zones (OAuth/token).
+#[derive(Debug, Default)]
+struct DomainChoices {
+    local: Vec<String>,
+    cloudflare: Vec<String>,
+    zone_error: Option<String>,
+}
+
+fn collect_domain_choices() -> DomainChoices {
+    let mut local: Vec<String> = list_sites()
         .unwrap_or_default()
         .into_iter()
-        .map(|s| s.domain)
+        .map(|s| s.domain.trim().to_ascii_lowercase())
+        .filter(|d| !d.is_empty())
         .collect();
-    if let Ok(cf_zones) = list_accessible_zones(100) {
-        for z in cf_zones {
-            domains.push(z);
+    local.sort();
+    local.dedup();
+
+    // Prefer a fresh OAuth access token before zone list (no-op for API token auth).
+    let _ = crate::panel_ops_cloudflare_oauth::refresh_oauth_access_if_needed();
+
+    let (cloudflare, zone_error) = match list_accessible_zones(100) {
+        Ok(mut zones) => {
+            zones.sort();
+            zones.dedup();
+            (zones, None)
         }
+        Err(err) => (Vec::new(), Some(err)),
+    };
+
+    DomainChoices {
+        local,
+        cloudflare,
+        zone_error,
     }
-    domains.sort();
-    domains.dedup();
-    for d in domains {
-        let sel = if d == selected { " selected" } else { "" };
-        out.push_str(&format!(
-            r#"<option value="{v}"{sel}>{l}</option>"#,
-            v = html_escape(&d),
-            l = html_escape(&d),
-            sel = sel,
-        ));
+}
+
+/// First domain to open when Manage DNS has no `domain` query (local or Cloudflare).
+pub fn preferred_manage_domain() -> Option<String> {
+    let choices = collect_domain_choices();
+    choices.cloudflare.into_iter().chain(choices.local).next()
+}
+
+fn domain_options(selected: &str, choices: &DomainChoices) -> String {
+    let mut out = String::from(r#"<option value="">Choose a Cloudflare zone...</option>"#);
+
+    if !choices.local.is_empty() {
+        out.push_str(r#"<optgroup label="Local websites">"#);
+        for d in &choices.local {
+            let sel = if d == selected { " selected" } else { "" };
+            out.push_str(&format!(
+                r#"<option value="{v}"{sel}>{l}</option>"#,
+                v = html_escape(d),
+                l = html_escape(d),
+                sel = sel,
+            ));
+        }
+        out.push_str("</optgroup>");
     }
+
+    if !choices.cloudflare.is_empty() {
+        out.push_str(r#"<optgroup label="Cloudflare zones">"#);
+        for d in &choices.cloudflare {
+            let sel = if d == selected { " selected" } else { "" };
+            out.push_str(&format!(
+                r#"<option value="{v}"{sel}>{l}</option>"#,
+                v = html_escape(d),
+                l = html_escape(d),
+                sel = sel,
+            ));
+        }
+        out.push_str("</optgroup>");
+    }
+
     out
+}
+
+fn manage_empty_hint(choices: &DomainChoices) -> String {
+    let oauth = oauth_public(0);
+    let pubv = cloudflare_public();
+    let linked = oauth.linked || pubv.oauth_linked || pubv.auth_type == "oauth";
+    let configured = pubv.configured || linked;
+
+    if let Some(err) = choices.zone_error.as_deref() {
+        return format!(
+            "Could not list Cloudflare zones ({err}). Open API Settings, confirm OAuth or token access, then reload Manage DNS."
+        );
+    }
+    if !choices.cloudflare.is_empty() || !choices.local.is_empty() {
+        return "Pick a Cloudflare zone (or local website) above to load DNS records.".into();
+    }
+    if linked {
+        return "Cloudflare OAuth is linked, but no zones were returned and this host has no local websites yet. Confirm the linked account can see zones in Cloudflare, or create a website in CPN.".into();
+    }
+    if configured {
+        return "Cloudflare credentials are saved, but no zones were returned and this host has no local websites yet. Use Test connection under API Settings, or create a website in CPN.".into();
+    }
+    "Connect Cloudflare under API Settings (OAuth or API token), or create a website first. Manage DNS lists Cloudflare zones even when no local website exists yet.".into()
 }
 
 fn add_type_options(selected: &str) -> String {
@@ -109,47 +185,86 @@ fn add_type_options(selected: &str) -> String {
 fn manage_body(
     domain: &str,
     records: Result<Vec<CfDnsRecord>, String>,
-    filter_type: &str,
+    table_opts: &CfTableOpts,
     load_error: Option<&str>,
 ) -> String {
-    let rec_html = match &records {
-        Ok(r) => records_table(domain, r, filter_type),
-        Err(e) => format!(
-            r#"<p class="panel-notice error" role="status">{}</p>"#,
-            html_escape(e)
-        ),
-    };
-    let err = load_error
-        .map(|e| {
-            format!(
+    let filter_type = table_opts.filter_type.as_str();
+    let choices = collect_domain_choices();
+    let empty_hint = manage_empty_hint(&choices);
+    let list_hiddens = format!(
+        r#"<input type="hidden" name="page" value="{page}">
+<input type="hidden" name="per_page" value="{per_page}">
+<input type="hidden" name="mode" value="{mode}">
+<input type="hidden" name="sort" value="{sort}">
+<input type="hidden" name="order" value="{order}">"#,
+        page = table_opts.page.max(1),
+        per_page = table_opts.per_page,
+        mode = html_escape(&table_opts.mode),
+        sort = html_escape(&table_opts.sort),
+        order = html_escape(&table_opts.order),
+    );
+    let rec_html = if domain.trim().is_empty() {
+        format!(
+            r#"<p class="muted" role="status">{}</p>"#,
+            html_escape(&empty_hint)
+        )
+    } else {
+        match &records {
+            Ok(r) => records_table(domain, r, table_opts),
+            Err(e) => format!(
                 r#"<p class="panel-notice error" role="status">{}</p>"#,
                 html_escape(e)
-            )
-        })
-        .unwrap_or_default();
+            ),
+        }
+    };
+    let mut err = String::new();
+    if let Some(zone_err) = choices.zone_error.as_deref() {
+        err.push_str(&format!(
+            r#"<p class="panel-notice error" role="status">{}</p>"#,
+            html_escape(&format!("Cloudflare zone list failed: {zone_err}"))
+        ));
+    }
+    if let Some(e) = load_error {
+        err.push_str(&format!(
+            r#"<p class="panel-notice error" role="status">{}</p>"#,
+            html_escape(e)
+        ));
+    }
     let add_type = if filter_type.is_empty() || filter_type.eq_ignore_ascii_case("all") {
         "A"
     } else {
         filter_type
+    };
+    let zone_count = choices.cloudflare.len();
+    let zone_note = if zone_count > 0 {
+        format!(
+            r#"<p class="muted">{n} Cloudflare zone(s) available from the linked account (local websites not required).</p>"#,
+            n = zone_count
+        )
+    } else {
+        String::new()
     };
     format!(
         r#"{tabs}
 <div class="cf-manage">
   <form method="get" action="/dns/cloudflare" class="cf-add-row">
     <input type="hidden" name="tab" value="manage">
-    <label>Select Domain
+    <label>Select zone
       <select name="domain" onchange="this.form.submit()">{opts}</select>
     </label>
   </form>
+  {zone_note}
   <form method="post" action="/dns/cloudflare/sync" style="display:inline-block;margin:8px 0;">
     <input type="hidden" name="domain" value="{dom}">
     <input type="hidden" name="filter_type" value="{ft}">
+    {list_hiddens}
     <button type="submit" class="btn-primary" {sync_dis}>Sync to Cloudflare</button>
   </form>
   <h3>Add DNS Record</h3>
   <form method="post" action="/dns/cloudflare/add" id="cf-add-form">
     <input type="hidden" name="domain" value="{dom}">
     <input type="hidden" name="filter_type" value="{ft}">
+    {list_hiddens}
     <div class="cf-add-row">
       <label>Type <select id="cf-add-type" name="record_type">{type_opts}</select></label>
       <label>Name <input name="name" placeholder="@" required></label>
@@ -164,11 +279,13 @@ fn manage_body(
   {err}
   {rec}
 </div>
-<p class="muted">Uses the Cloudflare API with token auth when configured. Local zone files under the CPN DNS data directory sync when enabled in API Settings.</p>"#,
+<p class="muted">Uses the Cloudflare API (OAuth or API token). Local zone files under the CPN DNS data directory sync when enabled in API Settings.</p>"#,
         tabs = tab_bar("manage"),
-        opts = domain_options(domain),
+        opts = domain_options(domain, &choices),
+        zone_note = zone_note,
         dom = html_escape(domain),
         ft = html_escape(filter_type),
+        list_hiddens = list_hiddens,
         type_opts = add_type_options(add_type),
         err = err,
         rec = rec_html,
@@ -177,165 +294,19 @@ fn manage_body(
     )
 }
 
-fn api_body(listen_port: u16) -> String {
-    let pubv = cloudflare_public();
-    let oauth = oauth_public(listen_port);
-    let sync_en = if pubv.sync_local { " selected" } else { "" };
-    let sync_dis = if pubv.sync_local { "" } else { " selected" };
-    let tok_sel = if pubv.auth_type == "global_key" {
-        ""
-    } else {
-        " selected"
-    };
-    let key_sel = if pubv.auth_type == "global_key" {
-        " selected"
-    } else {
-        ""
-    };
-    let configured = if pubv.configured {
-        format!(
-            r#"<p class="muted">Token on disk: <code>{}</code> (masked). Leave the token field blank to keep the current secret.</p>"#,
-            html_escape(&pubv.token_masked)
-        )
-    } else {
-        r#"<p class="muted">No Cloudflare API token stored yet. Create a token with Zone DNS Edit permissions.</p>"#.into()
-    };
-    let status_banner = match (
-        pubv.configured,
-        pubv.last_verify_ok,
-        pubv.last_verify_at_unix,
-        pubv.last_verify_message.as_deref(),
-        pubv.last_zone_count,
-    ) {
-        (false, _, _, _, _) => {
-            r#"<p class="panel-notice" role="status">API not configured. Save a token, then use <strong>Test connection</strong>.</p>"#.to_string()
-        }
-        (true, Some(true), Some(ts), msg, zones) => {
-            let when = format_verify_time(ts);
-            let zones_txt = zones
-                .map(|n| format!("{n} zone(s)"))
-                .unwrap_or_else(|| "zones checked".into());
-            let detail = msg.unwrap_or("Token valid");
-            format!(
-                r#"<p class="panel-notice success" role="status"><strong>Connection valid</strong> · {zones} · last verified {when}<br><span class="muted">{detail}</span></p>"#,
-                zones = html_escape(&zones_txt),
-                when = html_escape(&when),
-                detail = html_escape(detail),
-            )
-        }
-        (true, Some(false), Some(ts), msg, _) => {
-            let when = format_verify_time(ts);
-            let detail = msg.unwrap_or("Token invalid or zone list failed");
-            format!(
-                r#"<p class="panel-notice error" role="status"><strong>Connection invalid</strong> · last checked {when}<br><span class="muted">{detail}</span></p>"#,
-                when = html_escape(&when),
-                detail = html_escape(detail),
-            )
-        }
-        (true, _, _, _, _) => {
-            r#"<p class="panel-notice" role="status">Token is saved. Click <strong>Test connection</strong> to verify with Cloudflare (<code>/user/tokens/verify</code> + zone list) without opening Manage DNS.</p>"#.to_string()
-        }
-    };
-    let test_disabled = if pubv.configured { "" } else { " disabled" };
-    let oauth_status = if oauth.linked {
-        format!(
-            r#"<p class="panel-notice success" role="status"><strong>OAuth linked</strong> · scopes: <code>{}</code></p>"#,
-            html_escape(&oauth.scopes)
-        )
-    } else if oauth.client_configured {
-        r#"<p class="panel-notice" role="status">OAuth client saved. Click <strong>Connect with Cloudflare</strong> to authorize DNS access.</p>"#.into()
-    } else {
-        r#"<p class="muted">Optional: register a Cloudflare OAuth app and connect instead of pasting an API token (DNS link only; not panel login).</p>"#.into()
-    };
-    let oauth_secret_field = if oauth.client_configured {
-        format!(
-            r#"<p class="muted">Client secret on disk: <code>{}</code> (masked). Leave blank to keep the current secret.</p>"#,
-            html_escape(&oauth.client_secret_masked)
-        )
-    } else {
-        String::new()
-    };
-    format!(
-        r#"{tabs}
-<h3>Cloudflare OAuth (DNS link)</h3>
-<p class="muted">Redirect URI for your Cloudflare OAuth app: <code>{redirect}</code></p>
-{oauth_status}
-<form method="post" action="/dns/cloudflare/oauth/client" class="stack-form" style="max-width:520px;margin-bottom:16px;">
-  <label for="oauth_client_id">OAuth Client ID</label>
-  <input id="oauth_client_id" name="client_id" type="text" value="{oauth_client_id}" autocomplete="off">
-  <label for="oauth_client_secret">OAuth Client Secret</label>
-  <input id="oauth_client_secret" name="client_secret" type="password" autocomplete="new-password" placeholder="Paste client secret">
-  {oauth_secret_field}
-  <button type="submit" class="btn-secondary">Save OAuth client</button>
-</form>
-<form method="post" action="/dns/cloudflare/oauth/connect" style="display:inline-block;margin-right:8px;">
-  <button type="submit" class="btn-primary"{oauth_connect_dis}>Connect with Cloudflare</button>
-</form>
-<form method="post" action="/dns/cloudflare/oauth/disconnect" style="display:inline-block;" onsubmit="return confirm('Disconnect Cloudflare OAuth?');">
-  <button type="submit" class="btn-secondary"{oauth_disconnect_dis}>Disconnect OAuth</button>
-</form>
-<h3 style="margin-top:28px;">Manual API token (fallback)</h3>
-{status_banner}
-{configured}
-<form method="post" action="/dns/cloudflare/settings" class="stack-form" style="max-width:520px;">
-  <label for="auth_type">Authentication type</label>
-  <select id="auth_type" name="auth_type">
-    <option value="api_token"{tok_sel}>API Token (recommended)</option>
-    <option value="global_key"{key_sel}>Global API Key (email + key)</option>
-  </select>
-  <label for="email">Cloudflare Email</label>
-  <input id="email" name="email" type="email" placeholder="your@email.com" value="{email}">
-  <p class="muted">Optional when using an API Token. Required for Global API Key.</p>
-  <label for="api_token">API Token</label>
-  <input id="api_token" name="api_token" type="password" autocomplete="new-password" placeholder="Enter your Cloudflare API token">
-  <label for="sync_local">Sync Local Records to Cloudflare</label>
-  <select id="sync_local" name="sync_local">
-    <option value="1"{sync_en}>Enable</option>
-    <option value="0"{sync_dis}>Disable</option>
-  </select>
-  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
-    <button type="submit" class="btn-primary">Save Configuration</button>
-  </div>
-</form>
-<form method="post" action="/dns/cloudflare/test" style="margin-top:12px;">
-  <button type="submit" class="btn-secondary"{test_disabled}>Test connection</button>
-</form>
-<p class="muted">Test connection calls Cloudflare token verify (API Token), account check (Global Key), or OAuth refresh, then lists accessible zones. Secrets are never shown in full. Stored at <code>/var/lib/cpn/cloudflare.json</code> (mode 600).</p>"#,
-        tabs = tab_bar("api"),
-        redirect = html_escape(&oauth.redirect_uri),
-        oauth_status = oauth_status,
-        oauth_client_id = html_escape(&oauth.client_id),
-        oauth_secret_field = oauth_secret_field,
-        oauth_connect_dis = if oauth.client_configured {
-            ""
-        } else {
-            " disabled"
-        },
-        oauth_disconnect_dis = if oauth.linked { "" } else { " disabled" },
-        status_banner = status_banner,
-        configured = configured,
-        email = html_escape(&pubv.email),
-        tok_sel = tok_sel,
-        key_sel = key_sel,
-        sync_en = sync_en,
-        sync_dis = sync_dis,
-        test_disabled = test_disabled,
-    )
-}
-
 pub fn cloudflare_dns_page(
     tab: &str,
     domain: &str,
     records: Result<Vec<CfDnsRecord>, String>,
-    filter_type: &str,
+    table_opts: &CfTableOpts,
     listen_port: u16,
     notice: Option<&str>,
     error: Option<&str>,
 ) -> String {
     let body = if tab == "api" {
-        api_body(listen_port)
+        api_settings_body(listen_port, &tab_bar("api"))
     } else {
-        manage_body(domain, records, filter_type, None)
+        manage_body(domain, records, table_opts, None)
     };
     feature_shell(
         &[
