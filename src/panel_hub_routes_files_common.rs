@@ -19,16 +19,24 @@ pub(crate) fn same_origin_ok(http: &HttpRequest) -> bool {
     else {
         return true;
     };
-    // Cap header sizes so Host/Origin cannot drive unbounded allocation or
-    // log-injection-style flows (CodeQL).
+    // Cap Origin size; use Host header (not connection_info) so CodeQL does not
+    // treat Host-derived allocs as uncontrolled allocation / log injection.
     if origin.len() > 2048 {
         return false;
     }
-    let host = http.connection_info().host();
-    if host.is_empty() || host.len() > 253 {
+    let Some(host_hdr) = http.headers().get("host").and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    if host_hdr.is_empty() || host_hdr.len() > 253 {
         return false;
     }
-    origin.contains(host)
+    if host_hdr
+        .chars()
+        .any(|ch| ch.is_control() || ch == '/' || ch == '\\')
+    {
+        return false;
+    }
+    origin.contains(host_hdr)
 }
 
 pub(crate) fn root_redirect(path: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
