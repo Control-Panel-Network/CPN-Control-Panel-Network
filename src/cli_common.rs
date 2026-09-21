@@ -151,8 +151,9 @@ mod confirm_reply_tests {
 
     #[test]
     fn negative_accepts_common_no_and_empty() {
-        for sample in ["", "   ", "no", "NO", "No", "n", "N", "nope", "cancel", "abort", "false", "0"]
-        {
+        for sample in [
+            "", "   ", "no", "NO", "No", "n", "N", "nope", "cancel", "abort", "false", "0",
+        ] {
             assert!(
                 is_negative_reply(sample),
                 "expected negative for {sample:?}"
