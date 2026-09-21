@@ -1,7 +1,7 @@
 //! `cpn totp` subcommands: status / disable / clear (no secrets printed).
 
-use crate::account_mgmt::find_account;
 use crate::account_mfa::{clear_totp_force, totp_status_for};
+use crate::account_mgmt::find_account;
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]

@@ -1,7 +1,7 @@
 //! `cpn mfa` subcommands: clear TOTP + passkeys (+ pending ceremonies) for an account.
 
-use crate::account_mgmt::find_account;
 use crate::account_mfa::clear_totp_force;
+use crate::account_mgmt::find_account;
 use crate::account_passkeys::clear_all_passkeys;
 use crate::panel_webauthn::clear_all_ceremonies;
 use clap::Subcommand;

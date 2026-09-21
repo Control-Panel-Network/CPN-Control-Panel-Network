@@ -63,7 +63,10 @@ pub fn clear_all_ceremonies() -> Result<usize, String> {
         match fs::remove_file(&path) {
             Ok(()) => removed = removed.saturating_add(1),
             Err(err) => {
-                return Err(format!("Could not remove ceremony {}: {err}", path.display()));
+                return Err(format!(
+                    "Could not remove ceremony {}: {err}",
+                    path.display()
+                ));
             }
         }
     }

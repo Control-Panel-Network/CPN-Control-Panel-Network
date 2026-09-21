@@ -190,15 +190,15 @@ pub(crate) fn dns_list_toolbar(
         r#"<option value="all"{all_sel}>All</option>"#,
         all_sel = all_sel
     ));
-    let filter_label = if opts.filter_type.is_empty() || opts.filter_type.eq_ignore_ascii_case("all")
-    {
-        format!("Showing {filtered} of {total} records")
-    } else {
-        format!(
-            "Showing {filtered} of {total} · {}",
-            html_escape(&opts.filter_type.to_ascii_uppercase())
-        )
-    };
+    let filter_label =
+        if opts.filter_type.is_empty() || opts.filter_type.eq_ignore_ascii_case("all") {
+            format!("Showing {filtered} of {total} records")
+        } else {
+            format!(
+                "Showing {filtered} of {total} · {}",
+                html_escape(&opts.filter_type.to_ascii_uppercase())
+            )
+        };
     format!(
         r#"{styles}
 <div class="plugin-list-toolbar" role="group" aria-label="DNS records display">
