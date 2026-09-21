@@ -3,9 +3,21 @@
 //! Renders a limited set of tags; escapes all text. Disallows scripts, event
 //! handlers, and non-http(s) / relative-unsafe URLs.
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 const MAX_MD_CHARS: usize = 16_000;
+
+fn heading_level_num(level: HeadingLevel) -> u8 {
+    match level {
+        HeadingLevel::H1 => 1,
+        HeadingLevel::H2 => 2,
+        HeadingLevel::H3 => 3,
+        HeadingLevel::H4 => 4,
+        HeadingLevel::H5 => 5,
+        HeadingLevel::H6 => 6,
+    }
+    .clamp(1, 3)
+}
 
 fn html_escape(value: &str) -> String {
     value
@@ -76,7 +88,7 @@ fn start_tag(out: &mut String, tag: Tag<'_>) {
     match tag {
         Tag::Paragraph => out.push_str("<p>"),
         Tag::Heading { level, .. } => {
-            let n = u8::from(level).clamp(1, 3);
+            let n = heading_level_num(level);
             out.push_str(&format!("<h{n}>"));
         }
         Tag::BlockQuote(_) => out.push_str("<blockquote>"),
@@ -140,7 +152,7 @@ fn end_tag(out: &mut String, tag: TagEnd) {
     match tag {
         TagEnd::Paragraph => out.push_str("</p>\n"),
         TagEnd::Heading(level) => {
-            let n = u8::from(level).clamp(1, 3);
+            let n = heading_level_num(level);
             out.push_str(&format!("</h{n}>\n"));
         }
         TagEnd::BlockQuote(_) => out.push_str("</blockquote>\n"),
@@ -162,7 +174,7 @@ fn end_tag(out: &mut String, tag: TagEnd) {
         | TagEnd::DefinitionList
         | TagEnd::DefinitionListTitle
         | TagEnd::DefinitionListDefinition
-        | TagEnd::MetadataBlock
+        | TagEnd::MetadataBlock(_)
         | TagEnd::Superscript
         | TagEnd::Subscript => {}
     }
