@@ -184,7 +184,7 @@ fn ttl_sort_key(ttl: u32) -> u32 {
 
 fn priority_sort_key(priority: Option<u16>) -> u32 {
     // Missing priority sorts after real values in ascending order.
-    priority.map(|p| u32::from(p)).unwrap_or(u32::MAX)
+    priority.map(u32::from).unwrap_or(u32::MAX)
 }
 
 fn cmp_records(a: &CfDnsRecord, b: &CfDnsRecord, sort: &str) -> std::cmp::Ordering {
