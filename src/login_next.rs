@@ -166,10 +166,10 @@ pub fn sanitize_passkey_register_next(raw: &str) -> Option<String> {
     None
 }
 
-/// Prefer a sanitized client `next`; otherwise `/dashboard` (MFA unlock default).
+/// Prefer a sanitized client `next`; otherwise Modify User so more factors can be added.
 pub fn passkey_register_location(next: Option<&str>) -> String {
     next.and_then(sanitize_passkey_register_next)
-        .unwrap_or_else(|| "/dashboard".to_string())
+        .unwrap_or_else(|| "/account/users/modify".to_string())
 }
 
 pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
@@ -273,12 +273,15 @@ mod tests {
         assert!(sanitize_passkey_register_next("/websites").is_none());
         assert!(sanitize_passkey_register_next("https://evil.example/").is_none());
         assert!(sanitize_passkey_register_next("//evil").is_none());
-        assert_eq!(passkey_register_location(None), "/dashboard");
+        assert_eq!(passkey_register_location(None), "/account/users/modify");
         assert_eq!(
             passkey_register_location(Some("/account/users/modify")),
             "/account/users/modify"
         );
-        assert_eq!(passkey_register_location(Some("/packages")), "/dashboard");
+        assert_eq!(
+            passkey_register_location(Some("/packages")),
+            "/account/users/modify"
+        );
     }
 
     #[test]

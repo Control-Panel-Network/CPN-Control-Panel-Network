@@ -2,6 +2,7 @@
 
 use crate::manifest::detect_existing_install;
 use crate::panel_hub_pages_version_script::version_page_script;
+use crate::panel_hub_pages_version_source_script::version_source_script;
 use crate::panel_hubs::feature_shell;
 
 const RUNNING_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -19,6 +20,32 @@ pub fn version_management_page(can_manage: bool) -> String {
     let existing = detect_existing_install(RUNNING_VERSION);
     let installed = html_escape(&existing.package_version);
     let running = html_escape(RUNNING_VERSION);
+    let source_block = if can_manage {
+        r#"<div id="cpn-version-source" class="stack-form" style="margin-top:18px;max-width:640px;">
+  <h3 style="margin:0 0 10px;">Update source</h3>
+  <p class="muted" style="margin:0 0 12px;">Default is the official CPN repo. Point to your fork (owner/repo) for lab builds. Token is optional for public repos.</p>
+  <label for="cpn-source-repo">GitHub repo (owner/repo)
+    <input id="cpn-source-repo" type="text" autocomplete="off" spellcheck="false"
+      placeholder="Control-Panel-Network/CPN-Control-Panel-Network"
+      style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
+  </label>
+  <label for="cpn-source-token" style="margin-top:12px;display:block;">GitHub token (optional)
+    <input id="cpn-source-token" type="password" autocomplete="new-password"
+      placeholder="Leave blank to keep existing token"
+      style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
+  </label>
+  <label style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+    <input id="cpn-source-clear-token" type="checkbox" />
+    <span>Clear stored GitHub token</span>
+  </label>
+  <div style="margin-top:12px;">
+    <button type="button" class="btn-primary" id="cpn-source-save">Save update source</button>
+  </div>
+  <p id="cpn-source-status" class="muted" style="margin-top:10px;" role="status"></p>
+</div>"#
+    } else {
+        ""
+    };
     let manage_block = if can_manage {
         r#"<div id="cpn-version-ops" class="stack-form" style="margin-top:18px;max-width:640px;">
   <label for="cpn-version-search">Release / tag
@@ -53,12 +80,17 @@ pub fn version_management_page(can_manage: bool) -> String {
     } else {
         r#"<p class="muted" style="margin-top:16px;">Only the panel admin can upgrade, downgrade, or repair from this page.</p>"#
     };
-    let script = version_page_script(can_manage);
+    let mut script = version_page_script(can_manage);
+    if can_manage {
+        script.push_str(&version_source_script());
+    }
     let body = format!(
         r#"<ul class="kv-list">
   <li><span>Running</span><strong id="cpn-version-running">{running}</strong></li>
   <li><span>Installed package</span><strong id="cpn-version-installed">{installed}</strong></li>
-  <li><span>Latest</span><strong id="cpn-version-latest">-</strong></li>
+  <li><span>Your source</span><strong id="cpn-version-source-tip">-</strong></li>
+  <li><span>Upstream official</span><strong id="cpn-version-upstream-tip">-</strong></li>
+  <li><span>Latest (configured source)</span><strong id="cpn-version-latest">-</strong></li>
   <li><span>Manifest</span><strong>{manifest}</strong></li>
 </ul>
 <p id="cpn-version-status" class="muted" role="status">Checking for updates...</p>
@@ -66,6 +98,7 @@ pub fn version_management_page(can_manage: bool) -> String {
 <div class="stack-form" style="margin-top:16px;max-width:560px;">
   <button type="button" class="btn-primary" id="cpn-version-refresh">Check for updates</button>
 </div>
+{source_block}
 {manage_block}
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
@@ -80,6 +113,7 @@ pub fn version_management_page(can_manage: bool) -> String {
         } else {
             "missing"
         },
+        source_block = source_block,
         manage_block = manage_block,
         script = script,
     );
@@ -104,6 +138,8 @@ mod tests {
     #[test]
     fn version_page_uses_searchable_picker() {
         let html = version_management_page(true);
+        assert!(html.contains("cpn-version-source-tip"));
+        assert!(html.contains("cpn-source-repo"));
         assert!(html.contains("cpn-version-search"));
         assert!(html.contains("Type to search tags"));
         assert!(!html.contains("id=\"cpn-version-select\""));

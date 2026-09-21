@@ -70,6 +70,7 @@ pub fn duplicate_package(source_id: &str, new_name: &str) -> Result<Package, Str
         ftp_accounts: src.ftp_accounts,
         fqdn_enabled: src.fqdn_enabled,
         notes: src.notes,
+        sidebar_hidden_nav_ids: src.sidebar_hidden_nav_ids,
     })
 }
 
@@ -84,6 +85,7 @@ fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
         ftp_accounts: patch.ftp_accounts.unwrap_or(pkg.ftp_accounts),
         fqdn_enabled: patch.fqdn_enabled.unwrap_or(pkg.fqdn_enabled),
         notes: patch.notes.clone().unwrap_or_else(|| pkg.notes.clone()),
+        sidebar_hidden_nav_ids: pkg.sidebar_hidden_nav_ids.clone(),
     }
 }
 
@@ -154,6 +156,7 @@ mod tests {
             ftp_accounts: 2,
             fqdn_enabled: true,
             notes: "base".into(),
+            sidebar_hidden_nav_ids: Vec::new(),
         }
     }
 

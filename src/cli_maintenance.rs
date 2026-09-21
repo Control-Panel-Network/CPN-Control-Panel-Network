@@ -141,7 +141,7 @@ Notes:
   Without --bypass, Docker stacks are left running as-is; with --bypass, only CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 are refreshed.
   Leftover package identity 1.0.0/1.0.1 (retired GitHub retags) may be replaced by official --upgrade / upgrade.sh onto current 0.2.x-alpha (rpm --oldpackage; not a hostile downgrade).
   Version Management and --version-check reconcile a stale 1.0.x install-manifest when the live RPM is already on 0.2.x.
-  GitHub Releases lists are cached under the CPN data dir (github-releases-cache.json; TTL 30m). Manual Check for updates is rate-limited (60s). On HTTP 403/429, last good cache is shown when available; otherwise tip packages are resolved via direct release download URLs. Optional token: CPN_GITHUB_TOKEN or secrets/github-token.
+  GitHub Releases lists are cached under the CPN data dir (github-releases-cache.json for the official repo; per-fork cache files when configured; TTL 30m). Manual Check for updates is rate-limited (60s). On HTTP 403/429, last good cache is shown when available; otherwise tip packages are resolved via direct release download URLs. Optional fork source: /var/lib/cpn/update-source.json (owner/repo) plus optional token at secrets/github-token or CPN_GITHUB_TOKEN. Panel admins can change the update source under Settings > Version Management.
   Panel data migrations (api-tokens.json, Cloudflare OAuth stores, schema_migrations.json ledger) run at panel startup and after upgrade/repair package apply. SQL files under sql/ also apply to panel.db when sqlite3 is installed.
   systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
 "

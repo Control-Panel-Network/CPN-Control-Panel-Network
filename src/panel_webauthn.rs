@@ -556,7 +556,7 @@ function cpnPasskeyRegisterNext(){
     }
     const fromEnroll=enroll.getAttribute('data-redirect');
     if(fromEnroll) return fromEnroll;
-    return '/dashboard';
+    return '/account/users/modify?notice=Passkey+registered';
   }
   const box=document.getElementById('cpn-passkey-register');
   if(box){

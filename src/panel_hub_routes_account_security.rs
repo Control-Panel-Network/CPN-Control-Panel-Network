@@ -1,7 +1,9 @@
 //! Forced password-change and mandatory 2FA enrollment routes.
 
 use crate::account::{hash_password, new_password_salt, password_meets_policy, write_account_file};
-use crate::account_mfa::{begin_totp_enroll, confirm_totp_enroll, load_pending_secret};
+use crate::account_mfa::{
+    begin_totp_enroll, confirm_totp_enroll, load_pending_secret, store_once_backup_codes,
+};
 use crate::account_mgmt::find_account;
 use crate::account_security::{
     change_password_gate_main, enroll_mfa_gate_main, must_change_password, needs_mfa_enrollment,
@@ -123,7 +125,7 @@ pub async fn account_security_enroll_2fa_get(
         return redirect("/account/security/change-password");
     }
     if !needs_mfa_enrollment(&user) {
-        return redirect("/dashboard");
+        return redirect("/account/users/modify");
     }
     let (secret, qr) = match load_pending_secret(&user) {
         Ok(secret) => {
@@ -193,17 +195,15 @@ pub async fn account_security_enroll_2fa_confirm(
         return redirect("/account/security/change-password");
     }
     match confirm_totp_enroll(&user, &form.code) {
-        Ok(backup_codes) => gate_shell(
-            &user,
-            "Enable 2FA",
-            &enroll_mfa_gate_main(
-                Some("Two-factor authentication is enabled."),
-                None,
-                None,
-                None,
-                Some(&backup_codes),
-            ),
-        ),
+        Ok(backup_codes) => {
+            let _ = store_once_backup_codes(&user, &backup_codes);
+            redirect(&format!(
+                "/account/users/modify?notice={}",
+                urlencoding_simple(
+                    "Two-factor authentication is enabled. Store your backup codes."
+                )
+            ))
+        }
         Err(error) => {
             let (secret, qr) = match load_pending_secret(&user) {
                 Ok(secret) => {

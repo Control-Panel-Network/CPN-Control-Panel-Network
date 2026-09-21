@@ -60,8 +60,36 @@ pub fn check_min_interval_secs() -> u64 {
         .unwrap_or(DEFAULT_CHECK_MIN_INTERVAL_SECS)
 }
 
+fn repo_cache_slug(repo: &str) -> String {
+    repo.trim()
+        .to_ascii_lowercase()
+        .replace('/', "-")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+/// Per-repo cache file. Official repo keeps the legacy `github-releases-cache.json` path.
+pub fn cache_path_for(repo: &str) -> PathBuf {
+    let slug = repo_cache_slug(repo);
+    if repo
+        .trim()
+        .eq_ignore_ascii_case(crate::releases::OFFICIAL_GITHUB_REPO)
+    {
+        paths::default_data_dir().join("github-releases-cache.json")
+    } else {
+        paths::default_data_dir().join(format!("github-releases-cache-{slug}.json"))
+    }
+}
+
 pub fn cache_path() -> PathBuf {
-    paths::default_data_dir().join("github-releases-cache.json")
+    cache_path_for(crate::releases::OFFICIAL_GITHUB_REPO)
 }
 
 pub fn github_token() -> Option<String> {
@@ -85,15 +113,24 @@ pub fn github_token() -> Option<String> {
     }
 }
 
-pub fn load_cache() -> Option<ReleasesCacheFile> {
-    let raw = fs::read_to_string(cache_path()).ok()?;
-    serde_json::from_str(&raw).ok()
+pub fn load_cache_for(repo: &str) -> Option<ReleasesCacheFile> {
+    let path = cache_path_for(repo);
+    let raw = fs::read_to_string(&path).ok()?;
+    let mut cache: ReleasesCacheFile = serde_json::from_str(&raw).ok()?;
+    if cache.repo.is_empty() {
+        cache.repo = repo.to_string();
+    }
+    Some(cache)
 }
 
-pub fn save_cache(cache: &ReleasesCacheFile) -> Result<(), String> {
+pub fn load_cache() -> Option<ReleasesCacheFile> {
+    load_cache_for(crate::releases::OFFICIAL_GITHUB_REPO)
+}
+
+pub fn save_cache_for(repo: &str, cache: &ReleasesCacheFile) -> Result<(), String> {
     let dir = paths::default_data_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    let path = cache_path();
+    let path = cache_path_for(repo);
     let body = serde_json::to_string_pretty(cache)
         .map_err(|e| format!("Could not serialize releases cache: {e}"))?;
     fs::write(&path, format!("{body}\n"))
@@ -104,6 +141,15 @@ pub fn save_cache(cache: &ReleasesCacheFile) -> Result<(), String> {
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o644));
     }
     Ok(())
+}
+
+pub fn save_cache(cache: &ReleasesCacheFile) -> Result<(), String> {
+    let repo = if cache.repo.is_empty() {
+        crate::releases::OFFICIAL_GITHUB_REPO
+    } else {
+        cache.repo.as_str()
+    };
+    save_cache_for(repo, cache)
 }
 
 pub fn cache_is_fresh(cache: &ReleasesCacheFile, repo: &str) -> bool {
@@ -194,6 +240,22 @@ mod tests {
                 .to_lowercase()
                 .contains("cyberpanel")
         );
+    }
+
+    #[test]
+    fn per_repo_cache_paths() {
+        let official = "Control-Panel-Network/CPN-Control-Panel-Network";
+        assert!(
+            cache_path_for(official)
+                .to_string_lossy()
+                .ends_with("github-releases-cache.json")
+        );
+        let fork = cache_path_for("Acme/CPN-Fork");
+        assert!(
+            fork.to_string_lossy()
+                .contains("github-releases-cache-acme-cpn-fork")
+        );
+        assert_ne!(cache_path_for(official), fork);
     }
 
     #[test]

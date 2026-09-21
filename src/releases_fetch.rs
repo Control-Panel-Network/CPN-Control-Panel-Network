@@ -1,17 +1,31 @@
 //! GitHub Releases HTTP fetch with disk cache and rate limiting.
 
-use crate::releases::{
-    CpnRelease, VersionCheck, compare_versions, github_repo, normalize_version,
-    package_source_label, parse_release,
-};
-use std::cmp::Ordering;
+use crate::releases::{CpnRelease, github_repo, normalize_version, parse_release};
 use std::process::Stdio;
 use tokio::process::Command;
+
+const GITHUB_API_VERSION: &str = "2022-11-28";
 
 struct GithubHttpResponse {
     status: u16,
     etag: Option<String>,
     body: String,
+}
+
+fn installer_user_agent() -> String {
+    format!("CPN-Installer/{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn http_error_message(status: u16, repo: &str) -> String {
+    match status {
+        401 => "GitHub Releases returned HTTP 401 (bad or missing token). Check /var/lib/cpn/secrets/github-token or CPN_GITHUB_TOKEN.".into(),
+        404 => format!(
+            "GitHub Releases returned HTTP 404 (repo not found or private without token). Repo: {repo}"
+        ),
+        403 => crate::releases_cache::friendly_rate_limit_message(403),
+        429 => crate::releases_cache::friendly_rate_limit_message(429),
+        other => format!("GitHub Releases request failed (HTTP {other}) for repo {repo}"),
+    }
 }
 
 async fn curl_github_releases(url: &str, etag: Option<&str>) -> Result<GithubHttpResponse, String> {
@@ -36,7 +50,9 @@ async fn curl_github_releases(url: &str, etag: Option<&str>) -> Result<GithubHtt
         "-H".into(),
         "Accept: application/vnd.github+json".into(),
         "-H".into(),
-        "User-Agent: cpn-installer".into(),
+        format!("User-Agent: {}", installer_user_agent()),
+        "-H".into(),
+        format!("X-GitHub-Api-Version: {GITHUB_API_VERSION}"),
     ];
     if let Some(token) = crate::releases_cache::github_token() {
         args.push("-H".into());
@@ -113,21 +129,21 @@ async fn direct_fallback_result(
     existing: Option<crate::releases_cache::ReleasesCacheFile>,
     api_error: &str,
 ) -> crate::releases_cache::ReleasesFetchResult {
-    use crate::releases_cache::{mark_attempt, save_cache, store_success};
+    use crate::releases_cache::{mark_attempt, save_cache_for, store_success};
 
-    match crate::releases_direct::list_releases_direct(limit.clamp(1, 5)).await {
+    match crate::releases_direct::list_releases_direct_for_repo(repo, limit.clamp(1, 5)).await {
         Ok(releases) => {
             let stored = store_success(repo, releases.clone(), None, existing);
-            let _ = save_cache(&stored);
+            let _ = save_cache_for(repo, &stored);
             crate::releases_cache::ReleasesFetchResult {
                 releases,
                 from_cache: false,
                 cache_age_secs: Some(0),
                 rate_limited: api_error.contains("403") || api_error.contains("429"),
                 retry_after_secs: None,
-                note: Some(
-                    "GitHub API unavailable; resolved tip via direct release download URLs.".into(),
-                ),
+                note: Some(format!(
+                    "GitHub API unavailable for {repo}; resolved tip via direct release download URLs."
+                )),
                 soft_error: Some(api_error.to_string()),
             }
         }
@@ -135,7 +151,7 @@ async fn direct_fallback_result(
             if let Some(mut cache) = existing {
                 mark_attempt(&mut cache);
                 cache.last_error = Some(format!("{api_error}; {direct_error}"));
-                let _ = save_cache(&cache);
+                let _ = save_cache_for(repo, &cache);
             }
             crate::releases_cache::ReleasesFetchResult {
                 releases: Vec::new(),
@@ -150,20 +166,24 @@ async fn direct_fallback_result(
     }
 }
 
-pub async fn list_releases_cached(
+pub async fn list_releases_for_repo(
+    repo: &str,
     limit: usize,
     force_network: bool,
 ) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
     use crate::releases_cache::{
-        self, age_secs, cache_is_fresh, friendly_rate_limit_message, load_cache, mark_attempt,
-        note_for_cached, save_cache, seconds_until_next_check, store_success,
+        self, age_secs, cache_is_fresh, load_cache_for, mark_attempt, note_for_cached,
+        save_cache_for, seconds_until_next_check, store_success,
     };
 
-    let repo = github_repo();
-    let existing = load_cache();
+    let repo = repo.trim();
+    if repo.is_empty() {
+        return Err("GitHub repo is empty.".into());
+    }
+    let existing = load_cache_for(repo);
 
     if let Some(cache) = existing.as_ref() {
-        if cache_is_fresh(cache, &repo) && !force_network {
+        if cache_is_fresh(cache, repo) && !force_network {
             let age = age_secs(cache);
             let mut releases = cache.releases.clone();
             releases.truncate(limit.max(1));
@@ -208,7 +228,7 @@ pub async fn list_releases_cached(
                 let mut updated = cache.clone();
                 mark_attempt(&mut updated);
                 updated.last_error = Some(error.clone());
-                let _ = save_cache(&updated);
+                let _ = save_cache_for(repo, &updated);
                 return Ok(releases_cache::ReleasesFetchResult {
                     releases,
                     from_cache: true,
@@ -219,7 +239,7 @@ pub async fn list_releases_cached(
                     soft_error: Some(error),
                 });
             }
-            return Ok(direct_fallback_result(limit, &repo, existing, &error).await);
+            return Ok(direct_fallback_result(limit, repo, existing, &error).await);
         }
     };
 
@@ -236,7 +256,7 @@ pub async fn list_releases_cached(
         if let Some(tag) = response.etag.clone() {
             updated.etag = Some(tag);
         }
-        let _ = save_cache(&updated);
+        let _ = save_cache_for(repo, &updated);
         let mut releases = updated.releases.clone();
         releases.truncate(limit.max(1));
         return Ok(releases_cache::ReleasesFetchResult {
@@ -250,8 +270,12 @@ pub async fn list_releases_cached(
         });
     }
 
-    if response.status == 403 || response.status == 429 {
-        let msg = friendly_rate_limit_message(response.status);
+    if response.status == 403
+        || response.status == 429
+        || response.status == 401
+        || response.status == 404
+    {
+        let msg = http_error_message(response.status, repo);
         if let Some(cache) = existing.as_ref()
             && !cache.releases.is_empty()
             && cache.repo == repo
@@ -262,22 +286,26 @@ pub async fn list_releases_cached(
             let mut updated = cache.clone();
             mark_attempt(&mut updated);
             updated.last_error = Some(msg.clone());
-            let _ = save_cache(&updated);
+            let _ = save_cache_for(repo, &updated);
             return Ok(releases_cache::ReleasesFetchResult {
                 releases,
                 from_cache: true,
                 cache_age_secs: Some(age),
-                rate_limited: true,
+                rate_limited: matches!(response.status, 403 | 429),
                 retry_after_secs: None,
-                note: Some(note_for_cached(age, true, None)),
+                note: Some(note_for_cached(
+                    age,
+                    matches!(response.status, 403 | 429),
+                    None,
+                )),
                 soft_error: Some(msg),
             });
         }
-        return Ok(direct_fallback_result(limit, &repo, existing, &msg).await);
+        return Ok(direct_fallback_result(limit, repo, existing, &msg).await);
     }
 
     if response.status < 200 || response.status >= 300 {
-        let msg = format!("GitHub Releases request failed (HTTP {})", response.status);
+        let msg = http_error_message(response.status, repo);
         if let Some(cache) = existing.as_ref()
             && !cache.releases.is_empty()
             && cache.repo == repo
@@ -288,7 +316,7 @@ pub async fn list_releases_cached(
             let mut updated = cache.clone();
             mark_attempt(&mut updated);
             updated.last_error = Some(msg.clone());
-            let _ = save_cache(&updated);
+            let _ = save_cache_for(repo, &updated);
             return Ok(releases_cache::ReleasesFetchResult {
                 releases,
                 from_cache: true,
@@ -299,12 +327,12 @@ pub async fn list_releases_cached(
                 soft_error: Some(msg),
             });
         }
-        return Ok(direct_fallback_result(limit, &repo, existing, &msg).await);
+        return Ok(direct_fallback_result(limit, repo, existing, &msg).await);
     }
 
     let releases = parse_releases_json(&response.body, limit)?;
-    let stored = store_success(&repo, releases.clone(), response.etag, existing);
-    let _ = save_cache(&stored);
+    let stored = store_success(repo, releases.clone(), response.etag, existing);
+    let _ = save_cache_for(repo, &stored);
     Ok(releases_cache::ReleasesFetchResult {
         releases,
         from_cache: false,
@@ -314,6 +342,13 @@ pub async fn list_releases_cached(
         note: None,
         soft_error: None,
     })
+}
+
+pub async fn list_releases_cached(
+    limit: usize,
+    force_network: bool,
+) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
+    list_releases_for_repo(&github_repo(), limit, force_network).await
 }
 
 pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
@@ -329,7 +364,8 @@ pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
 
 pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
     let wanted = normalize_version(version_or_tag);
-    let releases = list_releases_cached(30, false).await?.releases;
+    let repo = github_repo();
+    let releases = list_releases_for_repo(&repo, 30, false).await?.releases;
     if let Some(found) = releases.into_iter().find(|release| {
         normalize_version(&release.version) == wanted
             || normalize_version(&release.tag_name) == wanted
@@ -338,69 +374,28 @@ pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
     }) {
         return Ok(found);
     }
-    crate::releases_direct::probe_direct_release(Some(version_or_tag))
+    crate::releases_direct::probe_direct_release_for_repo(&repo, Some(version_or_tag))
         .await
         .map_err(|error| format!("No GitHub release found for version {version_or_tag}: {error}"))
 }
 
-pub async fn version_check(running_version: &str, installed_version: &str) -> VersionCheck {
-    version_check_with_options(running_version, installed_version, false).await
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub async fn version_check_with_options(
-    running_version: &str,
-    installed_version: &str,
-    force_network: bool,
-) -> VersionCheck {
-    let repo = github_repo();
-    let source = package_source_label();
-    match list_releases_cached(20, force_network).await {
-        Ok(fetched) => {
-            let latest = fetched.releases.first();
-            let latest_version = latest.map(|item| item.version.clone());
-            let latest_tag = latest.map(|item| item.tag_name.clone());
-            let update_available = latest_version
-                .as_ref()
-                .map(|latest| compare_versions(installed_version, latest) == Ordering::Less)
-                .unwrap_or(false);
-            let downgrade_possible = fetched.releases.iter().any(|release| {
-                compare_versions(&release.version, installed_version) == Ordering::Less
-            });
-            let error = fetched.soft_error.clone();
-            VersionCheck {
-                running_version: running_version.into(),
-                installed_version: installed_version.into(),
-                latest_version,
-                latest_tag,
-                update_available,
-                downgrade_possible,
-                repo,
-                source,
-                releases: fetched.releases,
-                error,
-                from_cache: fetched.from_cache,
-                cache_age_secs: fetched.cache_age_secs,
-                rate_limited: fetched.rate_limited,
-                retry_after_secs: fetched.retry_after_secs,
-                cache_note: fetched.note,
-            }
-        }
-        Err(error) => VersionCheck {
-            running_version: running_version.into(),
-            installed_version: installed_version.into(),
-            latest_version: None,
-            latest_tag: None,
-            update_available: false,
-            downgrade_possible: false,
-            repo,
-            source,
-            releases: Vec::new(),
-            error: Some(error),
-            from_cache: false,
-            cache_age_secs: None,
-            rate_limited: false,
-            retry_after_secs: None,
-            cache_note: None,
-        },
+    #[test]
+    fn http_errors_are_actionable() {
+        let msg = http_error_message(401, "Acme/Fork");
+        assert!(msg.contains("401"));
+        assert!(msg.contains("token"));
+        let msg404 = http_error_message(404, "Acme/Missing");
+        assert!(msg404.contains("404"));
+        assert!(msg404.contains("Acme/Missing"));
+        assert!(!msg.contains('\u{2014}'));
+    }
+
+    #[test]
+    fn user_agent_includes_version() {
+        assert!(installer_user_agent().starts_with("CPN-Installer/"));
     }
 }
