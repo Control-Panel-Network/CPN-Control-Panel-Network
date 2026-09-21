@@ -1,7 +1,8 @@
 //! Cloudflare Manage DNS records table (type chips + pagination + inline edit).
 
 use crate::panel_hub_pages_cloudflare_pager::{
-    CfTableOpts, dns_list_toolbar, dns_mode_from_query, list_state_hiddens, manage_list_url,
+    CfTableOpts, dns_list_toolbar, dns_mode_from_query, dns_order_from_query, dns_sort_from_query,
+    list_state_hiddens, manage_list_url, manage_sort_url, sort_dns_records,
 };
 use crate::panel_ops_cloudflare::{RECORD_TYPES, record_type_uses_priority};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
@@ -25,7 +26,10 @@ fn type_filter_chips(domain: &str, opts: &CfTableOpts) -> String {
     } else {
         ""
     };
-    let all_href = manage_list_url(domain, "ALL", &opts.mode, opts.per_page, 1);
+    let mut all_opts = opts.clone();
+    all_opts.filter_type = String::new();
+    all_opts.page = 1;
+    let all_href = manage_list_url(domain, &all_opts);
     out.push_str(&format!(
         r#"<a class="cf-type-chip{all_active}" href="{href}">All</a>"#,
         all_active = all_active,
@@ -37,7 +41,10 @@ fn type_filter_chips(domain: &str, opts: &CfTableOpts) -> String {
         } else {
             ""
         };
-        let href = manage_list_url(domain, t, &opts.mode, opts.per_page, 1);
+        let mut chip_opts = opts.clone();
+        chip_opts.filter_type = (*t).to_string();
+        chip_opts.page = 1;
+        let href = manage_list_url(domain, &chip_opts);
         out.push_str(&format!(
             r#"<a class="cf-type-chip{active}" href="{href}">{t}</a>"#,
             active = active,
@@ -47,6 +54,45 @@ fn type_filter_chips(domain: &str, opts: &CfTableOpts) -> String {
     }
     out.push_str("</div>");
     out
+}
+
+fn sort_header(domain: &str, opts: &CfTableOpts, column: &str, label: &str) -> String {
+    let active = dns_sort_from_query(&opts.sort) == dns_sort_from_query(column);
+    let order = dns_order_from_query(&opts.order);
+    let (aria, ind) = if active {
+        if order == "desc" {
+            ("descending", "▼")
+        } else {
+            ("ascending", "▲")
+        }
+    } else {
+        ("none", "")
+    };
+    let href = manage_sort_url(domain, opts, column);
+    let ind_html = if ind.is_empty() {
+        String::new()
+    } else {
+        format!(r#" <span class="cf-sort-ind" aria-hidden="true">{ind}</span>"#)
+    };
+    format!(
+        r#"<th aria-sort="{aria}"><a class="cf-sort" href="{href}" title="Sort by {label}">{label}{ind_html}</a></th>"#,
+        aria = aria,
+        href = html_escape(&href),
+        label = html_escape(label),
+        ind_html = ind_html,
+    )
+}
+
+fn sort_headers_row(domain: &str, opts: &CfTableOpts) -> String {
+    format!(
+        r#"<tr>{name}{ty}{ttl}{val}{pri}{proxy}<th>ACTIONS</th></tr>"#,
+        name = sort_header(domain, opts, "name", "NAME"),
+        ty = sort_header(domain, opts, "type", "TYPE"),
+        ttl = sort_header(domain, opts, "ttl", "TTL"),
+        val = sort_header(domain, opts, "value", "VALUE"),
+        pri = sort_header(domain, opts, "priority", "PRIORITY"),
+        proxy = sort_header(domain, opts, "proxy", "PROXY"),
+    )
 }
 
 fn render_record_rows(domain: &str, records: &[&CfDnsRecord], opts: &CfTableOpts) -> String {
@@ -171,7 +217,8 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
     }
 
     let filter = opts.filter_type.trim();
-    let filtered: Vec<&CfDnsRecord> = if filter.is_empty() || filter.eq_ignore_ascii_case("all") {
+    let mut filtered: Vec<&CfDnsRecord> = if filter.is_empty() || filter.eq_ignore_ascii_case("all")
+    {
         records.iter().collect()
     } else {
         records
@@ -179,6 +226,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
             .filter(|r| r.record_type.eq_ignore_ascii_case(filter))
             .collect()
     };
+    sort_dns_records(&mut filtered, opts);
     let total_all = records.len();
     let filtered_count = filtered.len();
     let mode = dns_mode_from_query(&opts.mode);
@@ -217,6 +265,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
         filter
     };
     let add_type_js = serde_json::to_string(add_type).unwrap_or_else(|_| "\"A\"".into());
+    let headers = sort_headers_row(domain, opts);
 
     format!(
         r#"<h3>DNS Records</h3>
@@ -224,7 +273,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
 {toolbar}
 <div class="{scroll_cls}">
 <table class="cf-table" id="cf-records-table">
-  <thead><tr><th>NAME</th><th>TYPE</th><th>TTL</th><th>VALUE</th><th>PRIORITY</th><th>PROXY</th><th>ACTIONS</th></tr></thead>
+  <thead>{headers}</thead>
   <tbody>{rows}</tbody>
 </table>
 </div>
@@ -268,6 +317,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
         chips = type_filter_chips(domain, opts),
         toolbar = toolbar,
         scroll_cls = scroll_cls,
+        headers = headers,
         rows = render_record_rows(domain, page_slice, opts),
         add_type_js = add_type_js,
     )

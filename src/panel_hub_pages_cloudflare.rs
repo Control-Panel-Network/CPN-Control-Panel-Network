@@ -194,10 +194,14 @@ fn manage_body(
     let list_hiddens = format!(
         r#"<input type="hidden" name="page" value="{page}">
 <input type="hidden" name="per_page" value="{per_page}">
-<input type="hidden" name="mode" value="{mode}">"#,
+<input type="hidden" name="mode" value="{mode}">
+<input type="hidden" name="sort" value="{sort}">
+<input type="hidden" name="order" value="{order}">"#,
         page = table_opts.page.max(1),
         per_page = table_opts.per_page,
         mode = html_escape(&table_opts.mode),
+        sort = html_escape(&table_opts.sort),
+        order = html_escape(&table_opts.order),
     );
     let rec_html = if domain.trim().is_empty() {
         format!(

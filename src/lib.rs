@@ -136,6 +136,7 @@ pub mod panel_hub_routes_account;
 pub mod panel_hub_routes_account_security;
 pub mod panel_hub_routes_backups;
 pub mod panel_hub_routes_cloudflare;
+pub mod panel_hub_routes_cloudflare_forms;
 pub mod panel_hub_routes_db;
 pub mod panel_hub_routes_dns;
 pub mod panel_hub_routes_email;
