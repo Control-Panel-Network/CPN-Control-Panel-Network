@@ -19,14 +19,18 @@ pub fn host_sidebar_info() -> HostSidebarInfo {
 }
 
 fn primary_ipv4() -> Option<String> {
-    if let Some(ip) = udp_primary_ip() {
+    // Prefer local hostname enumeration first. UDP connect to 1.1.1.1 can stall on some
+    // lab/NAT guests when outbound routing flaps, and the sidebar runs on every page.
+    if let Some(ip) = hostname_first_ipv4() {
         return Some(ip);
     }
-    hostname_first_ipv4()
+    udp_primary_ip()
 }
 
 fn udp_primary_ip() -> Option<String> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(400)));
+    let _ = socket.set_write_timeout(Some(std::time::Duration::from_millis(400)));
     socket.connect("1.1.1.1:80").ok()?;
     let ip = socket.local_addr().ok()?.ip();
     let text = ip.to_string();

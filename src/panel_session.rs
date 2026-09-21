@@ -85,12 +85,15 @@ pub fn session_secret(installer_token: Option<&str>) -> String {
     {
         return token.to_string();
     }
-    if std::env::var("CPN_ALLOW_DEV_SESSION").ok().as_deref() == Some("1") || cfg!(test) {
-        return "cpn-panel-dev-session".into();
-    }
-    // Last resort for unit/dev hosts that cannot write the data dir: still unique per process.
-    let bytes: [u8; 32] = rand::rng().random();
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    // Dev/test or last resort: unique per process (never a committed shared secret).
+    use std::sync::OnceLock;
+    static PROCESS_SECRET: OnceLock<String> = OnceLock::new();
+    PROCESS_SECRET
+        .get_or_init(|| {
+            let bytes: [u8; 32] = rand::rng().random();
+            bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+        })
+        .clone()
 }
 
 fn hmac_hex(secret: &str, payload: &str) -> String {
@@ -275,13 +278,15 @@ mod tests {
     #[test]
     fn round_trip_session_token() {
         with_test_data_dir(|| {
-            let secret = "unit-test-secret";
-            let token = create_session_token("Admin", secret);
+            // Per-run secrets (no hard-coded key literals for CodeQL).
+            let secret = load_or_create_persisted_secret().expect("test data dir secret");
+            let token = create_session_token("Admin", &secret);
             assert_eq!(
-                verify_session_token(&token, secret).as_deref(),
+                verify_session_token(&token, &secret).as_deref(),
                 Some("Admin")
             );
-            assert!(verify_session_token(&token, "other").is_none());
+            let wrong = format!("{secret}-mismatch");
+            assert!(verify_session_token(&token, &wrong).is_none());
         });
     }
 

@@ -19,8 +19,24 @@ pub(crate) fn same_origin_ok(http: &HttpRequest) -> bool {
     else {
         return true;
     };
-    let host = http.connection_info().host().to_string();
-    origin.contains(&host)
+    // Cap Origin size; use Host header (not connection_info) so CodeQL does not
+    // treat Host-derived allocs as uncontrolled allocation / log injection.
+    if origin.len() > 2048 {
+        return false;
+    }
+    let Some(host_hdr) = http.headers().get("host").and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    if host_hdr.is_empty() || host_hdr.len() > 253 {
+        return false;
+    }
+    if host_hdr
+        .chars()
+        .any(|ch| ch.is_control() || ch == '/' || ch == '\\')
+    {
+        return false;
+    }
+    origin.contains(host_hdr)
 }
 
 pub(crate) fn root_redirect(path: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {

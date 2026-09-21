@@ -302,12 +302,12 @@ const PLUGINS_CHILDREN: &[NavChild] = &[
         href: "/plugins",
     },
     NavChild {
-        label: "Plugin Store",
+        label: "Store",
         href: "/plugins?view=store",
     },
     NavChild {
         label: "Host packages",
-        href: "/plugins?view=host",
+        href: "/plugins?view=store&category=Host",
     },
 ];
 
