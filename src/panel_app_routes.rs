@@ -388,7 +388,7 @@ pub async fn apps_uninstall(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                apps_redirect_to(&form.return_view, 
+                apps_redirect_to(&form.return_view,
                     &form.domain,
                     None,
                     Some(
