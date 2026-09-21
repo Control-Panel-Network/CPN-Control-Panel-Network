@@ -108,11 +108,7 @@ fn collect_domain_choices() -> DomainChoices {
 /// First domain to open when Manage DNS has no `domain` query (local or Cloudflare).
 pub fn preferred_manage_domain() -> Option<String> {
     let choices = collect_domain_choices();
-    choices
-        .cloudflare
-        .into_iter()
-        .chain(choices.local.into_iter())
-        .next()
+    choices.cloudflare.into_iter().chain(choices.local).next()
 }
 
 fn domain_options(selected: &str, choices: &DomainChoices) -> String {

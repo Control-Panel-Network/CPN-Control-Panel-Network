@@ -94,27 +94,28 @@ pub async fn cloudflare_dns_get(
     let mut domain = query.domain.clone().unwrap_or_default();
     let table_opts = table_opts_from_query(&query);
     // After OAuth (or token auth), open the first Cloudflare zone even when no local website exists.
-    if tab != "api" && domain.trim().is_empty() {
-        if let Some(preferred) = preferred_manage_domain() {
-            let mut loc = manage_list_url(
-                &preferred,
-                &table_opts.filter_type,
-                &table_opts.mode,
-                table_opts.per_page,
-                table_opts.page,
-            );
-            if let Some(n) = query.notice.as_deref().filter(|s| !s.is_empty()) {
-                loc.push_str("&notice=");
-                loc.push_str(&urlencoding_path(n));
-            }
-            if let Some(e) = query.error.as_deref().filter(|s| !s.is_empty()) {
-                loc.push_str("&error=");
-                loc.push_str(&urlencoding_path(e));
-            }
-            return HttpResponse::Found()
-                .append_header(("Location", loc))
-                .finish();
+    if tab != "api"
+        && domain.trim().is_empty()
+        && let Some(preferred) = preferred_manage_domain()
+    {
+        let mut loc = manage_list_url(
+            &preferred,
+            &table_opts.filter_type,
+            &table_opts.mode,
+            table_opts.per_page,
+            table_opts.page,
+        );
+        if let Some(n) = query.notice.as_deref().filter(|s| !s.is_empty()) {
+            loc.push_str("&notice=");
+            loc.push_str(&urlencoding_path(n));
         }
+        if let Some(e) = query.error.as_deref().filter(|s| !s.is_empty()) {
+            loc.push_str("&error=");
+            loc.push_str(&urlencoding_path(e));
+        }
+        return HttpResponse::Found()
+            .append_header(("Location", loc))
+            .finish();
     }
     domain = domain.trim().to_string();
     let records = if tab != "api" && !domain.is_empty() {
