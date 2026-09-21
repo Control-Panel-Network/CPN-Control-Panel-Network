@@ -38,6 +38,9 @@ pub struct Package {
     pub fqdn_enabled: bool,
     #[serde(default)]
     pub notes: String,
+    /// Top-level sidebar nav ids hidden for accounts on this package.
+    #[serde(default)]
+    pub sidebar_hidden_nav_ids: Vec<String>,
     pub created_at_unix: u64,
     pub updated_at_unix: u64,
 }
@@ -75,6 +78,7 @@ pub struct PackageInput {
     pub ftp_accounts: i64,
     pub fqdn_enabled: bool,
     pub notes: String,
+    pub sidebar_hidden_nav_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -207,7 +211,45 @@ fn validate_input(input: &PackageInput) -> Result<String, String> {
     if has_control_chars(&input.notes) {
         return Err("Notes cannot include control characters".into());
     }
+    let _ = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;
     Ok(name.to_string())
+}
+
+fn sanitize_sidebar_hidden(raw: &[String]) -> Result<Vec<String>, String> {
+    // Keep validation local to avoid a packages <-> sidebar_visibility cycle.
+    let known: std::collections::HashSet<&str> = [
+        "websites",
+        "wordpress",
+        "email",
+        "databases",
+        "backups",
+        "plugins",
+        "users",
+        "packages",
+        "root-files",
+        "server",
+        "security",
+        "settings",
+    ]
+    .into_iter()
+    .collect();
+    let mut out = Vec::new();
+    for id in raw {
+        let trimmed = id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed == "dashboard" {
+            return Err("Dashboard cannot be hidden".into());
+        }
+        if !known.contains(trimmed) {
+            return Err(format!("Unknown sidebar section `{trimmed}`"));
+        }
+        if !out.iter().any(|x: &String| x == trimmed) {
+            out.push(trimmed.to_string());
+        }
+    }
+    Ok(out)
 }
 
 fn default_package() -> Package {
@@ -223,6 +265,7 @@ fn default_package() -> Package {
         ftp_accounts: 1000,
         fqdn_enabled: true,
         notes: "Created automatically on first boot".into(),
+        sidebar_hidden_nav_ids: Vec::new(),
         created_at_unix: now,
         updated_at_unix: now,
     }
@@ -302,6 +345,7 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
         ftp_accounts: input.ftp_accounts,
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
+        sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
         created_at_unix: now,
         updated_at_unix: now,
     };
@@ -333,6 +377,7 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     pkg.ftp_accounts = input.ftp_accounts;
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
+    pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;
     pkg.updated_at_unix = now_unix();
     let out = pkg.clone();
     save_packages_file(&file)?;
@@ -460,6 +505,7 @@ mod tests {
                 ftp_accounts: 2,
                 fqdn_enabled: true,
                 notes: String::new(),
+                sidebar_hidden_nav_ids: Vec::new(),
             })
             .unwrap();
             assign_package("ops", &pkg.id).unwrap();

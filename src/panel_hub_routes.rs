@@ -7,6 +7,7 @@ pub use crate::panel_hub_routes_backups::*;
 pub use crate::panel_hub_routes_cloudflare::*;
 pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_dns::*;
+pub use crate::panel_hub_routes_error_messages::*;
 pub use crate::panel_hub_routes_email::*;
 pub use crate::panel_hub_routes_email_actions::*;
 pub use crate::panel_hub_routes_email_stubs::*;
@@ -18,6 +19,7 @@ pub use crate::panel_hub_routes_profile::*;
 pub use crate::panel_hub_routes_security::*;
 pub use crate::panel_hub_routes_server::*;
 pub use crate::panel_hub_routes_settings_logs::*;
+pub use crate::panel_hub_routes_sidebar_acl::*;
 pub use crate::panel_hub_routes_site_files::*;
 pub use crate::panel_hub_routes_ssl_actions::*;
 

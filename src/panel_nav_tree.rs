@@ -18,6 +18,10 @@ fn chevron_svg() -> &'static str {
     r#"<svg class="nav-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>"#
 }
 
+fn nav_visible(username: &str, id: &str) -> bool {
+    crate::sidebar_visibility::can_see_nav_id(username, id)
+}
+
 fn flat_link(id: &str, href: &str, label: &str, active: &str) -> String {
     let class = if id == active {
         r#" class="nav-tile active""#
@@ -109,20 +113,20 @@ fn render_section(
     feats: crate::panel_feature_gate::InstalledOptionalFeatures,
     email_plugin_children: &[(String, String)],
     admin: bool,
+    username: &str,
 ) -> Vec<String> {
     let mut parts = Vec::new();
-    parts.push(format!(
-        r#"<div class="nav-section">{}</div>"#,
-        html_escape(title)
-    ));
-    parts.push(r#"<div class="nav-tile-grid">"#.to_string());
+    let mut tiles = Vec::new();
     for entry in entries {
         match *entry {
             NavEntry::Link { id, href, label } => {
                 if id == "root-files" && !admin {
                     continue;
                 }
-                parts.push(flat_link(id, href, label, active));
+                if !nav_visible(username, id) {
+                    continue;
+                }
+                tiles.push(flat_link(id, href, label, active));
             }
             NavEntry::Group {
                 id,
@@ -130,17 +134,29 @@ fn render_section(
                 label,
                 children,
             } => {
+                if !nav_visible(username, id) {
+                    continue;
+                }
                 let extras = if id == "email" {
                     email_plugin_children
                 } else {
                     &[]
                 };
-                parts.push(group_block(
+                tiles.push(group_block(
                     id, href, label, children, active, feats, extras,
                 ));
             }
         }
     }
+    if tiles.is_empty() {
+        return parts;
+    }
+    parts.push(format!(
+        r#"<div class="nav-section">{}</div>"#,
+        html_escape(title)
+    ));
+    parts.push(r#"<div class="nav-tile-grid">"#.to_string());
+    parts.extend(tiles);
     parts.push(r#"</div>"#.to_string());
     parts
 }
@@ -181,6 +197,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         feats,
         &email_plugin_children,
         admin,
+        username,
     ));
     parts.extend(render_section(
         "Account",
@@ -189,6 +206,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         feats,
         &[],
         admin,
+        username,
     ));
     parts.extend(render_section(
         "Administration",
@@ -197,6 +215,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         feats,
         &[],
         admin,
+        username,
     ));
 
     if !other_plugin_html.is_empty() {

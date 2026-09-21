@@ -287,6 +287,14 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
         href: "/settings/connect",
     },
     NavChild {
+        label: "Site messages",
+        href: "/settings/site-messages",
+    },
+    NavChild {
+        label: "Error messages",
+        href: "/settings/error-messages",
+    },
+    NavChild {
         label: "Log retention",
         href: "/settings/logs",
     },

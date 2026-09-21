@@ -322,6 +322,7 @@ fn package_form(action: &str, pkg: Option<&Package>, submit: &str) -> String {
       <label>Notes
         <textarea name="notes" rows="3">{notes}</textarea>
       </label>
+      {sidebar}
       <button type="submit" class="btn-primary">{submit}</button>
       <p class="muted"><a href="/packages">Back to packages</a></p>
     </form>"#,
@@ -336,7 +337,39 @@ fn package_form(action: &str, pkg: Option<&Package>, submit: &str) -> String {
         ftp = html_escape(&ftp),
         fqdn_checked = fqdn_checked,
         notes = html_escape(notes),
+        sidebar = package_sidebar_fields(pkg),
         submit = html_escape(submit),
+    )
+}
+
+fn package_sidebar_fields(pkg: Option<&Package>) -> String {
+    let selected = pkg
+        .map(|p| p.sidebar_hidden_nav_ids.clone())
+        .unwrap_or_default();
+    let mut checks = String::new();
+    for item in crate::sidebar_visibility::controllable_nav_items() {
+        let checked = if selected.iter().any(|id| id == item.id) {
+            " checked"
+        } else {
+            ""
+        };
+        checks.push_str(&format!(
+            r#"<label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" name="sidebar_hidden_nav_ids" value="{id}"{checked}>
+          Hide {label}
+        </label>"#,
+            id = html_escape(item.id),
+            checked = checked,
+            label = html_escape(item.label),
+        ));
+    }
+    format!(
+        r#"<fieldset style="border:1px solid var(--hairline,#d0d5dd);border-radius:8px;padding:12px;">
+      <legend style="padding:0 6px;">Sidebar visibility (plan)</legend>
+      <p class="muted" style="margin:0 0 8px;">Accounts on this package cannot see or open checked sections (403 on direct URL). Dashboard stays available. Owner/admin keeps full access unless separately restricted in ACL.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">{checks}</div>
+    </fieldset>"#,
+        checks = checks,
     )
 }
 
