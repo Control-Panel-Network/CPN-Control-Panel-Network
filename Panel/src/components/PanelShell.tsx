@@ -155,7 +155,6 @@ const hosting: NavItem[] = [
     children: [
       { label: "Installed", href: "/plugins" },
       { label: "Plugin Store", href: "/plugins?view=store" },
-      { label: "Host packages", href: "/plugins?view=host" },
     ],
   },
 ];

@@ -92,7 +92,7 @@ sudo cpn passkey clear --username admin --yes
 
 - `list`: print registered passkeys for the account (`id`, `label`, `created_unix`, `last_used_unix`).
 - `remove`: delete one passkey by `--id` from `list`.
-- `clear`: delete every passkey for the account; requires `--yes`.
+- `clear`: delete every passkey for the account; confirm with `yes`/`y` (case-insensitive) or pass `--yes` to skip the prompt. `no`/`n` (or empty) aborts.
 - All mutations and list require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir.
 
 ## TOTP and MFA
@@ -107,8 +107,9 @@ sudo cpn mfa clear --username admin --yes
 ```
 
 - `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
-- `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; requires `--yes`.
-- `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; requires `--yes`.
+- `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; confirm with `yes`/`y` or pass `--yes` to skip.
+- `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; same confirmation rules (`yes`/`y`/`YES`, or `--yes`; `no`/`n` aborts).
+- Destructive confirmations are case-insensitive and trim whitespace (shared helper for account/site/plugin clears too).
 - After clearing all MFA for an admin with `totp_required`, the next password login may land on `/account/security/enroll-2fa` instead of `/login/2fa`. That is expected until the admin enrolls again.
 - Passkey clear alone does **not** remove TOTP; use `totp` or `mfa clear` when the Authenticator code page should stop appearing.
 
