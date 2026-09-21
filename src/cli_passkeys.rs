@@ -146,12 +146,16 @@ mod tests {
             };
             // Empty credentials still writes a file via save; clear should remove it.
             save_passkeys(&store).expect("save");
-            assert!(crate::account_passkeys::load_passkeys("admin")
-                .credentials
-                .is_empty());
+            assert!(
+                crate::account_passkeys::load_passkeys("admin")
+                    .credentials
+                    .is_empty()
+            );
             let removed = clear_all_passkeys("admin").expect("clear");
             assert_eq!(removed, 0);
-            let path = crate::account::data_dir().join("passkeys").join("admin.json");
+            let path = crate::account::data_dir()
+                .join("passkeys")
+                .join("admin.json");
             assert!(!path.exists());
         });
     }

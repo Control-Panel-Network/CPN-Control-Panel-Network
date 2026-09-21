@@ -11,10 +11,10 @@ use cpn_installer::cli_apps;
 use cpn_installer::cli_common::{
     confirm_delete, print_generated, read_password_confirmed, require_root_for_mutation,
 };
+use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
 use cpn_installer::cli_panel::{PanelCommands, run_panel};
-use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_passkeys::{PasskeyCommands, run as run_passkeys};
 use cpn_installer::cli_plugins;
 use cpn_installer::cli_totp::{TotpCommands, run as run_totp};
@@ -365,12 +365,8 @@ fn run() -> Result<(), String> {
         Commands::Passkey { command } => {
             run_passkeys(command, require_root_for_mutation, confirm_delete)
         }
-        Commands::Totp { command } => {
-            run_totp(command, require_root_for_mutation, confirm_delete)
-        }
-        Commands::Mfa { command } => {
-            run_mfa(command, require_root_for_mutation, confirm_delete)
-        }
+        Commands::Totp { command } => run_totp(command, require_root_for_mutation, confirm_delete),
+        Commands::Mfa { command } => run_mfa(command, require_root_for_mutation, confirm_delete),
         Commands::Site { command } => match command {
             SiteCommands::Ready { domain } => {
                 require_root_for_mutation()?;
