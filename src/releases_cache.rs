@@ -89,7 +89,7 @@ pub fn cache_path_for(repo: &str) -> PathBuf {
 }
 
 pub fn cache_path() -> PathBuf {
-    cache_path_for(&crate::releases::OFFICIAL_GITHUB_REPO)
+    cache_path_for(crate::releases::OFFICIAL_GITHUB_REPO)
 }
 
 pub fn github_token() -> Option<String> {
@@ -124,7 +124,7 @@ pub fn load_cache_for(repo: &str) -> Option<ReleasesCacheFile> {
 }
 
 pub fn load_cache() -> Option<ReleasesCacheFile> {
-    load_cache_for(&crate::releases::OFFICIAL_GITHUB_REPO)
+    load_cache_for(crate::releases::OFFICIAL_GITHUB_REPO)
 }
 
 pub fn save_cache_for(repo: &str, cache: &ReleasesCacheFile) -> Result<(), String> {
