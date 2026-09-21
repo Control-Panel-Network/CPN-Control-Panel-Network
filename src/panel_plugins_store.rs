@@ -143,7 +143,7 @@ pub(crate) fn store_catalog(
     )
 }
 
-fn store_card(
+pub(crate) fn render_catalog_card(
     entry: &CatalogEntry,
     all: &[CatalogEntry],
     installed_ids: &[String],
@@ -164,7 +164,7 @@ fn store_card(
     let host_badge = if host_scoped {
         r#"<span class="plugin-badge">Host</span>"#
     } else {
-        ""
+        r#"<span class="plugin-badge cat">Site</span>"#
     };
     let dates = dates_line(&entry.released_on, &entry.updated_on);
     let action = store_action_html(
@@ -180,11 +180,11 @@ fn store_card(
         r#"<article class="plugin-card">
           <h3>{name}</h3>
           <div class="plugin-badges">
+            {host}
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {pricing}
             {featured}
-            {host}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Author: {author}</p>
@@ -204,6 +204,16 @@ fn store_card(
     )
 }
 
+fn store_card(
+    entry: &CatalogEntry,
+    all: &[CatalogEntry],
+    installed_ids: &[String],
+    domain: &str,
+    username: &str,
+) -> String {
+    render_catalog_card(entry, all, installed_ids, domain, username)
+}
+
 fn store_action_html(
     entry: &CatalogEntry,
     domain: &str,
@@ -215,7 +225,7 @@ fn store_action_html(
 ) -> String {
     let id = html_escape(&entry.id);
     let domain_e = html_escape(domain);
-    // Roundcube is a Host package (not a catalog file install under host-plugins/).
+    // Roundcube is a Host package (cpn app install); jump to that card in this Store.
     if entry.id.eq_ignore_ascii_case("roundcubeWebmail")
         || entry.id.eq_ignore_ascii_case("roundcube")
     {
@@ -226,7 +236,7 @@ fn store_action_html(
         };
         return format!(
             r#"<span class="muted">Host package</span>
-            <a class="btn-primary" href="/plugins?view=host{domain_q}&amp;q=roundcube">Open Host packages</a>"#,
+            <a class="btn-primary" href="/plugins?view=store&amp;category=Host{domain_q}&amp;q=roundcube">Show Roundcube</a>"#,
             domain_q = domain_q,
         );
     }
@@ -362,6 +372,15 @@ pub(crate) fn category_pills(
     out.push_str(&format!(
         r#"<a class="{cls}" href="/plugins?view=store&amp;category=Featured{domain_q}">Featured</a>"#,
         cls = if active.eq_ignore_ascii_case("featured") {
+            "active"
+        } else {
+            ""
+        },
+        domain_q = domain_q,
+    ));
+    out.push_str(&format!(
+        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Host{domain_q}">Host</a>"#,
+        cls = if active.eq_ignore_ascii_case("host") {
             "active"
         } else {
             ""

@@ -84,10 +84,53 @@ fn urlencoding_simple(value: &str) -> String {
     out
 }
 
-fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
+/// Open / Manage deep links for installed host engines (Installed hub CTAs).
+pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
+    match id {
+        crate::apps::AppId::Mariadb => {
+            r#"<a class="btn-primary" href="/databases/manager">Manage</a>"#.into()
+        }
+        crate::apps::AppId::Phpmyadmin => {
+            r#"<a class="btn-primary" href="/databases/phpmyadmin/open" target="_blank" rel="noopener noreferrer">Open</a>
+            <a class="btn-secondary" href="/databases/phpmyadmin">Manage</a>"#
+                .into()
+        }
+        crate::apps::AppId::Email => {
+            r#"<a class="btn-primary" href="/email">Manage</a>"#.into()
+        }
+        crate::apps::AppId::Snappymail
+        | crate::apps::AppId::Tachyon
+        | crate::apps::AppId::Roundcube
+        | crate::apps::AppId::Nextsnapmail => {
+            r#"<a class="btn-primary" href="/email/webmail" target="_blank" rel="noopener noreferrer">Open</a>
+            <a class="btn-secondary" href="/email">Manage</a>"#
+                .into()
+        }
+        crate::apps::AppId::Postgresql => {
+            r#"<a class="btn-secondary" href="/databases">Manage</a>"#.into()
+        }
+        crate::apps::AppId::Rabbitmq => String::new(),
+        crate::apps::AppId::Nextcloud => String::new(),
+        crate::apps::AppId::Sogo => {
+            r#"<a class="btn-secondary" href="/email">Manage</a>"#.into()
+        }
+    }
+}
+
+/// Host package Start / Stop / Activate / Uninstall forms.
+/// `return_view`: `"installed"` sends POST redirects back to Installed; otherwise Store Host.
+pub(crate) fn host_action_buttons(
+    status: &AppStatus,
+    domain: &str,
+    is_admin: bool,
+    return_view: &str,
+) -> String {
     let name = status.id.as_str();
     let label = status.id.label();
-    let hidden = domain_hidden(domain);
+    let mut hidden = domain_hidden(domain);
+    if return_view.trim().eq_ignore_ascii_case("installed") {
+        hidden.push_str(r#"<input type="hidden" name="return_view" value="installed">"#);
+    }
     let meta = meta_for(status.id);
     let is_webmail = matches!(
         status.id,
@@ -97,6 +140,7 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
             | crate::apps::AppId::Nextsnapmail
     );
     let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
+    let on_installed_hub = return_view.trim().eq_ignore_ascii_case("installed");
     let bound = if !domain.is_empty() && is_associable(status.id) {
         bindings_for_domain(domain)
             .iter()
@@ -172,7 +216,9 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
             let mut out = String::new();
             if is_webmail {
                 if active {
-                    out.push_str(r#"<span class="plugin-badge featured">Active</span>"#);
+                    if !on_installed_hub {
+                        out.push_str(r#"<span class="plugin-badge featured">Active</span>"#);
+                    }
                 } else {
                     out.push_str(&format!(
                         r#"<form method="post" action="/apps/activate" class="inline-form" onsubmit="return confirm('Set {label} as the active panel webmail? Mailboxes stay on Postfix/Dovecot.');">
@@ -234,23 +280,29 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
                         hidden = hidden,
                     ));
                 }
-            } else if domain.is_empty() && !is_webmail {
+            } else if domain.is_empty() && !is_webmail && !on_installed_hub {
                 out.push_str(r#"<span class="plugin-badge installed">Installed on Host</span>"#);
             }
             if is_admin {
-                out.push_str(&format!(
-                    r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
+                if !on_installed_hub {
+                    out.push_str(&format!(
+                        r#"<form method="post" action="/apps/reinstall" class="inline-form" onsubmit="return confirm('Reinstall {label}?');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <button type="submit" class="btn-secondary">Reinstall</button>
-            </form>
-            <form method="post" action="/apps/uninstall" {form_attrs}>
+            </form>"#,
+                        label = html_escape(label),
+                        name = html_escape(name),
+                        hidden = hidden,
+                    ));
+                }
+                out.push_str(&format!(
+                    r#"<form method="post" action="/apps/uninstall" {form_attrs}>
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <input type="hidden" name="confirm" value="">
               <button type="submit" class="btn-danger">Uninstall from Host</button>
             </form>"#,
-                    label = html_escape(label),
                     name = html_escape(name),
                     hidden = hidden,
                     form_attrs = uninstall_form_attrs(label, &host_uninstall_impacts(status.id)),
@@ -261,7 +313,11 @@ fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
     }
 }
 
-fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool) -> String {
+fn action_buttons(status: &AppStatus, domain: &str, is_admin: bool) -> String {
+    host_action_buttons(status, domain, is_admin, "")
+}
+
+pub(crate) fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool) -> String {
     let meta = meta_for(status.id);
     let featured = host_package_is_featured(status.id, all);
     let featured_badge = if featured {
@@ -283,8 +339,10 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool
     ) && crate::apps_webmail::is_active_webmail(status.id)
     {
         r#"<span class="plugin-badge featured">Active</span>"#
+    } else if matches!(status.state, AppStateKind::Running | AppStateKind::Installed) {
+        r#"<span class="plugin-badge installed">Active</span>"#
     } else {
-        ""
+        r#"<span class="plugin-badge">Not installed</span>"#
     };
     let status_badge = format!(
         r#"<span class="plugin-badge">{}</span>"#,
@@ -331,6 +389,7 @@ fn host_card(status: &AppStatus, domain: &str, all: &[AppStatus], is_admin: bool
         r#"<article class="plugin-card">
           <h3>{label}</h3>
           <div class="plugin-badges">
+            <span class="plugin-badge">Host</span>
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {pricing}
@@ -382,8 +441,8 @@ fn category_pills(
     ));
     let mut out = String::from(r#"<div class="category-pills">"#);
     out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=host{domain_q}">All categories</a>"#,
-        cls = if active.is_empty() || active.eq_ignore_ascii_case("all") {
+        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Host{domain_q}">All host packages</a>"#,
+        cls = if active.is_empty() || active.eq_ignore_ascii_case("all") || active.eq_ignore_ascii_case("host") {
             "active"
         } else {
             ""
@@ -391,7 +450,7 @@ fn category_pills(
         domain_q = domain_q,
     ));
     out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=host&amp;category=Featured{domain_q}">Featured</a>"#,
+        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Featured{domain_q}">Featured</a>"#,
         cls = if active.eq_ignore_ascii_case("featured") {
             "active"
         } else {
@@ -400,7 +459,7 @@ fn category_pills(
         domain_q = domain_q,
     ));
     out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=host&amp;category=Paid{domain_q}">Paid</a>"#,
+        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Paid{domain_q}">Paid</a>"#,
         cls = if active.eq_ignore_ascii_case("paid") {
             "active"
         } else {
@@ -415,7 +474,7 @@ fn category_pills(
             ""
         };
         out.push_str(&format!(
-            r#"<a class="{cls}" href="/plugins?view=host&amp;category={enc}{domain_q}">{label}</a>"#,
+            r#"<a class="{cls}" href="/plugins?view=store&amp;category={enc}{domain_q}">{label}</a>"#,
             cls = cls,
             enc = urlencoding_simple(cat),
             domain_q = domain_q,
@@ -426,20 +485,8 @@ fn category_pills(
     out
 }
 
-pub struct AppsPageQuery<'a> {
-    pub notice: Option<&'a str>,
-    pub error: Option<&'a str>,
-    pub domain: &'a str,
-    pub sites: &'a [SiteRecord],
-    pub q: &'a str,
-    pub category: &'a str,
-    pub mode: &'a str,
-    pub page: usize,
-    pub per_page: usize,
-    pub username: &'a str,
-}
-
-pub fn apps_main(q: AppsPageQuery<'_>) -> String {
+/// Host package cards + search for embedding in the unified Plugins Store.
+pub fn host_packages_store_fragment(q: AppsPageQuery<'_>) -> String {
     let domain = q.domain.trim();
     let apps = list_apps();
     let mode = list_mode_from_query(q.mode);
@@ -483,7 +530,73 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
     } else {
         format!(
             r#"<form method="get" action="/plugins" class="domain-picker">
-          <input type="hidden" name="view" value="host">
+          <input type="hidden" name="view" value="store">
+          <input type="hidden" name="category" value="Host">
+          <div>
+            <label for="host-domain"><strong>Domain or subdomain</strong></label><br>
+            <select id="host-domain" name="domain" onchange="this.form.submit()">{opts}</select>
+          </div>
+          <noscript><button type="submit" class="btn-secondary">Apply</button></noscript>
+        </form>"#,
+            opts = site_options(q.sites, domain),
+        )
+    };
+    format!(
+        r#"{picker}
+      <p class="plugin-count">{count} host packages</p>
+      <form method="get" action="/plugins" class="plugin-search-row">
+        <input type="hidden" name="view" value="store">
+        <input type="hidden" name="category" value="{category}">
+        <input type="hidden" name="domain" value="{domain}">
+        <input type="hidden" name="mode" value="{mode}">
+        <input type="hidden" name="per_page" value="{per_page}">
+        <label for="hq">Search host packages</label>
+        <input class="plugin-search" id="hq" name="q" type="search" value="{q}" placeholder="Search host packages by name or description...">
+        <button type="submit" class="btn-primary">Search</button>
+      </form>
+      {pills}
+      {toolbar}
+      <div class="{scroll_cls}">{cards}</div>"#,
+        picker = picker,
+        count = total,
+        category = html_escape(if q.category.trim().is_empty() {
+            "Host"
+        } else {
+            q.category
+        }),
+        domain = html_escape(domain),
+        mode = html_escape(mode),
+        per_page = toolbar_per,
+        q = html_escape(q.q),
+        pills = category_pills(&apps, q.category, domain, mode, toolbar_per),
+        toolbar = store_list_toolbar(mode, toolbar_per, page, total_pages, total),
+        scroll_cls = scroll_cls,
+        cards = cards,
+    )
+}
+
+pub struct AppsPageQuery<'a> {
+    pub notice: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub domain: &'a str,
+    pub sites: &'a [SiteRecord],
+    pub q: &'a str,
+    pub category: &'a str,
+    pub mode: &'a str,
+    pub page: usize,
+    pub per_page: usize,
+    pub username: &'a str,
+}
+
+pub fn apps_main(q: AppsPageQuery<'_>) -> String {
+    let domain = q.domain.trim();
+    let picker = if q.sites.is_empty() {
+        r#"<p class="muted">No manageable sites yet. Host engines and webmail can still be installed without a site.</p>"#.into()
+    } else {
+        format!(
+            r#"<form method="get" action="/plugins" class="domain-picker">
+          <input type="hidden" name="view" value="store">
+          <input type="hidden" name="category" value="Host">
           <div>
             <label for="domain"><strong>Domain or subdomain</strong></label><br>
             <select id="domain" name="domain" onchange="this.form.submit()">{opts}</select>
@@ -502,37 +615,29 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
         <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> · <code>cpn app activate --name roundcube</code></p>
         {picker}
       </article>
-      <p class="plugin-count">{count} host packages</p>
-      <form method="get" action="/plugins" class="plugin-search-row">
-        <input type="hidden" name="view" value="host">
-        <input type="hidden" name="domain" value="{domain}">
-        <input type="hidden" name="mode" value="{mode}">
-        <input type="hidden" name="per_page" value="{per_page}">
-        <label for="hq">Search</label>
-        <input class="plugin-search" id="hq" name="q" type="search" value="{q}" placeholder="Search host packages by name or description...">
-        <button type="submit" class="btn-primary">Search</button>
-      </form>
-      {pills}
-      {toolbar}
-      <div class="{scroll_cls}">{cards}</div>"#,
+      {fragment}"#,
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
         picker = picker,
-        count = total,
-        domain = html_escape(domain),
-        mode = html_escape(mode),
-        per_page = toolbar_per,
-        q = html_escape(q.q),
-        pills = category_pills(&apps, q.category, domain, mode, toolbar_per),
-        toolbar = store_list_toolbar(mode, toolbar_per, page, total_pages, total),
-        scroll_cls = scroll_cls,
-        cards = cards,
+        fragment = host_packages_store_fragment(AppsPageQuery {
+            notice: None,
+            error: None,
+            domain: q.domain,
+            sites: q.sites,
+            q: q.q,
+            category: q.category,
+            mode: q.mode,
+            page: q.page,
+            per_page: q.per_page,
+            username: q.username,
+        }),
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::apps::AppId;
+    use super::host_action_buttons;
+    use crate::apps::{AppId, AppStateKind, AppStatus};
 
     #[test]
     fn parse_known_webmail_ids() {
@@ -540,5 +645,25 @@ mod tests {
         assert_eq!(AppId::parse("roundcube").unwrap(), AppId::Roundcube);
         assert_eq!(AppId::parse("nextsnapmail").unwrap(), AppId::Nextsnapmail);
         assert_eq!(AppId::parse("sogo").unwrap(), AppId::Sogo);
+    }
+
+    #[test]
+    fn non_admin_host_actions_omit_uninstall() {
+        let status = AppStatus {
+            id: AppId::Mariadb,
+            state: AppStateKind::Running,
+            detail: "ok".into(),
+            warning: None,
+        };
+        let guest = host_action_buttons(&status, "", false, "installed");
+        assert!(
+            !guest.to_ascii_lowercase().contains("uninstall"),
+            "non-admin must not see Uninstall: {guest}"
+        );
+        let admin = host_action_buttons(&status, "", true, "installed");
+        assert!(
+            admin.contains("Uninstall from Host"),
+            "admin must see Uninstall from Host: {admin}"
+        );
     }
 }

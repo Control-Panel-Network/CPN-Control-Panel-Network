@@ -212,21 +212,26 @@ enum PluginCommands {
         #[arg(long)]
         domain: Option<String>,
     },
-    /// Install a plugin id from the community catalog into a site
+    /// Install a plugin id from the community catalog (site) or host-plugins/ (--host)
     Install {
         #[arg(long)]
-        domain: String,
+        domain: Option<String>,
         #[arg(long)]
         id: String,
+        /// Install under $CPN_DATA_DIR/host-plugins/ (also auto for host-scoped Security ids)
+        #[arg(long)]
+        host: bool,
     },
-    /// Remove an installed plugin from a site
+    /// Remove an installed plugin from a site (or --host for host-scoped)
     Remove {
         #[arg(long)]
-        domain: String,
+        domain: Option<String>,
         #[arg(long)]
         id: String,
         #[arg(long)]
         yes: bool,
+        #[arg(long)]
+        host: bool,
     },
     /// Enable an installed plugin on a site
     Enable {
@@ -269,7 +274,7 @@ fn run() -> Result<(), String> {
                 paths::platform_data_dir()
             );
             println!("network  Manage listen port, hostname, public URL, and port migration");
-            println!("plugin   Manage per-site plugins under /home/<domain>/plugins");
+            println!("plugin   Manage host-scoped and per-site plugins (/home/<domain>/plugins)");
             println!(
                 "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, ...)"
             );
@@ -508,17 +513,30 @@ fn run() -> Result<(), String> {
         Commands::Network { command } => run_network(command, require_root_for_mutation),
         Commands::Plugin { command } => match command {
             PluginCommands::List { domain } => cli_plugins::list_plugins(domain.as_deref()),
-            PluginCommands::Install { domain, id } => {
+            PluginCommands::Install { domain, id, host } => {
                 require_root_for_mutation()?;
-                cli_plugins::install(&domain, &id)
+                cli_plugins::install(domain.as_deref(), &id, host)
             }
-            PluginCommands::Remove { domain, id, yes } => {
+            PluginCommands::Remove {
+                domain,
+                id,
+                yes,
+                host,
+            } => {
                 require_root_for_mutation()?;
+                let target = if host {
+                    format!("host plugin `{id}`")
+                } else {
+                    format!(
+                        "plugin `{id}` from `{}`",
+                        domain.as_deref().unwrap_or("(required)")
+                    )
+                };
                 confirm_delete(
-                    &format!("Remove plugin `{id}` from `{domain}`? This cannot be undone."),
+                    &format!("Remove {target}? This cannot be undone."),
                     yes,
                 )?;
-                cli_plugins::remove(&domain, &id)
+                cli_plugins::remove(domain.as_deref(), &id, host)
             }
             PluginCommands::Enable { domain, id } => {
                 require_root_for_mutation()?;

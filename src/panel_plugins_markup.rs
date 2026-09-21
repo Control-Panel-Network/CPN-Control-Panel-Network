@@ -4,6 +4,7 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_plugins_spa::plugins_hub_styles;
 use crate::plugin_activation::is_host_owned_install;
 use crate::plugins::InstalledPlugin;
+use crate::site_acl::{SitePerm, can_manage_site};
 use crate::sites::SiteRecord;
 use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
 
@@ -61,8 +62,11 @@ pub(crate) fn notice_block(kind: &str, message: Option<&str>) -> String {
 
 pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
     let installed = if active == "installed" { " active" } else { "" };
-    let store = if active == "store" { " active" } else { "" };
-    let host = if active == "host" { " active" } else { "" };
+    let store = if active == "store" || active == "host" {
+        " active"
+    } else {
+        ""
+    };
     let domain_q = if domain.is_empty() {
         String::new()
     } else {
@@ -71,8 +75,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
     format!(
         r#"<div class="plugin-tabs" role="tablist" aria-label="Plugins views">
         <a class="plugin-tab{installed}" href="/plugins?view=installed{domain_q}" role="tab">Installed</a>
-        <a class="plugin-tab{store}" href="/plugins?view=store{domain_q}" role="tab">Plugin Store</a>
-        <a class="plugin-tab{host}" href="/plugins?view=host{domain_q}" role="tab">Host packages</a>
+        <a class="plugin-tab{store}" href="/plugins?view=store{domain_q}" role="tab">Store</a>
       </div>
       <style>
         .plugin-tabs {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }}
@@ -173,7 +176,6 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
       </style>"#,
         installed = installed,
         store = store,
-        host = host,
         domain_q = domain_q,
         hub_styles = plugins_hub_styles(),
     )
@@ -181,7 +183,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
 
 pub(crate) fn domain_picker(sites: &[SiteRecord], selected: &str, view: &str) -> String {
     if sites.is_empty() {
-        return r#"<p class="panel-notice error" role="status">Create a website first. Plugins install under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#.into();
+        return r#"<p class="muted">No websites yet. Host packages still appear under Installed / Host. Create a site to install domain or sub-domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#.into();
     }
     let mut options = String::new();
     for site in sites {
@@ -227,6 +229,16 @@ fn badge_pricing(pricing: &str) -> String {
     }
 }
 
+pub(crate) fn installed_one_card(
+    item: &InstalledPlugin,
+    domain: &str,
+    username: &str,
+) -> String {
+    let html = installed_cards(std::slice::from_ref(item), "grid", domain, username);
+    html.replace(r#"<div class="plugin-grid">"#, "")
+        .replacen("</div>", "", 1)
+}
+
 pub(crate) fn installed_cards(
     plugins: &[InstalledPlugin],
     layout: &str,
@@ -234,7 +246,7 @@ pub(crate) fn installed_cards(
     username: &str,
 ) -> String {
     if plugins.is_empty() {
-        return r#"<p class="empty-state">No plugins installed for this site yet. Open the Plugin Store to install from the community catalog.</p>"#
+        return r#"<p class="empty-state">No plugins installed for this site yet. Open the Store to install from the community catalog.</p>"#
             .into();
     }
     if layout == "table" {
@@ -251,7 +263,22 @@ pub(crate) fn installed_cards(
         } else {
             "Installed"
         };
+        let active_badge = if m.enabled {
+            r#"<span class="plugin-badge installed">Active</span>"#
+        } else {
+            r#"<span class="plugin-badge">Deactivated</span>"#
+        };
+        let scope_badge = if host_owned {
+            r#"<span class="plugin-badge">Host</span>"#
+        } else {
+            r#"<span class="plugin-badge cat">Site</span>"#
+        };
         let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
+        let can_uninstall_site = !host_owned
+            && (admin
+                || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
+        // Host-installed packages: Uninstall from Host is panel-admin only.
+        // Site plugins: Uninstall only with site Uninstall ACL (owners always allowed).
         let uninstall = if host_owned && !admin {
             String::new()
         } else if host_owned && admin {
@@ -266,7 +293,7 @@ pub(crate) fn installed_cards(
                 form_attrs = form_attrs,
                 id = html_escape(&m.id),
             )
-        } else {
+        } else if can_uninstall_site {
             let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
             let form_attrs = uninstall_form_attrs(&m.name, &impacts);
             format!(
@@ -280,14 +307,18 @@ pub(crate) fn installed_cards(
                 id = html_escape(&m.id),
                 domain = html_escape(domain),
             )
+        } else {
+            String::new()
         };
         cards.push_str(&format!(
             r#"<article class="plugin-card">
           <h3>{name}</h3>
           <div class="plugin-badges">
+            {scope}
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {pricing}
+            {active_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Status: {status} · Active: {active}</p>
@@ -307,6 +338,8 @@ pub(crate) fn installed_cards(
             cat = html_escape(&m.category),
             ver = html_escape(&m.version),
             pricing = badge_pricing(&m.pricing),
+            scope = scope_badge,
+            active_badge = active_badge,
             desc = html_escape(&m.description),
             status = status,
             active = active,
@@ -375,6 +408,9 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
             "Inactive"
         };
         let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
+        let can_uninstall_site = !host_owned
+            && (admin
+                || can_manage_site(username, domain, SitePerm::Uninstall).unwrap_or(false));
         let uninstall = if host_owned && !admin {
             String::new()
         } else if host_owned && admin {
@@ -389,7 +425,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
                 form_attrs = form_attrs,
                 id = html_escape(&m.id),
             )
-        } else {
+        } else if can_uninstall_site {
             let impacts = plugin_uninstall_impacts(domain, &m.id, &m.name);
             let form_attrs = uninstall_form_attrs(&m.name, &impacts);
             format!(
@@ -403,6 +439,8 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
                 id = html_escape(&m.id),
                 domain = html_escape(domain),
             )
+        } else {
+            String::new()
         };
         rows.push_str(&format!(
             r#"<tr>
@@ -430,4 +468,3 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
     rows
 }
 
-pub(crate) use crate::panel_plugins_store::{StoreListOpts, category_pills, store_catalog};
