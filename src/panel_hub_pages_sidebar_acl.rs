@@ -106,11 +106,7 @@ pub fn sidebar_visibility_section() -> String {
 }
 
 pub fn sidebar_acl_standalone_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let body = format!(
-        r#"{}{}"#,
-        sidebar_grant_rows(),
-        sidebar_acl_form()
-    );
+    let body = format!(r#"{}{}"#, sidebar_grant_rows(), sidebar_acl_form());
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),

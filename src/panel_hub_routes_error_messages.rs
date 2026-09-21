@@ -1,5 +1,6 @@
 //! Routes for owner-editable panel error messages.
 
+use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_error_messages::{
     PanelErrorMessages, load_messages, restore_all_builtins, restore_forbidden, restore_internal,
@@ -9,7 +10,6 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_error_messages::error_messages_settings_page;
 use crate::panel_markdown::render_safe_markdown;
 use crate::panel_pages::panel_shell;
-use crate::installer::AppState;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -128,7 +128,12 @@ pub async fn settings_error_messages_restore_all(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
-    restore_one(&http, &state, restore_all_builtins, "All error defaults restored")
+    restore_one(
+        &http,
+        &state,
+        restore_all_builtins,
+        "All error defaults restored",
+    )
 }
 
 fn restore_one(

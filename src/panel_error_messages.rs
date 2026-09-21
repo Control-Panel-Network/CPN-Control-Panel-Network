@@ -71,7 +71,10 @@ fn sanitize_md(raw: &str, label: &str) -> Result<String, String> {
     if raw.chars().count() > MAX_CHARS {
         return Err(format!("{label} is too long (max {MAX_CHARS} characters)"));
     }
-    if raw.chars().any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+    if raw
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+    {
         return Err(format!("{label} cannot include control characters"));
     }
     Ok(raw.to_string())
