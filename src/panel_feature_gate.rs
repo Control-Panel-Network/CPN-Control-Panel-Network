@@ -46,12 +46,11 @@ pub struct InstalledOptionalFeatures {
 
 impl InstalledOptionalFeatures {
     pub fn detect() -> Self {
-        if let Ok(guard) = FEATURE_DETECT_CACHE.lock() {
-            if let Some(cached) = guard.as_ref() {
-                if cached.at.elapsed() < FEATURE_DETECT_TTL {
-                    return cached.value;
-                }
-            }
+        if let Ok(guard) = FEATURE_DETECT_CACHE.lock()
+            && let Some(cached) = guard.as_ref()
+            && cached.at.elapsed() < FEATURE_DETECT_TTL
+        {
+            return cached.value;
         }
         let value = Self::detect_uncached();
         if let Ok(mut guard) = FEATURE_DETECT_CACHE.lock() {
