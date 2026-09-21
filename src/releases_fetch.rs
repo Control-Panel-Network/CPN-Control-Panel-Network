@@ -1,8 +1,6 @@
 //! GitHub Releases HTTP fetch with disk cache and rate limiting.
 
-use crate::releases::{
-    CpnRelease, github_repo, normalize_version, parse_release,
-};
+use crate::releases::{CpnRelease, github_repo, normalize_version, parse_release};
 use std::process::Stdio;
 use tokio::process::Command;
 
@@ -272,7 +270,10 @@ pub async fn list_releases_for_repo(
         });
     }
 
-    if response.status == 403 || response.status == 429 || response.status == 401 || response.status == 404
+    if response.status == 403
+        || response.status == 429
+        || response.status == 401
+        || response.status == 404
     {
         let msg = http_error_message(response.status, repo);
         if let Some(cache) = existing.as_ref()
@@ -292,7 +293,11 @@ pub async fn list_releases_for_repo(
                 cache_age_secs: Some(age),
                 rate_limited: matches!(response.status, 403 | 429),
                 retry_after_secs: None,
-                note: Some(note_for_cached(age, matches!(response.status, 403 | 429), None)),
+                note: Some(note_for_cached(
+                    age,
+                    matches!(response.status, 403 | 429),
+                    None,
+                )),
                 soft_error: Some(msg),
             });
         }
@@ -360,9 +365,7 @@ pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
 pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
     let wanted = normalize_version(version_or_tag);
     let repo = github_repo();
-    let releases = list_releases_for_repo(&repo, 30, false)
-        .await?
-        .releases;
+    let releases = list_releases_for_repo(&repo, 30, false).await?.releases;
     if let Some(found) = releases.into_iter().find(|release| {
         normalize_version(&release.version) == wanted
             || normalize_version(&release.tag_name) == wanted

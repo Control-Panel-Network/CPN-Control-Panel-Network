@@ -42,7 +42,9 @@ pub fn update_source_path() -> PathBuf {
 }
 
 pub fn github_token_path() -> PathBuf {
-    paths::default_data_dir().join("secrets").join("github-token")
+    paths::default_data_dir()
+        .join("secrets")
+        .join("github-token")
 }
 
 /// Validate and normalize `owner/repo` (no URL, no .git suffix).

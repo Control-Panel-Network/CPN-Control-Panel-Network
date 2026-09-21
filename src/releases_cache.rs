@@ -78,7 +78,10 @@ fn repo_cache_slug(repo: &str) -> String {
 /// Per-repo cache file. Official repo keeps the legacy `github-releases-cache.json` path.
 pub fn cache_path_for(repo: &str) -> PathBuf {
     let slug = repo_cache_slug(repo);
-    if repo.trim().eq_ignore_ascii_case(crate::releases::OFFICIAL_GITHUB_REPO) {
+    if repo
+        .trim()
+        .eq_ignore_ascii_case(crate::releases::OFFICIAL_GITHUB_REPO)
+    {
         paths::default_data_dir().join("github-releases-cache.json")
     } else {
         paths::default_data_dir().join(format!("github-releases-cache-{slug}.json"))
@@ -242,11 +245,16 @@ mod tests {
     #[test]
     fn per_repo_cache_paths() {
         let official = "Control-Panel-Network/CPN-Control-Panel-Network";
-        assert!(cache_path_for(official)
-            .to_string_lossy()
-            .ends_with("github-releases-cache.json"));
+        assert!(
+            cache_path_for(official)
+                .to_string_lossy()
+                .ends_with("github-releases-cache.json")
+        );
         let fork = cache_path_for("Acme/CPN-Fork");
-        assert!(fork.to_string_lossy().contains("github-releases-cache-acme-cpn-fork"));
+        assert!(
+            fork.to_string_lossy()
+                .contains("github-releases-cache-acme-cpn-fork")
+        );
         assert_ne!(cache_path_for(official), fork);
     }
 

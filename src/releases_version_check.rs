@@ -1,7 +1,7 @@
 //! Version check assembly (configured source + optional upstream tip).
 
 use crate::releases::{
-    VersionCheck, OFFICIAL_GITHUB_REPO, compare_versions, github_repo, package_source_label,
+    OFFICIAL_GITHUB_REPO, VersionCheck, compare_versions, github_repo, package_source_label,
 };
 use crate::releases_fetch::list_releases_for_repo;
 use crate::releases_source;
