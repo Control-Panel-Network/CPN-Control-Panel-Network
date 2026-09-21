@@ -395,12 +395,7 @@ pub async fn login_mfa_page(
     }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(panel_mfa_html(
-            &payload,
-            None,
-            next.as_deref(),
-            options,
-        ))
+        .body(panel_mfa_html(&payload, None, next.as_deref(), options))
 }
 
 #[post("/login/2fa")]
