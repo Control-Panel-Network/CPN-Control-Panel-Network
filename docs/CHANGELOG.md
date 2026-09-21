@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **TOTP / 2FA enroll dark mode contrast**: form labels use `var(--ink)` instead of hardcoded slate; backup-codes and TOTP setup panels use theme-aware `.mfa-codes-panel` / `.mfa-totp-setup` (readable in light and dark). Applies to `/account/security/enroll-2fa` and Edit profile TOTP enrollment. Backup codes confirm adds **Copy to clipboard** (`navigator.clipboard` with `execCommand` fallback) and **Download** (`cpn-backup-codes.txt` via Blob).
+
 ### Added
 
 - **cpn.newstargeted.com landing**: product introduction homepage under `site/` while `/install.sh`, `/upgrade.sh`, and `/cpn-bootstrap-lib.sh` keep serving bootstrap scripts. Sync with `scripts/sync-cpn-host-site.sh`; deploy notes in [HOST-SITE.md](HOST-SITE.md).
