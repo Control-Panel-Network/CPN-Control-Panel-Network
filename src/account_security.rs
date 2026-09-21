@@ -97,10 +97,7 @@ pub fn backup_codes_panel_html(codes: &[String], hint: &str) -> String {
         hint = html_escape(hint),
     );
     for code in codes {
-        html.push_str(&format!(
-            "<li><code>{}</code></li>",
-            html_escape(code)
-        ));
+        html.push_str(&format!("<li><code>{}</code></li>", html_escape(code)));
     }
     html.push_str(
         r#"</ul>
@@ -266,7 +263,10 @@ pub fn enroll_mfa_gate_main(
     );
 
     if let Some(codes) = backup_codes {
-        body.push_str(&backup_codes_panel_html(codes, "store securely; shown once"));
+        body.push_str(&backup_codes_panel_html(
+            codes,
+            "store securely; shown once",
+        ));
         body.push_str(
             r#"<p><a class="btn-primary" href="/dashboard">Continue to dashboard</a></p>"#,
         );
