@@ -220,6 +220,7 @@ mod tests {
                 ftp_accounts: 0,
                 fqdn_enabled: false,
                 notes: String::new(),
+                sidebar_hidden_nav_ids: Vec::new(),
             })
             .unwrap();
             assign_package("ops", &tight.id).unwrap();
@@ -240,6 +241,7 @@ mod tests {
                     ftp_accounts: 0,
                     fqdn_enabled: false,
                     notes: String::new(),
+                    sidebar_hidden_nav_ids: Vec::new(),
                 },
             )
             .unwrap();

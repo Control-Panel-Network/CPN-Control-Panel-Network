@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sidebar visibility ACL and plan gates**: Modify ACL and Packages can hide left-sidebar sections per user (ACL grant) or per package. Hidden sections disappear from the nav; direct URLs return owner-editable 403 Markdown. Dashboard stays available. Middleware `SidebarAccessGuard` enforces path ACL for signed-in users.
+- **Owner Markdown error messages**: Settings > Error messages edits 403 / 404 / 500 copy with a safe Markdown toolbar (Preview). Stored under `panel-error-messages.json` (mode 600); restore defaults available.
+
+### Added
+
 - **cpn.newstargeted.com landing**: product introduction homepage under `site/` while `/install.sh`, `/upgrade.sh`, and `/cpn-bootstrap-lib.sh` keep serving bootstrap scripts. Sync with `scripts/sync-cpn-host-site.sh`; deploy notes in [HOST-SITE.md](HOST-SITE.md).
 
 - **CLI MFA management**: `cpn totp status|disable|clear --username <user>` and `cpn mfa clear --username <user> --yes` clear TOTP and/or passkeys (plus pending WebAuthn ceremonies) from SSH without printing secrets. Passkey clear alone does not remove TOTP; use these when `/login/2fa` Authenticator code should stop after password sign-in.

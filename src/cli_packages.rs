@@ -130,6 +130,7 @@ pub fn run(
                 ftp_accounts,
                 fqdn_enabled,
                 notes,
+                sidebar_hidden_nav_ids: Vec::new(),
             })?;
             println!("created package {} id={}", pkg.name, pkg.id);
             Ok(())
@@ -147,7 +148,7 @@ pub fn run(
             notes,
         } => {
             require_root()?;
-            let _ = get_package(&id)?;
+            let existing = get_package(&id)?;
             let pkg = update_package(
                 &id,
                 PackageInput {
@@ -160,6 +161,7 @@ pub fn run(
                     ftp_accounts,
                     fqdn_enabled,
                     notes,
+                    sidebar_hidden_nav_ids: existing.sidebar_hidden_nav_ids,
                 },
             )?;
             println!("updated package {} id={}", pkg.name, pkg.id);

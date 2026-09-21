@@ -367,10 +367,12 @@ pub fn acl_create_page(notice: Option<&str>, error: Option<&str>) -> String {
 pub fn acl_modify_page(notice: Option<&str>, error: Option<&str>) -> String {
     let body = format!(
         r#"{}
-      <h3 style="margin:24px 0 12px;">Add another grant</h3>
+      <h3 style="margin:24px 0 12px;">Add another site grant</h3>
+      {}
       {}"#,
         grant_rows(),
-        acl_form("/account/acl/create")
+        acl_form("/account/acl/create"),
+        crate::panel_hub_pages_sidebar_acl::sidebar_visibility_section()
     );
     feature_shell(
         &[
@@ -379,7 +381,7 @@ pub fn acl_modify_page(notice: Option<&str>, error: Option<&str>) -> String {
             ("Modify ACL", None),
         ],
         "Modify ACL",
-        "Review and remove site ACL grants.",
+        "Review site ACL and sidebar visibility grants.",
         &body,
         notice,
         error,

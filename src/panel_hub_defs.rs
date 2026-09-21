@@ -344,6 +344,12 @@ pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "Error messages",
+                    subtitle: "403, 404, 500 Markdown",
+                    href: "/settings/error-messages",
+                    live: true,
+                },
+                HubTile {
                     title: "Log retention",
                     subtitle: "Access & error keep window",
                     href: "/settings/logs",
