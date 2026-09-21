@@ -8,10 +8,11 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
 pub enum MfaCommands {
-    /// Clear TOTP, all passkeys, and pending WebAuthn ceremonies (requires --yes)
+    /// Clear TOTP, all passkeys, and pending WebAuthn ceremonies (prompt, or --yes to skip)
     Clear {
         #[arg(long)]
         username: String,
+        /// Skip interactive confirmation
         #[arg(long)]
         yes: bool,
     },

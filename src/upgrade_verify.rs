@@ -255,11 +255,29 @@ fn ensure_panel_service_restarted() -> Result<(), String> {
         allow_remote,
     )
     .map(|_| ())?;
+    // Labs often leave a foreground `sudo cpn-installer --web` holding :2087.
+    // `systemctl restart` alone then fails with AddrInUse and verification marks
+    // the upgrade as failed even when package apply succeeded.
+    let _ = panel_service::stop_orphan_panel_listeners();
+    let _ = Command::new("systemctl")
+        .args(["reset-failed", "cpn-installer.service"])
+        .status();
     // Prefer an explicit restart so the new package binary is live.
     let _ = Command::new("systemctl")
         .args(["restart", "cpn-installer.service"])
         .status();
     thread::sleep(Duration::from_secs(2));
+    if !unit_active("cpn-installer.service") {
+        // One more cleanup pass when restart raced a lingering listener.
+        let _ = panel_service::stop_orphan_panel_listeners();
+        let _ = Command::new("systemctl")
+            .args(["reset-failed", "cpn-installer.service"])
+            .status();
+        let _ = Command::new("systemctl")
+            .args(["start", "cpn-installer.service"])
+            .status();
+        thread::sleep(Duration::from_secs(2));
+    }
     Ok(())
 }
 

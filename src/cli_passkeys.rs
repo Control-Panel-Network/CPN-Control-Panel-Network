@@ -32,10 +32,11 @@ pub enum PasskeyCommands {
         #[arg(long)]
         id: String,
     },
-    /// Remove all passkeys for an account (requires --yes)
+    /// Remove all passkeys for an account (prompt, or --yes to skip)
     Clear {
         #[arg(long)]
         username: String,
+        /// Skip interactive confirmation
         #[arg(long)]
         yes: bool,
     },
