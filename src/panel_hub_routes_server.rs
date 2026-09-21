@@ -83,8 +83,15 @@ pub async fn server_openlitespeed_password(
     if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
-    let user = form.get("username").map(String::as_str).unwrap_or("admin");
-    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    let user = form
+        .get("username")
+        .map(String::as_str)
+        .filter(|u| !u.is_empty())
+        .unwrap_or("admin");
+    // Require a submitted password field (no hard-coded empty default into the sink).
+    let Some(pass) = form.get("password").map(String::as_str) else {
+        return redirect_notice("/server/openlitespeed", None, Some("Password is required."));
+    };
     match crate::litespeed_webadmin_users::set_webadmin_password(user, pass) {
         Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
         Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
@@ -137,8 +144,10 @@ pub async fn server_openlitespeed_guest(
     if let Some(resp) = litespeed_admin_redirect(&state, &http) {
         return resp;
     }
-    let user = form.get("username").map(String::as_str).unwrap_or("");
-    let pass = form.get("password").map(String::as_str).unwrap_or("");
+    let user = form.get("username").map(String::as_str).unwrap_or_default();
+    let Some(pass) = form.get("password").map(String::as_str) else {
+        return redirect_notice("/server/openlitespeed", None, Some("Password is required."));
+    };
     match crate::litespeed_webadmin_users::add_webadmin_guest(user, pass) {
         Ok(msg) => redirect_notice("/server/openlitespeed", Some(&msg), None),
         Err(err) => redirect_notice("/server/openlitespeed", None, Some(&err)),
