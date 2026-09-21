@@ -201,7 +201,10 @@ fn cmp_records(a: &CfDnsRecord, b: &CfDnsRecord, sort: &str) -> std::cmp::Orderi
             .cmp(&b.content.to_ascii_lowercase()),
         "priority" => priority_sort_key(a.priority).cmp(&priority_sort_key(b.priority)),
         "proxy" => a.proxied.cmp(&b.proxied),
-        _ => a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()),
+        _ => a
+            .name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase()),
     };
     if primary != Ordering::Equal {
         return primary;
