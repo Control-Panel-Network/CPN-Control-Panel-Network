@@ -292,6 +292,14 @@ mod tests {
         assert!(html.contains("nav-chevron"));
         assert!(html.contains("data-nav-group=\"websites\""));
         assert!(html.contains("data-nav-group=\"plugins\"") || html.contains("/plugins"));
+        assert!(
+            html.contains("/plugins?view=store"),
+            "Plugins sidebar must keep Store link"
+        );
+        assert!(
+            !html.contains(">Host packages</"),
+            "Host packages must not appear under Plugins; use Store category=Host"
+        );
     }
 
     #[test]
