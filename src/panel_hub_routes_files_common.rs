@@ -19,8 +19,16 @@ pub(crate) fn same_origin_ok(http: &HttpRequest) -> bool {
     else {
         return true;
     };
-    let host = http.connection_info().host().to_string();
-    origin.contains(&host)
+    // Cap header sizes so Host/Origin cannot drive unbounded allocation or
+    // log-injection-style flows (CodeQL).
+    if origin.len() > 2048 {
+        return false;
+    }
+    let host = http.connection_info().host();
+    if host.is_empty() || host.len() > 253 {
+        return false;
+    }
+    origin.contains(host)
 }
 
 pub(crate) fn root_redirect(path: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
