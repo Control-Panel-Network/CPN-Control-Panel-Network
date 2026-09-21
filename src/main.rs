@@ -84,11 +84,15 @@ use cpn_installer::panel_hub_routes::{
     server_php_extensions_set_default, server_php_extensions_set_default_get,
     server_php_extensions_uninstall, server_php_tuning, server_processes_page,
     server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_logs_page, settings_logs_save, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_reset,
-    settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_version_page, site_filemanager_alias, site_files_op,
-    site_files_page_route, site_files_upload, users_create_get, users_create_post,
+    settings_error_messages_page, settings_error_messages_preview,
+    settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
+    settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
+    settings_error_messages_save, settings_logs_page, settings_logs_save, settings_page,
+    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_site_messages_reset, settings_site_messages_restore_site_ready,
+    settings_site_messages_restore_suspend, settings_site_messages_save, settings_version_page,
+    sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
+    site_files_op, site_files_page_route, site_files_upload, users_create_get, users_create_post,
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
     users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
@@ -739,9 +743,18 @@ async fn panel_catch_all(
         return phpmyadmin_mount_proxy(req, payload, state).await;
     }
     if matches!(*req.method(), Method::GET | Method::HEAD) {
-        return static_asset_for(&path.into_inner());
+        let name = path.into_inner();
+        let asset = static_asset_for(&name);
+        if asset.status() != actix_web::http::StatusCode::NOT_FOUND {
+            return asset;
+        }
+        return HttpResponse::NotFound()
+            .content_type("text/html; charset=utf-8")
+            .body(cpn_installer::panel_error_messages::not_found_page_html());
     }
-    HttpResponse::NotFound().finish()
+    HttpResponse::NotFound()
+        .content_type("text/html; charset=utf-8")
+        .body(cpn_installer::panel_error_messages::not_found_page_html())
 }
 
 fn allow_remote_listen() -> bool {
@@ -1056,6 +1069,7 @@ async fn main() -> std::io::Result<()> {
     let cancel_state = state.clone();
     let mut server = HttpServer::new(move || {
         App::new()
+            .wrap(cpn_installer::sidebar_access_guard::SidebarAccessGuard)
             .app_data(web::Data::new(state.clone()))
             .app_data(web::JsonConfig::default().limit(64 * 1024))
             .app_data(web::PayloadConfig::new(64 * 1024))
@@ -1264,6 +1278,13 @@ async fn main() -> std::io::Result<()> {
             .service(settings_site_messages_restore_suspend)
             .service(settings_site_messages_restore_site_ready)
             .service(settings_site_messages_reset)
+            .service(settings_error_messages_page)
+            .service(settings_error_messages_save)
+            .service(settings_error_messages_preview)
+            .service(settings_error_messages_restore_forbidden)
+            .service(settings_error_messages_restore_not_found)
+            .service(settings_error_messages_restore_internal)
+            .service(settings_error_messages_restore_all)
             .service(settings_logs_page)
             .service(settings_logs_save)
             .service(settings_port_page)
@@ -1334,6 +1355,9 @@ async fn main() -> std::io::Result<()> {
             .service(acl_create_post)
             .service(acl_modify_get)
             .service(acl_delete_post)
+            .service(sidebar_acl_get)
+            .service(sidebar_acl_post)
+            .service(sidebar_acl_delete_post)
             .service(email_accounts_route)
             .service(email_create_route)
             .service(email_forwarding_route)

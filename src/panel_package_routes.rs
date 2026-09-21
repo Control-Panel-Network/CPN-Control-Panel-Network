@@ -87,8 +87,42 @@ pub struct PackageForm {
     notes: String,
 }
 
+fn collect_form_value(pairs: &[(String, String)], key: &str) -> String {
+    pairs
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
+        .unwrap_or_default()
+}
+
+fn collect_form_values(pairs: &[(String, String)], key: &str) -> Vec<String> {
+    pairs
+        .iter()
+        .filter(|(k, _)| k == key)
+        .map(|(_, v)| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
+fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, PackageInput), String> {
+    let form = PackageForm {
+        id: collect_form_value(pairs, "id"),
+        name: collect_form_value(pairs, "name"),
+        disk_mb: collect_form_value(pairs, "disk_mb"),
+        bandwidth_mb: collect_form_value(pairs, "bandwidth_mb"),
+        domains: collect_form_value(pairs, "domains"),
+        emails: collect_form_value(pairs, "emails"),
+        databases: collect_form_value(pairs, "databases"),
+        ftp_accounts: collect_form_value(pairs, "ftp_accounts"),
+        fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
+        notes: collect_form_value(pairs, "notes"),
+    };
+    let sidebar = collect_form_values(pairs, "sidebar_hidden_nav_ids");
+    Ok((form.id.clone(), form.to_input(sidebar)?))
+}
+
 impl PackageForm {
-    fn to_input(&self) -> Result<PackageInput, String> {
+    fn to_input(&self, sidebar_hidden_nav_ids: Vec<String>) -> Result<PackageInput, String> {
         Ok(PackageInput {
             name: self.name.clone(),
             disk_mb: parse_limit(&self.disk_mb, "disk_mb")?,
@@ -99,6 +133,7 @@ impl PackageForm {
             ftp_accounts: parse_limit(&self.ftp_accounts, "ftp_accounts")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
+            sidebar_hidden_nav_ids,
         })
     }
 }
@@ -205,7 +240,7 @@ pub async fn packages_edit_page(
 pub async fn packages_create(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
-    form: web::Form<PackageForm>,
+    form: web::Form<Vec<(String, String)>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -215,7 +250,7 @@ pub async fn packages_create(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    match form.to_input().and_then(create_package) {
+    match package_input_from_pairs(&form).and_then(|(_, input)| create_package(input)) {
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -235,7 +270,7 @@ pub async fn packages_create(
 pub async fn packages_update(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
-    form: web::Form<PackageForm>,
+    form: web::Form<Vec<(String, String)>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -245,26 +280,26 @@ pub async fn packages_update(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    match form
-        .to_input()
-        .and_then(|input| update_package(&form.id, input))
-    {
+    match package_input_from_pairs(&form).and_then(|(id, input)| update_package(&id, input)) {
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 packages_redirect(Some(&format!("Updated package {}", pkg.name)), None),
             ))
             .finish(),
-        Err(error) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!(
-                    "/packages/edit?id={}&error={}",
-                    urlencoding_simple(form.id.trim()),
-                    urlencoding_simple(&error)
-                ),
-            ))
-            .finish(),
+        Err(error) => {
+            let id = collect_form_value(&form, "id");
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    format!(
+                        "/packages/edit?id={}&error={}",
+                        urlencoding_simple(id.trim()),
+                        urlencoding_simple(&error)
+                    ),
+                ))
+                .finish()
+        }
     }
 }
 
