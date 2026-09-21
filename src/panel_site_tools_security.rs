@@ -140,11 +140,7 @@ pub fn same_origin_ok(http: &actix_web::HttpRequest) -> bool {
     if origin.len() > 2048 {
         return false;
     }
-    let Some(host_hdr) = http
-        .headers()
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-    else {
+    let Some(host_hdr) = http.headers().get("host").and_then(|v| v.to_str().ok()) else {
         return true;
     };
     if host_hdr.is_empty() || host_hdr.len() > 253 {
