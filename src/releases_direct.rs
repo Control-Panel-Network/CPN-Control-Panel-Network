@@ -81,6 +81,7 @@ fn parse_sha256sums_names(body: &str) -> Vec<String> {
 async fn curl_text(url: &str) -> Result<(u16, String), String> {
     let tmp = std::env::temp_dir().join(format!("cpn-direct-sums-{}.txt", std::process::id()));
     let _ = std::fs::remove_file(&tmp);
+    let user_agent = format!("User-Agent: CPN-Installer/{}", env!("CARGO_PKG_VERSION"));
     let output = Command::new("curl")
         .args([
             "--silent",
@@ -93,7 +94,7 @@ async fn curl_text(url: &str) -> Result<(u16, String), String> {
             "-w",
             "%{http_code}",
             "-H",
-            "User-Agent: cpn-installer",
+            user_agent.as_str(),
             url,
         ])
         .stdin(Stdio::null())
@@ -158,8 +159,7 @@ fn release_from_sums(repo: &str, tag: &str, sums_body: &str) -> Option<CpnReleas
 }
 
 /// Probe CDN download URLs for a single release tag (no api.github.com).
-pub async fn probe_tag(tag_or_version: &str) -> Result<CpnRelease, String> {
-    let repo = github_repo();
+pub async fn probe_tag_for_repo(repo: &str, tag_or_version: &str) -> Result<CpnRelease, String> {
     let tag = {
         let trimmed = tag_or_version.trim();
         if trimmed.starts_with('v') || trimmed.starts_with('V') {
@@ -168,20 +168,27 @@ pub async fn probe_tag(tag_or_version: &str) -> Result<CpnRelease, String> {
             format!("v{}", normalize_version(trimmed))
         }
     };
-    let url = format!("{}/SHA256SUMS", download_base(&repo, &tag));
+    let url = format!("{}/SHA256SUMS", download_base(repo, &tag));
     let (status, body) = curl_text(&url).await?;
     if !(200..300).contains(&status) || body.trim().is_empty() {
         return Err(format!("{tag}: HTTP {status} for SHA256SUMS"));
     }
-    release_from_sums(&repo, &tag, &body)
+    release_from_sums(repo, &tag, &body)
         .ok_or_else(|| format!("{tag}: SHA256SUMS empty or unreadable"))
 }
 
+pub async fn probe_tag(tag_or_version: &str) -> Result<CpnRelease, String> {
+    probe_tag_for_repo(&github_repo(), tag_or_version).await
+}
+
 /// Probe CDN download URLs for a release tip (no api.github.com).
-pub async fn probe_direct_release(wanted: Option<&str>) -> Result<CpnRelease, String> {
+pub async fn probe_direct_release_for_repo(
+    repo: &str,
+    wanted: Option<&str>,
+) -> Result<CpnRelease, String> {
     let mut errors = Vec::new();
     for tag in tag_candidates(wanted) {
-        match probe_tag(&tag).await {
+        match probe_tag_for_repo(repo, &tag).await {
             Ok(release) => return Ok(release),
             Err(error) => errors.push(error),
         }
@@ -192,15 +199,22 @@ pub async fn probe_direct_release(wanted: Option<&str>) -> Result<CpnRelease, St
     ))
 }
 
+pub async fn probe_direct_release(wanted: Option<&str>) -> Result<CpnRelease, String> {
+    probe_direct_release_for_repo(&github_repo(), wanted).await
+}
+
 /// Build a short release list from direct tip probes (newest first).
-pub async fn list_releases_direct(limit: usize) -> Result<Vec<CpnRelease>, String> {
+pub async fn list_releases_direct_for_repo(
+    repo: &str,
+    limit: usize,
+) -> Result<Vec<CpnRelease>, String> {
     let mut releases = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for tag in tag_candidates(None) {
         if releases.len() >= limit.max(1) {
             break;
         }
-        match probe_tag(&tag).await {
+        match probe_tag_for_repo(repo, &tag).await {
             Ok(release) => {
                 let key = normalize_version(&release.tag_name);
                 if seen.insert(key) {
@@ -211,12 +225,15 @@ pub async fn list_releases_direct(limit: usize) -> Result<Vec<CpnRelease>, Strin
         }
     }
     if releases.is_empty() {
-        return Err(
-            "No releases available via direct download URLs (set CPN_RELEASE_TAG or wait for GitHub API)."
-                .into(),
-        );
+        return Err(format!(
+            "No releases available via direct download URLs for {repo} (set CPN_RELEASE_TAG or wait for GitHub API)."
+        ));
     }
     Ok(releases)
+}
+
+pub async fn list_releases_direct(limit: usize) -> Result<Vec<CpnRelease>, String> {
+    list_releases_direct_for_repo(&github_repo(), limit).await
 }
 
 #[cfg(test)]

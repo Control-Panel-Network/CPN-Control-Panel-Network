@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Version Management fork source**: operators can point upgrades at a GitHub fork via `/var/lib/cpn/update-source.json` (mode 600) and optional token at `/var/lib/cpn/secrets/github-token`. Default remains `Control-Panel-Network/CPN-Control-Panel-Network`. Version check shows configured source tip and upstream official tip when using a fork. Panel APIs: GET/POST `/api/version-source` (POST admin-only). Per-fork release caches live beside the legacy `github-releases-cache.json` for the official repo.
+
+### Fixed
+
+- **Version Management fetch errors**: browser "Failed to fetch" on version checks and maintenance polls now surfaces actionable network/auth/service messages instead of opaque text.
+
+### Added
+
 - **cpn.newstargeted.com landing**: product introduction homepage under `site/` while `/install.sh`, `/upgrade.sh`, and `/cpn-bootstrap-lib.sh` keep serving bootstrap scripts. Sync with `scripts/sync-cpn-host-site.sh`; deploy notes in [HOST-SITE.md](HOST-SITE.md).
 
 - **CLI MFA management**: `cpn totp status|disable|clear --username <user>` and `cpn mfa clear --username <user> --yes` clear TOTP and/or passkeys (plus pending WebAuthn ceremonies) from SSH without printing secrets. Passkey clear alone does not remove TOTP; use these when `/login/2fa` Authenticator code should stop after password sign-in.

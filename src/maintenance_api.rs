@@ -7,8 +7,13 @@ use crate::manifest::{detect_existing_install, reconcile_stale_package_identity}
 use crate::model::{MaintenanceAction, MaintenanceInfo, MaintenanceRequest, TokenQuery};
 use crate::panel_admin::is_panel_admin;
 use crate::releases;
+use crate::releases_source::{
+    self, UpdateSourceConfig, github_token_configured, load_update_source, save_github_token,
+    save_update_source_repo,
+};
 use crate::upgrade::{build_plan, spawn_maintenance};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -87,7 +92,81 @@ pub async fn load_maintenance_info_with_options(force_network: bool) -> Maintena
         rate_limited: check.rate_limited,
         retry_after_secs: check.retry_after_secs,
         cache_note: check.cache_note,
+        using_fork: check.using_fork,
+        token_configured: check.token_configured,
+        upstream_repo: check.upstream_repo,
+        upstream_latest_version: check.upstream_latest_version,
+        upstream_latest_tag: check.upstream_latest_tag,
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionSourcePublic {
+    pub repo: String,
+    pub official_repo: String,
+    pub using_fork: bool,
+    pub token_configured: bool,
+    pub updated_at_unix: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VersionSourceRequest {
+    #[serde(default)]
+    pub repo: String,
+    #[serde(default)]
+    pub github_token: String,
+    #[serde(default)]
+    pub clear_token: bool,
+}
+
+fn version_source_public(cfg: &UpdateSourceConfig) -> VersionSourcePublic {
+    VersionSourcePublic {
+        repo: cfg.repo.clone(),
+        official_repo: releases::OFFICIAL_GITHUB_REPO.to_string(),
+        using_fork: !releases_source::is_official_repo(&cfg.repo),
+        token_configured: github_token_configured(),
+        updated_at_unix: cfg.updated_at_unix,
+    }
+}
+
+#[get("/api/version-source")]
+pub async fn api_version_source_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+) -> HttpResponse {
+    if !version_read_authorized(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let cfg = load_update_source();
+    HttpResponse::Ok().json(version_source_public(&cfg))
+}
+
+#[post("/api/version-source")]
+pub async fn api_version_source_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    body: web::Json<VersionSourceRequest>,
+) -> HttpResponse {
+    if !maintenance_authorized(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let request = body.into_inner();
+    let cfg = match save_update_source_repo(&request.repo) {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            return HttpResponse::BadRequest().json(serde_json::json!({ "error": error }));
+        }
+    };
+    if request.clear_token {
+        if let Err(error) = save_github_token("", true) {
+            return HttpResponse::BadRequest().json(serde_json::json!({ "error": error }));
+        }
+    } else if let Err(error) = save_github_token(&request.github_token, false) {
+        return HttpResponse::BadRequest().json(serde_json::json!({ "error": error }));
+    }
+    HttpResponse::Ok().json(version_source_public(&cfg))
 }
 
 #[get("/api/version-check")]
@@ -213,6 +292,11 @@ pub async fn start_maintenance(
             rate_limited: false,
             retry_after_secs: None,
             cache_note: None,
+            using_fork: !releases_source::is_official_repo(&releases::github_repo()),
+            token_configured: github_token_configured(),
+            upstream_repo: releases::OFFICIAL_GITHUB_REPO.to_string(),
+            upstream_latest_version: None,
+            upstream_latest_tag: None,
         });
     }
     current.phase = "downloading";
