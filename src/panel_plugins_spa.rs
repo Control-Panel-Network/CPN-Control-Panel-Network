@@ -113,6 +113,10 @@ pub fn plugins_hub_script() -> String {
     if (currentView !== 'store' && currentView !== 'host' && currentView !== 'installed') {
       currentView = 'store';
     }
+    if (currentView === 'host') {
+      currentView = 'store';
+      if (!u.searchParams.get('category')) u.searchParams.set('category', 'Host');
+    }
     u.searchParams.set('view', currentView);
     Object.keys(overrides || {}).forEach(function (k) {
       var v = overrides[k];

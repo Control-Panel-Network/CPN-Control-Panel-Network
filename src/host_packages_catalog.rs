@@ -281,7 +281,7 @@ pub fn filter_host_packages<'a>(
     apps.iter()
         .filter(|status| {
             let meta = meta_for(status.id);
-            let cat_ok = if cat.is_empty() || cat == "all" {
+            let cat_ok = if cat.is_empty() || cat == "all" || cat == "host" {
                 true
             } else if cat == "featured" {
                 host_package_is_featured(status.id, apps)

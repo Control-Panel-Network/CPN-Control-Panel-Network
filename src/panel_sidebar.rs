@@ -30,7 +30,7 @@ pub fn search_catalog_json() -> String {
         ("Create Backup", "/backups/create", "backup"),
         (
             "Host packages",
-            "/plugins?view=host",
+            "/plugins?view=store&category=Host",
             "applications packages mariadb phpmyadmin",
         ),
         ("Plugins", "/plugins", "store extensions host packages"),
