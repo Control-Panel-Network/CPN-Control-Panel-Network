@@ -141,6 +141,12 @@ pub fn panel_login_html_with_gate(
   var form=document.querySelector('form[action*="/login"]');
   var submit=document.getElementById('i18n-submit');
   var passkey=document.getElementById('i18n-passkey');
+  var err=document.getElementById('i18n-login-error');
+  function showErr(msg){
+    if(!err) return;
+    err.hidden=false;
+    err.textContent=msg;
+  }
   function applyReady(ready,message){
     if(notice){
       if(message){ notice.hidden=false; notice.textContent=message; }
@@ -156,10 +162,16 @@ pub fn panel_login_html_with_gate(
       });
     }
   }
+  var pollFails=0;
   async function poll(){
     try{
-      var res=await fetch('/api/login/services',{credentials:'same-origin',headers:{'Accept':'application/json'}});
+      var ctrl=new AbortController();
+      var t=setTimeout(function(){ctrl.abort();},8000);
+      var res=await fetch('/api/login/services',{credentials:'same-origin',headers:{'Accept':'application/json'},signal:ctrl.signal});
+      clearTimeout(t);
+      if(!res.ok){ throw new Error('http '+res.status); }
       var data=await res.json().catch(function(){return {};});
+      pollFails=0;
       var ready=!!data.ready;
       var msg=ready ? ((data.warnings&&data.warnings[0])||'') : (data.message||'');
       applyReady(ready,msg);
@@ -168,13 +180,80 @@ pub fn panel_login_html_with_gate(
         return;
       }
       if(!ready && notice) notice.setAttribute('data-was-blocked','1');
-    }catch(e){}
+    }catch(e){
+      pollFails++;
+      if(pollFails>=3 && notice){
+        notice.hidden=false;
+        notice.textContent='Could not check panel services (timeout or network). Sign-in may still work; if the button spins then stops with no message, wait and retry.';
+      }
+    }
     setTimeout(poll, 4000);
   }
   if(notice && notice.getAttribute('data-ready')==='0'){
     notice.setAttribute('data-was-blocked','1');
   }
   setTimeout(poll, 4000);
+  if(form && submit){
+    form.addEventListener('submit', function(ev){
+      if(form.getAttribute('data-cpn-native')==='1') return;
+      ev.preventDefault();
+      if(err){ err.hidden=true; err.textContent=''; }
+      var label=submit.textContent;
+      submit.disabled=true;
+      submit.textContent='Signing in…';
+      // Actix web::Form expects application/x-www-form-urlencoded.
+      // FormData alone makes fetch send multipart/form-data (HTTP 415).
+      var body=new URLSearchParams(new FormData(form));
+      var ctrl=new AbortController();
+      var timer=setTimeout(function(){ctrl.abort();},25000);
+      fetch(form.getAttribute('action')||'/login',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:body,
+        credentials:'same-origin',
+        redirect:'manual',
+        signal:ctrl.signal
+      }).then(function(res){
+        clearTimeout(timer);
+        if(res.status===408 || res.status===504 || res.status===502){
+          showErr('Sign-in timed out because the panel was busy. Wait a few seconds and try again.');
+          return null;
+        }
+        if(res.status>=300 && res.status<400){
+          var loc=res.headers.get('Location')||'/dashboard';
+          location.href=loc;
+          return null;
+        }
+        if(res.type==='opaqueredirect'){
+          // Browsers (and Cursor browser) often hide Location for redirect:'manual'.
+          // MFA-pending password login 303s to /login/2fa. Successful non-MFA login
+          // sets a session cookie and may 303 to enroll-2fa/dashboard; /login/2fa
+          // detects that session and continues there (never traps on empty passkeys).
+          location.href='/login/2fa';
+          return null;
+        }
+        return res.text().then(function(html){
+          if(res.status===401 || res.status===503 || res.ok){
+            document.open();
+            document.write(html);
+            document.close();
+            return;
+          }
+          showErr('Sign-in failed (HTTP '+res.status+'). Try again.');
+        });
+      }).catch(function(e){
+        clearTimeout(timer);
+        if(e && e.name==='AbortError'){
+          showErr('Sign-in timed out. The panel may be overloaded; retry in a moment.');
+        }else{
+          showErr('Could not reach the panel. Confirm the service is running, then retry.');
+        }
+      }).finally(function(){
+        submit.disabled=false;
+        submit.textContent=label;
+      });
+    });
+  }
 })();
 "#;
 
@@ -289,6 +368,11 @@ pub fn panel_mfa_html(
     } else {
         "Enter the 6-digit code from your authenticator app, or a one-time backup code."
     };
+    let passkey_only_recovery = if options.passkey_available && !options.totp_available {
+        r#"<p class="hint" style="margin-top:14px;">If you no longer have this passkey, a server operator can clear MFA with <code>sudo cpn mfa clear --username YOURUSER --yes</code>, then sign in again to enroll TOTP or a new passkey.</p>"#
+    } else {
+        ""
+    };
     let totp_form = if options.totp_available {
         format!(
             r#"<form method="post" action="/login/2fa" autocomplete="off">
@@ -342,6 +426,7 @@ pub fn panel_mfa_html(
       {error_block}
       {totp_form}
       {passkey_block}
+      {passkey_only_recovery}
       <p class="hint"><a href="{back_href}">Back to sign in</a></p>
     </section>
   </main>
@@ -356,6 +441,7 @@ pub fn panel_mfa_html(
         error_block = error_block,
         totp_form = totp_form,
         passkey_block = passkey_block,
+        passkey_only_recovery = passkey_only_recovery,
         back_href = html_escape(&back_href),
         next_attr = match safe_next.as_deref() {
             Some(n) => format!(r#" data-login-next="{}""#, html_escape(n)),
@@ -605,6 +691,23 @@ mod tests {
         assert!(html.contains("Sign in with passkey"));
         assert!(html.contains("Authenticator code"));
         assert!(html.contains("id=\"i18n-login-error\""));
+        assert!(!html.contains("sudo cpn mfa clear"));
+    }
+
+    #[test]
+    fn mfa_page_passkey_only_shows_operator_recovery_hint() {
+        let html = panel_mfa_html(
+            &InstallerStatus::default(),
+            None,
+            None,
+            MfaPageOptions {
+                totp_available: false,
+                passkey_available: true,
+            },
+        );
+        assert!(html.contains("Sign in with passkey"));
+        assert!(!html.contains("Authenticator code"));
+        assert!(html.contains("sudo cpn mfa clear"));
     }
 
     #[test]
