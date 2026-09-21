@@ -123,10 +123,7 @@ pub fn controllable_nav_items() -> Vec<NavVisibilityItem> {
 }
 
 pub fn known_nav_ids() -> HashSet<&'static str> {
-    controllable_nav_items()
-        .into_iter()
-        .map(|i| i.id)
-        .collect()
+    controllable_nav_items().into_iter().map(|i| i.id).collect()
 }
 
 fn sanitize_hidden_ids(raw: &[String]) -> Result<Vec<String>, String> {
@@ -230,10 +227,7 @@ pub fn can_see_nav_id(username: &str, nav_id: &str) -> bool {
     {
         return false;
     }
-    if package_hidden_ids(username)
-        .iter()
-        .any(|id| id == nav_id)
-    {
+    if package_hidden_ids(username).iter().any(|id| id == nav_id) {
         return false;
     }
     true

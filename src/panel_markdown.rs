@@ -21,11 +21,16 @@ fn safe_http_url(raw: &str) -> Option<String> {
         return None;
     }
     let lower = trimmed.to_ascii_lowercase();
-    if !(lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("mailto:"))
+    if !(lower.starts_with("https://")
+        || lower.starts_with("http://")
+        || lower.starts_with("mailto:"))
     {
         return None;
     }
-    if trimmed.chars().any(|c| c.is_control() || c == '"' || c == '\'' || c == '>') {
+    if trimmed
+        .chars()
+        .any(|c| c.is_control() || c == '"' || c == '\'' || c == '>')
+    {
         return None;
     }
     Some(html_escape(trimmed))
@@ -83,7 +88,9 @@ fn start_tag(out: &mut String, tag: Tag<'_>) {
         Tag::Emphasis => out.push_str("<em>"),
         Tag::Strong => out.push_str("<strong>"),
         Tag::Strikethrough => out.push_str("<s>"),
-        Tag::Link { dest_url, title, .. } => {
+        Tag::Link {
+            dest_url, title, ..
+        } => {
             if let Some(href) = safe_http_url(&dest_url) {
                 out.push_str("<a href=\"");
                 out.push_str(&href);
@@ -98,7 +105,9 @@ fn start_tag(out: &mut String, tag: Tag<'_>) {
                 out.push_str("<span>");
             }
         }
-        Tag::Image { dest_url, title, .. } => {
+        Tag::Image {
+            dest_url, title, ..
+        } => {
             if let Some(src) = safe_http_url(&dest_url) {
                 out.push_str("<img src=\"");
                 out.push_str(&src);
