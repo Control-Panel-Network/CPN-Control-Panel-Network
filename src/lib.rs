@@ -103,6 +103,8 @@ pub mod panel_hub_http;
 pub mod panel_hub_pages_account;
 pub mod panel_hub_pages_backups;
 pub mod panel_hub_pages_cloudflare;
+pub mod panel_hub_pages_cloudflare_api;
+pub mod panel_hub_pages_cloudflare_pager;
 pub mod panel_hub_pages_cloudflare_table;
 pub mod panel_hub_pages_dns;
 pub mod panel_hub_pages_dns_ns;

@@ -1,5 +1,8 @@
-//! Cloudflare Manage DNS records table (filter chips + inline edit rows).
+//! Cloudflare Manage DNS records table (type chips + pagination + inline edit).
 
+use crate::panel_hub_pages_cloudflare_pager::{
+    CfTableOpts, dns_list_toolbar, dns_mode_from_query, list_state_hiddens, manage_list_url,
+};
 use crate::panel_ops_cloudflare::RECORD_TYPES;
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
 
@@ -11,19 +14,22 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn type_filter_chips(selected: &str) -> String {
+fn type_filter_chips(domain: &str, opts: &CfTableOpts) -> String {
     let mut out = String::from(
         r#"<div class="cf-type-row" role="group" aria-label="Filter DNS records by type">
 <span class="muted" style="margin-right:4px;">Filter:</span>"#,
     );
+    let selected = opts.filter_type.as_str();
     let all_active = if selected.is_empty() || selected.eq_ignore_ascii_case("all") {
         " active"
     } else {
         ""
     };
+    let all_href = manage_list_url(domain, "ALL", &opts.mode, opts.per_page, 1);
     out.push_str(&format!(
-        r#"<button type="button" class="cf-type-chip{all_active}" data-cf-filter="ALL" onclick="cfFilterType('ALL')">All</button>"#,
+        r#"<a class="cf-type-chip{all_active}" href="{href}">All</a>"#,
         all_active = all_active,
+        href = html_escape(&all_href),
     ));
     for t in RECORD_TYPES {
         let active = if selected.eq_ignore_ascii_case(t) {
@@ -31,29 +37,21 @@ fn type_filter_chips(selected: &str) -> String {
         } else {
             ""
         };
+        let href = manage_list_url(domain, t, &opts.mode, opts.per_page, 1);
         out.push_str(&format!(
-            r#"<button type="button" class="cf-type-chip{active}" data-cf-filter="{t}" onclick="cfFilterType('{t}')">{t}</button>"#,
+            r#"<a class="cf-type-chip{active}" href="{href}">{t}</a>"#,
             active = active,
+            href = html_escape(&href),
             t = t,
         ));
     }
-    out.push_str(
-        r#" <span id="cf-filter-count" class="muted" style="margin-left:8px;"></span></div>"#,
-    );
+    out.push_str("</div>");
     out
 }
 
-pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: &str) -> String {
-    if domain.is_empty() {
-        return r#"<p class="muted">Select a domain to load Cloudflare DNS records.</p>"#.into();
-    }
-    if records.is_empty() {
-        return format!(
-            r#"<p class="muted">No DNS records returned for <strong>{}</strong>.</p>"#,
-            html_escape(domain)
-        );
-    }
+fn render_record_rows(domain: &str, records: &[&CfDnsRecord], opts: &CfTableOpts) -> String {
     let mut rows = String::new();
+    let state = list_state_hiddens(opts);
     for r in records {
         let ttl = if r.ttl == 1 {
             "AUTO".to_string()
@@ -88,16 +86,8 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
         } else {
             r#"<span class="muted">-</span>"#.into()
         };
-        let hidden = if !filter_type.is_empty()
-            && !filter_type.eq_ignore_ascii_case("all")
-            && !r.record_type.eq_ignore_ascii_case(filter_type)
-        {
-            " style=\"display:none\""
-        } else {
-            ""
-        };
         rows.push_str(&format!(
-            r#"<tr class="cf-row-view" data-rtype="{ty}" data-rid="{id}"{hidden}>
+            r#"<tr class="cf-row-view" data-rtype="{ty}" data-rid="{id}">
   <td><code>{name}</code></td>
   <td>{ty}</td>
   <td>{ttl}</td>
@@ -108,7 +98,7 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
       <input type="hidden" name="domain" value="{dom}">
       <input type="hidden" name="record_id" value="{id}">
       <input type="hidden" name="proxied" value="{next}">
-      <input type="hidden" name="filter_type" value="{ft}">
+      {state}
       <label class="cf-proxy" title="Cloudflare proxy">
         <input type="checkbox" onchange="this.form.submit()"{checked}{disabled}>
         <span></span>
@@ -120,17 +110,17 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
     <form method="post" action="/dns/cloudflare/delete" onsubmit="return confirm('Delete this DNS record?');" style="display:inline;">
       <input type="hidden" name="domain" value="{dom}">
       <input type="hidden" name="record_id" value="{id}">
-      <input type="hidden" name="filter_type" value="{ft}">
+      {state}
       <button type="submit" class="btn-danger" aria-label="Delete record">Delete</button>
     </form>
   </td>
 </tr>
-<tr class="cf-row-edit" data-rtype="{ty}" data-rid="{id}"{hidden}>
+<tr class="cf-row-edit" data-rtype="{ty}" data-rid="{id}" style="display:none">
   <td colspan="7">
     <form method="post" action="/dns/cloudflare/update" class="cf-add-row" style="margin:0;">
       <input type="hidden" name="domain" value="{dom}">
       <input type="hidden" name="record_id" value="{id}">
-      <input type="hidden" name="filter_type" value="{ft}">
+      {state}
       <label>Name <input class="cf-edit-input" name="name" value="{name}" required></label>
       <label>TTL <input class="cf-edit-input" name="ttl" type="number" value="{ttl_num}" min="1"></label>
       <label>Value <input class="cf-edit-input" name="content" value="{val}" required></label>
@@ -156,60 +146,86 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
             next = if r.proxied { "0" } else { "1" },
             checked = checked,
             disabled = disabled,
-            ft = html_escape(filter_type),
-            hidden = hidden,
+            state = state,
         ));
     }
-    let initial = if filter_type.is_empty() {
-        "ALL"
+    rows
+}
+
+pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTableOpts) -> String {
+    if domain.is_empty() {
+        return r#"<p class="muted">Pick a Cloudflare zone above to load DNS records (OAuth zones appear even without a local website).</p>"#.into();
+    }
+    if records.is_empty() {
+        return format!(
+            r#"<p class="muted">No DNS records returned for <strong>{}</strong>.</p>"#,
+            html_escape(domain)
+        );
+    }
+
+    let filter = opts.filter_type.trim();
+    let filtered: Vec<&CfDnsRecord> = if filter.is_empty() || filter.eq_ignore_ascii_case("all") {
+        records.iter().collect()
     } else {
-        filter_type
+        records
+            .iter()
+            .filter(|r| r.record_type.eq_ignore_ascii_case(filter))
+            .collect()
     };
-    let initial_js = serde_json::to_string(initial).unwrap_or_else(|_| "\"ALL\"".into());
+    let total_all = records.len();
+    let filtered_count = filtered.len();
+    let mode = dns_mode_from_query(&opts.mode);
+    let per_page = if mode == "scroll" {
+        filtered_count.max(1)
+    } else {
+        opts.per_page.max(1)
+    };
+    let total_pages = if mode == "scroll" {
+        1
+    } else {
+        filtered_count.div_ceil(per_page).max(1)
+    };
+    let page = opts.page.clamp(1, total_pages);
+    let start = if mode == "scroll" {
+        0
+    } else {
+        (page - 1) * per_page
+    };
+    let end = if mode == "scroll" {
+        filtered_count
+    } else {
+        (start + per_page).min(filtered_count)
+    };
+    let page_slice = &filtered[start..end];
+
+    let toolbar = dns_list_toolbar(domain, opts, page, total_pages, filtered_count, total_all);
+    let scroll_cls = if mode == "scroll" {
+        "cf-table-scroll is-scroll"
+    } else {
+        "cf-table-scroll"
+    };
+    let add_type = if filter.is_empty() || filter.eq_ignore_ascii_case("all") {
+        "A"
+    } else {
+        filter
+    };
+    let add_type_js = serde_json::to_string(add_type).unwrap_or_else(|_| "\"A\"".into());
+
     format!(
         r#"<h3>DNS Records</h3>
 {chips}
+{toolbar}
+<div class="{scroll_cls}">
 <table class="cf-table" id="cf-records-table">
   <thead><tr><th>NAME</th><th>TYPE</th><th>TTL</th><th>VALUE</th><th>PRIORITY</th><th>PROXY</th><th>ACTIONS</th></tr></thead>
   <tbody>{rows}</tbody>
 </table>
+</div>
 <script>
 (function(){{
-  var initial = {initial_js};
-  window.cfFilterType = function(t) {{
-    t = (t || 'ALL').toUpperCase();
-    document.querySelectorAll('.cf-type-chip').forEach(function(btn) {{
-      btn.classList.toggle('active', (btn.getAttribute('data-cf-filter') || '') === t);
-    }});
-    var shown = 0, total = 0;
-    document.querySelectorAll('#cf-records-table tr[data-rtype]').forEach(function(tr) {{
-      if (tr.classList.contains('cf-row-edit') && !tr.classList.contains('is-open')) {{
-        tr.style.display = 'none';
-        return;
-      }}
-      var rt = (tr.getAttribute('data-rtype') || '').toUpperCase();
-      if (tr.classList.contains('cf-row-view')) total++;
-      var match = (t === 'ALL' || rt === t);
-      if (tr.classList.contains('cf-row-view')) {{
-        tr.style.display = match ? '' : 'none';
-        if (match) shown++;
-      }} else if (tr.classList.contains('cf-row-edit')) {{
-        if (!match) {{ tr.classList.remove('is-open'); tr.style.display = 'none'; }}
-      }}
-    }});
-    var cnt = document.getElementById('cf-filter-count');
-    if (cnt) cnt.textContent = (t === 'ALL')
-      ? ('Showing ' + shown + ' of ' + total + ' records')
-      : ('Showing ' + shown + ' of ' + total + ' · ' + t);
-    var sel = document.getElementById('cf-add-type');
-    if (sel && t !== 'ALL') sel.value = t;
-    try {{
-      var u = new URL(window.location.href);
-      u.searchParams.set('tab', 'manage');
-      if (t === 'ALL') u.searchParams.delete('type'); else u.searchParams.set('type', t);
-      history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
-    }} catch (e) {{}}
-  }};
+  var addType = {add_type_js};
+  var sel = document.getElementById('cf-add-type');
+  if (sel && addType) sel.value = addType;
   window.cfStartEdit = function(id) {{
     document.querySelectorAll('.cf-row-view').forEach(function(tr) {{
       tr.classList.toggle('is-editing', tr.getAttribute('data-rid') === id);
@@ -240,11 +256,12 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], filter_type: 
       }}
     }});
   }}
-  cfFilterType(initial);
 }})();
 </script>"#,
-        chips = type_filter_chips(filter_type),
-        rows = rows,
-        initial_js = initial_js,
+        chips = type_filter_chips(domain, opts),
+        toolbar = toolbar,
+        scroll_cls = scroll_cls,
+        rows = render_record_rows(domain, page_slice, opts),
+        add_type_js = add_type_js,
     )
 }
