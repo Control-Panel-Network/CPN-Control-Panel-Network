@@ -3,6 +3,7 @@
 use crate::account::verify_password;
 use crate::account_mfa::{
     begin_totp_enroll, confirm_totp_enroll, disable_totp, load_pending_secret,
+    store_once_backup_codes, take_once_backup_codes,
 };
 use crate::account_mgmt::{
     change_own_password, find_account, rename_own_account, update_own_profile,
@@ -131,13 +132,14 @@ pub async fn users_modify_get(
             enroll_qr = Some(svg);
         }
     }
+    let backup_codes = take_once_backup_codes(&user);
     modify_html(
         &user,
         query.get("notice").map(String::as_str),
         query.get("error").map(String::as_str),
         enroll_secret.as_deref(),
         enroll_qr.as_deref(),
-        None,
+        backup_codes.as_deref(),
         None,
     )
 }
@@ -222,15 +224,9 @@ pub async fn users_profile_totp_begin(
         return login_redirect(&http);
     };
     match begin_totp_enroll(&user) {
-        Ok((secret, _uri, svg)) => modify_html(
-            &user,
-            Some("Scan the QR and confirm with a code"),
-            None,
-            Some(&secret),
-            Some(&svg),
-            None,
-            None,
-        ),
+        Ok((_secret, _uri, _svg)) => {
+            redirect_notice("/account/users/modify?enroll=1", Some("Scan the QR and confirm with a code"), None)
+        }
         Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
     }
 }
@@ -245,15 +241,14 @@ pub async fn users_profile_totp_confirm(
         return login_redirect(&http);
     };
     match confirm_totp_enroll(&user, &form.code) {
-        Ok(codes) => modify_html(
-            &user,
-            Some("TOTP enabled. Store your backup codes."),
-            None,
-            None,
-            None,
-            Some(&codes),
-            None,
-        ),
+        Ok(codes) => {
+            let _ = store_once_backup_codes(&user, &codes);
+            redirect_notice(
+                "/account/users/modify",
+                Some("TOTP enabled. Store your backup codes."),
+                None,
+            )
+        }
         Err(error) => redirect_notice("/account/users/modify?enroll=1", None, Some(&error)),
     }
 }
