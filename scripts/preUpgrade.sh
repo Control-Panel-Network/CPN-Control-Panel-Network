@@ -487,7 +487,7 @@ run_panel_maintenance() {
 }
 
 ensure_panel_service_reachable() {
-  if ! have_cmd systemctl; then
+  if !have_cmd systemctl; then
     return 0
   fi
   local data_dir="${CPN_DATA_DIR:-/var/lib/cpn}"
@@ -507,10 +507,34 @@ DROPIN
   fi
   systemctl daemon-reload >/dev/null 2>&1 || true
   systemctl enable cpn-installer.service >/dev/null 2>&1 || true
+  systemctl reset-failed cpn-installer.service >/dev/null 2>&1 || true
   systemctl restart cpn-installer.service >/dev/null 2>&1 \
     || systemctl start cpn-installer.service >/dev/null 2>&1 \
     || true
   info "panel service restart attempted (allow_remote=${allow})"
+}
+
+# True when the panel unit is active and /login answers successfully.
+panel_http_login_ok() {
+  if ! have_cmd systemctl || ! have_cmd curl; then
+    return 1
+  fi
+  local port=2087
+  local data_dir="${CPN_DATA_DIR:-/var/lib/cpn}"
+  if [[ -f "${data_dir}/listen_port" ]]; then
+    port="$(tr -d '[:space:]' < "${data_dir}/listen_port" || true)"
+  fi
+  [[ "$port" =~ ^[0-9]+$ ]] || port=2087
+  local i
+  for i in 1 2 3 4 5 6 7 8; do
+    if systemctl is-active --quiet cpn-installer.service \
+      && curl --fail --silent --show-error --max-time 8 \
+        --output /dev/null "http://127.0.0.1:${port}/login"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 main() {
@@ -578,6 +602,12 @@ main() {
       panel_rc=1
     fi
     ensure_panel_service_reachable
+    # Older binaries killed CLI --upgrade via pkill -x cpn-installer ("Terminated").
+    # If heal left the unit active and /login OK, treat package upgrade as success.
+    if [[ "$panel_rc" -ne 0 ]] && panel_http_login_ok; then
+      info "panel maintenance exited early; service healed and /login OK"
+      panel_rc=0
+    fi
   else
     info "panel install markers not found; skipped automatic cpn-installer --upgrade"
   fi

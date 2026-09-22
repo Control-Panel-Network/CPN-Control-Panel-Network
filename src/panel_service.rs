@@ -194,20 +194,51 @@ fn unit_is_active() -> bool {
         .unwrap_or(false)
 }
 
+/// Filter `pgrep -x cpn-installer` results so CLI maintenance never kills itself.
+///
+/// `pkill -x cpn-installer` during `cpn-installer --upgrade` used to SIGTERM the
+/// upgrade process ("Terminated" / "Terminert"), leave the unit inactive, and make
+/// `upgrade.sh` exit non-zero even when the RPM apply succeeded.
+pub(crate) fn orphan_cpn_installer_pids(self_pid: u32, candidates: &[u32]) -> Vec<u32> {
+    candidates
+        .iter()
+        .copied()
+        .filter(|pid| *pid != self_pid && *pid > 1)
+        .collect()
+}
+
+fn list_cpn_installer_pids() -> Vec<u32> {
+    let Ok(output) = Command::new("pgrep").args(["-x", "cpn-installer"]).output() else {
+        return Vec::new();
+    };
+    if !output.status.success() && output.stdout.is_empty() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.trim().parse::<u32>().ok())
+        .collect()
+}
+
 /// Stop non-systemd `cpn-installer` processes that can hold the listen port.
 ///
 /// VirtualBox labs often leave a foreground `sudo cpn-installer --web ...`
 /// running outside the unit. `systemctl restart` then fails with AddrInUse and
 /// upgrade verification reports a false failure. Safe to call before restart:
 /// systemd-managed MainPID is stopped via `systemctl stop` first when active.
+/// Never signals the calling process (preserves CLI `--upgrade` / `--repair`).
 pub fn stop_orphan_panel_listeners() -> Result<(), String> {
     if cfg!(windows) || !is_root() {
         return Ok(());
     }
     // Prefer a clean systemd stop so KillMode/cgroup cleanup runs.
     let _ = systemctl(&["stop", UNIT_NAME]);
-    // Kill remaining packaged binaries (foreground sudo wrappers / stragglers).
-    let _ = Command::new("pkill").args(["-x", "cpn-installer"]).status();
+    let self_pid = std::process::id();
+    for pid in orphan_cpn_installer_pids(self_pid, &list_cpn_installer_pids()) {
+        let _ = Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    }
     // Brief pause so the kernel releases the listen socket.
     std::thread::sleep(std::time::Duration::from_millis(400));
     Ok(())
@@ -358,5 +389,17 @@ mod tests {
         let joined = post_install_service_hints(2087, true).join("\n");
         assert!(joined.contains("0.0.0.0"));
         assert!(joined.contains("CPN_ALLOW_REMOTE=1"));
+    }
+
+    #[test]
+    fn orphan_pids_exclude_self() {
+        let self_pid = 4242;
+        let filtered = orphan_cpn_installer_pids(self_pid, &[1, 100, 4242, 9001]);
+        assert_eq!(filtered, vec![100, 9001]);
+    }
+
+    #[test]
+    fn orphan_pids_empty_when_only_self() {
+        assert!(orphan_cpn_installer_pids(7, &[7]).is_empty());
     }
 }

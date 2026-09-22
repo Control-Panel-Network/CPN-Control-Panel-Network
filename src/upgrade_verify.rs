@@ -248,6 +248,26 @@ pub fn maybe_refresh_cpn_docker(bypass: bool) -> Vec<String> {
     notes
 }
 
+fn wait_panel_unit_active(attempts: u32, sleep_secs: u64) -> bool {
+    for _ in 0..attempts {
+        if unit_active("cpn-installer.service") {
+            return true;
+        }
+        thread::sleep(Duration::from_secs(sleep_secs));
+    }
+    unit_active("cpn-installer.service")
+}
+
+fn wait_http_login_ok(port: u16, attempts: u32, sleep_secs: u64) -> bool {
+    for _ in 0..attempts {
+        if http_login_ok(port) {
+            return true;
+        }
+        thread::sleep(Duration::from_secs(sleep_secs));
+    }
+    http_login_ok(port)
+}
+
 fn ensure_panel_service_restarted() -> Result<(), String> {
     let allow_remote = panel_service::allow_remote_requested();
     panel_service::ensure_panel_service_after_install(
@@ -258,6 +278,7 @@ fn ensure_panel_service_restarted() -> Result<(), String> {
     // Labs often leave a foreground `sudo cpn-installer --web` holding :2087.
     // `systemctl restart` alone then fails with AddrInUse and verification marks
     // the upgrade as failed even when package apply succeeded.
+    // stop_orphan_panel_listeners must spare this process (CLI --upgrade).
     let _ = panel_service::stop_orphan_panel_listeners();
     let _ = Command::new("systemctl")
         .args(["reset-failed", "cpn-installer.service"])
@@ -266,8 +287,7 @@ fn ensure_panel_service_restarted() -> Result<(), String> {
     let _ = Command::new("systemctl")
         .args(["restart", "cpn-installer.service"])
         .status();
-    thread::sleep(Duration::from_secs(2));
-    if !unit_active("cpn-installer.service") {
+    if !wait_panel_unit_active(6, 1) {
         // One more cleanup pass when restart raced a lingering listener.
         let _ = panel_service::stop_orphan_panel_listeners();
         let _ = Command::new("systemctl")
@@ -276,7 +296,7 @@ fn ensure_panel_service_restarted() -> Result<(), String> {
         let _ = Command::new("systemctl")
             .args(["start", "cpn-installer.service"])
             .status();
-        thread::sleep(Duration::from_secs(2));
+        let _ = wait_panel_unit_active(6, 1);
     }
     Ok(())
 }
@@ -308,7 +328,8 @@ pub fn verify_after_upgrade(
             true,
         );
     } else {
-        let active = unit_active("cpn-installer.service");
+        // Unit can be briefly inactive right after restart; wait before failing.
+        let active = wait_panel_unit_active(8, 1);
         push(
             &mut report,
             "panel.service",
@@ -323,7 +344,7 @@ pub fn verify_after_upgrade(
     }
 
     let port = listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
-    let login_ok = http_login_ok(port);
+    let login_ok = wait_http_login_ok(port, 8, 1);
     push(
         &mut report,
         "panel.http_login",
