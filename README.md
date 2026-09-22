@@ -53,7 +53,7 @@ curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 Pin tip (example):
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.41
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.42
 ```
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).
