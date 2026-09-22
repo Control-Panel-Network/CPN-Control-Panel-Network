@@ -139,6 +139,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.41] - 22/09/2026
+
+MFA hardening after `v0.2.6-alpha.40`: survive MFA key loss with clear recovery, tolerant TOTP/backup code input, and lab passkey origin fixes (Cargo `0.2.6-alpha.41`).
+
+### Fixed
+
+- **MFA key loss / decrypt recovery**: do not mint a new AES key over existing TOTP ciphertext under `/var/lib/cpn/mfa/`. Decrypt failures show an operator recovery hint instead of silent invalid-code or rate-limit noise.
+- **TOTP and backup code input**: accept spaced authenticator codes and backup codes with or without dashes (legacy dashed hashes still verify).
+- **Passkey / WebAuthn lab origins**: allow `panel_public_url` origins; auto-redirect `127.0.0.1` to `localhost` before passkey login, register, and 2FA so the browser RP ID matches. Clearer SecurityError copy for labs.
+
+
 ## [0.2.6-alpha.40] - 22/09/2026
 
 TOTP enroll dark-mode and backup-code Copy/Download, MFA enroll return to Modify User, sidebar ACL with owner markdown error messages, Version Management fork update source, Host packages sidebar cleanup, and related CI/fixups since `v0.2.6-alpha.39` (Cargo `0.2.6-alpha.40`).
