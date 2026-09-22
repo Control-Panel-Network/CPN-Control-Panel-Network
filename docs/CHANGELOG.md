@@ -7,33 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **CLI destructive confirmation**: interactive prompts for `cpn mfa clear`, `cpn totp clear|disable`, `cpn passkey clear`, and other shared `confirm_delete` callers accept case-insensitive `yes`/`y` (and clear affirmatives like `yeah`/`ok`) or `no`/`n` (plus empty abort). `--yes` still skips the prompt. Previously only exact `YES` was accepted, which aborted lowercase `yes`.
-
-### Fixed
-
-- **Upgrade panel restart on labs**: post-upgrade verification stops orphan foreground `cpn-installer` listeners (AddrInUse) before `systemctl restart`, so a leftover `sudo cpn-installer --web` no longer fails `cpn-installer.service is not active after restart` when the package apply already succeeded.
-- **TOTP / 2FA enroll dark mode contrast**: form labels use `var(--ink)` instead of hardcoded slate; backup-codes and TOTP setup panels use theme-aware `.mfa-codes-panel` / `.mfa-totp-setup` (readable in light and dark). Applies to `/account/security/enroll-2fa` and Edit profile TOTP enrollment. Backup codes confirm adds **Copy to clipboard** (`navigator.clipboard` with `execCommand` fallback) and **Download** (`cpn-backup-codes.txt` via Blob).
-
-### Added
-
-- **Version Management fork source**: operators can point upgrades at a GitHub fork via `/var/lib/cpn/update-source.json` (mode 600) and optional token at `/var/lib/cpn/secrets/github-token`. Default remains `Control-Panel-Network/CPN-Control-Panel-Network`. Version check shows configured source tip and upstream official tip when using a fork. Panel APIs: GET/POST `/api/version-source` (POST admin-only). Per-fork release caches live beside the legacy `github-releases-cache.json` for the official repo.
-
-### Fixed
-
-- **Version Management fetch errors**: browser "Failed to fetch" on version checks and maintenance polls now surfaces actionable network/auth/service messages instead of opaque text.
-
-### Added
-
-- **cpn.newstargeted.com landing**: product introduction homepage under `site/` while `/install.sh`, `/upgrade.sh`, and `/cpn-bootstrap-lib.sh` keep serving bootstrap scripts. Sync with `scripts/sync-cpn-host-site.sh`; deploy notes in [HOST-SITE.md](HOST-SITE.md).
-
-- **CLI MFA management**: `cpn totp status|disable|clear --username <user>` and `cpn mfa clear --username <user> --yes` clear TOTP and/or passkeys (plus pending WebAuthn ceremonies) from SSH without printing secrets. Passkey clear alone does not remove TOTP; use these when `/login/2fa` Authenticator code should stop after password sign-in.
-
-### Fixed
-
-- **Activity Board / dashboard hang on EL10**: when `firewalld` is installed but inactive, `firewall-cmd` can block forever on D-Bus (`Waiting on dbus connection...`). That blocked the whole `/dashboard` render after Activity Board started calling `firewall_status()`. Probes now check `systemctl is-active firewalld` first and apply a short timeout to host command helpers. Package `%posttrans` also `try-restart`s `cpn-installer` so RPM upgrades do not leave a deleted-inode process serving old UI.
-
 ### Added
 
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.
@@ -165,6 +138,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
+
+## [0.2.6-alpha.40] - 22/09/2026
+
+TOTP enroll dark-mode and backup-code Copy/Download, MFA enroll return to Modify User, sidebar ACL with owner markdown error messages, Version Management fork update source, Host packages sidebar cleanup, and related CI/fixups since `v0.2.6-alpha.39` (Cargo `0.2.6-alpha.40`).
+
+### Added
+
+- **Version Management fork source**: operators can point upgrades at a GitHub fork via `/var/lib/cpn/update-source.json` (mode 600) and optional token at `/var/lib/cpn/secrets/github-token`. Default remains `Control-Panel-Network/CPN-Control-Panel-Network`. Version check shows configured source tip and upstream official tip when using a fork. Panel APIs: GET/POST `/api/version-source` (POST admin-only). Per-fork release caches live beside the legacy `github-releases-cache.json` for the official repo.
+- **Sidebar ACL visibility**: plans and ACL control which left-sidebar items a user can see or open; unauthorized deep links return 403. CPN owner can edit forbidden/error copy from Settings with a markdown editor.
+- **cpn.newstargeted.com landing**: product introduction homepage under `site/` while `/install.sh`, `/upgrade.sh`, and `/cpn-bootstrap-lib.sh` keep serving bootstrap scripts. Sync with `scripts/sync-cpn-host-site.sh`; deploy notes in [HOST-SITE.md](HOST-SITE.md).
+- **CLI MFA management**: `cpn totp status|disable|clear --username <user>` and `cpn mfa clear --username <user> --yes` clear TOTP and/or passkeys (plus pending WebAuthn ceremonies) from SSH without printing secrets. Passkey clear alone does not remove TOTP; use these when `/login/2fa` Authenticator code should stop after password sign-in.
+
+### Changed
+
+- **CLI destructive confirmation**: interactive prompts for `cpn mfa clear`, `cpn totp clear|disable`, `cpn passkey clear`, and other shared `confirm_delete` callers accept case-insensitive `yes`/`y` (and clear affirmatives like `yeah`/`ok`) or `no`/`n` (plus empty abort). `--yes` still skips the prompt. Previously only exact `YES` was accepted, which aborted lowercase `yes`.
+- **Plugins sidebar**: remove the separate Host packages sidebar leaf; Host packages remain under Plugins (`/plugins?view=host`) with Store-matching Installed sections.
+
+### Fixed
+
+- **Upgrade panel restart on labs**: post-upgrade verification stops orphan foreground `cpn-installer` listeners (AddrInUse) before `systemctl restart`, so a leftover `sudo cpn-installer --web` no longer fails `cpn-installer.service is not active after restart` when the package apply already succeeded.
+- **TOTP / 2FA enroll dark mode contrast**: form labels use `var(--ink)` instead of hardcoded slate; backup-codes and TOTP setup panels use theme-aware `.mfa-codes-panel` / `.mfa-totp-setup` (readable in light and dark). Applies to `/account/security/enroll-2fa` and Edit profile TOTP enrollment. Backup codes confirm adds **Copy to clipboard** (`navigator.clipboard` with `execCommand` fallback) and **Download** (`cpn-backup-codes.txt` via Blob).
+- **MFA enroll return path**: after TOTP or passkey enroll from Modify User / Edit profile, return to `/account/users/modify` so more factors can be added (dedicated `/account/security/enroll-2fa` still unlocks to `/dashboard`).
+- **Version Management fetch errors**: browser "Failed to fetch" on version checks and maintenance polls now surfaces actionable network/auth/service messages instead of opaque text.
+- **Activity Board / dashboard hang on EL10**: when `firewalld` is installed but inactive, `firewall-cmd` can block forever on D-Bus (`Waiting on dbus connection...`). That blocked the whole `/dashboard` render after Activity Board started calling `firewall_status()`. Probes now check `systemctl is-active firewalld` first and apply a short timeout to host command helpers. Package `%posttrans` also `try-restart`s `cpn-installer` so RPM upgrades do not leave a deleted-inode process serving old UI.
+
 
 ## [0.2.6-alpha.39] - 13/09/2026
 
