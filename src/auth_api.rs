@@ -452,14 +452,22 @@ pub async fn login_mfa_submit(
                 next.as_deref(),
                 options,
             )),
-        Err(error) => HttpResponse::TooManyRequests()
-            .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(
-                &payload,
-                Some(&error),
-                next.as_deref(),
-                options,
-            )),
+        Err(error) => {
+            let rate_limited = crate::account_mfa::is_mfa_rate_limit_error(&error);
+            let mut builder = if rate_limited {
+                HttpResponse::TooManyRequests()
+            } else {
+                HttpResponse::Unauthorized()
+            };
+            builder
+                .content_type("text/html; charset=utf-8")
+                .body(panel_mfa_html(
+                    &payload,
+                    Some(&error),
+                    next.as_deref(),
+                    options,
+                ))
+        }
     }
 }
 
