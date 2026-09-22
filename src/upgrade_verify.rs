@@ -82,10 +82,9 @@ fn path_is_executable(path: &str) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        return p
-            .metadata()
+        p.metadata()
             .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(unix))]
     {

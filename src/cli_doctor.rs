@@ -35,10 +35,9 @@ fn executable(path: &str) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        return p
-            .metadata()
+        p.metadata()
             .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(unix))]
     {
@@ -186,18 +185,16 @@ fn check_plugins_summary(checks: &mut Vec<Check>) {
     // Lightweight presence scan; doctor does not reinstall plugins.
     let sites_dir = paths::default_data_dir().join("sites");
     let mut plugin_roots = 0usize;
-    if sites_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&sites_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if !name.ends_with(".json") {
-                    continue;
-                }
-                let domain = name.trim_end_matches(".json");
-                let home = Path::new("/home").join(domain).join("plugins");
-                if home.is_dir() {
-                    plugin_roots += 1;
-                }
+    if let Ok(entries) = fs::read_dir(&sites_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let domain = name.trim_end_matches(".json");
+            let home = Path::new("/home").join(domain).join("plugins");
+            if home.is_dir() {
+                plugin_roots += 1;
             }
         }
     }
@@ -277,14 +274,14 @@ pub fn run(heal: bool) -> Result<(), String> {
         &mut checks,
         "cli.installer_bin",
         executable(installer),
-        format!("{installer}"),
+        installer.to_string(),
         true,
     );
     push(
         &mut checks,
         "cli.cpn_bin",
         executable(cli),
-        format!("{cli}"),
+        cli.to_string(),
         true,
     );
 
