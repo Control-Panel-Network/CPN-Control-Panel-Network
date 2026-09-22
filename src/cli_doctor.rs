@@ -265,7 +265,9 @@ pub fn run(heal: bool) -> Result<(), String> {
                 println!("heal: {note}");
             }
         }
-        println!("heal: run `hash -r` in open shells so bash forgets a deleted /usr/local/bin/cpn path");
+        println!(
+            "heal: run `hash -r` in open shells so bash forgets a deleted /usr/local/bin/cpn path"
+        );
         println!();
     }
 

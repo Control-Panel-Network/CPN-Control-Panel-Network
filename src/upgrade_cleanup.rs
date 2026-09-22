@@ -57,8 +57,9 @@ pub fn remove_local_bin_overrides() -> Vec<String> {
             if is_link {
                 match fs::remove_file(p) {
                     Ok(()) => notes.push(format!("removed local override (symlink): {path}")),
-                    Err(error) => notes
-                        .push(format!("could not remove local override {path}: {error}")),
+                    Err(error) => {
+                        notes.push(format!("could not remove local override {path}: {error}"))
+                    }
                 }
                 continue;
             }
@@ -85,10 +86,9 @@ pub fn remove_local_bin_overrides() -> Vec<String> {
                 let path = entry.path();
                 match fs::remove_file(&path) {
                     Ok(()) => notes.push(format!("removed stale local backup: {}", path.display())),
-                    Err(error) => notes.push(format!(
-                        "could not remove {}: {error}",
-                        path.display()
-                    )),
+                    Err(error) => {
+                        notes.push(format!("could not remove {}: {error}", path.display()))
+                    }
                 }
             }
         }

@@ -112,7 +112,10 @@ fn check_cli_binaries(report: &mut VerifyReport) {
         "cli.cpn_installer",
         installer_ok,
         if installer_ok {
-            format!("{} present and executable", crate::paths::UNIX_INSTALLER_BIN)
+            format!(
+                "{} present and executable",
+                crate::paths::UNIX_INSTALLER_BIN
+            )
         } else {
             format!(
                 "{} missing or not executable (reinstall RPM or run cpn-installer --repair)",
