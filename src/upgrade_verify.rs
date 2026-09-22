@@ -74,6 +74,93 @@ fn http_login_ok(port: u16) -> bool {
         .unwrap_or(false)
 }
 
+fn path_is_executable(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    if !p.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        p.metadata()
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn local_bin_override_present(name: &str) -> bool {
+    let path = format!("/usr/local/bin/{name}");
+    let p = std::path::Path::new(&path);
+    if p.exists() {
+        return true;
+    }
+    std::fs::symlink_metadata(p)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
+/// Ensure RPM CLI paths exist and warn when `/usr/local/bin` shadows them.
+fn check_cli_binaries(report: &mut VerifyReport) {
+    let installer_ok = path_is_executable(crate::paths::UNIX_INSTALLER_BIN);
+    push(
+        report,
+        "cli.cpn_installer",
+        installer_ok,
+        if installer_ok {
+            format!(
+                "{} present and executable",
+                crate::paths::UNIX_INSTALLER_BIN
+            )
+        } else {
+            format!(
+                "{} missing or not executable (reinstall RPM or run cpn-installer --repair)",
+                crate::paths::UNIX_INSTALLER_BIN
+            )
+        },
+        true,
+    );
+
+    let cpn_ok = path_is_executable(crate::paths::UNIX_CLI_BIN);
+    push(
+        report,
+        "cli.cpn",
+        cpn_ok,
+        if cpn_ok {
+            format!("{} present and executable", crate::paths::UNIX_CLI_BIN)
+        } else {
+            format!(
+                "{} missing or not executable (dnf reinstall cpn-installer, or cpn-installer --repair)",
+                crate::paths::UNIX_CLI_BIN
+            )
+        },
+        true,
+    );
+
+    let local_cpn = local_bin_override_present("cpn");
+    let local_installer = local_bin_override_present("cpn-installer");
+    if local_cpn || local_installer {
+        push(
+            report,
+            "cli.local_bin_override",
+            false,
+            "hot-deploy override under /usr/local/bin/cpn or cpn-installer still present; run cpn doctor --heal or upgrade cleanup so PATH uses /usr/bin",
+            false,
+        );
+    } else {
+        push(
+            report,
+            "cli.local_bin_override",
+            true,
+            "no /usr/local/bin/cpn override shadowing RPM binaries",
+            false,
+        );
+    }
+}
+
 fn cpn_managed_container_ids() -> Vec<String> {
     let Some(bin) = ["docker", "podman"].into_iter().find(|&candidate| {
         Command::new(candidate)
@@ -352,6 +439,8 @@ pub fn verify_after_upgrade(
         format!("GET http://127.0.0.1:{port}/login"),
         true,
     );
+
+    check_cli_binaries(&mut report);
 
     // Web server: probe only units that exist on disk. Missing optional engines
     // (httpd/caddy on OLS labs) must be skipped quietly with no systemctl stderr.

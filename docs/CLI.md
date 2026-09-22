@@ -31,6 +31,68 @@ Top-level groups:
 | `plugin` | Per-site plugin management |
 | `app` | Host applications and services |
 | `package` | Hosting packages and account assignments |
+| `doctor` | Health checks: CLI paths, panel unit, `/login`, core manifest, host/plugin summary |
+
+## Repair, upgrade, and `cpn doctor`
+
+There is **no** `cpn --repair`. Repair and upgrade belong to the installer binary:
+
+```bash
+sudo cpn-installer --upgrade          # tip package (or --to X.Y.Z); preserves accounts/sites
+sudo cpn-installer --repair           # re-apply core files from install-manifest / release
+sudo cpn-installer --repair --reset-data   # destructive: also wipes bootstrap/accounts/sites/smtp/secrets
+```
+
+What **repair** does today:
+
+- Overwrites **core packaged files** listed in `/var/lib/cpn/install-manifest.json` (installer + CLI binaries, unit files when listed).
+- Preserves accounts, bootstrap, SMTP, MFA, sites, docker volumes, and `/home` docroots unless `--reset-data`.
+- Runs post-apply cleanup and health verify (panel unit, `/login`, CLI binaries).
+- Does **not** reinstall every plugin or Host package. Use `cpn plugin` / `cpn app` / Plugins UI for those.
+
+What **upgrade** adds:
+
+- Installs a newer (or retargeted) RPM/package, refreshes CPN-managed host packages via dnf/apt when already installed, optional `--bypass` for CPN-managed Docker only.
+
+### Why `cpn --help` can say `/usr/local/bin/cpn: No such file or directory`
+
+RPM packages install `/usr/bin/cpn`. Lab hot-deploys sometimes copy binaries to `/usr/local/bin/cpn`, which can shadow PATH. If that file is later removed while bash still has it **hashed**, the shell prints exactly:
+
+```text
+-bash: /usr/local/bin/cpn: No such file or directory
+```
+
+while `cpn-installer --help` may still work from `/usr/bin`.
+
+Quick heal:
+
+```bash
+hash -r
+sudo cpn doctor --heal          # removes /usr/local/bin/cpn* overrides
+type -a cpn                     # should show /usr/bin/cpn (and/or /bin/cpn)
+cpn --help
+```
+
+If `/usr/bin/cpn` itself is missing:
+
+```bash
+sudo dnf reinstall cpn-installer
+# or
+sudo cpn-installer --repair
+```
+
+Recommended "make sure everything runs" flow:
+
+```bash
+hash -r
+sudo cpn doctor --heal
+sudo cpn-installer --upgrade
+sudo cpn-installer --repair
+cpn doctor
+cpn panel status
+```
+
+Read-only check anytime: `cpn doctor`. Heal local-bin shadows: `sudo cpn doctor --heal` then `hash -r`.
 
 ## Panel URL and status
 

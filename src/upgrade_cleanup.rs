@@ -36,6 +36,66 @@ fn removable_exact_files() -> Vec<&'static str> {
     ]
 }
 
+/// Remove broken or leftover `/usr/local/bin/cpn*` overrides and report paths.
+/// Safe to call from upgrade cleanup and `cpn doctor --heal`.
+pub fn remove_local_bin_overrides() -> Vec<String> {
+    let mut notes = Vec::new();
+    if cfg!(windows) {
+        return notes;
+    }
+    for path in ["/usr/local/bin/cpn", "/usr/local/bin/cpn-installer"] {
+        let p = Path::new(path);
+        let is_link = fs::symlink_metadata(p)
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
+        if !p.exists() && !is_link {
+            continue;
+        }
+        // Broken symlink: exists() is false but symlink metadata succeeds.
+        #[cfg(unix)]
+        {
+            if is_link {
+                match fs::remove_file(p) {
+                    Ok(()) => notes.push(format!("removed local override (symlink): {path}")),
+                    Err(error) => {
+                        notes.push(format!("could not remove local override {path}: {error}"))
+                    }
+                }
+                continue;
+            }
+        }
+        if p.exists() {
+            match fs::remove_file(p) {
+                Ok(()) => notes.push(format!("removed local override: {path}")),
+                Err(error) => {
+                    notes.push(format!("could not remove local override {path}: {error}"))
+                }
+            }
+        }
+    }
+    // Stale heal backups from earlier lab scripts (cpn.bak.<epoch>).
+    if let Ok(entries) = fs::read_dir("/usr/local/bin") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("cpn.bak.")
+                || name.starts_with("cpn-installer.bak.")
+                || name == "cpn.bak"
+                || name == "cpn-installer.bak"
+            {
+                let path = entry.path();
+                match fs::remove_file(&path) {
+                    Ok(()) => notes.push(format!("removed stale local backup: {}", path.display())),
+                    Err(error) => {
+                        notes.push(format!("could not remove {}: {error}", path.display()))
+                    }
+                }
+            }
+        }
+    }
+    notes
+}
+
 /// Allowlisted directory name prefixes under `/var/tmp` (CPN staging only).
 fn removable_var_tmp_prefixes() -> Vec<&'static str> {
     vec!["cpn-upgrade-", "cpn-gpg-", "cpn-install-", "cpn-release-"]
@@ -167,6 +227,17 @@ pub fn cleanup_stale_packaging() -> CleanupReport {
     for path in removable_exact_files() {
         remove_path(Path::new(path), &mut report);
     }
+    // Prefer RPM `/usr/bin/cpn` over hot-deploy `/usr/local/bin/cpn` shadows.
+    for note in remove_local_bin_overrides() {
+        if let Some(path) = note
+            .strip_prefix("removed local override: ")
+            .or_else(|| note.strip_prefix("removed local override (symlink): "))
+        {
+            report.removed.push(path.to_string());
+        } else {
+            report.notes.push(note);
+        }
+    }
     clean_var_tmp_staging(&mut report);
     clean_var_cache_cpn_staging(&mut report);
     clean_obsolete_webmail_code_trees(&mut report);
@@ -199,6 +270,14 @@ mod tests {
         for note in report.notes.iter().chain(report.skipped_preserved.iter()) {
             assert!(!note.contains('\u{2014}'));
             assert!(!note.contains('\u{2013}'));
+        }
+    }
+
+    #[test]
+    fn local_bin_override_helper_is_safe_on_windows() {
+        let notes = remove_local_bin_overrides();
+        if cfg!(windows) {
+            assert!(notes.is_empty());
         }
     }
 }

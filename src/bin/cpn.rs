@@ -11,6 +11,7 @@ use cpn_installer::cli_apps;
 use cpn_installer::cli_common::{
     confirm_delete, print_generated, read_password_confirmed, require_root_for_mutation,
 };
+use cpn_installer::cli_doctor;
 use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
@@ -110,6 +111,12 @@ enum Commands {
     Package {
         #[command(subcommand)]
         command: PackageCommands,
+    },
+    /// Health checks: CLI paths, panel unit, /login, core manifest, host summary
+    Doctor {
+        /// Remove stale `/usr/local/bin/cpn*` hot-deploy overrides (requires root)
+        #[arg(long)]
+        heal: bool,
     },
 }
 
@@ -279,10 +286,12 @@ fn run() -> Result<(), String> {
                 "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, ...)"
             );
             println!("package  Manage hosting packages and account assignments");
+            println!("doctor   Health checks (CLI paths, panel unit, /login, core files)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
         }
+        Commands::Doctor { heal } => cli_doctor::run(heal),
         Commands::Panel { command } => run_panel(command, require_root_for_mutation),
         Commands::Info { raw } => {
             run_panel(PanelCommands::Status { raw }, require_root_for_mutation)

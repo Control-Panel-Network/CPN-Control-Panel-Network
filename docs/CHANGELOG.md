@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`cpn doctor`**: health checks for `/usr/bin/cpn` and `/usr/bin/cpn-installer`, stale `/usr/local/bin` overrides, panel unit, `/login`, install-manifest core paths, and a host/plugin summary. Optional `sudo cpn doctor --heal` removes hot-deploy `/usr/local/bin/cpn*` overrides (then run `hash -r` in open shells).
+
+### Fixed
+
+- **Stale `/usr/local/bin/cpn` after hot-deploy cleanup**: upgrade/repair cleanup now removes `/usr/local/bin/cpn` and `cpn-installer` overrides (and `cpn.bak.*` leftovers) so PATH prefers RPM `/usr/bin`. Post-upgrade verify also checks CLI binaries. Documented in `docs/CLI.md` and `cpn-installer --help`.
+
+### Added
+
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.
 
 ### Changed

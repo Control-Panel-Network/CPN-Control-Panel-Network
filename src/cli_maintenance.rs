@@ -134,7 +134,12 @@ Notes:
   Preferred port, optional panel hostname, and port migration live under the CPN data directory (mode 0600 on Unix).
   Operator network CLI: cpn network show|set-port|set-hostname|clear-hostname|set-public-url|clear-public-url|clear-migration
   Repair overwrites only core packaged files listed in install-manifest.json under the CPN data directory.
+  Repair does NOT reinstall per-site plugins or Host packages; use cpn plugin / cpn app / the Plugins UI for those.
   Accounts, bootstrap state, SMTP secrets, and other CPN data are preserved unless --reset-data is explicitly requested.
+  Upgrade/repair cleanup removes stale /usr/local/bin/cpn and cpn-installer hot-deploy overrides so PATH uses /usr/bin.
+  After moving those overrides, run hash -r in open shells (bash may still hash a deleted /usr/local/bin/cpn path).
+  Operator health check: cpn doctor  (optional: sudo cpn doctor --heal to clear local-bin overrides).
+  Recommended fix flow when the panel is unhealthy: hash -r; sudo cpn doctor --heal; sudo cpn-installer --upgrade; sudo cpn-installer --repair; cpn doctor.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
   Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
   Upgrade may refresh already-installed CPN-managed packages (MariaDB, OpenLiteSpeed, PHP) via dnf/apt; databases and docroots are never dropped.

@@ -32,6 +32,7 @@ pub mod backups;
 pub mod blocked_passwords;
 pub mod cli_apps;
 pub mod cli_common;
+pub mod cli_doctor;
 pub mod cli_install;
 pub mod cli_maintenance;
 pub mod cli_mfa;
