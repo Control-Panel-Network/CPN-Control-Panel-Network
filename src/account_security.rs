@@ -256,7 +256,8 @@ pub fn enroll_mfa_gate_main(
 <section class="panel-card" style="max-width:640px;">
   <p class="eyebrow">SECURITY</p>
   <h1>Enable two-factor authentication</h1>
-  <p class="muted">Panel administrators must enroll TOTP (authenticator app) or a passkey before using the dashboard.</p>
+  <p class="muted">Panel administrators must enroll TOTP (authenticator app) or a passkey before using the dashboard and other operational areas.</p>
+  <p class="muted"><a href="/settings">Settings</a> (version, design, setup wizard, connect, site and error messages, log retention, and change port) stay available so you can finish panel configuration while enrollment is pending.</p>
   {notice_html}
   {error_html}
 "#
@@ -303,6 +304,14 @@ pub fn enroll_mfa_gate_main(
     body
 }
 
+/// Nav keys that remain reachable while MFA enrollment is still pending.
+///
+/// Password-change remains a hard gate for every area except the security pages.
+/// Settings hub and all settings children use `active = "settings"` in `panel_shell`.
+pub fn mfa_enrollment_allows_nav(active: &str) -> bool {
+    matches!(active, "account-security" | "settings")
+}
+
 /// If a gate applies, return (active_nav_key, title, main_html).
 pub fn security_gate_override(
     username: &str,
@@ -320,6 +329,9 @@ pub fn security_gate_override(
         ));
     }
     if needs_mfa_enrollment(username) {
+        if mfa_enrollment_allows_nav(active) {
+            return None;
+        }
         return Some((
             "account-security",
             "Enable 2FA",
@@ -374,8 +386,84 @@ mod tests {
     }
 
     #[test]
+    fn password_change_still_gates_settings() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            let created = create_account(
+                "pwdgate",
+                None,
+                true,
+                "pwdgate@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            assert!(created.generated_password.is_some());
+            assert!(must_change_password("pwdgate"));
+            let gated = security_gate_override("pwdgate", "settings");
+            assert!(
+                gated.is_some(),
+                "forced password change must still block Settings"
+            );
+            assert_eq!(gated.unwrap().1, "Change password");
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
+    }
+
+    #[test]
+    fn mfa_gate_allows_settings_but_not_dashboard() {
+        assert!(mfa_enrollment_allows_nav("settings"));
+        assert!(mfa_enrollment_allows_nav("account-security"));
+        assert!(!mfa_enrollment_allows_nav("dashboard"));
+        assert!(!mfa_enrollment_allows_nav("websites"));
+        assert!(!mfa_enrollment_allows_nav("server"));
+    }
+
+    #[test]
+    fn security_gate_skips_settings_while_mfa_pending() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            let created = create_account(
+                "settingsgate",
+                None,
+                true,
+                "settingsgate@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            assert!(created.generated_password.is_some());
+            clear_must_change_password("settingsgate").unwrap();
+            assert!(needs_mfa_enrollment("settingsgate"));
+            assert!(
+                security_gate_override("settingsgate", "settings").is_none(),
+                "Settings must stay open while MFA enrollment is pending"
+            );
+            let dashboard = security_gate_override("settingsgate", "dashboard");
+            assert!(
+                dashboard.is_some(),
+                "Dashboard must stay behind the MFA enroll gate"
+            );
+            assert_eq!(dashboard.unwrap().1, "Enable 2FA");
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
+    }
+
+    #[test]
     fn enroll_gate_offers_passkey_alongside_totp() {
         let start = enroll_mfa_gate_main(None, None, None, None, None);
+        assert!(
+            start.contains("href=\"/settings\""),
+            "enroll page must link to Settings while MFA is pending"
+        );
         assert!(
             start.contains("Register passkey"),
             "start view must offer passkey enrollment"
