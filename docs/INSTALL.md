@@ -32,13 +32,13 @@ Hosts without curl: `wget -O - URL | bash`. Optional process substitution still 
 ## Pin a git ref or Release (`-b` / `--ref`)
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.42
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.43
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b 1.0.0-dev
 curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- --branch v0.2.6-alpha.22
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --ref v0.2.6-alpha.21 --bypass
 ```
 
-Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.42`.
+Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.43`.
 
 Behavior:
 
