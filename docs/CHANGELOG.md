@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Upgrade self-kill / false maintenance failure**: `stop_orphan_panel_listeners` no longer `pkill -x cpn-installer` the running CLI `--upgrade` process (lab symptom: `Terminated` / `Terminert`, unit left inactive, `upgrade.sh` "Panel maintenance was started but exited with an error"). Orphan cleanup now terminates other `cpn-installer` PIDs only. `upgrade.sh` heals the unit after maintenance and treats active `/login` as success when an older binary still exits early. Post-upgrade verify waits for the unit and HTTP before failing.
+
 ### Added
 
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.
