@@ -186,8 +186,11 @@ fn origin_url(scheme: &str, host_no_port: &str, port: Option<&str>) -> Result<Ur
 /// for IP literals (builder error: "The configuration was invalid"). Loopback
 /// Hosts (`127.0.0.1`, `::1`, `localhost`) therefore use RP ID `localhost`, and
 /// both `http://localhost:PORT` and `http://127.0.0.1:PORT` are allowed origins
-/// so lab access via either URL can verify ceremonies. Prefer `localhost` in the
-/// browser for create/get; API begin-register works for either Host header.
+/// so lab access via either URL can verify ceremonies. Browsers still require the
+/// page host to match the RP ID for `credentials.get/create`, so the client JS
+/// redirects `127.0.0.1` to `localhost` before the ceremony. Prefer `localhost` in
+/// the browser; API begin-register works for either Host header. When
+/// `panel_public_url` is set (NAT labs), that origin is also allowed.
 pub fn webauthn_for_request(
     host_header: Option<&str>,
     https: bool,
@@ -223,6 +226,23 @@ pub fn webauthn_for_request(
                 && alt != primary
             {
                 builder = builder.append_allowed_origin(&alt);
+            }
+        }
+    }
+    // NAT / reverse-proxy labs: also allow the configured public panel URL origin.
+    if let Some(public) = crate::panel_public_url::load_panel_public_url()
+        && let Ok(public_url) = Url::parse(&public)
+    {
+        builder = builder.append_allowed_origin(&public_url);
+        if let Some(host_str) = public_url.host_str()
+            && is_loopback_host(host_str)
+        {
+            let pub_port = public_url.port().map(|p| p.to_string());
+            let pub_scheme = public_url.scheme();
+            for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
+                if let Ok(alt) = origin_url(pub_scheme, alt_host, pub_port.as_deref()) {
+                    builder = builder.append_allowed_origin(&alt);
+                }
             }
         }
     }
@@ -474,6 +494,16 @@ function cpnClearPasskeyError(){
     status.style.fontWeight='';
   }
 }
+function cpnPreferLocalhostForPasskeys(){
+  const h=String((location&&location.hostname)||'');
+  if(h==='127.0.0.1'||h==='[::1]'||h==='::1'){
+    const port=location.port?(':'+location.port):'';
+    const dest='http://localhost'+port+location.pathname+location.search+location.hash;
+    try{ location.replace(dest); }catch(e){ location.href=dest; }
+    return true;
+  }
+  return false;
+}
 function cpnPasskeyUserMessage(err,kind){
   const name=String((err&&err.name)||'');
   const raw=String((err&&err.message)||err||'');
@@ -482,7 +512,7 @@ function cpnPasskeyUserMessage(err,kind){
     return 'This browser does not support passkeys.';
   }
   if(/open this page as http:\/\/localhost/i.test(raw) || /not 127\.0\.0\.1/i.test(raw)){
-    return cpnStripUrls(raw) || 'Open this page as http://localhost (not 127.0.0.1) for passkeys.';
+    return cpnStripUrls(raw) || 'Open this page as http://localhost with the same port for passkeys.';
   }
   if(/no passkey is registered/i.test(raw) || /no passkeys registered/i.test(raw)){
     return 'No passkey is registered for this account.';
@@ -503,7 +533,7 @@ function cpnPasskeyUserMessage(err,kind){
       : 'This passkey is already registered.';
   }
   if(name==='SecurityError' || /relying party|rp id|securityerror/i.test(lower)){
-    return 'Passkey could not run for this site address. Prefer http://localhost with the same port, or your panel hostname.';
+    return 'Passkey could not run for this site address. Use http://localhost with the same port (127.0.0.1 is redirected automatically), or your panel hostname.';
   }
   if(/incorrect passkey|not registered|different account|unknown credential/i.test(lower)){
     return cpnStripUrls(raw) || 'Incorrect passkey. Try again or use another sign-in method.';
@@ -518,10 +548,7 @@ async function cpnRegisterPasskey(){
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     // Browsers bind RP ID to the page host; use localhost (not 127.0.0.1) for create().
-    if(location.hostname==='127.0.0.1'||location.hostname==='[::1]'||location.hostname==='::1'){
-      const port=location.port?(':'+location.port):'';
-      throw new Error('Open this page as http://localhost'+port+' (not 127.0.0.1) to register a passkey.');
-    }
+    if(cpnPreferLocalhostForPasskeys()) return;
     if(status) status.textContent='Starting registration...';
     const label=(document.getElementById('cpn-passkey-label')||{}).value||'';
     const next=cpnPasskeyRegisterNext();
@@ -576,6 +603,7 @@ async function cpnLoginPasskey(){
       throw new Error('Panel services are still starting. Sign-in is disabled until Web server and MariaDB are running.');
     }
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
+    if(cpnPreferLocalhostForPasskeys()) return;
     if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
     const start=await cpnJson('/login/passkey/start',{});
     const pk=await cpnDecodeGetOptions(start.publicKey);
@@ -596,6 +624,7 @@ async function cpnMfaPasskey(){
   try{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
+    if(cpnPreferLocalhostForPasskeys()) return;
     if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
     const start=await cpnJson('/login/2fa/passkey/start',{});
     const pk=await cpnDecodeGetOptions(start.publicKey);
@@ -646,6 +675,14 @@ mod tests {
             script.contains("function cpnMfaPasskey"),
             "2FA page must offer passkey assertion"
         );
+        assert!(
+            script.contains("function cpnPreferLocalhostForPasskeys"),
+            "passkey ceremonies must redirect 127.0.0.1 to localhost"
+        );
+        assert!(
+            script.contains("location.replace(dest)"),
+            "localhost redirect must replace the current page"
+        );
     }
 
     #[test]
@@ -662,6 +699,37 @@ mod tests {
             origins.iter().any(|u| u.as_str().contains("localhost")),
             "expected localhost origin among {origins:?}"
         );
+    }
+
+    #[test]
+    fn nat_public_port_host_builds_webauthn() {
+        let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2091"), false)
+            .expect("builder should accept NAT host port");
+        assert_eq!(rp_id, "localhost");
+        let origins = wan.get_allowed_origins();
+        assert!(
+            origins
+                .iter()
+                .any(|u| u.as_str().contains("127.0.0.1:2091") || u.as_str().contains("localhost")),
+            "expected loopback origin for public port among {origins:?}"
+        );
+    }
+
+    #[test]
+    fn public_url_origin_appended_when_configured() {
+        use crate::account::with_test_data_dir;
+        use crate::panel_public_url::save_panel_public_url;
+        with_test_data_dir(|| {
+            save_panel_public_url("http://127.0.0.1:2091").expect("save public url");
+            let (wan, rp_id) =
+                webauthn_for_request(Some("127.0.0.1:2087"), false).expect("webauthn");
+            assert_eq!(rp_id, "localhost");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins.iter().any(|u| u.as_str().contains(":2091")),
+                "panel_public_url origin should be allowed among {origins:?}"
+            );
+        });
     }
 
     #[test]

@@ -176,8 +176,67 @@ fn decode_hex_key32(hex: &str) -> Result<[u8; 32], String> {
         .map_err(|_| "Corrupt MFA encryption key length".into())
 }
 
+/// True when any MFA record on disk looks encrypted (TOTP enabled with ciphertext).
+/// Used to avoid silently minting a new AES key over orphan ciphertext after upgrade mishaps.
+fn mfa_dir_has_encrypted_records() -> bool {
+    let Ok(entries) = fs::read_dir(mfa_dir()) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.starts_with("pending-")
+            || name.starts_with("once-codes-")
+            || name == "rate-limits.json"
+        {
+            continue;
+        }
+        let Ok(raw) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+            continue;
+        };
+        let Some(obj) = value.as_object() else {
+            continue;
+        };
+        let enabled = obj
+            .get("totp_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let enc = obj
+            .get("totp_secret_enc")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if enabled && !enc.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
+/// Operator-facing recovery when ciphertext cannot be opened (missing/rotated key).
+pub fn mfa_decrypt_recovery_hint(username: &str) -> String {
+    let user = if username.trim().is_empty() {
+        "USERNAME".to_string()
+    } else {
+        username.trim().to_string()
+    };
+    format!(
+        "MFA secret could not be read (encryption key missing or changed). An operator can restore /var/lib/cpn/mfa/mfa-encryption.key from backup, or run: sudo cpn mfa clear --username {user} --yes, then sign in and re-enroll MFA."
+    )
+}
+
 /// Load the per-install AES-256 key, or generate and persist one (mode 600).
 /// Unique on every fresh data dir; never a committed default.
+/// Never mint a new key when encrypted MFA records already exist (would brick TOTP).
 fn load_or_create_mfa_key() -> Result<[u8; 32], String> {
     let path = mfa_key_path();
     if path.is_file() {
@@ -188,16 +247,27 @@ fn load_or_create_mfa_key() -> Result<[u8; 32], String> {
                 .try_into()
                 .map_err(|_| "Corrupt MFA encryption key length".into());
         }
-        // Legacy installs stored 64 hex chars; migrate to raw 32 bytes.
+        // Legacy installs stored 64 hex chars; migrate to raw 32 bytes (same key material).
         if let Ok(text) = std::str::from_utf8(&raw) {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
                 let key = decode_hex_key32(trimmed)?;
+                // Keep a hex backup before rewriting so upgrades never lose the prior form.
+                let bak = mfa_dir().join("mfa-encryption.key.hexbak");
+                if !bak.is_file() {
+                    let _ = write_secret_file(&bak, trimmed.as_bytes());
+                }
                 write_secret_file(&path, &key)?;
                 return Ok(key);
             }
         }
         return Err("Corrupt MFA encryption key on disk".into());
+    }
+    if mfa_dir_has_encrypted_records() {
+        return Err(
+            "MFA encryption key is missing but encrypted MFA records exist. Restore mfa-encryption.key or clear MFA for affected accounts."
+                .into(),
+        );
     }
     let key: [u8; 32] = rand::rng().random();
     write_secret_file(&path, &key)?;
@@ -233,6 +303,19 @@ fn decrypt_secret(enc_b64: &str, nonce_b64: &str) -> Result<String, String> {
         .decrypt(&nonce, ciphertext.as_ref())
         .map_err(|_| "Could not decrypt TOTP secret".to_string())?;
     String::from_utf8(plain).map_err(|_| "Invalid TOTP secret encoding".into())
+}
+
+/// Normalize authenticator app codes: strip whitespace only (keep 6 digits).
+fn normalize_totp_code(code: &str) -> String {
+    code.chars().filter(|ch| !ch.is_whitespace()).collect()
+}
+
+/// Normalize backup codes: alphanumeric only, uppercase (accepts with or without dashes).
+fn normalize_backup_code(code: &str) -> String {
+    code.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_uppercase())
+        .collect()
 }
 
 fn empty_record(username: &str) -> MfaRecord {
@@ -313,13 +396,21 @@ fn generate_backup_codes() -> Vec<String> {
 
 fn hash_backup_code(code: &str) -> (String, String) {
     let salt = new_password_salt();
-    let normalized = code.trim().to_uppercase().replace(' ', "");
+    let normalized = normalize_backup_code(code);
     (hash_password(&normalized, &salt), salt)
 }
 
 fn verify_backup_code(code: &str, hash: &str, salt: &str) -> bool {
-    let normalized = code.trim().to_uppercase().replace(' ', "");
-    verify_password(&normalized, salt, hash)
+    let normalized = normalize_backup_code(code);
+    if !normalized.is_empty() && verify_password(&normalized, salt, hash) {
+        return true;
+    }
+    // Legacy hashes kept dashes (only spaces were stripped).
+    let legacy = code.trim().to_uppercase().replace(' ', "");
+    if !legacy.is_empty() && legacy != normalized {
+        return verify_password(&legacy, salt, hash);
+    }
+    false
 }
 
 /// Start TOTP enrollment: returns (secret_base32, otpauth_uri, qr_svg).
@@ -544,16 +635,29 @@ fn consume_backup_code(username: &str, code: &str) -> bool {
     persist_backup_code_lists(&path, hashes, salts).is_ok()
 }
 
+/// True when an MFA verify error is a rate-limit lockout (HTTP 429), not a decrypt/config fault.
+pub fn is_mfa_rate_limit_error(message: &str) -> bool {
+    message.contains("Too many MFA attempts")
+}
+
 /// Verify TOTP or a single-use backup code. Updates rate limit on failure.
+/// Decrypt/key failures return a clear Err (never silently as "invalid code").
 pub fn verify_mfa_challenge(username: &str, code_raw: &str) -> Result<bool, String> {
     check_rate_limit(username)?;
     let record = load_mfa(username);
     if !record.totp_enabled {
         return Ok(true);
     }
-    let secret_b32 = decrypt_secret(&record.totp_secret_enc, &record.totp_nonce)?;
-    let secret = decode_totp_secret(&secret_b32)?;
-    if verify_totp_code(&secret, code_raw, now_unix()) {
+    let secret_b32 = match decrypt_secret(&record.totp_secret_enc, &record.totp_nonce) {
+        Ok(secret) => secret,
+        Err(_) => return Err(mfa_decrypt_recovery_hint(username)),
+    };
+    let secret = match decode_totp_secret(&secret_b32) {
+        Ok(secret) => secret,
+        Err(_) => return Err(mfa_decrypt_recovery_hint(username)),
+    };
+    let totp_code = normalize_totp_code(code_raw);
+    if verify_totp_code(&secret, &totp_code, now_unix()) {
         clear_rate_limit(username);
         return Ok(true);
     }
@@ -680,5 +784,65 @@ mod tests {
         });
         let key_b = with_test_data_dir(|| load_or_create_mfa_key().unwrap());
         assert_ne!(key_a, key_b);
+    }
+
+    #[test]
+    fn backup_codes_accept_with_or_without_dashes() {
+        with_test_data_dir(|| {
+            let user = "dashuser";
+            let (secret_b32, _uri, _svg) = begin_totp_enroll(user).unwrap();
+            let secret = decode_totp_secret(&secret_b32).unwrap();
+            let code = format!("{:06}", totp_code_at(&secret, now_unix()));
+            let backups = confirm_totp_enroll(user, &code).unwrap();
+            let with_dash = &backups[0];
+            let without_dash = with_dash.replace('-', "");
+            assert!(verify_mfa_challenge(user, without_dash.as_str()).unwrap());
+            // Consumed once; dashed form of same code must also fail afterward.
+            assert!(!verify_mfa_challenge(user, with_dash).unwrap());
+        });
+    }
+
+    #[test]
+    fn totp_codes_accept_internal_spaces() {
+        with_test_data_dir(|| {
+            let user = "spaceuser";
+            let (secret_b32, _uri, _svg) = begin_totp_enroll(user).unwrap();
+            let secret = decode_totp_secret(&secret_b32).unwrap();
+            let digits = format!("{:06}", totp_code_at(&secret, now_unix()));
+            confirm_totp_enroll(user, &digits).unwrap();
+            let digits2 = format!("{:06}", totp_code_at(&secret, now_unix()));
+            let spaced = format!("{} {}", &digits2[..3], &digits2[3..]);
+            assert!(verify_mfa_challenge(user, &spaced).unwrap());
+        });
+    }
+
+    #[test]
+    fn missing_key_with_ciphertext_does_not_mint_new_key() {
+        with_test_data_dir(|| {
+            let user = "keyloss";
+            let (secret_b32, _uri, _svg) = begin_totp_enroll(user).unwrap();
+            let secret = decode_totp_secret(&secret_b32).unwrap();
+            let code = format!("{:06}", totp_code_at(&secret, now_unix()));
+            confirm_totp_enroll(user, &code).unwrap();
+            fs::remove_file(mfa_key_path()).unwrap();
+            let err = verify_mfa_challenge(user, "123456").unwrap_err();
+            assert!(
+                err.contains("encryption key") || err.contains("mfa clear"),
+                "expected recovery hint, got: {err}"
+            );
+            assert!(
+                !mfa_key_path().is_file(),
+                "must not mint a new key over existing ciphertext"
+            );
+        });
+    }
+
+    #[test]
+    fn decrypt_failure_is_not_rate_limit_error() {
+        let hint = mfa_decrypt_recovery_hint("cpnowner");
+        assert!(!is_mfa_rate_limit_error(&hint));
+        assert!(is_mfa_rate_limit_error(
+            "Too many MFA attempts. Try again in 30 seconds."
+        ));
     }
 }
