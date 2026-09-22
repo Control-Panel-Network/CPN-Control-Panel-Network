@@ -86,7 +86,7 @@
     <section class="section" id="install" aria-labelledby="install-title">
       <h2 id="install-title">Install and upgrade</h2>
       <p class="lede">
-        Official one-liners hit this host first, then fall back to GitHub raw on <code>stable</code>. Scripts stay at plain URLs so <code>curl -fsSL</code> keeps working.
+        Prefer these short <code>curl -fsSL</code> pipes against this host. Scripts stay at plain URLs. Use GitHub raw only when the site is down (see fallback below).
       </p>
 
       <div class="install-block">
@@ -95,7 +95,7 @@
           <span>Run as root or with sudo available</span>
         </div>
         <div class="command-row">
-          <pre id="cmd-install">bash &lt;(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)</pre>
+          <pre id="cmd-install">curl -fsSL https://cpn.newstargeted.com/install.sh | bash</pre>
           <button type="button" class="copy-btn" data-copy-target="cmd-install">Copy</button>
         </div>
       </div>
@@ -106,7 +106,7 @@
           <span>Package upgrade, then auto panel maintenance when installed</span>
         </div>
         <div class="command-row">
-          <pre id="cmd-upgrade">bash &lt;(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)</pre>
+          <pre id="cmd-upgrade">curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash</pre>
           <button type="button" class="copy-btn" data-copy-target="cmd-upgrade">Copy</button>
         </div>
       </div>
@@ -117,10 +117,35 @@
           <span><code>-b</code> / <code>--ref</code> example</span>
         </div>
         <div class="command-row">
-          <pre id="cmd-pin">bash &lt;(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.39</pre>
+          <pre id="cmd-pin">curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.41</pre>
           <button type="button" class="copy-btn" data-copy-target="cmd-pin">Copy</button>
         </div>
       </div>
+
+      <details class="fallback-details">
+        <summary>Fallback if the site is down</summary>
+        <p class="fallback-note">
+          GitHub raw on <code>stable</code>. Hosts without curl can use <code>wget -O - URL | bash</code> the same way.
+        </p>
+        <div class="install-block">
+          <div class="install-label">
+            <strong>Install (GitHub raw)</strong>
+          </div>
+          <div class="command-row">
+            <pre id="cmd-install-fallback">curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh | bash</pre>
+            <button type="button" class="copy-btn" data-copy-target="cmd-install-fallback">Copy</button>
+          </div>
+        </div>
+        <div class="install-block">
+          <div class="install-label">
+            <strong>Upgrade (GitHub raw)</strong>
+          </div>
+          <div class="command-row">
+            <pre id="cmd-upgrade-fallback">curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh | bash</pre>
+            <button type="button" class="copy-btn" data-copy-target="cmd-upgrade-fallback">Copy</button>
+          </div>
+        </div>
+      </details>
 
       <ul class="script-links">
         <li><a href="/install.sh">/install.sh</a></li>

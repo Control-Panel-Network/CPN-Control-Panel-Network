@@ -370,6 +370,35 @@ a:hover {
   color: var(--teal);
 }
 
+.fallback-details {
+  margin-top: 1.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.fallback-details summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: var(--paper);
+}
+
+.fallback-details[open] summary {
+  margin-bottom: 0.65rem;
+}
+
+.fallback-note {
+  margin: 0 0 0.25rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.fallback-details .install-block {
+  margin-top: 1.1rem;
+}
+
 .script-links {
   display: flex;
   flex-wrap: wrap;

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: install the latest matching release package.
-# Official one-liner (asks for sudo automatically; News Targeted host, then GitHub raw fallback):
-#   bash <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+# Preferred one-liner:
+#   curl -fsSL https://cpn.newstargeted.com/install.sh | bash
+# Fallback if the host is down:
+#   curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh | bash
 #
 # Env:
 #   CPN_RELEASE_TAG          pin a Release tag (example: v0.2.6-alpha.22); default: newest non-draft release
@@ -11,7 +13,7 @@
 #   CPN_GITHUB_REPO          owner/name (default: Control-Panel-Network/CPN-Control-Panel-Network)
 #   CPN_REQUIRE_GPG          1 (default) require SHA256SUMS.asc + matching fingerprint
 #   CPN_ALLOW_UNSIGNED       1 allow missing GPG assets (lab only; not for production)
-# CLI: -b|--branch|--ref REF  same as CPN_BRANCH (example: bash <(curl -fsSL .../install.sh) -b 1.0.0-dev)
+# CLI: -b|--branch|--ref REF  same as CPN_BRANCH (example: curl -fsSL .../install.sh | bash -s -- -b 1.0.0-dev)
 set -euo pipefail
 
 CPN_GITHUB_REPO="${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}"
