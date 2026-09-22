@@ -23,7 +23,13 @@
 On a supported Linux guest (the script requests `sudo` automatically when needed):
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+curl -fsSL https://cpn.newstargeted.com/install.sh | bash
+```
+
+If the host is down, use GitHub raw:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh | bash
 ```
 
 Then start the installer:
@@ -36,12 +42,18 @@ sudo cpn-installer --cli    # terminal wizard
 
 SSH tunnel for remote hosts: `ssh -L 2087:127.0.0.1:2087 root@your-server`, then open the URL printed by `--web`.
 
-Pins (`-b` / `--ref`), GitHub raw URLs, `--bypass`, env vars, and retag notes: **[docs/INSTALL.md](docs/INSTALL.md)**.
+Pins (`-b` / `--ref`), wget hosts, `--bypass`, env vars, and retag notes: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Upgrade
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
+```
+
+Pin tip (example):
+
+```bash
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.41
 ```
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).

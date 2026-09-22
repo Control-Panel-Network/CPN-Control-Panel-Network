@@ -2,33 +2,43 @@
 
 CPN is **alpha-only** for now. Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
 
-## Preferred one-liners (host, then GitHub raw)
+## Preferred one-liners
 
-Use `bash` (or `sh`) with process substitution. Arguments after `<(...)` are passed to the script (`$1`, `$2`, ...).
+Short pipes against `cpn.newstargeted.com` are the default. GitHub raw is only for when the site is down; wget is for hosts without curl. Those do not need to be in the primary command.
 
 ### Install (newest published Release with packages)
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/install.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh || wget -O - https://cpn.newstargeted.com/install.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh)
+curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 ```
 
 ### Upgrade (existing `cpn-installer`)
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh || wget -O - https://cpn.newstargeted.com/upgrade.sh || wget -O - https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 ```
 
 `upgrade.sh` upgrades the package, then **automatically runs** `cpn-installer --upgrade` when a panel install is detected. Repo-root `preUpgrade.sh` is a GitHub alias of the same script.
 
-Use `curl -fsSL` so a down or non-200 host fails and the next URL runs.
+### Fallback if the site is down
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh | bash
+```
+
+Hosts without curl: `wget -O - URL | bash`. Optional process substitution still works when you prefer `bash <(curl -fsSL URL)` (and args after `<(...)`).
 
 ## Pin a git ref or Release (`-b` / `--ref`)
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b 1.0.0-dev
-bash <(curl -fsSL https://cpn.newstargeted.com/install.sh) --branch v0.2.6-alpha.22
-bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) --ref v0.2.6-alpha.21 --bypass
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.41
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b 1.0.0-dev
+curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- --branch v0.2.6-alpha.22
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --ref v0.2.6-alpha.21 --bypass
 ```
+
+Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.41`.
 
 Behavior:
 
@@ -96,9 +106,9 @@ git branch v1.0.0-dev 1.0.0-dev && git push -u origin v1.0.0-dev
 Opt-in only. Refreshes CPN-managed compose under `/var/lib/cpn/docker` and containers labeled `com.cpn.managed=1`. Preserves volumes. Does not touch unlabeled user containers.
 
 ```bash
-bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) --bypass
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --bypass
 # or
-CPN_UPGRADE_BYPASS=1 bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh)
+CPN_UPGRADE_BYPASS=1 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 # or after package tip is installed:
 sudo cpn-installer --upgrade --bypass
 ```

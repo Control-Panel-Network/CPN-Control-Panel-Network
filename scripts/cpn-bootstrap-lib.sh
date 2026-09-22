@@ -45,8 +45,8 @@ Raw script URLs (github.com/.../<ref>/upgrade.sh is not a raw file URL):
   https://raw.githubusercontent.com/${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}/<ref>/scripts/upgrade.sh
 
 Examples:
-  bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b 1.0.0-dev
-  bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) --bypass
+  curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b 1.0.0-dev
+  curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --bypass
 EOF
         else
           cat <<EOF
@@ -64,7 +64,7 @@ Raw script URLs (github.com/.../<ref>/install.sh is not a raw file URL):
   https://raw.githubusercontent.com/${CPN_GITHUB_REPO:-Control-Panel-Network/CPN-Control-Panel-Network}/<ref>/scripts/install.sh
 
 Example:
-  bash <(curl -fsSL https://cpn.newstargeted.com/install.sh) -b 1.0.0-dev
+  curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- -b 1.0.0-dev
 EOF
         fi
         exit 0

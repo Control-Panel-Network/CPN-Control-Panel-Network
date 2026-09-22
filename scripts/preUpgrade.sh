@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # CPN Control Panel Network: upgrade cpn-installer from GitHub Releases.
-# One-liner: bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh || curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh)
+# Preferred: curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
+# Fallback:  curl -fsSL https://raw.githubusercontent.com/Control-Panel-Network/CPN-Control-Panel-Network/stable/scripts/upgrade.sh | bash
 # Alias: repo-root / scripts preUpgrade.sh. Shared helpers: scripts/cpn-bootstrap-lib.sh
 # Env/CLI: CPN_RELEASE_TAG, CPN_BRANCH, -b/--ref, --bypass (see cpn-bootstrap-lib.sh --help via upgrade.sh --help)
 set -euo pipefail
