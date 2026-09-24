@@ -523,7 +523,8 @@ mod tests {
             "backup codes must render in theme-aware panel"
         );
         assert!(
-            !done.contains("Register with Windows Hello") && !done.contains("Register security key"),
+            !done.contains("Register with Windows Hello")
+                && !done.contains("Register security key"),
             "backup-codes view is TOTP-complete; no passkey CTA needed"
         );
     }

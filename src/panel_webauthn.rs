@@ -484,7 +484,7 @@ pub fn finish_authentication(
 #[cfg(test)]
 mod tests {
     use super::{
-        start_authentication, start_registration, webauthn_for_request, RegisterAuthenticatorKind,
+        RegisterAuthenticatorKind, start_authentication, start_registration, webauthn_for_request,
     };
     use crate::account::with_test_data_dir;
 
@@ -622,12 +622,9 @@ mod tests {
         with_test_data_dir(|| {
             let (webauthn, _) =
                 webauthn_for_request(Some("localhost:2091"), false).expect("webauthn");
-            let (_, challenge) = start_registration(
-                &webauthn,
-                "cpnowner",
-                RegisterAuthenticatorKind::Platform,
-            )
-            .expect("platform registration should start");
+            let (_, challenge) =
+                start_registration(&webauthn, "cpnowner", RegisterAuthenticatorKind::Platform)
+                    .expect("platform registration should start");
             let json = serde_json::to_value(challenge).expect("challenge JSON");
             let pk = json
                 .get("publicKey")

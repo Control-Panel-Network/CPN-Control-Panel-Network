@@ -10,9 +10,8 @@ use crate::panel_session::{
     verify_mfa_pending_token,
 };
 use crate::panel_webauthn::{
-    finish_authentication, finish_registration, start_authentication,
+    RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
     start_authentication_for_user, start_registration, webauthn_for_request,
-    RegisterAuthenticatorKind,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use serde::Deserialize;
