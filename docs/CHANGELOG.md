@@ -19,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Version Management UI post-upgrade reconnect**: UI package upgrade/repair no longer calls `systemctl stop` on the live MainPID (that left the unit inactive and the browser on ERR_CONNECTION_RESET / "Waiting for panel after restart"). After a successful apply the panel schedules a detached reload (`systemd-run` / nohup), marks maintenance completed first, and the Version page polls the same browser origin (`localhost` vs `127.0.0.1`) until `/login` is back with a clear success or timeout message.
-
 - **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk** (Spam role), **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
 
 ### Added
@@ -143,11 +141,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.47] - 24/09/2026
 
-Single Register passkey button after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
+Version UI self-stop / reconnect fix (#302) and single Register passkey button (#303) after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
 
 ### Fixed
 
-- **Passkey enroll UX**: restore one **Register passkey** button on enroll-2fa and Modify User (no Windows Hello vs security-key split). Registration uses one presence-only ceremony (no CredProtect UV-required, no required resident key, no platform UV-required passkey path that steered Edge into Microsoft Password Manager). Client strips `hints` for a unified OS/browser picker; on `NotSupportedError` it silently retries with a cross-platform attachment hint. Status text is **Waiting for authenticator...**.
+- **Version Management UI post-upgrade reconnect** (#302): UI package upgrade/repair no longer calls `systemctl stop` on the live MainPID (that left the unit inactive and the browser on ERR_CONNECTION_RESET / "Waiting for panel after restart"). After a successful apply the panel schedules a detached reload (`systemd-run` / nohup), marks maintenance completed first, and the Version page polls the same browser origin (`localhost` vs `127.0.0.1`) until `/login` is back with a clear success or timeout message.
+- **Passkey enroll UX** (#303): restore one **Register passkey** button on enroll-2fa and Modify User (no Windows Hello vs security-key split). Registration uses one presence-only ceremony (no CredProtect UV-required, no required resident key, no platform UV-required passkey path that steered Edge into Microsoft Password Manager). Client strips `hints` for a unified OS/browser picker; on `NotSupportedError` it silently retries with a cross-platform attachment hint. Status text is **Waiting for authenticator...**.
 
 ## [0.2.6-alpha.46] - 24/09/2026
 
