@@ -151,14 +151,15 @@ pub fn run(opts: UninstallOptions) -> i32 {
         return 1;
     }
 
-    if opts.purge_sites && !sites.is_empty() {
-        if let Err(error) = confirm_delete(
+    if opts.purge_sites
+        && !sites.is_empty()
+        && let Err(error) = confirm_delete(
             "SECOND CONFIRMATION: delete website document roots listed above?",
             opts.yes,
-        ) {
-            eprintln!("error: {error}");
-            return 1;
-        }
+        )
+    {
+        eprintln!("error: {error}");
+        return 1;
     }
 
     let data_dir = paths::default_data_dir();
@@ -195,11 +196,11 @@ pub fn run(opts: UninstallOptions) -> i32 {
         }
     }
 
-    if opts.purge_sites {
-        if let Err(error) = ops::purge_site_homes(&sites, opts.dry_run) {
-            eprintln!("error: {error}");
-            failed = true;
-        }
+    if opts.purge_sites
+        && let Err(error) = ops::purge_site_homes(&sites, opts.dry_run)
+    {
+        eprintln!("error: {error}");
+        failed = true;
     }
 
     if opts.purge_stack {

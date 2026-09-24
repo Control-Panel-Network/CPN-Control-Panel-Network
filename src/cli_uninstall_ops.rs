@@ -76,10 +76,9 @@ pub(crate) fn site_home_guess(site: &SiteRecord) -> PathBuf {
         .file_name()
         .and_then(|n| n.to_str())
         .is_some_and(|n| n.eq_ignore_ascii_case("public_html"))
+        && let Some(parent) = doc.parent()
     {
-        if let Some(parent) = doc.parent() {
-            return parent.to_path_buf();
-        }
+        return parent.to_path_buf();
     }
     sites::hosting_home_root().join(&site.domain)
 }
