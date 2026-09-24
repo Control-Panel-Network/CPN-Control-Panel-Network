@@ -390,9 +390,11 @@ mod tests {
             checksums_asset: None,
             checksums_asc_asset: None,
         };
-        let picked = pick_newest_publishable_release(&[hollow, older.clone()]).expect("pick");
+        let with_hollow = [hollow, older.clone()];
+        let picked = pick_newest_publishable_release(&with_hollow).expect("pick");
         assert_eq!(picked.version, "0.2.6-alpha.45");
-        let both = pick_newest_publishable_release(&[older]).expect("pick");
+        let only_older = [older];
+        let both = pick_newest_publishable_release(&only_older).expect("pick");
         assert_eq!(both.version, "0.2.6-alpha.45");
     }
 

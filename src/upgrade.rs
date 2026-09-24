@@ -412,9 +412,7 @@ pub async fn spawn_maintenance(state: Arc<AppState>, request: MaintenanceRequest
 mod tests {
     use super::build_plan;
     use crate::model::MaintenanceAction;
-    use crate::releases::{
-        CpnRelease, ReleaseAsset, compare_versions, pick_newest_publishable_release,
-    };
+    use crate::releases::compare_versions;
     use std::cmp::Ordering;
 
     #[test]
@@ -438,44 +436,5 @@ mod tests {
             compare_versions("0.2.6-alpha.45", "0.2.6-alpha.46"),
             Ordering::Less
         );
-    }
-
-    #[test]
-    fn newest_publishable_ignores_hollow_newer_tag() {
-        let hollow = CpnRelease {
-            tag_name: "v0.2.6-alpha.46".into(),
-            version: "0.2.6-alpha.46".into(),
-            name: "x".into(),
-            published_at: "2026-09-24".into(),
-            prerelease: true,
-            draft: false,
-            html_url: "https://example.invalid".into(),
-            assets: Vec::new(),
-            rpm_asset: None,
-            binary_asset: None,
-            checksums_asset: None,
-            checksums_asc_asset: None,
-        };
-        let older = CpnRelease {
-            tag_name: "v0.2.6-alpha.45".into(),
-            version: "0.2.6-alpha.45".into(),
-            name: "x".into(),
-            published_at: "2026-09-24".into(),
-            prerelease: true,
-            draft: false,
-            html_url: "https://example.invalid".into(),
-            assets: vec![ReleaseAsset {
-                name: "cpn".into(),
-                browser_download_url: "https://example.invalid/cpn".into(),
-                content_type: "application/octet-stream".into(),
-                size: 1,
-            }],
-            rpm_asset: None,
-            binary_asset: None,
-            checksums_asset: None,
-            checksums_asc_asset: None,
-        };
-        let picked = pick_newest_publishable_release(&[hollow, older]).expect("pick");
-        assert_eq!(picked.version, "0.2.6-alpha.45");
     }
 }
