@@ -1,4 +1,4 @@
-﻿# CPN Â· Control Panel Network
+# CPN · Control Panel Network
 
 > [!WARNING]
 > **Alpha only** (published tip **v0.2.6-alpha.21**; line **0.2.6-alpha.22**). No stable 1.x yet. Prefer a disposable VPS or VM, keep backups, and read [Platform Support](docs/SUPPORT.md) before important hosts.
@@ -53,7 +53,7 @@ curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 Pin tip (example):
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.47
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.48
 ```
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).

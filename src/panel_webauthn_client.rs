@@ -172,20 +172,23 @@ function cpnPreferLocalhostForPasskeys(){{
   return false;
 }}
 {messages}
-function cpnNormalizeCreateOptions(pk, keepAttachment){{
-  // webauthn-rs security-key path always sends hints:['security-key']. Strip that so
-  // Edge/Chrome show a unified picker (Windows Hello + FIDO2) instead of forcing
-  // Microsoft Password Manager or security-key-only UX. Keep attachment only on retry.
+function cpnNormalizeCreateOptions(pk, kind){{
+  // Strip security-key-only hints so Edge does not force Microsoft Password Manager
+  // or security-key-only UX on the first attempt.
   try{{ delete pk.hints; }}catch(e){{}}
-  if(!keepAttachment && pk.authenticatorSelection){{
-    try{{ delete pk.authenticatorSelection.authenticatorAttachment; }}catch(e){{}}
+  if(!pk.authenticatorSelection) pk.authenticatorSelection={{}};
+  if(kind==='platform'){{
+    // Prefer local Windows Hello over hybrid cloud save prompts.
+    pk.authenticatorSelection.authenticatorAttachment='platform';
+  }}else if(kind==='security-key'){{
+    pk.authenticatorSelection.authenticatorAttachment='cross-platform';
   }}
   return pk;
 }}
 async function cpnRegisterPasskey(){{
   const status=document.getElementById('cpn-passkey-status');
-  // One button: flexible create first; silent CrossPlatform retry on NotSupported only.
-  const attempts=[{{kind:'', keepAttachment:false}}, {{kind:'security-key', keepAttachment:true}}];
+  // One button: Hello-friendly platform first, then presence-only security-key.
+  const attempts=['platform','security-key'];
   try{{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
@@ -195,15 +198,15 @@ async function cpnRegisterPasskey(){{
     const next=cpnPasskeyRegisterNext();
     let lastErr=null;
     for(let i=0;i<attempts.length;i++){{
-      const attempt=attempts[i];
+      const kind=attempts[i];
       try{{
         if(status){{
           status.style.color='';
           status.style.fontWeight='';
           status.textContent='Waiting for authenticator...';
         }}
-        const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:attempt.kind}});
-        const pk=cpnNormalizeCreateOptions(await cpnDecodeCreateOptions(start.publicKey), attempt.keepAttachment);
+        const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:kind}});
+        const pk=cpnNormalizeCreateOptions(await cpnDecodeCreateOptions(start.publicKey), kind);
         const cred=await navigator.credentials.create({{publicKey:pk}});
         if(!cred) throw new Error('Passkey registration did not complete.');
         const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
@@ -221,9 +224,12 @@ async function cpnRegisterPasskey(){{
         lastErr=err;
         const name=String((err&&err.name)||'');
         const msg=String((err&&err.message)||'');
-        // Silent retry only for option incongruence / unsupported; cancel stays.
+        // Retry security-key when Hello options fail or the user dismisses Hello /
+        // picks a path that cannot complete with platform UV-required options.
         const canFallback=i===0
-          && (name==='NotSupportedError' || /incongruent|inconsistent|not supported|protection policy/i.test(msg));
+          && (name==='NotSupportedError'
+            || name==='NotAllowedError'
+            || /incongruent|inconsistent|not supported|protection policy/i.test(msg));
         if(!canFallback) throw err;
       }}
     }}
@@ -402,6 +408,20 @@ mod tests {
         assert!(
             script.contains("delete pk.hints"),
             "client must strip security-key-only hints"
+        );
+        assert!(
+            script.contains("'platform','security-key'")
+                || script.contains("\"platform\",\"security-key\"")
+                || script.contains("attempts=['platform','security-key']"),
+            "single button must try platform then security-key"
+        );
+        assert!(
+            script.contains("authenticatorAttachment='platform'"),
+            "platform attempt must prefer local Hello attachment"
+        );
+        assert!(
+            script.contains("name==='NotAllowedError'"),
+            "Hello NotAllowed must fall back to security-key"
         );
     }
 

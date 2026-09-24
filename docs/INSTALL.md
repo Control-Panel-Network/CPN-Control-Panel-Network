@@ -1,4 +1,4 @@
-﻿# CPN install and upgrade options
+# CPN install and upgrade options
 
 CPN is **alpha-only** for now. Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
 
@@ -32,13 +32,13 @@ Hosts without curl: `wget -O - URL | bash`. Optional process substitution still 
 ## Pin a git ref or Release (`-b` / `--ref`)
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.47
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.48
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b 1.0.0-dev
 curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- --branch v0.2.6-alpha.22
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --ref v0.2.6-alpha.21 --bypass
 ```
 
-Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.47`.
+Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v0.2.6-alpha.48`.
 
 Behavior:
 
@@ -162,7 +162,7 @@ sudo install -m 600 /dev/stdin /var/lib/cpn/secrets/github-token <<<'ghp_...'
 - **Default on AlmaLinux/RHEL 9+:** PHP **8.5** (Remi `php:remi-8.5`).
 - **Default on EL8:** Remi PHP **8.2**.
 - CLI and web installers let you choose 8.5 / 8.4 / 8.3 / 8.2.
-- If the selected packages are missing, CPN falls back (8.5 â†’ 8.4 â†’ 8.3 â†’ 8.2) and writes `/var/lib/cpn/php-default.json`.
+- If the selected packages are missing, CPN falls back (8.5 → 8.4 → 8.3 → 8.2) and writes `/var/lib/cpn/php-default.json`.
 - See `to-do/PHP-INSTALL-DEFAULT-85.md`.
 
 Post-upgrade verification checks panel `/login`, web server units, and MariaDB when present.

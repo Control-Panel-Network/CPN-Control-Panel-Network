@@ -139,6 +139,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.48] - 24/09/2026
+
+Windows Hello passkey registration on the single Register passkey button after `v0.2.6-alpha.47` (Cargo `0.2.6-alpha.48`).
+
+### Fixed
+
+- **Windows Hello enroll on localhost**: Presence-only create options used `userVerification: discouraged`, so Edge/Chrome Hello failed with `NotAllowedError` after the picker. Register now tries a platform ceremony first (UV required + congruent CredProtect, client sets `authenticatorAttachment=platform`), then silently retries presence-only security-key on `NotSupportedError` / `NotAllowedError`. One Register passkey button remains.
+
 ## [0.2.6-alpha.47] - 24/09/2026
 
 Version UI reconnect (#302), single Register passkey (#303), and upgrade "Already up to date" / newest-release selection (#304) after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
