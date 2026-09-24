@@ -1,5 +1,9 @@
 //! WebAuthn relying-party helpers and short-lived ceremony state.
 //! RP ID follows the request Host (works for `127.0.0.1` lab and production FQDNs).
+//!
+//! Registration uses the security-key ceremony with user verification **preferred** so
+//! YubiKeys (touch, optional FIDO2 PIN) and platform authenticators (Windows Hello) both
+//! work on `http://localhost:<port>` labs. Credentials are stored as Passkeys.
 
 use crate::account::{data_dir, now_unix};
 use crate::account_passkeys::{
@@ -17,19 +21,29 @@ use std::{
 use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
-    CreationChallengeResponse, DiscoverableAuthentication, DiscoverableKey, PasskeyAuthentication,
-    PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse, Webauthn, WebauthnBuilder,
+    CreationChallengeResponse, Credential, DiscoverableAuthentication, DiscoverableKey, Passkey,
+    PublicKeyCredential, RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey,
+    SecurityKeyAuthentication, SecurityKeyRegistration, Webauthn, WebauthnBuilder,
 };
+
+pub use crate::panel_webauthn_client::passkey_client_script;
 
 const CEREMONY_TTL_SECS: u64 = 300;
 const MAX_HOST_LEN: usize = 253;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum CeremonyKind {
-    Register(PasskeyRegistration),
-    Authenticate { state: PasskeyAuthentication },
+    Register(SecurityKeyRegistration),
+    Authenticate { state: SecurityKeyAuthentication },
     Discoverable(DiscoverableAuthentication),
+}
+
+fn passkey_to_security_key(passkey: &Passkey) -> SecurityKey {
+    SecurityKey::from(Credential::from(passkey.clone()))
+}
+
+fn security_key_to_passkey(key: SecurityKey) -> Passkey {
+    Passkey::from(Credential::from(key))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,8 +276,17 @@ pub fn start_registration(
     } else {
         Some(exclude)
     };
+    // Security-key ceremony: UV preferred (not required) so YubiKeys without a PIN and
+    // Windows Hello both work. Attachment hint left open for platform + roaming keys.
     let (ccr, state) = webauthn
-        .start_passkey_registration(user_uuid(username), username, username, exclude)
+        .start_securitykey_registration(
+            user_uuid(username),
+            username,
+            username,
+            exclude,
+            None,
+            None,
+        )
         .map_err(|err| format!("Could not start passkey registration: {err}"))?;
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
@@ -289,10 +312,10 @@ pub fn finish_registration(
     let CeremonyKind::Register(state) = record.kind else {
         return Err("Passkey ceremony type mismatch".into());
     };
-    let passkey = webauthn
-        .finish_passkey_registration(credential, &state)
+    let security_key = webauthn
+        .finish_securitykey_registration(credential, &state)
         .map_err(|err| format!("Passkey registration failed: {err}"))?;
-    add_passkey(username, label, passkey)?;
+    add_passkey(username, label, security_key_to_passkey(security_key))?;
     Ok(())
 }
 
@@ -307,11 +330,11 @@ pub fn start_authentication(
         (rcr, CeremonyKind::Discoverable(state))
     } else {
         let keys = creds
-            .into_iter()
-            .map(|(_, passkey)| passkey)
+            .iter()
+            .map(|(_, passkey)| passkey_to_security_key(passkey))
             .collect::<Vec<_>>();
         let (rcr, state) = webauthn
-            .start_passkey_authentication(&keys)
+            .start_securitykey_authentication(&keys)
             .map_err(|err| format!("Could not start passkey authentication: {err}"))?;
         (rcr, CeremonyKind::Authenticate { state })
     };
@@ -334,8 +357,12 @@ pub fn start_authentication_for_user(
     if keys.is_empty() {
         return Err("No passkey is registered for this account.".into());
     }
+    let sk = keys
+        .iter()
+        .map(passkey_to_security_key)
+        .collect::<Vec<_>>();
     let (rcr, state) = webauthn
-        .start_passkey_authentication(&keys)
+        .start_securitykey_authentication(&sk)
         .map_err(|_| "Could not start passkey authentication.".to_string())?;
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
@@ -357,7 +384,7 @@ pub fn finish_authentication(
     let (username, result) = match record.kind {
         CeremonyKind::Authenticate { state } => {
             let result = webauthn
-                .finish_passkey_authentication(credential, &state)
+                .finish_securitykey_authentication(credential, &state)
                 .map_err(|_| {
                     "Incorrect passkey. Try again or use another sign-in method.".to_string()
                 })?;
@@ -398,292 +425,10 @@ pub fn finish_authentication(
     Ok(username)
 }
 
-/// Client JS for register (profile) and login ceremonies.
-pub fn passkey_client_script() -> &'static str {
-    r#"
-function cpnB64urlToBuf(b64url){
-  const s=String(b64url).replace(/-/g,'+').replace(/_/g,'/');
-  const pad='='.repeat((4-(s.length%4))%4);
-  const bin=atob(s+pad);
-  const out=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
-  return out.buffer;
-}
-function cpnBufToB64url(buf){
-  const bytes=new Uint8Array(buf);
-  let s='';
-  for(const b of bytes) s+=String.fromCharCode(b);
-  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-async function cpnDecodeCreateOptions(pk){
-  pk.challenge=cpnB64urlToBuf(pk.challenge);
-  pk.user.id=cpnB64urlToBuf(pk.user.id);
-  if(pk.excludeCredentials){
-    for(const c of pk.excludeCredentials){ c.id=cpnB64urlToBuf(c.id); }
-  }
-  return pk;
-}
-async function cpnDecodeGetOptions(pk){
-  pk.challenge=cpnB64urlToBuf(pk.challenge);
-  if(pk.allowCredentials){
-    for(const c of pk.allowCredentials){ c.id=cpnB64urlToBuf(c.id); }
-  }
-  return pk;
-}
-function cpnCredToJson(cred){
-  const r={
-    id:cred.id,
-    rawId:cpnBufToB64url(cred.rawId),
-    type:cred.type,
-    response:{}
-  };
-  const resp=cred.response;
-  if(resp.clientDataJSON) r.response.clientDataJSON=cpnBufToB64url(resp.clientDataJSON);
-  if(resp.attestationObject) r.response.attestationObject=cpnBufToB64url(resp.attestationObject);
-  if(resp.authenticatorData) r.response.authenticatorData=cpnBufToB64url(resp.authenticatorData);
-  if(resp.signature) r.response.signature=cpnBufToB64url(resp.signature);
-  if(resp.userHandle) r.response.userHandle=cpnBufToB64url(resp.userHandle);
-  return r;
-}
-async function cpnJson(url,body){
-  const res=await fetch(url,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','Accept':'application/json'},
-    credentials:'same-origin',
-    body:JSON.stringify(body||{})
-  });
-  const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(cpnStripUrls(data.error||('Request failed ('+res.status+')')));
-  return data;
-}
-function cpnStripUrls(text){
-  return String(text||'').replace(/https?:\/\/\S+/gi,'').replace(/\s{2,}/g,' ').replace(/\s+([.,;:!?])/g,'$1').trim();
-}
-function cpnShowPasskeyError(message){
-  const msg=cpnStripUrls(message)||'Passkey sign-in failed.';
-  const banner=document.getElementById('i18n-login-error');
-  if(banner){
-    banner.hidden=false;
-    banner.removeAttribute('hidden');
-    banner.setAttribute('role','alert');
-    banner.textContent=msg;
-    try{ banner.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
-  }
-  const status=document.getElementById('cpn-passkey-login-status')
-    ||document.getElementById('cpn-passkey-status');
-  if(status){
-    status.textContent=msg;
-    status.style.color='#991b1b';
-    status.style.fontWeight='650';
-  }
-  if(!banner && !status){
-    try{ window.alert(msg); }catch(e){}
-  }
-}
-function cpnClearPasskeyError(){
-  const banner=document.getElementById('i18n-login-error');
-  if(banner && !document.body.getAttribute('data-login-error')){
-    banner.hidden=true;
-    banner.textContent='';
-  }
-  const status=document.getElementById('cpn-passkey-login-status')
-    ||document.getElementById('cpn-passkey-status');
-  if(status){
-    status.textContent='';
-    status.style.color='';
-    status.style.fontWeight='';
-  }
-}
-function cpnPreferLocalhostForPasskeys(){
-  const h=String((location&&location.hostname)||'');
-  if(h==='127.0.0.1'||h==='[::1]'||h==='::1'){
-    const port=location.port?(':'+location.port):'';
-    const dest='http://localhost'+port+location.pathname+location.search+location.hash;
-    try{ location.replace(dest); }catch(e){ location.href=dest; }
-    return true;
-  }
-  return false;
-}
-function cpnPasskeyUserMessage(err,kind){
-  const name=String((err&&err.name)||'');
-  const raw=String((err&&err.message)||err||'');
-  const lower=raw.toLowerCase();
-  if(/does not support passkeys/i.test(raw)){
-    return 'This browser does not support passkeys.';
-  }
-  if(/open this page as http:\/\/localhost/i.test(raw) || /not 127\.0\.0\.1/i.test(raw)){
-    return cpnStripUrls(raw) || 'Open this page as http://localhost with the same port for passkeys.';
-  }
-  if(/no passkey is registered/i.test(raw) || /no passkeys registered/i.test(raw)){
-    return 'No passkey is registered for this account.';
-  }
-  if(/services are still starting|sign-in is disabled/i.test(raw)){
-    return cpnStripUrls(raw) || 'Panel services are still starting. Sign-in is temporarily disabled.';
-  }
-  if(name==='NotAllowedError'||name==='AbortError'
-    ||/not allowed|timed out|timeout|abort|cancel+ed/i.test(raw)
-    ||/w3\.org\/TR\/webauthn/i.test(raw)){
-    return kind==='login'
-      ? 'Passkey sign-in was cancelled or timed out. Try again.'
-      : 'Passkey registration was cancelled or timed out. Try again.';
-  }
-  if(name==='InvalidStateError' || /already registered|invalid state/i.test(lower)){
-    return kind==='login'
-      ? 'This passkey cannot be used right now. Try another device or authenticator.'
-      : 'This passkey is already registered.';
-  }
-  if(name==='SecurityError' || /relying party|rp id|securityerror/i.test(lower)){
-    return 'Passkey could not run for this site address. Use http://localhost with the same port (127.0.0.1 is redirected automatically), or your panel hostname.';
-  }
-  if(/incorrect passkey|not registered|different account|unknown credential/i.test(lower)){
-    return cpnStripUrls(raw) || 'Incorrect passkey. Try again or use another sign-in method.';
-  }
-  const cleaned=cpnStripUrls(raw);
-  if(cleaned) return cleaned;
-  return kind==='login' ? 'Passkey sign-in failed. Try again.' : 'Passkey registration failed. Try again.';
-}
-async function cpnRegisterPasskey(){
-  const status=document.getElementById('cpn-passkey-status');
-  try{
-    cpnClearPasskeyError();
-    if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    // Browsers bind RP ID to the page host; use localhost (not 127.0.0.1) for create().
-    if(cpnPreferLocalhostForPasskeys()) return;
-    if(status) status.textContent='Starting registration...';
-    const label=(document.getElementById('cpn-passkey-label')||{}).value||'';
-    const next=cpnPasskeyRegisterNext();
-    const start=await cpnJson('/account/users/profile/passkey/register/start',{});
-    const pk=await cpnDecodeCreateOptions(start.publicKey);
-    const cred=await navigator.credentials.create({publicKey:pk});
-    if(!cred) throw new Error('Passkey registration was cancelled or timed out.');
-    const finish=await cpnJson('/account/users/profile/passkey/register/finish',{
-      ceremony_id:start.ceremony_id,
-      label:label,
-      next:next,
-      credential:cpnCredToJson(cred)
-    });
-    if(status) status.textContent='Passkey registered.';
-    const go=finish.redirect||next||'';
-    if(go){ location.href=go; return; }
-    location.reload();
-  }catch(err){
-    const msg=cpnPasskeyUserMessage(err,'register');
-    cpnShowPasskeyError(msg);
-    if(status) status.textContent=msg;
-  }
-}
-function cpnPasskeyRegisterNext(){
-  const path=String((location&&location.pathname)||'');
-  const enroll=document.getElementById('cpn-passkey-enroll');
-  if(enroll){
-    // MFA gate may overlay Edit/View profile; return there so another passkey can be added.
-    if(path==='/account/users/modify'||path.indexOf('/account/users/modify/')===0
-      ||path==='/account/users/profile'||path.indexOf('/account/users/profile/')===0){
-      return '/account/users/modify?notice=Passkey+registered';
-    }
-    const fromEnroll=enroll.getAttribute('data-redirect');
-    if(fromEnroll) return fromEnroll;
-    return '/account/users/modify?notice=Passkey+registered';
-  }
-  const box=document.getElementById('cpn-passkey-register');
-  if(box){
-    const fromBox=box.getAttribute('data-redirect');
-    if(fromBox) return fromBox;
-  }
-  if(path.indexOf('/account/users/')===0){
-    return '/account/users/modify?notice=Passkey+registered';
-  }
-  return '';
-}
-async function cpnLoginPasskey(){
-  const status=document.getElementById('cpn-passkey-login-status');
-  try{
-    cpnClearPasskeyError();
-    if(document.body && document.body.getAttribute('data-services-ready')==='0'){
-      throw new Error('Panel services are still starting. Sign-in is disabled until Web server and MariaDB are running.');
-    }
-    if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    if(cpnPreferLocalhostForPasskeys()) return;
-    if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
-    const start=await cpnJson('/login/passkey/start',{});
-    const pk=await cpnDecodeGetOptions(start.publicKey);
-    const cred=await navigator.credentials.get({publicKey:pk});
-    if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
-    const finish=await cpnJson('/login/passkey/finish',{
-      ceremony_id:start.ceremony_id,
-      credential:cpnCredToJson(cred),
-      next:(document.body&&document.body.getAttribute('data-login-next'))||new URLSearchParams(location.search).get('next')||''
-    });
-    location.href=finish.redirect||'/dashboard';
-  }catch(err){
-    cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
-  }
-}
-async function cpnMfaPasskey(){
-  const status=document.getElementById('cpn-passkey-login-status');
-  try{
-    cpnClearPasskeyError();
-    if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
-    if(cpnPreferLocalhostForPasskeys()) return;
-    if(status){ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }
-    const start=await cpnJson('/login/2fa/passkey/start',{});
-    const pk=await cpnDecodeGetOptions(start.publicKey);
-    const cred=await navigator.credentials.get({publicKey:pk});
-    if(!cred) throw new Error('Passkey sign-in was cancelled or timed out.');
-    const finish=await cpnJson('/login/2fa/passkey/finish',{
-      ceremony_id:start.ceremony_id,
-      credential:cpnCredToJson(cred),
-      next:(document.body&&document.body.getAttribute('data-login-next'))||new URLSearchParams(location.search).get('next')||''
-    });
-    location.href=finish.redirect||'/dashboard';
-  }catch(err){
-    cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
-  }
-}
-"#
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{passkey_client_script, start_authentication, webauthn_for_request};
+    use super::{start_authentication, start_registration, webauthn_for_request};
     use crate::account::with_test_data_dir;
-
-    #[test]
-    fn register_script_sends_next_and_prefers_profile_return() {
-        let script = passkey_client_script();
-        assert!(
-            script.contains("function cpnPasskeyRegisterNext"),
-            "client must compute context-aware return path"
-        );
-        assert!(
-            script.contains("next:next"),
-            "register finish must send next for server allowlist"
-        );
-        assert!(
-            script.contains("/account/users/modify?notice=Passkey+registered"),
-            "profile/edit overlay must return to Modify User"
-        );
-        assert!(
-            script.contains("finish.redirect||next"),
-            "client must honor server redirect"
-        );
-        assert!(
-            script.contains("function cpnShowPasskeyError"),
-            "login/2FA must surface high-contrast passkey errors"
-        );
-        assert!(
-            script.contains("function cpnMfaPasskey"),
-            "2FA page must offer passkey assertion"
-        );
-        assert!(
-            script.contains("function cpnPreferLocalhostForPasskeys"),
-            "passkey ceremonies must redirect 127.0.0.1 to localhost"
-        );
-        assert!(
-            script.contains("location.replace(dest)"),
-            "localhost redirect must replace the current page"
-        );
-    }
 
     #[test]
     fn loopback_ip_host_builds_webauthn() {
@@ -717,7 +462,6 @@ mod tests {
 
     #[test]
     fn public_url_origin_appended_when_configured() {
-        use crate::account::with_test_data_dir;
         use crate::panel_public_url::save_panel_public_url;
         with_test_data_dir(|| {
             save_panel_public_url("http://127.0.0.1:2091").expect("save public url");
@@ -741,6 +485,24 @@ mod tests {
     }
 
     #[test]
+    fn localhost_nat_2091_allows_browser_origin() {
+        let (wan, rp_id) = webauthn_for_request(Some("localhost:2091"), false)
+            .expect("builder should accept localhost NAT port");
+        assert_eq!(rp_id, "localhost");
+        let origins = wan.get_allowed_origins();
+        assert!(
+            origins
+                .iter()
+                .any(|u| u.as_str() == "http://localhost:2091/" || u.as_str().contains("localhost:2091")),
+            "expected http://localhost:2091 among {origins:?}"
+        );
+        assert!(
+            origins.iter().any(|u| u.as_str().contains("127.0.0.1:2091")),
+            "expected 127.0.0.1:2091 sibling origin among {origins:?}"
+        );
+    }
+
+    #[test]
     fn login_challenge_starts_without_registered_passkeys() {
         with_test_data_dir(|| {
             let (webauthn, _) =
@@ -749,6 +511,36 @@ mod tests {
                 start_authentication(&webauthn).expect("discoverable challenge should start");
             let json = serde_json::to_value(challenge).expect("challenge JSON");
             assert!(json.get("publicKey").is_some());
+        });
+    }
+
+    #[test]
+    fn registration_challenge_uses_uv_preferred_for_security_keys() {
+        with_test_data_dir(|| {
+            let (webauthn, rp_id) =
+                webauthn_for_request(Some("localhost:2091"), false).expect("webauthn");
+            assert_eq!(rp_id, "localhost");
+            let (_, challenge) =
+                start_registration(&webauthn, "cpnowner").expect("registration should start");
+            let json = serde_json::to_value(challenge).expect("challenge JSON");
+            let pk = json
+                .get("publicKey")
+                .expect("publicKey")
+                .as_object()
+                .expect("object");
+            let rp = pk.get("rp").expect("rp");
+            assert_eq!(rp.get("id").and_then(|v| v.as_str()), Some("localhost"));
+            let selection = pk
+                .get("authenticatorSelection")
+                .expect("authenticatorSelection");
+            let uv = selection
+                .get("userVerification")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            assert_eq!(
+                uv, "preferred",
+                "YubiKey/lab registration must prefer UV, not require it; got {selection}"
+            );
         });
     }
 }

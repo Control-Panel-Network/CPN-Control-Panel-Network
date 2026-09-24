@@ -252,7 +252,7 @@ pub fn users_self_edit_body(
       </div>
       <script>"#,
     );
-    body.push_str(passkey_client_script());
+    body.push_str(&passkey_client_script());
     body.push_str("</script>");
     body
 }

@@ -404,7 +404,7 @@ pub fn panel_mfa_html(
     let passkey_script = if options.passkey_available {
         crate::panel_webauthn::passkey_client_script()
     } else {
-        ""
+        String::new()
     };
     format!(
         r#"<!DOCTYPE html>
