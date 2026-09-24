@@ -205,10 +205,11 @@ pub fn mark_attempt(cache: &mut ReleasesCacheFile) {
 
 pub fn store_success(
     repo: &str,
-    releases: Vec<CpnRelease>,
+    mut releases: Vec<CpnRelease>,
     etag: Option<String>,
     previous: Option<ReleasesCacheFile>,
 ) -> ReleasesCacheFile {
+    crate::releases::sort_releases_newest_first(&mut releases);
     let now = now_unix();
     ReleasesCacheFile {
         schema_version: 1,

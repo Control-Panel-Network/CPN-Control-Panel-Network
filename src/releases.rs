@@ -105,6 +105,41 @@ pub fn compare_versions(left: &str, right: &str) -> Ordering {
     Ordering::Equal
 }
 
+/// Sort releases newest-first by [`compare_versions`] (not GitHub API order alone).
+pub fn sort_releases_newest_first(releases: &mut [CpnRelease]) {
+    releases.sort_by(|left, right| compare_versions(&right.version, &left.version));
+}
+
+/// Newest release by version compare.
+pub fn pick_newest_release(releases: &[CpnRelease]) -> Option<&CpnRelease> {
+    releases
+        .iter()
+        .max_by(|left, right| compare_versions(&left.version, &right.version))
+}
+
+fn release_has_downloadable_assets(release: &CpnRelease) -> bool {
+    !release.assets.is_empty()
+        || release.rpm_asset.is_some()
+        || release.binary_asset.is_some()
+        || release.checksums_asset.is_some()
+}
+
+/// Newest release that has package/binary assets when any such release exists.
+/// Empty tip releases (assets still uploading) are skipped so upgrade does not pin a hollow tag.
+pub fn pick_newest_publishable_release(releases: &[CpnRelease]) -> Option<&CpnRelease> {
+    let with_assets: Vec<&CpnRelease> = releases
+        .iter()
+        .filter(|item| release_has_downloadable_assets(item))
+        .collect();
+    if with_assets.is_empty() {
+        pick_newest_release(releases)
+    } else {
+        with_assets
+            .into_iter()
+            .max_by(|left, right| compare_versions(&left.version, &right.version))
+    }
+}
+
 /// Retired CPN package identities that were retagged on GitHub as `0.2.x-alpha.*`.
 /// RPM/semver still treat `1.0.0`/`1.0.1` as newer than `0.2.6`, which blocks upgrades.
 pub fn is_retired_cpn_1_0_identity(version: &str) -> bool {
@@ -299,15 +334,17 @@ pub(crate) fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
 }
 
 pub use crate::releases_fetch::{
-    find_release, list_releases, list_releases_cached, list_releases_for_repo,
+    find_release, list_releases, list_releases_cached, list_releases_cached_opts,
+    list_releases_for_repo, list_releases_for_repo_opts,
 };
 pub use crate::releases_version_check::{version_check, version_check_with_options};
 
 #[cfg(test)]
 mod tests {
     use super::{
-        cargo_version_from_rpm, compare_versions, deb_name_matches, expand_compact_prerelease,
-        is_active_0_2_line, is_retag_migration, is_retired_cpn_1_0_identity, normalize_version,
+        CpnRelease, ReleaseAsset, cargo_version_from_rpm, compare_versions, deb_name_matches,
+        expand_compact_prerelease, is_active_0_2_line, is_retag_migration,
+        is_retired_cpn_1_0_identity, normalize_version, pick_newest_publishable_release,
         rpm_name_matches,
     };
     use std::cmp::Ordering;
@@ -316,6 +353,49 @@ mod tests {
     fn normalizes_v_prefix() {
         assert_eq!(normalize_version("v0.2.0"), "0.2.0");
         assert_eq!(normalize_version("0.2.0"), "0.2.0");
+    }
+
+    #[test]
+    fn picks_newest_publishable_over_hollow_tip() {
+        let hollow = CpnRelease {
+            tag_name: "v0.2.6-alpha.46".into(),
+            version: "0.2.6-alpha.46".into(),
+            name: "x".into(),
+            published_at: "2026-09-24".into(),
+            prerelease: true,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: Vec::new(),
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let older = CpnRelease {
+            tag_name: "v0.2.6-alpha.45".into(),
+            version: "0.2.6-alpha.45".into(),
+            name: "x".into(),
+            published_at: "2026-09-24".into(),
+            prerelease: true,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: vec![ReleaseAsset {
+                name: "cpn-installer".into(),
+                browser_download_url: "https://example.invalid/cpn-installer".into(),
+                content_type: "application/octet-stream".into(),
+                size: 1,
+            }],
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let with_hollow = [hollow, older.clone()];
+        let picked = pick_newest_publishable_release(&with_hollow).expect("pick");
+        assert_eq!(picked.version, "0.2.6-alpha.45");
+        let only_older = [older];
+        let both = pick_newest_publishable_release(&only_older).expect("pick");
+        assert_eq!(both.version, "0.2.6-alpha.45");
     }
 
     #[test]
