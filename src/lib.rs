@@ -263,6 +263,7 @@ pub mod panel_theme_routes;
 pub mod panel_theme_store;
 pub mod panel_user_prefs;
 pub mod panel_webauthn;
+pub mod panel_webauthn_client;
 pub mod panel_webmail;
 pub mod panel_webmail_proxy;
 pub mod panel_website_alias_cron_routes;

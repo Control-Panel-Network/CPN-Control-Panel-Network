@@ -214,7 +214,7 @@ fn enroll_passkey_section_html() -> String {
   <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form mfa-passkey-section">
     <h2 style="margin:0;font-size:1.1rem;">Passkey</h2>
     <p class="muted" style="margin:0;">Register a platform or security-key passkey instead of TOTP. Completing either path returns you to Modify User so you can add more factors.</p>
-    <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential.</p>
+    <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential. Use Windows Hello or a FIDO2 security key (touch; a key PIN is optional but recommended).</p>
     <label>Label (optional)
       <input id="cpn-passkey-label" type="text" maxlength="64" placeholder="Laptop / YubiKey" autocomplete="off">
     </label>
