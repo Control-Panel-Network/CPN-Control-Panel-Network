@@ -360,7 +360,13 @@ pub fn schedule_detached_panel_restart(reason: &str) -> Result<(), String> {
     }
     let reason_safe: String = reason
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
         .take(80)
         .collect();
     let unit_helper = format!("cpn-panel-reload-{}.service", std::process::id());
@@ -400,7 +406,10 @@ pub fn schedule_detached_panel_restart(reason: &str) -> Result<(), String> {
     let status = Command::new("bash")
         .args([
             "-c",
-            &format!("nohup bash -c {script} >/dev/null 2>&1 &", script = shell_single_quote(&script)),
+            &format!(
+                "nohup bash -c {script} >/dev/null 2>&1 &",
+                script = shell_single_quote(&script)
+            ),
         ])
         .status()
         .map_err(|error| format!("Could not nohup detached panel restart: {error}"))?;
