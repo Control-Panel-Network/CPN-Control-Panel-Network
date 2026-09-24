@@ -34,7 +34,7 @@ function cpnPasskeyUserMessage(err,kind){
   if(name==='NotSupportedError' || /not supported|incongruent|inconsistent|protection policy/i.test(lower)){
     return kind==='login'
       ? 'This authenticator cannot sign in here. Try Windows Hello or a FIDO2 security key.'
-      : 'This authenticator cannot register here. Use Register with Windows Hello, or Register security key for a YubiKey.';
+      : 'This authenticator cannot register here. Try Windows Hello or a FIDO2 security key, or pick Save another way in the browser prompt.';
   }
   if(name==='NetworkError' || /network|failed to fetch/i.test(lower)){
     return 'Could not reach the panel to finish the passkey step. Check the connection and try again.';
@@ -172,13 +172,20 @@ function cpnPreferLocalhostForPasskeys(){{
   return false;
 }}
 {messages}
-async function cpnRegisterPasskey(kind){{
+function cpnNormalizeCreateOptions(pk, keepAttachment){{
+  // webauthn-rs security-key path always sends hints:['security-key']. Strip that so
+  // Edge/Chrome show a unified picker (Windows Hello + FIDO2) instead of forcing
+  // Microsoft Password Manager or security-key-only UX. Keep attachment only on retry.
+  try{{ delete pk.hints; }}catch(e){{}}
+  if(!keepAttachment && pk.authenticatorSelection){{
+    try{{ delete pk.authenticatorSelection.authenticatorAttachment; }}catch(e){{}}
+  }}
+  return pk;
+}}
+async function cpnRegisterPasskey(){{
   const status=document.getElementById('cpn-passkey-status');
-  const requested=(kind===undefined||kind===null||kind==='')?'':String(kind);
-  // Auto: try Windows Hello first, then security key (YubiKey). Explicit kind skips fallback.
-  const kinds=requested
-    ? [requested]
-    : ['platform','security-key'];
+  // One button: flexible create first; silent CrossPlatform retry on NotSupported only.
+  const attempts=[{{kind:'', keepAttachment:false}}, {{kind:'security-key', keepAttachment:true}}];
   try{{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
@@ -187,18 +194,16 @@ async function cpnRegisterPasskey(kind){{
     const label=(document.getElementById('cpn-passkey-label')||{{}}).value||'';
     const next=cpnPasskeyRegisterNext();
     let lastErr=null;
-    for(let i=0;i<kinds.length;i++){{
-      const k=kinds[i];
+    for(let i=0;i<attempts.length;i++){{
+      const attempt=attempts[i];
       try{{
         if(status){{
           status.style.color='';
           status.style.fontWeight='';
-          status.textContent=k==='platform'
-            ? 'Waiting for Windows Hello...'
-            : 'Waiting for security key...';
+          status.textContent='Waiting for authenticator...';
         }}
-        const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:k}});
-        const pk=await cpnDecodeCreateOptions(start.publicKey);
+        const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:attempt.kind}});
+        const pk=cpnNormalizeCreateOptions(await cpnDecodeCreateOptions(start.publicKey), attempt.keepAttachment);
         const cred=await navigator.credentials.create({{publicKey:pk}});
         if(!cred) throw new Error('Passkey registration did not complete.');
         const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
@@ -215,9 +220,10 @@ async function cpnRegisterPasskey(kind){{
       }}catch(err){{
         lastErr=err;
         const name=String((err&&err.name)||'');
-        // Only auto-fallback when the platform options are unsupported; cancel/timeout stays.
-        const canFallback=kinds.length>1 && i===0 && k==='platform'
-          && (name==='NotSupportedError' || /incongruent|inconsistent|not supported/i.test(String((err&&err.message)||'')));
+        const msg=String((err&&err.message)||'');
+        // Silent retry only for option incongruence / unsupported; cancel stays.
+        const canFallback=i===0
+          && (name==='NotSupportedError' || /incongruent|inconsistent|not supported|protection policy/i.test(msg));
         if(!canFallback) throw err;
       }}
     }}
@@ -371,6 +377,31 @@ mod tests {
         assert!(
             logic.contains("Touch your security key") || logic.contains("approve Windows Hello"),
             "NotAllowedError copy should guide YubiKey / Hello"
+        );
+        assert!(
+            !logic.contains("Use Register with Windows Hello"),
+            "register errors must not point at dual Hello/security-key buttons"
+        );
+    }
+
+    #[test]
+    fn register_script_uses_single_button_flow() {
+        let script = passkey_client_script();
+        assert!(
+            script.contains("Waiting for authenticator..."),
+            "single-button status must say Waiting for authenticator"
+        );
+        assert!(
+            !script.contains("Waiting for Windows Hello"),
+            "must not show Windows Hello-specific waiting copy"
+        );
+        assert!(
+            script.contains("function cpnNormalizeCreateOptions"),
+            "client must normalize create options for a unified picker"
+        );
+        assert!(
+            script.contains("delete pk.hints"),
+            "client must strip security-key-only hints"
         );
     }
 

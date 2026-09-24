@@ -247,10 +247,8 @@ pub fn users_self_edit_body(
         <label>Label (optional)
           <input id="cpn-passkey-label" type="text" maxlength="64" placeholder="Laptop / YubiKey">
         </label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <button type="button" class="btn-primary" onclick="cpnRegisterPasskey('platform')">Register with Windows Hello</button>
-          <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey('security-key')">Register security key</button>
-        </div>
+        <p class="muted" style="margin:0;">On loopback labs use <code>http://localhost</code> (not <code>127.0.0.1</code>). If the browser offers Microsoft Password Manager, choose <strong>Save another way</strong> for Windows Hello or a FIDO2 security key.</p>
+        <button type="button" class="btn-primary" onclick="cpnRegisterPasskey()">Register passkey</button>
         <p id="cpn-passkey-status" class="muted" role="status"></p>
       </div>
       <script>"#,
@@ -372,10 +370,16 @@ mod tests {
                 html.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
                 "edit profile passkey success must return to Modify User with notice"
             );
-            assert!(
-                html.contains("cpnRegisterPasskey"),
-                "edit profile must include passkey client script"
-            );
+        assert!(
+            html.contains("cpnRegisterPasskey"),
+            "edit profile must include passkey client script"
+        );
+        assert!(
+            html.contains(">Register passkey</button>")
+                && !html.contains("Register with Windows Hello")
+                && !html.contains("Register security key"),
+            "edit profile must offer a single Register passkey button"
+        );
             assert!(
                 !html.contains("id=\"cpn-passkey-enroll\""),
                 "edit profile must not use the MFA enroll redirect marker"

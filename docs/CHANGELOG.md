@@ -139,13 +139,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.47] - 24/09/2026
+
+Single Register passkey button after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
+
+### Fixed
+
+- **Passkey enroll UX**: restore one **Register passkey** button on enroll-2fa and Modify User (no Windows Hello vs security-key split). Registration uses one presence-only ceremony (no CredProtect UV-required, no required resident key, no platform UV-required passkey path that steered Edge into Microsoft Password Manager). Client strips `hints` for a unified OS/browser picker; on `NotSupportedError` it silently retries with a cross-platform attachment hint. Status text is **Waiting for authenticator...**.
+
 ## [0.2.6-alpha.46] - 24/09/2026
 
 Passkey CredProtect fix after `v0.2.6-alpha.45` (Cargo `0.2.6-alpha.46`).
 
 ### Fixed
 
-- **Passkey registration CredProtect incongruence**: Chrome/Edge rejected security-key create options when `userVerification` was preferred but the CredProtect extension required UV (`NotSupportedError: Requested protection policy is inconsistent or incongruent`). Security-key registration now uses presence-only keys (no UV-required CredProtect). Enroll UI offers separate **Windows Hello** (platform / UV required) and **Register security key** (YubiKey) buttons.
+- **Passkey registration CredProtect incongruence**: Chrome/Edge rejected security-key create options when `userVerification` was preferred but the CredProtect extension required UV (`NotSupportedError: Requested protection policy is inconsistent or incongruent`). Security-key registration now uses presence-only keys (no UV-required CredProtect). Enroll UI momentarily offered separate Windows Hello and security-key buttons (superseded by `0.2.6-alpha.47`).
 
 ## [0.2.6-alpha.45] - 24/09/2026
 
