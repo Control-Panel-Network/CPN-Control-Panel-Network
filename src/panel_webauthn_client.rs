@@ -31,10 +31,10 @@ function cpnPasskeyUserMessage(err,kind){
       ? 'This passkey cannot be used right now. Try another device or authenticator.'
       : 'This passkey is already registered.';
   }
-  if(name==='NotSupportedError' || /not supported|incongruent|inconsistent/i.test(lower)){
+  if(name==='NotSupportedError' || /not supported|incongruent|inconsistent|protection policy/i.test(lower)){
     return kind==='login'
       ? 'This authenticator cannot sign in here. Try Windows Hello or a FIDO2 security key.'
-      : 'This authenticator cannot register here. Try Windows Hello or a FIDO2 security key.';
+      : 'This authenticator cannot register here. Use Register with Windows Hello, or Register security key for a YubiKey.';
   }
   if(name==='NetworkError' || /network|failed to fetch/i.test(lower)){
     return 'Could not reach the panel to finish the passkey step. Check the connection and try again.';
@@ -172,30 +172,56 @@ function cpnPreferLocalhostForPasskeys(){{
   return false;
 }}
 {messages}
-async function cpnRegisterPasskey(){{
+async function cpnRegisterPasskey(kind){{
   const status=document.getElementById('cpn-passkey-status');
+  const requested=(kind===undefined||kind===null||kind==='')?'':String(kind);
+  // Auto: try Windows Hello first, then security key (YubiKey). Explicit kind skips fallback.
+  const kinds=requested
+    ? [requested]
+    : ['platform','security-key'];
   try{{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     // Browsers bind RP ID to the page host; use localhost (not 127.0.0.1) for create().
     if(cpnPreferLocalhostForPasskeys()) return;
-    if(status) status.textContent='Starting registration...';
     const label=(document.getElementById('cpn-passkey-label')||{{}}).value||'';
     const next=cpnPasskeyRegisterNext();
-    const start=await cpnJson('/account/users/profile/passkey/register/start',{{}});
-    const pk=await cpnDecodeCreateOptions(start.publicKey);
-    const cred=await navigator.credentials.create({{publicKey:pk}});
-    if(!cred) throw new Error('Passkey registration did not complete.');
-    const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
-      ceremony_id:start.ceremony_id,
-      label:label,
-      next:next,
-      credential:cpnCredToJson(cred)
-    }});
-    if(status) status.textContent='Passkey registered.';
-    const go=finish.redirect||next||'';
-    if(go){{ location.href=go; return; }}
-    location.reload();
+    let lastErr=null;
+    for(let i=0;i<kinds.length;i++){{
+      const k=kinds[i];
+      try{{
+        if(status){{
+          status.style.color='';
+          status.style.fontWeight='';
+          status.textContent=k==='platform'
+            ? 'Waiting for Windows Hello...'
+            : 'Waiting for security key...';
+        }}
+        const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:k}});
+        const pk=await cpnDecodeCreateOptions(start.publicKey);
+        const cred=await navigator.credentials.create({{publicKey:pk}});
+        if(!cred) throw new Error('Passkey registration did not complete.');
+        const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
+          ceremony_id:start.ceremony_id,
+          label:label,
+          next:next,
+          credential:cpnCredToJson(cred)
+        }});
+        if(status) status.textContent='Passkey registered.';
+        const go=finish.redirect||next||'';
+        if(go){{ location.href=go; return; }}
+        location.reload();
+        return;
+      }}catch(err){{
+        lastErr=err;
+        const name=String((err&&err.name)||'');
+        // Only auto-fallback when the platform options are unsupported; cancel/timeout stays.
+        const canFallback=kinds.length>1 && i===0 && k==='platform'
+          && (name==='NotSupportedError' || /incongruent|inconsistent|not supported/i.test(String((err&&err.message)||'')));
+        if(!canFallback) throw err;
+      }}
+    }}
+    if(lastErr) throw lastErr;
   }}catch(err){{
     const msg=cpnPasskeyUserMessage(err,'register');
     cpnShowPasskeyError(msg);

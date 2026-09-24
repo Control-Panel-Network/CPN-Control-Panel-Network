@@ -247,7 +247,10 @@ pub fn users_self_edit_body(
         <label>Label (optional)
           <input id="cpn-passkey-label" type="text" maxlength="64" placeholder="Laptop / YubiKey">
         </label>
-        <button type="button" class="btn-primary" onclick="cpnRegisterPasskey()">Register passkey</button>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn-primary" onclick="cpnRegisterPasskey('platform')">Register with Windows Hello</button>
+          <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey('security-key')">Register security key</button>
+        </div>
         <p id="cpn-passkey-status" class="muted" role="status"></p>
       </div>
       <script>"#,

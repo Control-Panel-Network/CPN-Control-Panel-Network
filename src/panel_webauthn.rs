@@ -1,9 +1,12 @@
 //! WebAuthn relying-party helpers and short-lived ceremony state.
 //! RP ID follows the request Host (works for `127.0.0.1` lab and production FQDNs).
 //!
-//! Registration uses the security-key ceremony with user verification **preferred** so
-//! YubiKeys (touch, optional FIDO2 PIN) and platform authenticators (Windows Hello) both
-//! work on `http://localhost:<port>` labs. Credentials are stored as Passkeys.
+//! Registration offers two ceremonies:
+//! - **platform**: passkey registration (UV required, congruent CredProtect) for Windows Hello
+//! - **security-key**: presence-only security-key registration (no CredProtect UV-required
+//!   extension) so YubiKeys / FIDO2 keys are not rejected as "incongruent" when UV is preferred
+//!
+//! Credentials are stored as Passkeys either way.
 
 use crate::account::{data_dir, now_unix};
 use crate::account_passkeys::{
@@ -21,9 +24,10 @@ use std::{
 use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
-    CreationChallengeResponse, Credential, DiscoverableAuthentication, DiscoverableKey, Passkey,
-    PublicKeyCredential, RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey,
-    SecurityKeyAuthentication, SecurityKeyRegistration, Webauthn, WebauthnBuilder,
+    AuthenticatorAttachment, CreationChallengeResponse, Credential, DiscoverableAuthentication,
+    DiscoverableKey, Passkey, PasskeyRegistration, PublicKeyCredential,
+    RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey, SecurityKeyAuthentication,
+    SecurityKeyRegistration, Webauthn, WebauthnBuilder,
 };
 
 pub use crate::panel_webauthn_client::passkey_client_script;
@@ -31,9 +35,39 @@ pub use crate::panel_webauthn_client::passkey_client_script;
 const CEREMONY_TTL_SECS: u64 = 300;
 const MAX_HOST_LEN: usize = 253;
 
+/// Which authenticator class the browser should enroll.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegisterAuthenticatorKind {
+    /// Windows Hello / platform authenticator (UV required, congruent options).
+    Platform,
+    /// Roaming FIDO2 / YubiKey (presence-only; avoids CredProtect vs UV mismatch).
+    SecurityKey,
+}
+
+impl RegisterAuthenticatorKind {
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "platform" | "hello" | "windows-hello" | "client-device" => Self::Platform,
+            "security-key" | "security_key" | "cross-platform" | "yubikey" | "roaming" => {
+                Self::SecurityKey
+            }
+            // Default to security-key for labs that register a physical key first.
+            _ => Self::SecurityKey,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Platform => "platform",
+            Self::SecurityKey => "security-key",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum CeremonyKind {
-    Register(SecurityKeyRegistration),
+    RegisterPasskey(PasskeyRegistration),
+    RegisterSecurityKey(SecurityKeyRegistration),
     Authenticate { state: SecurityKeyAuthentication },
     Discoverable(DiscoverableAuthentication),
 }
@@ -232,7 +266,10 @@ pub fn webauthn_for_request(
     let mut builder = WebauthnBuilder::new(&rp_id, &primary)
         .map_err(|err| format!("WebAuthn builder error: {err}"))?
         .rp_name("CPN Panel")
-        .allow_any_port(true);
+        .allow_any_port(true)
+        // Avoid CredProtect UV-required + UV-preferred incongruence that Chrome/Edge
+        // reject with NotSupportedError during security-key registration.
+        .danger_set_user_presence_only_security_keys(true);
     if loopback {
         // Accept either loopback spelling used by the lab browser/API client.
         for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
@@ -269,6 +306,7 @@ pub fn webauthn_for_request(
 pub fn start_registration(
     webauthn: &Webauthn,
     username: &str,
+    kind: RegisterAuthenticatorKind,
 ) -> Result<(String, CreationChallengeResponse), String> {
     let exclude = exclude_credential_ids(username);
     let exclude = if exclude.is_empty() {
@@ -276,24 +314,37 @@ pub fn start_registration(
     } else {
         Some(exclude)
     };
-    // Security-key ceremony: UV preferred (not required) so YubiKeys without a PIN and
-    // Windows Hello both work. Attachment hint left open for platform + roaming keys.
-    let (ccr, state) = webauthn
-        .start_securitykey_registration(
-            user_uuid(username),
-            username,
-            username,
-            exclude,
-            None,
-            None,
-        )
-        .map_err(|err| format!("Could not start passkey registration: {err}"))?;
+    let (ccr, ceremony_kind) = match kind {
+        RegisterAuthenticatorKind::Platform => {
+            // UV required + CredProtect UV-required stay congruent for Windows Hello.
+            let (ccr, state) = webauthn
+                .start_passkey_registration(user_uuid(username), username, username, exclude)
+                .map_err(|err| format!("Could not start passkey registration: {err}"))?;
+            (ccr, CeremonyKind::RegisterPasskey(state))
+        }
+        RegisterAuthenticatorKind::SecurityKey => {
+            // Presence-only security keys: no CredProtect UV-required extension, so Chrome
+            // does not reject the create() options as incongruent. Attachment hint prefers
+            // cross-platform authenticators (YubiKey) without blocking other keys.
+            let (ccr, state) = webauthn
+                .start_securitykey_registration(
+                    user_uuid(username),
+                    username,
+                    username,
+                    exclude,
+                    None,
+                    Some(AuthenticatorAttachment::CrossPlatform),
+                )
+                .map_err(|err| format!("Could not start passkey registration: {err}"))?;
+            (ccr, CeremonyKind::RegisterSecurityKey(state))
+        }
+    };
     let id = new_ceremony_id();
     save_ceremony(&CeremonyRecord {
         id: id.clone(),
         username: username.to_string(),
         created_at_unix: now_unix(),
-        kind: CeremonyKind::Register(state),
+        kind: ceremony_kind,
     })?;
     Ok((id, ccr))
 }
@@ -309,13 +360,21 @@ pub fn finish_registration(
     if !record.username.eq_ignore_ascii_case(username) {
         return Err("Passkey ceremony user mismatch".into());
     }
-    let CeremonyKind::Register(state) = record.kind else {
-        return Err("Passkey ceremony type mismatch".into());
-    };
-    let security_key = webauthn
-        .finish_securitykey_registration(credential, &state)
-        .map_err(|err| format!("Passkey registration failed: {err}"))?;
-    add_passkey(username, label, security_key_to_passkey(security_key))?;
+    match record.kind {
+        CeremonyKind::RegisterPasskey(state) => {
+            let passkey = webauthn
+                .finish_passkey_registration(credential, &state)
+                .map_err(|err| format!("Passkey registration failed: {err}"))?;
+            add_passkey(username, label, passkey)?;
+        }
+        CeremonyKind::RegisterSecurityKey(state) => {
+            let security_key = webauthn
+                .finish_securitykey_registration(credential, &state)
+                .map_err(|err| format!("Passkey registration failed: {err}"))?;
+            add_passkey(username, label, security_key_to_passkey(security_key))?;
+        }
+        _ => return Err("Passkey ceremony type mismatch".into()),
+    }
     Ok(())
 }
 
@@ -424,7 +483,9 @@ pub fn finish_authentication(
 
 #[cfg(test)]
 mod tests {
-    use super::{start_authentication, start_registration, webauthn_for_request};
+    use super::{
+        start_authentication, start_registration, webauthn_for_request, RegisterAuthenticatorKind,
+    };
     use crate::account::with_test_data_dir;
 
     #[test]
@@ -515,13 +576,17 @@ mod tests {
     }
 
     #[test]
-    fn registration_challenge_uses_uv_preferred_for_security_keys() {
+    fn registration_security_key_avoids_credprotect_uv_incongruence() {
         with_test_data_dir(|| {
             let (webauthn, rp_id) =
                 webauthn_for_request(Some("localhost:2091"), false).expect("webauthn");
             assert_eq!(rp_id, "localhost");
-            let (_, challenge) =
-                start_registration(&webauthn, "cpnowner").expect("registration should start");
+            let (_, challenge) = start_registration(
+                &webauthn,
+                "cpnowner",
+                RegisterAuthenticatorKind::SecurityKey,
+            )
+            .expect("security-key registration should start");
             let json = serde_json::to_value(challenge).expect("challenge JSON");
             let pk = json
                 .get("publicKey")
@@ -537,9 +602,48 @@ mod tests {
                 .get("userVerification")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
+            assert_ne!(
+                uv, "required",
+                "security-key labs must not require UV (YubiKey without PIN); got {selection}"
+            );
+            let extensions = pk.get("extensions").and_then(|v| v.as_object());
+            let cred_protect = extensions
+                .and_then(|e| e.get("credentialProtectionPolicy"))
+                .and_then(|v| v.as_str());
+            assert!(
+                cred_protect.is_none() || cred_protect != Some("userVerificationRequired"),
+                "CredProtect UV-required + non-required UV is rejected by Chrome as incongruent; got {extensions:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn registration_platform_keeps_uv_required_congruent() {
+        with_test_data_dir(|| {
+            let (webauthn, _) =
+                webauthn_for_request(Some("localhost:2091"), false).expect("webauthn");
+            let (_, challenge) = start_registration(
+                &webauthn,
+                "cpnowner",
+                RegisterAuthenticatorKind::Platform,
+            )
+            .expect("platform registration should start");
+            let json = serde_json::to_value(challenge).expect("challenge JSON");
+            let pk = json
+                .get("publicKey")
+                .expect("publicKey")
+                .as_object()
+                .expect("object");
+            let selection = pk
+                .get("authenticatorSelection")
+                .expect("authenticatorSelection");
+            let uv = selection
+                .get("userVerification")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             assert_eq!(
-                uv, "preferred",
-                "YubiKey/lab registration must prefer UV, not require it; got {selection}"
+                uv, "required",
+                "Windows Hello / platform registration expects UV required; got {selection}"
             );
         });
     }

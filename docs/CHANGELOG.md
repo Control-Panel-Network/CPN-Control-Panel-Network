@@ -139,6 +139,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.46] - 24/09/2026
+
+Passkey CredProtect fix after `v0.2.6-alpha.45` (Cargo `0.2.6-alpha.46`).
+
+### Fixed
+
+- **Passkey registration CredProtect incongruence**: Chrome/Edge rejected security-key create options when `userVerification` was preferred but the CredProtect extension required UV (`NotSupportedError: Requested protection policy is inconsistent or incongruent`). Security-key registration now uses presence-only keys (no UV-required CredProtect). Enroll UI offers separate **Windows Hello** (platform / UV required) and **Register security key** (YubiKey) buttons.
+
 ## [0.2.6-alpha.45] - 24/09/2026
 
 Passkey registration fix after `v0.2.6-alpha.44` (Cargo `0.2.6-alpha.45`, #300).

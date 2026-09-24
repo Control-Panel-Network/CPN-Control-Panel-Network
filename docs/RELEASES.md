@@ -1,4 +1,4 @@
-# Releases and Verification
+﻿# Releases and Verification
 
 Official CPN releases are published through GitHub Releases. End users should install those native artifacts instead of building packages from source.
 
@@ -14,7 +14,7 @@ curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 
 # Pin Release / tracking ref; optional Docker bypass
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.45
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.46
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --bypass
 ```
 
