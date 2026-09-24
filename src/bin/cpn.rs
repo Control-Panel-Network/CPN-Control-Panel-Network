@@ -322,14 +322,15 @@ fn run() -> Result<(), String> {
             purge_stack,
             dry_run,
         } => {
-            let code = cpn_installer::cli_uninstall::run(cpn_installer::cli_uninstall::UninstallOptions {
-                yes,
-                keep_data,
-                purge_all,
-                purge_sites,
-                purge_stack,
-                dry_run,
-            });
+            let code =
+                cpn_installer::cli_uninstall::run(cpn_installer::cli_uninstall::UninstallOptions {
+                    yes,
+                    keep_data,
+                    purge_all,
+                    purge_sites,
+                    purge_stack,
+                    dry_run,
+                });
             if code == 0 {
                 Ok(())
             } else {
