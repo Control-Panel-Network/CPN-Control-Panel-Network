@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Version Management UI post-upgrade reconnect**: UI package upgrade/repair no longer calls `systemctl stop` on the live MainPID (that left the unit inactive and the browser on ERR_CONNECTION_RESET / "Waiting for panel after restart"). After a successful apply the panel schedules a detached reload (`systemd-run` / nohup), marks maintenance completed first, and the Version page polls the same browser origin (`localhost` vs `127.0.0.1`) until `/login` is back with a clear success or timeout message.
+
 - **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk** (Spam role), **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
 
 ### Added

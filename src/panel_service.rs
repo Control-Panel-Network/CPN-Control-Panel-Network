@@ -63,6 +63,16 @@ fn under_systemd() -> bool {
     env::var_os("INVOCATION_ID").is_some()
 }
 
+/// True when this process is the systemd `cpn-installer.service` MainPID.
+///
+/// UI Version Management upgrades run inside that unit. Synchronous
+/// `systemctl stop/restart` from the same process kills the worker before it can
+/// mark maintenance complete or start the unit again (browser then sees
+/// ERR_CONNECTION_RESET). Callers should schedule a detached restart instead.
+pub fn running_under_systemd() -> bool {
+    under_systemd()
+}
+
 fn allow_remote_preference_path() -> PathBuf {
     paths::join_data("allow_remote")
 }
@@ -335,6 +345,76 @@ pub fn ensure_panel_service_after_install(
     })
 }
 
+/// Schedule a panel unit restart that outlives this process.
+///
+/// Used after in-process (UI) package apply: a detached `systemd-run` helper
+/// heals `/usr/local/bin/cpn*` shadows, clears failed state, and restarts the
+/// unit so the new binary listens again. Safe when called from MainPID; do not
+/// call `systemctl stop` on this unit from the same process.
+pub fn schedule_detached_panel_restart(reason: &str) -> Result<(), String> {
+    if cfg!(windows) {
+        return Ok(());
+    }
+    if !is_root() {
+        return Err("schedule_detached_panel_restart requires root".into());
+    }
+    let reason_safe: String = reason
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '-' })
+        .take(80)
+        .collect();
+    let unit_helper = format!("cpn-panel-reload-{}.service", std::process::id());
+    let script = format!(
+        "sleep 2; \
+         rm -f /usr/local/bin/cpn /usr/local/bin/cpn-installer 2>/dev/null || true; \
+         systemctl reset-failed {unit} 2>/dev/null || true; \
+         systemctl stop {unit} 2>/dev/null || true; \
+         sleep 1; \
+         for pid in $(pgrep -x cpn-installer 2>/dev/null || true); do \
+           kill -TERM \"$pid\" 2>/dev/null || true; \
+         done; \
+         sleep 1; \
+         for pid in $(pgrep -x cpn-installer 2>/dev/null || true); do \
+           kill -KILL \"$pid\" 2>/dev/null || true; \
+         done; \
+         systemctl start {unit} || systemctl restart {unit} || true; \
+         logger -t cpn-installer \"detached panel restart ({reason}) finished\" 2>/dev/null || true",
+        unit = UNIT_NAME,
+        reason = reason_safe
+    );
+    let status = Command::new("systemd-run")
+        .args([
+            "--collect",
+            &format!("--unit={unit_helper}"),
+            "--description=CPN detached panel reload after package apply",
+            "/bin/bash",
+            "-c",
+            &script,
+        ])
+        .status()
+        .map_err(|error| format!("Could not schedule detached panel restart: {error}"))?;
+    if status.success() {
+        return Ok(());
+    }
+    // Fallback when systemd-run is unavailable: nohup outside this cgroup is best-effort.
+    let status = Command::new("bash")
+        .args([
+            "-c",
+            &format!("nohup bash -c {script} >/dev/null 2>&1 &", script = shell_single_quote(&script)),
+        ])
+        .status()
+        .map_err(|error| format!("Could not nohup detached panel restart: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Could not schedule detached panel restart (systemd-run and nohup failed)".into())
+    }
+}
+
+fn shell_single_quote(raw: &str) -> String {
+    format!("'{}'", raw.replace('\'', "'\"'\"'"))
+}
+
 /// Best-effort wrapper for install paths (logs warnings, never fails the install).
 pub fn ensure_panel_service_best_effort(mode: PanelServiceMode, allow_remote: bool) {
     match ensure_panel_service_after_install(mode, allow_remote) {
@@ -382,6 +462,12 @@ mod tests {
         assert!(joined.contains("systemctl"));
         assert!(!joined.to_lowercase().contains("password"));
         assert!(!joined.contains('\u{2014}'));
+    }
+
+    #[test]
+    fn shell_single_quote_escapes_embedded_quotes() {
+        assert_eq!(shell_single_quote("a'b"), "'a'\"'\"'b'");
+        assert!(!shell_single_quote("restart").contains('\u{2014}'));
     }
 
     #[test]

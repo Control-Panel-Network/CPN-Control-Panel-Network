@@ -306,8 +306,10 @@ pub fn version_page_script(can_manage: bool) -> String {
   window.cpnVersionRecheck = check;
   var pollFailCount = 0;
   var pollBackoffMs = 500;
-  var POLL_FAIL_SOFT_MAX = 8;
-  var POLL_FAIL_HARD_MAX = 40;
+  var POLL_FAIL_SOFT_MAX = 6;
+  var POLL_FAIL_HARD_MAX = 60;
+  var awaitingReconnect = false;
+  var sawCompletedBeforeDisconnect = false;
   function schedulePoll(delayMs) {{
     if (pollTimer) {{ clearTimeout(pollTimer); pollTimer = null; }}
     pollTimer = setTimeout(pollStatus, Math.max(250, delayMs || 500));
@@ -318,6 +320,36 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (pollTimer) {{ clearTimeout(pollTimer); pollTimer = null; }}
     pollFailCount = 0;
     pollBackoffMs = 500;
+    awaitingReconnect = false;
+    sawCompletedBeforeDisconnect = false;
+  }}
+  function finishAfterReconnect(st) {{
+    finishPollOk();
+    if (progressBar) progressBar.style.width = "100%";
+    if (progressLabel) {{
+      progressLabel.textContent = "100% Completed. Panel reconnected after restart.";
+    }}
+    if (opError) opError.textContent = "";
+    if (st && st.error) {{
+      if (opError) opError.textContent = st.error;
+      if (progressLabel) progressLabel.textContent = "Failed after reconnect: " + st.error;
+    }}
+    check(false);
+  }}
+  function probeLoginThen(cont) {{
+    // Same-origin /login proves the browser host:port (localhost:2091 vs 127.0.0.1) is up.
+    fetch("/login", {{
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "manual"
+    }}).then(function (res) {{
+      if (res && (res.ok || res.status === 301 || res.status === 302 || res.status === 303 || res.type === "opaqueredirect")) {{
+        cont(true);
+        return;
+      }}
+      cont(false);
+    }}).catch(function () {{ cont(false); }});
   }}
   function pollStatus() {{
     fetch("/api/maintenance/status", {{
@@ -330,7 +362,8 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}).then(function (st) {{
       pollFailCount = 0;
       pollBackoffMs = 500;
-      if (opError && opError.textContent.indexOf("Status poll failed") === 0) {{
+      if (opError && (opError.textContent.indexOf("Status poll failed") === 0 ||
+          opError.textContent.indexOf("Reconnecting to panel") === 0)) {{
         opError.textContent = "";
       }}
       var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
@@ -339,10 +372,18 @@ pub fn version_page_script(can_manage: bool) -> String {
         var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
         progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
       }}
-      if (st.error) {{
+      if (st.phase === "completed") {{
+        sawCompletedBeforeDisconnect = true;
+      }}
+      if (st.error && st.phase === "failed") {{
         finishPollOk();
         if (opError) opError.textContent = st.error;
         if (progressLabel) progressLabel.textContent = pct + "% Failed: " + st.error;
+        return;
+      }}
+      // After a package restart the new process starts in preparing/ready with busy=false.
+      if (awaitingReconnect && !st.busy) {{
+        finishAfterReconnect(st);
         return;
       }}
       if (!st.busy && (st.phase === "completed" || st.phase === "ready" || st.phase === "failed")) {{
@@ -352,6 +393,7 @@ pub fn version_page_script(can_manage: bool) -> String {
         }} else {{
           if (progressBar) progressBar.style.width = "100%";
           if (progressLabel) progressLabel.textContent = "100% Completed.";
+          if (opError) opError.textContent = "";
           check(false);
         }}
         return;
@@ -359,21 +401,42 @@ pub fn version_page_script(can_manage: bool) -> String {
       schedulePoll(500);
     }}).catch(function (err) {{
       pollFailCount += 1;
-      pollBackoffMs = Math.min(5000, Math.round(pollBackoffMs * 1.4));
+      awaitingReconnect = true;
+      pollBackoffMs = Math.min(4000, Math.round(pollBackoffMs * 1.35));
       if (progressLabel) {{
         progressLabel.textContent = "Waiting for panel after restart (" + pollFailCount + ")...";
       }}
       if (pollFailCount >= POLL_FAIL_HARD_MAX) {{
-        finishPollOk();
-        if (opError) {{
-          opError.textContent = friendlyFetchError(err, "Status poll") +
-            " If the package already matches tip, refresh this page.";
-        }}
-        check(false);
+        probeLoginThen(function (loginOk) {{
+          if (loginOk || sawCompletedBeforeDisconnect) {{
+            finishAfterReconnect({{ phase: "completed", busy: false, error: null }});
+            return;
+          }}
+          finishPollOk();
+          if (opError) {{
+            opError.textContent = friendlyFetchError(err, "Status poll") +
+              " Package apply may have finished. Confirm cpn-installer is active (sudo systemctl start cpn-installer; sudo cpn doctor --heal), then refresh this page on the same host you used (localhost vs 127.0.0.1).";
+          }}
+          if (progressLabel) {{
+            progressLabel.textContent = "Reconnect timed out. Refresh /settings/version when the panel is back.";
+          }}
+          check(false);
+        }});
         return;
       }}
       if (pollFailCount >= POLL_FAIL_SOFT_MAX && opError) {{
-        opError.textContent = "Reconnecting to panel after restart...";
+        opError.textContent = "Reconnecting to panel after restart on " + window.location.origin + "...";
+      }}
+      // Also probe /login so NAT host ports recover even if status JSON is briefly 401.
+      if (pollFailCount >= POLL_FAIL_SOFT_MAX && pollFailCount % 3 === 0) {{
+        probeLoginThen(function (loginOk) {{
+          if (loginOk) {{
+            schedulePoll(400);
+            return;
+          }}
+          schedulePoll(pollBackoffMs);
+        }});
+        return;
       }}
       schedulePoll(pollBackoffMs);
     }});
@@ -385,6 +448,8 @@ pub fn version_page_script(can_manage: bool) -> String {
     clearConfirm();
     pollFailCount = 0;
     pollBackoffMs = 500;
+    awaitingReconnect = false;
+    sawCompletedBeforeDisconnect = false;
     if (opError) opError.textContent = "";
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
@@ -491,6 +556,10 @@ mod tests {
         assert!(js.contains("retry_after_secs"));
         assert!(js.contains("cpnFriendlyFetchError"));
         assert!(js.contains("cpn-version-source-tip"));
+        assert!(js.contains("awaitingReconnect"));
+        assert!(js.contains("Waiting for panel after restart"));
+        assert!(js.contains("window.location.origin"));
+        assert!(js.contains("probeLoginThen"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

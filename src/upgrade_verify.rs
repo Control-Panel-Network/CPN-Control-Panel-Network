@@ -355,13 +355,28 @@ fn wait_http_login_ok(port: u16, attempts: u32, sleep_secs: u64) -> bool {
     http_login_ok(port)
 }
 
-fn ensure_panel_service_restarted() -> Result<(), String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PanelRestartKind {
+    /// CLI / out-of-band: unit restarted in-process.
+    Sync,
+    /// Web UI under systemd: restart scheduled via systemd-run / nohup.
+    Deferred,
+}
+
+fn ensure_panel_service_restarted() -> Result<PanelRestartKind, String> {
     let allow_remote = panel_service::allow_remote_requested();
     panel_service::ensure_panel_service_after_install(
         PanelServiceMode::EnableAndStart,
         allow_remote,
     )
     .map(|_| ())?;
+
+    // UI upgrades run as the systemd MainPID. Do not stop/restart here; the caller
+    // schedules a detached reload after writing phase=completed so migrations finish.
+    if panel_service::running_under_systemd() {
+        return Ok(PanelRestartKind::Deferred);
+    }
+
     // Labs often leave a foreground `sudo cpn-installer --web` holding :2087.
     // `systemctl restart` alone then fails with AddrInUse and verification marks
     // the upgrade as failed even when package apply succeeded.
@@ -385,7 +400,7 @@ fn ensure_panel_service_restarted() -> Result<(), String> {
             .status();
         let _ = wait_panel_unit_active(6, 1);
     }
-    Ok(())
+    Ok(PanelRestartKind::Sync)
 }
 
 /// Verify critical services after upgrade. Fails when required checks fail.
@@ -406,39 +421,68 @@ pub fn verify_after_upgrade(
         return Ok(report);
     }
 
-    if let Err(error) = ensure_panel_service_restarted() {
-        push(
-            &mut report,
-            "panel.service",
-            false,
-            format!("could not enable/restart cpn-installer.service: {error}"),
-            true,
-        );
-    } else {
-        // Unit can be briefly inactive right after restart; wait before failing.
-        let active = wait_panel_unit_active(8, 1);
-        push(
-            &mut report,
-            "panel.service",
-            active,
-            if active {
-                "cpn-installer.service is active"
-            } else {
-                "cpn-installer.service is not active after restart"
-            },
-            true,
-        );
-    }
+    let restart_kind = match ensure_panel_service_restarted() {
+        Ok(kind) => Some(kind),
+        Err(error) => {
+            push(
+                &mut report,
+                "panel.service",
+                false,
+                format!("could not enable/restart cpn-installer.service: {error}"),
+                true,
+            );
+            None
+        }
+    };
 
-    let port = listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
-    let login_ok = wait_http_login_ok(port, 8, 1);
-    push(
-        &mut report,
-        "panel.http_login",
-        login_ok,
-        format!("GET http://127.0.0.1:{port}/login"),
-        true,
-    );
+    match restart_kind {
+        Some(PanelRestartKind::Deferred) => {
+            push(
+                &mut report,
+                "panel.service",
+                true,
+                "cpn-installer.service reload scheduled (detached; avoids in-process self-stop)",
+                true,
+            );
+            let port =
+                listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
+            push(
+                &mut report,
+                "panel.http_login",
+                true,
+                format!(
+                    "GET http://127.0.0.1:{port}/login deferred until detached reload finishes"
+                ),
+                false,
+            );
+        }
+        Some(PanelRestartKind::Sync) => {
+            // Unit can be briefly inactive right after restart; wait before failing.
+            let active = wait_panel_unit_active(8, 1);
+            push(
+                &mut report,
+                "panel.service",
+                active,
+                if active {
+                    "cpn-installer.service is active"
+                } else {
+                    "cpn-installer.service is not active after restart"
+                },
+                true,
+            );
+            let port =
+                listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
+            let login_ok = wait_http_login_ok(port, 8, 1);
+            push(
+                &mut report,
+                "panel.http_login",
+                login_ok,
+                format!("GET http://127.0.0.1:{port}/login"),
+                true,
+            );
+        }
+        None => {}
+    }
 
     check_cli_binaries(&mut report);
 
