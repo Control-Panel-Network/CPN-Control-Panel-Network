@@ -12,6 +12,34 @@ use tokio::process::Command;
 
 const TIP_CARGO_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn recent_alpha_fallback_tips() -> Vec<String> {
+    // Walk back from the binary tip so CDN fallback stays near current alphas.
+    let tip = normalize_version(TIP_CARGO_VERSION);
+    let mut out = Vec::new();
+    if let Some((prefix, num)) = tip.rsplit_once('.')
+        && prefix.contains("alpha")
+        && let Ok(n) = num.parse::<u64>()
+    {
+        for step in 0..12u64 {
+            if n >= step {
+                out.push(format!("v{prefix}.{}", n - step));
+            }
+        }
+        return out;
+    }
+    for tip in [
+        "v0.2.6-alpha.46",
+        "v0.2.6-alpha.45",
+        "v0.2.6-alpha.44",
+        "v0.2.6-alpha.43",
+        "v0.2.6-alpha.42",
+        "v0.2.6-alpha.28",
+    ] {
+        out.push(tip.to_string());
+    }
+    out
+}
+
 fn tag_candidates(wanted: Option<&str>) -> Vec<String> {
     let mut out = Vec::new();
     let push = |list: &mut Vec<String>, raw: &str| {
@@ -35,15 +63,8 @@ fn tag_candidates(wanted: Option<&str>) -> Vec<String> {
         push(&mut out, &value);
     }
     push(&mut out, TIP_CARGO_VERSION);
-    // Recent published tips (newest first). Keep short; CDN probe is cheap vs API.
-    for tip in [
-        "v0.2.6-alpha.28",
-        "v0.2.6-alpha.27",
-        "v0.2.6-alpha.26",
-        "v0.2.6-alpha.25",
-        "v0.2.6-alpha.24",
-    ] {
-        push(&mut out, tip);
+    for tip in recent_alpha_fallback_tips() {
+        push(&mut out, &tip);
     }
     out
 }

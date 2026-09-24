@@ -150,6 +150,9 @@ Notes:
   Operator health check: cpn doctor  (optional: sudo cpn doctor --heal to clear local-bin overrides).
   Recommended fix flow when the panel is unhealthy: hash -r; sudo cpn doctor --heal; sudo cpn-installer --upgrade; sudo cpn-installer --repair; cpn doctor.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
+  Upgrade without --to targets the newest publishable GitHub release for the configured source (not a stale selected UI tag).
+  When that tip equals the installed package (or is older after a cache refresh), upgrade exits 0 with: Already up to date (X.Y.Z).
+  Downgrade messaging appears only for an explicit older --to / --downgrade request.
   Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
   Upgrade may refresh already-installed CPN-managed packages (MariaDB, OpenLiteSpeed, PHP) via dnf/apt; databases and docroots are never dropped.
   Without --bypass, Docker stacks are left running as-is; with --bypass, only CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 are refreshed.
@@ -224,8 +227,19 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 confirm_execute: true,
                 bypass_docker,
             };
-            match run_maintenance(state, request).await {
-                Ok(()) => 0,
+            match run_maintenance(state.clone(), request).await {
+                Ok(()) => {
+                    let message = state
+                        .status
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .message
+                        .clone();
+                    if !message.is_empty() {
+                        println!("{message}");
+                    }
+                    0
+                }
                 Err(error) => {
                     eprintln!("error: {error}");
                     1

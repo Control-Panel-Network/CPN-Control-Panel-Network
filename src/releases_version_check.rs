@@ -2,6 +2,7 @@
 
 use crate::releases::{
     OFFICIAL_GITHUB_REPO, VersionCheck, compare_versions, github_repo, package_source_label,
+    pick_newest_publishable_release,
 };
 use crate::releases_fetch::list_releases_for_repo;
 use crate::releases_source;
@@ -13,7 +14,7 @@ async fn upstream_tip(force_network: bool) -> (Option<String>, Option<String>) {
     }
     match list_releases_for_repo(OFFICIAL_GITHUB_REPO, 1, force_network).await {
         Ok(fetched) => {
-            let latest = fetched.releases.first();
+            let latest = pick_newest_publishable_release(&fetched.releases);
             (
                 latest.map(|item| item.version.clone()),
                 latest.map(|item| item.tag_name.clone()),
@@ -39,7 +40,7 @@ pub async fn version_check_with_options(
     let upstream_repo = OFFICIAL_GITHUB_REPO.to_string();
     match list_releases_for_repo(&repo, 20, force_network).await {
         Ok(fetched) => {
-            let latest = fetched.releases.first();
+            let latest = pick_newest_publishable_release(&fetched.releases);
             let latest_version = latest.map(|item| item.version.clone());
             let latest_tag = latest.map(|item| item.tag_name.clone());
             let update_available = latest_version

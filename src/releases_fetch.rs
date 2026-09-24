@@ -1,6 +1,8 @@
 //! GitHub Releases HTTP fetch with disk cache and rate limiting.
 
-use crate::releases::{CpnRelease, github_repo, normalize_version, parse_release};
+use crate::releases::{
+    CpnRelease, github_repo, normalize_version, parse_release, sort_releases_newest_first,
+};
 use std::process::Stdio;
 use tokio::process::Command;
 
@@ -108,19 +110,24 @@ async fn curl_github_releases(url: &str, etag: Option<&str>) -> Result<GithubHtt
     })
 }
 
+fn take_newest(mut releases: Vec<CpnRelease>, limit: usize) -> Vec<CpnRelease> {
+    sort_releases_newest_first(&mut releases);
+    releases.truncate(limit.max(1));
+    releases
+}
+
 fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, String> {
     let value: serde_json::Value =
         serde_json::from_str(body).map_err(|error| format!("Invalid releases JSON: {error}"))?;
     let items = value
         .as_array()
         .ok_or_else(|| "GitHub Releases response was not an array".to_string())?;
-    let mut releases = items
+    let releases = items
         .iter()
         .filter_map(parse_release)
         .filter(|release| !release.draft)
         .collect::<Vec<_>>();
-    releases.truncate(limit.max(1));
-    Ok(releases)
+    Ok(take_newest(releases, limit))
 }
 
 async fn direct_fallback_result(
@@ -171,6 +178,17 @@ pub async fn list_releases_for_repo(
     limit: usize,
     force_network: bool,
 ) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
+    list_releases_for_repo_opts(repo, limit, force_network, false).await
+}
+
+/// Like [`list_releases_for_repo`], with optional bypass of the manual-check min interval.
+/// Upgrade uses `bypass_min_interval=true` when the cached tip is older than installed.
+pub async fn list_releases_for_repo_opts(
+    repo: &str,
+    limit: usize,
+    force_network: bool,
+    bypass_min_interval: bool,
+) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
     use crate::releases_cache::{
         self, age_secs, cache_is_fresh, load_cache_for, mark_attempt, note_for_cached,
         save_cache_for, seconds_until_next_check, store_success,
@@ -185,8 +203,7 @@ pub async fn list_releases_for_repo(
     if let Some(cache) = existing.as_ref() {
         if cache_is_fresh(cache, repo) && !force_network {
             let age = age_secs(cache);
-            let mut releases = cache.releases.clone();
-            releases.truncate(limit.max(1));
+            let releases = take_newest(cache.releases.clone(), limit);
             return Ok(releases_cache::ReleasesFetchResult {
                 releases,
                 from_cache: true,
@@ -197,10 +214,12 @@ pub async fn list_releases_for_repo(
                 soft_error: None,
             });
         }
-        if force_network && let Some(wait) = seconds_until_next_check(cache) {
+        if force_network
+            && !bypass_min_interval
+            && let Some(wait) = seconds_until_next_check(cache)
+        {
             let age = age_secs(cache);
-            let mut releases = cache.releases.clone();
-            releases.truncate(limit.max(1));
+            let releases = take_newest(cache.releases.clone(), limit);
             return Ok(releases_cache::ReleasesFetchResult {
                 releases,
                 from_cache: true,
@@ -223,8 +242,7 @@ pub async fn list_releases_for_repo(
                 && cache.repo == repo
             {
                 let age = age_secs(cache);
-                let mut releases = cache.releases.clone();
-                releases.truncate(limit.max(1));
+                let releases = take_newest(cache.releases.clone(), limit);
                 let mut updated = cache.clone();
                 mark_attempt(&mut updated);
                 updated.last_error = Some(error.clone());
@@ -256,9 +274,9 @@ pub async fn list_releases_for_repo(
         if let Some(tag) = response.etag.clone() {
             updated.etag = Some(tag);
         }
+        sort_releases_newest_first(&mut updated.releases);
         let _ = save_cache_for(repo, &updated);
-        let mut releases = updated.releases.clone();
-        releases.truncate(limit.max(1));
+        let releases = take_newest(updated.releases.clone(), limit);
         return Ok(releases_cache::ReleasesFetchResult {
             releases,
             from_cache: true,
@@ -281,8 +299,7 @@ pub async fn list_releases_for_repo(
             && cache.repo == repo
         {
             let age = age_secs(cache);
-            let mut releases = cache.releases.clone();
-            releases.truncate(limit.max(1));
+            let releases = take_newest(cache.releases.clone(), limit);
             let mut updated = cache.clone();
             mark_attempt(&mut updated);
             updated.last_error = Some(msg.clone());
@@ -311,8 +328,7 @@ pub async fn list_releases_for_repo(
             && cache.repo == repo
         {
             let age = age_secs(cache);
-            let mut releases = cache.releases.clone();
-            releases.truncate(limit.max(1));
+            let releases = take_newest(cache.releases.clone(), limit);
             let mut updated = cache.clone();
             mark_attempt(&mut updated);
             updated.last_error = Some(msg.clone());
@@ -349,6 +365,14 @@ pub async fn list_releases_cached(
     force_network: bool,
 ) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
     list_releases_for_repo(&github_repo(), limit, force_network).await
+}
+
+pub async fn list_releases_cached_opts(
+    limit: usize,
+    force_network: bool,
+    bypass_min_interval: bool,
+) -> Result<crate::releases_cache::ReleasesFetchResult, String> {
+    list_releases_for_repo_opts(&github_repo(), limit, force_network, bypass_min_interval).await
 }
 
 pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {

@@ -66,16 +66,25 @@ async fn resolve_target_release(
     match action {
         MaintenanceAction::Upgrade => {
             if let Some(version) = requested {
-                releases::find_release(version).await
-            } else {
-                let list = releases::list_releases(20).await?;
-                // Alpha-only period: prefer newest non-draft release (including prereleases).
-                list.first()
-                    .cloned()
-                    .ok_or_else(|| {
-                        "No GitHub release found. Publish a release with RPM/binary assets, or set CPN_GITHUB_REPO.".into()
-                    })
+                return releases::find_release(version).await;
             }
+            // Default upgrade target: newest publishable release from configured source.
+            // Stale disk cache can still tip at an older tag after a newer install; refresh once.
+            let mut fetched = releases::list_releases_cached(30, false).await?;
+            let mut tip = releases::pick_newest_publishable_release(&fetched.releases)
+                .cloned()
+                .ok_or_else(|| {
+                    "No GitHub release found. Publish a release with RPM/binary assets, or set CPN_GITHUB_REPO.".to_string()
+                })?;
+            if compare_versions(&tip.version, installed_version) == Ordering::Less {
+                fetched = releases::list_releases_cached_opts(30, true, true).await?;
+                if let Some(refreshed) =
+                    releases::pick_newest_publishable_release(&fetched.releases)
+                {
+                    tip = refreshed.clone();
+                }
+            }
+            Ok(tip)
         }
         MaintenanceAction::Downgrade | MaintenanceAction::Repair => {
             let version = requested
@@ -85,6 +94,24 @@ async fn resolve_target_release(
         }
         MaintenanceAction::ConfigOnly => Err("config_only does not resolve a release".into()),
     }
+}
+
+async fn finish_already_up_to_date(
+    state: Arc<AppState>,
+    installed: &str,
+) -> Result<(), String> {
+    let message = format!("Already up to date ({installed})");
+    state.log(message.clone(), "info");
+    state.progress("completed", 100, message.clone()).await;
+    let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
+    status.phase = "completed";
+    status.progress = 100;
+    status.error = None;
+    status.message = message;
+    let _ = state.events.send(crate::model::InstallerEvent::Completed {
+        status: status.clone(),
+    });
+    Ok(())
 }
 
 fn maybe_reset_data(reset_data: bool) -> Result<(), String> {
@@ -151,18 +178,27 @@ pub async fn run_maintenance(
     let release =
         resolve_target_release(request.action, request.version.as_deref(), &installed).await?;
 
+    let explicit_target = request.version.is_some();
     let retag = matches!(request.action, MaintenanceAction::Upgrade)
         && is_retag_migration(&installed, &release.version);
 
-    if matches!(request.action, MaintenanceAction::Upgrade)
-        && compare_versions(&release.version, &installed) == Ordering::Less
-        && !request.confirm_downgrade
-        && !retag
-    {
-        return Err(format!(
-            "Target {} is older than installed {installed}. Use downgrade with confirmation.",
-            release.version
-        ));
+    if matches!(request.action, MaintenanceAction::Upgrade) && !retag {
+        match compare_versions(&release.version, &installed) {
+            Ordering::Equal => {
+                return finish_already_up_to_date(state, &installed).await;
+            }
+            Ordering::Less if !explicit_target => {
+                // Cached tip still older than installed after refresh: not a downgrade request.
+                return finish_already_up_to_date(state, &installed).await;
+            }
+            Ordering::Less if explicit_target && !request.confirm_downgrade => {
+                return Err(format!(
+                    "Target {} is older than installed {installed}. Use --downgrade --to {} --yes (or confirm_downgrade) to install that older release.",
+                    release.version, release.version
+                ));
+            }
+            _ => {}
+        }
     }
 
     if retag {
@@ -379,6 +415,10 @@ pub async fn spawn_maintenance(state: Arc<AppState>, request: MaintenanceRequest
 mod tests {
     use super::build_plan;
     use crate::model::MaintenanceAction;
+    use crate::releases::{
+        CpnRelease, ReleaseAsset, compare_versions, pick_newest_publishable_release,
+    };
+    use std::cmp::Ordering;
 
     #[test]
     fn plan_lists_preserve_bootstrap_by_default() {
@@ -389,5 +429,56 @@ mod tests {
                 .any(|p| p.contains("panel-bootstrap"))
         );
         assert!(!plan.overwrite_paths.is_empty());
+    }
+
+    #[test]
+    fn upgrade_tip_equality_is_not_a_downgrade() {
+        assert_eq!(
+            compare_versions("0.2.6-alpha.46", "0.2.6-alpha.46"),
+            Ordering::Equal
+        );
+        assert_eq!(
+            compare_versions("0.2.6-alpha.45", "0.2.6-alpha.46"),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn newest_publishable_ignores_hollow_newer_tag() {
+        let hollow = CpnRelease {
+            tag_name: "v0.2.6-alpha.46".into(),
+            version: "0.2.6-alpha.46".into(),
+            name: "x".into(),
+            published_at: "2026-09-24".into(),
+            prerelease: true,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: Vec::new(),
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let older = CpnRelease {
+            tag_name: "v0.2.6-alpha.45".into(),
+            version: "0.2.6-alpha.45".into(),
+            name: "x".into(),
+            published_at: "2026-09-24".into(),
+            prerelease: true,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: vec![ReleaseAsset {
+                name: "cpn".into(),
+                browser_download_url: "https://example.invalid/cpn".into(),
+                content_type: "application/octet-stream".into(),
+                size: 1,
+            }],
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let picked = pick_newest_publishable_release(&[hollow, older]).expect("pick");
+        assert_eq!(picked.version, "0.2.6-alpha.45");
     }
 }
