@@ -141,12 +141,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.6-alpha.47] - 24/09/2026
 
-Version UI self-stop / reconnect fix (#302) and single Register passkey button (#303) after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
+Version UI reconnect (#302), single Register passkey (#303), and upgrade "Already up to date" / newest-release selection (#304) after `v0.2.6-alpha.46` (Cargo `0.2.6-alpha.47`).
 
 ### Fixed
 
 - **Version Management UI post-upgrade reconnect** (#302): UI package upgrade/repair no longer calls `systemctl stop` on the live MainPID (that left the unit inactive and the browser on ERR_CONNECTION_RESET / "Waiting for panel after restart"). After a successful apply the panel schedules a detached reload (`systemd-run` / nohup), marks maintenance completed first, and the Version page polls the same browser origin (`localhost` vs `127.0.0.1`) until `/login` is back with a clear success or timeout message.
 - **Passkey enroll UX** (#303): restore one **Register passkey** button on enroll-2fa and Modify User (no Windows Hello vs security-key split). Registration uses one presence-only ceremony (no CredProtect UV-required, no required resident key, no platform UV-required passkey path that steered Edge into Microsoft Password Manager). Client strips `hints` for a unified OS/browser picker; on `NotSupportedError` it silently retries with a cross-platform attachment hint. Status text is **Waiting for authenticator...**.
+- **Upgrade Already up to date / newest tip** (#304): default `cpn-installer --upgrade` (no `--to`) picks the newest publishable GitHub Release (version-ordered; hollow empty-asset tips skipped) and refreshes the Releases cache when the cached tip lags the installed version. When the resolved tip equals installed (or is still older without an explicit `--to`), exit 0 with `Already up to date (X.Y.Z)` instead of a downgrade suggestion. Downgrade wording only when `--to` / `--downgrade` explicitly targets an older release.
 
 ## [0.2.6-alpha.46] - 24/09/2026
 
