@@ -370,16 +370,16 @@ mod tests {
                 html.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
                 "edit profile passkey success must return to Modify User with notice"
             );
-        assert!(
-            html.contains("cpnRegisterPasskey"),
-            "edit profile must include passkey client script"
-        );
-        assert!(
-            html.contains(">Register passkey</button>")
-                && !html.contains("Register with Windows Hello")
-                && !html.contains("Register security key"),
-            "edit profile must offer a single Register passkey button"
-        );
+            assert!(
+                html.contains("cpnRegisterPasskey"),
+                "edit profile must include passkey client script"
+            );
+            assert!(
+                html.contains(">Register passkey</button>")
+                    && !html.contains("Register with Windows Hello")
+                    && !html.contains("Register security key"),
+                "edit profile must offer a single Register passkey button"
+            );
             assert!(
                 !html.contains("id=\"cpn-passkey-enroll\""),
                 "edit profile must not use the MFA enroll redirect marker"

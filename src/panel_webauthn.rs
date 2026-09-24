@@ -637,9 +637,12 @@ mod tests {
         with_test_data_dir(|| {
             let (webauthn, _) =
                 webauthn_for_request(Some("localhost:2091"), false).expect("webauthn");
-            let (_, challenge) =
-                start_registration(&webauthn, "cpnowner", RegisterAuthenticatorKind::SecurityKey)
-                    .expect("security-key registration should start");
+            let (_, challenge) = start_registration(
+                &webauthn,
+                "cpnowner",
+                RegisterAuthenticatorKind::SecurityKey,
+            )
+            .expect("security-key registration should start");
             let json = serde_json::to_value(challenge).expect("challenge JSON");
             assert_flexible_create_options(&json, true);
         });
