@@ -343,8 +343,7 @@ mod tests {
             "avoid the old ambiguous cancelled-or-timed-out copy"
         );
         assert!(
-            logic.contains("Touch your security key")
-                || logic.contains("approve Windows Hello"),
+            logic.contains("Touch your security key") || logic.contains("approve Windows Hello"),
             "NotAllowedError copy should guide YubiKey / Hello"
         );
     }

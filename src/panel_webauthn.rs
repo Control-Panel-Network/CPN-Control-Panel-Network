@@ -357,10 +357,7 @@ pub fn start_authentication_for_user(
     if keys.is_empty() {
         return Err("No passkey is registered for this account.".into());
     }
-    let sk = keys
-        .iter()
-        .map(passkey_to_security_key)
-        .collect::<Vec<_>>();
+    let sk = keys.iter().map(passkey_to_security_key).collect::<Vec<_>>();
     let (rcr, state) = webauthn
         .start_securitykey_authentication(&sk)
         .map_err(|_| "Could not start passkey authentication.".to_string())?;
@@ -493,11 +490,14 @@ mod tests {
         assert!(
             origins
                 .iter()
-                .any(|u| u.as_str() == "http://localhost:2091/" || u.as_str().contains("localhost:2091")),
+                .any(|u| u.as_str() == "http://localhost:2091/"
+                    || u.as_str().contains("localhost:2091")),
             "expected http://localhost:2091 among {origins:?}"
         );
         assert!(
-            origins.iter().any(|u| u.as_str().contains("127.0.0.1:2091")),
+            origins
+                .iter()
+                .any(|u| u.as_str().contains("127.0.0.1:2091")),
             "expected 127.0.0.1:2091 sibling origin among {origins:?}"
         );
     }
