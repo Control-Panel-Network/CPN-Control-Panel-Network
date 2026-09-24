@@ -467,7 +467,9 @@ pub fn finish_authentication(
                 })?;
             (username, result)
         }
-        CeremonyKind::Register(_) => return Err("Passkey ceremony type mismatch".into()),
+        CeremonyKind::RegisterPasskey(_) | CeremonyKind::RegisterSecurityKey(_) => {
+            return Err("Passkey ceremony type mismatch".into());
+        }
     };
     if !expected_user.is_empty() && !expected_user.eq_ignore_ascii_case(&username) {
         return Err("That passkey belongs to a different account.".into());
