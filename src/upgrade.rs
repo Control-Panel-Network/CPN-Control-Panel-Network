@@ -347,7 +347,7 @@ pub async fn run_maintenance(
     {
         match crate::panel_service::schedule_detached_panel_restart("post-upgrade") {
             Ok(()) => state.log(
-                "Scheduled detached cpn-installer.service reload after package apply".into(),
+                "Scheduled detached cpn-installer.service reload after package apply".to_string(),
                 "info",
             ),
             Err(error) => state.log(
