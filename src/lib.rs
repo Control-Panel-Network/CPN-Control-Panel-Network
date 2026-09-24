@@ -42,6 +42,8 @@ pub mod cli_panel;
 pub mod cli_passkeys;
 pub mod cli_plugins;
 pub mod cli_totp;
+pub mod cli_uninstall;
+mod cli_uninstall_ops;
 pub mod db_defaults;
 pub mod environment;
 pub mod host_packages_catalog;

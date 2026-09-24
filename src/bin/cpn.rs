@@ -118,6 +118,27 @@ enum Commands {
         #[arg(long)]
         heal: bool,
     },
+    /// Uninstall CPN from this host (same as `cpn-installer --uninstall`)
+    Uninstall {
+        /// Skip confirmation prompts
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Leave /var/lib/cpn and /etc/cpn
+        #[arg(long)]
+        keep_data: bool,
+        /// Also remove CPN Docker volumes and webmail trees
+        #[arg(long)]
+        purge_all: bool,
+        /// Delete registered website document roots (second confirmation)
+        #[arg(long)]
+        purge_sites: bool,
+        /// Remove common MariaDB / OpenLiteSpeed packages when present
+        #[arg(long)]
+        purge_stack: bool,
+        /// Print steps without changing the host
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -287,11 +308,35 @@ fn run() -> Result<(), String> {
             );
             println!("package  Manage hosting packages and account assignments");
             println!("doctor   Health checks (CLI paths, panel unit, /login, core files)");
+            println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
         }
         Commands::Doctor { heal } => cli_doctor::run(heal),
+        Commands::Uninstall {
+            yes,
+            keep_data,
+            purge_all,
+            purge_sites,
+            purge_stack,
+            dry_run,
+        } => {
+            let code =
+                cpn_installer::cli_uninstall::run(cpn_installer::cli_uninstall::UninstallOptions {
+                    yes,
+                    keep_data,
+                    purge_all,
+                    purge_sites,
+                    purge_stack,
+                    dry_run,
+                });
+            if code == 0 {
+                Ok(())
+            } else {
+                Err("uninstall failed".into())
+            }
+        }
         Commands::Panel { command } => run_panel(command, require_root_for_mutation),
         Commands::Info { raw } => {
             run_panel(PanelCommands::Status { raw }, require_root_for_mutation)
