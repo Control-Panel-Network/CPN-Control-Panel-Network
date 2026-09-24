@@ -139,6 +139,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.45] - 24/09/2026
+
+Passkey registration fix after `v0.2.6-alpha.44` (Cargo `0.2.6-alpha.45`, #300).
+
+### Fixed
+
+- **Passkey / WebAuthn registration on lab NAT**: register with the security-key ceremony and `userVerification: preferred` so YubiKeys (touch; PIN optional) and Windows Hello work on `http://localhost:<panel_port>` (including host NAT port 2091). Credentials still store as Passkeys.
+- **Clearer WebAuthn errors**: stop mapping every Chrome `NotAllowedError` (and W3C URL text) to "cancelled or timed out"; emit distinct friendly messages for Abort, NotAllowed, SecurityError, NotSupported, and InvalidState. Keep RP ID `localhost` plus `localhost`/`127.0.0.1` origin handling and `panel_public_url` support.
+
 ## [0.2.6-alpha.44] - 24/09/2026
 
 Full CLI product uninstall after `v0.2.6-alpha.43` (Cargo `0.2.6-alpha.44`, #299).
