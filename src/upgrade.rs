@@ -336,6 +336,27 @@ pub async fn run_maintenance(
     let _ = state.events.send(crate::model::InstallerEvent::Completed {
         status: status.clone(),
     });
+    drop(status);
+
+    // After UI package apply, reload the unit out-of-band so the new binary is live
+    // without systemctl stop killing this worker mid-flight.
+    if matches!(
+        request.action,
+        MaintenanceAction::Upgrade | MaintenanceAction::Repair
+    ) && crate::panel_service::running_under_systemd()
+    {
+        match crate::panel_service::schedule_detached_panel_restart("post-upgrade") {
+            Ok(()) => state.log(
+                "Scheduled detached cpn-installer.service reload after package apply".to_string(),
+                "info",
+            ),
+            Err(error) => state.log(
+                format!("Warning: could not schedule detached panel reload: {error}"),
+                "error",
+            ),
+        }
+    }
+
     Ok(())
 }
 
