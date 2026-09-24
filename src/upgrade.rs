@@ -96,10 +96,7 @@ async fn resolve_target_release(
     }
 }
 
-async fn finish_already_up_to_date(
-    state: Arc<AppState>,
-    installed: &str,
-) -> Result<(), String> {
+async fn finish_already_up_to_date(state: Arc<AppState>, installed: &str) -> Result<(), String> {
     let message = format!("Already up to date ({installed})");
     state.log(message.clone(), "info");
     state.progress("completed", 100, message.clone()).await;
