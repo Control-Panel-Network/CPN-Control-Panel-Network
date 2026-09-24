@@ -10,7 +10,7 @@ use crate::panel_session::{
     verify_mfa_pending_token,
 };
 use crate::panel_webauthn::{
-    finish_authentication, finish_registration, start_authentication,
+    RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
     start_authentication_for_user, start_registration, webauthn_for_request,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -46,6 +46,12 @@ fn json_err(status: actix_web::http::StatusCode, message: &str) -> HttpResponse 
 
 fn json_ok(value: serde_json::Value) -> HttpResponse {
     HttpResponse::Ok().json(value)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasskeyRegisterStartBody {
+    #[serde(default)]
+    kind: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +98,7 @@ pub struct PasskeyLoginFinishBody {
 pub async fn passkey_register_start(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    body: web::Json<PasskeyRegisterStartBody>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return HttpResponse::Unauthorized().json(serde_json::json!({"error": "Sign in required"}));
@@ -101,7 +108,8 @@ pub async fn passkey_register_start(
         Ok((w, _)) => w,
         Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
     };
-    match start_registration(&webauthn, &user) {
+    let kind = RegisterAuthenticatorKind::parse(&body.kind);
+    match start_registration(&webauthn, &user, kind) {
         Ok((ceremony_id, ccr)) => {
             let mut value = match serde_json::to_value(&ccr) {
                 Ok(v) => v,
@@ -114,6 +122,10 @@ pub async fn passkey_register_start(
             };
             if let Some(obj) = value.as_object_mut() {
                 obj.insert("ceremony_id".into(), serde_json::Value::String(ceremony_id));
+                obj.insert(
+                    "kind".into(),
+                    serde_json::Value::String(kind.as_str().to_string()),
+                );
             }
             json_ok(value)
         }

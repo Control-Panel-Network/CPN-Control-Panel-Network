@@ -213,12 +213,15 @@ fn enroll_passkey_section_html() -> String {
         r#"
   <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form mfa-passkey-section">
     <h2 style="margin:0;font-size:1.1rem;">Passkey</h2>
-    <p class="muted" style="margin:0;">Register a platform or security-key passkey instead of TOTP. Completing either path returns you to Modify User so you can add more factors.</p>
-    <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential. Use Windows Hello or a FIDO2 security key (touch; a key PIN is optional but recommended).</p>
+    <p class="muted" style="margin:0;">Register Windows Hello or a FIDO2 security key instead of TOTP. Completing either path returns you to Modify User so you can add more factors.</p>
+    <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential. Security keys use touch (PIN optional). Windows Hello works on the host browser over localhost.</p>
     <label>Label (optional)
       <input id="cpn-passkey-label" type="text" maxlength="64" placeholder="Laptop / YubiKey" autocomplete="off">
     </label>
-    <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey()">Register passkey</button>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey('platform')">Register with Windows Hello</button>
+      <button type="button" class="btn-secondary" onclick="cpnRegisterPasskey('security-key')">Register security key</button>
+    </div>
     <p id="cpn-passkey-status" class="muted" role="status"></p>
   </div>
   <script>{script}</script>"#,
@@ -465,8 +468,9 @@ mod tests {
             "enroll page must link to Settings while MFA is pending"
         );
         assert!(
-            start.contains("Register passkey"),
-            "start view must offer passkey enrollment"
+            start.contains("Register with Windows Hello")
+                && start.contains("Register security key"),
+            "start view must offer Windows Hello and security-key enrollment"
         );
         assert!(
             start.contains("cpnRegisterPasskey"),
@@ -485,7 +489,9 @@ mod tests {
             None,
         );
         assert!(
-            mid.contains("Confirm TOTP") && mid.contains("Register passkey"),
+            mid.contains("Confirm TOTP")
+                && mid.contains("Register with Windows Hello")
+                && mid.contains("Register security key"),
             "TOTP-in-progress view must still offer passkey"
         );
 
@@ -517,7 +523,8 @@ mod tests {
             "backup codes must render in theme-aware panel"
         );
         assert!(
-            !done.contains("Register passkey"),
+            !done.contains("Register with Windows Hello")
+                && !done.contains("Register security key"),
             "backup-codes view is TOTP-complete; no passkey CTA needed"
         );
     }

@@ -1,6 +1,6 @@
 [package]
 name = "cpn-installer"
-version = "0.2.6-alpha.45"
+version = "0.2.6-alpha.46"
 edition = "2024"
 description = "CPN Server Panel installer (web UI and SSH/CLI)"
 license = "GPL-3.0-only"
@@ -41,7 +41,7 @@ sha2 = "0.11"
 tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 url = "2"
 uuid = { version = "1", features = ["serde", "v4", "v5"] }
-webauthn-rs = { version = "0.5", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals"] }
+webauthn-rs = { version = "0.5", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
