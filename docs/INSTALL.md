@@ -178,6 +178,18 @@ sudo cpn panel url          # print login URL from live config
 
 See also [Releases and Verification](RELEASES.md), [CLI](CLI.md), and [Changelog](CHANGELOG.md).
 
+## Uninstall
+
+Remove the product over SSH (confirmation required unless `--yes`):
+
+```bash
+sudo cpn-installer --uninstall
+sudo cpn-installer --uninstall --yes
+sudo cpn uninstall --yes
+```
+
+Default keeps website document roots and host MariaDB / OpenLiteSpeed. See [CLI.md](CLI.md) for `--keep-data`, `--purge-all`, `--purge-sites`, `--purge-stack`, and `--dry-run`.
+
 ## Lab / source builds (disk cleanup)
 
 Parallel agent or maintainer checkouts under `/home/cpn/cpn-build-*` can fill the guest disk. Prefer a single worktree, and always clean abandoned trees:

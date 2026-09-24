@@ -32,15 +32,49 @@ Top-level groups:
 | `app` | Host applications and services |
 | `package` | Hosting packages and account assignments |
 | `doctor` | Health checks: CLI paths, panel unit, `/login`, core manifest, host/plugin summary |
+| `uninstall` | Remove CPN from this host (same engine as `cpn-installer --uninstall`) |
 
-## Repair, upgrade, and `cpn doctor`
+## Repair, upgrade, uninstall, and `cpn doctor`
 
-There is **no** `cpn --repair`. Repair and upgrade belong to the installer binary:
+There is **no** `cpn --repair`. Repair, upgrade, and product uninstall belong to the installer binary (uninstall is also exposed as `cpn uninstall`):
 
 ```bash
 sudo cpn-installer --upgrade          # tip package (or --to X.Y.Z); preserves accounts/sites
 sudo cpn-installer --repair           # re-apply core files from install-manifest / release
 sudo cpn-installer --repair --reset-data   # destructive: also wipes bootstrap/accounts/sites/smtp/secrets
+sudo cpn-installer --uninstall        # interactive confirm; removes panel + package + /var/lib/cpn
+sudo cpn-installer --uninstall --yes  # non-interactive
+sudo cpn uninstall --yes              # same as installer --uninstall --yes
+sudo cpn-installer --uninstall --yes --dry-run   # print steps only
+```
+
+### Product uninstall (leave CPN)
+
+Default uninstall is **destructive for CPN** but **keeps customer website files** and **keeps host MariaDB / OpenLiteSpeed** packages:
+
+| Removed by default | Kept by default |
+|---|---|
+| `cpn-installer.service` (stop + disable) | `/home/<domain>/public_html` and other site homes |
+| RPM/DEB package `cpn-installer` | Host MariaDB / OpenLiteSpeed packages |
+| `/usr/bin/cpn`, `/usr/bin/cpn-installer`, leftover `/usr/local/bin/cpn*` | Unlabeled Docker containers |
+| `/var/lib/cpn`, `/etc/cpn` | CPN Docker volumes (unless `--purge-all`) |
+| CPN-managed compose/containers (`com.cpn.managed=1`) | `/var/lib/cpn-webmail`, `/opt/cpn-webmail` (unless `--purge-all`) |
+
+Optional flags:
+
+- `--yes` / `-y`: skip confirmation (`yes`/`y` and `no`/`n` are accepted interactively).
+- `--keep-data`: leave `/var/lib/cpn` and `/etc/cpn`; skip CPN Docker teardown.
+- `--purge-all`: also remove CPN Docker volumes and webmail trees under `/var/lib/cpn-webmail` and `/opt/cpn-webmail`.
+- `--purge-sites`: delete registered website homes (second confirmation; never silent).
+- `--purge-stack`: attempt to remove common MariaDB / OpenLiteSpeed packages.
+- `--dry-run`: print steps without changing the host.
+
+Examples:
+
+```bash
+sudo cpn-installer --uninstall --yes
+sudo cpn-installer --uninstall --yes --purge-all
+sudo cpn uninstall --yes --purge-sites   # also wipes site homes after second confirm
 ```
 
 What **repair** does today:
@@ -310,6 +344,13 @@ Options:
 | `--old-port-policy <MODE>` | Port-change behavior: `redirect_1m`, `redirect_3m`, or `deny` |
 | `--allow-remote` | Bind `0.0.0.0` for the web UI; HTTP without TLS |
 | `--listen-all` | Alias for `--allow-remote` |
+| `--uninstall` | Remove CPN from this host (confirm unless `--yes`) |
+| `--keep-data` | With `--uninstall`: leave `/var/lib/cpn` and `/etc/cpn` |
+| `--purge-all` | With `--uninstall`: also remove CPN Docker volumes and webmail trees |
+| `--purge-sites` | With `--uninstall`: delete registered website homes (second confirm) |
+| `--purge-stack` | With `--uninstall`: remove common MariaDB / OLS packages when present |
+| `--dry-run` | With `--uninstall`: print steps only |
+| `--yes` / `-y` | Skip confirmation for uninstall / downgrade |
 | `-h`, `--help` | Show help |
 | `-V`, `--version` | Show version |
 

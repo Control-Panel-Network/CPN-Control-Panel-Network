@@ -58,6 +58,15 @@ curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).
 
+## Uninstall
+
+```bash
+sudo cpn-installer --uninstall --yes
+# or: sudo cpn uninstall --yes
+```
+
+Default removes the panel package and `/var/lib/cpn`, and keeps website files under `/home/<domain>` plus host MariaDB/OLS. Details: [docs/CLI.md](docs/CLI.md).
+
 ## After install
 
 ```bash

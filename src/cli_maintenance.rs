@@ -32,6 +32,9 @@ pub enum CliMode {
         database: crate::model::DatabaseEngine,
         install_phpmyadmin: bool,
     },
+    Uninstall {
+        options: crate::cli_uninstall::UninstallOptions,
+    },
     Help,
 }
 
@@ -100,6 +103,11 @@ pub fn parse_cli(args: &[String]) -> Option<CliMode> {
             reset_data,
         });
     }
+    if args.iter().any(|arg| arg == "--uninstall") {
+        return Some(CliMode::Uninstall {
+            options: crate::cli_uninstall::UninstallOptions::from_args(args),
+        });
+    }
     None
 }
 
@@ -121,6 +129,7 @@ Usage:
   cpn-installer --upgrade [--to X.Y.Z] [--bypass]
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
+  cpn-installer --uninstall [--yes] [--keep-data] [--purge-all] [--purge-sites] [--purge-stack] [--dry-run]
   cpn-installer --allow-remote  Bind 0.0.0.0 for the web UI (HTTP without TLS; operator opt-in)
   cpn-installer --bypass        With --upgrade: refresh CPN-managed Docker compose/stacks only (preserves volumes; never touches unlabeled user containers)
   cpn-installer --ensure-database-defaults [--database mariadb|none] [--skip-phpmyadmin]
@@ -149,6 +158,10 @@ Notes:
   GitHub Releases lists are cached under the CPN data dir (github-releases-cache.json for the official repo; per-fork cache files when configured; TTL 30m). Manual Check for updates is rate-limited (60s). On HTTP 403/429, last good cache is shown when available; otherwise tip packages are resolved via direct release download URLs. Optional fork source: /var/lib/cpn/update-source.json (owner/repo) plus optional token at secrets/github-token or CPN_GITHUB_TOKEN. Panel admins can change the update source under Settings > Version Management.
   Panel data migrations (api-tokens.json, Cloudflare OAuth stores, schema_migrations.json ledger) run at panel startup and after upgrade/repair package apply. SQL files under sql/ also apply to panel.db when sqlite3 is installed.
   systemd / non-interactive starts default to the web UI (use --web explicitly in unit files).
+  Uninstall (also: sudo cpn uninstall ...): stops/disables cpn-installer.service, removes the cpn-installer package and leftover /usr/bin/cpn* and /usr/local/bin/cpn*, and deletes /var/lib/cpn + /etc/cpn unless --keep-data.
+  Uninstall confirmation accepts yes/y or no/n (case-insensitive); pass --yes to skip. --dry-run prints steps without changes.
+  Default uninstall keeps /home/<domain> website files and host MariaDB/OpenLiteSpeed packages. --purge-sites deletes registered site homes (second confirmation). --purge-all also removes CPN Docker volumes and /var/lib/cpn-webmail + /opt/cpn-webmail. --purge-stack removes common MariaDB/OLS packages when present.
+  Uninstall never touches unlabeled Docker containers. Prefer --dry-run first on disposable hosts.
 "
     );
 }
@@ -295,5 +308,26 @@ pub async fn run_cli(mode: CliMode) -> i32 {
                 1
             }
         },
+        CliMode::Uninstall { options } => crate::cli_uninstall::run(options),
+    }
+}
+
+#[cfg(test)]
+mod uninstall_parse_tests {
+    use super::*;
+
+    #[test]
+    fn parse_uninstall_mode() {
+        let args: Vec<String> = ["cpn-installer", "--uninstall", "--yes", "--purge-all"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        match parse_cli(&args) {
+            Some(CliMode::Uninstall { options }) => {
+                assert!(options.yes);
+                assert!(options.purge_all);
+            }
+            other => panic!("expected Uninstall, got {other:?}"),
+        }
     }
 }
