@@ -9,8 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **CLI product uninstall**: `sudo cpn-installer --uninstall` (and `sudo cpn uninstall`) stops/disables `cpn-installer.service`, removes the `cpn-installer` package and leftover `/usr/bin/cpn*` / `/usr/local/bin/cpn*` binaries, and deletes `/var/lib/cpn` plus `/etc/cpn` unless `--keep-data`. Default keeps `/home/<domain>` website files and host MariaDB/OpenLiteSpeed. Optional `--purge-all` (CPN Docker volumes + webmail trees), `--purge-sites` (registered site homes, second confirmation), `--purge-stack` (common MariaDB/OLS packages), and `--dry-run`. Confirmation accepts `yes`/`y` or `no`/`n`; `--yes` skips prompts. Documented in `docs/CLI.md` and `docs/INSTALL.md`.
-
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.
 
 ### Changed
@@ -140,6 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
+
+## [0.2.6-alpha.44] - 24/09/2026
+
+Full CLI product uninstall after `v0.2.6-alpha.43` (Cargo `0.2.6-alpha.44`, #299).
+
+### Added
+
+- **CLI product uninstall**: `sudo cpn-installer --uninstall` (and `sudo cpn uninstall`) stops/disables `cpn-installer.service`, removes the `cpn-installer` package and leftover `/usr/bin/cpn*` / `/usr/local/bin/cpn*` binaries, and deletes `/var/lib/cpn` plus `/etc/cpn` unless `--keep-data`. Default keeps `/home/<domain>` website files and host MariaDB/OpenLiteSpeed. Optional `--purge-all` (CPN Docker volumes + webmail trees), `--purge-sites` (registered site homes, second confirmation), `--purge-stack` (common MariaDB/OLS packages), and `--dry-run`. Confirmation accepts `yes`/`y` or `no`/`n`; `--yes` skips prompts. Documented in `docs/CLI.md` and `docs/INSTALL.md`.
 
 ## [0.2.6-alpha.43] - 22/09/2026
 
