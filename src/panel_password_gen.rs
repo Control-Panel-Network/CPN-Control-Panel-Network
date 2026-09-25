@@ -316,7 +316,7 @@ pub fn password_gen_script() -> String {
   }
 })();
 </script>"#
-    .to_string()
+        .to_string()
 }
 
 /// Compact CSS for generator controls (dark-mode friendly with existing stack-form vars).
@@ -354,7 +354,7 @@ html[data-color-mode="dark"] .cpn-pw-gen-panel {
   color:#f2f4f7;
 }
 </style>"#
-    .to_string()
+        .to_string()
 }
 
 #[cfg(test)]
