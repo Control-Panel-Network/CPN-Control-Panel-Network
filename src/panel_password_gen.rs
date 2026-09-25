@@ -14,7 +14,7 @@ pub fn wants_server_generated_password(password: &str) -> bool {
 /// Checkbox, options panel, and regenerate controls for one password form.
 pub fn password_gen_controls_html() -> String {
     let policy = default_password_policy();
-    let min_len = policy.min_length.max(8);
+    let min_len = u32::from(policy.min_length.max(8));
     let max_len = MAX_PASSWORD_CHARS as u32;
     let default_len = min_len.max(20).min(max_len);
     let req_upper = if policy.require_uppercase { "1" } else { "0" };
