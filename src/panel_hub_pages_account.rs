@@ -6,6 +6,9 @@ use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
 use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
+use crate::panel_password_gen::{
+    password_gen_controls_html, password_gen_script, password_gen_styles,
+};
 use crate::site_acl::{SiteAclGrant, list_grants};
 
 pub use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
@@ -99,16 +102,18 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
         <label>Password (leave blank to generate)
           <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
         </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input name="generate" type="checkbox" value="1">
-          Generate a strong password
-        </label>
+        {pw_gen}
         <button type="submit" class="btn-primary">Create user</button>
       </form>
       <p class="muted" style="margin-top:12px;">Password policy: {hint}</p>
-      <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>"#,
+      <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>
+      {pw_styles}
+      {pw_script}"#,
         min_len = policy.min_length,
         hint = hint,
+        pw_gen = password_gen_controls_html(),
+        pw_styles = password_gen_styles(),
+        pw_script = password_gen_script(),
     );
     feature_shell(
         &[

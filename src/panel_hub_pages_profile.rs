@@ -7,6 +7,9 @@ use crate::account_security::backup_codes_panel_html;
 use crate::packages::{is_panel_admin, package_for_account};
 use crate::panel_hub_pages_profile_tabs::{normalize_modify_tab, wrap_modify_tabs};
 use crate::panel_hubs::{feature_shell, not_configured_body};
+use crate::panel_password_gen::{
+    password_gen_controls_html, password_gen_script, password_gen_styles,
+};
 use crate::panel_webauthn::passkey_client_script;
 
 fn html_escape(value: &str) -> String {
@@ -136,10 +139,7 @@ fn security_tab_html(
         <label>New password (leave blank to generate)
           <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
         </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input name="generate" type="checkbox" value="1">
-          Generate a strong password
-        </label>
+        {pw_gen}
         <button type="submit" class="btn-primary">Update password</button>
       </form>
 
@@ -149,6 +149,7 @@ fn security_tab_html(
         totp_status = totp_status,
         policy_hint = policy_hint,
         min_len = min_len,
+        pw_gen = password_gen_controls_html(),
     );
 
     if let Some(password) = generated_password {
@@ -255,6 +256,8 @@ fn security_tab_html(
     );
     body.push_str(&passkey_client_script());
     body.push_str("</script>");
+    body.push_str(&password_gen_styles());
+    body.push_str(&password_gen_script());
     body
 }
 
@@ -409,10 +412,7 @@ fn admin_other_users_section() -> String {
         <label>New password (leave blank to generate)
           <input name="password" type="password" autocomplete="new-password" maxlength="256">
         </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input name="generate" type="checkbox" value="1">
-          Generate a strong password
-        </label>
+        {pw_gen}
         <button type="submit" class="btn-primary">Reset password</button>
       </form>
       <form method="post" action="/account/users/rename" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
@@ -451,7 +451,10 @@ fn admin_other_users_section() -> String {
         </label>
         <button type="submit" class="btn-secondary">Delete user</button>
       </form>
-      <p class="muted">The bootstrap admin account cannot be deleted from this screen. Deactivating the last active admin is blocked unless Force is checked.</p>"#
+      <p class="muted">The bootstrap admin account cannot be deleted from this screen. Deactivating the last active admin is blocked unless Force is checked.</p>"#,
+        non_admin_select = non_admin_select,
+        all_select = all_select,
+        pw_gen = password_gen_controls_html(),
     )
 }
 
@@ -512,6 +515,10 @@ mod tests {
                 html.contains("data-modify-tab=\"account\"")
                     && html.contains("data-modify-tab=\"security\""),
                 "modify self-edit must expose Account and Security tabs"
+            );
+            assert!(
+                html.contains("cpn-pw-gen-regen") && html.contains("crypto.getRandomValues"),
+                "security tab must include password generator preview/regenerate UI"
             );
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");

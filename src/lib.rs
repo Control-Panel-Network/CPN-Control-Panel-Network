@@ -130,6 +130,7 @@ pub mod panel_hub_pages_php_cfg;
 pub mod panel_hub_pages_php_ext;
 pub mod panel_hub_pages_profile;
 pub mod panel_hub_pages_profile_tabs;
+pub mod panel_password_gen;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
 pub mod panel_hub_pages_server_net;
