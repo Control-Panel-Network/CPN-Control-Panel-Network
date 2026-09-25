@@ -366,16 +366,16 @@ pub fn finish_registration(
     }
     let mut meta = client_meta;
     // Prefer clientExtensionResults.credProps.rk when the browser sent it.
-    if meta.cred_props_rk.is_none() {
-        if let Some(props) = credential.extensions.cred_props.as_ref() {
-            meta.cred_props_rk = props.rk;
-        }
+    if meta.cred_props_rk.is_none()
+        && let Some(props) = credential.extensions.cred_props.as_ref()
+    {
+        meta.cred_props_rk = props.rk;
     }
     // Transports on the attestation response (from getTransports()).
-    if meta.transports.is_empty() {
-        if let Some(transports) = credential.response.transports.as_ref() {
-            meta.transports = transports.iter().map(|t| t.to_string()).collect();
-        }
+    if meta.transports.is_empty()
+        && let Some(transports) = credential.response.transports.as_ref()
+    {
+        meta.transports = transports.iter().map(|t| t.to_string()).collect();
     }
     match record.kind {
         CeremonyKind::RegisterPasskey(state) => {

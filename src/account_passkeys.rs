@@ -283,10 +283,10 @@ pub fn passkey_type_label(entry: &StoredPasskey) -> &'static str {
 }
 
 fn effective_meta(entry: &StoredPasskey) -> PasskeyAuthenticatorMeta {
-    if let Some(meta) = entry.authenticator.as_ref() {
-        if meta_has_signal(meta) {
-            return meta.clone();
-        }
+    if let Some(meta) = entry.authenticator.as_ref()
+        && meta_has_signal(meta)
+    {
+        return meta.clone();
     }
     // Older rows: derive only from verified Passkey fields already on disk.
     build_authenticator_meta(&entry.passkey, &PasskeyAuthenticatorMeta::default())
