@@ -1,6 +1,6 @@
 //! Account profile view and self-edit form fragments (used by Modify User).
 
-use crate::account::password_policy_hint;
+use crate::account::password_policy_hint_html;
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::list_passkey_summaries;
 use crate::account_security::backup_codes_panel_html;
@@ -123,7 +123,7 @@ fn security_tab_html(
         "Disabled"
     };
     let policy = crate::account::default_password_policy();
-    let policy_hint = password_policy_hint(&policy);
+    let policy_hint = password_policy_hint_html(&policy);
     let min_len = policy.min_length;
     let mut body = format!(
         r#"
@@ -147,7 +147,7 @@ fn security_tab_html(
         <h3 style="margin:0;">Two-factor authentication (TOTP)</h3>
         <p class="muted" style="margin:0;">Status: <strong>{totp_status}</strong>. Secrets are stored encrypted under the CPN data directory.</p>"#,
         totp_status = totp_status,
-        policy_hint = html_escape(&policy_hint),
+        policy_hint = policy_hint,
         min_len = min_len,
     );
 

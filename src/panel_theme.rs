@@ -361,6 +361,22 @@ html[data-color-mode="dark"] .btn-secondary {
 }
 [data-color-mode="dark"] a.btn-primary,
 html[data-color-mode="dark"] a.btn-primary { color:#fff; }
+.password-policy-link {
+  color: var(--blue, #0066cc);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.password-policy-link:hover {
+  color: var(--blue-focus, #3385d6);
+}
+[data-color-mode="dark"] .password-policy-link,
+html[data-color-mode="dark"] .password-policy-link {
+  color: #60a5fa;
+}
+[data-color-mode="dark"] .password-policy-link:hover,
+html[data-color-mode="dark"] .password-policy-link:hover {
+  color: #93c5fd;
+}
 .theme-toggle {
   display:inline-grid; place-items:center; cursor:pointer; color:var(--muted);
 }
