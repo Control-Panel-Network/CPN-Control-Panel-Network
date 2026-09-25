@@ -29,6 +29,9 @@ pub struct PanelBootstrap {
     /// When true (panel admins default on), require TOTP or a passkey before full panel use.
     #[serde(default)]
     pub totp_required: bool,
+    /// When true, the account cannot sign in (sessions are rejected).
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -108,11 +111,17 @@ pub fn load_bootstrap() -> Option<PanelBootstrap> {
 }
 
 pub fn account_public_from_disk() -> Option<AccountPublic> {
-    load_bootstrap().map(|boot| AccountPublic {
-        username: boot.username,
-        recovery_email: boot.recovery_email,
+    load_bootstrap().map(|boot| to_account_public(&boot))
+}
+
+/// Public account snapshot (no secrets).
+pub fn to_account_public(boot: &PanelBootstrap) -> AccountPublic {
+    AccountPublic {
+        username: boot.username.clone(),
+        recovery_email: boot.recovery_email.clone(),
         configured: true,
-    })
+        disabled: boot.disabled,
+    }
 }
 
 pub fn now_unix() -> u64 {
@@ -492,6 +501,7 @@ pub fn setup_account(
         created_at_unix: now_unix(),
         must_change_password: generated_password.is_some(),
         totp_required: true,
+        disabled: false,
     };
     persist_bootstrap(&boot)?;
     // OLS WebAdmin uses htpasswd (apr1/bcrypt), not CPN PBKDF2. Align while plaintext
@@ -505,6 +515,7 @@ pub fn setup_account(
             username,
             recovery_email,
             configured: true,
+            disabled: false,
         },
         generated_password,
     })

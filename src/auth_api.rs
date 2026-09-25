@@ -100,7 +100,7 @@ pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<S
                 && let Some((username, _scopes)) =
                     crate::panel_api_tokens::authenticate_bearer(bearer)
             {
-                return Some(username);
+                return reject_if_account_disabled(username);
             }
         }
     }
@@ -110,7 +110,16 @@ pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<S
         .and_then(|value| value.to_str().ok());
     let token = read_session_cookie(cookie)?;
     let secret = session_secret(Some(&state.token));
-    verify_session_token(&token, &secret)
+    let username = verify_session_token(&token, &secret)?;
+    reject_if_account_disabled(username)
+}
+
+fn reject_if_account_disabled(username: String) -> Option<String> {
+    if crate::account_lifecycle::account_is_disabled(&username) {
+        None
+    } else {
+        Some(username)
+    }
 }
 
 fn maybe_upgrade_password_hash(
@@ -276,7 +285,9 @@ pub async fn login_submit(
     } else {
         match find_account(username) {
             Ok((mut boot, path)) => {
-                if verify_password(password, &boot.password_salt, &boot.password_hash) {
+                if boot.disabled {
+                    None
+                } else if verify_password(password, &boot.password_salt, &boot.password_hash) {
                     maybe_upgrade_password_hash(&path, &mut boot, password);
                     Some(boot.username)
                 } else {

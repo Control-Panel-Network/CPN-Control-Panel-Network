@@ -371,22 +371,36 @@ pub fn users_modify_page_with_tab(
 }
 
 fn admin_other_users_section() -> String {
+    use crate::account_lifecycle::status_label;
     use crate::account_mgmt::list_accounts;
     let accounts = list_accounts().unwrap_or_default();
-    let mut options = String::new();
+    let mut non_admin_options = String::new();
+    let mut all_options = String::new();
     for acct in &accounts {
-        if is_panel_admin(&acct.username) {
-            continue;
-        }
-        options.push_str(&format!(
-            r#"<option value="{u}">{u}</option>"#,
+        let label = format!(
+            "{} ({})",
+            acct.username,
+            status_label(acct.disabled)
+        );
+        let opt = format!(
+            r#"<option value="{u}">{l}</option>"#,
             u = html_escape(&acct.username),
-        ));
+            l = html_escape(&label),
+        );
+        all_options.push_str(&opt);
+        if !is_panel_admin(&acct.username) {
+            non_admin_options.push_str(&opt);
+        }
     }
-    let select_inner = if options.is_empty() {
+    let non_admin_select = if non_admin_options.is_empty() {
         r#"<option value="">No non-admin accounts</option>"#.to_string()
     } else {
-        options
+        non_admin_options
+    };
+    let all_select = if all_options.is_empty() {
+        r#"<option value="">No accounts</option>"#.to_string()
+    } else {
+        all_options
     };
     format!(
         r#"
@@ -394,7 +408,7 @@ fn admin_other_users_section() -> String {
       <form method="post" action="/account/users/password" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
         <h4 style="margin:0;">Reset password</h4>
         <label>Username
-          <select name="username" required>{select_inner}</select>
+          <select name="username" required>{non_admin_select}</select>
         </label>
         <label>New password (leave blank to generate)
           <input name="password" type="password" autocomplete="new-password" maxlength="256">
@@ -405,15 +419,43 @@ fn admin_other_users_section() -> String {
         </label>
         <button type="submit" class="btn-primary">Reset password</button>
       </form>
+      <form method="post" action="/account/users/rename" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
+        <h4 style="margin:0;">Rename user</h4>
+        <label>Username
+          <select name="username" required>{all_select}</select>
+        </label>
+        <label>New username
+          <input name="new_username" type="text" required autocomplete="username" maxlength="128">
+        </label>
+        <button type="submit" class="btn-primary">Rename user</button>
+        <p class="muted" style="margin:0;">Reserved and blacklisted names are rejected (same list as account create).</p>
+      </form>
+      <form method="post" action="/account/users/status" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
+        <h4 style="margin:0;">Deactivate / Enable</h4>
+        <label>Username
+          <select name="username" required>{all_select}</select>
+        </label>
+        <label>Action
+          <select name="action" required>
+            <option value="deactivate">Deactivate</option>
+            <option value="enable">Enable</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input name="force" type="checkbox" value="1">
+          Force deactivate last active admin (locks admin UI until CLI re-enable)
+        </label>
+        <button type="submit" class="btn-secondary">Apply status</button>
+      </form>
       <form method="post" action="/account/users/delete" class="stack-form" style="max-width:520px;display:grid;gap:12px;"
             onsubmit="return confirm('Delete this panel account? This cannot be undone.');">
         <h4 style="margin:0;">Delete user</h4>
         <label>Username
-          <select name="username" required>{select_inner}</select>
+          <select name="username" required>{non_admin_select}</select>
         </label>
         <button type="submit" class="btn-secondary">Delete user</button>
       </form>
-      <p class="muted">The bootstrap admin account cannot be deleted from this screen.</p>"#
+      <p class="muted">The bootstrap admin account cannot be deleted from this screen. Deactivating the last active admin is blocked unless Force is checked.</p>"#
     )
 }
 

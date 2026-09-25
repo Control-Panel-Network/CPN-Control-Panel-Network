@@ -1,6 +1,7 @@
 //! Users & Plans hub routes: admin account and ACL tooling.
 
 use crate::account::{default_password_policy, load_bootstrap};
+use crate::account_lifecycle::{deactivate_account, enable_account, rename_account};
 use crate::account_mgmt::{create_account, delete_account, reset_account_password};
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
@@ -57,6 +58,24 @@ pub struct UserModifyForm {
 pub struct UserDeleteForm {
     #[serde(default)]
     username: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct UserRenameForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    new_username: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct UserStatusForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    force: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -233,6 +252,59 @@ pub async fn users_delete_post(
     }
     match delete_account(&form.username) {
         Ok(()) => redirect_notice("/account/users/list", Some("Account deleted"), None),
+        Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
+    }
+}
+
+#[post("/account/users/rename")]
+pub async fn users_rename_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<UserRenameForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_admin(&user) {
+        return redirect_notice("/account/users/list", None, Some(&error));
+    }
+    match rename_account(&form.username, &form.new_username) {
+        Ok(public) => {
+            let notice = format!("Account renamed to {}", public.username);
+            redirect_notice("/account/users/modify?tab=other", Some(&notice), None)
+        }
+        Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
+    }
+}
+
+#[post("/account/users/status")]
+pub async fn users_status_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<UserStatusForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_admin(&user) {
+        return redirect_notice("/account/users/list", None, Some(&error));
+    }
+    let action = form.action.trim().to_ascii_lowercase();
+    let force = parse_flag(&form.force);
+    let result = match action.as_str() {
+        "deactivate" => deactivate_account(&form.username, force),
+        "enable" | "reactivate" => enable_account(&form.username),
+        _ => Err("Choose Deactivate or Enable".into()),
+    };
+    match result {
+        Ok(public) => {
+            let notice = if public.disabled {
+                format!("Account {} deactivated", public.username)
+            } else {
+                format!("Account {} enabled", public.username)
+            };
+            redirect_notice("/account/users/modify?tab=other", Some(&notice), None)
+        }
         Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
     }
 }

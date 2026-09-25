@@ -25,6 +25,7 @@ fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
         username: "Admin".into(),
         recovery_email: "admin@example.com".into(),
         configured: true,
+        disabled: false,
     });
     web::Data::new(Arc::new(AppState {
         status: std::sync::RwLock::new(status),
@@ -53,6 +54,7 @@ fn write_admin_account(password: &str) {
         created_at_unix: 1,
         must_change_password: false,
         totp_required: false,
+        disabled: false,
     };
     let path = crate::account::bootstrap_path();
     write_account_file(&path, &boot).expect("write bootstrap");

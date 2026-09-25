@@ -1,7 +1,9 @@
 //! Shared library for cpn-installer and the cpn operator CLI.
 
 pub mod account;
+pub mod account_lifecycle;
 pub mod account_mfa;
+pub mod account_rename_refs;
 pub mod account_mgmt;
 pub mod account_passkeys;
 pub mod account_password_reset;
@@ -127,7 +129,6 @@ pub mod panel_hub_pages_mail_client;
 pub mod panel_hub_pages_php_cfg;
 pub mod panel_hub_pages_php_ext;
 pub mod panel_hub_pages_profile;
-pub mod panel_hub_pages_profile_tabs;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
 pub mod panel_hub_pages_server_net;

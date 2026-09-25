@@ -1,5 +1,6 @@
 //! Users & Plans hub HTML: accounts, ACL grants, and honest scaffolds.
 
+use crate::account_lifecycle::status_label;
 use crate::account_mgmt::list_accounts;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
@@ -42,7 +43,7 @@ pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) 
     } else {
         body.push_str(
             r#"<div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Username</th><th>Recovery email</th><th>Role</th></tr></thead><tbody>"#,
+        <thead><tr><th>Username</th><th>Recovery email</th><th>Role</th><th>Status</th></tr></thead><tbody>"#,
         );
         for acct in &accounts {
             if !admin && !acct.username.eq_ignore_ascii_case(viewer) {
@@ -54,10 +55,11 @@ pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) 
                 "User"
             };
             body.push_str(&format!(
-                r#"<tr><td><strong>{}</strong></td><td>{}</td><td>{}</td></tr>"#,
+                r#"<tr><td><strong>{}</strong></td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
                 html_escape(&acct.username),
                 html_escape(&acct.recovery_email),
                 role,
+                status_label(acct.disabled),
             ));
         }
         body.push_str("</tbody></table></div>");

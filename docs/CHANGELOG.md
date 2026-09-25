@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Account rename / deactivate**: Other accounts (admin) on Modify User gains Rename and Deactivate/Enable beside Reset password and Delete. CLI: `cpn account rename|deactivate|enable|list` with reserved-username rejection, flexible `y`/`yes` confirm, and last-admin safety (`--force` required to deactivate the last active bootstrap admin).
 - **Lab/source build disk cleanup**: `scripts/cleanup-old-build-trees.sh` removes abandoned `/home/cpn/cpn-build-*` worktrees (skips the active keep dir, in-use process cwd/cmdline, and the main `CPN-Control-Panel-Network` clone) and stale `/tmp`/`/var/tmp` `cpn-*` extract dirs older than a TTL. `scripts/build-rpm.sh` and `scripts/build-deb.sh` call it before compile and after a successful package build (`--keep-count 0`). Agents should run the same helper when cloning a new `cpn-build-*` tree outside those scripts.
 
 ### Changed
