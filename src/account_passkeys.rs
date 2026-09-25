@@ -8,9 +8,33 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use webauthn_rs::prelude::Passkey;
+use webauthn_rs::prelude::{AttestationMetadata, Credential, Passkey};
 
 const SCHEMA: u32 = 1;
+
+/// Client + server hints captured at registration (not secret material).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PasskeyAuthenticatorMeta {
+    /// `platform` or `cross-platform` when the browser reported it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticator_attachment: Option<String>,
+    /// Hint transports: usb, nfc, ble, internal, hybrid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transports: Vec<String>,
+    /// Authenticator AAGUID as UUID string when attestation exposed one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_eligible: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_state: Option<bool>,
+    /// `credProps.rk` when the client extension result was present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cred_props_rk: Option<bool>,
+    /// Which register path succeeded: `platform` or `security-key`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration_path: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredPasskey {
@@ -18,7 +42,21 @@ pub struct StoredPasskey {
     pub label: String,
     pub created_at_unix: u64,
     pub last_used_unix: u64,
+    /// System-derived authenticator hints (optional for credentials enrolled before this field).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticator: Option<PasskeyAuthenticatorMeta>,
     pub passkey: Passkey,
+}
+
+/// List-row view for admin UI and CLI (no secret material).
+#[derive(Debug, Clone)]
+pub struct PasskeySummary {
+    pub id: String,
+    pub label: String,
+    /// Short friendly type for the Type column (read-only).
+    pub type_label: String,
+    pub created_at_unix: u64,
+    pub last_used_unix: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,11 +135,17 @@ pub fn save_passkeys(store: &PasskeyStore) -> Result<(), String> {
     write_secret_file(&path, json.as_bytes())
 }
 
-pub fn list_passkey_summaries(username: &str) -> Vec<(String, String, u64, u64)> {
+pub fn list_passkey_summaries(username: &str) -> Vec<PasskeySummary> {
     load_passkeys(username)
         .credentials
         .into_iter()
-        .map(|c| (c.id, c.label, c.created_at_unix, c.last_used_unix))
+        .map(|c| PasskeySummary {
+            type_label: passkey_type_label(&c).to_string(),
+            id: c.id,
+            label: c.label,
+            created_at_unix: c.created_at_unix,
+            last_used_unix: c.last_used_unix,
+        })
         .collect()
 }
 
@@ -113,7 +157,200 @@ pub fn has_passkeys(username: &str) -> bool {
     passkey_count(username) > 0
 }
 
-pub fn add_passkey(username: &str, label: &str, passkey: Passkey) -> Result<StoredPasskey, String> {
+/// Merge client hints with fields already present on the verified Passkey.
+pub fn build_authenticator_meta(
+    passkey: &Passkey,
+    client: &PasskeyAuthenticatorMeta,
+) -> PasskeyAuthenticatorMeta {
+    let cred = Credential::from(passkey.clone());
+    let mut meta = client.clone();
+
+    if meta.transports.is_empty() {
+        if let Some(transports) = cred.transports.as_ref() {
+            meta.transports = transports.iter().map(|t| t.to_string()).collect();
+        }
+    } else {
+        meta.transports = normalize_transport_list(&meta.transports);
+    }
+
+    if meta.backup_eligible.is_none() {
+        meta.backup_eligible = Some(cred.backup_eligible);
+    }
+    if meta.backup_state.is_none() {
+        meta.backup_state = Some(cred.backup_state);
+    }
+
+    if meta.aaguid.is_none() {
+        meta.aaguid = aaguid_from_attestation(&cred.attestation.metadata);
+    } else if let Some(raw) = meta.aaguid.take() {
+        meta.aaguid = normalize_aaguid(&raw);
+    }
+
+    if let Some(path) = meta.registration_path.as_mut() {
+        *path = normalize_registration_path(path).to_string();
+    }
+    if let Some(attachment) = meta.authenticator_attachment.as_mut() {
+        *attachment = normalize_attachment(attachment).to_string();
+    }
+
+    meta
+}
+
+fn aaguid_from_attestation(metadata: &AttestationMetadata) -> Option<String> {
+    match metadata {
+        AttestationMetadata::Packed { aaguid } | AttestationMetadata::Tpm { aaguid, .. } => {
+            let text = aaguid.to_string().to_ascii_lowercase();
+            if text == "00000000-0000-0000-0000-000000000000" {
+                None
+            } else {
+                Some(text)
+            }
+        }
+        _ => None,
+    }
+}
+
+fn normalize_aaguid(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().to_ascii_lowercase();
+    if trimmed.is_empty() || trimmed == "00000000-0000-0000-0000-000000000000" {
+        None
+    } else {
+        Some(trimmed.chars().take(64).collect())
+    }
+}
+
+fn normalize_transport_list(values: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for value in values {
+        let t = value.trim().to_ascii_lowercase();
+        if matches!(
+            t.as_str(),
+            "usb" | "nfc" | "ble" | "internal" | "hybrid" | "cable" | "smart-card"
+        ) && !out.iter().any(|existing| existing == &t)
+        {
+            let mapped = if t == "cable" {
+                "hybrid".to_string()
+            } else {
+                t
+            };
+            if !out.iter().any(|existing| existing == &mapped) {
+                out.push(mapped);
+            }
+        }
+    }
+    out
+}
+
+fn normalize_attachment(raw: &str) -> &'static str {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "cross-platform" | "cross_platform" | "crossplatform" => "cross-platform",
+        _ => "platform",
+    }
+}
+
+fn normalize_registration_path(raw: &str) -> &'static str {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "security-key" | "security_key" | "cross-platform" | "yubikey" | "roaming" => "security-key",
+        _ => "platform",
+    }
+}
+
+fn transport_set(meta: &PasskeyAuthenticatorMeta) -> Vec<String> {
+    normalize_transport_list(&meta.transports)
+}
+
+fn has_transport(transports: &[String], name: &str) -> bool {
+    transports.iter().any(|t| t == name)
+}
+
+fn is_windows_hello_aaguid(aaguid: &str) -> bool {
+    // Well-known Microsoft Windows Hello AAGUIDs (software / hardware / NFC / fingerprint).
+    matches!(
+        aaguid.to_ascii_lowercase().as_str(),
+        "08987058-cadc-4b81-b6e1-30de50dcbe96"
+            | "6028b017-b1d4-4c02-b4b3-bd3d66a25456"
+            | "9ddd1817-af5a-4672-a2b9-3e3dd95000a9"
+            | "73bb0cd4-e502-49b7-9c0f-015883140882"
+    )
+}
+
+/// Friendly Type label for the passkeys table. Never invents a type without evidence.
+pub fn passkey_type_label(entry: &StoredPasskey) -> &'static str {
+    let meta = effective_meta(entry);
+    classify_authenticator(&meta)
+}
+
+fn effective_meta(entry: &StoredPasskey) -> PasskeyAuthenticatorMeta {
+    if let Some(meta) = entry.authenticator.as_ref() {
+        if meta_has_signal(meta) {
+            return meta.clone();
+        }
+    }
+    // Older rows: derive only from verified Passkey fields already on disk.
+    build_authenticator_meta(&entry.passkey, &PasskeyAuthenticatorMeta::default())
+}
+
+fn meta_has_signal(meta: &PasskeyAuthenticatorMeta) -> bool {
+    meta.authenticator_attachment.is_some()
+        || !meta.transports.is_empty()
+        || meta.aaguid.is_some()
+        || meta.registration_path.is_some()
+        || meta.cred_props_rk.is_some()
+        || meta.backup_eligible == Some(true)
+        || meta.backup_state == Some(true)
+}
+
+pub fn classify_authenticator(meta: &PasskeyAuthenticatorMeta) -> &'static str {
+    let transports = transport_set(meta);
+    let attachment = meta
+        .authenticator_attachment
+        .as_deref()
+        .map(normalize_attachment);
+    let path = meta
+        .registration_path
+        .as_deref()
+        .map(normalize_registration_path);
+    let aaguid = meta.aaguid.as_deref().unwrap_or("");
+    let backupish = meta.backup_eligible == Some(true) || meta.backup_state == Some(true);
+
+    if has_transport(&transports, "usb") {
+        return "Security key (USB)";
+    }
+    if has_transport(&transports, "nfc") {
+        return "Security key (NFC)";
+    }
+    if has_transport(&transports, "ble") {
+        return "Security key (Bluetooth)";
+    }
+    if has_transport(&transports, "hybrid") {
+        return "Browser / synced passkey";
+    }
+    if backupish && attachment != Some("platform") && path != Some("platform") {
+        return "Browser / synced passkey";
+    }
+    if !aaguid.is_empty() && is_windows_hello_aaguid(aaguid) {
+        return "Windows Hello";
+    }
+    // Platform / internal without roaming transports: Hello-first path and internal
+    // authenticators map to Windows Hello; bare platform attachment stays generic.
+    if path == Some("platform") || has_transport(&transports, "internal") {
+        return "Windows Hello";
+    }
+    if attachment == Some("platform") {
+        return "Platform authenticator";
+    }
+    if path == Some("security-key") || attachment == Some("cross-platform") {
+        return "Security key";
+    }
+    "Passkey"
+}
+
+pub fn add_passkey(
+    username: &str,
+    label: &str,
+    passkey: Passkey,
+    authenticator: PasskeyAuthenticatorMeta,
+) -> Result<StoredPasskey, String> {
     let mut store = load_passkeys(username);
     let id = base64url(passkey.cred_id());
     if store.credentials.iter().any(|c| c.id == id) {
@@ -127,11 +364,17 @@ pub fn add_passkey(username: &str, label: &str, passkey: Passkey) -> Result<Stor
             trimmed.chars().take(64).collect()
         }
     };
+    let meta = build_authenticator_meta(&passkey, &authenticator);
     let entry = StoredPasskey {
         id: id.clone(),
         label,
         created_at_unix: now_unix(),
         last_used_unix: 0,
+        authenticator: if meta_has_signal(&meta) {
+            Some(meta)
+        } else {
+            None
+        },
         passkey,
     };
     store.username = username.to_string();
@@ -361,5 +604,51 @@ mod tests {
         // 15/09/2026 17:11:37 UTC (1789492297)
         let formatted = format_passkey_timestamp_utc(1_789_492_297);
         assert_eq!(formatted, "15/09/2026 17:11");
+    }
+
+    #[test]
+    fn classify_authenticator_labels() {
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                transports: vec!["usb".into()],
+                ..Default::default()
+            }),
+            "Security key (USB)"
+        );
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                transports: vec!["hybrid".into()],
+                ..Default::default()
+            }),
+            "Browser / synced passkey"
+        );
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                registration_path: Some("platform".into()),
+                authenticator_attachment: Some("platform".into()),
+                transports: vec!["internal".into()],
+                ..Default::default()
+            }),
+            "Windows Hello"
+        );
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                registration_path: Some("security-key".into()),
+                authenticator_attachment: Some("cross-platform".into()),
+                ..Default::default()
+            }),
+            "Security key"
+        );
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta::default()),
+            "Passkey"
+        );
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                authenticator_attachment: Some("platform".into()),
+                ..Default::default()
+            }),
+            "Platform authenticator"
+        );
     }
 }

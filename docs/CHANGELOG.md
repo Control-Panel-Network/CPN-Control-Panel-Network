@@ -139,6 +139,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub raw URLs (override with `CPN_RESERVED_USERNAMES_URL` / `CPN_BLOCKED_PASSWORDS_URL`; offline tests: `*_OFFLINE=1`).
 - Generated passwords are never logged; shown once in the installer UI/CLI only.
 
+## [0.2.6-alpha.49] - 25/09/2026
+
+Passkey Type column after `v0.2.6-alpha.48` (Cargo `0.2.6-alpha.49`).
+
+### Added
+
+- **Passkey authenticator Type**: Modify User (and related list surfaces) show a read-only Type beside Label and Created. Registration persists WebAuthn hints (`authenticatorAttachment`, `transports`, AAGUID when attested, backup/`credProps.rk`, and which register path succeeded). Friendly labels include Windows Hello, Security key (USB/NFC/Bluetooth), Browser / synced passkey, Platform authenticator, Security key, and Passkey when metadata is missing. Existing credentials without metadata show Passkey until re-registered (no invented types). Single Register passkey button unchanged.
+
 ## [0.2.6-alpha.48] - 24/09/2026
 
 Windows Hello passkey registration on the single Register passkey button after `v0.2.6-alpha.47` (Cargo `0.2.6-alpha.48`).

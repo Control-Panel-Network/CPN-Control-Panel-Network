@@ -13,8 +13,8 @@
 
 use crate::account::{data_dir, now_unix};
 use crate::account_passkeys::{
-    add_passkey, all_passkeys_for_auth, exclude_credential_ids, passkey_owner, passkeys_for_auth,
-    update_passkey_after_auth,
+    PasskeyAuthenticatorMeta, add_passkey, all_passkeys_for_auth, exclude_credential_ids,
+    passkey_owner, passkeys_for_auth, update_passkey_after_auth,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -358,23 +358,43 @@ pub fn finish_registration(
     ceremony_id: &str,
     label: &str,
     credential: &RegisterPublicKeyCredential,
+    client_meta: PasskeyAuthenticatorMeta,
 ) -> Result<(), String> {
     let record = take_ceremony(ceremony_id)?;
     if !record.username.eq_ignore_ascii_case(username) {
         return Err("Passkey ceremony user mismatch".into());
     }
+    let mut meta = client_meta;
+    // Prefer clientExtensionResults.credProps.rk when the browser sent it.
+    if meta.cred_props_rk.is_none() {
+        if let Some(props) = credential.extensions.cred_props.as_ref() {
+            meta.cred_props_rk = props.rk;
+        }
+    }
+    // Transports on the attestation response (from getTransports()).
+    if meta.transports.is_empty() {
+        if let Some(transports) = credential.response.transports.as_ref() {
+            meta.transports = transports.iter().map(|t| t.to_string()).collect();
+        }
+    }
     match record.kind {
         CeremonyKind::RegisterPasskey(state) => {
+            if meta.registration_path.is_none() {
+                meta.registration_path = Some("platform".into());
+            }
             let passkey = webauthn
                 .finish_passkey_registration(credential, &state)
                 .map_err(|err| format!("Passkey registration failed: {err}"))?;
-            add_passkey(username, label, passkey)?;
+            add_passkey(username, label, passkey, meta)?;
         }
         CeremonyKind::RegisterSecurityKey(state) => {
+            if meta.registration_path.is_none() {
+                meta.registration_path = Some("security-key".into());
+            }
             let security_key = webauthn
                 .finish_securitykey_registration(credential, &state)
                 .map_err(|err| format!("Passkey registration failed: {err}"))?;
-            add_passkey(username, label, security_key_to_passkey(security_key))?;
+            add_passkey(username, label, security_key_to_passkey(security_key), meta)?;
         }
         _ => return Err("Passkey ceremony type mismatch".into()),
     }
