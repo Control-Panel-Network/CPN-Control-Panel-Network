@@ -396,11 +396,13 @@ fn run() -> Result<(), String> {
                     return Ok(());
                 }
                 for account in accounts {
+                    // Do not echo usernames/emails: CodeQL rust/cleartext-logging.
+                    // Status and role remain so operators can see disabled/admin rows.
+                    let role = role_label(&account.username);
                     println!(
-                        "{}\tstatus={}\trole={}\tconfigured={}\trecovery_set={}",
-                        account.username,
+                        "account\tstatus={}\trole={}\tconfigured={}\trecovery_set={}",
                         status_label(account.disabled),
-                        role_label(&account.username),
+                        role,
                         account.configured,
                         !account.recovery_email.trim().is_empty()
                     );

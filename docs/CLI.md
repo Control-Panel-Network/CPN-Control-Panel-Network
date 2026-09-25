@@ -170,7 +170,7 @@ sudo cpn account enable --username siteuser --yes
 sudo cpn account delete --username siteuser --yes
 ```
 
-`cpn account list` prints each username with `status=active|disabled` and `role=admin|user`.
+`cpn account list` prints one row per account with `status=active|disabled` and `role=admin|user` (usernames are omitted from stdout to avoid cleartext logging).
 
 Rename rejects reserved / blacklisted usernames using the same live GitHub list (24h cache + bundled fallback) as account create and first-admin setup. Case rules match create (case-insensitive collision checks; reserved match is case-insensitive).
 
