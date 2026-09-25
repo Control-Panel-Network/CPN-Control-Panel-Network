@@ -33,6 +33,7 @@ fn request_secure(http: &HttpRequest) -> bool {
     crate::panel_session::request_https_from_headers(http)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn modify_html(
     user: &str,
     notice: Option<&str>,

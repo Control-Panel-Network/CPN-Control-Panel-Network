@@ -336,6 +336,7 @@ pub fn users_modify_page(
 }
 
 /// Modify page with an explicit initial tab (`account`, `security`, `other`).
+#[allow(clippy::too_many_arguments)]
 pub fn users_modify_page_with_tab(
     viewer: &str,
     notice: Option<&str>,
