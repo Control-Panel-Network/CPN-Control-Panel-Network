@@ -166,7 +166,12 @@ pub fn wrap_modify_tabs(
         tab_button("security", "Security", initial == "security"),
     ];
     let mut panels = vec![
-        tab_panel("account", "modify-tab-account", initial != "account", account_html),
+        tab_panel(
+            "account",
+            "modify-tab-account",
+            initial != "account",
+            account_html,
+        ),
         tab_panel(
             "security",
             "modify-tab-security",

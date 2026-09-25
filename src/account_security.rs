@@ -475,10 +475,11 @@ mod tests {
             "start view must include passkey client script"
         );
         assert!(
-            start.contains("data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\"")
-                || start.contains(
-                    "data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\"",
-                ),
+            start.contains(
+                "data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\""
+            ) || start.contains(
+                "data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\"",
+            ),
             "enroll gate passkey returns to Modify User Security tab"
         );
 

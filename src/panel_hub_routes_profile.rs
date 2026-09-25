@@ -139,10 +139,7 @@ pub async fn users_modify_get(
         }
     }
     let backup_codes = take_once_backup_codes(&user);
-    let mut initial_tab = query
-        .get("tab")
-        .map(|s| s.as_str())
-        .unwrap_or("account");
+    let mut initial_tab = query.get("tab").map(|s| s.as_str()).unwrap_or("account");
     if enroll || enroll_secret.is_some() || backup_codes.is_some() {
         initial_tab = "security";
     }
@@ -287,11 +284,7 @@ pub async fn users_profile_totp_disable(
         &boot.password_salt,
         &boot.password_hash,
     ) {
-        return redirect_notice(
-            MODIFY_SECURITY,
-            None,
-            Some("Current password is incorrect"),
-        );
+        return redirect_notice(MODIFY_SECURITY, None, Some("Current password is incorrect"));
     }
     match disable_totp(&user, &form.code) {
         Ok(()) => redirect_notice("/account/users/profile", Some("TOTP disabled"), None),

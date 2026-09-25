@@ -185,11 +185,7 @@ pub async fn passkey_delete_post(
             Some("Passkey removed"),
             None,
         ),
-        Err(error) => redirect_notice(
-            "/account/users/modify?tab=security",
-            None,
-            Some(&error),
-        ),
+        Err(error) => redirect_notice("/account/users/modify?tab=security", None, Some(&error)),
     }
 }
 
@@ -208,11 +204,7 @@ pub async fn passkey_rename_post(
             Some("Passkey renamed"),
             None,
         ),
-        Err(error) => redirect_notice(
-            "/account/users/modify?tab=security",
-            None,
-            Some(&error),
-        ),
+        Err(error) => redirect_notice("/account/users/modify?tab=security", None, Some(&error)),
     }
 }
 
