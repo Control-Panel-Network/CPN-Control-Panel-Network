@@ -125,7 +125,7 @@ pub async fn account_security_enroll_2fa_get(
         return redirect("/account/security/change-password");
     }
     if !needs_mfa_enrollment(&user) {
-        return redirect("/account/users/modify");
+        return redirect("/account/users/modify?tab=security");
     }
     let (secret, qr) = match load_pending_secret(&user) {
         Ok(secret) => {
@@ -198,7 +198,7 @@ pub async fn account_security_enroll_2fa_confirm(
         Ok(backup_codes) => {
             let _ = store_once_backup_codes(&user, &backup_codes);
             redirect(&format!(
-                "/account/users/modify?notice={}",
+                "/account/users/modify?tab=security&notice={}",
                 urlencoding_simple(
                     "Two-factor authentication is enabled. Store your backup codes."
                 )

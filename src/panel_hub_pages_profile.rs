@@ -5,6 +5,7 @@ use crate::account_mgmt::find_account;
 use crate::account_passkeys::list_passkey_summaries;
 use crate::account_security::backup_codes_panel_html;
 use crate::packages::{is_panel_admin, package_for_account};
+use crate::panel_hub_pages_profile_tabs::{normalize_modify_tab, wrap_modify_tabs};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_webauthn::passkey_client_script;
 
@@ -76,38 +77,15 @@ pub fn users_profile_page(
     )
 }
 
-/// Self-service edit forms (details, password, TOTP, Passkeys) for the signed-in user.
-pub fn users_self_edit_body(
-    username: &str,
-    enroll_secret: Option<&str>,
-    enroll_qr_svg: Option<&str>,
-    backup_codes: Option<&[String]>,
-    generated_password: Option<&str>,
-) -> String {
-    let mfa = crate::account_mfa::load_mfa(username);
-    let Ok((boot, _)) = find_account(username) else {
-        return not_configured_body(
-            "Account not found",
-            "Sign in again if this account was removed.",
-        );
-    };
-    let lang = boot.language.clone();
+fn account_tab_html(boot_username: &str, recovery_email: &str, lang: &str) -> String {
     let en_sel = if lang == "en" { " selected" } else { "" };
     let es_sel = if lang == "es" { " selected" } else { "" };
     let nb_sel = if lang == "nb" { " selected" } else { "" };
-    let totp_status = if mfa.totp_enabled {
-        "Enabled"
-    } else {
-        "Disabled"
-    };
-    let policy = crate::account::default_password_policy();
-    let policy_hint = password_policy_hint(&policy);
-    let min_len = policy.min_length;
-    let mut body = format!(
+    format!(
         r#"
       <p style="margin:0 0 16px;"><a class="btn-secondary" href="/account/users/profile">Back to profile</a></p>
       <h3 style="margin:0 0 12px;">Your account</h3>
-      <form method="post" action="/account/users/profile/details" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
+      <form method="post" action="/account/users/profile/details" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:8px;">
         <label>Username
           <input name="username" type="text" required autocomplete="username" maxlength="128" value="{username}">
         </label>
@@ -122,8 +100,33 @@ pub fn users_self_edit_body(
           </select>
         </label>
         <button type="submit" class="btn-primary">Save details</button>
-      </form>
+      </form>"#,
+        username = html_escape(boot_username),
+        email = html_escape(recovery_email),
+        en_sel = en_sel,
+        es_sel = es_sel,
+        nb_sel = nb_sel,
+    )
+}
 
+fn security_tab_html(
+    username: &str,
+    enroll_secret: Option<&str>,
+    enroll_qr_svg: Option<&str>,
+    backup_codes: Option<&[String]>,
+    generated_password: Option<&str>,
+) -> String {
+    let mfa = crate::account_mfa::load_mfa(username);
+    let totp_status = if mfa.totp_enabled {
+        "Enabled"
+    } else {
+        "Disabled"
+    };
+    let policy = crate::account::default_password_policy();
+    let policy_hint = password_policy_hint(&policy);
+    let min_len = policy.min_length;
+    let mut body = format!(
+        r#"
       <form method="post" action="/account/users/profile/password" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
         <h3 style="margin:0;">Change password</h3>
         <p class="muted" style="margin:0;">Password policy: {policy_hint}</p>
@@ -143,11 +146,6 @@ pub fn users_self_edit_body(
       <div class="stack-form" style="max-width:560px;display:grid;gap:12px;margin-bottom:28px;">
         <h3 style="margin:0;">Two-factor authentication (TOTP)</h3>
         <p class="muted" style="margin:0;">Status: <strong>{totp_status}</strong>. Secrets are stored encrypted under the CPN data directory.</p>"#,
-        username = html_escape(&boot.username),
-        email = html_escape(&boot.recovery_email),
-        en_sel = en_sel,
-        es_sel = es_sel,
-        nb_sel = nb_sel,
         totp_status = totp_status,
         policy_hint = html_escape(&policy_hint),
         min_len = min_len,
@@ -202,10 +200,9 @@ pub fn users_self_edit_body(
     }
     body.push_str("</div>");
 
-    // Passkeys
     body.push_str(
         r#"
-      <div id="cpn-passkey-register" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form" style="max-width:720px;display:grid;gap:12px;margin-bottom:28px;">
+      <div id="cpn-passkey-register" data-redirect="/account/users/modify?tab=security&amp;notice=Passkey+registered" class="stack-form" style="max-width:720px;display:grid;gap:12px;margin-bottom:8px;">
         <h3 style="margin:0;">Passkeys (WebAuthn)</h3>
         <p class="muted" style="margin:0;">Register a platform or security-key passkey for passwordless sign-in. Credentials are stored under the CPN data directory. Type is detected from authenticator metadata when available.</p>"#,
     );
@@ -261,6 +258,61 @@ pub fn users_self_edit_body(
     body
 }
 
+/// Self-service edit forms (details, password, TOTP, Passkeys) for the signed-in user.
+pub fn users_self_edit_body(
+    username: &str,
+    enroll_secret: Option<&str>,
+    enroll_qr_svg: Option<&str>,
+    backup_codes: Option<&[String]>,
+    generated_password: Option<&str>,
+) -> String {
+    users_self_edit_body_with_tab(
+        username,
+        enroll_secret,
+        enroll_qr_svg,
+        backup_codes,
+        generated_password,
+        "account",
+        false,
+    )
+}
+
+/// Same as [`users_self_edit_body`], with an initial tab and optional admin Other accounts panel.
+pub fn users_self_edit_body_with_tab(
+    username: &str,
+    enroll_secret: Option<&str>,
+    enroll_qr_svg: Option<&str>,
+    backup_codes: Option<&[String]>,
+    generated_password: Option<&str>,
+    initial_tab: &str,
+    include_admin_other: bool,
+) -> String {
+    let Ok((boot, _)) = find_account(username) else {
+        return not_configured_body(
+            "Account not found",
+            "Sign in again if this account was removed.",
+        );
+    };
+    let mut initial = normalize_modify_tab(initial_tab);
+    if enroll_secret.is_some() || backup_codes.is_some() || generated_password.is_some() {
+        initial = "security";
+    }
+    let account = account_tab_html(&boot.username, &boot.recovery_email, &boot.language);
+    let security = security_tab_html(
+        username,
+        enroll_secret,
+        enroll_qr_svg,
+        backup_codes,
+        generated_password,
+    );
+    let other = if include_admin_other {
+        Some(admin_other_users_section())
+    } else {
+        None
+    };
+    wrap_modify_tabs(&account, &security, other.as_deref(), initial)
+}
+
 /// Modify page: self-edit for everyone; other-user admin tools when viewer is admin.
 pub fn users_modify_page(
     viewer: &str,
@@ -271,16 +323,38 @@ pub fn users_modify_page(
     backup_codes: Option<&[String]>,
     generated_password: Option<&str>,
 ) -> String {
-    let mut body = users_self_edit_body(
+    users_modify_page_with_tab(
+        viewer,
+        notice,
+        error,
+        enroll_secret,
+        enroll_qr_svg,
+        backup_codes,
+        generated_password,
+        "account",
+    )
+}
+
+/// Modify page with an explicit initial tab (`account`, `security`, `other`).
+pub fn users_modify_page_with_tab(
+    viewer: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    enroll_secret: Option<&str>,
+    enroll_qr_svg: Option<&str>,
+    backup_codes: Option<&[String]>,
+    generated_password: Option<&str>,
+    initial_tab: &str,
+) -> String {
+    let body = users_self_edit_body_with_tab(
         viewer,
         enroll_secret,
         enroll_qr_svg,
         backup_codes,
         generated_password,
+        initial_tab,
+        is_panel_admin(viewer),
     );
-    if is_panel_admin(viewer) {
-        body.push_str(&admin_other_users_section());
-    }
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -315,7 +389,6 @@ fn admin_other_users_section() -> String {
     };
     format!(
         r#"
-      <hr style="margin:28px 0;border:0;border-top:1px solid var(--border,#334155);">
       <h3 style="margin:0 0 12px;">Other accounts (admin)</h3>
       <form method="post" action="/account/users/password" class="stack-form" style="max-width:520px;display:grid;gap:12px;margin-bottom:28px;">
         <h4 style="margin:0;">Reset password</h4>
@@ -370,8 +443,9 @@ mod tests {
                 "edit profile must mark the passkey register section"
             );
             assert!(
-                html.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
-                "edit profile passkey success must return to Modify User with notice"
+                html.contains("data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\"")
+                    || html.contains("data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\""),
+                "edit profile passkey success must return to Modify User Security tab with notice"
             );
             assert!(
                 html.contains("cpnRegisterPasskey"),
@@ -390,6 +464,15 @@ mod tests {
             assert!(
                 !html.contains("id=\"cpn-passkey-enroll\""),
                 "edit profile must not use the MFA enroll redirect marker"
+            );
+            assert!(
+                html.contains("id=\"modify-user-tabs\""),
+                "modify self-edit must use tabbed layout"
+            );
+            assert!(
+                html.contains("data-modify-tab=\"account\"")
+                    && html.contains("data-modify-tab=\"security\""),
+                "modify self-edit must expose Account and Security tabs"
             );
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");

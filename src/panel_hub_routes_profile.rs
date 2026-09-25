@@ -11,11 +11,16 @@ use crate::account_mgmt::{
 use crate::account_totp::otpauth_qr_svg;
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
-use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
+use crate::panel_hub_pages_profile::users_modify_page_with_tab;
+use crate::panel_hub_pages_profile::users_profile_page;
 use crate::panel_pages::panel_shell;
 use crate::panel_session::{create_session_token, session_cookie_header, session_secret};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
+
+const MODIFY_ACCOUNT: &str = "/account/users/modify?tab=account";
+const MODIFY_SECURITY: &str = "/account/users/modify?tab=security";
+const MODIFY_SECURITY_ENROLL: &str = "/account/users/modify?tab=security&enroll=1";
 
 fn parse_flag(raw: &str) -> bool {
     matches!(
@@ -36,12 +41,13 @@ fn modify_html(
     enroll_qr_svg: Option<&str>,
     backup_codes: Option<&[String]>,
     generated_password: Option<&str>,
+    initial_tab: &str,
 ) -> HttpResponse {
     html_ok(panel_shell(
         user,
         "users",
         "Modify User",
-        &users_modify_page(
+        &users_modify_page_with_tab(
             user,
             notice,
             error,
@@ -49,6 +55,7 @@ fn modify_html(
             enroll_qr_svg,
             backup_codes,
             generated_password,
+            initial_tab,
         ),
     ))
 }
@@ -123,9 +130,8 @@ pub async fn users_modify_get(
     };
     let mut enroll_secret = None;
     let mut enroll_qr = None;
-    if query.get("enroll").map(String::as_str) == Some("1")
-        && let Ok(secret) = load_pending_secret(&user)
-    {
+    let enroll = query.get("enroll").map(String::as_str) == Some("1");
+    if enroll && let Ok(secret) = load_pending_secret(&user) {
         let uri = crate::account_totp::otpauth_uri("CPN Panel", &user, &secret);
         if let Ok(svg) = otpauth_qr_svg(&uri) {
             enroll_secret = Some(secret);
@@ -133,6 +139,13 @@ pub async fn users_modify_get(
         }
     }
     let backup_codes = take_once_backup_codes(&user);
+    let mut initial_tab = query
+        .get("tab")
+        .map(|s| s.as_str())
+        .unwrap_or("account");
+    if enroll || enroll_secret.is_some() || backup_codes.is_some() {
+        initial_tab = "security";
+    }
     modify_html(
         &user,
         query.get("notice").map(String::as_str),
@@ -141,6 +154,7 @@ pub async fn users_modify_get(
         enroll_qr.as_deref(),
         backup_codes.as_deref(),
         None,
+        initial_tab,
     )
 }
 
@@ -159,13 +173,13 @@ pub async fn users_profile_details_post(
         Some(form.recovery_email.as_str()),
         Some(form.language.as_str()),
     ) {
-        return redirect_notice("/account/users/modify", None, Some(&error));
+        return redirect_notice(MODIFY_ACCOUNT, None, Some(&error));
     }
     let session_user = if rename_needed {
         match rename_own_account(&user, &form.username) {
             Ok(public) => public.username,
             Err(error) => {
-                return redirect_notice("/account/users/modify", None, Some(&error));
+                return redirect_notice(MODIFY_ACCOUNT, None, Some(&error));
             }
         }
     } else {
@@ -206,12 +220,13 @@ pub async fn users_profile_password_post(
                     None,
                     None,
                     result.generated_password.as_deref(),
+                    "security",
                 )
             } else {
                 redirect_notice("/account/users/profile", Some("Password updated"), None)
             }
         }
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Err(error) => redirect_notice(MODIFY_SECURITY, None, Some(&error)),
     }
 }
 
@@ -225,11 +240,11 @@ pub async fn users_profile_totp_begin(
     };
     match begin_totp_enroll(&user) {
         Ok((_secret, _uri, _svg)) => redirect_notice(
-            "/account/users/modify?enroll=1",
+            MODIFY_SECURITY_ENROLL,
             Some("Scan the QR and confirm with a code"),
             None,
         ),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Err(error) => redirect_notice(MODIFY_SECURITY, None, Some(&error)),
     }
 }
 
@@ -246,12 +261,12 @@ pub async fn users_profile_totp_confirm(
         Ok(codes) => {
             let _ = store_once_backup_codes(&user, &codes);
             redirect_notice(
-                "/account/users/modify",
+                MODIFY_SECURITY,
                 Some("TOTP enabled. Store your backup codes."),
                 None,
             )
         }
-        Err(error) => redirect_notice("/account/users/modify?enroll=1", None, Some(&error)),
+        Err(error) => redirect_notice(MODIFY_SECURITY_ENROLL, None, Some(&error)),
     }
 }
 
@@ -265,7 +280,7 @@ pub async fn users_profile_totp_disable(
         return login_redirect(&http);
     };
     let Ok((boot, _)) = find_account(&user) else {
-        return redirect_notice("/account/users/modify", None, Some("Account not found"));
+        return redirect_notice(MODIFY_SECURITY, None, Some("Account not found"));
     };
     if !verify_password(
         &form.current_password,
@@ -273,13 +288,13 @@ pub async fn users_profile_totp_disable(
         &boot.password_hash,
     ) {
         return redirect_notice(
-            "/account/users/modify",
+            MODIFY_SECURITY,
             None,
             Some("Current password is incorrect"),
         );
     }
     match disable_totp(&user, &form.code) {
         Ok(()) => redirect_notice("/account/users/profile", Some("TOTP disabled"), None),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Err(error) => redirect_notice(MODIFY_SECURITY, None, Some(&error)),
     }
 }

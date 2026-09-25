@@ -180,8 +180,16 @@ pub async fn passkey_delete_post(
         return login_redirect(&http);
     };
     match delete_passkey(&user, form.id.trim()) {
-        Ok(()) => redirect_notice("/account/users/modify", Some("Passkey removed"), None),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Ok(()) => redirect_notice(
+            "/account/users/modify?tab=security",
+            Some("Passkey removed"),
+            None,
+        ),
+        Err(error) => redirect_notice(
+            "/account/users/modify?tab=security",
+            None,
+            Some(&error),
+        ),
     }
 }
 
@@ -195,8 +203,16 @@ pub async fn passkey_rename_post(
         return login_redirect(&http);
     };
     match rename_passkey(&user, form.id.trim(), form.label.trim()) {
-        Ok(()) => redirect_notice("/account/users/modify", Some("Passkey renamed"), None),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Ok(()) => redirect_notice(
+            "/account/users/modify?tab=security",
+            Some("Passkey renamed"),
+            None,
+        ),
+        Err(error) => redirect_notice(
+            "/account/users/modify?tab=security",
+            None,
+            Some(&error),
+        ),
     }
 }
 
