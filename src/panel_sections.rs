@@ -97,7 +97,7 @@ pub fn email_accounts_main(
     notice: Option<&str>,
     error: Option<&str>,
 ) -> String {
-    use crate::mail_accounts::{list_accounts_public, MailSmtpMode};
+    use crate::mail_accounts::{MailSmtpMode, list_accounts_public};
     use crate::postfix_fallback::postfix_is_ready;
 
     let mail = selected_mail

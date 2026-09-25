@@ -119,10 +119,10 @@ use cpn_installer::panel_routes::{
     plugins_deactivate_host, plugins_disable, plugins_enable, plugins_install,
     plugins_install_host, plugins_page, plugins_settings_page, plugins_settings_save,
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
-    site_preview_image, site_preview_refresh, websites_create, websites_create_page, websites_delete,
-    websites_manage, websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
-    websites_reset_placeholder, websites_resume, websites_suspend, websites_suspend_message,
-    websites_suspend_message_restore,
+    site_preview_image, site_preview_refresh, websites_create, websites_create_page,
+    websites_delete, websites_manage, websites_page, websites_prefs, websites_pretty_manage,
+    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
+    websites_suspend_message, websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,

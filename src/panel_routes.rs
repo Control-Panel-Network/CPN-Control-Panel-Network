@@ -12,10 +12,10 @@ use crate::panel_plugin_settings::{
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{run_mariadb_install, set_websites_docroot_pref, websites_main};
+use crate::panel_website_manage::website_manage_main;
 use crate::panel_websites_create_ui::{
     require_domain_in_cloudflare_zones, resolve_create_domain, websites_create_main,
 };
-use crate::panel_website_manage::website_manage_main;
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
     is_host_owned_install, is_host_scoped_plugin, uninstall_host_plugin,
@@ -141,8 +141,8 @@ pub async fn websites_create(
         // Non-admins may only create sites for themselves.
         user.clone()
     };
-    let cloudflare_mode = crate::panel_ops_cloudflare::cloudflare_configured()
-        && !form.cf_zone.trim().is_empty();
+    let cloudflare_mode =
+        crate::panel_ops_cloudflare::cloudflare_configured() && !form.cf_zone.trim().is_empty();
     let domain = match resolve_create_domain(
         &form.domain,
         &form.cf_zone,
@@ -156,11 +156,7 @@ pub async fn websites_create(
         return create_redirect("/websites/create", "error", &error);
     }
     // Package users cannot override docroot (ACL / package path layout).
-    let docroot = if admin {
-        form.docroot.trim()
-    } else {
-        ""
-    };
+    let docroot = if admin { form.docroot.trim() } else { "" };
     if let Err(error) = require_site_create_allowed(&owner, &domain) {
         return create_redirect("/websites/create", "error", &error);
     }
