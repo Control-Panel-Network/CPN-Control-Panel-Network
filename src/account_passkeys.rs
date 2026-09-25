@@ -250,7 +250,9 @@ fn normalize_attachment(raw: &str) -> &'static str {
 
 fn normalize_registration_path(raw: &str) -> &'static str {
     match raw.trim().to_ascii_lowercase().as_str() {
-        "security-key" | "security_key" | "cross-platform" | "yubikey" | "roaming" => "security-key",
+        "security-key" | "security_key" | "cross-platform" | "yubikey" | "roaming" => {
+            "security-key"
+        }
         _ => "platform",
     }
 }

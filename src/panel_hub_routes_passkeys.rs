@@ -2,7 +2,8 @@
 
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::{
-    PasskeyAuthenticatorMeta, PasskeySummary, delete_passkey, list_passkey_summaries, rename_passkey,
+    PasskeyAuthenticatorMeta, PasskeySummary, delete_passkey, list_passkey_summaries,
+    rename_passkey,
 };
 use crate::installer::AppState;
 use crate::login_service_gate::{evaluate_login_services, login_services_ready};
