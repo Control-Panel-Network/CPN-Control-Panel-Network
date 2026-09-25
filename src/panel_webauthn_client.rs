@@ -282,11 +282,11 @@ function cpnPasskeyRegisterNext(){{
     // MFA gate may overlay Edit/View profile; return there so another passkey can be added.
     if(path==='/account/users/modify'||path.indexOf('/account/users/modify/')===0
       ||path==='/account/users/profile'||path.indexOf('/account/users/profile/')===0){{
-      return '/account/users/modify?notice=Passkey+registered';
+      return '/account/users/modify?tab=security&notice=Passkey+registered';
     }}
     const fromEnroll=enroll.getAttribute('data-redirect');
     if(fromEnroll) return fromEnroll;
-    return '/account/users/modify?notice=Passkey+registered';
+    return '/account/users/modify?tab=security&notice=Passkey+registered';
   }}
   const box=document.getElementById('cpn-passkey-register');
   if(box){{
@@ -294,7 +294,7 @@ function cpnPasskeyRegisterNext(){{
     if(fromBox) return fromBox;
   }}
   if(path.indexOf('/account/users/')===0){{
-    return '/account/users/modify?notice=Passkey+registered';
+    return '/account/users/modify?tab=security&notice=Passkey+registered';
   }}
   return '';
 }}
@@ -363,8 +363,8 @@ mod tests {
             "register finish must send next for server allowlist"
         );
         assert!(
-            script.contains("/account/users/modify?notice=Passkey+registered"),
-            "profile/edit overlay must return to Modify User"
+            script.contains("/account/users/modify?tab=security&notice=Passkey+registered"),
+            "profile/edit overlay must return to Modify User Security tab"
         );
         assert!(
             script.contains("finish.redirect||next"),

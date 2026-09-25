@@ -211,7 +211,7 @@ pub fn change_password_gate_main(notice: Option<&str>, error: Option<&str>) -> S
 fn enroll_passkey_section_html() -> String {
     format!(
         r#"
-  <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form mfa-passkey-section">
+  <div id="cpn-passkey-enroll" data-redirect="/account/users/modify?tab=security&amp;notice=Passkey+registered" class="stack-form mfa-passkey-section">
     <h2 style="margin:0;font-size:1.1rem;">Passkey</h2>
     <p class="muted" style="margin:0;">Register a platform or security-key passkey instead of TOTP. Completing either path returns you to Modify User so you can add more factors.</p>
     <p class="muted" style="margin:0;">On loopback labs, open the panel as <code>http://localhost</code> with your panel port (not <code>127.0.0.1</code>) so the browser can create the credential. Use Windows Hello or a FIDO2 security key (touch; a key PIN is optional but recommended). If the browser offers Microsoft Password Manager, choose <strong>Save another way</strong> for a local authenticator or security key.</p>
@@ -269,7 +269,7 @@ pub fn enroll_mfa_gate_main(
             "store securely; shown once",
         ));
         body.push_str(
-            r#"<p><a class="btn-primary" href="/account/users/modify">Continue to Modify User</a></p>"#,
+            r#"<p><a class="btn-primary" href="/account/users/modify?tab=security">Continue to Modify User</a></p>"#,
         );
     } else if let (Some(secret), Some(qr)) = (enroll_secret, enroll_qr_svg) {
         body.push_str(&format!(
@@ -475,8 +475,12 @@ mod tests {
             "start view must include passkey client script"
         );
         assert!(
-            start.contains("data-redirect=\"/account/users/modify?notice=Passkey+registered\""),
-            "enroll gate passkey returns to Modify User"
+            start.contains(
+                "data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\""
+            ) || start.contains(
+                "data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\"",
+            ),
+            "enroll gate passkey returns to Modify User Security tab"
         );
 
         let mid = enroll_mfa_gate_main(
@@ -506,8 +510,8 @@ mod tests {
             "backup-codes view must continue to Modify User"
         );
         assert!(
-            done.contains("href=\"/account/users/modify\""),
-            "backup-codes continue link must target Modify User"
+            done.contains("href=\"/account/users/modify?tab=security\""),
+            "backup-codes continue link must target Modify User Security tab"
         );
         assert!(
             done.contains("Copy to clipboard") && done.contains("Download"),

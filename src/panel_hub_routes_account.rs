@@ -208,7 +208,7 @@ pub async fn users_password_post(
                 result.generated_password.as_deref(),
             ),
         )),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
     }
 }
 
@@ -226,14 +226,14 @@ pub async fn users_delete_post(
     }
     if is_panel_admin(form.username.trim()) {
         return redirect_notice(
-            "/account/users/modify",
+            "/account/users/modify?tab=other",
             None,
             Some("The bootstrap admin account cannot be deleted here"),
         );
     }
     match delete_account(&form.username) {
         Ok(()) => redirect_notice("/account/users/list", Some("Account deleted"), None),
-        Err(error) => redirect_notice("/account/users/modify", None, Some(&error)),
+        Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
     }
 }
 
