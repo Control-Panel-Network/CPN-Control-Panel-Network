@@ -113,7 +113,41 @@ function cpnCredToJson(cred){{
   if(resp.authenticatorData) r.response.authenticatorData=cpnBufToB64url(resp.authenticatorData);
   if(resp.signature) r.response.signature=cpnBufToB64url(resp.signature);
   if(resp.userHandle) r.response.userHandle=cpnBufToB64url(resp.userHandle);
+  try{{
+    if(typeof resp.getTransports==='function'){{
+      const t=resp.getTransports();
+      if(Array.isArray(t)&&t.length) r.response.transports=t;
+    }}
+  }}catch(e){{}}
+  try{{
+    if(typeof cred.getClientExtensionResults==='function'){{
+      r.clientExtensionResults=cred.getClientExtensionResults()||{{}};
+    }}
+  }}catch(e){{}}
   return r;
+}}
+function cpnAuthenticatorMeta(cred,kind){{
+  const meta={{registration_path:kind||''}};
+  try{{
+    const attachment=cred&&cred.authenticatorAttachment;
+    if(attachment) meta.authenticator_attachment=String(attachment);
+  }}catch(e){{}}
+  try{{
+    const resp=cred&&cred.response;
+    if(resp&&typeof resp.getTransports==='function'){{
+      const t=resp.getTransports();
+      if(Array.isArray(t)&&t.length) meta.transports=t.map(String);
+    }}
+  }}catch(e){{}}
+  try{{
+    if(cred&&typeof cred.getClientExtensionResults==='function'){{
+      const ext=cred.getClientExtensionResults()||{{}};
+      if(ext.credProps&&typeof ext.credProps.rk==='boolean'){{
+        meta.cred_props_rk=ext.credProps.rk;
+      }}
+    }}
+  }}catch(e){{}}
+  return meta;
 }}
 async function cpnJson(url,body){{
   const res=await fetch(url,{{
@@ -213,6 +247,7 @@ async function cpnRegisterPasskey(){{
           ceremony_id:start.ceremony_id,
           label:label,
           next:next,
+          authenticator:cpnAuthenticatorMeta(cred,kind),
           credential:cpnCredToJson(cred)
         }});
         if(status) status.textContent='Passkey registered.';
@@ -422,6 +457,18 @@ mod tests {
         assert!(
             script.contains("name==='NotAllowedError'"),
             "Hello NotAllowed must fall back to security-key"
+        );
+        assert!(
+            script.contains("function cpnAuthenticatorMeta"),
+            "register finish must send authenticator metadata"
+        );
+        assert!(
+            script.contains("authenticator:cpnAuthenticatorMeta(cred,kind)"),
+            "finish body must include authenticator meta from the credential"
+        );
+        assert!(
+            script.contains("getTransports"),
+            "client must collect transports when the browser exposes them"
         );
     }
 

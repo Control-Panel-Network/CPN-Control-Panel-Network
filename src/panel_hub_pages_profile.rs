@@ -205,17 +205,18 @@ pub fn users_self_edit_body(
     // Passkeys
     body.push_str(
         r#"
-      <div id="cpn-passkey-register" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form" style="max-width:560px;display:grid;gap:12px;margin-bottom:28px;">
+      <div id="cpn-passkey-register" data-redirect="/account/users/modify?notice=Passkey+registered" class="stack-form" style="max-width:720px;display:grid;gap:12px;margin-bottom:28px;">
         <h3 style="margin:0;">Passkeys (WebAuthn)</h3>
-        <p class="muted" style="margin:0;">Register a platform or security-key passkey for passwordless sign-in. Credentials are stored under the CPN data directory.</p>"#,
+        <p class="muted" style="margin:0;">Register a platform or security-key passkey for passwordless sign-in. Credentials are stored under the CPN data directory. Type is detected from authenticator metadata when available.</p>"#,
     );
     let keys = list_passkey_summaries(username);
     if keys.is_empty() {
         body.push_str(r#"<p class="empty-state">No passkeys registered yet.</p>"#);
     } else {
-        body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Label</th><th>Created</th><th></th></tr></thead><tbody>"#);
-        for (id, label, created, _) in &keys {
-            let created_fmt = crate::account_passkeys::format_passkey_timestamp(*created);
+        body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Label</th><th>Type</th><th>Created</th><th></th></tr></thead><tbody>"#);
+        for key in &keys {
+            let created_fmt =
+                crate::account_passkeys::format_passkey_timestamp(key.created_at_unix);
             body.push_str(&format!(
                 r#"<tr>
               <td>
@@ -226,6 +227,7 @@ pub fn users_self_edit_body(
                   <button type="submit" class="linkish" style="background:none;border:0;color:var(--cpn-accent,#2563eb);font-weight:600;cursor:pointer;padding:0;">Rename</button>
                 </form>
               </td>
+              <td><span class="muted">{type_label}</span></td>
               <td>{created_fmt}</td>
               <td>
                 <form method="post" action="/account/users/profile/passkey/delete" style="display:inline;"
@@ -235,9 +237,10 @@ pub fn users_self_edit_body(
                 </form>
               </td>
             </tr>"#,
-                label = html_escape(label),
+                label = html_escape(&key.label),
+                type_label = html_escape(&key.type_label),
                 created_fmt = html_escape(&created_fmt),
-                id = html_escape(id),
+                id = html_escape(&key.id),
             ));
         }
         body.push_str("</tbody></table></div>");
@@ -379,6 +382,10 @@ mod tests {
                     && !html.contains("Register with Windows Hello")
                     && !html.contains("Register security key"),
                 "edit profile must offer a single Register passkey button"
+            );
+            assert!(
+                html.contains("Type is detected from authenticator metadata"),
+                "passkeys section must explain the read-only Type column"
             );
             assert!(
                 !html.contains("id=\"cpn-passkey-enroll\""),

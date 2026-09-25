@@ -1,7 +1,10 @@
 //! Passkey (WebAuthn) HTTP routes: register, list/delete, and login ceremonies.
 
 use crate::account_mgmt::find_account;
-use crate::account_passkeys::{delete_passkey, list_passkey_summaries, rename_passkey};
+use crate::account_passkeys::{
+    PasskeyAuthenticatorMeta, PasskeySummary, delete_passkey, list_passkey_summaries,
+    rename_passkey,
+};
 use crate::installer::AppState;
 use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
@@ -62,6 +65,9 @@ pub struct PasskeyRegisterFinishBody {
     label: String,
     #[serde(default)]
     next: Option<String>,
+    /// Optional browser hints (attachment, transports, registration path).
+    #[serde(default)]
+    authenticator: Option<PasskeyAuthenticatorMeta>,
     credential: RegisterPublicKeyCredential,
 }
 
@@ -147,12 +153,14 @@ pub async fn passkey_register_finish(
         Ok((w, _)) => w,
         Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
     };
+    let client_meta = body.authenticator.clone().unwrap_or_default();
     match finish_registration(
         &webauthn,
         &user,
         body.ceremony_id.trim(),
         body.label.trim(),
         &body.credential,
+        client_meta,
     ) {
         Ok(()) => {
             let redirect = crate::login_next::passkey_register_location(body.next.as_deref());
@@ -383,6 +391,6 @@ pub async fn passkey_mfa_finish(
     }
 }
 
-pub fn passkey_list_for_profile(username: &str) -> Vec<(String, String, u64, u64)> {
+pub fn passkey_list_for_profile(username: &str) -> Vec<PasskeySummary> {
     list_passkey_summaries(username)
 }

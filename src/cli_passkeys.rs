@@ -9,7 +9,7 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
 pub enum PasskeyCommands {
-    /// List registered passkeys for an account (id, label, timestamps only)
+    /// List registered passkeys for an account (id, label, type, timestamps only)
     List {
         #[arg(long)]
         username: String,
@@ -61,11 +61,14 @@ pub fn run(
                 println!("(no passkeys)");
                 return Ok(());
             }
-            for (id, label, created, last_used) in rows {
+            for row in rows {
                 println!(
-                    "id={id}\tlabel={label}\tcreated={}\tlast_used={}",
-                    format_passkey_timestamp(created),
-                    format_passkey_timestamp(last_used),
+                    "id={}\tlabel={}\ttype={}\tcreated={}\tlast_used={}",
+                    row.id,
+                    row.label,
+                    row.type_label,
+                    format_passkey_timestamp(row.created_at_unix),
+                    format_passkey_timestamp(row.last_used_unix),
                 );
             }
             Ok(())
