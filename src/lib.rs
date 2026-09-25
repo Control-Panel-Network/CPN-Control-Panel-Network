@@ -249,6 +249,7 @@ pub mod panel_prefs;
 pub mod panel_public_url;
 pub mod panel_routes;
 pub mod panel_sections;
+pub mod panel_websites_create_ui;
 pub mod panel_service;
 pub mod panel_session;
 pub mod panel_sidebar;

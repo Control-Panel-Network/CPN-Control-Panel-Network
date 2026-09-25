@@ -119,8 +119,8 @@ use cpn_installer::panel_routes::{
     plugins_deactivate_host, plugins_disable, plugins_enable, plugins_install,
     plugins_install_host, plugins_page, plugins_settings_page, plugins_settings_save,
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
-    site_preview_image, site_preview_refresh, websites_create, websites_delete, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
+    site_preview_image, site_preview_refresh, websites_create, websites_create_page, websites_delete,
+    websites_manage, websites_page, websites_prefs, websites_pretty_manage, websites_preview_redirect,
     websites_reset_placeholder, websites_resume, websites_suspend, websites_suspend_message,
     websites_suspend_message_restore,
 };
@@ -1094,6 +1094,8 @@ async fn main() -> std::io::Result<()> {
             .service(dashboard_ssh_security_review_snooze)
             .service(dashboard_ssh_security_review_show)
             .service(websites_page)
+            // Static /websites/create before /websites/{domain} catch-all.
+            .service(websites_create_page)
             .service(websites_manage)
             .service(websites_alias_add)
             .service(websites_alias_remove)
