@@ -409,8 +409,9 @@ fn run() -> Result<(), String> {
             }
             AccountCommands::Rename { username, to } => {
                 require_root_for_mutation()?;
-                let public = rename_account(&username, &to)?;
-                println!("renamed account ok\tto={}", public.username);
+                // Do not echo the new username: CodeQL rust/cleartext-logging.
+                let _ = rename_account(&username, &to)?;
+                println!("renamed account ok");
                 Ok(())
             }
             AccountCommands::Deactivate {
