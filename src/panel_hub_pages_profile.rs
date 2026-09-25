@@ -377,11 +377,7 @@ fn admin_other_users_section() -> String {
     let mut non_admin_options = String::new();
     let mut all_options = String::new();
     for acct in &accounts {
-        let label = format!(
-            "{} ({})",
-            acct.username,
-            status_label(acct.disabled)
-        );
+        let label = format!("{} ({})", acct.username, status_label(acct.disabled));
         let opt = format!(
             r#"<option value="{u}">{l}</option>"#,
             u = html_escape(&acct.username),

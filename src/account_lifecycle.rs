@@ -63,11 +63,7 @@ pub fn enable_account(username_raw: &str) -> Result<AccountPublic, String> {
 }
 
 pub fn status_label(disabled: bool) -> &'static str {
-    if disabled {
-        "disabled"
-    } else {
-        "active"
-    }
+    if disabled { "disabled" } else { "active" }
 }
 
 pub fn role_label(username: &str) -> &'static str {

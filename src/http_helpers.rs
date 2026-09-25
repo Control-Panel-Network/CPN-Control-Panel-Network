@@ -278,7 +278,7 @@ mod tests {
             username: "Admin".into(),
             recovery_email: "admin@example.com".into(),
             configured: true,
-        disabled: false,
+            disabled: false,
         });
         assert!(panel_account_ready(&status));
         assert!(!install_finished(&status));

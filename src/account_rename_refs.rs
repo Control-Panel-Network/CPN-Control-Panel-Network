@@ -39,10 +39,7 @@ fn rename_package_assignment(old_username: &str, new_username: &str) -> Result<(
         .map_err(|error| format!("Could not read package assignments: {error}"))?;
     let mut value: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|error| format!("Invalid package assignments JSON: {error}"))?;
-    let Some(assignments) = value
-        .get_mut("assignments")
-        .and_then(|v| v.as_array_mut())
-    else {
+    let Some(assignments) = value.get_mut("assignments").and_then(|v| v.as_array_mut()) else {
         return Ok(());
     };
     let mut changed = false;

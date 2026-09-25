@@ -135,7 +135,7 @@ mod tests {
             created_at_unix: 1,
             must_change_password: false,
             totp_required: true,
-        disabled: false,
+            disabled: false,
         };
         persist_bootstrap(&boot).expect("bootstrap");
     }

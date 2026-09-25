@@ -3,10 +3,10 @@
 pub mod account;
 pub mod account_lifecycle;
 pub mod account_mfa;
-pub mod account_rename_refs;
 pub mod account_mgmt;
 pub mod account_passkeys;
 pub mod account_password_reset;
+pub mod account_rename_refs;
 pub mod account_security;
 pub mod account_totp;
 pub mod active_webmail;
