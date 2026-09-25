@@ -3,7 +3,7 @@
 //! Preview fills the form password field so operators can copy and re-roll before submit.
 //! Server policy and the blocked-password list still validate on submit.
 
-use crate::account::{default_password_policy, MAX_PASSWORD_CHARS};
+use crate::account::{MAX_PASSWORD_CHARS, default_password_policy};
 
 /// True when the password field is empty: server should generate (leave-blank UX).
 /// When the field is filled (client preview), prefer that value even if Generate is checked.
