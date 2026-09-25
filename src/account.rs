@@ -65,6 +65,33 @@ pub fn password_policy_hint(policy: &PasswordPolicy) -> String {
     format!("{}.", parts.join("; "))
 }
 
+/// HTML form of [`password_policy_hint`] with a link to the live blocked-password list.
+///
+/// Uses [`crate::blocked_passwords::default_list_url`] (same GitHub raw URL the fetcher
+/// defaults to). Safe to insert into panel HTML without further escaping.
+pub fn password_policy_hint_html(policy: &PasswordPolicy) -> String {
+    let plain = password_policy_hint(policy);
+    let url = crate::blocked_passwords::default_list_url();
+    let link = format!(
+        r#"must not match the <a class="password-policy-link" href="{href}" target="_blank" rel="noopener noreferrer">blocked-password list</a>"#,
+        href = html_escape_attr(url)
+    );
+    // Phrase has no HTML metacharacters; escape the rest, then inject the anchor.
+    html_escape_text(&plain).replace("must not match the blocked-password list", &link)
+}
+
+fn html_escape_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn html_escape_attr(value: &str) -> String {
+    html_escape_text(value).replace('\'', "&#39;")
+}
+
 /// Data root for panel bootstrap, extra accounts, and site records.
 /// Override with `CPN_DATA_DIR` (used by tests and non-standard installs).
 pub fn data_dir() -> PathBuf {
@@ -539,6 +566,12 @@ mod tests {
         assert!(hint.contains("Min 8 characters"));
         assert!(hint.contains("max 256"));
         assert!(!hint.contains("special character"));
+        assert!(hint.contains("blocked-password list"));
+        let hint_html = password_policy_hint_html(&policy);
+        assert!(hint_html.contains("blocked-password list</a>"));
+        assert!(hint_html.contains(crate::blocked_passwords::default_list_url()));
+        assert!(hint_html.contains("rel=\"noopener noreferrer\""));
+        assert!(hint_html.contains("target=\"_blank\""));
         assert!(password_meets_policy(&ascii_min8_no_special_sample(), &policy).is_ok());
     }
 

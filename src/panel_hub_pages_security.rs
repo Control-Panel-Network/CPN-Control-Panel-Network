@@ -33,10 +33,9 @@ pub fn security_hub_main() -> String {
         "Firewall, SSH hardening, fail2ban, WAF, malware scan, and SSL certificates for this CPN node.",
     );
     let policy = crate::account::default_password_policy();
-    let hint = crate::account::password_policy_hint(&policy);
+    let hint = crate::account::password_policy_hint_html(&policy);
     body.push_str(&format!(
-        r#"<p class="muted" style="margin:0 0 16px;">Panel password policy: {}</p>"#,
-        html_escape(&hint)
+        r#"<p class="muted" style="margin:0 0 16px;">Panel password policy: {hint}</p>"#
     ));
     for (title, tiles) in security_hub_sections() {
         let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);

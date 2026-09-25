@@ -84,7 +84,7 @@ pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) 
 
 pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
     let policy = crate::account::default_password_policy();
-    let hint = crate::account::password_policy_hint(&policy);
+    let hint = crate::account::password_policy_hint_html(&policy);
     let body = format!(
         r#"
       <form method="post" action="/account/users/create" class="stack-form" style="max-width:520px;display:grid;gap:12px;">
@@ -106,7 +106,7 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
       <p class="muted" style="margin-top:12px;">Password policy: {hint}</p>
       <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>"#,
         min_len = policy.min_length,
-        hint = html_escape(&hint),
+        hint = hint,
     );
     feature_shell(
         &[
