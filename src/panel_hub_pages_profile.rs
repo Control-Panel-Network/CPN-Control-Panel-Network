@@ -384,8 +384,8 @@ mod tests {
                 "edit profile must offer a single Register passkey button"
             );
             assert!(
-                html.contains("<th>Type</th>"),
-                "passkeys table must show a read-only Type column"
+                html.contains("Type is detected from authenticator metadata"),
+                "passkeys section must explain the read-only Type column"
             );
             assert!(
                 !html.contains("id=\"cpn-passkey-enroll\""),
