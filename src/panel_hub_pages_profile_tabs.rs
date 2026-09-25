@@ -73,7 +73,16 @@ pub fn modify_tabs_script() -> &'static str {
     if(v==='security'||v==='account'||v==='other') return v;
     return '';
   }
-  function activate(id, pushHash){
+  function syncUrl(id){
+    try{
+      var u=new URL(location.href);
+      u.searchParams.set('tab', id);
+      // Canonical deep-link is ?tab= only. Clear any leftover hash fragment.
+      u.hash='';
+      history.replaceState(null,'', u.pathname+u.search);
+    }catch(e){}
+  }
+  function activate(id, pushUrl){
     if(!known(id)) id='account';
     tabs.forEach(function(btn){
       var on=btn.getAttribute('data-modify-tab')===id;
@@ -84,16 +93,7 @@ pub fn modify_tabs_script() -> &'static str {
       var on=panel.id==='modify-panel-'+id;
       if(on) panel.removeAttribute('hidden'); else panel.setAttribute('hidden','');
     });
-    if(pushHash){
-      try{
-        var u=new URL(location.href);
-        u.searchParams.set('tab', id);
-        u.hash=id;
-        history.replaceState(null,'', u.pathname+u.search+u.hash);
-      }catch(e){
-        try{ history.replaceState(null,'','#'+id); }catch(_e){}
-      }
-    }
+    if(pushUrl) syncUrl(id);
   }
   tabs.forEach(function(btn, idx){
     btn.addEventListener('click', function(){
@@ -119,10 +119,15 @@ pub fn modify_tabs_script() -> &'static str {
     want=resolve(q.get('tab')||'');
     if(!want && q.get('enroll')==='1') want='security';
   }catch(e){}
-  if(!want) want=resolve((location.hash||'').replace(/^#/,''));
+  // Accept legacy hash deep-links once (#security, #passkeys), then normalize to ?tab=.
+  var hashTab=resolve((location.hash||'').replace(/^#/,''));
+  if(!want && hashTab) want=hashTab;
   if(!want) want=resolve(root.getAttribute('data-initial-tab')||'');
   if(!want || !known(want)) want='account';
-  activate(want, false);
+  var hadHash=!!((location.hash||'').replace(/^#/,''));
+  var qHasTab=false;
+  try{ qHasTab=!!(new URLSearchParams(location.search||'').get('tab')); }catch(e){}
+  activate(want, hadHash || !qHasTab);
 })();
 "#
 }
@@ -243,5 +248,26 @@ mod tests {
         let html = wrap_modify_tabs("<p>a</p>", "<p>s</p>", None, "other");
         assert!(!html.contains("data-modify-tab=\"other\""));
         assert!(html.contains("data-initial-tab=\"account\""));
+    }
+
+    #[test]
+    fn tab_script_uses_query_only_not_hash() {
+        let html = wrap_modify_tabs("<p>a</p>", "<p>s</p>", None, "account");
+        assert!(
+            html.contains("u.searchParams.set('tab', id)"),
+            "tab switching must update ?tab="
+        );
+        assert!(
+            html.contains("u.hash=''"),
+            "tab switching must clear hash fragments"
+        );
+        assert!(
+            !html.contains("u.hash=id"),
+            "must not set location.hash to the tab id (avoids ?tab=account#account)"
+        );
+        assert!(
+            !html.contains("u.pathname+u.search+u.hash"),
+            "history URL must not append hash after query"
+        );
     }
 }
