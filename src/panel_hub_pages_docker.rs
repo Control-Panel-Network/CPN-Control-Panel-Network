@@ -385,14 +385,14 @@ pub fn docker_manage_page(
     };
     let prefill = prefill_image.unwrap_or("");
     let body = format!(
-        r#"{toolbar}
+        r##"{toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
         <a class="btn-primary" href="#create-container">+ Create Container</a>
         <a class="btn-secondary" href="/docker/images">Manage Images</a>
       </p>
       <h2 style="margin:18px 0 10px;">Active Containers</h2>
       {table}
-      <div id="create-container">{create}</div>"#,
+      <div id="create-container">{create}</div>"##,
         toolbar = toolbar("containers"),
         table = table,
         create = create_container_form(prefill),
@@ -430,7 +430,7 @@ pub fn docker_images_page(
         ),
     };
     let body = format!(
-        r#"{toolbar}
+        r##"{toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
         <a class="btn-primary" href="/docker#create-container">+ Create Container</a>
         <a class="btn-secondary" href="/docker/images">Manage Images</a>
@@ -444,7 +444,7 @@ pub fn docker_images_page(
           </form>
         </div>
         {table}
-      </div>"#,
+      </div>"##,
         toolbar = toolbar("images"),
         search = search_pull_card(q, hits),
         table = table,
