@@ -59,9 +59,7 @@ fn container_actions(row: &DockerContainerRow) -> String {
         name = urlencoding_simple(&row.name),
     ));
     if row.cpn_managed {
-        out.push_str(
-            r#"<span class="muted" title="Labeled com.cpn.managed=1">Protected</span>"#,
-        );
+        out.push_str(r#"<span class="muted" title="Labeled com.cpn.managed=1">Protected</span>"#);
     } else {
         out.push_str(&action_form(
             "remove",

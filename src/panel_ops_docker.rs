@@ -68,10 +68,7 @@ fn split_image_tag(image: &str) -> (String, String) {
     } else if let Some(colon) = image.rfind(':') {
         // Avoid splitting digests like sha256:...
         if !image[..colon].contains('@') && !image.starts_with("sha256:") {
-            return (
-                image[..colon].to_string(),
-                image[colon + 1..].to_string(),
-            );
+            return (image[..colon].to_string(), image[colon + 1..].to_string());
         }
     }
     (image.to_string(), "latest".into())
@@ -156,7 +153,10 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
         } else {
             Vec::new()
         };
-        let state = parts.get(5).map(|s| s.trim().to_ascii_lowercase()).unwrap_or_default();
+        let state = parts
+            .get(5)
+            .map(|s| s.trim().to_ascii_lowercase())
+            .unwrap_or_default();
         let cpn_managed = is_cpn_managed(&labels);
         let running = state == "running"
             || status.to_ascii_lowercase().starts_with("up ")
@@ -227,7 +227,9 @@ fn container_is_cpn_managed(bin: &str, name_or_id: &str) -> bool {
         .output();
     match output {
         Ok(o) if o.status.success() => {
-            let v = String::from_utf8_lossy(&o.stdout).trim().to_ascii_lowercase();
+            let v = String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .to_ascii_lowercase();
             v == "1" || v == "true"
         }
         _ => false,
@@ -272,10 +274,12 @@ pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String
         return Err("Docker/Podman CLI not found.".into());
     };
     match action.trim().to_ascii_lowercase().as_str() {
-        "start" => run_container_cmd(bin, &["start", name])
-            .map(|_| format!("Started container `{name}`.")),
-        "stop" => run_container_cmd(bin, &["stop", name])
-            .map(|_| format!("Stopped container `{name}`.")),
+        "start" => {
+            run_container_cmd(bin, &["start", name]).map(|_| format!("Started container `{name}`."))
+        }
+        "stop" => {
+            run_container_cmd(bin, &["stop", name]).map(|_| format!("Stopped container `{name}`."))
+        }
         "restart" => run_container_cmd(bin, &["restart", name])
             .map(|_| format!("Restarted container `{name}`.")),
         "remove" | "rm" | "delete" => {
@@ -333,12 +337,7 @@ pub fn docker_status() -> DockerStatus {
         list_containers_detailed()
             .unwrap_or_default()
             .into_iter()
-            .map(|c| {
-                format!(
-                    "{} {} {}:{} {}",
-                    c.id, c.name, c.image, c.tag, c.status
-                )
-            })
+            .map(|c| format!("{} {} {}:{} {}", c.id, c.name, c.image, c.tag, c.status))
             .take(50)
             .collect()
     } else {
@@ -377,8 +376,10 @@ fn enable_container_engine() -> Result<String, String> {
         }
     }
     if notes.is_empty() {
-        Ok("Container packages installed; start docker or podman if the CLI is not ready yet."
-            .into())
+        Ok(
+            "Container packages installed; start docker or podman if the CLI is not ready yet."
+                .into(),
+        )
     } else {
         Ok(format!("Started container engine ({})", notes.join(", ")))
     }
@@ -389,9 +390,7 @@ fn enable_container_engine() -> Result<String, String> {
 pub fn install_docker_engine() -> Result<String, String> {
     if let Some(bin) = docker_bin() {
         if docker_daemon_ok(bin) {
-            return Ok(format!(
-                "Container engine already available via `{bin}`."
-            ));
+            return Ok(format!("Container engine already available via `{bin}`."));
         }
         let note = enable_container_engine()?;
         if docker_daemon_ok(bin) {

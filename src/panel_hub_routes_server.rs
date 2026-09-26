@@ -3,11 +3,11 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_litespeed::{
     litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
     run_set_tier, run_set_webadmin_url, run_upgrade,
 };
-use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_server::{
     docker_page, package_manager_page, php_tuning_page, processes_page, run_service_control,
     server_hub_main, services_page,
