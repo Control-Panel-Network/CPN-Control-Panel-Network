@@ -25,9 +25,7 @@ use cpn_installer::cli_totp::{TotpCommands, run as run_totp};
 use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::panel_ops_ssl_provider::SslProvider;
 use cpn_installer::paths;
-use cpn_installer::sites::{
-    SiteModify, create_site_with_ssl, delete_site, list_sites, modify_site,
-};
+use cpn_installer::sites::{SiteModify, create_site_with_ssl, list_sites, modify_site};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -540,7 +538,7 @@ fn run() -> Result<(), String> {
                     Some(raw) => Some(SslProvider::parse(raw)?),
                     None => None,
                 };
-                let site = create_site_with_ssl(
+                let (site, report) = create_site_with_ssl(
                     &domain,
                     &owner,
                     docroot.as_deref(),
@@ -557,6 +555,10 @@ fn run() -> Result<(), String> {
                     paths::platform_data_dir(),
                     site.domain
                 );
+                println!("{}", report.summary());
+                for w in &report.warnings {
+                    eprintln!("warning: {w}");
+                }
                 if !site.vhost_wired {
                     eprintln!(
                         "note: web server vhost files are not written yet; files are under the docroot above"
@@ -620,8 +622,9 @@ fn run() -> Result<(), String> {
                     &format!("Delete site `{domain}` record? This cannot be undone."),
                     yes,
                 )?;
-                delete_site(&domain)?;
+                let dns_note = cpn_installer::sites::delete_site_with_dns_report(&domain)?;
                 println!("deleted site {domain}");
+                println!("{dns_note}");
                 Ok(())
             }
         },

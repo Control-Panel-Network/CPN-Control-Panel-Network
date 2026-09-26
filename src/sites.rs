@@ -381,11 +381,12 @@ pub fn create_site(
     engine: Option<&str>,
     notes: Option<&str>,
 ) -> Result<SiteRecord, String> {
-    create_site_with_ssl(domain_raw, owner, docroot, engine, notes, None)
+    create_site_with_ssl(domain_raw, owner, docroot, engine, notes, None).map(|(site, _)| site)
 }
 
 /// Create a site with an optional explicit SSL provider (CLI `--ssl-provider`).
 /// Subdomains inherit the parent provider as the initial value only when `ssl_provider` is None.
+/// Returns the site record and the best-effort domain-ready report (Cloudflare DNS, mail DNS, SSL).
 pub fn create_site_with_ssl(
     domain_raw: &str,
     owner: &str,
@@ -393,7 +394,7 @@ pub fn create_site_with_ssl(
     engine: Option<&str>,
     notes: Option<&str>,
     ssl_provider: Option<SslProvider>,
-) -> Result<SiteRecord, String> {
+) -> Result<(SiteRecord, crate::panel_ops_domain_ready::DomainReadyReport), String> {
     let domain = normalize_domain(domain_raw)?;
     let path = site_path(&domain);
     if path.is_file() {
@@ -446,16 +447,16 @@ pub fn create_site_with_ssl(
     persist_site(&path, &site)?;
     // Best-effort: create log files and wire OLS/nginx access/error log paths.
     let _ = crate::panel_site_vhost_wire::ensure_site_vhost_logging(&site);
-    // Best-effort: DKIM, SPF/DKIM/DMARC DNS, auto SSL (never fails site create).
-    let _ = crate::panel_ops_domain_ready::after_site_created(&domain);
+    // Best-effort: Cloudflare site DNS, DKIM, SPF/DKIM/DMARC, auto SSL (never fails site create).
+    let report = crate::panel_ops_domain_ready::after_site_created(&domain);
     // Optional unique internal IP when Nginx front mode is enabled.
     if crate::proxy_front::proxy_front_enabled() {
         let _ = crate::proxy_front::ensure_site_internal_ip(&domain);
         if let Ok(updated) = load_site(&domain) {
-            return Ok(updated);
+            return Ok((updated, report));
         }
     }
-    Ok(site)
+    Ok((site, report))
 }
 
 /// Update only the unique internal IP field for a site (proxy-front mode).
@@ -560,15 +561,32 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
 }
 
 /// Remove the registry JSON only. Document root files under `/home/...` are kept.
+/// Best-effort: remove CPN-managed Cloudflare A/AAAA/www records for the hostname first.
 pub fn delete_site(domain_raw: &str) -> Result<(), String> {
     let domain = normalize_domain(domain_raw)?;
     let path = site_path(&domain);
     if !path.is_file() {
         return Err(format!("Site `{domain}` not found"));
     }
+    // Best-effort DNS cleanup; never block registry delete when Cloudflare is down.
+    let _ = crate::panel_ops_site_dns::remove_site_cloudflare_dns(&domain);
     fs::remove_file(&path)
         .map_err(|error| format!("Could not delete {}: {error}", path.display()))?;
     Ok(())
+}
+
+/// Like [`delete_site`], but returns Cloudflare DNS cleanup notes for UI/CLI notices.
+pub fn delete_site_with_dns_report(domain_raw: &str) -> Result<String, String> {
+    let domain = normalize_domain(domain_raw)?;
+    let path = site_path(&domain);
+    if !path.is_file() {
+        return Err(format!("Site `{domain}` not found"));
+    }
+    let dns_note = crate::panel_ops_site_dns::remove_site_cloudflare_dns(&domain)
+        .unwrap_or_else(|e| format!("Cloudflare site DNS remove: {e}"));
+    fs::remove_file(&path)
+        .map_err(|error| format!("Could not delete {}: {error}", path.display()))?;
+    Ok(dns_note)
 }
 
 #[cfg(test)]
