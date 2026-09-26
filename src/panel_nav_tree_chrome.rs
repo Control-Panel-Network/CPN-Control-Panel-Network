@@ -10,9 +10,21 @@ pub fn nav_tree_styles() -> &'static str {
   margin:0 0 10px;
 }
 .nav-section {
-  margin:14px 4px 8px;
-  color:var(--muted); font-size:11px; font-weight:700;
+  display:block;
+  margin:14px 0 8px;
+  padding:0;
+}
+.nav-section-label {
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+  padding:7px 12px;
+  border-radius:8px;
+  background:#2563eb;
+  color:#fff;
+  font-size:11px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase;
+  line-height:1.2;
 }
 .sidebar nav > .nav-section:first-child { margin-top:4px; }
 .nav-group { margin:0; border:0; min-width:0; width:100%; }
@@ -68,6 +80,11 @@ pub fn nav_tree_styles() -> &'static str {
   border-color:#9ec2f0; background:#e7f1ff; color:var(--blue); font-weight:600;
 }
 .sidebar nav a.nav-child { padding-left:22px; font-size:14px; min-height:40px; }
+[data-color-mode="dark"] .nav-section-label {
+  background:#1e3a5f;
+  color:#93c5fd;
+  border:1px solid #2a4a73;
+}
 [data-color-mode="dark"] .sidebar nav a.nav-tile,
 [data-color-mode="dark"] .nav-parent.nav-tile,
 [data-color-mode="dark"] .nav-child-btn {

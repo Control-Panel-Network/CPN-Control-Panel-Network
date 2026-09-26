@@ -7,7 +7,7 @@
 use crate::account::{data_dir, now_unix};
 use crate::packages::package_for_account;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_nav_catalog::{ACCOUNT, ADMINISTRATION, HOSTING, NavEntry};
+use crate::panel_nav_catalog::{NavEntry, all_sections};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -102,7 +102,7 @@ fn names_equal(a: &str, b: &str) -> bool {
 /// Controllable top-level sidebar sections (catalog entry ids).
 pub fn controllable_nav_items() -> Vec<NavVisibilityItem> {
     let mut items = Vec::new();
-    for section in [HOSTING, ACCOUNT, ADMINISTRATION] {
+    for section in all_sections() {
         for entry in section {
             match *entry {
                 NavEntry::Link { id, href, label } => {
@@ -235,7 +235,7 @@ pub fn can_see_nav_id(username: &str, nav_id: &str) -> bool {
 
 fn catalog_href_map() -> Vec<(&'static str, &'static str)> {
     let mut pairs = Vec::new();
-    for section in [HOSTING, ACCOUNT, ADMINISTRATION] {
+    for section in all_sections() {
         for entry in section {
             match *entry {
                 NavEntry::Link { id, href, .. } => pairs.push((href, id)),
@@ -276,8 +276,14 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
     if path.starts_with("/email") {
         return Some("email");
     }
-    if path.starts_with("/databases") || path.starts_with("/ftp") {
+    if path.starts_with("/databases/manager") {
+        return Some("mariadb");
+    }
+    if path.starts_with("/databases") {
         return Some("databases");
+    }
+    if path.starts_with("/ftp") {
+        return Some("ftp");
     }
     if path.starts_with("/backups") {
         return Some("backups");
@@ -285,23 +291,52 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
     if path.starts_with("/plugins") || path.starts_with("/apps") {
         return Some("plugins");
     }
+    if path.starts_with("/docker") {
+        return Some("docker");
+    }
     if path.starts_with("/account") {
         return Some("users");
     }
     if path.starts_with("/packages") {
         return Some("packages");
     }
-    if path.starts_with("/server") {
-        if path.starts_with("/server/files") {
-            return Some("root-files");
-        }
-        return Some("server");
+    if path.starts_with("/dns") {
+        return Some("dns");
+    }
+    if path.starts_with("/security/ssl") {
+        return Some("ssl");
     }
     if path.starts_with("/security") {
         return Some("security");
     }
     if path.starts_with("/settings") {
         return Some("settings");
+    }
+    if path.starts_with("/server/files") {
+        return Some("root-files");
+    }
+    if path.starts_with("/server/php") {
+        return Some("php");
+    }
+    if path.starts_with("/server/services") {
+        return Some("services");
+    }
+    if path.starts_with("/server/processes") {
+        return Some("processes");
+    }
+    if path.starts_with("/server/packages") {
+        return Some("package-manager");
+    }
+    if path.starts_with("/server/dns") {
+        return Some("dns");
+    }
+    if path.starts_with("/server/openlitespeed")
+        || path.starts_with("/server/litespeed")
+    {
+        return Some("litespeed");
+    }
+    if path.starts_with("/server") {
+        return Some("server");
     }
     None
 }
