@@ -31,13 +31,39 @@ fn find_record<'a>(records: &'a [CfDnsRecord], name: &str, rtype: &str) -> Optio
         .find(|r| r.record_type.eq_ignore_ascii_case(rtype) && names_equal(&r.name, name))
 }
 
-fn upsert_proxied_a(zone_domain: &str, hostname: &str, ip: &str) -> Result<String, String> {
+fn is_private_or_cgnat_ipv4(ip: &str) -> bool {
+    let parts: Vec<&str> = ip.split('.').collect();
+    if parts.len() != 4 {
+        return false;
+    }
+    let Ok(octets) = parts
+        .iter()
+        .map(|p| p.parse::<u8>())
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return false;
+    };
+    matches!(octets[0], 10)
+        || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+        || (octets[0] == 192 && octets[1] == 168)
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        || octets[0] == 127
+}
+
+/// Cloudflare orange-cloud proxy rejects RFC1918 and CGNAT targets. Use DNS-only then.
+fn want_proxied(ip: &str) -> bool {
+    !is_private_or_cgnat_ipv4(ip)
+}
+
+fn upsert_site_a(zone_domain: &str, hostname: &str, ip: &str) -> Result<String, String> {
+    let proxied = want_proxied(ip);
     let existing = list_dns_records(zone_domain)?;
     if let Some(found) = find_record(&existing, hostname, "A") {
-        if found.content == ip && found.proxied {
-            return Ok(format!("A `{hostname}` already points to {ip} (proxied)"));
+        if found.content == ip && found.proxied == proxied {
+            let mode = if proxied { "proxied" } else { "DNS-only" };
+            return Ok(format!("A `{hostname}` already points to {ip} ({mode})"));
         }
-        let msg = update_dns_record(zone_domain, &found.id, hostname, ip, 1, None, true)?;
+        let msg = update_dns_record(zone_domain, &found.id, hostname, ip, 1, None, proxied)?;
         return Ok(format!("updated A `{hostname}`: {msg}"));
     }
     // Do not replace an existing CNAME for the same name; operators may point elsewhere.
@@ -46,22 +72,22 @@ fn upsert_proxied_a(zone_domain: &str, hostname: &str, ip: &str) -> Result<Strin
             "CNAME already exists for `{hostname}`; leave it unchanged (not replacing with A)"
         ));
     }
-    let msg = create_dns_record(zone_domain, "A", hostname, ip, 1, None, true)?;
+    let msg = create_dns_record(zone_domain, "A", hostname, ip, 1, None, proxied)?;
     Ok(format!("added A `{hostname}`: {msg}"))
 }
 
-fn upsert_www_cname(zone_domain: &str, hostname: &str) -> Result<String, String> {
+fn upsert_www_cname(zone_domain: &str, hostname: &str, proxied: bool) -> Result<String, String> {
     let www = format!("www.{hostname}");
     let existing = list_dns_records(zone_domain)?;
     if let Some(found) = find_record(&existing, &www, "CNAME") {
         let target = found.content.trim_end_matches('.').to_ascii_lowercase();
         let want = hostname.trim_end_matches('.').to_ascii_lowercase();
-        if target == want && found.proxied {
+        if target == want && found.proxied == proxied {
             return Ok(format!(
-                "CNAME `{www}` already points to `{hostname}` (proxied)"
+                "CNAME `{www}` already points to `{hostname}`"
             ));
         }
-        let msg = update_dns_record(zone_domain, &found.id, &www, hostname, 1, None, true)?;
+        let msg = update_dns_record(zone_domain, &found.id, &www, hostname, 1, None, proxied)?;
         return Ok(format!("updated CNAME `{www}`: {msg}"));
     }
     if find_record(&existing, &www, "A").is_some() || find_record(&existing, &www, "AAAA").is_some()
@@ -70,7 +96,7 @@ fn upsert_www_cname(zone_domain: &str, hostname: &str) -> Result<String, String>
             "skipped www CNAME: A/AAAA already exists for `{www}`"
         ));
     }
-    let msg = create_dns_record(zone_domain, "CNAME", &www, hostname, 1, None, true)?;
+    let msg = create_dns_record(zone_domain, "CNAME", &www, hostname, 1, None, proxied)?;
     Ok(format!("added CNAME `{www}`: {msg}"))
 }
 
@@ -82,12 +108,16 @@ pub fn ensure_site_cloudflare_dns(domain_raw: &str) -> Result<String, String> {
     }
     let domain = normalize_domain(domain_raw)?;
     let ip = site_dns_target_ip()?;
-    // Zone resolve walks parents (subdomain FQDN -> apex zone).
+    let proxied = want_proxied(&ip);
     let mut messages = Vec::new();
-    messages.push(upsert_proxied_a(&domain, &domain, &ip)?);
-    // Mirror existing CPN lab zones (www.test, www.cmstest): always offer www.<fqdn>.
+    messages.push(upsert_site_a(&domain, &domain, &ip)?);
+    if !proxied {
+        messages.push(format!(
+            "proxy off: host IPv4 `{ip}` is private/CGNAT so Cloudflare DNS-only is required"
+        ));
+    }
     if !domain.starts_with("www.") {
-        match upsert_www_cname(&domain, &domain) {
+        match upsert_www_cname(&domain, &domain, proxied) {
             Ok(m) => messages.push(m),
             Err(e) => messages.push(format!("www CNAME note: {e}")),
         }
@@ -173,5 +203,15 @@ mod tests {
     fn names_equal_trims_dot() {
         assert!(names_equal("test2.example.com.", "test2.example.com"));
         assert!(!names_equal("a.example.com", "b.example.com"));
+    }
+
+    #[test]
+    fn private_ip_is_dns_only() {
+        assert!(is_private_or_cgnat_ipv4("10.0.2.15"));
+        assert!(is_private_or_cgnat_ipv4("192.168.1.1"));
+        assert!(is_private_or_cgnat_ipv4("100.64.0.1"));
+        assert!(!is_private_or_cgnat_ipv4("203.0.113.10"));
+        assert!(!want_proxied("10.0.2.15"));
+        assert!(want_proxied("203.0.113.10"));
     }
 }
