@@ -192,11 +192,13 @@ fn manage_body(
     let choices = collect_domain_choices();
     let empty_hint = manage_empty_hint(&choices);
     let list_hiddens = format!(
-        r#"<input type="hidden" name="page" value="{page}">
+        r#"<input type="hidden" name="q" value="{q}">
+<input type="hidden" name="page" value="{page}">
 <input type="hidden" name="per_page" value="{per_page}">
 <input type="hidden" name="mode" value="{mode}">
 <input type="hidden" name="sort" value="{sort}">
 <input type="hidden" name="order" value="{order}">"#,
+        q = html_escape(&table_opts.q),
         page = table_opts.page.max(1),
         per_page = table_opts.per_page,
         mode = html_escape(&table_opts.mode),
@@ -275,7 +277,7 @@ fn manage_body(
       <button type="submit" class="btn-primary" {add_dis}>+ Add Record</button>
     </div>
   </form>
-  <p class="muted">Type chips below filter the records table. Choosing a type also sets the Add form type. AAAA values must be IPv6.</p>
+  <p class="muted">Search filters by name or value. Type chips narrow by record type (combined with search). Choosing a type also sets the Add form type. AAAA values must be IPv6.</p>
   {err}
   {rec}
 </div>

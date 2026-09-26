@@ -2,7 +2,7 @@
 
 use crate::panel_hub_pages_cloudflare_pager::{
     CfTableOpts, dns_mode_from_query, dns_order_from_query, dns_page_from_query,
-    dns_per_page_from_query, dns_sort_from_query, manage_list_url,
+    dns_per_page_from_query, dns_search_from_query, dns_sort_from_query, manage_list_url,
 };
 use serde::Deserialize;
 
@@ -12,6 +12,7 @@ pub struct CfQuery {
     pub domain: Option<String>,
     #[serde(rename = "type")]
     pub filter_type: Option<String>,
+    pub q: Option<String>,
     pub page: Option<String>,
     pub per_page: Option<String>,
     pub mode: Option<String>,
@@ -26,6 +27,8 @@ pub struct CfDomainForm {
     pub domain: String,
     #[serde(default)]
     pub filter_type: Option<String>,
+    #[serde(default)]
+    pub q: Option<String>,
     #[serde(default)]
     pub page: Option<String>,
     #[serde(default)]
@@ -51,6 +54,8 @@ pub struct CfAddForm {
     #[serde(default)]
     pub filter_type: Option<String>,
     #[serde(default)]
+    pub q: Option<String>,
+    #[serde(default)]
     pub page: Option<String>,
     #[serde(default)]
     pub per_page: Option<String>,
@@ -68,6 +73,8 @@ pub struct CfRecordForm {
     pub record_id: String,
     #[serde(default)]
     pub filter_type: Option<String>,
+    #[serde(default)]
+    pub q: Option<String>,
     #[serde(default)]
     pub page: Option<String>,
     #[serde(default)]
@@ -93,6 +100,8 @@ pub struct CfUpdateForm {
     #[serde(default)]
     pub filter_type: Option<String>,
     #[serde(default)]
+    pub q: Option<String>,
+    #[serde(default)]
     pub page: Option<String>,
     #[serde(default)]
     pub per_page: Option<String>,
@@ -111,6 +120,8 @@ pub struct CfProxyForm {
     pub proxied: String,
     #[serde(default)]
     pub filter_type: Option<String>,
+    #[serde(default)]
+    pub q: Option<String>,
     #[serde(default)]
     pub page: Option<String>,
     #[serde(default)]
@@ -132,6 +143,7 @@ pub fn table_opts_from_query(query: &CfQuery) -> CfTableOpts {
     };
     CfTableOpts {
         filter_type: query.filter_type.clone().unwrap_or_default(),
+        q: dns_search_from_query(query.q.as_deref().unwrap_or("")),
         page: dns_page_from_query(query.page.as_deref().unwrap_or("1")),
         per_page: dns_per_page_from_query(per_raw),
         mode,
@@ -146,6 +158,7 @@ pub fn manage_back(domain: &str, opts: &CfTableOpts) -> String {
 
 pub fn opts_from_form(
     filter_type: Option<&str>,
+    q: Option<&str>,
     page: Option<&str>,
     per_page: Option<&str>,
     mode: Option<&str>,
@@ -154,6 +167,7 @@ pub fn opts_from_form(
 ) -> CfTableOpts {
     CfTableOpts {
         filter_type: filter_type.unwrap_or("").to_string(),
+        q: dns_search_from_query(q.unwrap_or("")),
         page: dns_page_from_query(page.unwrap_or("1")),
         per_page: dns_per_page_from_query(per_page.unwrap_or("10")),
         mode: dns_mode_from_query(mode.unwrap_or("page")).to_string(),

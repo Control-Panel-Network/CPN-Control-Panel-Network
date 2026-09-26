@@ -7,6 +7,8 @@ use crate::panel_plugins_spa::list_mode_from_query;
 #[derive(Debug, Clone)]
 pub struct CfTableOpts {
     pub filter_type: String,
+    /// Case-insensitive substring match on record name or value (`&q=`).
+    pub q: String,
     pub page: usize,
     pub per_page: usize,
     pub mode: String,
@@ -18,6 +20,7 @@ impl Default for CfTableOpts {
     fn default() -> Self {
         Self {
             filter_type: String::new(),
+            q: String::new(),
             page: 1,
             per_page: 10,
             mode: "page".into(),
@@ -73,6 +76,21 @@ pub fn dns_order_from_query(raw: &str) -> &'static str {
     }
 }
 
+/// Normalize Manage DNS search (`q`): trim, cap length, drop control chars.
+pub fn dns_search_from_query(raw: &str) -> String {
+    let trimmed: String = raw
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if trimmed.len() > 200 {
+        trimmed.chars().take(200).collect()
+    } else {
+        trimmed
+    }
+}
+
 /// Default order when selecting a new sort column (TTL/Priority start high-first).
 pub fn dns_default_order_for_sort(sort: &str) -> &'static str {
     match dns_sort_from_query(sort) {
@@ -90,7 +108,7 @@ fn urlencoding_path(s: &str) -> String {
         .collect()
 }
 
-/// Build a Manage DNS URL from list options (preserves filter, mode, sort, order).
+/// Build a Manage DNS URL from list options (preserves filter, search, mode, sort, order).
 pub fn manage_list_url(domain: &str, opts: &CfTableOpts) -> String {
     let mut url = format!(
         "/dns/cloudflare?tab=manage&domain={}",
@@ -100,6 +118,11 @@ pub fn manage_list_url(domain: &str, opts: &CfTableOpts) -> String {
     if !ft.is_empty() && !ft.eq_ignore_ascii_case("all") {
         url.push_str("&type=");
         url.push_str(&urlencoding_path(ft));
+    }
+    let q = dns_search_from_query(&opts.q);
+    if !q.is_empty() {
+        url.push_str("&q=");
+        url.push_str(&urlencoding_path(&q));
     }
     let mode = dns_mode_from_query(&opts.mode);
     if mode == "scroll" {
@@ -147,6 +170,18 @@ pub(crate) fn type_hidden_input(filter_type: &str) -> String {
     }
 }
 
+pub(crate) fn search_hidden_input(q: &str) -> String {
+    let q = dns_search_from_query(q);
+    if q.is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<input type="hidden" name="q" value="{}">"#,
+            html_escape(&q)
+        )
+    }
+}
+
 pub(crate) fn sort_hidden_inputs(opts: &CfTableOpts) -> String {
     let sort = dns_sort_from_query(&opts.sort);
     let order = dns_order_from_query(&opts.order);
@@ -163,18 +198,31 @@ pub(crate) fn sort_hidden_inputs(opts: &CfTableOpts) -> String {
 pub(crate) fn list_state_hiddens(opts: &CfTableOpts) -> String {
     format!(
         r#"<input type="hidden" name="filter_type" value="{ft}">
+<input type="hidden" name="q" value="{q}">
 <input type="hidden" name="page" value="{page}">
 <input type="hidden" name="per_page" value="{per_page}">
 <input type="hidden" name="mode" value="{mode}">
 <input type="hidden" name="sort" value="{sort}">
 <input type="hidden" name="order" value="{order}">"#,
         ft = html_escape(&opts.filter_type),
+        q = html_escape(&dns_search_from_query(&opts.q)),
         page = opts.page.max(1),
         per_page = opts.per_page,
         mode = html_escape(dns_mode_from_query(&opts.mode)),
         sort = html_escape(dns_sort_from_query(&opts.sort)),
         order = html_escape(dns_order_from_query(&opts.order)),
     )
+}
+
+/// True when name or content contains `q` (case-insensitive). Empty `q` matches all.
+pub fn record_matches_search(record: &CfDnsRecord, q: &str) -> bool {
+    let needle = dns_search_from_query(q);
+    if needle.is_empty() {
+        return true;
+    }
+    let needle = needle.to_ascii_lowercase();
+    record.name.to_ascii_lowercase().contains(&needle)
+        || record.content.to_ascii_lowercase().contains(&needle)
 }
 
 /// Cloudflare TTL: 1 (and 0) means AUTO; sort as numeric 1 so AUTO ranks lowest.
@@ -244,8 +292,13 @@ fn toolbar_styles() -> &'static str {
 .cf-table th a.cf-sort{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
 .cf-table th a.cf-sort:hover{text-decoration:underline}
 .cf-table th a.cf-sort .cf-sort-ind{font-size:11px;opacity:.85}
+.cf-search-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
+.cf-search-row label{font-size:13px;font-weight:600;color:var(--ink,#eee)}
+.cf-search-row input[type=search]{flex:1 1 180px;min-width:140px;max-width:420px;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--border,#444);background:var(--canvas,#fff);color:var(--ink,#1d1d1f);font:inherit;color-scheme:light}
+.cf-search-row .btn-primary,.cf-search-row .btn-secondary{min-height:36px}
 [data-color-mode=dark] .plugin-mode-switch a.active{background:#2563eb;color:#fff}
 [data-color-mode=dark] .plugin-pager select,[data-color-mode=dark] .plugin-pager input[type=number]{background:#1a1d26;border-color:#475569;color:#f1f5f9;color-scheme:dark}
+[data-color-mode=dark] .cf-search-row input[type=search]{background:#12151c;border-color:#3b4558;color:#f3f6fb;color-scheme:dark}
 </style>"#
 }
 
@@ -323,16 +376,20 @@ pub(crate) fn dns_list_toolbar(
         r#"<option value="all"{all_sel}>All</option>"#,
         all_sel = all_sel
     ));
-    let filter_label =
-        if opts.filter_type.is_empty() || opts.filter_type.eq_ignore_ascii_case("all") {
-            format!("Showing {filtered} of {total} records")
-        } else {
-            format!(
-                "Showing {filtered} of {total} · {}",
-                html_escape(&opts.filter_type.to_ascii_uppercase())
-            )
-        };
+    let q = dns_search_from_query(&opts.q);
+    let mut filter_label = format!("Showing {filtered} of {total} records");
+    let mut extras: Vec<String> = Vec::new();
+    if !opts.filter_type.is_empty() && !opts.filter_type.eq_ignore_ascii_case("all") {
+        extras.push(html_escape(&opts.filter_type.to_ascii_uppercase()));
+    }
+    if !q.is_empty() {
+        extras.push(format!("\"{}\"", html_escape(&q)));
+    }
+    if !extras.is_empty() {
+        filter_label = format!("Showing {filtered} of {total} · {}", extras.join(" · "));
+    }
     let sort_hiddens = sort_hidden_inputs(opts);
+    let q_hidden = search_hidden_input(&opts.q);
     format!(
         r#"{styles}
 <div class="plugin-list-toolbar" role="group" aria-label="DNS records display">
@@ -347,6 +404,7 @@ pub(crate) fn dns_list_toolbar(
       <input type="hidden" name="domain" value="{dom}">
       <input type="hidden" name="mode" value="page">
       {type_hidden}
+      {q_hidden}
       {sort_hiddens}
       <label for="cf-per-page">Show</label>
       <select id="cf-per-page" name="per_page" aria-label="Records per page" onchange="this.form.submit()">{options}</select>
@@ -361,6 +419,7 @@ pub(crate) fn dns_list_toolbar(
       <input type="hidden" name="mode" value="page">
       <input type="hidden" name="per_page" value="{per_page}">
       {type_hidden}
+      {q_hidden}
       {sort_hiddens}
       <label for="cf-goto-page">Go to page</label>
       <input id="cf-goto-page" name="page" type="number" min="1" max="{total_pages}" value="{page}">
@@ -385,6 +444,7 @@ pub(crate) fn dns_list_toolbar(
         dom = html_escape(domain),
         per_page = opts.per_page,
         type_hidden = type_hidden_input(&opts.filter_type),
+        q_hidden = q_hidden,
         sort_hiddens = sort_hiddens,
     )
 }
@@ -392,9 +452,11 @@ pub(crate) fn dns_list_toolbar(
 #[cfg(test)]
 mod tests {
     use super::{
-        dns_default_order_for_sort, dns_mode_from_query, dns_order_from_query, dns_page_from_query,
-        dns_per_page_from_query, dns_sort_from_query,
+        CfTableOpts, dns_default_order_for_sort, dns_mode_from_query, dns_order_from_query,
+        dns_page_from_query, dns_per_page_from_query, dns_search_from_query, dns_sort_from_query,
+        manage_list_url, record_matches_search,
     };
+    use crate::panel_ops_cloudflare_api::CfDnsRecord;
 
     #[test]
     fn dns_per_page_defaults_to_ten() {
@@ -421,5 +483,41 @@ mod tests {
         assert_eq!(dns_order_from_query(""), "asc");
         assert_eq!(dns_default_order_for_sort("ttl"), "desc");
         assert_eq!(dns_default_order_for_sort("name"), "asc");
+    }
+
+    #[test]
+    fn dns_search_trims_and_caps() {
+        assert_eq!(dns_search_from_query("  test2  "), "test2");
+        assert_eq!(dns_search_from_query(""), "");
+        assert_eq!(dns_search_from_query(" \t "), "");
+        let long = "a".repeat(250);
+        assert_eq!(dns_search_from_query(&long).len(), 200);
+    }
+
+    #[test]
+    fn manage_list_url_includes_q() {
+        let mut opts = CfTableOpts::default();
+        opts.q = "test2".into();
+        let url = manage_list_url("example.com", &opts);
+        assert!(url.contains("q=test2"), "url={url}");
+        assert!(url.contains("domain=example.com"), "url={url}");
+    }
+
+    #[test]
+    fn record_matches_name_or_content_case_insensitive() {
+        let rec = CfDnsRecord {
+            id: "1".into(),
+            record_type: "A".into(),
+            name: "test2.newstargeted.com".into(),
+            content: "192.0.2.10".into(),
+            ttl: 3600,
+            priority: None,
+            proxied: false,
+        };
+        assert!(record_matches_search(&rec, "TEST2"));
+        assert!(record_matches_search(&rec, "192.0.2"));
+        assert!(!record_matches_search(&rec, "missing"));
+        assert!(record_matches_search(&rec, ""));
+        assert!(record_matches_search(&rec, "  "));
     }
 }
