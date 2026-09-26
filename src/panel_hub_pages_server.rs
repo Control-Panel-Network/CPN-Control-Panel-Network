@@ -2,9 +2,7 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_defs::server_hub_sections;
-use crate::panel_hubs::{
-    feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
-};
+use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading, status_kv};
 use crate::panel_ops_php::detect_php;
 // PHP Extensions / Configurations live in panel_hub_pages_php_*.
 use crate::panel_ops_pkgmgr::package_manager_status;
