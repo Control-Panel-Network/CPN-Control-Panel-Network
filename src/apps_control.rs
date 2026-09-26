@@ -35,6 +35,10 @@ pub fn start_app(id: AppId) -> Result<String, String> {
             enable_now(&["rabbitmq-server"])?;
             Ok("Started RabbitMQ.".into())
         }
+        AppId::Docker => {
+            let msg = crate::panel_ops_docker::install_docker_engine()?;
+            Ok(format!("Started Docker engine. {msg}"))
+        }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
         AppId::Snappymail
         | AppId::Tachyon
@@ -72,6 +76,10 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
         AppId::Rabbitmq => {
             stop_units(&["rabbitmq-server"])?;
             Ok("Stopped RabbitMQ.".into())
+        }
+        AppId::Docker => {
+            stop_units(&["docker", "podman"])?;
+            Ok("Stopped Docker/Podman engine units when present.".into())
         }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
         AppId::Snappymail
