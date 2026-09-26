@@ -94,9 +94,10 @@ fn is_cpn_managed(labels: &[(String, String)]) -> bool {
 }
 
 fn owner_from_labels(labels: &[(String, String)], cpn_managed: bool) -> String {
-    if let Some((_, v)) = labels.iter().find(|(k, _)| {
-        k.eq_ignore_ascii_case("com.cpn.owner") || k.eq_ignore_ascii_case("owner")
-    }) && !v.is_empty()
+    if let Some((_, v)) = labels
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("com.cpn.owner") || k.eq_ignore_ascii_case("owner"))
+        && !v.is_empty()
     {
         return v.clone();
     }
