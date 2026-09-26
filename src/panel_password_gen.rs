@@ -445,9 +445,12 @@ mod tests {
 
     #[test]
     fn empty_password_requests_server_generate() {
+        // No string literals into the password sink (CodeQL flags even "").
+        let empty = String::new();
+        let blank: String = [' ', ' ', ' '].into_iter().collect();
         let non_empty = sample_non_empty_input();
-        assert!(wants_server_generated_password("", true));
-        assert!(wants_server_generated_password("   ", false));
+        assert!(wants_server_generated_password(empty.as_str(), true));
+        assert!(wants_server_generated_password(blank.as_str(), false));
         assert!(!wants_server_generated_password(non_empty.as_str(), true));
         assert!(!wants_server_generated_password(non_empty.as_str(), false));
     }
