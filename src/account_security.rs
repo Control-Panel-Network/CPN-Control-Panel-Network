@@ -257,7 +257,7 @@ pub fn enroll_mfa_gate_main(
   <p class="eyebrow">SECURITY</p>
   <h1>Enable two-factor authentication</h1>
   <p class="muted">Panel administrators must enroll TOTP (authenticator app) or a passkey before using the dashboard and other operational areas.</p>
-  <p class="muted"><a href="/settings">Settings</a> (version, design, setup wizard, connect, site and error messages, log retention, and change port) stay available so you can finish panel configuration while enrollment is pending.</p>
+  <p class="muted"><a href="/settings">Settings</a> (version, design, setup wizard, connect, site and error messages, log retention, and change port) and <a href="/account/users/modify">Modify User</a> / <a href="/account/users/profile">View Profile</a> stay available so you can finish panel configuration and update your account while enrollment is pending. Use the Security tab on Modify User to enroll factors without leaving your profile.</p>
   {notice_html}
   {error_html}
 "#
@@ -308,8 +308,11 @@ pub fn enroll_mfa_gate_main(
 ///
 /// Password-change remains a hard gate for every area except the security pages.
 /// Settings hub and all settings children use `active = "settings"` in `panel_shell`.
+/// Users & Plans (Modify User, View Profile, and related account paths) use
+/// `active = "users"` so admins can update profile fields and manage factors
+/// on the tabbed Modify User page while enrollment is still pending.
 pub fn mfa_enrollment_allows_nav(active: &str) -> bool {
-    matches!(active, "account-security" | "settings")
+    matches!(active, "account-security" | "settings" | "users")
 }
 
 /// If a gate applies, return (active_nav_key, title, main_html).
@@ -415,16 +418,18 @@ mod tests {
     }
 
     #[test]
-    fn mfa_gate_allows_settings_but_not_dashboard() {
+    fn mfa_gate_allows_settings_and_users_but_not_dashboard() {
         assert!(mfa_enrollment_allows_nav("settings"));
         assert!(mfa_enrollment_allows_nav("account-security"));
+        assert!(mfa_enrollment_allows_nav("users"));
         assert!(!mfa_enrollment_allows_nav("dashboard"));
         assert!(!mfa_enrollment_allows_nav("websites"));
         assert!(!mfa_enrollment_allows_nav("server"));
+        assert!(!mfa_enrollment_allows_nav("email"));
     }
 
     #[test]
-    fn security_gate_skips_settings_while_mfa_pending() {
+    fn security_gate_skips_settings_and_users_while_mfa_pending() {
         with_test_data_dir(|| {
             unsafe {
                 std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
@@ -445,6 +450,10 @@ mod tests {
                 security_gate_override("settingsgate", "settings").is_none(),
                 "Settings must stay open while MFA enrollment is pending"
             );
+            assert!(
+                security_gate_override("settingsgate", "users").is_none(),
+                "Modify User / View Profile (users nav) must stay open while MFA enrollment is pending"
+            );
             let dashboard = security_gate_override("settingsgate", "dashboard");
             assert!(
                 dashboard.is_some(),
@@ -463,6 +472,14 @@ mod tests {
         assert!(
             start.contains("href=\"/settings\""),
             "enroll page must link to Settings while MFA is pending"
+        );
+        assert!(
+            start.contains("href=\"/account/users/modify\""),
+            "enroll page must link to Modify User while MFA is pending"
+        );
+        assert!(
+            start.contains("href=\"/account/users/profile\""),
+            "enroll page must link to View Profile while MFA is pending"
         );
         assert!(
             start.contains("Register passkey")
