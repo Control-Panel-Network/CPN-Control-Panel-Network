@@ -121,8 +121,8 @@ use cpn_installer::panel_routes::{
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
     site_preview_image, site_preview_refresh, websites_create, websites_create_page,
     websites_delete, websites_manage, websites_page, websites_prefs, websites_pretty_manage,
-    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
-    websites_suspend_message, websites_suspend_message_restore,
+    websites_preview_prefs, websites_preview_redirect, websites_reset_placeholder, websites_resume,
+    websites_suspend, websites_suspend_message, websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
@@ -1121,6 +1121,7 @@ async fn main() -> std::io::Result<()> {
             .service(websites_suspend_message_restore)
             .service(websites_reset_placeholder)
             .service(websites_prefs)
+            .service(websites_preview_prefs)
             .service(wordpress_list_route)
             .service(wordpress_install_get)
             .service(wordpress_install_post)

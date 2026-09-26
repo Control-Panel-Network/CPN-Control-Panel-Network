@@ -2,7 +2,7 @@
 
 use crate::http_helpers::smtp_status_public;
 use crate::install_webmail_runtime::webmail_health_url;
-use crate::panel_prefs::{load_panel_ui_prefs, set_show_document_roots};
+use crate::panel_prefs::{load_panel_ui_prefs, set_remote_site_previews, set_show_document_roots};
 use crate::service_detect::{detect_database, install_mariadb_server};
 use crate::site_preview_list_ui::{site_preview_cards, site_preview_list_styles};
 use crate::sites::list_sites;
@@ -56,6 +56,18 @@ pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         "Show document roots"
     };
     let toggle_value = if show { "0" } else { "1" };
+    let remote = prefs.remote_site_previews;
+    let remote_label = if remote {
+        "Turn off screenshot service"
+    } else {
+        "Turn on screenshot service"
+    };
+    let remote_value = if remote { "0" } else { "1" };
+    let remote_hint = if remote {
+        "Public domains without a cached local capture load a thumbnail from the Microlink screenshot API, so the site hostname is sent to that service."
+    } else {
+        "Screenshot service is off: thumbnails come only from local captures on this host."
+    };
     format!(
         r#"<style>{preview_css}</style>
       {heading}
@@ -65,10 +77,17 @@ pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         <h2>Sites ({count})</h2>
         <p class="muted">Each site shows a Site preview thumbnail (cached homepage shot), Manage, Visit, SSL status, and File manager. Document roots live under the domain home. Vhost wiring is applied later by panel recipes.</p>
         <p style="margin:12px 0;"><a class="btn-primary" href="/websites/create">Create Website</a></p>
-        <form method="post" action="/websites/prefs" class="inline-form" style="margin:12px 0;">
-          <input type="hidden" name="show_document_roots" value="{toggle_value}">
-          <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
-        </form>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;">
+          <form method="post" action="/websites/prefs" class="inline-form">
+            <input type="hidden" name="show_document_roots" value="{toggle_value}">
+            <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
+          </form>
+          <form method="post" action="/websites/preview-prefs" class="inline-form">
+            <input type="hidden" name="remote_site_previews" value="{remote_value}">
+            <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;" title="{remote_hint}">{remote_label}</button>
+          </form>
+        </div>
+        <p class="muted" style="margin:0 0 12px;">{remote_hint}</p>
         {rows}
       </article>"#,
         preview_css = site_preview_list_styles(),
@@ -81,12 +100,21 @@ pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         count = sites.len(),
         toggle_value = toggle_value,
         toggle_label = toggle_label,
+        remote_value = remote_value,
+        remote_label = remote_label,
+        remote_hint = html_escape(remote_hint),
         rows = site_preview_cards(&sites, show, username),
     )
 }
 
 pub fn set_websites_docroot_pref(show: bool) -> Result<(), String> {
     set_show_document_roots(show)?;
+    Ok(())
+}
+
+/// Toggle the Microlink screenshot fallback for Site preview thumbnails.
+pub fn set_websites_remote_preview_pref(enabled: bool) -> Result<(), String> {
+    set_remote_site_previews(enabled)?;
     Ok(())
 }
 

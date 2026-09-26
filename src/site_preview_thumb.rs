@@ -148,6 +148,16 @@ pub fn read_cached_image(domain_raw: &str) -> Result<(Vec<u8>, String), String> 
 }
 
 pub fn write_cached_image(domain_raw: &str, bytes: &[u8], backend: &str) -> Result<(), String> {
+    write_cached_image_typed(domain_raw, bytes, backend, "image/png")
+}
+
+/// Store a cached shot with an explicit content type (remote shots may be JPEG).
+pub fn write_cached_image_typed(
+    domain_raw: &str,
+    bytes: &[u8],
+    backend: &str,
+    content_type: &str,
+) -> Result<(), String> {
     if bytes.is_empty() {
         return Err("Empty screenshot".into());
     }
@@ -164,6 +174,11 @@ pub fn write_cached_image(domain_raw: &str, bytes: &[u8], backend: &str) -> Resu
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
+    let content_type = if content_type.starts_with("image/") {
+        content_type.to_string()
+    } else {
+        "image/png".to_string()
+    };
     save_meta(
         domain_raw,
         &PreviewMeta {
@@ -171,7 +186,7 @@ pub fn write_cached_image(domain_raw: &str, bytes: &[u8], backend: &str) -> Resu
             ok: true,
             error: String::new(),
             backend: backend.to_string(),
-            content_type: "image/png".into(),
+            content_type,
         },
     )?;
     Ok(())

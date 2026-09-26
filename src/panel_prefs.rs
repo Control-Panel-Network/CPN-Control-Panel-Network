@@ -9,6 +9,10 @@ pub struct PanelUiPrefs {
     /// When true, Websites table shows document root paths (default for admins).
     #[serde(default = "default_true")]
     pub show_document_roots: bool,
+    /// When true, Site preview may use the Microlink screenshot API for public
+    /// domains that have no cached local capture.
+    #[serde(default = "default_true")]
+    pub remote_site_previews: bool,
 }
 
 fn default_true() -> bool {
@@ -19,6 +23,7 @@ impl Default for PanelUiPrefs {
     fn default() -> Self {
         Self {
             show_document_roots: true,
+            remote_site_previews: true,
         }
     }
 }
@@ -55,6 +60,13 @@ pub fn save_panel_ui_prefs(prefs: &PanelUiPrefs) -> Result<(), String> {
 pub fn set_show_document_roots(show: bool) -> Result<PanelUiPrefs, String> {
     let mut prefs = load_panel_ui_prefs();
     prefs.show_document_roots = show;
+    save_panel_ui_prefs(&prefs)?;
+    Ok(prefs)
+}
+
+pub fn set_remote_site_previews(enabled: bool) -> Result<PanelUiPrefs, String> {
+    let mut prefs = load_panel_ui_prefs();
+    prefs.remote_site_previews = enabled;
     save_panel_ui_prefs(&prefs)?;
     Ok(prefs)
 }

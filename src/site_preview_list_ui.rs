@@ -2,7 +2,8 @@
 
 use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl};
 use crate::panel_user_prefs::load_user_minimalist_mode;
-use crate::site_preview_thumb::{PreviewFreshness, freshness, load_meta};
+use crate::site_preview_microlink::enabled_image_url;
+use crate::site_preview_thumb::{PreviewFreshness, freshness, image_path, load_meta};
 use crate::site_preview_thumb_routes::spawn_background_capture;
 use crate::sites::SiteRecord;
 use crate::website_preview::public_site_url;
@@ -94,6 +95,41 @@ fn site_action_buttons(site: &SiteRecord) -> String {
     )
 }
 
+/// True when an authenticated cached shot exists for this domain.
+fn cached_shot_present(domain: &str) -> bool {
+    load_meta(domain).ok
+        && image_path(domain)
+            .map(|path| path.is_file())
+            .unwrap_or(false)
+}
+
+/// Thumbnail `<img>` markup.
+///
+/// Cached local captures are served from the authenticated panel route. Without
+/// a cached shot, public domains load the Microlink screenshot URL directly and
+/// fall back to the panel placeholder when that request fails (labs without
+/// public DNS, offline browser, or remote previews switched off).
+fn preview_image_tag(domain_raw: &str, bust: u64, extra_style: &str) -> String {
+    let domain = html_escape(domain_raw);
+    let panel_src = format!("/websites/site-preview/image?domain={domain}&amp;v={bust}");
+    let style = if extra_style.is_empty() {
+        String::new()
+    } else {
+        format!(r#" style="{}""#, html_escape(extra_style))
+    };
+    if !cached_shot_present(domain_raw)
+        && let Some(remote) = enabled_image_url(domain_raw, bust)
+    {
+        return format!(
+            r#"<img src="{remote}" alt="Site preview for {domain}" loading="lazy" width="640" height="400"{style} data-preview-fallback="{panel_src}" onerror="if(this.dataset.previewFallback){{this.src=this.dataset.previewFallback;this.removeAttribute('data-preview-fallback');}}">"#,
+            remote = html_escape(&remote),
+        );
+    }
+    format!(
+        r#"<img src="{panel_src}" alt="Site preview for {domain}" loading="lazy" width="640" height="400"{style}>"#
+    )
+}
+
 fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     let domain = html_escape(&site.domain);
     let visit = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
@@ -103,8 +139,13 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
         spawn_background_capture(site.domain.clone());
     }
     let meta = load_meta(&site.domain);
-    let status_hint = if state == PreviewFreshness::Fresh {
+    let has_cached = cached_shot_present(&site.domain);
+    let status_hint = if has_cached && state == PreviewFreshness::Fresh {
         "Cached thumbnail"
+    } else if has_cached {
+        "Cached thumbnail, refresh for a newer shot"
+    } else if enabled_image_url(&site.domain, 0).is_some() {
+        "Screenshot service thumbnail until a local capture is cached"
     } else if !meta.error.is_empty() {
         "Preview unavailable"
     } else {
@@ -114,7 +155,7 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     format!(
         r#"<div class="site-preview-slot">
   <div class="site-preview-frame">
-    <img src="/websites/site-preview/image?domain={domain}&amp;v={bust}" alt="Site preview for {domain}" loading="lazy" width="640" height="400">
+    {img}
   </div>
   <div class="site-preview-actions">
     <a class="visit-link" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
@@ -125,6 +166,7 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     </form>
   </div>
 </div>"#,
+        img = preview_image_tag(&site.domain, bust, ""),
         visit = visit_e,
         hint = html_escape(status_hint),
     )
@@ -226,11 +268,11 @@ pub fn manage_overview_preview(site: &SiteRecord) -> String {
     format!(
         r#"<aside class="manage-site-preview" style="margin:0 0 14px;display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:14px;align-items:center;background:var(--m-card,#1b1e27);border:1px solid var(--m-line,#2a2f3a);border-radius:14px;padding:12px;">
   <div class="site-preview-frame" style="aspect-ratio:16/10;border-radius:10px;overflow:hidden;border:1px solid var(--m-line,#2a2f3a);">
-    <img src="/websites/site-preview/image?domain={domain}&amp;v={bust}" alt="Site preview for {domain}" loading="lazy" width="640" height="400" style="width:100%;height:100%;object-fit:cover;object-position:top center;display:block;">
+    {img}
   </div>
   <div>
     <strong style="display:block;font-size:14px;">Site preview</strong>
-    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Labs without public DNS may need Refresh with local vhost mapping.</p>
+    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Public domains fall back to the Microlink screenshot service until a local capture is cached; labs without public DNS may need Refresh with local vhost mapping.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <a class="manage-btn" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
       <form method="post" action="/websites/site-preview/refresh" class="inline-form">
@@ -241,8 +283,12 @@ pub fn manage_overview_preview(site: &SiteRecord) -> String {
     </div>
   </div>
 </aside>"#,
+        img = preview_image_tag(
+            &site.domain,
+            meta.captured_at,
+            "width:100%;height:100%;object-fit:cover;object-position:top center;display:block;",
+        ),
         visit = html_escape(&visit),
-        bust = meta.captured_at,
     )
 }
 
@@ -254,5 +300,39 @@ mod tests {
     fn styles_mention_site_preview_slot() {
         assert!(site_preview_list_styles().contains("site-preview-slot"));
         assert!(site_preview_list_styles().contains("site-preview-frame"));
+    }
+
+    #[test]
+    fn public_domain_without_cache_uses_screenshot_service() {
+        crate::account::with_test_data_dir(|| {
+            let html = preview_image_tag("example.com", 0, "");
+            assert!(html.contains("api.microlink.io"));
+            assert!(html.contains("data-preview-fallback"));
+            assert!(html.contains("/websites/site-preview/image?domain=example.com"));
+        });
+    }
+
+    #[test]
+    fn lab_domain_keeps_panel_route_only() {
+        crate::account::with_test_data_dir(|| {
+            let html = preview_image_tag("lab.test", 0, "");
+            assert!(!html.contains("microlink"));
+            assert!(html.contains("/websites/site-preview/image?domain=lab.test"));
+        });
+    }
+
+    #[test]
+    fn cached_local_capture_wins_over_remote() {
+        crate::account::with_test_data_dir(|| {
+            crate::site_preview_thumb::write_cached_image(
+                "example.com",
+                b"\x89PNG\r\n\x1a\nlocal-shot",
+                "chromium",
+            )
+            .unwrap();
+            let html = preview_image_tag("example.com", 42, "");
+            assert!(!html.contains("microlink"));
+            assert!(html.contains("v=42"));
+        });
     }
 }
