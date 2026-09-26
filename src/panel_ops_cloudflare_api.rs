@@ -172,14 +172,24 @@ fn parse_record(v: &Value) -> Option<CfDnsRecord> {
     })
 }
 
-pub fn resolve_zone_id(domain: &str) -> Result<String, String> {
-    let domain = domain.trim().to_ascii_lowercase();
+/// Zone name candidates for a hostname: exact FQDN, then parents (a.b.example.com -> b.example.com -> example.com).
+pub fn zone_name_candidates(hostname: &str) -> Vec<String> {
+    let domain = hostname.trim().trim_end_matches('.').to_ascii_lowercase();
     if domain.is_empty() {
-        return Err("Domain is required".into());
+        return Vec::new();
     }
+    let parts: Vec<&str> = domain.split('.').collect();
+    let mut out = vec![domain];
+    for i in 1..parts.len().saturating_sub(1) {
+        out.push(parts[i..].join("."));
+    }
+    out
+}
+
+fn resolve_zone_id_exact(zone_name: &str) -> Result<String, String> {
     let url = format!(
         "{CF_API}/zones?name={}&status=active",
-        urlencoding_simple(&domain)
+        urlencoding_simple(zone_name)
     );
     let result = curl_json("GET", &url, None)?;
     let arr = result
@@ -187,7 +197,7 @@ pub fn resolve_zone_id(domain: &str) -> Result<String, String> {
         .ok_or_else(|| "Unexpected Cloudflare zone list".to_string())?;
     if arr.is_empty() {
         return Err(format!(
-            "No active Cloudflare zone found for `{domain}`. Confirm the zone exists and the token can read it."
+            "No active Cloudflare zone found for `{zone_name}`. Confirm the zone exists and the token can read it."
         ));
     }
     arr[0]
@@ -195,6 +205,26 @@ pub fn resolve_zone_id(domain: &str) -> Result<String, String> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .ok_or_else(|| "Cloudflare zone response missing id".into())
+}
+
+/// Resolve Cloudflare zone id for a hostname or zone name (walks parent labels for subdomains).
+pub fn resolve_zone_id(domain: &str) -> Result<String, String> {
+    let domain = domain.trim().to_ascii_lowercase();
+    if domain.is_empty() {
+        return Err("Domain is required".into());
+    }
+    let candidates = zone_name_candidates(&domain);
+    if candidates.is_empty() {
+        return Err("Domain is required".into());
+    }
+    let mut last_err = String::new();
+    for name in &candidates {
+        match resolve_zone_id_exact(name) {
+            Ok(id) => return Ok(id),
+            Err(e) => last_err = e,
+        }
+    }
+    Err(last_err)
 }
 
 fn urlencoding_simple(s: &str) -> String {
@@ -474,5 +504,20 @@ mod tests {
     #[test]
     fn encode_domain_keeps_dots() {
         assert_eq!(urlencoding_simple("a.b-c.example.com"), "a.b-c.example.com");
+    }
+
+    #[test]
+    fn zone_candidates_walk_parents() {
+        assert_eq!(
+            zone_name_candidates("test2.newstargeted.com"),
+            vec![
+                "test2.newstargeted.com".to_string(),
+                "newstargeted.com".to_string()
+            ]
+        );
+        assert_eq!(
+            zone_name_candidates("example.com"),
+            vec!["example.com".to_string()]
+        );
     }
 }

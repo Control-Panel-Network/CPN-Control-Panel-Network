@@ -431,6 +431,7 @@ mod tests {
                 None,
                 Some(SslProvider::None),
             )
+            .map(|(s, _)| s)
             .unwrap();
             let err =
                 crate::panel_ops_ssl_issue::issue_or_renew("cpn-lab-test.example").unwrap_err();
@@ -449,6 +450,7 @@ mod tests {
                 None,
                 Some(SslProvider::LetsEncrypt),
             )
+            .map(|(s, _)| s)
             .unwrap();
             create_site_with_ssl(
                 "a.example.com",
@@ -458,6 +460,7 @@ mod tests {
                 None,
                 Some(SslProvider::None),
             )
+            .map(|(s, _)| s)
             .unwrap();
             create_site_with_ssl(
                 "b.example.com",
@@ -467,6 +470,7 @@ mod tests {
                 None,
                 None, // inherit LE from parent as initial only
             )
+            .map(|(s, _)| s)
             .unwrap();
             assert_eq!(
                 load_site("a.example.com").unwrap().ssl.provider,

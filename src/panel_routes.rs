@@ -26,7 +26,9 @@ use crate::plugins_settings::{
 };
 use crate::site_acl::{SitePerm, require_manage_site, sites_manageable_by};
 pub use crate::site_preview_thumb_routes::{site_preview_image, site_preview_refresh};
-use crate::sites::{SiteModify, SuspendActor, create_site, delete_site, modify_site};
+use crate::sites::{
+    SiteModify, SuspendActor, create_site_with_ssl, delete_site_with_dns_report, modify_site,
+};
 pub use crate::website_preview_routes::{
     preview_content, preview_mode_page, websites_pretty_manage, websites_preview_redirect,
 };
@@ -160,7 +162,7 @@ pub async fn websites_create(
     if let Err(error) = require_site_create_allowed(&owner, &domain) {
         return create_redirect("/websites/create", "error", &error);
     }
-    let result = create_site(
+    let result = create_site_with_ssl(
         &domain,
         &owner,
         if docroot.is_empty() {
@@ -170,16 +172,21 @@ pub async fn websites_create(
         },
         None,
         None,
+        None,
     );
     match result {
-        Ok(site) => create_redirect(
-            "/websites",
-            "notice",
-            &format!(
-                "Created {} at {}. Auto SSL and SPF/DKIM/DMARC were attempted.",
-                site.domain, site.docroot
-            ),
-        ),
+        Ok((site, report)) => {
+            let mut notice = format!("Created {} at {}.", site.domain, site.docroot);
+            if !report.steps.is_empty() {
+                notice.push(' ');
+                notice.push_str(&report.steps.join(" | "));
+            }
+            if !report.warnings.is_empty() {
+                notice.push_str(" Warnings: ");
+                notice.push_str(&report.warnings.join(" | "));
+            }
+            create_redirect("/websites", "notice", &notice)
+        }
         Err(error) => create_redirect("/websites/create", "error", &error),
     }
 }
@@ -199,13 +206,13 @@ pub async fn websites_delete(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match delete_site(&form.domain) {
-        Ok(()) => HttpResponse::SeeOther()
+    match delete_site_with_dns_report(&form.domain) {
+        Ok(dns_note) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 format!(
                     "/websites?notice={}",
-                    urlencoding_simple(&format!("Deleted {}", form.domain.trim()))
+                    urlencoding_simple(&format!("Deleted {}. {}", form.domain.trim(), dns_note))
                 ),
             ))
             .finish(),
