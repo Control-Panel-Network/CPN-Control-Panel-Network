@@ -2,7 +2,7 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
-use crate::panel_nav_catalog::{ACCOUNT, ADMINISTRATION, HOSTING, NavChild, NavEntry};
+use crate::panel_nav_catalog::{MAIN, NavChild, NavEntry, SECURITY, SERVER, SETTINGS};
 
 pub use crate::panel_nav_tree_chrome::{nav_tree_script, nav_tree_styles};
 
@@ -62,14 +62,17 @@ fn group_block(
     let visible: Vec<&NavChild> = children
         .iter()
         .filter(|child| feats.allows_href(child.href))
-        .filter(|child| {
-            // Root File Manager is also a top-level Administration link for admins.
-            !(child.href == "/server/files" && child.label == "Root File Manager")
-        })
         .collect();
+    // Hide fully gated groups (e.g. Docker / LiteSpeed when not installed).
+    if visible.is_empty() && extra_children.is_empty() {
+        let any_ungated = children.iter().any(|c| feats.allows_href(c.href));
+        if !any_ungated {
+            return String::new();
+        }
+    }
     let mut child_rows = Vec::with_capacity(visible.len() + 1 + extra_children.len());
     let has_hub_child = visible.iter().any(|c| c.href == href);
-    if !has_hub_child {
+    if !has_hub_child && feats.allows_href(href) {
         child_rows.push(child_button(&format!("{label} overview"), href));
     }
     let mut seen = std::collections::HashSet::new();
@@ -86,6 +89,9 @@ fn group_block(
             continue;
         }
         child_rows.push(child_button(extra_label, extra_href));
+    }
+    if child_rows.is_empty() {
+        return String::new();
     }
     format!(
         r#"<details class="nav-group" data-nav-group="{id}"{open}>
@@ -126,6 +132,9 @@ fn render_section(
                 if !nav_visible(username, id) {
                     continue;
                 }
+                if !feats.allows_href(href) {
+                    continue;
+                }
                 tiles.push(flat_link(id, href, label, active));
             }
             NavEntry::Group {
@@ -142,9 +151,10 @@ fn render_section(
                 } else {
                     &[]
                 };
-                tiles.push(group_block(
-                    id, href, label, children, active, feats, extras,
-                ));
+                let block = group_block(id, href, label, children, active, feats, extras);
+                if !block.is_empty() {
+                    tiles.push(block);
+                }
             }
         }
     }
@@ -152,7 +162,7 @@ fn render_section(
         return parts;
     }
     parts.push(format!(
-        r#"<div class="nav-section">{}</div>"#,
+        r#"<div class="nav-section"><span class="nav-section-label">{}</span></div>"#,
         html_escape(title)
     ));
     parts.push(r#"<div class="nav-tile-grid">"#.to_string());
@@ -191,8 +201,8 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
 
     let mut parts = Vec::new();
     parts.extend(render_section(
-        "Hosting",
-        HOSTING,
+        "Main",
+        MAIN,
         active,
         feats,
         &email_plugin_children,
@@ -200,8 +210,8 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         username,
     ));
     parts.extend(render_section(
-        "Account",
-        ACCOUNT,
+        "Server",
+        SERVER,
         active,
         feats,
         &[],
@@ -209,8 +219,17 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
         username,
     ));
     parts.extend(render_section(
-        "Administration",
-        ADMINISTRATION,
+        "Security",
+        SECURITY,
+        active,
+        feats,
+        &[],
+        admin,
+        username,
+    ));
+    parts.extend(render_section(
+        "Settings",
+        SETTINGS,
         active,
         feats,
         &[],
@@ -219,7 +238,10 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
     ));
 
     if !other_plugin_html.is_empty() {
-        parts.push(r#"<div class="nav-section">Installed plugins</div>"#.to_string());
+        parts.push(
+            r#"<div class="nav-section"><span class="nav-section-label">Installed plugins</span></div>"#
+                .to_string(),
+        );
         parts.push(r#"<div class="nav-tile-grid">"#.to_string());
         parts.push(other_plugin_html.join("\n          "));
         parts.push(r#"</div>"#.to_string());
@@ -355,5 +377,35 @@ mod tests {
         }
         assert!(html.contains("/databases/manager"));
         assert!(html.contains("/databases/all"));
+    }
+
+    #[test]
+    fn flatter_sections_expose_server_tools() {
+        let html = nav_links_html("dashboard", "admin");
+        assert!(html.contains("nav-section-label\">Main</span>"));
+        assert!(html.contains("nav-section-label\">Server</span>"));
+        assert!(html.contains("nav-section-label\">Security</span>"));
+        assert!(html.contains("nav-section-label\">Settings</span>"));
+        assert!(html.contains("MariaDB Manager"));
+        assert!(html.contains("Manage Services"));
+        assert!(html.contains("data-nav-group=\"php\""));
+        assert!(html.contains("data-nav-group=\"dns\""));
+        assert!(html.contains("data-nav-group=\"ssl\""));
+        assert!(html.contains("data-nav-group=\"ftp\""));
+        assert!(
+            !html.contains("data-nav-group=\"server\""),
+            "Server must be a leaf overview link, not a nested dump"
+        );
+        if crate::panel_feature_gate::docker_installed() {
+            assert!(
+                html.contains("data-nav-group=\"docker\""),
+                "Docker must appear at Main section level when installed"
+            );
+        } else {
+            assert!(
+                !html.contains("data-nav-group=\"docker\""),
+                "Docker must stay hidden until installed"
+            );
+        }
     }
 }
