@@ -55,7 +55,7 @@ fn load_account_file(path: &std::path::Path) -> Result<PanelBootstrap, String> {
         .map_err(|error| format!("Invalid account JSON in {}: {error}", path.display()))
 }
 
-fn usernames_equal(a: &str, b: &str) -> bool {
+pub(crate) fn usernames_equal(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
@@ -80,11 +80,7 @@ pub fn find_account(username_raw: &str) -> Result<(PanelBootstrap, PathBuf), Str
 pub fn list_accounts() -> Result<Vec<AccountPublic>, String> {
     let mut accounts = Vec::new();
     if let Some(boot) = load_bootstrap() {
-        accounts.push(AccountPublic {
-            username: boot.username,
-            recovery_email: boot.recovery_email,
-            configured: true,
-        });
+        accounts.push(crate::account::to_account_public(&boot));
     }
     let dir = accounts_dir();
     if dir.is_dir() {
@@ -103,11 +99,7 @@ pub fn list_accounts() -> Result<Vec<AccountPublic>, String> {
             {
                 continue;
             }
-            accounts.push(AccountPublic {
-                username: boot.username,
-                recovery_email: boot.recovery_email,
-                configured: true,
-            });
+            accounts.push(crate::account::to_account_public(&boot));
         }
     }
     accounts.sort_by_key(|a| a.username.to_lowercase());
@@ -140,6 +132,7 @@ fn build_bootstrap(
         created_at_unix: now_unix(),
         must_change_password,
         totp_required,
+        disabled: false,
     }
 }
 
@@ -202,11 +195,7 @@ pub fn create_account(
     write_account_file(&path, &boot)?;
     let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
     Ok(AccountSetupResult {
-        public: AccountPublic {
-            username,
-            recovery_email,
-            configured: true,
-        },
+        public: crate::account::to_account_public(&boot),
         generated_password,
     })
 }
@@ -231,11 +220,7 @@ pub fn reset_account_password(
     write_account_file(&path, &boot)?;
     let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
     Ok(AccountSetupResult {
-        public: AccountPublic {
-            username: boot.username,
-            recovery_email: boot.recovery_email,
-            configured: true,
-        },
+        public: crate::account::to_account_public(&boot),
         generated_password,
     })
 }
@@ -281,11 +266,7 @@ pub fn change_own_password(
     write_account_file(&path, &boot)?;
     let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
     Ok(AccountSetupResult {
-        public: AccountPublic {
-            username: boot.username,
-            recovery_email: boot.recovery_email,
-            configured: true,
-        },
+        public: crate::account::to_account_public(&boot),
         generated_password,
     })
 }
@@ -310,11 +291,7 @@ pub fn update_own_profile(
         boot.language = crate::http_helpers::normalize_language(lang_raw)?;
     }
     write_account_file(&path, &boot)?;
-    Ok(AccountPublic {
-        username: boot.username,
-        recovery_email: boot.recovery_email,
-        configured: true,
-    })
+    Ok(crate::account::to_account_public(&boot))
 }
 
 /// Rename the signed-in account. Caller must re-issue the session cookie.
@@ -325,11 +302,7 @@ pub fn rename_own_account(
     let (mut boot, old_path) = find_account(current_username_raw)?;
     let new_username = require_new_username(new_username_raw)?;
     if usernames_equal(&boot.username, &new_username) {
-        return Ok(AccountPublic {
-            username: boot.username,
-            recovery_email: boot.recovery_email,
-            configured: true,
-        });
+        return Ok(crate::account::to_account_public(&boot));
     }
     if account_exists(&new_username) {
         return Err(format!("Account `{new_username}` already exists"));
@@ -346,13 +319,11 @@ pub fn rename_own_account(
         }
     }
     // Best-effort MFA file rename (encrypted ciphertext stays valid under new name).
-    let _ = crate::account_mfa::save_mfa_for_rename(current_username_raw, &new_username);
-    let _ = crate::account_passkeys::rename_passkey_store(current_username_raw, &new_username);
-    Ok(AccountPublic {
-        username: boot.username,
-        recovery_email: boot.recovery_email,
-        configured: true,
-    })
+    let prior = require_username(current_username_raw)?;
+    let _ = crate::account_mfa::save_mfa_for_rename(&prior, &new_username);
+    let _ = crate::account_passkeys::rename_passkey_store(&prior, &new_username);
+    crate::account_rename_refs::rename_username_references(&prior, &new_username);
+    Ok(crate::account::to_account_public(&boot))
 }
 
 #[cfg(test)]

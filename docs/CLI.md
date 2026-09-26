@@ -164,17 +164,28 @@ sudo cpn account create \
   --generate
 
 sudo cpn account passwd --username admin --generate
-sudo cpn account delete --username admin --yes
+sudo cpn account rename --username siteuser --to newname
+sudo cpn account deactivate --username siteuser --yes
+sudo cpn account enable --username siteuser --yes
+sudo cpn account delete --username siteuser --yes
 ```
+
+`cpn account list` prints one row per account with `status=active|disabled` and `role=admin|user` (usernames are omitted from stdout to avoid cleartext logging).
+
+Rename rejects reserved / blacklisted usernames using the same live GitHub list (24h cache + bundled fallback) as account create and first-admin setup. Case rules match create (case-insensitive collision checks; reserved match is case-insensitive).
+
+Deactivate blocks sign-in and rejects existing sessions. Re-enable restores login. Deactivating the last active panel admin (bootstrap owner) is blocked unless `--force` is passed (CLI prints a clear warning). Prefer enabling another admin path before forcing. The bootstrap admin cannot be deleted from the Other accounts UI; rename of the bootstrap account is allowed when the new name is not reserved.
 
 Options used by account commands:
 
-- `--username <NAME>` — account username.
-- `--email <EMAIL>` — recovery/account email on create.
-- `--language <LANG>` — account language; otherwise follows the detected locale.
-- `--password-stdin` — read the password from stdin instead of argv.
-- `--generate` — generate a password that satisfies the default password policy.
-- `--yes` — skip destructive-operation confirmation where supported.
+- `--username <NAME>` : account username.
+- `--to <NAME>` : new username for `account rename`.
+- `--email <EMAIL>` : recovery/account email on create.
+- `--language <LANG>` : account language; otherwise follows the detected locale.
+- `--password-stdin` : read the password from stdin instead of argv.
+- `--generate` : generate a password that satisfies the default password policy.
+- `--yes` : skip destructive-operation confirmation where supported (`y`/`yes` also accepted at the prompt).
+- `--force` : required with `account deactivate` when targeting the last active panel admin.
 
 ## Passkeys
 
@@ -227,11 +238,11 @@ sudo cpn site delete --domain example.com --yes
 `site create` accepts:
 
 - `--domain <DOMAIN>`
-- `--owner <ACCOUNT>` — defaults to `admin`.
+- `--owner <ACCOUNT>` : defaults to `admin`.
 - `--docroot <PATH>`
 - `--engine <ENGINE>`
 - `--notes <TEXT>`
-- `--ssl-provider <PROVIDER>` — `letsencrypt`, `zerossl`, `cloudflare_ca`, `custom`, or `none`.
+- `--ssl-provider <PROVIDER>` : `letsencrypt`, `zerossl`, `cloudflare_ca`, `custom`, or `none`.
 
 `site modify` accepts the same mutable fields plus `--enable` or `--disable`. Do not pass both in the same command.
 
@@ -251,9 +262,9 @@ sudo cpn network clear-migration
 
 `network set-port` options:
 
-- `--port <PORT>` — preferred listen port.
-- `--old-port-policy <MODE>` — `redirect_1m`, `redirect_3m`, or `deny` when changing from the current port.
-- `--from-port <PORT>` — optional previous port override used when recording the migration.
+- `--port <PORT>` : preferred listen port.
+- `--old-port-policy <MODE>` : `redirect_1m`, `redirect_3m`, or `deny` when changing from the current port.
+- `--from-port <PORT>` : optional previous port override used when recording the migration.
 
 After changing the preferred port, restart the installer/panel process on the new port when instructed.
 
@@ -292,10 +303,10 @@ sudo cpn app install --name phpmyadmin --subdomain db.example.com
 
 Relevant options:
 
-- `--name <APP>` — application ID.
-- `--domain <DOMAIN>` — optional site scope.
-- `--subdomain <HOST>` — optional subdomain scope.
-- `--yes` — skip confirmation for reinstall/uninstall.
+- `--name <APP>` : application ID.
+- `--domain <DOMAIN>` : optional site scope.
+- `--subdomain <HOST>` : optional subdomain scope.
+- `--yes` : skip confirmation for reinstall/uninstall.
 
 ## Hosting packages
 

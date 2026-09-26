@@ -269,6 +269,7 @@ mod tests {
                 created_at_unix: 1,
                 must_change_password: false,
                 totp_required: false,
+                disabled: false,
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let html = nav_links_html("root-files", "admin");

@@ -96,7 +96,7 @@ use cpn_installer::panel_hub_routes::{
     users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
     users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
-    users_reseller_route,
+    users_rename_post, users_reseller_route, users_status_post,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -1349,6 +1349,8 @@ async fn main() -> std::io::Result<()> {
             .service(users_modify_get)
             .service(users_password_post)
             .service(users_delete_post)
+            .service(users_rename_post)
+            .service(users_status_post)
             .service(users_reseller_route)
             .service(api_access_route)
             .service(api_access_create_post)

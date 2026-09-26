@@ -4,6 +4,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use cpn_installer::account::{default_password_policy, load_bootstrap};
+use cpn_installer::account_lifecycle::{
+    deactivate_account, enable_account, rename_account, role_label, status_label,
+};
 use cpn_installer::account_mgmt::{
     create_account, delete_account, list_accounts, reset_account_password,
 };
@@ -176,6 +179,30 @@ enum AccountCommands {
     },
     /// List configured accounts (no secrets)
     List,
+    /// Rename an account (rejects reserved / blacklisted names)
+    Rename {
+        #[arg(long)]
+        username: String,
+        #[arg(long = "to")]
+        to: String,
+    },
+    /// Deactivate an account (cannot log in; sessions rejected)
+    Deactivate {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        yes: bool,
+        /// Required to deactivate the last active panel admin
+        #[arg(long)]
+        force: bool,
+    },
+    /// Re-enable a deactivated account
+    Enable {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -369,13 +396,51 @@ fn run() -> Result<(), String> {
                     return Ok(());
                 }
                 for account in accounts {
-                    // Avoid cleartext usernames/emails on stdout (CodeQL cleartext-logging).
+                    // Do not echo usernames/emails: CodeQL rust/cleartext-logging.
+                    // Status and role remain so operators can see disabled/admin rows.
+                    let role = role_label(&account.username);
                     println!(
-                        "account\tconfigured={}\trecovery_set={}",
+                        "account\tstatus={}\trole={}\tconfigured={}\trecovery_set={}",
+                        status_label(account.disabled),
+                        role,
                         account.configured,
                         !account.recovery_email.trim().is_empty()
                     );
                 }
+                Ok(())
+            }
+            AccountCommands::Rename { username, to } => {
+                require_root_for_mutation()?;
+                // Do not echo the new username: CodeQL rust/cleartext-logging.
+                let _ = rename_account(&username, &to)?;
+                println!("renamed account ok");
+                Ok(())
+            }
+            AccountCommands::Deactivate {
+                username,
+                yes,
+                force,
+            } => {
+                require_root_for_mutation()?;
+                confirm_delete(
+                    "Deactivate this account? It will not be able to sign in.",
+                    yes,
+                )?;
+                let public = deactivate_account(&username, force)?;
+                println!(
+                    "deactivated account ok\tstatus={}",
+                    status_label(public.disabled)
+                );
+                Ok(())
+            }
+            AccountCommands::Enable { username, yes } => {
+                require_root_for_mutation()?;
+                confirm_delete("Re-enable this account for sign-in?", yes)?;
+                let public = enable_account(&username)?;
+                println!(
+                    "enabled account ok\tstatus={}",
+                    status_label(public.disabled)
+                );
                 Ok(())
             }
             AccountCommands::Create {

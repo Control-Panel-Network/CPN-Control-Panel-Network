@@ -130,6 +130,9 @@ pub struct AccountPublic {
     pub username: String,
     pub recovery_email: String,
     pub configured: bool,
+    /// True when the account is deactivated and cannot sign in.
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 /// Safe SMTP summary for `/api/status` (no passwords or SMTP usernames).
