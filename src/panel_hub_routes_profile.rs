@@ -201,7 +201,10 @@ pub async fn users_profile_password_post(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let generate = parse_flag(&form.generate) || form.password.trim().is_empty();
+    let generate = crate::panel_password_gen::wants_server_generated_password(
+        &form.password,
+        parse_flag(&form.generate),
+    );
     let password = if generate {
         None
     } else {

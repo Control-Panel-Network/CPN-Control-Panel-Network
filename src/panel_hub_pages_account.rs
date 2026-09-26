@@ -6,6 +6,10 @@ use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
 use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
+use crate::panel_password_gen::{
+    generated_password_notice_html, password_field_and_gen_html, password_gen_script,
+    password_gen_styles,
+};
 use crate::site_acl::{SiteAclGrant, list_grants};
 
 pub use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
@@ -96,19 +100,18 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
         <label>Recovery email
           <input name="recovery_email" type="email" required autocomplete="email" maxlength="254">
         </label>
-        <label>Password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input name="generate" type="checkbox" value="1">
-          Generate a strong password
-        </label>
+        {pw_gen}
         <button type="submit" class="btn-primary">Create user</button>
       </form>
       <p class="muted" style="margin-top:12px;">Password policy: {hint}</p>
-      <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>"#,
-        min_len = policy.min_length,
+      <p class="muted">Generated passwords are shown once on the success page and never stored in the URL.</p>
+      {pw_styles}
+      {pw_script}"#,
         hint = hint,
+        pw_gen =
+            password_field_and_gen_html("Password (leave blank to generate)", policy.min_length),
+        pw_styles = password_gen_styles(),
+        pw_script = password_gen_script(),
     );
     feature_shell(
         &[
@@ -130,11 +133,9 @@ pub fn users_create_success_page(username: &str, generated_password: Option<&str
         html_escape(username)
     );
     if let Some(password) = generated_password {
-        body.push_str(&format!(
-            r#"<p><strong>Generated password</strong> (copy now; it will not be shown again):</p>
-            <p><code style="user-select:all;">{}</code></p>"#,
-            html_escape(password)
-        ));
+        body.push_str(&generated_password_notice_html(password, true));
+        body.push_str(&password_gen_styles());
+        body.push_str(&password_gen_script());
     }
     body.push_str(
         r#"<p style="margin-top:16px;"><a class="btn-primary" href="/account/users/list">Back to list</a></p>"#,
@@ -159,11 +160,9 @@ pub fn users_password_success_page(username: &str, generated_password: Option<&s
         html_escape(username)
     );
     if let Some(password) = generated_password {
-        body.push_str(&format!(
-            r#"<p><strong>Generated password</strong> (copy now; it will not be shown again):</p>
-            <p><code style="user-select:all;">{}</code></p>"#,
-            html_escape(password)
-        ));
+        body.push_str(&generated_password_notice_html(password, true));
+        body.push_str(&password_gen_styles());
+        body.push_str(&password_gen_script());
     }
     body.push_str(
         r#"<p style="margin-top:16px;"><a class="btn-primary" href="/account/users/modify">Back to modify</a></p>"#,

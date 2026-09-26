@@ -169,7 +169,10 @@ pub async fn users_create_post(
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
     }
-    let generate = parse_flag(&form.generate) || form.password.trim().is_empty();
+    let generate = crate::panel_password_gen::wants_server_generated_password(
+        &form.password,
+        parse_flag(&form.generate),
+    );
     let password = if generate {
         None
     } else {
@@ -211,7 +214,10 @@ pub async fn users_password_post(
     if let Err(error) = require_admin(&user) {
         return redirect_notice("/account/users/list", None, Some(&error));
     }
-    let generate = parse_flag(&form.generate) || form.password.trim().is_empty();
+    let generate = crate::panel_password_gen::wants_server_generated_password(
+        &form.password,
+        parse_flag(&form.generate),
+    );
     let password = if generate {
         None
     } else {
