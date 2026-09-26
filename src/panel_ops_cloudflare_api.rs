@@ -178,8 +178,8 @@ pub fn zone_name_candidates(hostname: &str) -> Vec<String> {
     if domain.is_empty() {
         return Vec::new();
     }
+    let mut out = vec![domain.clone()];
     let parts: Vec<&str> = domain.split('.').collect();
-    let mut out = vec![domain];
     for i in 1..parts.len().saturating_sub(1) {
         out.push(parts[i..].join("."));
     }
