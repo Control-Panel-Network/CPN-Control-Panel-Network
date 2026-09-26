@@ -1,9 +1,11 @@
-//! Docker Host package manage UI: Active Containers table and images list.
+//! Docker Host package manage UI: containers, images search/pull, create container.
 
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_ops_docker::{
-    DockerContainerRow, docker_status, list_containers_detailed, list_images_detailed,
+    DockerContainerRow, DockerImageRow, docker_status, list_containers_detailed,
+    list_images_detailed,
 };
+use crate::panel_ops_docker_images::{DockerHubSearchHit, image_in_use};
 
 fn html_escape(value: &str) -> String {
     value
@@ -11,6 +13,20 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+fn urlencoding_simple(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() * 3);
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 fn action_form(action: &str, name: &str, label: &str, class: &str, confirm: &str) -> String {
@@ -75,23 +91,9 @@ fn container_actions(row: &DockerContainerRow) -> String {
     out
 }
 
-fn urlencoding_simple(value: &str) -> String {
-    let mut out = String::with_capacity(value.len() * 3);
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char);
-            }
-            b' ' => out.push('+'),
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
-
 fn containers_table(rows: &[DockerContainerRow]) -> String {
     if rows.is_empty() {
-        return r#"<p class="empty-state">No containers yet. Pull an image and run a container from the host CLI, or use Manage Images.</p>"#.into();
+        return r#"<p class="empty-state">No containers yet. Pull an image from Manage Images, then use Create Container.</p>"#.into();
     }
     let mut body = String::from(
         r#"<div class="table-wrap"><table class="data-table docker-containers-table">
@@ -133,57 +135,204 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
     body
 }
 
-fn images_table() -> String {
-    match list_images_detailed() {
-        Ok(rows) if rows.is_empty() => {
-            r#"<p class="empty-state">No images on this host.</p>"#.into()
-        }
-        Ok(rows) => {
-            let mut body = String::from(
-                r#"<div class="table-wrap"><table class="data-table">
-          <thead><tr>
-            <th scope="col">Repository</th>
-            <th scope="col">Tag</th>
-            <th scope="col">Id</th>
-            <th scope="col">Size</th>
-          </tr></thead><tbody>"#,
-            );
-            for row in rows {
-                body.push_str(&format!(
-                    r#"<tr>
-              <td><code>{repo}</code></td>
-              <td><code>{tag}</code></td>
-              <td><code>{id}</code></td>
-              <td>{size}</td>
-            </tr>"#,
-                    repo = html_escape(&row.repository),
-                    tag = html_escape(&row.tag),
-                    id = html_escape(&row.id),
-                    size = html_escape(&row.size),
-                ));
-            }
-            body.push_str("</tbody></table></div>");
-            body
-        }
-        Err(e) => format!(
-            r#"<p class="panel-notice error" role="status">{}</p>"#,
-            html_escape(&e)
-        ),
+fn tab_class(active: &str, id: &str) -> &'static str {
+    if active == id {
+        "btn-primary"
+    } else {
+        "btn-secondary"
     }
 }
 
-fn toolbar() -> String {
-    r#"<p class="stack-actions" style="margin-bottom:16px;">
-      <a class="btn-primary" href="/docker">Active Containers</a>
-      <a class="btn-secondary" href="/docker/images">Manage Images</a>
-      <a class="btn-secondary" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>
+fn toolbar(active: &str) -> String {
+    format!(
+        r#"<p class="stack-actions docker-tabs" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
+      <a class="{c}" href="/docker">Active Containers</a>
+      <a class="{i}" href="/docker/images">Manage Images</a>
+      <a class="{h}" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>
     </p>
-    <p class="muted">CPN-managed containers (label <code>com.cpn.managed=1</code>) cannot be removed from this UI. Upgrade <code>--bypass</code> refreshes only those stacks.</p>"#
-        .into()
+    <p class="muted">CPN-managed containers (label <code>com.cpn.managed=1</code>) cannot be removed from this UI. Upgrade <code>--bypass</code> refreshes only those stacks.</p>"#,
+        c = tab_class(active, "containers"),
+        i = tab_class(active, "images"),
+        h = tab_class(active, "host"),
+    )
 }
 
-/// Primary manage page: Active Containers table (Host package Manage + /docker).
-pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
+fn create_container_form(prefill_image: &str) -> String {
+    let img = html_escape(prefill_image);
+    format!(
+        r#"<div class="panel-card" style="margin:18px 0;">
+      <h2 style="margin:0 0 8px;font-size:18px;">Create Container</h2>
+      <p class="muted" style="margin:0 0 14px;">Run a local or pulled image. User containers are not labeled as CPN-managed.</p>
+      <form method="post" action="/docker/create" class="docker-create-form" style="display:grid;gap:12px;max-width:640px;">
+        <label>Image <span class="muted">(required)</span>
+          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{img}" autocomplete="off" style="width:100%;">
+        </label>
+        <label>Container name <span class="muted">(optional)</span>
+          <input type="text" name="name" maxlength="64" placeholder="my-nginx" autocomplete="off" style="width:100%;">
+        </label>
+        <label>Ports <span class="muted">(host:container, comma or newline)</span>
+          <input type="text" name="ports" maxlength="200" placeholder="8080:80" autocomplete="off" style="width:100%;">
+        </label>
+        <label>Environment <span class="muted">(KEY=value, one per line)</span>
+          <textarea name="env" rows="3" maxlength="4000" placeholder="TZ=UTC" style="width:100%;font-family:monospace;"></textarea>
+        </label>
+        <label>Restart policy
+          <select name="restart" style="width:100%;max-width:280px;">
+            <option value="no">no</option>
+            <option value="unless-stopped" selected>unless-stopped</option>
+            <option value="always">always</option>
+            <option value="on-failure">on-failure</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" name="start" value="1" checked>
+          Start container after create
+        </label>
+        <p style="margin:0;"><button type="submit" class="btn-primary">Create Container</button></p>
+      </form>
+    </div>"#,
+        img = img,
+    )
+}
+
+fn search_results_html(hits: &[DockerHubSearchHit]) -> String {
+    if hits.is_empty() {
+        return String::new();
+    }
+    let mut body = String::from(
+        r#"<div class="table-wrap" style="margin-top:12px;"><table class="data-table">
+      <thead><tr>
+        <th scope="col">Repository</th>
+        <th scope="col">Description</th>
+        <th scope="col">Stars</th>
+        <th scope="col">Actions</th>
+      </tr></thead><tbody>"#,
+    );
+    for hit in hits {
+        let official = if hit.is_official {
+            r#" <span class="plugin-badge">Official</span>"#
+        } else {
+            ""
+        };
+        let desc: String = hit.description.chars().take(120).collect();
+        body.push_str(&format!(
+            r#"<tr>
+          <td><code>{name}</code>{official}</td>
+          <td>{desc}</td>
+          <td>{stars}</td>
+          <td class="docker-actions">
+            <form method="post" action="/docker/images/pull" class="inline-form" style="display:inline;">
+              <input type="hidden" name="image" value="{name}:latest">
+              <button type="submit" class="btn-primary">Pull</button>
+            </form>
+            <a class="btn-secondary" href="/docker?image={enc}">Create</a>
+          </td>
+        </tr>"#,
+            name = html_escape(&hit.name),
+            official = official,
+            desc = html_escape(&desc),
+            stars = hit.star_count,
+            enc = urlencoding_simple(&format!("{}:latest", hit.name)),
+        ));
+    }
+    body.push_str("</tbody></table></div>");
+    body
+}
+
+fn images_table(rows: &[DockerImageRow]) -> String {
+    if rows.is_empty() {
+        return r#"<p class="empty-state">No images on this host. Search Docker Hub above or pull by name (for example nginx:alpine).</p>"#.into();
+    }
+    let mut body = String::from(
+        r#"<div class="table-wrap"><table class="data-table">
+      <thead><tr>
+        <th scope="col">Image name</th>
+        <th scope="col">Tags</th>
+        <th scope="col">Size</th>
+        <th scope="col">Actions</th>
+      </tr></thead><tbody>"#,
+    );
+    for row in rows {
+        let ref_name = if row.repository == "<none>" || row.tag == "<none>" {
+            row.id.clone()
+        } else {
+            format!("{}:{}", row.repository, row.tag)
+        };
+        let in_use = image_in_use(&row.repository, &row.tag, &row.id);
+        let delete_btn = if in_use {
+            r#"<span class="muted" title="In use by a container">In use</span>"#.to_string()
+        } else {
+            format!(
+                r#"<form method="post" action="/docker/images/delete" class="inline-form" style="display:inline;" onsubmit="return confirm('Delete image {label}?');">
+              <input type="hidden" name="repository" value="{repo}">
+              <input type="hidden" name="tag" value="{tag}">
+              <input type="hidden" name="id" value="{id}">
+              <button type="submit" class="btn-danger" title="Delete">Delete</button>
+            </form>"#,
+                label = html_escape(&ref_name),
+                repo = html_escape(&row.repository),
+                tag = html_escape(&row.tag),
+                id = html_escape(&row.id),
+            )
+        };
+        body.push_str(&format!(
+            r#"<tr>
+          <td><code>{repo}</code><br><code class="muted">{id}</code></td>
+          <td><code>{tag}</code></td>
+          <td>{size}</td>
+          <td class="docker-actions">
+            <form method="post" action="/docker/images/pull" class="inline-form" style="display:inline;">
+              <input type="hidden" name="image" value="{ref_name}">
+              <button type="submit" class="btn-primary" title="Pull / update this tag">Pull</button>
+            </form>
+            <a class="btn-secondary" href="/docker?image={enc}">Create</a>
+            {delete}
+          </td>
+        </tr>"#,
+            repo = html_escape(&row.repository),
+            id = html_escape(&row.id),
+            tag = html_escape(&row.tag),
+            size = html_escape(&row.size),
+            ref_name = html_escape(&ref_name),
+            enc = urlencoding_simple(&ref_name),
+            delete = delete_btn,
+        ));
+    }
+    body.push_str("</tbody></table></div>");
+    body
+}
+
+fn search_pull_card(query: &str, hits: &[DockerHubSearchHit]) -> String {
+    let q = html_escape(query);
+    format!(
+        r#"<div class="panel-card" style="margin:18px 0;">
+      <h2 style="margin:0 0 8px;font-size:18px;">Search &amp; Pull Images</h2>
+      <p class="muted" style="margin:0 0 12px;">Search Docker Hub, or enter a full image reference and pull directly.</p>
+      <form method="get" action="/docker/images" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px;">
+        <label style="flex:1;min-width:200px;">Search Docker Hub
+          <input type="search" name="q" value="{q}" maxlength="100" placeholder="nginx, mysql, ubuntu" autocomplete="off" style="width:100%;">
+        </label>
+        <button type="submit" class="btn-secondary">Search</button>
+      </form>
+      <form method="post" action="/docker/images/pull" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+        <label style="flex:1;min-width:200px;">Image to pull
+          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{q}" autocomplete="off" style="width:100%;">
+        </label>
+        <button type="submit" class="btn-primary">Pull</button>
+      </form>
+      {results}
+    </div>"#,
+        q = q,
+        results = search_results_html(hits),
+    )
+}
+
+/// Primary manage page: Active Containers + Create Container.
+pub fn docker_manage_page(
+    notice: Option<&str>,
+    error: Option<&str>,
+    prefill_image: Option<&str>,
+) -> String {
     let status = docker_status();
     if !status.installed {
         return feature_shell(
@@ -221,7 +370,7 @@ pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
                     "The container CLI is installed but the engine is not running.",
                     "Use Start on the Docker host package card, or systemctl start docker / podman."
                 ),
-                toolbar()
+                toolbar("containers")
             ),
             notice,
             error,
@@ -234,12 +383,19 @@ pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
             html_escape(&e)
         ),
     };
+    let prefill = prefill_image.unwrap_or("");
     let body = format!(
-        r#"{toolbar}
+        r##"{toolbar}
+      <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
+        <a class="btn-primary" href="#create-container">+ Create Container</a>
+        <a class="btn-secondary" href="/docker/images">Manage Images</a>
+      </p>
       <h2 style="margin:18px 0 10px;">Active Containers</h2>
-      {table}"#,
-        toolbar = toolbar(),
+      {table}
+      <div id="create-container">{create}</div>"##,
+        toolbar = toolbar("containers"),
         table = table,
+        create = create_container_form(prefill),
     );
     feature_shell(
         &[
@@ -255,17 +411,43 @@ pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
     )
 }
 
-pub fn docker_images_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn docker_images_page(
+    notice: Option<&str>,
+    error: Option<&str>,
+    query: Option<&str>,
+    hits: &[DockerHubSearchHit],
+) -> String {
     let status = docker_status();
     if !status.installed {
-        return docker_manage_page(notice, error);
+        return docker_manage_page(notice, error, None);
     }
+    let q = query.unwrap_or("");
+    let table = match list_images_detailed() {
+        Ok(rows) => images_table(&rows),
+        Err(e) => format!(
+            r#"<p class="panel-notice error" role="status">{}</p>"#,
+            html_escape(&e)
+        ),
+    };
     let body = format!(
-        r#"{toolbar}
-      <h2 style="margin:18px 0 10px;">Images</h2>
-      {table}"#,
-        toolbar = toolbar(),
-        table = images_table(),
+        r##"{toolbar}
+      <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
+        <a class="btn-primary" href="/docker#create-container">+ Create Container</a>
+        <a class="btn-secondary" href="/docker/images">Manage Images</a>
+      </p>
+      {search}
+      <div class="panel-card" style="margin:18px 0;">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
+          <h2 style="margin:0;font-size:18px;">Local Images</h2>
+          <form method="post" action="/docker/images/prune" onsubmit="return confirm('Prune all unused images on this host?');">
+            <button type="submit" class="btn-secondary" style="background:#c2410c;border-color:#c2410c;color:#fff;">Prune Unused</button>
+          </form>
+        </div>
+        {table}
+      </div>"##,
+        toolbar = toolbar("images"),
+        search = search_pull_card(q, hits),
+        table = table,
     );
     feature_shell(
         &[
@@ -275,7 +457,7 @@ pub fn docker_images_page(notice: Option<&str>, error: Option<&str>) -> String {
             ("Images", None),
         ],
         "Docker Images",
-        &status.detail,
+        "Pull, manage, and organize images for your containers.",
         &body,
         notice,
         error,
@@ -289,7 +471,7 @@ pub fn docker_logs_page(name: &str, notice: Option<&str>, error: Option<&str>) -
       <h2 style="margin:18px 0 10px;">Logs: {name}</h2>
       <pre class="code-block" style="max-height:480px;overflow:auto;">{logs}</pre>
       <p><a class="btn-secondary" href="/docker">Back to containers</a></p>"#,
-        toolbar = toolbar(),
+        toolbar = toolbar("containers"),
         name = html_escape(name),
         logs = html_escape(&logs),
     );
@@ -310,7 +492,7 @@ pub fn docker_logs_page(name: &str, notice: Option<&str>, error: Option<&str>) -
 /// Legacy Server hub tiles still call this with a kind label.
 pub fn docker_page(kind: &str) -> String {
     match kind {
-        "Docker Images" => docker_images_page(None, None),
-        _ => docker_manage_page(None, None),
+        "Docker Images" => docker_images_page(None, None, None, &[]),
+        _ => docker_manage_page(None, None, None),
     }
 }
