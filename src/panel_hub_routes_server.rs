@@ -405,7 +405,7 @@ pub async fn server_docker_containers(
         &user,
         "server",
         "Containers",
-        &docker_manage_page(None, None),
+        &docker_manage_page(None, None, None),
     ))
 }
 
@@ -421,7 +421,7 @@ pub async fn server_docker_images(
         &user,
         "server",
         "Docker Images",
-        &docker_images_page(None, None),
+        &docker_images_page(None, None, None, &[]),
     ))
 }
 
@@ -436,11 +436,12 @@ pub async fn docker_home(
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let image = query.get("image").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "server",
         "Docker",
-        &docker_manage_page(notice, error),
+        &docker_manage_page(notice, error, image),
     ))
 }
 
@@ -455,11 +456,27 @@ pub async fn docker_images_route(
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let q = query.get("q").map(|s| s.as_str()).unwrap_or("");
+    let hits = if q.is_empty() {
+        Vec::new()
+    } else {
+        match crate::panel_ops_docker_images::search_docker_hub(q) {
+            Ok(h) => h,
+            Err(e) => {
+                return html_ok(panel_shell(
+                    &user,
+                    "server",
+                    "Docker Images",
+                    &docker_images_page(notice, Some(&e), Some(q), &[]),
+                ));
+            }
+        }
+    };
     html_ok(panel_shell(
         &user,
         "server",
         "Docker Images",
-        &docker_images_page(notice, error),
+        &docker_images_page(notice, error, Some(q).filter(|s| !s.is_empty()), &hits),
     ))
 }
 
@@ -507,6 +524,159 @@ pub async fn docker_container_action(
         );
     }
     match crate::panel_ops_docker::container_action(&form.action, &form.name) {
+        Ok(msg) => redirect_notice("/docker", Some(&msg), None),
+        Err(err) => redirect_notice("/docker", None, Some(&err)),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerImagePullForm {
+    pub image: String,
+}
+
+#[post("/docker/images/pull")]
+pub async fn docker_image_pull(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerImagePullForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker/images",
+            None,
+            Some("Only panel admins can pull images."),
+        );
+    }
+    let image = form.image.clone();
+    let result = web::block(move || crate::panel_ops_docker_images::pull_image(&image))
+        .await
+        .unwrap_or_else(|e| Err(format!("Pull task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/images", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/images", None, Some(&err)),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerImageDeleteForm {
+    pub repository: String,
+    pub tag: String,
+    pub id: String,
+}
+
+#[post("/docker/images/delete")]
+pub async fn docker_image_delete(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerImageDeleteForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker/images",
+            None,
+            Some("Only panel admins can delete images."),
+        );
+    }
+    let repository = form.repository.clone();
+    let tag = form.tag.clone();
+    let id = form.id.clone();
+    let result = web::block(move || {
+        crate::panel_ops_docker_images::delete_image(&repository, &tag, &id)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Delete task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/images", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/images", None, Some(&err)),
+    }
+}
+
+#[post("/docker/images/prune")]
+pub async fn docker_image_prune(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker/images",
+            None,
+            Some("Only panel admins can prune images."),
+        );
+    }
+    let result = web::block(crate::panel_ops_docker_images::prune_unused_images)
+        .await
+        .unwrap_or_else(|e| Err(format!("Prune task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/images", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/images", None, Some(&err)),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerCreateForm {
+    pub image: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub ports: String,
+    #[serde(default)]
+    pub env: String,
+    #[serde(default)]
+    pub restart: String,
+    #[serde(default)]
+    pub start: Option<String>,
+}
+
+#[post("/docker/create")]
+pub async fn docker_create_container(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker",
+            None,
+            Some("Only panel admins can create containers."),
+        );
+    }
+    let image = form.image.clone();
+    let name = form.name.clone();
+    let ports = form.ports.clone();
+    let env = form.env.clone();
+    let restart = form.restart.clone();
+    let start = form
+        .start
+        .as_deref()
+        .map(|s| s == "1" || s.eq_ignore_ascii_case("on") || s.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let result = web::block(move || {
+        crate::panel_ops_docker_images::create_container(
+            crate::panel_ops_docker_images::CreateContainerRequest {
+                image: &image,
+                name: &name,
+                ports: &ports,
+                env: &env,
+                restart: &restart,
+                start,
+            },
+        )
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Create task failed: {e}")));
+    match result {
         Ok(msg) => redirect_notice("/docker", Some(&msg), None),
         Err(err) => redirect_notice("/docker", None, Some(&err)),
     }

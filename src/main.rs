@@ -41,7 +41,8 @@ use cpn_installer::panel_hub_routes::{
     cloudflare_update_post, dashboard_ssh_security_review_show,
     dashboard_ssh_security_review_snooze, databases_all_route, databases_create_get,
     databases_create_post, databases_delete_get, databases_delete_post, databases_manager_route,
-    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action, docker_home,
+    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
+    docker_create_container, docker_home, docker_image_delete, docker_image_prune, docker_image_pull,
     docker_images_route, docker_logs_route, email_accounts_route, email_bimi_push_cf,
     email_bimi_route, email_bimi_save, email_catchall_route, email_catchall_save,
     email_create_route, email_debugger, email_delivery_route, email_dkim_ensure, email_dkim_route,
@@ -1241,6 +1242,10 @@ async fn main() -> std::io::Result<()> {
             .service(docker_images_route)
             .service(docker_logs_route)
             .service(docker_container_action)
+            .service(docker_image_pull)
+            .service(docker_image_delete)
+            .service(docker_image_prune)
+            .service(docker_create_container)
             .service(server_files_page)
             .service(filemanager_alias)
             .service(server_filemanager_alias)
