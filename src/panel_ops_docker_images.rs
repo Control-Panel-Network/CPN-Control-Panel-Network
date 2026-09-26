@@ -81,7 +81,7 @@ fn validate_restart_policy(raw: &str) -> Result<String, String> {
 
 fn parse_port_mappings(raw: &str) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
-    for part in raw.split(|c: char| c == '\n' || c == ',' || c == ';') {
+    for part in raw.split(['\n', ',', ';']) {
         let p = part.trim();
         if p.is_empty() {
             continue;
