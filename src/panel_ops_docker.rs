@@ -367,10 +367,10 @@ fn enable_container_engine() -> Result<String, String> {
         let status = Command::new("systemctl")
             .args(["enable", "--now", unit])
             .status();
-        if let Ok(s) = status {
-            if s.success() {
-                notes.push(format!("enabled {unit}"));
-            }
+        if let Ok(s) = status
+            && s.success()
+        {
+            notes.push(format!("enabled {unit}"));
         }
     }
     if notes.is_empty() {
