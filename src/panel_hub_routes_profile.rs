@@ -22,6 +22,13 @@ const MODIFY_ACCOUNT: &str = "/account/users/modify?tab=account";
 const MODIFY_SECURITY: &str = "/account/users/modify?tab=security";
 const MODIFY_SECURITY_ENROLL: &str = "/account/users/modify?tab=security&enroll=1";
 
+fn parse_flag(raw: &str) -> bool {
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
 fn request_secure(http: &HttpRequest) -> bool {
     crate::panel_session::request_https_from_headers(http)
 }
@@ -194,7 +201,10 @@ pub async fn users_profile_password_post(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let generate = crate::panel_password_gen::wants_server_generated_password(&form.password);
+    let generate = crate::panel_password_gen::wants_server_generated_password(
+        &form.password,
+        parse_flag(&form.generate),
+    );
     let password = if generate {
         None
     } else {

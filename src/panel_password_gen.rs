@@ -7,7 +7,8 @@ use crate::account::{MAX_PASSWORD_CHARS, default_password_policy};
 
 /// True when the password field is empty: server should generate (leave-blank UX).
 /// When the field is filled (client preview), prefer that value even if Generate is checked.
-pub fn wants_server_generated_password(password: &str) -> bool {
+/// `generate_flag` keeps the form checkbox wired; it does not override a filled password.
+pub fn wants_server_generated_password(password: &str, _generate_flag: bool) -> bool {
     password.trim().is_empty()
 }
 
@@ -363,9 +364,10 @@ mod tests {
 
     #[test]
     fn empty_password_requests_server_generate() {
-        assert!(wants_server_generated_password(""));
-        assert!(wants_server_generated_password("   "));
-        assert!(!wants_server_generated_password("Abcdefg1"));
+        assert!(wants_server_generated_password("", true));
+        assert!(wants_server_generated_password("   ", false));
+        assert!(!wants_server_generated_password("Abcdefg1", true));
+        assert!(!wants_server_generated_password("Abcdefg1", false));
     }
 
     #[test]
