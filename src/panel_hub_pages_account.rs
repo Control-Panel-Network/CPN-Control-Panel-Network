@@ -10,7 +10,7 @@ use crate::panel_password_gen::{
     generated_password_notice_html, password_field_and_gen_html, password_gen_script,
     password_gen_styles,
 };
-use crate::site_acl::{SiteAclGrant, list_grants};
+use crate::site_acl::{list_grants, SiteAclGrant};
 
 pub use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
 

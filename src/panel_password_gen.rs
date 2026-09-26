@@ -3,7 +3,7 @@
 //! Generate fills and reveals the password field without submitting. Copy sits beside
 //! the field. Server policy and the blocked-password list still validate on submit.
 
-use crate::account::{MAX_PASSWORD_CHARS, default_password_policy};
+use crate::account::{default_password_policy, MAX_PASSWORD_CHARS};
 
 /// True when the password field is empty: server should generate (leave-blank UX).
 /// When the field is filled (client preview), prefer that value even if Generate is checked.
