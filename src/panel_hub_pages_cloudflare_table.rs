@@ -1,9 +1,10 @@
 //! Cloudflare Manage DNS records table (type chips + search + pagination + inline edit).
 
 use crate::panel_hub_pages_cloudflare_pager::{
-    CfTableOpts, dns_list_toolbar, dns_mode_from_query, dns_order_from_query, dns_search_from_query,
-    dns_sort_from_query, list_state_hiddens, manage_list_url, manage_sort_url,
-    record_matches_search, sort_dns_records, sort_hidden_inputs, type_hidden_input,
+    CfTableOpts, dns_list_toolbar, dns_mode_from_query, dns_order_from_query,
+    dns_search_from_query, dns_sort_from_query, list_state_hiddens, manage_list_url,
+    manage_sort_url, record_matches_search, sort_dns_records, sort_hidden_inputs,
+    type_hidden_input,
 };
 use crate::panel_ops_cloudflare::{RECORD_TYPES, record_type_uses_priority};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
