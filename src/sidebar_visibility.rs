@@ -330,9 +330,7 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
     if path.starts_with("/server/dns") {
         return Some("dns");
     }
-    if path.starts_with("/server/openlitespeed")
-        || path.starts_with("/server/litespeed")
-    {
+    if path.starts_with("/server/openlitespeed") || path.starts_with("/server/litespeed") {
         return Some("litespeed");
     }
     if path.starts_with("/server") {

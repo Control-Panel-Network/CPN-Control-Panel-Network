@@ -2,7 +2,7 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
-use crate::panel_nav_catalog::{MAIN, SECURITY, SERVER, SETTINGS, NavChild, NavEntry};
+use crate::panel_nav_catalog::{MAIN, NavChild, NavEntry, SECURITY, SERVER, SETTINGS};
 
 pub use crate::panel_nav_tree_chrome::{nav_tree_script, nav_tree_styles};
 
