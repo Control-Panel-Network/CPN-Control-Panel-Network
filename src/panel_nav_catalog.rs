@@ -487,8 +487,3 @@ pub(crate) const SETTINGS: &[NavEntry] = &[NavEntry::Group {
 pub(crate) fn all_sections() -> [&'static [NavEntry]; 4] {
     [MAIN, SERVER, SECURITY, SETTINGS]
 }
-
-// Compatibility aliases used by older imports during the IA transition.
-pub(crate) const HOSTING: &[NavEntry] = MAIN;
-pub(crate) const ACCOUNT: &[NavEntry] = &[];
-pub(crate) const ADMINISTRATION: &[NavEntry] = SERVER;
