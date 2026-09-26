@@ -83,9 +83,7 @@ fn upsert_www_cname(zone_domain: &str, hostname: &str, proxied: bool) -> Result<
         let target = found.content.trim_end_matches('.').to_ascii_lowercase();
         let want = hostname.trim_end_matches('.').to_ascii_lowercase();
         if target == want && found.proxied == proxied {
-            return Ok(format!(
-                "CNAME `{www}` already points to `{hostname}`"
-            ));
+            return Ok(format!("CNAME `{www}` already points to `{hostname}`"));
         }
         let msg = update_dns_record(zone_domain, &found.id, &www, hostname, 1, None, proxied)?;
         return Ok(format!("updated CNAME `{www}`: {msg}"));
