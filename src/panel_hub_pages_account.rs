@@ -10,7 +10,7 @@ use crate::panel_password_gen::{
     generated_password_notice_html, password_field_and_gen_html, password_gen_script,
     password_gen_styles,
 };
-use crate::site_acl::{list_grants, SiteAclGrant};
+use crate::site_acl::{SiteAclGrant, list_grants};
 
 pub use crate::panel_hub_pages_profile::{users_modify_page, users_profile_page};
 
@@ -108,7 +108,8 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
       {pw_styles}
       {pw_script}"#,
         hint = hint,
-        pw_gen = password_field_and_gen_html("Password (leave blank to generate)", policy.min_length),
+        pw_gen =
+            password_field_and_gen_html("Password (leave blank to generate)", policy.min_length),
         pw_styles = password_gen_styles(),
         pw_script = password_gen_script(),
     );

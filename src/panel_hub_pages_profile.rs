@@ -146,10 +146,7 @@ fn security_tab_html(
         <p class="muted" style="margin:0;">Status: <strong>{totp_status}</strong>. Secrets are stored encrypted under the CPN data directory.</p>"#,
         totp_status = totp_status,
         policy_hint = policy_hint,
-        pw_gen = password_field_and_gen_html(
-            "New password (leave blank to generate)",
-            min_len,
-        ),
+        pw_gen = password_field_and_gen_html("New password (leave blank to generate)", min_len,),
     );
 
     if let Some(password) = generated_password {
