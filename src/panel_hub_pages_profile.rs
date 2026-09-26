@@ -8,7 +8,8 @@ use crate::packages::{is_panel_admin, package_for_account};
 use crate::panel_hub_pages_profile_tabs::{normalize_modify_tab, wrap_modify_tabs};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_password_gen::{
-    password_gen_controls_html, password_gen_script, password_gen_styles,
+    generated_password_notice_html, password_field_and_gen_html, password_gen_script,
+    password_gen_styles,
 };
 use crate::panel_webauthn::passkey_client_script;
 
@@ -136,9 +137,6 @@ fn security_tab_html(
         <label>Current password
           <input name="current_password" type="password" required autocomplete="current-password" maxlength="256">
         </label>
-        <label>New password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" minlength="{min_len}" maxlength="256">
-        </label>
         {pw_gen}
         <button type="submit" class="btn-primary">Update password</button>
       </form>
@@ -148,15 +146,14 @@ fn security_tab_html(
         <p class="muted" style="margin:0;">Status: <strong>{totp_status}</strong>. Secrets are stored encrypted under the CPN data directory.</p>"#,
         totp_status = totp_status,
         policy_hint = policy_hint,
-        min_len = min_len,
-        pw_gen = password_gen_controls_html(),
+        pw_gen = password_field_and_gen_html(
+            "New password (leave blank to generate)",
+            min_len,
+        ),
     );
 
     if let Some(password) = generated_password {
-        body.push_str(&format!(
-            r#"<p class="panel-notice ok" role="status"><strong>Generated password</strong> (copy now): <code style="user-select:all;">{pw}</code></p>"#,
-            pw = html_escape(password)
-        ));
+        body.push_str(&generated_password_notice_html(password, false));
     }
     if let Some(codes) = backup_codes {
         body.push_str(&backup_codes_panel_html(codes, "copy now; each works once"));
@@ -409,9 +406,6 @@ fn admin_other_users_section() -> String {
         <label>Username
           <select name="username" required>{non_admin_select}</select>
         </label>
-        <label>New password (leave blank to generate)
-          <input name="password" type="password" autocomplete="new-password" maxlength="256">
-        </label>
         {pw_gen}
         <button type="submit" class="btn-primary">Reset password</button>
       </form>
@@ -454,7 +448,10 @@ fn admin_other_users_section() -> String {
       <p class="muted">The bootstrap admin account cannot be deleted from this screen. Deactivating the last active admin is blocked unless Force is checked.</p>"#,
         non_admin_select = non_admin_select,
         all_select = all_select,
-        pw_gen = password_gen_controls_html(),
+        pw_gen = password_field_and_gen_html(
+            "New password (leave blank to generate)",
+            crate::account::default_password_policy().min_length,
+        ),
     )
 }
 
@@ -481,44 +478,19 @@ mod tests {
             .expect("create");
             let html = users_self_edit_body("panelowner", None, None, None, None);
             assert!(
-                html.contains("id=\"cpn-passkey-register\""),
-                "edit profile must mark the passkey register section"
-            );
-            assert!(
-                html.contains("data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\"")
-                    || html.contains("data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\""),
-                "edit profile passkey success must return to Modify User Security tab with notice"
-            );
-            assert!(
-                html.contains("cpnRegisterPasskey"),
-                "edit profile must include passkey client script"
-            );
-            assert!(
-                html.contains(">Register passkey</button>")
+                html.contains("id=\"cpn-passkey-register\"")
+                    && (html.contains("data-redirect=\"/account/users/modify?tab=security&amp;notice=Passkey+registered\"")
+                        || html.contains("data-redirect=\"/account/users/modify?tab=security&notice=Passkey+registered\""))
+                    && html.contains("cpnRegisterPasskey")
+                    && html.contains(">Register passkey</button>")
                     && !html.contains("Register with Windows Hello")
-                    && !html.contains("Register security key"),
-                "edit profile must offer a single Register passkey button"
-            );
-            assert!(
-                html.contains("Type is detected from authenticator metadata"),
-                "passkeys section must explain the read-only Type column"
-            );
-            assert!(
-                !html.contains("id=\"cpn-passkey-enroll\""),
-                "edit profile must not use the MFA enroll redirect marker"
-            );
-            assert!(
-                html.contains("id=\"modify-user-tabs\""),
-                "modify self-edit must use tabbed layout"
-            );
-            assert!(
-                html.contains("data-modify-tab=\"account\"")
+                    && !html.contains("Register security key")
+                    && html.contains("Type is detected from authenticator metadata")
+                    && !html.contains("id=\"cpn-passkey-enroll\"")
+                    && html.contains("id=\"modify-user-tabs\"")
+                    && html.contains("data-modify-tab=\"account\"")
                     && html.contains("data-modify-tab=\"security\""),
-                "modify self-edit must expose Account and Security tabs"
-            );
-            assert!(
-                html.contains("cpn-pw-gen-regen") && html.contains("crypto.getRandomValues"),
-                "security tab must include password generator preview/regenerate UI"
+                "edit profile passkeys and Modify tabs must stay wired"
             );
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");

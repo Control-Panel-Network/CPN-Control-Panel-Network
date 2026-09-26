@@ -1,21 +1,31 @@
 //! Client-side strong-password generator UI for Modify User / Create User forms.
 //!
-//! Preview fills the form password field so operators can copy and re-roll before submit.
-//! Server policy and the blocked-password list still validate on submit.
+//! Generate fills and reveals the password field without submitting. Copy sits beside
+//! the field. Server policy and the blocked-password list still validate on submit.
 
 use crate::account::{MAX_PASSWORD_CHARS, default_password_policy};
 
 /// True when the password field is empty: server should generate (leave-blank UX).
 /// When the field is filled (client preview), prefer that value even if Generate is checked.
-/// `generate_flag` keeps the form checkbox wired; it does not override a filled password.
+/// `generate_flag` keeps the form field wired; it does not override a filled password.
 pub fn wants_server_generated_password(password: &str, _generate_flag: bool) -> bool {
     password.trim().is_empty()
 }
 
-/// Checkbox, options panel, and regenerate controls for one password form.
-pub fn password_gen_controls_html() -> String {
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// New-password field with Copy on the right, Generate button, options, and Regenerate.
+///
+/// `label` is the field caption (e.g. "New password (leave blank to generate)").
+pub fn password_field_and_gen_html(label: &str, min_length: u8) -> String {
     let policy = default_password_policy();
-    let min_len = u32::from(policy.min_length.max(8));
+    let min_len = u32::from(min_length.max(policy.min_length).max(8));
     let max_len = MAX_PASSWORD_CHARS as u32;
     let default_len = min_len.max(20).min(max_len);
     let req_upper = if policy.require_uppercase { "1" } else { "0" };
@@ -25,10 +35,19 @@ pub fn password_gen_controls_html() -> String {
         r#"
         <div class="cpn-pw-gen" data-min="{min_len}" data-max="{max_len}" data-default-len="{default_len}"
              data-require-upper="{req_upper}" data-require-number="{req_number}" data-require-special="{req_special}">
-          <label class="cpn-pw-gen-enable-label" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <input name="generate" type="checkbox" value="1" class="cpn-pw-gen-enable">
-            Generate a strong password
+          <label class="cpn-pw-gen-field-label">{label}
+            <div class="cpn-pw-field-row">
+              <input name="password" type="password" class="cpn-pw-gen-input" autocomplete="new-password"
+                     minlength="{min_len}" maxlength="{max_len}">
+              <button type="button" class="btn-secondary cpn-pw-gen-copy">Copy</button>
+            </div>
           </label>
+          <input type="hidden" name="generate" value="0" class="cpn-pw-gen-flag">
+          <div class="cpn-pw-gen-actions">
+            <button type="button" class="btn-secondary cpn-pw-gen-generate">Generate</button>
+            <button type="button" class="btn-secondary cpn-pw-gen-regen" hidden>Regenerate</button>
+            <button type="button" class="btn-secondary cpn-pw-gen-stronger">Stronger</button>
+          </div>
           <div class="cpn-pw-gen-panel" hidden>
             <div class="cpn-pw-gen-row">
               <label class="cpn-pw-gen-length-label">Length
@@ -45,15 +64,11 @@ pub fn password_gen_controls_html() -> String {
               <label class="cpn-pw-gen-class"><input type="checkbox" class="cpn-pw-gen-digit" checked> Numbers</label>
               <label class="cpn-pw-gen-class"><input type="checkbox" class="cpn-pw-gen-special"> Special</label>
             </div>
-            <div class="cpn-pw-gen-actions">
-              <button type="button" class="btn-secondary cpn-pw-gen-stronger">Stronger</button>
-              <button type="button" class="btn-secondary cpn-pw-gen-regen">Regenerate</button>
-              <button type="button" class="btn-secondary cpn-pw-gen-copy">Copy</button>
-            </div>
-            <p class="muted cpn-pw-gen-hint" style="margin:0;">Preview fills the password field above. Re-roll until you like it, then update. Server policy still applies on save.</p>
-            <p class="muted cpn-pw-gen-status" role="status" style="margin:0;"></p>
+            <p class="muted cpn-pw-gen-hint" style="margin:0;">Generate fills the field above without saving. Re-roll until you like it, then update. Server policy still applies on save.</p>
           </div>
+          <p class="muted cpn-pw-gen-status" role="status" style="margin:0;"></p>
         </div>"#,
+        label = html_escape(label),
         min_len = min_len,
         max_len = max_len,
         default_len = default_len,
@@ -63,7 +78,26 @@ pub fn password_gen_controls_html() -> String {
     )
 }
 
-/// Inline script (include once per page that renders [`password_gen_controls_html`]).
+/// Post-submit / success notice with a one-click Copy button beside the value.
+pub fn generated_password_notice_html(password: &str, once_note: bool) -> String {
+    let note = if once_note {
+        "copy now; it will not be shown again"
+    } else {
+        "copy now"
+    };
+    format!(
+        r#"<div class="panel-notice ok cpn-pw-notice" role="status">
+  <strong>Generated password</strong> ({note}):
+  <code class="cpn-pw-notice-value" style="user-select:all;">{pw}</code>
+  <button type="button" class="btn-secondary cpn-pw-notice-copy">Copy</button>
+  <span class="muted cpn-pw-notice-status" role="status"></span>
+</div>"#,
+        note = note,
+        pw = html_escape(password),
+    )
+}
+
+/// Inline script (include once per page that renders the generator or notice).
 pub fn password_gen_script() -> String {
     r#"
 <script>
@@ -109,14 +143,51 @@ pub fn password_gen_script() -> String {
   }
 
   function findPasswordInput(root) {
-    var form = root.closest("form");
-    if (!form) return null;
-    return form.querySelector('input[name="password"]');
+    return root.querySelector('input[name="password"], input.cpn-pw-gen-input');
   }
 
   function setStatus(root, msg) {
     var el = root.querySelector(".cpn-pw-gen-status");
     if (el) el.textContent = msg || "";
+  }
+
+  function flashCopied(btn, statusEl) {
+    var prev = btn ? btn.textContent : "";
+    if (btn) btn.textContent = "Copied";
+    if (statusEl) statusEl.textContent = "Copied";
+    setTimeout(function () {
+      if (btn) btn.textContent = prev || "Copy";
+      if (statusEl && statusEl.textContent === "Copied") statusEl.textContent = "";
+    }, 1600);
+  }
+
+  function copyText(text, btn, statusEl, onFail) {
+    if (!text) {
+      if (onFail) onFail("Nothing to copy yet. Click Generate first.");
+      return;
+    }
+    function ok() { flashCopied(btn, statusEl); }
+    function fail() {
+      if (onFail) onFail("Could not copy. Select the password and copy manually.");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(fail);
+      return;
+    }
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      ok();
+    } catch (e) {
+      fail();
+    }
   }
 
   function syncLengthUi(root, len) {
@@ -182,7 +253,18 @@ pub fn password_gen_script() -> String {
     input.type = "text";
     input.value = password;
     input.setAttribute("autocomplete", "new-password");
-    setStatus(root, "Generated. Copy or regenerate before saving.");
+    var panel = root.querySelector(".cpn-pw-gen-panel");
+    var regen = root.querySelector(".cpn-pw-gen-regen");
+    var flag = root.querySelector(".cpn-pw-gen-flag");
+    if (panel) panel.hidden = false;
+    if (regen) regen.hidden = false;
+    if (flag) flag.value = "0";
+    setStatus(root, "Generated in this tab. Copy or regenerate, then save.");
+  }
+
+  function runGenerate(root) {
+    applyPolicyLocks(root);
+    fill(root, generate(root));
   }
 
   function stronger(root) {
@@ -198,73 +280,53 @@ pub fn password_gen_script() -> String {
     if (lower) lower.checked = true;
     if (digit && !digit.disabled) digit.checked = true;
     if (special && !special.disabled) special.checked = true;
-    fill(root, generate(root));
-  }
-
-  function setEnabled(root, on) {
-    var panel = root.querySelector(".cpn-pw-gen-panel");
-    var input = findPasswordInput(root);
-    if (panel) panel.hidden = !on;
-    if (!on) {
-      if (input) {
-        input.type = "password";
-      }
-      setStatus(root, "");
-      return;
-    }
-    applyPolicyLocks(root);
-    fill(root, generate(root));
+    runGenerate(root);
   }
 
   function bind(root) {
     if (root.getAttribute("data-bound") === "1") return;
     root.setAttribute("data-bound", "1");
     applyPolicyLocks(root);
-    var enable = root.querySelector(".cpn-pw-gen-enable");
     var range = root.querySelector(".cpn-pw-gen-length-range");
     var num = root.querySelector(".cpn-pw-gen-length-num");
+    var genBtn = root.querySelector(".cpn-pw-gen-generate");
     var regen = root.querySelector(".cpn-pw-gen-regen");
     var copyBtn = root.querySelector(".cpn-pw-gen-copy");
     var strongerBtn = root.querySelector(".cpn-pw-gen-stronger");
     var min = parseInt(root.getAttribute("data-min") || "8", 10);
     var max = parseInt(root.getAttribute("data-max") || "256", 10);
+    var panelOpen = false;
 
-    if (enable) {
-      enable.addEventListener("change", function () {
-        setEnabled(root, enable.checked);
-      });
-      if (enable.checked) setEnabled(root, true);
-    }
     function onLenChange(val) {
       var len = clampLen(val, min, max);
       syncLengthUi(root, len);
-      if (enable && enable.checked) fill(root, generate(root));
+      if (panelOpen) fill(root, generate(root));
     }
     if (range) range.addEventListener("input", function () { onLenChange(range.value); });
     if (num) num.addEventListener("change", function () { onLenChange(num.value); });
     root.querySelectorAll(".cpn-pw-gen-classes input[type=checkbox]").forEach(function (cb) {
       cb.addEventListener("change", function () {
-        if (enable && enable.checked) fill(root, generate(root));
+        if (panelOpen) fill(root, generate(root));
       });
     });
+    if (genBtn) {
+      genBtn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        panelOpen = true;
+        runGenerate(root);
+      });
+    }
     if (regen) {
       regen.addEventListener("click", function (ev) {
         ev.preventDefault();
-        if (enable && !enable.checked) {
-          enable.checked = true;
-          setEnabled(root, true);
-          return;
-        }
-        fill(root, generate(root));
+        panelOpen = true;
+        runGenerate(root);
       });
     }
     if (strongerBtn) {
       strongerBtn.addEventListener("click", function (ev) {
         ev.preventDefault();
-        if (enable && !enable.checked) {
-          enable.checked = true;
-          setEnabled(root, true);
-        }
+        panelOpen = true;
         stronger(root);
       });
     }
@@ -273,42 +335,32 @@ pub fn password_gen_script() -> String {
         ev.preventDefault();
         var input = findPasswordInput(root);
         var val = input ? input.value : "";
-        if (!val) {
-          setStatus(root, "Nothing to copy yet. Enable generate or regenerate first.");
-          return;
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(val).then(function () {
-            setStatus(root, "Copied to clipboard.");
-          }).catch(function () {
-            setStatus(root, "Could not copy. Select the password field and copy manually.");
-          });
-        } else {
-          input.type = "text";
-          input.select();
-          try {
-            document.execCommand("copy");
-            setStatus(root, "Copied to clipboard.");
-          } catch (e) {
-            setStatus(root, "Could not copy. Select the password field and copy manually.");
-          }
-        }
-      });
-    }
-
-    var form = root.closest("form");
-    if (form) {
-      form.addEventListener("submit", function () {
-        var input = findPasswordInput(root);
-        if (input && input.value.trim() && enable) {
-          enable.checked = false;
-        }
+        var status = root.querySelector(".cpn-pw-gen-status");
+        copyText(val, copyBtn, status, function (msg) { setStatus(root, msg); });
       });
     }
   }
 
+  function bindNotices() {
+    document.querySelectorAll(".cpn-pw-notice").forEach(function (box) {
+      if (box.getAttribute("data-bound") === "1") return;
+      box.setAttribute("data-bound", "1");
+      var btn = box.querySelector(".cpn-pw-notice-copy");
+      var code = box.querySelector(".cpn-pw-notice-value");
+      var status = box.querySelector(".cpn-pw-notice-status");
+      if (!btn || !code) return;
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        copyText(code.textContent || "", btn, status, function (msg) {
+          if (status) status.textContent = msg;
+        });
+      });
+    });
+  }
+
   function initAll() {
     document.querySelectorAll(".cpn-pw-gen").forEach(bind);
+    bindNotices();
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initAll);
@@ -325,6 +377,16 @@ pub fn password_gen_styles() -> String {
     r#"
 <style>
 .cpn-pw-gen { display:grid; gap:10px; }
+.cpn-pw-gen-field-label { display:grid; gap:6px; margin:0; }
+.cpn-pw-field-row {
+  display:flex; flex-wrap:wrap; gap:8px; align-items:stretch;
+}
+.cpn-pw-field-row .cpn-pw-gen-input {
+  flex:1 1 12rem; min-width:0; width:auto;
+}
+.cpn-pw-field-row .cpn-pw-gen-copy {
+  width:auto; flex:0 0 auto; white-space:nowrap;
+}
 .cpn-pw-gen-panel {
   display:grid; gap:10px; padding:12px;
   border:1px solid var(--hairline,#e5e5ea);
@@ -348,6 +410,11 @@ pub fn password_gen_styles() -> String {
   display:flex; flex-wrap:wrap; gap:8px;
 }
 .cpn-pw-gen-actions .btn-secondary { width:auto; }
+.cpn-pw-notice {
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.cpn-pw-notice .cpn-pw-notice-copy { width:auto; flex:0 0 auto; }
+.cpn-pw-notice code { word-break:break-all; }
 [data-color-mode="dark"] .cpn-pw-gen-panel,
 html[data-color-mode="dark"] .cpn-pw-gen-panel {
   background:var(--surface-soft,#161922);
@@ -371,17 +438,58 @@ mod tests {
     }
 
     #[test]
-    fn controls_include_regenerate_and_options() {
-        let html = password_gen_controls_html();
+    fn controls_include_generate_copy_and_options() {
+        let html = password_field_and_gen_html("New password (leave blank to generate)", 8);
+        assert!(html.contains("cpn-pw-gen-generate"));
+        assert!(html.contains("cpn-pw-gen-copy"));
         assert!(html.contains("cpn-pw-gen-regen"));
         assert!(html.contains("cpn-pw-gen-stronger"));
         assert!(html.contains("cpn-pw-gen-length-range"));
+        assert!(html.contains("cpn-pw-field-row"));
         assert!(html.contains("cpn-pw-gen-upper"));
-        assert!(html.contains("cpn-pw-gen-special"));
-        assert!(html.contains("Generate a strong password"));
         let script = password_gen_script();
         assert!(script.contains("crypto.getRandomValues"));
-        assert!(script.contains("cpn-pw-gen-regen"));
+        assert!(script.contains("cpn-pw-gen-generate"));
+        let notice = generated_password_notice_html("Abcd1234!", false);
+        assert!(notice.contains("cpn-pw-notice-copy"));
+        assert!(notice.contains("Abcd1234!"));
+    }
+
+    #[test]
+    fn security_tab_embeds_generate_and_copy() {
+        use crate::account::{default_password_policy, with_test_data_dir};
+        use crate::account_mgmt::create_account;
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "panelowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            let html = crate::panel_hub_pages_profile::users_self_edit_body(
+                "panelowner",
+                None,
+                None,
+                None,
+                None,
+            );
+            assert!(
+                html.contains("cpn-pw-gen-generate")
+                    && html.contains("cpn-pw-gen-copy")
+                    && html.contains("cpn-pw-field-row")
+                    && html.contains("crypto.getRandomValues"),
+                "security change-password must expose Generate, Copy beside field, and RNG script"
+            );
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
     }
 
     #[test]
@@ -411,7 +519,10 @@ mod tests {
                 true,
             );
             assert!(html.contains("action=\"/account/users/password\""));
-            assert!(html.contains("cpn-pw-gen-regen") && html.contains("cpn-pw-gen-stronger"));
+            assert!(
+                html.contains("cpn-pw-gen-generate") && html.contains("cpn-pw-gen-copy"),
+                "other accounts reset must expose Generate and Copy"
+            );
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
             }
