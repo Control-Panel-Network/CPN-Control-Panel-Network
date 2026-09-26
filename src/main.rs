@@ -72,7 +72,8 @@ use cpn_installer::panel_hub_routes::{
     server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete, server_dns_zones,
     server_dns_zones_create_get, server_dns_zones_create_post, server_dns_zones_delete,
     server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
-    server_docker_images, server_filemanager_alias, server_files_op, server_files_page,
+    server_docker_images, docker_container_action, docker_home, docker_images_route, docker_logs_route,
+    server_filemanager_alias, server_files_op, server_files_page,
     server_files_upload, server_litespeed_downgrade, server_litespeed_enterprise_page,
     server_litespeed_page, server_litespeed_serial, server_litespeed_tier,
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
@@ -1237,6 +1238,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_apps)
             .service(server_docker_containers)
             .service(server_docker_images)
+            .service(docker_home)
+            .service(docker_images_route)
+            .service(docker_logs_route)
+            .service(docker_container_action)
             .service(server_files_page)
             .service(filemanager_alias)
             .service(server_filemanager_alias)

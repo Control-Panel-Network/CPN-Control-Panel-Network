@@ -329,7 +329,7 @@ fn run() -> Result<(), String> {
             println!("network  Manage listen port, hostname, public URL, and port migration");
             println!("plugin   Manage host-scoped and per-site plugins (/home/<domain>/plugins)");
             println!(
-                "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, ...)"
+                "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, ...)"
             );
             println!("package  Manage hosting packages and account assignments");
             println!("doctor   Health checks (CLI paths, panel unit, /login, core files)");

@@ -240,6 +240,10 @@ const SERVER_CHILDREN: &[NavChild] = &[
         label: "Cloudflare DNS",
         href: "/dns/cloudflare",
     },
+    NavChild {
+        label: "Docker",
+        href: "/docker",
+    },
 ];
 
 const SECURITY_CHILDREN: &[NavChild] = &[

@@ -132,6 +132,7 @@ pub mod panel_hub_pages_profile;
 pub mod panel_hub_pages_profile_tabs;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
+pub mod panel_hub_pages_docker;
 pub mod panel_hub_pages_server_net;
 pub mod panel_hub_pages_settings;
 pub mod panel_hub_pages_sidebar_acl;

@@ -5,7 +5,6 @@ use crate::panel_hub_defs::server_hub_sections;
 use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
-use crate::panel_ops_docker::docker_status;
 use crate::panel_ops_php::detect_php;
 // PHP Extensions / Configurations live in panel_hub_pages_php_*.
 use crate::panel_ops_pkgmgr::package_manager_status;
@@ -305,49 +304,5 @@ pub fn package_manager_page(query: &str) -> String {
 }
 
 pub fn docker_page(kind: &str) -> String {
-    let status = docker_status();
-    if !status.installed {
-        return feature_shell(
-            &[
-                ("Dashboard", Some("/dashboard")),
-                ("Server", Some("/server")),
-                (kind, None),
-            ],
-            kind,
-            "Container tooling on this host.",
-            &not_configured_body(
-                &status.detail,
-                "Install Docker or Podman to enable this tile.",
-            ),
-            None,
-            None,
-        );
-    }
-    let lines = match kind {
-        "Docker Images" => &status.images,
-        "Containers" => &status.containers,
-        _ => &status.containers,
-    };
-    let list = if lines.is_empty() {
-        "<p class=\"empty-state\">No entries.</p>".into()
-    } else {
-        let mut ul = String::from("<ul>");
-        for line in lines {
-            ul.push_str(&format!("<li><code>{}</code></li>", html_escape(line)));
-        }
-        ul.push_str("</ul>");
-        ul
-    };
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Server", Some("/server")),
-            (kind, None),
-        ],
-        kind,
-        &status.detail,
-        &list,
-        None,
-        None,
-    )
+    crate::panel_hub_pages_docker::docker_page(kind)
 }

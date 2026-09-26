@@ -110,6 +110,9 @@ pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
             r#"<a class="btn-secondary" href="/databases">Manage</a>"#.into()
         }
         crate::apps::AppId::Rabbitmq => String::new(),
+        crate::apps::AppId::Docker => {
+            r#"<a class="btn-primary" href="/docker">Manage</a>"#.into()
+        }
         crate::apps::AppId::Nextcloud => String::new(),
         crate::apps::AppId::Sogo => {
             r#"<a class="btn-secondary" href="/email">Manage</a>"#.into()
@@ -202,12 +205,18 @@ pub(crate) fn host_action_buttons(
                     .into();
             }
             format!(
-                r#"<form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('Install {label} on this host?');">
+                r#"<form method="post" action="/apps/install" class="inline-form" onsubmit="return confirm('{confirm}');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
               <button type="submit" class="btn-primary">Install on Host</button>
             </form>"#,
-                label = html_escape(label),
+                confirm = if status.id == crate::apps::AppId::Docker {
+                    html_escape(
+                        "Install Docker Engine (or Podman) on this host? Existing CPN-managed compose stacks stay untouched.",
+                    )
+                } else {
+                    format!("Install {} on this host?", html_escape(label))
+                },
                 name = html_escape(name),
                 hidden = hidden,
             )
@@ -653,6 +662,8 @@ mod tests {
         assert_eq!(AppId::parse("roundcube").unwrap(), AppId::Roundcube);
         assert_eq!(AppId::parse("nextsnapmail").unwrap(), AppId::Nextsnapmail);
         assert_eq!(AppId::parse("sogo").unwrap(), AppId::Sogo);
+        assert_eq!(AppId::parse("docker").unwrap(), AppId::Docker);
+        assert_eq!(AppId::parse("podman").unwrap(), AppId::Docker);
     }
 
     #[test]
