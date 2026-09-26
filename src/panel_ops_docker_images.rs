@@ -109,15 +109,11 @@ fn parse_env_vars(raw: &str) -> Result<Vec<(String, String)>, String> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let (k, v) = line.split_once('=').ok_or_else(|| {
-            format!("Invalid env line `{line}`. Use KEY=value (one per line).")
-        })?;
+        let (k, v) = line
+            .split_once('=')
+            .ok_or_else(|| format!("Invalid env line `{line}`. Use KEY=value (one per line)."))?;
         let key = k.trim();
-        if key.is_empty()
-            || !key
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Err(format!("Invalid env key `{key}`."));
         }
         if v.contains('\0') || key.contains('\0') {
@@ -190,9 +186,8 @@ pub fn search_docker_hub(query: &str) -> Result<Vec<DockerHubSearchHit>, String>
             _ => format!("%{b:02X}"),
         })
         .collect();
-    let url = format!(
-        "https://hub.docker.com/v2/search/repositories/?query={encoded}&page_size=12"
-    );
+    let url =
+        format!("https://hub.docker.com/v2/search/repositories/?query={encoded}&page_size=12");
     let output = Command::new("curl")
         .args([
             "--fail-with-body",

@@ -586,11 +586,10 @@ pub async fn docker_image_delete(
     let repository = form.repository.clone();
     let tag = form.tag.clone();
     let id = form.id.clone();
-    let result = web::block(move || {
-        crate::panel_ops_docker_images::delete_image(&repository, &tag, &id)
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("Delete task failed: {e}")));
+    let result =
+        web::block(move || crate::panel_ops_docker_images::delete_image(&repository, &tag, &id))
+            .await
+            .unwrap_or_else(|e| Err(format!("Delete task failed: {e}")));
     match result {
         Ok(msg) => redirect_notice("/docker/images", Some(&msg), None),
         Err(err) => redirect_notice("/docker/images", None, Some(&err)),
