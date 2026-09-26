@@ -13,6 +13,9 @@ use crate::panel_plugin_settings::{
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{run_mariadb_install, set_websites_docroot_pref, websites_main};
 use crate::panel_website_manage::website_manage_main;
+use crate::panel_websites_create_ui::{
+    require_domain_in_cloudflare_zones, resolve_create_domain, websites_create_main,
+};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
     is_host_owned_install, is_host_scoped_plugin, uninstall_host_plugin,
@@ -58,6 +61,16 @@ pub async fn websites_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    // Deep-link alias: keep list URL clean; send create to its own path.
+    if query
+        .get("view")
+        .map(|v| v.trim().eq_ignore_ascii_case("create"))
+        .unwrap_or(false)
+    {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/websites/create"))
+            .finish();
+    }
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     html_ok(panel_shell(
@@ -68,14 +81,46 @@ pub async fn websites_page(
     ))
 }
 
+#[get("/websites/create")]
+pub async fn websites_create_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "websites",
+        "Create Website",
+        &websites_create_main(&user, notice, error),
+    ))
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct SiteCreateForm {
     #[serde(default)]
     domain: String,
     #[serde(default)]
+    cf_zone: String,
+    #[serde(default)]
+    cf_subdomain: String,
+    #[serde(default)]
     owner: String,
     #[serde(default)]
     docroot: String,
+}
+
+fn create_redirect(path: &str, key: &str, message: &str) -> HttpResponse {
+    HttpResponse::SeeOther()
+        .append_header((
+            "Location",
+            format!("{}?{}={}", path, key, urlencoding_simple(message)),
+        ))
+        .finish()
 }
 
 #[post("/websites/create")]
@@ -87,25 +132,36 @@ pub async fn websites_create(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let admin = crate::packages::is_panel_admin(&user);
     let owner = if form.owner.trim().is_empty() {
         user.clone()
-    } else if crate::packages::is_panel_admin(&user) {
+    } else if admin {
         form.owner.trim().to_string()
     } else {
         // Non-admins may only create sites for themselves.
         user.clone()
     };
-    let docroot = form.docroot.trim();
-    if let Err(error) = require_site_create_allowed(&owner, &form.domain) {
-        return HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
-            ))
-            .finish();
+    let cloudflare_mode =
+        crate::panel_ops_cloudflare::cloudflare_configured() && !form.cf_zone.trim().is_empty();
+    let domain = match resolve_create_domain(
+        &form.domain,
+        &form.cf_zone,
+        &form.cf_subdomain,
+        cloudflare_mode,
+    ) {
+        Ok(d) => d,
+        Err(error) => return create_redirect("/websites/create", "error", &error),
+    };
+    if let Err(error) = require_domain_in_cloudflare_zones(&domain) {
+        return create_redirect("/websites/create", "error", &error);
+    }
+    // Package users cannot override docroot (ACL / package path layout).
+    let docroot = if admin { form.docroot.trim() } else { "" };
+    if let Err(error) = require_site_create_allowed(&owner, &domain) {
+        return create_redirect("/websites/create", "error", &error);
     }
     let result = create_site(
-        &form.domain,
+        &domain,
         &owner,
         if docroot.is_empty() {
             None
@@ -116,24 +172,15 @@ pub async fn websites_create(
         None,
     );
     match result {
-        Ok(site) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!(
-                    "/websites?notice={}",
-                    urlencoding_simple(&format!(
-                        "Created {} at {}. Auto SSL and SPF/DKIM/DMARC were attempted.",
-                        site.domain, site.docroot
-                    ))
-                ),
-            ))
-            .finish(),
-        Err(error) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
-            ))
-            .finish(),
+        Ok(site) => create_redirect(
+            "/websites",
+            "notice",
+            &format!(
+                "Created {} at {}. Auto SSL and SPF/DKIM/DMARC were attempted.",
+                site.domain, site.docroot
+            ),
+        ),
+        Err(error) => create_redirect("/websites/create", "error", &error),
     }
 }
 

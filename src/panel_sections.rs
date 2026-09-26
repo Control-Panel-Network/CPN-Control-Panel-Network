@@ -45,6 +45,7 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
+/// List Websites page body (sites table only; create lives at `/websites/create`).
 pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let sites = list_sites().unwrap_or_default();
     let prefs = load_panel_ui_prefs();
@@ -63,24 +64,12 @@ pub fn websites_main(username: &str, notice: Option<&str>, error: Option<&str>) 
       <article class="section-card">
         <h2>Sites ({count})</h2>
         <p class="muted">Each site shows a Site preview thumbnail (cached homepage shot), Manage, Visit, SSL status, and File manager. Document roots live under the domain home. Vhost wiring is applied later by panel recipes.</p>
+        <p style="margin:12px 0;"><a class="btn-primary" href="/websites/create">Create Website</a></p>
         <form method="post" action="/websites/prefs" class="inline-form" style="margin:12px 0;">
           <input type="hidden" name="show_document_roots" value="{toggle_value}">
           <button type="submit" class="btn-secondary" style="min-height:40px;padding:0 14px;border:0;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;cursor:pointer;">{toggle_label}</button>
         </form>
         {rows}
-      </article>
-      <article class="section-card" style="margin-top:22px;">
-        <h2>Add site</h2>
-        <p>Creates the site home and document root. Subdomains require the parent domain first. Optional custom docroot must be an absolute path.</p>
-        <form method="post" action="/websites/create" class="stack-form">
-          <label for="domain">Domain</label>
-          <input id="domain" name="domain" type="text" required placeholder="example.com" autocomplete="off">
-          <label for="owner">Owner</label>
-          <input id="owner" name="owner" type="text" required placeholder="admin" autocomplete="username">
-          <label for="docroot">Docroot (optional)</label>
-          <input id="docroot" name="docroot" type="text" placeholder="/home/example.com/public_html">
-          <button type="submit" class="btn-primary">Create site</button>
-        </form>
       </article>"#,
         preview_css = site_preview_list_styles(),
         heading = section_heading(

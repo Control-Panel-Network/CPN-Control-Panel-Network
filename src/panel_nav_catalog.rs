@@ -28,7 +28,7 @@ const WEBSITES_CHILDREN: &[NavChild] = &[
     },
     NavChild {
         label: "Create Website",
-        href: "/websites",
+        href: "/websites/create",
     },
 ];
 
