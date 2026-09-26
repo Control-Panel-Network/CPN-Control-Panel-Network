@@ -432,7 +432,9 @@ mod tests {
     /// Build sample input from chars so CodeQL does not treat a literal as a
     /// hard-coded password (rust/hard-coded-cryptographic-value).
     fn sample_non_empty_input() -> String {
-        ['A', 'b', 'c', 'd', 'e', 'f', 'g', '1'].into_iter().collect()
+        ['A', 'b', 'c', 'd', 'e', 'f', 'g', '1']
+            .into_iter()
+            .collect()
     }
 
     fn sample_notice_secret() -> String {
