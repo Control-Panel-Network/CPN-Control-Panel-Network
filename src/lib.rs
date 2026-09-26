@@ -114,6 +114,7 @@ pub mod panel_hub_pages_cloudflare_pager;
 pub mod panel_hub_pages_cloudflare_table;
 pub mod panel_hub_pages_dns;
 pub mod panel_hub_pages_dns_ns;
+pub mod panel_hub_pages_docker;
 pub mod panel_hub_pages_email_auth;
 pub mod panel_hub_pages_email_deliver;
 pub mod panel_hub_pages_email_tools;

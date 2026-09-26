@@ -1,6 +1,7 @@
 //! Host app lifecycle: detect, install, start, stop, reinstall, uninstall via dnf/apt.
 //!
-//! Supported apps: MariaDB, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ, webmail.
+//! Supported apps: MariaDB, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ,
+//! Docker (engine), webmail.
 //! CPN installs MariaDB only as the MySQL-compatible host database (not Oracle MySQL).
 //! PostgreSQL is opt-in and may coexist with MariaDB.
 
@@ -18,6 +19,7 @@ pub enum AppId {
     Phpmyadmin,
     Email,
     Rabbitmq,
+    Docker,
     Snappymail,
     Tachyon,
     Roundcube,
@@ -38,6 +40,7 @@ impl AppId {
             "phpmyadmin" | "php-myadmin" => Ok(Self::Phpmyadmin),
             "email" | "mail" => Ok(Self::Email),
             "rabbitmq" => Ok(Self::Rabbitmq),
+            "docker" | "podman" | "container" | "containers" => Ok(Self::Docker),
             "snappymail" | "snappy" => Ok(Self::Snappymail),
             "tachyon" => Ok(Self::Tachyon),
             "roundcube" | "roundcubewebmail" => Ok(Self::Roundcube),
@@ -45,7 +48,7 @@ impl AppId {
             "nextsnapmail" | "next-snapmail" | "nextcloud-snappymail" => Ok(Self::Nextsnapmail),
             "sogo" => Ok(Self::Sogo),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, snappymail, tachyon, roundcube, nextcloud, nextsnapmail, sogo"
+                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, tachyon, roundcube, nextcloud, nextsnapmail, sogo"
             )),
         }
     }
@@ -57,6 +60,7 @@ impl AppId {
             Self::Phpmyadmin => "phpmyadmin",
             Self::Email => "email",
             Self::Rabbitmq => "rabbitmq",
+            Self::Docker => "docker",
             Self::Snappymail => "snappymail",
             Self::Tachyon => "tachyon",
             Self::Roundcube => "roundcube",
@@ -73,6 +77,7 @@ impl AppId {
             Self::Phpmyadmin => "phpMyAdmin",
             Self::Email => "Email (Postfix + Dovecot)",
             Self::Rabbitmq => "RabbitMQ",
+            Self::Docker => "Docker",
             Self::Snappymail => "SnappyMail",
             Self::Tachyon => "Tachyon",
             Self::Roundcube => "Roundcube",
@@ -86,7 +91,7 @@ impl AppId {
     pub fn supports_service_control(self) -> bool {
         matches!(
             self,
-            Self::Mariadb | Self::Postgresql | Self::Email | Self::Rabbitmq
+            Self::Mariadb | Self::Postgresql | Self::Email | Self::Rabbitmq | Self::Docker
         )
     }
 
@@ -97,6 +102,7 @@ impl AppId {
             Self::Phpmyadmin,
             Self::Email,
             Self::Rabbitmq,
+            Self::Docker,
             Self::Snappymail,
             Self::Tachyon,
             Self::Roundcube,
@@ -296,6 +302,22 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 warning: None,
             }
         }
+        AppId::Docker => {
+            let st = crate::panel_ops_docker::docker_status();
+            let (state, detail) = if st.running {
+                (AppStateKind::Running, st.detail)
+            } else if st.installed {
+                (AppStateKind::Installed, st.detail)
+            } else {
+                (AppStateKind::NotInstalled, st.detail)
+            };
+            AppStatus {
+                id,
+                state,
+                detail,
+                warning: None,
+            }
+        }
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
@@ -350,6 +372,7 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
                 enable_now(&["rabbitmq-server"])?;
                 "Installed and started RabbitMQ.".to_string()
             }
+            AppId::Docker => crate::panel_ops_docker::install_docker_engine()?,
             AppId::Snappymail
             | AppId::Tachyon
             | AppId::Roundcube
@@ -422,6 +445,7 @@ pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, Strin
             remove_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
             "Uninstalled RabbitMQ.".to_string()
         }
+        AppId::Docker => crate::panel_ops_docker::uninstall_docker_engine()?,
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube

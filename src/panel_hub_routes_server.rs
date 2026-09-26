@@ -3,6 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_litespeed::{
     litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
     run_set_tier, run_set_webadmin_url, run_upgrade,
@@ -404,7 +405,7 @@ pub async fn server_docker_containers(
         &user,
         "server",
         "Containers",
-        &docker_page("Containers"),
+        &docker_manage_page(None, None),
     ))
 }
 
@@ -420,8 +421,95 @@ pub async fn server_docker_images(
         &user,
         "server",
         "Docker Images",
-        &docker_page("Docker Images"),
+        &docker_images_page(None, None),
     ))
+}
+
+#[get("/docker")]
+pub async fn docker_home(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Docker",
+        &docker_manage_page(notice, error),
+    ))
+}
+
+#[get("/docker/images")]
+pub async fn docker_images_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Docker Images",
+        &docker_images_page(notice, error),
+    ))
+}
+
+#[get("/docker/logs")]
+pub async fn docker_logs_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let name = query.get("name").map(String::as_str).unwrap_or("");
+    if name.is_empty() {
+        return redirect_notice("/docker", None, Some("Missing container name."));
+    }
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Container Logs",
+        &docker_logs_page(name, None, None),
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerContainerForm {
+    pub action: String,
+    pub name: String,
+}
+
+#[post("/docker/container")]
+pub async fn docker_container_action(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerContainerForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker",
+            None,
+            Some("Only panel admins can change containers."),
+        );
+    }
+    match crate::panel_ops_docker::container_action(&form.action, &form.name) {
+        Ok(msg) => redirect_notice("/docker", Some(&msg), None),
+        Err(err) => redirect_notice("/docker", None, Some(&err)),
+    }
 }
 
 #[get("/settings")]
