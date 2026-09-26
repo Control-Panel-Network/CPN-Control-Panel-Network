@@ -150,6 +150,7 @@ pub async fn cloudflare_sync_post(
     };
     let opts = opts_from_form(
         form.filter_type.as_deref(),
+        form.q.as_deref(),
         form.page.as_deref(),
         form.per_page.as_deref(),
         form.mode.as_deref(),
@@ -177,6 +178,7 @@ pub async fn cloudflare_add_post(
     };
     let opts = opts_from_form(
         form.filter_type.as_deref(),
+        form.q.as_deref(),
         form.page.as_deref(),
         form.per_page.as_deref(),
         form.mode.as_deref(),
@@ -217,6 +219,7 @@ pub async fn cloudflare_delete_post(
     };
     let opts = opts_from_form(
         form.filter_type.as_deref(),
+        form.q.as_deref(),
         form.page.as_deref(),
         form.per_page.as_deref(),
         form.mode.as_deref(),
@@ -244,6 +247,7 @@ pub async fn cloudflare_update_post(
     };
     let opts = opts_from_form(
         form.filter_type.as_deref(),
+        form.q.as_deref(),
         form.page.as_deref(),
         form.per_page.as_deref(),
         form.mode.as_deref(),
@@ -284,6 +288,7 @@ pub async fn cloudflare_proxy_post(
     };
     let opts = opts_from_form(
         form.filter_type.as_deref(),
+        form.q.as_deref(),
         form.page.as_deref(),
         form.per_page.as_deref(),
         form.mode.as_deref(),

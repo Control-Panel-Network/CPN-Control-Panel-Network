@@ -1,8 +1,10 @@
-//! Cloudflare Manage DNS records table (type chips + pagination + inline edit).
+//! Cloudflare Manage DNS records table (type chips + search + pagination + inline edit).
 
 use crate::panel_hub_pages_cloudflare_pager::{
-    CfTableOpts, dns_list_toolbar, dns_mode_from_query, dns_order_from_query, dns_sort_from_query,
-    list_state_hiddens, manage_list_url, manage_sort_url, sort_dns_records,
+    CfTableOpts, dns_list_toolbar, dns_mode_from_query, dns_order_from_query,
+    dns_search_from_query, dns_sort_from_query, list_state_hiddens, manage_list_url,
+    manage_sort_url, record_matches_search, sort_dns_records, sort_hidden_inputs,
+    type_hidden_input,
 };
 use crate::panel_ops_cloudflare::{RECORD_TYPES, record_type_uses_priority};
 use crate::panel_ops_cloudflare_api::CfDnsRecord;
@@ -13,6 +15,74 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+fn search_row(domain: &str, opts: &CfTableOpts) -> String {
+    let q = dns_search_from_query(&opts.q);
+    let mode = dns_mode_from_query(&opts.mode);
+    let mut clear_opts = opts.clone();
+    clear_opts.q = String::new();
+    clear_opts.page = 1;
+    let clear_href = manage_list_url(domain, &clear_opts);
+    let clear_btn = if q.is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#" <a class="btn-secondary" href="{href}" id="cf-search-clear">Clear</a>"#,
+            href = html_escape(&clear_href),
+        )
+    };
+    let mode_hidden = if mode == "scroll" {
+        r#"<input type="hidden" name="mode" value="scroll">"#.to_string()
+    } else {
+        format!(
+            r#"<input type="hidden" name="mode" value="page">
+<input type="hidden" name="per_page" value="{per}">
+<input type="hidden" name="page" value="1">"#,
+            per = opts.per_page,
+        )
+    };
+    format!(
+        r#"<form method="get" action="/dns/cloudflare" class="cf-search-row" id="cf-search-form" role="search">
+  <input type="hidden" name="tab" value="manage">
+  <input type="hidden" name="domain" value="{dom}">
+  {mode_hidden}
+  {type_hidden}
+  {sort_hiddens}
+  <label for="cf-q">Search</label>
+  <input type="search" id="cf-q" name="q" value="{q}" placeholder="Name or value (e.g. test2)" autocomplete="off" aria-label="Search DNS records by name or value">
+  <button type="submit" class="btn-primary">Search</button>{clear_btn}
+</form>
+<script>
+(function(){{
+  var form = document.getElementById('cf-search-form');
+  var input = document.getElementById('cf-q');
+  if (!form || !input) return;
+  var timer = null;
+  var lastSubmitted = input.value;
+  function submitSearch() {{
+    var next = (input.value || '').trim();
+    if (next === (lastSubmitted || '').trim()) return;
+    lastSubmitted = input.value;
+    form.submit();
+  }}
+  input.addEventListener('input', function() {{
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(submitSearch, 400);
+  }});
+  form.addEventListener('submit', function() {{
+    if (timer) clearTimeout(timer);
+    lastSubmitted = input.value;
+  }});
+}})();
+</script>"#,
+        dom = html_escape(domain),
+        mode_hidden = mode_hidden,
+        type_hidden = type_hidden_input(&opts.filter_type),
+        sort_hiddens = sort_hidden_inputs(opts),
+        q = html_escape(&q),
+        clear_btn = clear_btn,
+    )
 }
 
 fn type_filter_chips(domain: &str, opts: &CfTableOpts) -> String {
@@ -217,15 +287,16 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
     }
 
     let filter = opts.filter_type.trim();
-    let mut filtered: Vec<&CfDnsRecord> = if filter.is_empty() || filter.eq_ignore_ascii_case("all")
-    {
-        records.iter().collect()
-    } else {
-        records
-            .iter()
-            .filter(|r| r.record_type.eq_ignore_ascii_case(filter))
-            .collect()
-    };
+    let q = dns_search_from_query(&opts.q);
+    let mut filtered: Vec<&CfDnsRecord> = records
+        .iter()
+        .filter(|r| {
+            let type_ok = filter.is_empty()
+                || filter.eq_ignore_ascii_case("all")
+                || r.record_type.eq_ignore_ascii_case(filter);
+            type_ok && record_matches_search(r, &q)
+        })
+        .collect();
     sort_dns_records(&mut filtered, opts);
     let total_all = records.len();
     let filtered_count = filtered.len();
@@ -267,10 +338,23 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
     let add_type_js = serde_json::to_string(add_type).unwrap_or_else(|_| "\"A\"".into());
     let headers = sort_headers_row(domain, opts);
 
+    let empty_filter = if filtered_count == 0 && !q.is_empty() {
+        format!(
+            r#"<p class="muted" role="status">No records match search &quot;{}&quot;.</p>"#,
+            html_escape(&q)
+        )
+    } else if filtered_count == 0 {
+        r#"<p class="muted" role="status">No records match the current type filter.</p>"#.into()
+    } else {
+        String::new()
+    };
+
     format!(
         r#"<h3>DNS Records</h3>
+{search}
 {chips}
 {toolbar}
+{empty_filter}
 <div class="{scroll_cls}">
 <table class="cf-table" id="cf-records-table">
   <thead>{headers}</thead>
@@ -288,8 +372,8 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
     }});
     document.querySelectorAll('.cf-row-edit').forEach(function(tr) {{
       var open = tr.getAttribute('data-rid') === id;
-      tr.classList.toggle('is-open', open);
       tr.style.display = open ? 'table-row' : 'none';
+      tr.classList.toggle('is-open', open);
     }});
   }};
   window.cfCancelEdit = function(id) {{
@@ -314,8 +398,10 @@ pub(crate) fn records_table(domain: &str, records: &[CfDnsRecord], opts: &CfTabl
   }}
 }})();
 </script>"#,
+        search = search_row(domain, opts),
         chips = type_filter_chips(domain, opts),
         toolbar = toolbar,
+        empty_filter = empty_filter,
         scroll_cls = scroll_cls,
         headers = headers,
         rows = render_record_rows(domain, page_slice, opts),
