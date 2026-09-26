@@ -15,17 +15,17 @@ use cpn_installer::cli_common::{
     confirm_delete, print_generated, read_password_confirmed, require_root_for_mutation,
 };
 use cpn_installer::cli_doctor;
-use cpn_installer::cli_mfa::{run as run_mfa, MfaCommands};
-use cpn_installer::cli_network::{run_network, NetworkCommands};
+use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
+use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
-use cpn_installer::cli_panel::{run_panel, PanelCommands};
-use cpn_installer::cli_passkeys::{run as run_passkeys, PasskeyCommands};
+use cpn_installer::cli_panel::{PanelCommands, run_panel};
+use cpn_installer::cli_passkeys::{PasskeyCommands, run as run_passkeys};
 use cpn_installer::cli_plugins;
-use cpn_installer::cli_totp::{run as run_totp, TotpCommands};
+use cpn_installer::cli_totp::{TotpCommands, run as run_totp};
 use cpn_installer::packages::require_site_create_allowed;
 use cpn_installer::panel_ops_ssl_provider::SslProvider;
 use cpn_installer::paths;
-use cpn_installer::sites::{create_site_with_ssl, list_sites, modify_site, SiteModify};
+use cpn_installer::sites::{SiteModify, create_site_with_ssl, list_sites, modify_site};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

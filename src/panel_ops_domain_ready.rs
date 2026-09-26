@@ -4,11 +4,11 @@ use crate::panel_ops_certbot_install::ensure_certbot_on_path;
 use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_dkim_keys::ensure_dkim_for_domain;
 use crate::panel_ops_mail_dns::provision_mail_dns;
-use crate::panel_ops_mail_onboarding::{load_mail_onboarding, MailMode};
+use crate::panel_ops_mail_onboarding::{MailMode, load_mail_onboarding};
 use crate::panel_ops_site_dns::ensure_site_cloudflare_dns;
 use crate::panel_ops_ssl_issue::issue_or_renew;
 use crate::panel_ops_ssl_provider::{SslCoverageMode, SslProvider};
-use crate::sites::{load_site, modify_site, normalize_domain, SiteModify};
+use crate::sites::{SiteModify, load_site, modify_site, normalize_domain};
 
 #[derive(Debug, Clone, Default)]
 pub struct DomainReadyReport {
