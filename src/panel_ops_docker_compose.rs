@@ -129,7 +129,11 @@ fn read_compose_image_hint(path: &Path) -> Option<String> {
 }
 
 pub fn validate_stack_id(raw: &str) -> Result<String, String> {
-    let id = raw.trim().to_ascii_lowercase();
+    let trimmed = raw.trim();
+    if trimmed.chars().any(|c| c.is_ascii_uppercase()) {
+        return Err("Stack name must be lowercase.".into());
+    }
+    let id = trimmed.to_ascii_lowercase();
     if id.is_empty() {
         return Err("Stack name is required.".into());
     }
