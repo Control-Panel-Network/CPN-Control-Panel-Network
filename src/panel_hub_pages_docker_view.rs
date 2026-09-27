@@ -81,11 +81,13 @@ fn action_grid(detail: &DockerContainerDetail) -> String {
             &format!("Start container {name}?"),
         ));
     }
+    let hash = "#";
     buttons.push_str(&format!(
-        r#"<a class="btn-secondary" href="#container-settings">Settings</a>
+        r#"<a class="btn-secondary" href="{hash}container-settings">Settings</a>
       <a class="btn-secondary" href="/docker/export?name={enc}" title="Download filesystem export">Export</a>
-      <a class="btn-secondary" href="#container-processes">Processes</a>
-      <a class="btn-secondary" href="#container-exec">Run Command</a>"#,
+      <a class="btn-secondary" href="{hash}container-processes">Processes</a>
+      <a class="btn-secondary" href="{hash}container-exec">Run Command</a>"#,
+        hash = hash,
         enc = urlencoding_simple(name),
     ));
     if !detail.row.cpn_managed {
