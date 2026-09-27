@@ -1,7 +1,10 @@
 //! Email hub feature routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    flash_messages, html_ok, html_ok_pop_flash, login_redirect, redirect_flash, redirect_notice,
+    require_panel_user,
+};
 use crate::panel_hub_pages_email_auth::{
     email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
     save_bimi_form, save_mta_sts_form,
@@ -160,15 +163,20 @@ pub async fn email_dkim_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "DKIM Manager",
-        &email_dkim_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
+    let (notice, error) = flash_messages(
+        &http,
+        query.get("notice").map(String::as_str),
+        query.get("error").map(String::as_str),
+    );
+    html_ok_pop_flash(
+        &http,
+        panel_shell(
+            &user,
+            "email",
+            "DKIM Manager",
+            &email_dkim_page(notice.as_deref(), error.as_deref()),
         ),
-    ))
+    )
 }
 
 #[post("/email/dkim/ensure")]
@@ -177,8 +185,8 @@ pub async fn email_dkim_ensure(http: HttpRequest, state: web::Data<Arc<AppState>
         return login_redirect(&http);
     };
     match ensure_dkim() {
-        Ok(msg) => redirect_notice("/email/dkim", Some(&msg), None),
-        Err(err) => redirect_notice("/email/dkim", None, Some(&err)),
+        Ok(msg) => redirect_flash("/email/dkim", Some(&msg), None),
+        Err(err) => redirect_flash("/email/dkim", None, Some(&err)),
     }
 }
 
