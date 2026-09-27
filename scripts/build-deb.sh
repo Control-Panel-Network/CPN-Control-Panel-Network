@@ -27,8 +27,8 @@ if [[ "${ID:-}" != "ubuntu" && "${ID:-}" != "debian" ]]; then
   exit 1
 fi
 
-if [[ "${ID}" == "ubuntu" ]] && [[ "$major" != "22" && "$major" != "24" ]]; then
-  echo "Unsupported Ubuntu major ${major}. Maintainer .deb builds target Ubuntu 22.04/24.04." >&2
+if [[ "${ID}" == "ubuntu" ]] && [[ "$major" != "22" && "$major" != "24" && "$major" != "26" ]]; then
+  echo "Unsupported Ubuntu major ${major}. Maintainer .deb builds target Ubuntu 22.04, 24.04, and 26.04." >&2
   exit 1
 fi
 if [[ "${ID}" == "debian" ]] && [[ "$major" != "12" && "$major" != "13" ]]; then

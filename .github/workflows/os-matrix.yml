@@ -30,6 +30,7 @@ on:
       - "scripts/build-deb.sh"
       - "scripts/docker-build-rpm.sh"
       - "scripts/docker-build-deb.sh"
+      - "docker/**"
       - ".github/workflows/os-matrix.yml"
 
 permissions:
@@ -85,6 +86,7 @@ jobs:
         image:
           - ubuntu:22.04
           - ubuntu:24.04
+          - ubuntu:26.04
     steps:
       - uses: actions/checkout@v7
       - name: Build matching DEB
