@@ -27,10 +27,7 @@ pub fn start_app(id: AppId) -> Result<String, String> {
             Ok("Started MariaDB.".into())
         }
         AppId::Postgresql => start_postgresql(),
-        AppId::Email => {
-            enable_now(&["postfix", "dovecot"])?;
-            Ok("Started Email stack (Postfix + Dovecot).".into())
-        }
+        AppId::Email => crate::apps_email::start_email_stack(),
         AppId::Rabbitmq => {
             enable_now(&["rabbitmq-server"])?;
             Ok("Started RabbitMQ.".into())

@@ -1,6 +1,7 @@
 //! Shared dnf/apt and systemd helpers for host app recipes.
 
-use std::process::Command;
+use crate::service_detect::systemd_unit_file_exists;
+use std::process::{Command, Stdio};
 
 pub fn package_manager() -> Result<&'static str, String> {
     if Command::new("dnf").arg("--version").status().is_ok() {
@@ -56,14 +57,68 @@ pub fn run_pkg(args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
+fn sanitize_unit_log_snippet(raw: &str) -> String {
+    let mut out = String::new();
+    for line in raw.lines().take(8) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.contains("password") || lower.contains("passphrase") {
+            continue;
+        }
+        if out.len() + trimmed.len() > 480 {
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(trimmed);
+    }
+    out
+}
+
+fn unit_enable_failure_hint(unit: &str) -> String {
+    if !systemd_unit_file_exists(unit) {
+        return format!(
+            "Unit file {unit}.service is not installed. Install the Email host package first."
+        );
+    }
+    let journal = Command::new("timeout")
+        .args(["5", "journalctl", "-u", unit, "-n", "8", "--no-pager"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| sanitize_unit_log_snippet(&String::from_utf8_lossy(&o.stdout)))
+        .unwrap_or_default();
+    if journal.is_empty() {
+        format!("Check: systemctl status {unit} and journalctl -u {unit} -n 20")
+    } else {
+        format!("Recent log: {journal}")
+    }
+}
+
 pub fn enable_now(units: &[&str]) -> Result<(), String> {
     for unit in units {
+        if !systemd_unit_file_exists(unit) {
+            return Err(format!(
+                "systemctl enable --now {unit} failed. {}",
+                unit_enable_failure_hint(unit)
+            ));
+        }
         let status = Command::new("systemctl")
             .args(["enable", "--now", unit])
             .status()
             .map_err(|error| format!("Could not start systemctl for {unit}: {error}"))?;
         if !status.success() {
-            return Err(format!("systemctl enable --now {unit} failed"));
+            return Err(format!(
+                "systemctl enable --now {unit} failed. {}",
+                unit_enable_failure_hint(unit)
+            ));
         }
     }
     Ok(())
@@ -124,33 +179,36 @@ pub fn remove_packages_dnf_or_apt(dnf_pkgs: &[&str], apt_pkgs: &[&str]) -> Resul
     }
 }
 
-pub fn rpm_or_dpkg_installed(names: &[&str]) -> bool {
-    use std::process::Stdio;
-    for name in names {
-        let rpm = Command::new("rpm")
-            .args(["-q", name])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if rpm {
-            return true;
-        }
-        let dpkg = Command::new("dpkg-query")
-            .args(["-W", "-f=${Status}", name])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()
-            .ok()
-            .map(|out| {
-                let text = String::from_utf8_lossy(&out.stdout);
-                text.contains("install ok installed")
-            })
-            .unwrap_or(false);
-        if dpkg {
-            return true;
-        }
+pub fn package_installed(name: &str) -> bool {
+    let rpm = Command::new("rpm")
+        .args(["-q", name])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if rpm {
+        return true;
     }
-    false
+    Command::new("dpkg-query")
+        .args(["-W", "-f=${Status}", name])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .map(|out| {
+            let text = String::from_utf8_lossy(&out.stdout);
+            text.contains("install ok installed")
+        })
+        .unwrap_or(false)
+}
+
+/// True when at least one listed package is installed (legacy helper).
+pub fn rpm_or_dpkg_installed(names: &[&str]) -> bool {
+    names.iter().any(|name| package_installed(name))
+}
+
+/// True when every listed package is installed.
+pub fn rpm_or_dpkg_all_installed(names: &[&str]) -> bool {
+    !names.is_empty() && names.iter().all(|name| package_installed(name))
 }

@@ -196,6 +196,60 @@ pub fn selector() -> &'static str {
     SELECTOR
 }
 
+#[derive(Debug, Clone)]
+pub struct DkimDomainRow {
+    pub domain: String,
+    pub has_key: bool,
+    pub dns_name: String,
+    pub txt_preview: String,
+}
+
+fn truncate_txt(value: &str, max: usize) -> String {
+    if value.len() <= max {
+        value.to_string()
+    } else {
+        format!("{}...", &value[..max.saturating_sub(3)])
+    }
+}
+
+/// List domain folders under the DKIM store with key/DNS TXT preview.
+pub fn list_dkim_domain_rows() -> Vec<DkimDomainRow> {
+    let dir = dkim_root();
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut rows: Vec<DkimDomainRow> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| {
+            let domain = e.file_name().to_string_lossy().to_string();
+            if domain.is_empty() {
+                return None;
+            }
+            let has_key = private_key_path(&domain)
+                .map(|p| p.is_file())
+                .unwrap_or(false);
+            let dns_name = dkim_dns_name(&domain)
+                .unwrap_or_else(|_| format!("{SELECTOR}._domainkey.{domain}"));
+            let txt_preview = if has_key {
+                read_dkim_txt_value(&domain)
+                    .map(|v| truncate_txt(&v, 120))
+                    .unwrap_or_else(|_| "(TXT value not readable)".into())
+            } else {
+                "No private key in this folder yet.".into()
+            };
+            Some(DkimDomainRow {
+                domain,
+                has_key,
+                dns_name,
+                txt_preview,
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| a.domain.cmp(&b.domain));
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -80,18 +80,15 @@ pub fn email_accounts_page(
     )
 }
 
-pub fn email_create_redirect_hint() -> String {
-    feature_shell(
-        &[
+pub fn email_create_page(notice: Option<&str>, error: Option<&str>) -> String {
+    format!(
+        r#"{}{}"#,
+        crate::panel_hubs::breadcrumb(&[
             ("Dashboard", Some("/dashboard")),
             ("Email", Some("/email")),
             ("Create Email", None),
-        ],
-        "Create Email",
-        "Add a mailbox.",
-        r#"<p>Use the create form on <a href="/email/accounts">Email Accounts</a>.</p>"#,
-        None,
-        None,
+        ]),
+        crate::panel_sections::email_create_main(notice, error),
     )
 }
 
@@ -201,21 +198,56 @@ pub fn add_catchall(domain: &str, target: &str) -> Result<String, String> {
     Ok("Catch-all saved".into())
 }
 
-pub fn email_dkim_page() -> String {
+fn dkim_domain_table_html() -> String {
+    let rows = crate::panel_ops_dkim_keys::list_dkim_domain_rows();
+    if rows.is_empty() {
+        return r#"<p class="muted">No domain folders yet. Run Ensure DKIM or create a website to generate keys.</p>"#.into();
+    }
+    let mut table = String::from(
+        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Domain</th><th>Key</th><th>DNS name</th><th>TXT preview</th></tr></thead><tbody>"#,
+    );
+    for row in &rows {
+        let key_label = if row.has_key { "Present" } else { "Missing" };
+        table.push_str(&format!(
+            r#"<tr><td>{domain}</td><td>{key}</td><td><code>{dns}</code></td><td class="muted"><code>{txt}</code></td></tr>"#,
+            domain = html_escape(&row.domain),
+            key = key_label,
+            dns = html_escape(&row.dns_name),
+            txt = html_escape(&row.txt_preview),
+        ));
+    }
+    table.push_str("</tbody></table></div>");
+    table
+}
+
+pub fn email_dkim_page(notice: Option<&str>, error: Option<&str>) -> String {
     let (ready, detail) = dkim_status();
+    let table = dkim_domain_table_html();
     let body = if ready {
         format!(
-            "<p>{}</p><form method=\"post\" action=\"/email/dkim/ensure\"><button class=\"btn-primary\" type=\"submit\">Ensure DKIM directory</button></form>",
-            html_escape(&detail)
+            r#"<p>{detail}</p>
+        <h3 style="margin:16px 0 8px;font-size:15px;">Domain keys</h3>
+        {table}
+        <form method="post" action="/email/dkim/ensure" style="margin-top:16px;">
+          <button class="btn-primary" type="submit">Ensure DKIM directory and keys</button>
+        </form>
+        <p class="muted">Ensure creates <code>/var/lib/cpn/dkim</code> if needed and generates selector <code>default</code> keys for each registered site domain.</p>"#,
+            detail = html_escape(&detail),
+            table = table,
         )
     } else {
         format!(
-            "{}{}",
-            not_configured_body(
+            r#"{not_cfg}
+        <h3 style="margin:16px 0 8px;font-size:15px;">Domain keys</h3>
+        {table}
+        <form method="post" action="/email/dkim/ensure" style="margin-top:12px;">
+          <button class="btn-primary" type="submit">Create DKIM directory and keys</button>
+        </form>"#,
+            not_cfg = not_configured_body(
                 &detail,
-                "Create the DKIM store directory when Postfix/OpenDKIM is ready."
+                "Create the DKIM store and per-domain keys for DNS TXT records.",
             ),
-            r#"<form method="post" action="/email/dkim/ensure" style="margin-top:12px;"><button class="btn-primary" type="submit">Create DKIM directory</button></form>"#
+            table = table,
         )
     };
     feature_shell(
@@ -225,22 +257,39 @@ pub fn email_dkim_page() -> String {
             ("DKIM Manager", None),
         ],
         "DKIM Manager",
-        "Email signing keys.",
+        "Email signing keys for your site domains.",
         &body,
-        None,
-        None,
+        notice,
+        error,
     )
 }
 
 pub fn ensure_dkim() -> Result<String, String> {
-    let mut parts = vec![crate::panel_ops_mail_extra::ensure_dkim_store_ready()?];
-    for site in crate::sites::list_sites().unwrap_or_default() {
+    crate::panel_ops_mail_extra::ensure_dkim_store_ready()?;
+    let sites = crate::sites::list_sites().unwrap_or_default();
+    let mut existing = 0usize;
+    let mut generated = 0usize;
+    let mut errors = Vec::new();
+    for site in &sites {
         match crate::panel_ops_dkim_keys::ensure_dkim_for_domain(&site.domain) {
-            Ok(msg) => parts.push(msg),
-            Err(e) => parts.push(format!("{}: {e}", site.domain)),
+            Ok(msg) => {
+                if msg.contains("already present") {
+                    existing += 1;
+                } else if msg.contains("Generated") {
+                    generated += 1;
+                }
+            }
+            Err(e) => errors.push(format!("{}: {e}", site.domain)),
         }
     }
-    Ok(parts.join(" "))
+    if !errors.is_empty() {
+        return Err(errors.join("; "));
+    }
+    let folder_count = crate::panel_ops_dkim_keys::list_dkim_domain_rows().len();
+    Ok(format!(
+        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated.",
+        sites.len()
+    ))
 }
 
 /// Deprecated wrapper: prefer `panel_hub_pages_webmail::email_webmail_page`.

@@ -7,9 +7,8 @@ use crate::panel_hub_pages_email_auth::{
     save_bimi_form, save_mta_sts_form,
 };
 use crate::panel_hub_pages_hosting::{
-    add_catchall, add_forward, email_accounts_page, email_catchall_page,
-    email_create_redirect_hint, email_delivery_page, email_dkim_page, email_forwarding_page,
-    ensure_dkim,
+    add_catchall, add_forward, email_accounts_page, email_catchall_page, email_create_page,
+    email_delivery_page, email_dkim_page, email_forwarding_page, ensure_dkim,
 };
 use crate::panel_hub_pages_webmail::{
     apply_regenerate_path, apply_webmail_settings_form, email_webmail_app_page, email_webmail_page,
@@ -39,7 +38,7 @@ pub async fn email_accounts_route(
         &email_accounts_page(
             status.selected_mail,
             status.mail_client_ready,
-            status.mail_backend_ready,
+            status.mail_backend_ready || crate::apps_email::mail_backend_ready_fast(),
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
         ),
@@ -50,6 +49,7 @@ pub async fn email_accounts_route(
 pub async fn email_create_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -58,7 +58,10 @@ pub async fn email_create_route(
         &user,
         "email",
         "Create Email",
-        &email_create_redirect_hint(),
+        &email_create_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
 }
 
@@ -149,7 +152,11 @@ pub async fn email_catchall_save(
 }
 
 #[get("/email/dkim")]
-pub async fn email_dkim_route(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn email_dkim_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
@@ -157,7 +164,10 @@ pub async fn email_dkim_route(http: HttpRequest, state: web::Data<Arc<AppState>>
         &user,
         "email",
         "DKIM Manager",
-        &email_dkim_page(),
+        &email_dkim_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
 }
 
