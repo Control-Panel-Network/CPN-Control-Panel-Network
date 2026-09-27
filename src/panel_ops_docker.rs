@@ -104,8 +104,7 @@ pub fn owner_from_labels(labels: &[(String, String)], cpn_managed: bool) -> Stri
         }
     }
     if labels.iter().any(|(k, v)| {
-        k.eq_ignore_ascii_case("com.cpn.system")
-            && (v == "1" || v.eq_ignore_ascii_case("true"))
+        k.eq_ignore_ascii_case("com.cpn.system") && (v == "1" || v.eq_ignore_ascii_case("true"))
     }) {
         return "System".into();
     }
@@ -289,8 +288,9 @@ pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String
         }
         "restart" => run_container_cmd(bin, &["restart", name])
             .map(|_| format!("Restarted container `{name}`.")),
-        "pause" => run_container_cmd(bin, &["pause", name])
-            .map(|_| format!("Paused container `{name}`.")),
+        "pause" => {
+            run_container_cmd(bin, &["pause", name]).map(|_| format!("Paused container `{name}`."))
+        }
         "unpause" => run_container_cmd(bin, &["unpause", name])
             .map(|_| format!("Unpaused container `{name}`.")),
         "remove" | "rm" | "delete" => {

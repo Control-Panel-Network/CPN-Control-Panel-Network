@@ -1,10 +1,10 @@
 //! Single-container detail page (reference-panel inspired layout, CPN branded).
 
-use crate::panel_hubs::feature_shell;
 use crate::panel_hub_pages_docker::{html_escape, toolbar, urlencoding_simple};
+use crate::panel_hubs::feature_shell;
 use crate::panel_ops_docker::container_logs;
 use crate::panel_ops_docker_detail::{
-    container_processes, load_container_detail, DockerContainerDetail,
+    DockerContainerDetail, container_processes, load_container_detail,
 };
 
 fn action_post(action: &str, name: &str, label: &str, class: &str, confirm: &str) -> String {

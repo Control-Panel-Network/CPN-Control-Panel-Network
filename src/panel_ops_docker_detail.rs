@@ -1,6 +1,6 @@
 //! Container inspect, stats, processes, and extended lifecycle for Docker detail UI.
 
-use crate::panel_ops_docker::{docker_bin, list_containers_detailed, DockerContainerRow};
+use crate::panel_ops_docker::{DockerContainerRow, docker_bin, list_containers_detailed};
 use std::process::Command;
 
 #[derive(Debug, Clone)]

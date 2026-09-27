@@ -6,8 +6,8 @@ use crate::panel_hub_http::{
     html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
-use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
+use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
     litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
     run_set_tier, run_set_webadmin_url, run_upgrade,
@@ -598,11 +598,10 @@ pub async fn docker_view_exec(
     }
     let cmd = form.command.clone();
     let cname = name.to_string();
-    let output = web::block(move || {
-        crate::panel_ops_docker_detail::container_exec_command(&cname, &cmd)
-    })
-    .await
-    .unwrap_or_else(|e| Err(format!("Exec task failed: {e}")));
+    let output =
+        web::block(move || crate::panel_ops_docker_detail::container_exec_command(&cname, &cmd))
+            .await
+            .unwrap_or_else(|e| Err(format!("Exec task failed: {e}")));
     let exec_out = match &output {
         Ok(s) => Some(s.as_str()),
         Err(e) => Some(e.as_str()),
@@ -625,7 +624,11 @@ pub async fn docker_export_route(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_notice("/docker", None, Some("Only panel admins can export containers."));
+        return redirect_notice(
+            "/docker",
+            None,
+            Some("Only panel admins can export containers."),
+        );
     }
     let name = query.get("name").map(String::as_str).unwrap_or("");
     if name.is_empty() {
