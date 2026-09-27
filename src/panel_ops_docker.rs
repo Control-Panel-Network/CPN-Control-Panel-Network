@@ -362,6 +362,60 @@ pub fn docker_status() -> DockerStatus {
     }
 }
 
+pub fn compose_cli_ok(bin: &str) -> bool {
+    Command::new(bin)
+        .args(["compose", "version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Install a compose provider when the engine CLI exists but `compose` subcommand does not.
+pub fn ensure_compose_cli() -> Result<String, String> {
+    let Some(bin) = docker_bin() else {
+        return Err("Docker/Podman CLI not found.".into());
+    };
+    if compose_cli_ok(bin) {
+        return Ok(format!("Compose available via `{bin} compose`."));
+    }
+    let pm = crate::apps_pkg::package_manager()?;
+    let mut last_err = String::new();
+    let try_sets: &[&[&str]] = if pm == "dnf" {
+        &[&["docker-compose-plugin"], &["podman-compose"]]
+    } else {
+        &[
+            &["docker-compose-plugin"],
+            &["docker-compose-v2"],
+            &["podman-compose"],
+        ]
+    };
+    for pkgs in try_sets {
+        let result = if pm == "dnf" {
+            crate::apps_pkg::install_packages_dnf_or_apt(pkgs, &[])
+        } else {
+            crate::apps_pkg::install_packages_dnf_or_apt(&[], pkgs)
+        };
+        match result {
+            Ok(()) => {
+                if compose_cli_ok(bin) {
+                    return Ok(format!(
+                        "Installed {} for `{bin} compose`.",
+                        pkgs.join(", ")
+                    ));
+                }
+                last_err = format!(
+                    "Installed {} but `{bin} compose` is still unavailable.",
+                    pkgs.join(", ")
+                );
+            }
+            Err(e) => last_err = e,
+        }
+    }
+    Err(format!(
+        "Container engine `{bin}` is installed but compose is missing ({last_err}). Install docker-compose-plugin or podman-compose."
+    ))
+}
+
 fn enable_container_engine() -> Result<String, String> {
     let mut notes = Vec::new();
     for unit in ["docker", "podman", "podman.socket"] {
@@ -389,11 +443,15 @@ fn enable_container_engine() -> Result<String, String> {
 pub fn install_docker_engine() -> Result<String, String> {
     if let Some(bin) = docker_bin() {
         if docker_daemon_ok(bin) {
-            return Ok(format!("Container engine already available via `{bin}`."));
+            let compose = ensure_compose_cli().unwrap_or_else(|e| e);
+            return Ok(format!(
+                "Container engine already available via `{bin}`. {compose}"
+            ));
         }
         let note = enable_container_engine()?;
         if docker_daemon_ok(bin) {
-            return Ok(format!("Started existing `{bin}` engine. {note}"));
+            let compose = ensure_compose_cli().unwrap_or_else(|e| e);
+            return Ok(format!("Started existing `{bin}` engine. {note} {compose}"));
         }
     }
 
@@ -402,10 +460,15 @@ pub fn install_docker_engine() -> Result<String, String> {
     if pm == "dnf" {
         // Prefer real Docker when the distro/repo provides it; fall back to Podman.
         let try_sets: &[&[&str]] = &[
-            &["docker-ce", "docker-ce-cli", "containerd.io"],
-            &["moby-engine", "moby-cli"],
+            &[
+                "docker-ce",
+                "docker-ce-cli",
+                "containerd.io",
+                "docker-compose-plugin",
+            ],
+            &["moby-engine", "moby-cli", "docker-compose-plugin"],
             &["docker"],
-            &["podman", "podman-docker"],
+            &["podman", "podman-docker", "podman-compose"],
         ];
         let mut installed = false;
         let mut last_err = String::new();
@@ -425,7 +488,11 @@ pub fn install_docker_engine() -> Result<String, String> {
             ));
         }
     } else {
-        let try_sets: &[&[&str]] = &[&["docker.io"], &["docker-ce"], &["podman"]];
+        let try_sets: &[&[&str]] = &[
+            &["docker.io", "docker-compose-plugin"],
+            &["docker-ce", "docker-compose-plugin"],
+            &["podman", "podman-compose"],
+        ];
         let mut installed = false;
         let mut last_err = String::new();
         for pkgs in try_sets {
@@ -446,6 +513,7 @@ pub fn install_docker_engine() -> Result<String, String> {
     }
 
     messages.push(enable_container_engine()?);
+    messages.push(ensure_compose_cli().unwrap_or_else(|e| e));
     messages.push(
         "Existing CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 were left untouched."
             .into(),
@@ -468,8 +536,17 @@ pub fn uninstall_docker_engine() -> Result<String, String> {
             "moby-cli",
             "docker",
             "podman-docker",
+            "docker-compose-plugin",
+            "podman-compose",
         ],
-        &["docker.io", "docker-ce", "docker-ce-cli", "containerd.io"],
+        &[
+            "docker.io",
+            "docker-ce",
+            "docker-ce-cli",
+            "containerd.io",
+            "docker-compose-plugin",
+            "podman-compose",
+        ],
     );
     Ok(
         "Uninstalled Docker Engine packages when present. Volumes and /var/lib/cpn/docker compose projects were not deleted."
