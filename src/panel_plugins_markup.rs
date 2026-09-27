@@ -261,10 +261,7 @@ pub(crate) fn store_scope_query_suffix(
     } else {
         out.push_str("&amp;target=site");
         if !domain.is_empty() {
-            out.push_str(&format!(
-                "&amp;domain={}",
-                urlencoding_simple(domain)
-            ));
+            out.push_str(&format!("&amp;domain={}", urlencoding_simple(domain)));
         }
     }
     if !q.trim().is_empty() {
@@ -287,15 +284,7 @@ pub(crate) fn store_install_target_picker(
     let host_active = if target == "host" { " active" } else { "" };
     let site_active = if target == "site" { " active" } else { "" };
     let host_href = store_target_href(view, "host", category, "", mode, per_page, q);
-    let site_href = store_target_href(
-        view,
-        "site",
-        category,
-        selected_domain,
-        mode,
-        per_page,
-        q,
-    );
+    let site_href = store_target_href(view, "site", category, selected_domain, mode, per_page, q);
     let toggle = format!(
         r#"<div class="store-scope-toggle" role="group" aria-label="Install target">
         <span class="store-scope-label">Install target</span>
@@ -311,15 +300,8 @@ pub(crate) fn store_install_target_picker(
         let site_hint = if sites.is_empty() {
             String::new()
         } else {
-            let site_link = store_target_href(
-                view,
-                "site",
-                category,
-                selected_domain,
-                mode,
-                per_page,
-                q,
-            );
+            let site_link =
+                store_target_href(view, "site", category, selected_domain, mode, per_page, q);
             format!(
                 r#"<p class="muted store-scope-hint">Host packages install once on this server. Sites only <strong>Activate</strong> or <strong>Deactivate</strong> them. <a href="{site_link}">Switch to Site</a> to pick a domain for site plugins or activation.</p>"#,
                 site_link = html_escape(&site_link),
