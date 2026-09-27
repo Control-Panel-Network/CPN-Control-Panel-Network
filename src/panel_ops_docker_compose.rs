@@ -219,7 +219,8 @@ fn normalize_compose_image_refs(project_dir: &Path) -> Result<(), String> {
     let Some(file) = find_compose_file(project_dir) else {
         return Ok(());
     };
-    let text = fs::read_to_string(&file).map_err(|e| format!("Could not read compose file: {e}"))?;
+    let text =
+        fs::read_to_string(&file).map_err(|e| format!("Could not read compose file: {e}"))?;
     let mut changed = false;
     let mut out_lines = Vec::new();
     for line in text.lines() {

@@ -252,12 +252,7 @@ pub fn pull_image(image_ref: &str) -> Result<String, String> {
     let image = validate_image_ref(image_ref)?;
     let pull_ref = normalize_container_image_ref(&image);
     let bin = require_bin()?;
-    run_cmd(
-        bin,
-        &["pull", &pull_ref],
-        &format!("Pulled `{pull_ref}`."),
-    )
-    .map(|_| {
+    run_cmd(bin, &["pull", &pull_ref], &format!("Pulled `{pull_ref}`.")).map(|_| {
         if pull_ref == image {
             format!("Pulled `{image}`.")
         } else {
