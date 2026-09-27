@@ -385,6 +385,7 @@ mod store_target_tests {
             suspended_by: None,
             php_version: None,
             aliases: vec![],
+            staging_of: None,
         }];
         assert_eq!(resolve_store_target("", "Host", &sites), "host");
         assert_eq!(resolve_store_target("", "", &sites), "site");
