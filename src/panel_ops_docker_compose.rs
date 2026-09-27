@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn stack_id_validation() {
         assert!(validate_stack_id("my-app").is_ok());
-        assert!(validate_stack_id("Bad").is_err());
+        assert!(validate_stack_id("bad_name").is_err());
         assert!(validate_stack_id("-x").is_err());
     }
 
