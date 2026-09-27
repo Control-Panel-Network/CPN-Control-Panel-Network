@@ -164,14 +164,15 @@ fn require_bin() -> Result<&'static str, String> {
     docker_bin().ok_or_else(|| "Docker/Podman CLI not found.".into())
 }
 
-fn compose_args(file: &Path, project_dir: &Path) -> Vec<String> {
-    vec![
+fn compose_args(file: &Path, project_dir: &Path) -> Result<Vec<String>, String> {
+    let rel = file
+        .strip_prefix(project_dir)
+        .map_err(|_| format!("Compose file {} is not under {}.", file.display(), project_dir.display()))?;
+    Ok(vec![
         "compose".into(),
         "-f".into(),
-        file.to_string_lossy().into_owned(),
-        "--project-directory".into(),
-        project_dir.to_string_lossy().into_owned(),
-    ]
+        rel.to_string_lossy().into_owned(),
+    ])
 }
 
 pub fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, String> {
@@ -179,12 +180,13 @@ pub fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, St
         return Err(format!("No compose file in {}.", project_dir.display()));
     };
     let bin = require_bin()?;
-    let mut args = compose_args(&file, project_dir);
+    let mut args = compose_args(&file, project_dir)?;
     for s in subcommand {
         args.push((*s).to_string());
     }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let output = Command::new(bin)
+        .current_dir(project_dir)
         .args(&arg_refs)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

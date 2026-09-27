@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Docker Host package compose provider**: Install/heal now pulls in `docker-compose-plugin` (Docker CE / moby) or `podman-compose` (Podman + podman-docker) so `docker compose` works for `/docker/stacks` Pull & Recreate. Re-running Install on an engine-only host adds the missing compose packages without touching CPN-managed stacks.
+- **Compose on Podman**: CPN runs `docker compose` from the stack project directory with a relative `-f` file (no `--project-directory`) so `podman-compose` works on AlmaLinux Podman labs.
 
 ### Added
 
