@@ -71,16 +71,16 @@ pub fn collect_linked_database_names(source: &SiteRecord) -> Vec<String> {
         .map(|d| d.name)
         .collect();
     let docroot = PathBuf::from(&source.docroot);
-    if let Some(wp) = guess_db_name_from_wp_config(&docroot.join("wp-config.php")) {
-        if !names.iter().any(|n| n.eq_ignore_ascii_case(&wp)) {
-            names.push(wp);
-        }
+    if let Some(wp) = guess_db_name_from_wp_config(&docroot.join("wp-config.php"))
+        && !names.iter().any(|n| n.eq_ignore_ascii_case(&wp))
+    {
+        names.push(wp);
     }
     let home_wp = site_home_from_record(source).join("wp-config.php");
-    if let Some(wp) = guess_db_name_from_wp_config(&home_wp) {
-        if !names.iter().any(|n| n.eq_ignore_ascii_case(&wp)) {
-            names.push(wp);
-        }
+    if let Some(wp) = guess_db_name_from_wp_config(&home_wp)
+        && !names.iter().any(|n| n.eq_ignore_ascii_case(&wp))
+    {
+        names.push(wp);
     }
     names.sort();
     names.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
@@ -163,11 +163,11 @@ pub fn apply_staging_extras(
                     .push(format!("Database `{src_db}` clone failed: {err}")),
             }
         }
-        if !db_map_entries.is_empty() {
-            if let Err(err) = write_db_map_file(source, target, &db_map_entries) {
-                out.warnings
-                    .push(format!("Could not write staging DB map file: {err}"));
-            }
+        if !db_map_entries.is_empty()
+            && let Err(err) = write_db_map_file(source, target, &db_map_entries)
+        {
+            out.warnings
+                .push(format!("Could not write staging DB map file: {err}"));
         }
     }
 
