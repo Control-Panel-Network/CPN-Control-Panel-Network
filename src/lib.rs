@@ -323,6 +323,7 @@ pub mod site_acl;
 pub mod site_messages;
 pub mod site_preview_capture;
 pub mod site_preview_list_ui;
+pub mod site_preview_microlink;
 pub mod site_preview_thumb;
 pub mod site_preview_thumb_routes;
 pub mod sites;

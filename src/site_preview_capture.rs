@@ -3,7 +3,12 @@
 //! Lab hosts often lack public DNS. Capture maps the managed domain to loopback
 //! (and optional LAN IPs) with Chromium `--host-resolver-rules` so local vhosts
 //! still render when the panel can reach them.
+//!
+//! Local capture stays primary. When no browser binary exists, or every local
+//! URL fails, public domains fall back to the Microlink screenshot API (see
+//! `site_preview_microlink`) so the Websites list still shows a real thumbnail.
 
+use crate::site_preview_microlink::{capture_via_microlink, remote_preview_ready};
 use crate::site_preview_thumb::{
     PREVIEW_MAX_BYTES, image_path, record_capture_failure, write_cached_image,
 };
@@ -21,9 +26,9 @@ pub fn capture_site_preview(domain_raw: &str) -> Result<PathBuf, String> {
     let domain = normalize_domain(domain_raw)?;
     let backends = discover_backends();
     if backends.is_empty() {
-        let err = "No headless browser found (install chromium or google-chrome for Site preview)";
-        let _ = record_capture_failure(&domain, err, "none");
-        return Err(err.into());
+        let local_err =
+            "No headless browser found (install chromium or google-chrome for Site preview)";
+        return finish_with_remote(&domain, local_err, "none");
     }
 
     let urls = candidate_urls(&domain);
@@ -38,8 +43,28 @@ pub fn capture_site_preview(domain_raw: &str) -> Result<PathBuf, String> {
             }
         }
     }
-    let _ = record_capture_failure(&domain, &last_err, "failed");
-    Err(last_err)
+    finish_with_remote(&domain, &last_err, "failed")
+}
+
+/// Try the remote screenshot service, then record the combined failure if it
+/// is unavailable for this domain.
+fn finish_with_remote(
+    domain: &str,
+    local_err: &str,
+    backend_label: &str,
+) -> Result<PathBuf, String> {
+    if remote_preview_ready(domain) {
+        match capture_via_microlink(domain, true) {
+            Ok(path) => return Ok(path),
+            Err(remote_err) => {
+                let combined = format!("{local_err}; remote screenshot: {remote_err}");
+                let _ = record_capture_failure(domain, &combined, backend_label);
+                return Err(combined);
+            }
+        }
+    }
+    let _ = record_capture_failure(domain, local_err, backend_label);
+    Err(local_err.to_string())
 }
 
 struct CaptureBackend {

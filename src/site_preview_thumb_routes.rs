@@ -5,13 +5,14 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::site_acl::{SitePerm, require_manage_site};
 use crate::site_preview_capture::{capture_available, capture_site_preview};
+use crate::site_preview_microlink::remote_preview_ready;
 use crate::site_preview_thumb::{
     PreviewFreshness, freshness, load_meta, placeholder_svg, read_cached_image,
 };
 use crate::sites::normalize_domain;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
 
 fn urlencoding_simple(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
@@ -70,7 +71,7 @@ pub async fn site_preview_image(
 
     let detail = if !meta.error.is_empty() {
         meta.error.clone()
-    } else if !capture_available() {
+    } else if !capture_available() && !remote_preview_ready(&domain) {
         "Capture tool not installed on this host".into()
     } else {
         "No screenshot yet. Use Refresh preview.".into()
@@ -162,17 +163,47 @@ fn sanitize_next(raw: &str, domain: &str) -> String {
     "/websites?".to_string()
 }
 
+/// Domains with a background capture already running, so repeated list loads do
+/// not stack chromium runs or outbound screenshot requests for the same site.
+fn in_flight() -> &'static Mutex<HashSet<String>> {
+    static IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn claim_capture(domain: &str) -> bool {
+    let Ok(mut guard) = in_flight().lock() else {
+        return false;
+    };
+    guard.insert(domain.to_string())
+}
+
+fn release_capture(domain: &str) {
+    if let Ok(mut guard) = in_flight().lock() {
+        guard.remove(domain);
+    }
+}
+
 /// Kick a background capture when the list page loads (non-minimalist).
 pub fn spawn_background_capture(domain: String) {
     if freshness(&domain) == PreviewFreshness::Fresh {
         return;
     }
-    std::thread::Builder::new()
+    if !claim_capture(&domain) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
         .name("cpn-site-preview".into())
-        .spawn(move || {
-            let _ = capture_site_preview(&domain);
+        .spawn({
+            let domain = domain.clone();
+            move || {
+                let _ = capture_site_preview(&domain);
+                release_capture(&domain);
+            }
         })
-        .ok();
+        .is_ok();
+    if !spawned {
+        release_capture(&domain);
+    }
 }
 
 #[cfg(test)]

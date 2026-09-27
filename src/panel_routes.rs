@@ -11,7 +11,9 @@ use crate::panel_plugin_settings::{
     plugin_dashboard_main, plugin_settings_main, settings_from_form,
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
-use crate::panel_sections::{run_mariadb_install, set_websites_docroot_pref, websites_main};
+use crate::panel_sections::{
+    run_mariadb_install, set_websites_docroot_pref, set_websites_remote_preview_pref, websites_main,
+};
 use crate::panel_website_manage::website_manage_main;
 use crate::panel_websites_create_ui::{
     require_domain_in_cloudflare_zones, resolve_create_domain, websites_create_main,
@@ -251,6 +253,49 @@ pub async fn websites_prefs(
                         "Document roots visible"
                     } else {
                         "Document roots hidden"
+                    })
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!("/websites?error={}", urlencoding_simple(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct WebsitePreviewPrefsForm {
+    #[serde(default)]
+    remote_site_previews: String,
+}
+
+/// Toggle the Microlink screenshot fallback used by Site preview thumbnails.
+#[post("/websites/preview-prefs")]
+pub async fn websites_preview_prefs(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<WebsitePreviewPrefsForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let enabled = matches!(
+        form.remote_site_previews.trim(),
+        "1" | "true" | "on" | "yes"
+    );
+    match set_websites_remote_preview_pref(enabled) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                format!(
+                    "/websites?notice={}",
+                    urlencoding_simple(if enabled {
+                        "Screenshot service thumbnails enabled"
+                    } else {
+                        "Screenshot service thumbnails disabled"
                     })
                 ),
             ))
