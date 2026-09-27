@@ -167,7 +167,7 @@ fn compose_args(file: &Path, project_dir: &Path) -> Vec<String> {
     ]
 }
 
-fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, String> {
+pub fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, String> {
     let Some(file) = find_compose_file(project_dir) else {
         return Err(format!(
             "No compose file in {}.",

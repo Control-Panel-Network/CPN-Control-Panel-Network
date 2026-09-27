@@ -1,8 +1,10 @@
-//! Clone / staging: copy site files to a new registered site under the parent home.
+//! Clone / staging: copy site files, databases, plugins, and linked Docker notes.
 
+use crate::package_quota::require_site_create_allowed;
+use crate::panel_site_staging::{apply_staging_extras, StagingCloneOptions};
 use crate::sites::{
-    SiteRecord, create_site, hosting_home_root, load_site, normalize_domain, resolve_parent_domain,
-    site_home_from_record,
+    SiteModify, SiteRecord, create_site_with_ssl, hosting_home_root, load_site, modify_site,
+    normalize_domain, resolve_parent_domain, site_home_from_record,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,7 +28,6 @@ fn copy_dir_contents(src: &Path, dst: &Path) -> Result<u64, String> {
     }
     fs::create_dir_all(dst).map_err(|e| format!("Could not create {}: {e}", dst.display()))?;
 
-    // Prefer cp -a on Unix for speed and mode preservation.
     #[cfg(unix)]
     {
         let status = Command::new("cp")
@@ -120,7 +121,6 @@ fn resolve_target_domain(
     if trimmed.is_empty() {
         return Err("Target domain or subdomain label is required".into());
     }
-    // Short label: treat as subdomain of parent (or of source when source is primary).
     if !trimmed.contains('.') {
         let label = trimmed.to_ascii_lowercase();
         if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
@@ -141,14 +141,47 @@ pub struct CloneResult {
     pub docroot: String,
     pub files_copied: u64,
     pub note: String,
+    pub production_domain: String,
 }
 
-/// Create a new site registry entry and copy public_html files from the source.
+#[derive(Debug, Clone, Copy)]
+pub struct CloneOptions {
+    pub clone_files: bool,
+    pub staging: StagingCloneOptions,
+}
+
+impl Default for CloneOptions {
+    fn default() -> Self {
+        Self {
+            clone_files: true,
+            staging: StagingCloneOptions::default(),
+        }
+    }
+}
+
+pub fn clone_option_from_form(raw: &str) -> bool {
+    !matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "0" | "false" | "off" | "no"
+    )
+}
+
+/// Create staging (or custom clone), copy files, databases, plugins; register staging link.
 pub fn clone_site_files(
     source: &SiteRecord,
     owner: &str,
     target_raw: &str,
     use_staging: bool,
+) -> Result<CloneResult, String> {
+    clone_site_with_options(source, owner, target_raw, use_staging, &CloneOptions::default())
+}
+
+pub fn clone_site_with_options(
+    source: &SiteRecord,
+    owner: &str,
+    target_raw: &str,
+    use_staging: bool,
+    options: &CloneOptions,
 ) -> Result<CloneResult, String> {
     let target = resolve_target_domain(source, target_raw, use_staging)?;
     if target.eq_ignore_ascii_case(&source.domain) {
@@ -157,50 +190,128 @@ pub fn clone_site_files(
     if load_site(&target).is_ok() {
         return Err(format!("Site `{target}` already exists"));
     }
+    require_site_create_allowed(owner, &target)?;
 
-    let created = create_site(
+    let notes = format!(
+        "Staging clone of {} (created from Manage > Clone/Staging)",
+        source.domain
+    );
+    let (created, dns_report) = create_site_with_ssl(
         &target,
         owner,
         None,
         source.engine.as_deref(),
-        Some(&format!(
-            "Cloned files from {} (databases not copied)",
-            source.domain
-        )),
+        Some(&notes),
+        None,
     )?;
+
+    let staging_link = if use_staging && target_raw.trim().is_empty() {
+        Some(source.domain.clone())
+    } else {
+        None
+    };
+    let created = if staging_link.is_some() {
+        modify_site(
+            &created.domain,
+            SiteModify {
+                staging_of: Some(staging_link),
+                ..SiteModify::default()
+            },
+        )?
+    } else {
+        created
+    };
 
     let src_doc = PathBuf::from(&source.docroot);
     let dst_doc = PathBuf::from(&created.docroot);
-    // Remove placeholder index so clone content wins when present.
     let placeholder = dst_doc.join("index.html");
     if placeholder.is_file() {
         let _ = fs::remove_file(&placeholder);
     }
 
-    let files_copied = copy_dir_contents(&src_doc, &dst_doc)?;
-
-    // Best-effort: also copy common config sitting beside public_html (not nested sites).
-    let src_home = site_home_from_record(source);
-    let dst_home = site_home_from_record(&created);
-    for name in [
-        "wp-config.php",
-        ".htaccess",
-        "composer.json",
-        "package.json",
-    ] {
-        let from = src_home.join(name);
-        if from.is_file() {
-            let to = dst_home.join(name);
-            let _ = fs::copy(&from, &to);
+    let mut files_copied = 0u64;
+    if options.clone_files {
+        files_copied = copy_dir_contents(&src_doc, &dst_doc)?;
+        let src_home = site_home_from_record(source);
+        let dst_home = site_home_from_record(&created);
+        for name in [
+            "wp-config.php",
+            ".htaccess",
+            "composer.json",
+            "package.json",
+        ] {
+            let from = src_home.join(name);
+            if from.is_file() {
+                let to = dst_home.join(name);
+                let _ = fs::copy(&from, &to);
+            }
+        }
+    } else {
+        let placeholder = dst_doc.join("index.html");
+        if !placeholder.is_file() {
+            let _ = fs::write(
+                &placeholder,
+                "<!-- Staging site: enable Files in clone options to copy public_html -->\n",
+            );
         }
     }
+
+    let extras = apply_staging_extras(source, &created, owner, &options.staging);
+
+    let mut note_parts = vec![if options.clone_files {
+        format!("{} file(s) copied.", files_copied)
+    } else {
+        "Files clone skipped (toggle was off).".into()
+    }];
+    if options.staging.plugins {
+        note_parts.push(if extras.plugins_copied {
+            "Site plugins/apps folder copied.".into()
+        } else {
+            "No site plugins folder to copy (or copy skipped).".into()
+        });
+    }
+    if options.staging.cron {
+        if extras.cron_jobs_copied > 0 {
+            note_parts.push(extras.cron_note.clone());
+        } else if !extras.cron_note.is_empty() {
+            note_parts.push(extras.cron_note.clone());
+        } else {
+            note_parts.push("Cron: none copied.".into());
+        }
+    }
+    if options.staging.databases {
+        if extras.databases_cloned.is_empty() {
+            note_parts.push(
+                "No linked MariaDB databases cloned (none registered for this domain or MariaDB unavailable)."
+                    .into(),
+            );
+        } else {
+            note_parts.push(format!(
+                "Databases cloned: {}.",
+                extras.databases_cloned.join("; ")
+            ));
+        }
+    }
+    if options.staging.docker && !extras.docker_notes.is_empty() {
+        note_parts.push(format!("Docker: {}", extras.docker_notes.join(" ")));
+    }
+    if !extras.warnings.is_empty() {
+        note_parts.push(format!("Warnings: {}", extras.warnings.join(" ")));
+    }
+    let dns_summary = dns_report.summary();
+    if !dns_report.steps.is_empty() || !dns_report.warnings.is_empty() {
+        note_parts.push(dns_summary);
+    }
+    note_parts.push(
+        "Promote/sync staging to production is not automated yet (phase 2).".into(),
+    );
 
     Ok(CloneResult {
         domain: created.domain,
         docroot: created.docroot,
         files_copied,
-        note: "File clone finished. Databases are not copied; export/import separately if needed."
-            .into(),
+        note: note_parts.join(" "),
+        production_domain: source.domain.clone(),
     })
 }
 
@@ -230,6 +341,11 @@ mod tests {
             let out = clone_site_files(&src, "Admin", "", true).unwrap();
             assert_eq!(out.domain, "staging.example.com");
             assert!(Path::new(&out.docroot).join("hello.txt").is_file());
+            let staged = load_site("staging.example.com").unwrap();
+            assert_eq!(
+                staged.staging_of.as_deref(),
+                Some("example.com")
+            );
             unsafe {
                 std::env::remove_var("CPN_SITES_HOME");
             }

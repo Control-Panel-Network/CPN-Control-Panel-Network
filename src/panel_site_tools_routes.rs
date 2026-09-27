@@ -2,7 +2,10 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{redirect_notice, require_panel_user, urlencoding_simple};
-use crate::panel_site_clone::clone_site_files;
+use crate::panel_site_clone::{
+    clone_option_from_form, clone_site_with_options, CloneOptions,
+};
+use crate::panel_site_staging::StagingCloneOptions;
 use crate::panel_site_git::{GitAction, run_git_action};
 use crate::panel_site_tools_security::{
     check_tools_rate_limit, same_origin_ok, site_tools_csrf_token, verify_site_tools_csrf,
@@ -102,6 +105,20 @@ pub struct CloneForm {
     target: String,
     #[serde(default)]
     staging: String,
+    #[serde(default = "default_clone_on")]
+    clone_files: String,
+    #[serde(default = "default_clone_on")]
+    clone_databases: String,
+    #[serde(default = "default_clone_on")]
+    clone_cron: String,
+    #[serde(default = "default_clone_on")]
+    clone_plugins: String,
+    #[serde(default = "default_clone_on")]
+    clone_docker: String,
+}
+
+fn default_clone_on() -> String {
+    "1".into()
 }
 
 #[post("/websites/clone")]
@@ -142,11 +159,20 @@ pub async fn websites_clone_post(
         form.staging.trim().to_ascii_lowercase().as_str(),
         "1" | "true" | "on" | "yes"
     );
-    match clone_site_files(&site, &user, &form.target, use_staging) {
+    let options = CloneOptions {
+        clone_files: clone_option_from_form(&form.clone_files),
+        staging: StagingCloneOptions {
+            databases: clone_option_from_form(&form.clone_databases),
+            cron: clone_option_from_form(&form.clone_cron),
+            plugins: clone_option_from_form(&form.clone_plugins),
+            docker: clone_option_from_form(&form.clone_docker),
+        },
+    };
+    match clone_site_with_options(&site, &user, &form.target, use_staging, &options) {
         Ok(result) => {
             let notice = format!(
-                "Cloned files to {} ({} files). {}",
-                result.domain, result.files_copied, result.note
+                "Staging site {} created from {}. {}",
+                result.domain, result.production_domain, result.note
             );
             manage_redirect(&result.domain, "overview", Some(&notice), None)
         }

@@ -261,6 +261,8 @@ pub mod panel_service;
 pub mod panel_session;
 pub mod panel_sidebar;
 pub mod panel_site_clone;
+pub mod panel_site_staging;
+pub mod panel_site_staging_docker;
 pub mod panel_site_git;
 pub mod panel_site_terminal;
 pub mod panel_site_tools_routes;
