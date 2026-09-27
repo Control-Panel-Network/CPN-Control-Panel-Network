@@ -1,14 +1,24 @@
 name: Docker Hub publish
 
-# Builds the RPM with scripts/docker-build-rpm.sh, then the existing Dockerfile,
-# and pushes master3395/cpn-installer:{almalinux9,almalinux10,latest}.
-# latest tracks almalinux10.
+# Builds the RPM with scripts/docker-build-rpm.sh, then the root Dockerfile,
+# and pushes master3395/cpn-installer tags to Docker Hub.
 #
-# Required repository secrets (same names as master3395/cyberpanel):
+# Tags:
+#   almalinux9, almalinux10 (OS baseline)
+#   latest (AlmaLinux 9, primary EL install target)
+#   <semver> from the Git tag when triggered by v* tag push or release (no leading v)
+#
+# Triggers on v* tag push because GitHub Releases created with GITHUB_TOKEN do not
+# fire release:published for other workflows.
+#
+# Required repository secrets:
 #   DOCKERHUB_USERNAME
 #   DOCKERHUB_TOKEN
 
 on:
+  push:
+    tags:
+      - "v*"
   release:
     types: [published]
   workflow_dispatch:
@@ -35,10 +45,10 @@ jobs:
         include:
           - alma: "9"
             tag: almalinux9
-            latest: false
+            latest: true
           - alma: "10"
             tag: almalinux10
-            latest: true
+            latest: false
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -48,11 +58,12 @@ jobs:
         env:
           OS_TAG: ${{ github.event.inputs.os_tag }}
           EVENT: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
           TAG: ${{ matrix.tag }}
         run: |
           set -euo pipefail
           os_tag="${OS_TAG:-all}"
-          if [ "${EVENT}" = "release" ]; then
+          if [ "${EVENT}" = "release" ] || [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             os_tag="all"
           fi
           if [ "${os_tag}" = "all" ] || [ "${os_tag}" = "${TAG}" ]; then
@@ -60,6 +71,23 @@ jobs:
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Resolve CPN version for image tags
+        if: steps.want.outputs.run == 'true'
+        id: ver
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          ver=""
+          if [ "${EVENT}" = "release" ] && [ -n "${RELEASE_TAG:-}" ]; then
+            ver="${RELEASE_TAG#v}"
+          elif [[ "${REF_NAME:-}" == v* ]]; then
+            ver="${REF_NAME#v}"
+          fi
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         if: steps.want.outputs.run == 'true'
@@ -78,6 +106,15 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "Missing DOCKERHUB_USERNAME / DOCKERHUB_TOKEN; will build only."
           fi
+
+      - name: Require Docker Hub secrets for automated publish
+        if: >-
+          steps.want.outputs.run == 'true'
+          && steps.hub.outputs.available != 'true'
+          && (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/'))
+        run: |
+          echo "::error::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN to publish master3395/cpn-installer."
+          exit 1
 
       - name: Log in to Docker Hub
         if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
@@ -123,11 +160,13 @@ jobs:
           tags: |
             master3395/cpn-installer:${{ matrix.tag }}
             ${{ matrix.latest && 'master3395/cpn-installer:latest' || '' }}
+            ${{ steps.ver.outputs.version != '' && format('master3395/cpn-installer:{0}', steps.ver.outputs.version) || '' }}
           build-args: |
             ALMA_VERSION=${{ matrix.alma }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
             cpn.almalinux.version=${{ matrix.alma }}
 
       - name: Smoke check pushed image
@@ -138,3 +177,11 @@ jobs:
           docker run --rm --entrypoint /bin/bash \
             "master3395/cpn-installer:${{ matrix.tag }}" \
             -lc 'rpm -q cpn-installer && systemctl is-enabled cpn-installer.service'
+
+      - name: Report pushed digest
+        if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          docker pull "master3395/cpn-installer:${{ matrix.tag }}"
+          digest="$(docker inspect --format='{{index .RepoDigests 0}}' "master3395/cpn-installer:${{ matrix.tag }}")"
+          echo "Pushed master3395/cpn-installer:${{ matrix.tag }} (${digest})"
