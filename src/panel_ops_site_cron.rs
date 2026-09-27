@@ -464,6 +464,63 @@ pub fn delete_site_cron_job(
     Ok((site, format!("Cron job deleted. {sync}")))
 }
 
+/// Copy cron jobs from a production site to a staging site (new ids, paths rewritten).
+pub fn clone_cron_jobs_to_target(
+    source_domain: &str,
+    target: &SiteRecord,
+) -> Result<(usize, String), String> {
+    let source_domain = normalize_domain(source_domain)?;
+    let source_site = load_site(&source_domain)?;
+    let src_file = load_file(&source_domain);
+    if src_file.jobs.is_empty() {
+        return Ok((0, "No cron jobs on source site.".into()));
+    }
+    let src_home = site_home_from_record(&source_site);
+    let dst_home = site_home_from_record(target);
+    let src_home_s = src_home.display().to_string();
+    let dst_home_s = dst_home.display().to_string();
+    let now = now_unix();
+    let mut cloned = Vec::new();
+    for job in src_file.jobs {
+        if !job.enabled {
+            continue;
+        }
+        let command = job
+            .command
+            .replace(&src_home_s, &dst_home_s)
+            .replace(&source_domain, &target.domain);
+        let command = validate_cron_command(target, &command)?;
+        cloned.push(SiteCronJob {
+            id: new_id(),
+            enabled: true,
+            minute: job.minute,
+            hour: job.hour,
+            day: job.day,
+            month: job.month,
+            weekday: job.weekday,
+            command,
+            comment: job.comment,
+            created_at_unix: now,
+            updated_at_unix: now,
+        });
+    }
+    if cloned.is_empty() {
+        return Ok((0, "No enabled cron jobs to copy.".into()));
+    }
+    if cloned.len() > 50 {
+        return Err("Staging cron clone would exceed 50 jobs per site".into());
+    }
+    let mut dst_file = load_file(&target.domain);
+    dst_file.domain = target.domain.clone();
+    dst_file.jobs = cloned;
+    save_file(&dst_file)?;
+    let sync = sync_cron_d(target, &dst_file.jobs)?;
+    Ok((
+        dst_file.jobs.len(),
+        format!("Copied {} cron job(s). {sync}", dst_file.jobs.len()),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,6 +543,7 @@ mod tests {
             suspended_by: None,
             php_version: None,
             aliases: Vec::new(),
+            staging_of: None,
         }
     }
 

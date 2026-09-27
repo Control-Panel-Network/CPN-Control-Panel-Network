@@ -26,7 +26,7 @@ use crate::panel_ops_ssl_provider::{
     SiteSslSettings, SslProvider, initial_provider_for_new_site, load_ssl_defaults,
 };
 
-const SCHEMA_VERSION: u32 = 4;
+const SCHEMA_VERSION: u32 = 5;
 
 /// Who last suspended the site (drives which suspend message is shown).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +70,9 @@ pub struct SiteRecord {
     /// Extra hostnames (ServerAlias / OLS map) served by this site.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
+    /// When set, this site is a staging clone of the production FQDN.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staging_of: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -89,6 +92,8 @@ pub struct SiteModify {
     pub vhost_wired: Option<bool>,
     /// Replace the full alias list when `Some`.
     pub aliases: Option<Vec<String>>,
+    /// `Some(None)` clears staging link; `Some(Some(fqdn))` sets production source.
+    pub staging_of: Option<Option<String>>,
 }
 
 fn sites_dir() -> PathBuf {
@@ -216,6 +221,19 @@ pub fn site_backups_dir(site: &SiteRecord) -> PathBuf {
 /// Per-site plugins directory: `/home/<domain>/plugins`.
 pub fn site_plugins_dir(site: &SiteRecord) -> PathBuf {
     site_home_from_record(site).join("plugins")
+}
+
+/// Staging sites whose `staging_of` matches `production_domain` (case-insensitive).
+pub fn staging_sites_for(production_domain: &str) -> Result<Vec<SiteRecord>, String> {
+    let needle = production_domain.trim().to_ascii_lowercase();
+    Ok(list_sites()?
+        .into_iter()
+        .filter(|s| {
+            s.staging_of
+                .as_ref()
+                .is_some_and(|p| p.eq_ignore_ascii_case(&needle))
+        })
+        .collect())
 }
 
 /// True when `docroot` does not follow the current `/home/.../public_html` layout
@@ -443,6 +461,7 @@ pub fn create_site_with_ssl(
         suspended_by: None,
         php_version: Some(crate::php_defaults::default_php_branch_for_sites()),
         aliases: Vec::new(),
+        staging_of: None,
     };
     persist_site(&path, &site)?;
     // Best-effort: create log files and wire OLS/nginx access/error log paths.
@@ -538,6 +557,11 @@ pub fn modify_site(domain_raw: &str, patch: SiteModify) -> Result<SiteRecord, St
     }
     if let Some(aliases) = patch.aliases {
         site.aliases = aliases;
+    }
+    if let Some(staging) = patch.staging_of {
+        site.staging_of = staging
+            .map(|d| d.trim().to_ascii_lowercase())
+            .filter(|d| !d.is_empty());
     }
     if let Some(ssl) = patch.ssl {
         site.ssl = ssl;

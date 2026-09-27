@@ -249,6 +249,7 @@ mod tests {
             suspended_by: None,
             php_version: None,
             aliases: vec![],
+            staging_of: None,
         }
     }
 
