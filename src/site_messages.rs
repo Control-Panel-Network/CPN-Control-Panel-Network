@@ -79,8 +79,8 @@ impl Default for SiteMessageDefaults {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            suspend_message_html: BUILTIN_SUSPEND.to_string(),
-            site_ready_html: BUILTIN_SITE_READY.to_string(),
+            suspend_message_html: BUILTIN_SUSPEND.trim().to_string(),
+            site_ready_html: BUILTIN_SITE_READY.trim().to_string(),
             updated_at_unix: 0,
         }
     }
@@ -132,10 +132,10 @@ pub fn load_defaults() -> SiteMessageDefaults {
     };
     let mut loaded: SiteMessageDefaults = serde_json::from_str(&raw).unwrap_or_default();
     if loaded.suspend_message_html.trim().is_empty() {
-        loaded.suspend_message_html = BUILTIN_SUSPEND.to_string();
+        loaded.suspend_message_html = BUILTIN_SUSPEND.trim().to_string();
     }
     if loaded.site_ready_html.trim().is_empty() {
-        loaded.site_ready_html = BUILTIN_SITE_READY.to_string();
+        loaded.site_ready_html = BUILTIN_SITE_READY.trim().to_string();
     }
     loaded.schema_version = SCHEMA_VERSION;
     loaded
@@ -163,21 +163,21 @@ pub fn builtin_suspend_message() -> &'static str {
 /// Restore only the global suspend message to the built-in factory text.
 pub fn restore_factory_suspend_message() -> Result<(), String> {
     let mut defaults = load_defaults();
-    defaults.suspend_message_html = BUILTIN_SUSPEND.to_string();
+    defaults.suspend_message_html = BUILTIN_SUSPEND.trim().to_string();
     save_defaults(&defaults)
 }
 
 /// Restore only the site-ready template to the built-in factory HTML.
 pub fn restore_factory_site_ready() -> Result<(), String> {
     let mut defaults = load_defaults();
-    defaults.site_ready_html = BUILTIN_SITE_READY.to_string();
+    defaults.site_ready_html = BUILTIN_SITE_READY.trim().to_string();
     save_defaults(&defaults)
 }
 
 pub fn site_ready_html_for_new_docroot() -> String {
     let defaults = load_defaults();
     if defaults.site_ready_html.trim().is_empty() {
-        BUILTIN_SITE_READY.to_string()
+        BUILTIN_SITE_READY.trim().to_string()
     } else {
         defaults.site_ready_html
     }
@@ -223,7 +223,7 @@ pub fn sanitize_message_body(raw: &str) -> Result<String, String> {
 pub fn sanitize_site_ready_html(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Ok(BUILTIN_SITE_READY.to_string());
+        return Ok(BUILTIN_SITE_READY.trim().to_string());
     }
     if trimmed.chars().count() > MAX_SITE_READY_CHARS {
         return Err(format!(
@@ -264,7 +264,7 @@ pub fn sanitize_site_ready_html(raw: &str) -> Result<String, String> {
 pub fn effective_suspend_message(site: &SiteRecord) -> String {
     let defaults = load_defaults();
     let global = if defaults.suspend_message_html.trim().is_empty() {
-        BUILTIN_SUSPEND.to_string()
+        BUILTIN_SUSPEND.trim().to_string()
     } else {
         defaults.suspend_message_html
     };
@@ -450,7 +450,7 @@ mod tests {
             save_defaults(&d).unwrap();
             restore_factory_suspend_message().unwrap();
             let loaded = load_defaults();
-            assert_eq!(loaded.suspend_message_html, BUILTIN_SUSPEND);
+            assert_eq!(loaded.suspend_message_html, BUILTIN_SUSPEND.trim());
             assert!(loaded.site_ready_html.contains("keep"));
         });
     }
