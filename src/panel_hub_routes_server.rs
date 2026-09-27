@@ -788,10 +788,9 @@ pub async fn docker_stack_refresh(
         );
     }
     let stack = form.stack.clone();
-    let result =
-        web::block(move || crate::panel_ops_docker_compose::refresh_compose_stack(&stack))
-            .await
-            .unwrap_or_else(|e| Err(format!("Refresh task failed: {e}")));
+    let result = web::block(move || crate::panel_ops_docker_compose::refresh_compose_stack(&stack))
+        .await
+        .unwrap_or_else(|e| Err(format!("Refresh task failed: {e}")));
     match result {
         Ok(msg) => redirect_notice("/docker/stacks", Some(&msg), None),
         Err(err) => redirect_notice("/docker/stacks", None, Some(&err)),
