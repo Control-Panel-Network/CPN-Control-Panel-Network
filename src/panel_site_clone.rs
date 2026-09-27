@@ -277,9 +277,7 @@ pub fn clone_site_with_options(
         });
     }
     if options.staging.cron {
-        if extras.cron_jobs_copied > 0 {
-            note_parts.push(extras.cron_note.clone());
-        } else if !extras.cron_note.is_empty() {
+        if extras.cron_jobs_copied > 0 || !extras.cron_note.is_empty() {
             note_parts.push(extras.cron_note.clone());
         } else {
             note_parts.push("Cron: none copied.".into());

@@ -366,9 +366,10 @@ fn copy_tree_best_effort(src: &Path, dst: &Path) -> Result<(), String> {
             .status()
             .map_err(|e| format!("cp: {e}"))?;
         if status.success() {
-            return Ok(());
+            Ok(())
+        } else {
+            Err("cp -a failed".into())
         }
-        return Err("cp -a failed".into());
     }
     #[cfg(not(unix))]
     {
