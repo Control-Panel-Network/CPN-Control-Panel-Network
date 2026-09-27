@@ -1,6 +1,9 @@
 //! Docker Hub search, image pull/delete/prune, and create-container helpers.
 
 use crate::panel_ops_docker::{docker_bin, list_containers_detailed};
+use crate::panel_ops_docker_image_ref::{
+    normalize_container_image_ref, sanitize_container_cli_message,
+};
 use serde::Deserialize;
 use std::process::{Command, Stdio};
 
@@ -158,7 +161,7 @@ fn run_cmd(bin: &str, args: &[&str], timeout_note: &str) -> Result<String, Strin
             "{} {} failed: {}",
             bin,
             args.first().unwrap_or(&""),
-            msg.chars().take(280).collect::<String>()
+            sanitize_container_cli_message(msg)
         ))
     }
 }
@@ -247,9 +250,15 @@ pub fn search_docker_hub(query: &str) -> Result<Vec<DockerHubSearchHit>, String>
 
 pub fn pull_image(image_ref: &str) -> Result<String, String> {
     let image = validate_image_ref(image_ref)?;
+    let pull_ref = normalize_container_image_ref(&image);
     let bin = require_bin()?;
-    run_cmd(bin, &["pull", &image], &format!("Pulled `{image}`."))
-        .map(|_| format!("Pulled `{image}`."))
+    run_cmd(bin, &["pull", &pull_ref], &format!("Pulled `{pull_ref}`.")).map(|_| {
+        if pull_ref == image {
+            format!("Pulled `{image}`.")
+        } else {
+            format!("Pulled `{pull_ref}` (from `{image}`).")
+        }
+    })
 }
 
 /// True when any container (running or stopped) references this image id or repo:tag.
@@ -366,6 +375,7 @@ pub fn parse_volume_bindings(raw: &str) -> Result<Vec<String>, String> {
 
 pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, String> {
     let image = validate_image_ref(req.image)?;
+    let run_image = normalize_container_image_ref(&image);
     let name = validate_container_name(req.name)?;
     let restart = validate_restart_policy(req.restart)?;
     let ports = parse_port_mappings(req.ports)?;
@@ -399,18 +409,23 @@ pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, Strin
         args.push(format!("{k}={v}"));
     }
     // Never label user-created containers as CPN-managed.
-    args.push(image.clone());
+    args.push(run_image.clone());
 
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let out = run_cmd(bin, &arg_refs, "Container created.")?;
     let label = name.as_deref().unwrap_or(out.trim());
+    let image_note = if run_image == image {
+        image.clone()
+    } else {
+        format!("{run_image} (requested `{image}`)")
+    };
     if req.start {
         Ok(format!(
-            "Created and started container `{label}` from `{image}`."
+            "Created and started container `{label}` from `{image_note}`."
         ))
     } else {
         Ok(format!(
-            "Created container `{label}` from `{image}` (not started)."
+            "Created container `{label}` from `{image_note}` (not started)."
         ))
     }
 }
@@ -443,5 +458,15 @@ mod tests {
             "unless-stopped"
         );
         assert!(validate_restart_policy("sometimes").is_err());
+    }
+
+    #[test]
+    fn pull_normalizes_short_names() {
+        assert_eq!(
+            crate::panel_ops_docker_image_ref::normalize_container_image_ref(
+                "filebrowser/filebrowser:latest"
+            ),
+            "docker.io/filebrowser/filebrowser:latest"
+        );
     }
 }
