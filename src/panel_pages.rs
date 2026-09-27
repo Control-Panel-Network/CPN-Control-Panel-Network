@@ -176,6 +176,37 @@ button { font:inherit; cursor:pointer; }
   padding:10px 12px; border:1px solid var(--hairline); border-radius:10px;
   background:var(--canvas); color:var(--ink);
 }
+.docker-create-form, .docker-hub-form {
+  display:grid; gap:14px; max-width:640px; margin-top:4px;
+}
+.docker-create-form label, .docker-hub-form label {
+  display:grid; gap:8px; font-size:14px; font-weight:600; color:var(--ink);
+}
+.docker-create-form input[type=text],
+.docker-create-form input[type=search],
+.docker-create-form textarea,
+.docker-create-form select,
+.docker-hub-form input[type=text],
+.docker-hub-form input[type=search] {
+  width:100%; max-width:100%; box-sizing:border-box; font:inherit;
+  padding:11px 13px; border:1px solid var(--hairline); border-radius:10px;
+  background:var(--canvas); color:var(--ink); color-scheme:light dark;
+}
+.docker-create-form textarea { font-family:ui-monospace,Consolas,monospace; min-height:88px; resize:vertical; }
+.docker-create-form label.docker-inline-check {
+  display:flex; align-items:center; gap:10px; font-weight:600;
+}
+.docker-create-form .docker-form-actions { margin:4px 0 0; }
+[data-color-mode=dark] .docker-create-form input[type=text],
+[data-color-mode=dark] .docker-create-form input[type=search],
+[data-color-mode=dark] .docker-create-form textarea,
+[data-color-mode=dark] .docker-create-form select,
+[data-color-mode=dark] .docker-hub-form input[type=text],
+[data-color-mode=dark] .docker-hub-form input[type=search] {
+  background:#12151c; border-color:#3b4558; color:#f3f6fb;
+}
+[data-color-mode=dark] .docker-create-form input::placeholder,
+[data-color-mode=dark] .docker-hub-form input::placeholder { color:#94a3b8; }
 .btn-primary {
   display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px;
   border-radius:999px; background:var(--blue); color:#fff; font-weight:700; border:0;
