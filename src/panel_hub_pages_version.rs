@@ -86,8 +86,8 @@ pub fn version_management_page(can_manage: bool) -> String {
     }
     let body = format!(
         r#"<ul class="kv-list">
-  <li><span>Running</span><strong id="cpn-version-running">{running}</strong></li>
-  <li><span>Installed package</span><strong id="cpn-version-installed">{installed}</strong></li>
+  <li><span>Running</span><span><strong id="cpn-version-running">{running}</strong><br><span class="muted" id="cpn-version-running-date"></span></span></li>
+  <li><span>Installed package</span><span><strong id="cpn-version-installed">{installed}</strong><br><span class="muted" id="cpn-version-installed-date"></span></span></li>
   <li><span>Your source</span><strong id="cpn-version-source-tip">-</strong></li>
   <li><span>Upstream official</span><strong id="cpn-version-upstream-tip">-</strong></li>
   <li><span>Latest (configured source)</span><strong id="cpn-version-latest">-</strong></li>
@@ -100,6 +100,10 @@ pub fn version_management_page(can_manage: bool) -> String {
 </div>
 {source_block}
 {manage_block}
+<p class="muted" style="margin-top:14px;max-width:640px;">
+  CPN supports the <strong>latest two published releases</strong> only (current tip plus the previous release).
+  Older tags remain listed for lab use, but they are outside support. Prefer upgrade to the newest release.
+</p>
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
   CLI remains available: <code>sudo cpn-installer --upgrade</code> / <code>--repair</code> / <code>--downgrade --to X.Y.Z --yes</code>.
@@ -144,6 +148,8 @@ mod tests {
         assert!(html.contains("Type to search tags"));
         assert!(!html.contains("id=\"cpn-version-select\""));
         assert!(html.contains("Upgrade to latest"));
+        assert!(html.contains("latest two published releases"));
+        assert!(html.contains("cpn-version-running-date"));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
         assert!(!html.contains('\u{2014}'));
