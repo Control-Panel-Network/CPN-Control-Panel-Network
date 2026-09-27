@@ -514,10 +514,10 @@ pub fn install_docker_engine() -> Result<String, String> {
 
     messages.push(enable_container_engine()?);
     messages.push(ensure_compose_cli().unwrap_or_else(|e| e));
-    if let Ok(heal) = crate::panel_ops_docker_image_ref::heal_container_engine_podman_pull() {
-        if !heal.contains("skipped") {
-            messages.push(heal);
-        }
+    if let Ok(heal) = crate::panel_ops_docker_image_ref::heal_container_engine_podman_pull()
+        && !heal.contains("skipped")
+    {
+        messages.push(heal);
     }
     messages.push(
         "Existing CPN-managed compose under /var/lib/cpn/docker and containers labeled com.cpn.managed=1 were left untouched."

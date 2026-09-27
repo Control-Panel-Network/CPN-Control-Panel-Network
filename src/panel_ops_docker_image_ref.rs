@@ -85,11 +85,11 @@ pub fn normalize_container_image_ref(raw: &str) -> String {
         format!("docker.io/library/{name}")
     };
     let mut out = full_name;
-    if let Some(t) = tag {
-        if !t.is_empty() {
-            out.push(':');
-            out.push_str(&t);
-        }
+    if let Some(t) = tag
+        && !t.is_empty()
+    {
+        out.push(':');
+        out.push_str(&t);
     }
     if let Some(d) = digest {
         out.push_str(&d);
