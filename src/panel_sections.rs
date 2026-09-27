@@ -81,10 +81,7 @@ pub fn email_create_main(notice: Option<&str>, error: Option<&str>) -> String {
         {create}
       </article>
       <p class="muted"><a href="/email/accounts">View all mailboxes</a></p>"#,
-        heading = section_heading(
-            "Create Email",
-            "Provision a mailbox on this CPN host.",
-        ),
+        heading = section_heading("Create Email", "Provision a mailbox on this CPN host.",),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         stack = email_mail_stack_notice_html(),

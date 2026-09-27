@@ -8,8 +8,7 @@ use crate::panel_hub_pages_email_auth::{
 };
 use crate::panel_hub_pages_hosting::{
     add_catchall, add_forward, email_accounts_page, email_catchall_page, email_create_page,
-    email_delivery_page, email_dkim_page, email_forwarding_page,
-    ensure_dkim,
+    email_delivery_page, email_dkim_page, email_forwarding_page, ensure_dkim,
 };
 use crate::panel_hub_pages_webmail::{
     apply_regenerate_path, apply_webmail_settings_form, email_webmail_app_page, email_webmail_page,

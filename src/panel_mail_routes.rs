@@ -32,11 +32,7 @@ fn safe_email_return_path(raw: &str) -> String {
     }
 }
 
-fn email_redirect(
-    return_to: Option<&str>,
-    notice: Option<&str>,
-    error: Option<&str>,
-) -> String {
+fn email_redirect(return_to: Option<&str>, notice: Option<&str>, error: Option<&str>) -> String {
     let mut url = return_to
         .map(safe_email_return_path)
         .unwrap_or_else(|| "/email/accounts".into());

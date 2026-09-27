@@ -1,6 +1,8 @@
 //! Postfix + Dovecot host package heal, start, and fast health probes.
 
-use crate::apps_pkg::{enable_now, install_packages_dnf_or_apt, package_manager, rpm_or_dpkg_all_installed};
+use crate::apps_pkg::{
+    enable_now, install_packages_dnf_or_apt, package_manager, rpm_or_dpkg_all_installed,
+};
 use crate::install_mail_backend::apply_local_mail_configuration;
 use crate::service_detect::{port_open, systemd_unit_active, systemd_unit_file_exists};
 
@@ -69,8 +71,7 @@ pub fn start_email_stack() -> Result<String, String> {
     crate::install_selinux_mail::ensure_httpd_mail_ports();
     if !systemd_unit_file_exists("postfix") {
         return Err(
-            "Postfix unit is missing after package install. Check dnf/yum logs on the host."
-                .into(),
+            "Postfix unit is missing after package install. Check dnf/yum logs on the host.".into(),
         );
     }
     enable_now(&["postfix"])?;

@@ -203,8 +203,9 @@ fn dkim_domain_table_html() -> String {
     if rows.is_empty() {
         return r#"<p class="muted">No domain folders yet. Run Ensure DKIM or create a website to generate keys.</p>"#.into();
     }
-    let mut table =
-        String::from(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Domain</th><th>Key</th><th>DNS name</th><th>TXT preview</th></tr></thead><tbody>"#);
+    let mut table = String::from(
+        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Domain</th><th>Key</th><th>DNS name</th><th>TXT preview</th></tr></thead><tbody>"#,
+    );
     for row in &rows {
         let key_label = if row.has_key { "Present" } else { "Missing" };
         table.push_str(&format!(

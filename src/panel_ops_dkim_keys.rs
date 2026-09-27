@@ -229,7 +229,8 @@ pub fn list_dkim_domain_rows() -> Vec<DkimDomainRow> {
             let has_key = private_key_path(&domain)
                 .map(|p| p.is_file())
                 .unwrap_or(false);
-            let dns_name = dkim_dns_name(&domain).unwrap_or_else(|_| format!("{SELECTOR}._domainkey.{domain}"));
+            let dns_name = dkim_dns_name(&domain)
+                .unwrap_or_else(|_| format!("{SELECTOR}._domainkey.{domain}"));
             let txt_preview = if has_key {
                 read_dkim_txt_value(&domain)
                     .map(|v| truncate_txt(&v, 120))

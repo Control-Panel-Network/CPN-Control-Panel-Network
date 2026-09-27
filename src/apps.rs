@@ -263,10 +263,7 @@ pub fn detect_app(id: AppId) -> AppStatus {
                     "Postfix and Dovecot are active; IMAP :143 is listening.".into(),
                 )
             } else if pkgs || postfix || dovecot {
-                (
-                    AppStateKind::Installed,
-                    stack.detail,
-                )
+                (AppStateKind::Installed, stack.detail)
             } else {
                 (
                     AppStateKind::NotInstalled,
