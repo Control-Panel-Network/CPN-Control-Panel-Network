@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docker Host package compose provider**: Install/heal now pulls in `docker-compose-plugin` (Docker CE / moby) or `podman-compose` (Podman + podman-docker) so `docker compose` works for `/docker/stacks` Pull & Recreate. Re-running Install on an engine-only host adds the missing compose packages without touching CPN-managed stacks.
+- **Compose on Podman**: CPN runs `docker compose` from the stack project directory with a relative `-f` file (no `--project-directory`) so `podman-compose` works on AlmaLinux Podman labs.
+
 ### Added
 
 - **Website staging (Manage > Clone/Staging)**: `POST /websites/clone` creates a separate staging site (default `staging.<domain>` or `staging-<label>.<parent>`) with toggles (default on) for files, MariaDB (registry + wp-config), site plugins/host activations, cron jobs, and site-linked Docker compose stacks. Staging gets new DB users/passwords (never logged), wp-config remap when detected, `.cpn-staging-db-map.json` (mode 600) under the site home, Cloudflare DNS via the normal create flow, and `staging_of` on site JSON. Linked compose stacks clone to a new project under `<data>/docker/` with copied `<data>/docker-data/` and `docker compose up -d`; production stacks are left running. Manage shows production/staging links. Promote/sync to production remains phase 2.
