@@ -5,7 +5,7 @@ use crate::panel_site_git::snapshot;
 use crate::panel_site_staging::collect_linked_database_names;
 use crate::panel_site_tools_security::site_tools_csrf_token;
 use crate::panel_website_manage_ui::html_escape;
-use crate::sites::{staging_sites_for, SiteRecord};
+use crate::sites::{SiteRecord, staging_sites_for};
 
 pub fn tab_git(site: &SiteRecord, username: &str) -> String {
     let csrf = html_escape(&site_tools_csrf_token(username, &site.domain));
@@ -81,9 +81,7 @@ fn staging_relationship_html(site: &SiteRecord) -> String {
         .iter()
         .map(|s| {
             let d = html_escape(&s.domain);
-            format!(
-                r#"<a href="/websites/manage?domain={d}&amp;tab=overview">{d}</a>"#
-            )
+            format!(r#"<a href="/websites/manage?domain={d}&amp;tab=overview">{d}</a>"#)
         })
         .collect();
     format!(

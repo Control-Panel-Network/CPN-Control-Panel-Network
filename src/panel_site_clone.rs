@@ -1,7 +1,7 @@
 //! Clone / staging: copy site files, databases, plugins, and linked Docker notes.
 
 use crate::package_quota::require_site_create_allowed;
-use crate::panel_site_staging::{apply_staging_extras, StagingCloneOptions};
+use crate::panel_site_staging::{StagingCloneOptions, apply_staging_extras};
 use crate::sites::{
     SiteModify, SiteRecord, create_site_with_ssl, hosting_home_root, load_site, modify_site,
     normalize_domain, resolve_parent_domain, site_home_from_record,
@@ -173,7 +173,13 @@ pub fn clone_site_files(
     target_raw: &str,
     use_staging: bool,
 ) -> Result<CloneResult, String> {
-    clone_site_with_options(source, owner, target_raw, use_staging, &CloneOptions::default())
+    clone_site_with_options(
+        source,
+        owner,
+        target_raw,
+        use_staging,
+        &CloneOptions::default(),
+    )
 }
 
 pub fn clone_site_with_options(
@@ -302,9 +308,7 @@ pub fn clone_site_with_options(
     if !dns_report.steps.is_empty() || !dns_report.warnings.is_empty() {
         note_parts.push(dns_summary);
     }
-    note_parts.push(
-        "Promote/sync staging to production is not automated yet (phase 2).".into(),
-    );
+    note_parts.push("Promote/sync staging to production is not automated yet (phase 2).".into());
 
     Ok(CloneResult {
         domain: created.domain,
@@ -342,10 +346,7 @@ mod tests {
             assert_eq!(out.domain, "staging.example.com");
             assert!(Path::new(&out.docroot).join("hello.txt").is_file());
             let staged = load_site("staging.example.com").unwrap();
-            assert_eq!(
-                staged.staging_of.as_deref(),
-                Some("example.com")
-            );
+            assert_eq!(staged.staging_of.as_deref(), Some("example.com"));
             unsafe {
                 std::env::remove_var("CPN_SITES_HOME");
             }

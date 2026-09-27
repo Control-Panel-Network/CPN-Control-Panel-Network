@@ -6,14 +6,14 @@ use crate::packages::QuotaResource;
 use crate::panel_ops_db::{
     create_database_with_user, local_mariadb_ready, mariadb_client_bin, mariadb_dump_bin,
 };
-use crate::panel_ops_site_cron::clone_cron_jobs_to_target;
 use crate::panel_ops_docker_compose::CPN_MANAGED_LABEL;
+use crate::panel_ops_site_cron::clone_cron_jobs_to_target;
 use crate::panel_site_staging_docker::{clone_stack_for_staging, stacks_linked_to_site};
 use crate::plugin_activation::{activate_host_plugin_for_domain, list_activations_for_domain};
 use crate::resource_accounts::{create_database, list_databases};
-use crate::sites::{site_home_from_record, site_plugins_dir, SiteRecord};
-use rand::distr::Alphanumeric;
+use crate::sites::{SiteRecord, site_home_from_record, site_plugins_dir};
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -113,9 +113,7 @@ pub fn apply_staging_extras(
             }
         }
         for act in list_activations_for_domain(&source.domain) {
-            if let Err(err) =
-                activate_host_plugin_for_domain(&target.domain, &act.plugin_id)
-            {
+            if let Err(err) = activate_host_plugin_for_domain(&target.domain, &act.plugin_id) {
                 out.warnings.push(format!(
                     "Host plugin `{}` activation on staging skipped: {err}",
                     act.plugin_id
@@ -127,7 +125,8 @@ pub fn apply_staging_extras(
     if opts.databases {
         for src_db in collect_linked_database_names(source) {
             if let Err(err) = require_quota(owner, QuotaResource::Databases) {
-                out.warnings.push(format!("Database `{src_db}` not cloned: {err}"));
+                out.warnings
+                    .push(format!("Database `{src_db}` not cloned: {err}"));
                 break;
             }
             match clone_one_database(&src_db, owner, &target.domain) {
@@ -166,7 +165,8 @@ pub fn apply_staging_extras(
         }
         if !db_map_entries.is_empty() {
             if let Err(err) = write_db_map_file(source, target, &db_map_entries) {
-                out.warnings.push(format!("Could not write staging DB map file: {err}"));
+                out.warnings
+                    .push(format!("Could not write staging DB map file: {err}"));
             }
         }
     }
@@ -190,8 +190,7 @@ pub fn apply_staging_extras(
             );
         } else {
             for stack in linked {
-                let compose_text =
-                    fs::read_to_string(&stack.compose_file).unwrap_or_default();
+                let compose_text = fs::read_to_string(&stack.compose_file).unwrap_or_default();
                 if compose_text.contains(CPN_MANAGED_LABEL) {
                     out.docker_notes.push(format!(
                         "Compose stack `{}` uses {} and was left on production (not cloned).",
@@ -201,10 +200,9 @@ pub fn apply_staging_extras(
                 }
                 match clone_stack_for_staging(&stack, source, target, owner) {
                     Ok(msg) => out.docker_notes.push(msg),
-                    Err(err) => out.warnings.push(format!(
-                        "Docker stack `{}` not cloned: {err}",
-                        stack.id
-                    )),
+                    Err(err) => out
+                        .warnings
+                        .push(format!("Docker stack `{}` not cloned: {err}", stack.id)),
                 }
             }
         }
@@ -230,8 +228,7 @@ fn write_db_map_file(
         staging_domain: target.domain.clone(),
         entries: entries.to_vec(),
     };
-    let raw = serde_json::to_string_pretty(&file)
-        .map_err(|e| format!("serialize db map: {e}"))?;
+    let raw = serde_json::to_string_pretty(&file).map_err(|e| format!("serialize db map: {e}"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
     }
@@ -250,9 +247,7 @@ fn clone_one_database(
     registry_domain: &str,
 ) -> Result<CloneDbResult, String> {
     if !local_mariadb_ready() {
-        return Err(
-            "Local MariaDB is not available. Install MariaDB from Host packages.".into(),
-        );
+        return Err("Local MariaDB is not available. Install MariaDB from Host packages.".into());
     }
     let staging_name = unique_staging_db_name(source_db, registry_domain)?;
     let db_user = staging_name.clone();

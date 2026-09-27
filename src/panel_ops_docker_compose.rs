@@ -117,7 +117,12 @@ fn read_compose_image_hint(path: &Path) -> Option<String> {
     for line in text.lines() {
         let t = line.trim();
         if t.starts_with("image:") {
-            return Some(t.trim_start_matches("image:").trim().trim_matches('"').to_string());
+            return Some(
+                t.trim_start_matches("image:")
+                    .trim()
+                    .trim_matches('"')
+                    .to_string(),
+            );
         }
     }
     None
@@ -131,9 +136,7 @@ pub fn validate_stack_id(raw: &str) -> Result<String, String> {
     if id.len() > 48 {
         return Err("Stack name is too long (max 48).".into());
     }
-    let ok = id
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    let ok = id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
         && !id.starts_with('-')
         && !id.ends_with('-');
     if !ok {
@@ -169,10 +172,7 @@ fn compose_args(file: &Path, project_dir: &Path) -> Vec<String> {
 
 pub fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, String> {
     let Some(file) = find_compose_file(project_dir) else {
-        return Err(format!(
-            "No compose file in {}.",
-            project_dir.display()
-        ));
+        return Err(format!("No compose file in {}.", project_dir.display()));
     };
     let bin = require_bin()?;
     let mut args = compose_args(&file, project_dir);
@@ -279,11 +279,13 @@ pub fn create_compose_stack(req: CreateComposeStackRequest<'_>) -> Result<String
         let _ = fs::set_permissions(&host_data, fs::Permissions::from_mode(0o750));
     }
 
-    fs::create_dir_all(&project_dir).map_err(|e| format!("Could not create stack directory: {e}"))?;
+    fs::create_dir_all(&project_dir)
+        .map_err(|e| format!("Could not create stack directory: {e}"))?;
 
     let compose_path = project_dir.join("compose.yml");
     let compose_body = render_compose_yml(&image, &id, &host_data, &data_path, &ports, req.owner);
-    fs::write(&compose_path, compose_body).map_err(|e| format!("Could not write compose.yml: {e}"))?;
+    fs::write(&compose_path, compose_body)
+        .map_err(|e| format!("Could not write compose.yml: {e}"))?;
 
     if !envs.is_empty() {
         let mut env_lines = Vec::new();
@@ -387,9 +389,11 @@ mod tests {
             OfficialStackTemplate::Nginx.default_image(),
             Some("nginx:alpine")
         );
-        assert!(OfficialStackTemplate::MariaDb
-            .default_image()
-            .unwrap()
-            .starts_with("mariadb:"));
+        assert!(
+            OfficialStackTemplate::MariaDb
+                .default_image()
+                .unwrap()
+                .starts_with("mariadb:")
+        );
     }
 }

@@ -1,10 +1,10 @@
 //! Clone site-linked Docker Compose stacks for staging (separate project + data).
 
 use crate::panel_ops_docker_compose::{
-    compose_host_data_root, compose_projects_root, find_compose_file, list_compose_stacks,
-    run_compose, validate_stack_id, ComposeStackRow, CPN_MANAGED_LABEL,
+    CPN_MANAGED_LABEL, ComposeStackRow, compose_host_data_root, compose_projects_root,
+    find_compose_file, list_compose_stacks, run_compose, validate_stack_id,
 };
-use crate::sites::{site_home_from_record, SiteRecord};
+use crate::sites::{SiteRecord, site_home_from_record};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -53,11 +53,14 @@ pub fn clone_stack_for_staging(
 
     let src_home = site_home_from_record(source).display().to_string();
     let dst_home = site_home_from_record(target).display().to_string();
-    let mut body = fs::read_to_string(&stack.compose_file)
-        .map_err(|e| format!("read compose: {e}"))?;
+    let mut body =
+        fs::read_to_string(&stack.compose_file).map_err(|e| format!("read compose: {e}"))?;
     body = body.replace(&src_home, &dst_home);
     body = body.replace(&source.domain, &target.domain);
-    body = body.replace(&format!("com.cpn.stack: \"{}\"", stack.id), &format!("com.cpn.stack: \"{new_id}\""));
+    body = body.replace(
+        &format!("com.cpn.stack: \"{}\"", stack.id),
+        &format!("com.cpn.stack: \"{new_id}\""),
+    );
     body = body.replace(
         &format!("com.cpn.stack: '{stack.id}'"),
         &format!("com.cpn.stack: '{new_id}'"),
@@ -77,8 +80,7 @@ pub fn clone_stack_for_staging(
     }
 
     fs::create_dir_all(&new_project).map_err(|e| format!("mkdir stack project: {e}"))?;
-    fs::write(new_project.join("compose.yml"), &body)
-        .map_err(|e| format!("write compose: {e}"))?;
+    fs::write(new_project.join("compose.yml"), &body).map_err(|e| format!("write compose: {e}"))?;
 
     let env_src = stack.project_dir.join(".env");
     if env_src.is_file() {

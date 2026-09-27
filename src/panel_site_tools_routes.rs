@@ -2,11 +2,9 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{redirect_notice, require_panel_user, urlencoding_simple};
-use crate::panel_site_clone::{
-    clone_option_from_form, clone_site_with_options, CloneOptions,
-};
-use crate::panel_site_staging::StagingCloneOptions;
+use crate::panel_site_clone::{CloneOptions, clone_option_from_form, clone_site_with_options};
 use crate::panel_site_git::{GitAction, run_git_action};
+use crate::panel_site_staging::StagingCloneOptions;
 use crate::panel_site_tools_security::{
     check_tools_rate_limit, same_origin_ok, site_tools_csrf_token, verify_site_tools_csrf,
 };
