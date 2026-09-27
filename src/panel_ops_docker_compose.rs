@@ -165,9 +165,13 @@ fn require_bin() -> Result<&'static str, String> {
 }
 
 fn compose_args(file: &Path, project_dir: &Path) -> Result<Vec<String>, String> {
-    let rel = file
-        .strip_prefix(project_dir)
-        .map_err(|_| format!("Compose file {} is not under {}.", file.display(), project_dir.display()))?;
+    let rel = file.strip_prefix(project_dir).map_err(|_| {
+        format!(
+            "Compose file {} is not under {}.",
+            file.display(),
+            project_dir.display()
+        )
+    })?;
     Ok(vec![
         "compose".into(),
         "-f".into(),
