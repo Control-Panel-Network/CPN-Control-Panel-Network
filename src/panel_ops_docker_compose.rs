@@ -213,14 +213,14 @@ pub fn refresh_compose_stack(stack_id: &str) -> Result<String, String> {
     }
     let _ = run_compose(&project_dir, &["pull"]);
     run_compose(&project_dir, &["up", "-d", "--remove-orphans"]).map(|detail| {
-        format!(
+        let mut msg = format!(
             "Stack `{id}` refreshed (pull + up -d). Data under {} is unchanged.",
             compose_host_data_root().join(&id).join("data").display()
-        ) + if detail.is_empty() {
-            String::new()
-        } else {
-            format!(" ({detail})")
+        );
+        if !detail.is_empty() {
+            msg.push_str(&format!(" ({detail})"));
         }
+        msg
     })
 }
 
