@@ -7,7 +7,7 @@ use crate::panel_ops_docker::{
 };
 use crate::panel_ops_docker_images::{DockerHubSearchHit, image_in_use};
 
-fn html_escape(value: &str) -> String {
+pub(crate) fn html_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -15,7 +15,7 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn urlencoding_simple(value: &str) -> String {
+pub(crate) fn urlencoding_simple(value: &str) -> String {
     let mut out = String::with_capacity(value.len() * 3);
     for byte in value.bytes() {
         match byte {
@@ -143,15 +143,17 @@ fn tab_class(active: &str, id: &str) -> &'static str {
     }
 }
 
-fn toolbar(active: &str) -> String {
+pub(crate) fn toolbar(active: &str) -> String {
     format!(
         r#"<p class="stack-actions docker-tabs" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
       <a class="{c}" href="/docker">Active Containers</a>
+      <a class="{s}" href="/docker/stacks">Compose Stacks</a>
       <a class="{i}" href="/docker/images">Manage Images</a>
       <a class="{h}" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>
     </p>
-    <p class="muted">CPN-managed containers (label <code>com.cpn.managed=1</code>) cannot be removed from this UI. Upgrade <code>--bypass</code> refreshes only those stacks.</p>"#,
+    <p class="muted">Prefer official or maintainer-published images from Docker Hub. CPN-managed stacks (label <code>com.cpn.managed=1</code>) keep data on the host under the CPN docker-data path; use Compose Stacks <strong>Pull &amp; Recreate</strong> or upgrade <code>--bypass</code> to refresh images without deleting volumes.</p>"#,
         c = tab_class(active, "containers"),
+        s = tab_class(active, "stacks"),
         i = tab_class(active, "images"),
         h = tab_class(active, "host"),
     )
@@ -162,7 +164,7 @@ fn create_container_form(prefill_image: &str) -> String {
     format!(
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Create Container</h2>
-      <p class="muted" style="margin:0 0 14px;">Run a local or pulled image. User containers are not labeled as CPN-managed.</p>
+      <p class="muted" style="margin:0 0 14px;">Run a local or pulled upstream image. For production data, prefer <a href="/docker/stacks">Compose Stacks</a> (host bind mounts). User containers are not labeled as CPN-managed.</p>
       <form method="post" action="/docker/create" class="docker-create-form" style="display:grid;gap:12px;max-width:640px;">
         <label>Image <span class="muted">(required)</span>
           <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{img}" autocomplete="off" style="width:100%;">
@@ -172,6 +174,9 @@ fn create_container_form(prefill_image: &str) -> String {
         </label>
         <label>Ports <span class="muted">(host:container, comma or newline)</span>
           <input type="text" name="ports" maxlength="200" placeholder="8080:80" autocomplete="off" style="width:100%;">
+        </label>
+        <label>Volumes <span class="muted">(host_path:container_path, optional)</span>
+          <input type="text" name="volumes" maxlength="400" placeholder="/var/lib/cpn/docker-data/myapp/data:/data" autocomplete="off" style="width:100%;">
         </label>
         <label>Environment <span class="muted">(KEY=value, one per line)</span>
           <textarea name="env" rows="3" maxlength="4000" placeholder="TZ=UTC" style="width:100%;font-family:monospace;"></textarea>
@@ -226,6 +231,7 @@ fn search_results_html(hits: &[DockerHubSearchHit]) -> String {
               <button type="submit" class="btn-primary">Pull</button>
             </form>
             <a class="btn-secondary" href="/docker?image={enc}">Create</a>
+            <a class="btn-secondary" href="/docker/stacks?image={enc}&amp;template=custom">Stack</a>
           </td>
         </tr>"#,
             name = html_escape(&hit.name),
@@ -307,16 +313,16 @@ fn search_pull_card(query: &str, hits: &[DockerHubSearchHit]) -> String {
     format!(
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Search &amp; Pull Images</h2>
-      <p class="muted" style="margin:0 0 12px;">Search Docker Hub, or enter a full image reference and pull directly.</p>
+      <p class="muted" style="margin:0 0 12px;">Search Docker Hub for official or maintainer images (Official badge first), pull, then run as a container or <a href="/docker/stacks">compose stack</a> with host volumes.</p>
       <form method="get" action="/docker/images" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px;">
         <label style="flex:1;min-width:200px;">Search Docker Hub
-          <input type="search" name="q" value="{q}" maxlength="100" placeholder="nginx, mysql, ubuntu" autocomplete="off" style="width:100%;">
+          <input type="search" name="q" value="{q}" maxlength="100" placeholder="nginx, mariadb, redis" autocomplete="off" style="width:100%;">
         </label>
         <button type="submit" class="btn-secondary">Search</button>
       </form>
       <form method="post" action="/docker/images/pull" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
         <label style="flex:1;min-width:200px;">Image to pull
-          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{q}" autocomplete="off" style="width:100%;">
+          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine (Docker Official Image)" value="{q}" autocomplete="off" style="width:100%;">
         </label>
         <button type="submit" class="btn-primary">Pull</button>
       </form>
@@ -388,6 +394,7 @@ pub fn docker_manage_page(
         r##"{toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
         <a class="btn-primary" href="#create-container">+ Create Container</a>
+        <a class="btn-secondary" href="/docker/stacks">Compose Stacks</a>
         <a class="btn-secondary" href="/docker/images">Manage Images</a>
       </p>
       <h2 style="margin:18px 0 10px;">Active Containers</h2>

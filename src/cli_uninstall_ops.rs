@@ -107,29 +107,12 @@ fn docker_bin() -> Option<&'static str> {
     })
 }
 
-fn cpn_compose_dirs(data_dir: &Path) -> Vec<PathBuf> {
-    let root = data_dir.join("docker");
-    let Ok(entries) = fs::read_dir(&root) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_dir()
-                && (p.join("compose.yml").is_file()
-                    || p.join("docker-compose.yml").is_file()
-                    || p.join("compose.yaml").is_file())
-        })
-        .collect()
-}
-
 pub(crate) fn tear_down_cpn_docker(data_dir: &Path, purge_volumes: bool, dry_run: bool) {
     let Some(bin) = docker_bin() else {
         log_step("docker/podman not found; skipping CPN Docker teardown");
         return;
     };
-    for dir in cpn_compose_dirs(data_dir) {
+    for dir in crate::panel_ops_docker_compose::cpn_compose_project_dirs(data_dir) {
         let compose_file = ["compose.yml", "docker-compose.yml", "compose.yaml"]
             .into_iter()
             .map(|n| dir.join(n))

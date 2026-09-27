@@ -79,7 +79,7 @@ fn validate_restart_policy(raw: &str) -> Result<String, String> {
     }
 }
 
-fn parse_port_mappings(raw: &str) -> Result<Vec<String>, String> {
+pub fn parse_port_mappings(raw: &str) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
     for part in raw.split(['\n', ',', ';']) {
         let p = part.trim();
@@ -102,7 +102,7 @@ fn parse_port_mappings(raw: &str) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-fn parse_env_vars(raw: &str) -> Result<Vec<(String, String)>, String> {
+pub fn parse_env_vars(raw: &str) -> Result<Vec<(String, String)>, String> {
     let mut out = Vec::new();
     for line in raw.lines() {
         let line = line.trim();
@@ -231,10 +231,17 @@ pub fn search_docker_hub(query: &str) -> Result<Vec<DockerHubSearchHit>, String>
             star_count: row.star_count.unwrap_or(0),
             is_official: row.is_official.unwrap_or(false),
         });
-        if hits.len() >= 12 {
+        if hits.len() >= 24 {
             break;
         }
     }
+    hits.sort_by(|a, b| {
+        b.is_official
+            .cmp(&a.is_official)
+            .then(b.star_count.cmp(&a.star_count))
+            .then(a.name.cmp(&b.name))
+    });
+    hits.truncate(12);
     Ok(hits)
 }
 
@@ -316,9 +323,45 @@ pub struct CreateContainerRequest<'a> {
     pub image: &'a str,
     pub name: &'a str,
     pub ports: &'a str,
+    pub volumes: &'a str,
     pub env: &'a str,
     pub restart: &'a str,
     pub start: bool,
+}
+
+/// Bind mount lines: `host_path:container_path` (host path should live under the CPN data root when possible).
+pub fn parse_volume_bindings(raw: &str) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    for part in raw.split(['\n', ',', ';']) {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        let Some((host, container)) = p.split_once(':') else {
+            return Err(format!(
+                "Invalid volume `{p}`. Use host_path:container_path (for example /var/lib/cpn/docker-data/myapp/data:/data)."
+            ));
+        };
+        let host = host.trim();
+        let container = container.trim();
+        if host.is_empty()
+            || container.is_empty()
+            || host.contains("..")
+            || container.contains("..")
+            || !host.starts_with('/')
+            || !container.starts_with('/')
+        {
+            return Err(format!("Invalid volume mapping `{p}`."));
+        }
+        if host.len() > 200 || container.len() > 120 {
+            return Err("Volume path is too long.".into());
+        }
+        out.push(format!("{host}:{container}"));
+        if out.len() > 16 {
+            return Err("Too many volume mappings.".into());
+        }
+    }
+    Ok(out)
 }
 
 pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, String> {
@@ -326,6 +369,7 @@ pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, Strin
     let name = validate_container_name(req.name)?;
     let restart = validate_restart_policy(req.restart)?;
     let ports = parse_port_mappings(req.ports)?;
+    let volumes = parse_volume_bindings(req.volumes)?;
     let envs = parse_env_vars(req.env)?;
     let bin = require_bin()?;
 
@@ -345,6 +389,10 @@ pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, Strin
     for p in &ports {
         args.push("-p".into());
         args.push(p.clone());
+    }
+    for v in &volumes {
+        args.push("-v".into());
+        args.push(v.clone());
     }
     for (k, v) in &envs {
         args.push("-e".into());

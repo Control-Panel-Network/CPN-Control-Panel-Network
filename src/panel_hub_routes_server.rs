@@ -4,6 +4,7 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
+use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_litespeed::{
     litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
     run_set_tier, run_set_webadmin_url, run_upgrade,
@@ -628,6 +629,8 @@ pub struct DockerCreateForm {
     #[serde(default)]
     pub ports: String,
     #[serde(default)]
+    pub volumes: String,
+    #[serde(default)]
     pub env: String,
     #[serde(default)]
     pub restart: String,
@@ -654,6 +657,7 @@ pub async fn docker_create_container(
     let image = form.image.clone();
     let name = form.name.clone();
     let ports = form.ports.clone();
+    let volumes = form.volumes.clone();
     let env = form.env.clone();
     let restart = form.restart.clone();
     let start = form
@@ -667,6 +671,7 @@ pub async fn docker_create_container(
                 image: &image,
                 name: &name,
                 ports: &ports,
+                volumes: &volumes,
                 env: &env,
                 restart: &restart,
                 start,
@@ -678,6 +683,118 @@ pub async fn docker_create_container(
     match result {
         Ok(msg) => redirect_notice("/docker", Some(&msg), None),
         Err(err) => redirect_notice("/docker", None, Some(&err)),
+    }
+}
+
+#[get("/docker/stacks")]
+pub async fn docker_stacks_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Compose Stacks",
+        &docker_stacks_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+            query.get("image").map(String::as_str),
+            query.get("template").map(String::as_str),
+        ),
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerStackCreateForm {
+    pub stack: String,
+    pub image: String,
+    #[serde(default)]
+    pub template: String,
+    #[serde(default)]
+    pub ports: String,
+    #[serde(default)]
+    pub env: String,
+    pub container_data_path: String,
+}
+
+#[post("/docker/stacks/create")]
+pub async fn docker_stack_create(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerStackCreateForm>,
+) -> HttpResponse {
+    let Some(username) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&username) {
+        return redirect_notice(
+            "/docker/stacks",
+            None,
+            Some("Only panel admins can create compose stacks."),
+        );
+    }
+    let stack = form.stack.clone();
+    let image = form.image.clone();
+    let template = form.template.clone();
+    let ports = form.ports.clone();
+    let env = form.env.clone();
+    let container_data_path = form.container_data_path.clone();
+    let owner = username.clone();
+    let tpl = crate::panel_ops_docker_compose::OfficialStackTemplate::from_form(&template);
+    let result = web::block(move || {
+        crate::panel_ops_docker_compose::create_compose_stack(
+            crate::panel_ops_docker_compose::CreateComposeStackRequest {
+                stack_id: &stack,
+                image: &image,
+                ports: &ports,
+                env: &env,
+                container_data_path: &container_data_path,
+                template: tpl,
+                owner: &owner,
+            },
+        )
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Create stack task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/stacks", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/stacks", None, Some(&err)),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerStackRefreshForm {
+    pub stack: String,
+}
+
+#[post("/docker/stacks/refresh")]
+pub async fn docker_stack_refresh(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerStackRefreshForm>,
+) -> HttpResponse {
+    let Some(username) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&username) {
+        return redirect_notice(
+            "/docker/stacks",
+            None,
+            Some("Only panel admins can refresh compose stacks."),
+        );
+    }
+    let stack = form.stack.clone();
+    let result =
+        web::block(move || crate::panel_ops_docker_compose::refresh_compose_stack(&stack))
+            .await
+            .unwrap_or_else(|e| Err(format!("Refresh task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/stacks", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/stacks", None, Some(&err)),
     }
 }
 
