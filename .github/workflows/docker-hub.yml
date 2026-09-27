@@ -122,13 +122,17 @@ jobs:
             echo "Missing DOCKERHUB_USERNAME / DOCKERHUB_TOKEN; will build only."
           fi
 
-      - name: Require Docker Hub secrets for automated publish
+      - name: Require Docker Hub secrets for publish
         if: >-
           steps.want.outputs.run == 'true'
           && steps.hub.outputs.available != 'true'
-          && (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/'))
+          && (
+            github.event_name == 'release'
+            || startsWith(github.ref, 'refs/tags/')
+            || github.event_name == 'workflow_dispatch'
+          )
         run: |
-          echo "::error::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN to publish master3395/cpn-installer."
+          echo "::error::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN on Control-Panel-Network/CPN-Control-Panel-Network to publish master3395/cpn-installer."
           exit 1
 
       - name: Log in to Docker Hub
