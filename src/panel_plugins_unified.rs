@@ -92,6 +92,7 @@ fn collect_unified<'a>(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn unified_category_pills(
     apps: &[AppStatus],
     entries: &[CatalogEntry],

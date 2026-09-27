@@ -273,6 +273,7 @@ pub(crate) fn store_scope_query_suffix(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn store_install_target_picker(
     sites: &[SiteRecord],
     selected_domain: &str,
