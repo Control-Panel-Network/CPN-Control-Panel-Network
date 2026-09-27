@@ -199,9 +199,7 @@ pub(crate) fn resolve_store_target(
         "host" => "host",
         "site" => "site",
         _ => {
-            if category.trim().eq_ignore_ascii_case("host") {
-                "host"
-            } else if sites.is_empty() {
+            if category.trim().eq_ignore_ascii_case("host") || sites.is_empty() {
                 "host"
             } else {
                 "site"
