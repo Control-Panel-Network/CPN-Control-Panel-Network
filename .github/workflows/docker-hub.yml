@@ -1,19 +1,15 @@
 name: Docker Hub publish
 
-# Builds the RPM with scripts/docker-build-rpm.sh, then the root Dockerfile,
-# and pushes master3395/cpn-installer tags to Docker Hub.
+# Builds native packages, then docker/Dockerfile.* runtime images, and pushes
+# master3395/cpn-installer tags to Docker Hub (alpha/prerelease product line).
 #
-# Tags:
-#   almalinux9, almalinux10 (OS baseline)
-#   latest (AlmaLinux 9, primary EL install target)
-#   <semver> from the Git tag when triggered by v* tag push or release (no leading v)
+# OS tags: almalinux9, almalinux10, ubuntu22.04, ubuntu24.04, ubuntu26.04, latest
+# latest tracks almalinux9 (primary EL baseline). Semver tags come from v* Git tags.
 #
 # Triggers on v* tag push because GitHub Releases created with GITHUB_TOKEN do not
 # fire release:published for other workflows.
 #
-# Required repository secrets:
-#   DOCKERHUB_USERNAME
-#   DOCKERHUB_TOKEN
+# Required repository secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
 
 on:
   push:
@@ -24,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       os_tag:
-        description: OS tag (almalinux9, almalinux10, or all)
+        description: OS tag (almalinux9, almalinux10, ubuntu22.04, ubuntu24.04, ubuntu26.04, or all)
         required: false
         default: all
 
@@ -43,12 +39,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - alma: "9"
+          - family: alma
+            alma: "9"
             tag: almalinux9
             latest: true
-          - alma: "10"
+            dockerfile: docker/Dockerfile.almalinux
+          - family: alma
+            alma: "10"
             tag: almalinux10
             latest: false
+            dockerfile: docker/Dockerfile.almalinux
+          - family: ubuntu
+            ubuntu_version: "22.04"
+            tag: ubuntu22.04
+            latest: false
+            dockerfile: docker/Dockerfile.ubuntu
+          - family: ubuntu
+            ubuntu_version: "24.04"
+            tag: ubuntu24.04
+            latest: false
+            dockerfile: docker/Dockerfile.ubuntu
+          - family: ubuntu
+            ubuntu_version: "26.04"
+            tag: ubuntu26.04
+            latest: false
+            dockerfile: docker/Dockerfile.ubuntu
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -123,8 +138,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build RPM (scripts/docker-build-rpm.sh)
-        if: steps.want.outputs.run == 'true'
+      - name: Build AlmaLinux RPM
+        if: steps.want.outputs.run == 'true' && matrix.family == 'alma'
         env:
           CPN_ALMA_VERSION: ${{ matrix.alma }}
           CPN_CONTAINER_ENGINE: docker
@@ -138,24 +153,40 @@ jobs:
           cp -f "${rpms[0]}" ./cpn-installer.rpm
           ls -lh ./cpn-installer.rpm
 
+      - name: Build Ubuntu DEB
+        if: steps.want.outputs.run == 'true' && matrix.family == 'ubuntu'
+        env:
+          CPN_UBUNTU_VERSION: ${{ matrix.ubuntu_version }}
+          CPN_CONTAINER_ENGINE: docker
+        run: |
+          set -euo pipefail
+          chmod +x scripts/docker-build-deb.sh scripts/build-deb.sh
+          ./scripts/docker-build-deb.sh
+          shopt -s nullglob
+          debs=(target/deb/*.deb)
+          test "${#debs[@]}" -ge 1
+          cp -f "${debs[0]}" ./cpn-installer.deb
+          ls -lh ./cpn-installer.deb
+
       - name: Build runtime image (no Hub secrets)
         if: steps.want.outputs.run == 'true' && steps.hub.outputs.available != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          file: Dockerfile
+          file: ${{ matrix.dockerfile }}
           load: true
           push: false
           tags: master3395/cpn-installer:${{ matrix.tag }}
           build-args: |
             ALMA_VERSION=${{ matrix.alma }}
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
 
       - name: Build and push image
         if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
-          file: Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: |
             master3395/cpn-installer:${{ matrix.tag }}
@@ -163,20 +194,31 @@ jobs:
             ${{ steps.ver.outputs.version != '' && format('master3395/cpn-installer:{0}', steps.ver.outputs.version) || '' }}
           build-args: |
             ALMA_VERSION=${{ matrix.alma }}
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            cpn.os.family=${{ matrix.family }}
             cpn.almalinux.version=${{ matrix.alma }}
+            cpn.ubuntu.version=${{ matrix.ubuntu_version }}
 
       - name: Smoke check pushed image
         if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
+        env:
+          FAMILY: ${{ matrix.family }}
         run: |
           set -euo pipefail
           docker pull "master3395/cpn-installer:${{ matrix.tag }}"
-          docker run --rm --entrypoint /bin/bash \
-            "master3395/cpn-installer:${{ matrix.tag }}" \
-            -lc 'rpm -q cpn-installer && systemctl is-enabled cpn-installer.service'
+          if [ "${FAMILY}" = "alma" ]; then
+            docker run --rm --entrypoint /bin/bash \
+              "master3395/cpn-installer:${{ matrix.tag }}" \
+              -lc 'rpm -q cpn-installer && systemctl is-enabled cpn-installer.service'
+          else
+            docker run --rm --entrypoint /bin/bash \
+              "master3395/cpn-installer:${{ matrix.tag }}" \
+              -lc 'dpkg -l cpn-installer | grep -q ^ii && systemctl is-enabled cpn-installer.service'
+          fi
 
       - name: Report pushed digest
         if: steps.want.outputs.run == 'true' && steps.hub.outputs.available == 'true'
