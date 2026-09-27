@@ -45,7 +45,10 @@ fn action_form(action: &str, name: &str, label: &str, class: &str, confirm: &str
 }
 
 fn container_actions(row: &DockerContainerRow) -> String {
-    let mut out = String::new();
+    let mut out = format!(
+        r#"<a class="btn-secondary" href="/docker/view/{name}" title="Manage container">Settings</a>"#,
+        name = urlencoding_simple(&row.name),
+    );
     if row.running {
         out.push_str(&action_form(
             "stop",
@@ -71,7 +74,7 @@ fn container_actions(row: &DockerContainerRow) -> String {
         ));
     }
     out.push_str(&format!(
-        r#"<a class="btn-secondary" href="/docker/logs?name={name}">Logs</a>"#,
+        r#"<a class="btn-secondary" href="/docker/view/{name}#container-logs">Logs</a>"#,
         name = urlencoding_simple(&row.name),
     ));
     if row.cpn_managed {
@@ -112,9 +115,16 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
         } else {
             ""
         };
+        let owner_cell = if row.owner == "Unassigned" {
+            format!(
+                r#"<span title="No com.cpn.owner label; created outside the panel.">Unassigned</span>"#
+            )
+        } else {
+            html_escape(&row.owner)
+        };
         body.push_str(&format!(
             r#"<tr>
-          <td><strong>{name}</strong>{managed}<br><code class="muted">{id}</code></td>
+          <td><strong><a href="/docker/view/{name_link}">{name}</a></strong>{managed}<br><code class="muted">{id}</code></td>
           <td>{owner}</td>
           <td><code>{image}</code></td>
           <td><code>{tag}</code></td>
@@ -122,9 +132,10 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
           <td class="docker-actions">{actions}</td>
         </tr>"#,
             name = html_escape(&row.name),
+            name_link = urlencoding_simple(&row.name),
             managed = managed,
             id = html_escape(&row.id),
-            owner = html_escape(&row.owner),
+            owner = owner_cell,
             image = html_escape(&row.image),
             tag = html_escape(&row.tag),
             status = html_escape(&row.status),
@@ -151,7 +162,8 @@ pub(crate) fn toolbar(active: &str) -> String {
       <a class="{i}" href="/docker/images">Manage Images</a>
       <a class="{h}" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>
     </p>
-    <p class="muted">Prefer official or maintainer-published images from Docker Hub. CPN-managed stacks (label <code>com.cpn.managed=1</code>) keep data on the host under the CPN docker-data path; use Compose Stacks <strong>Pull &amp; Recreate</strong> or upgrade <code>--bypass</code> to refresh images without deleting volumes.</p>"#,
+    <p class="muted">Prefer official or maintainer-published images from Docker Hub. CPN-managed stacks (label <code>com.cpn.managed=1</code>) keep data on the host under the CPN docker-data path; use Compose Stacks <strong>Pull &amp; Recreate</strong> or upgrade <code>--bypass</code> to refresh images without deleting volumes.</p>
+    <p class="muted"><strong>Owner:</strong> panel-created containers use your account name; compose stacks use the owner you set on the stack. CLI or third-party containers show <strong>Unassigned</strong> until label <code>com.cpn.owner=username</code> is set. Missing image metadata shows as <strong>Unknown</strong> but the row still lists the container.</p>"#,
         c = tab_class(active, "containers"),
         s = tab_class(active, "stacks"),
         i = tab_class(active, "images"),

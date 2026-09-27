@@ -2,8 +2,11 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+};
 use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
+use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_litespeed::{
     litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
@@ -506,6 +509,21 @@ pub async fn docker_logs_route(
 pub struct DockerContainerForm {
     pub action: String,
     pub name: String,
+    #[serde(default)]
+    pub return_to: String,
+}
+
+fn docker_action_redirect_base(return_to: &str) -> String {
+    let rt = return_to.trim();
+    if rt.starts_with("/docker/view/")
+        && !rt.contains("..")
+        && !rt.contains('\n')
+        && rt.len() <= 200
+    {
+        rt.to_string()
+    } else {
+        "/docker".into()
+    }
 }
 
 #[post("/docker/container")]
@@ -524,9 +542,115 @@ pub async fn docker_container_action(
             Some("Only panel admins can change containers."),
         );
     }
+    let redirect_base = docker_action_redirect_base(&form.return_to);
     match crate::panel_ops_docker::container_action(&form.action, &form.name) {
-        Ok(msg) => redirect_notice("/docker", Some(&msg), None),
-        Err(err) => redirect_notice("/docker", None, Some(&err)),
+        Ok(msg) => redirect_notice(&redirect_base, Some(&msg), None),
+        Err(err) => redirect_notice(&redirect_base, None, Some(&err)),
+    }
+}
+
+#[get("/docker/view/{name}")]
+pub async fn docker_view_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    name: web::Path<String>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    let tail = query
+        .get("tail")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(200)
+        .clamp(20, 500);
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Container",
+        &docker_container_view_page(&name, notice, error, None, tail),
+    ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerExecForm {
+    pub command: String,
+}
+
+#[post("/docker/view/{name}/exec")]
+pub async fn docker_view_exec(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    name: web::Path<String>,
+    form: web::Form<DockerExecForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            &format!("/docker/view/{}", urlencoding_simple(name.as_str())),
+            None,
+            Some("Only panel admins can run commands in containers."),
+        );
+    }
+    let cmd = form.command.clone();
+    let cname = name.to_string();
+    let output = web::block(move || {
+        crate::panel_ops_docker_detail::container_exec_command(&cname, &cmd)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Exec task failed: {e}")));
+    let exec_out = match &output {
+        Ok(s) => Some(s.as_str()),
+        Err(e) => Some(e.as_str()),
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Container",
+        &docker_container_view_page(name.as_str(), None, None, exec_out, 200),
+    ))
+}
+
+#[get("/docker/export")]
+pub async fn docker_export_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice("/docker", None, Some("Only panel admins can export containers."));
+    }
+    let name = query.get("name").map(String::as_str).unwrap_or("");
+    if name.is_empty() {
+        return redirect_notice("/docker", None, Some("Missing container name for export."));
+    }
+    let cname = name.to_string();
+    let result = web::block(move || crate::panel_ops_docker_detail::container_export_tar(&cname))
+        .await
+        .unwrap_or_else(|e| Err(format!("Export task failed: {e}")));
+    match result {
+        Ok(bytes) => {
+            let filename = format!("{name}.tar");
+            HttpResponse::Ok()
+                .content_type("application/x-tar")
+                .append_header((
+                    "Content-Disposition",
+                    format!("attachment; filename=\"{filename}\""),
+                ))
+                .body(bytes)
+        }
+        Err(err) => redirect_notice(
+            &format!("/docker/view/{}", urlencoding_simple(name)),
+            None,
+            Some(&err),
+        ),
     }
 }
 
@@ -665,6 +789,7 @@ pub async fn docker_create_container(
         .as_deref()
         .map(|s| s == "1" || s.eq_ignore_ascii_case("on") || s.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let owner_username = user.clone();
     let result = web::block(move || {
         crate::panel_ops_docker_images::create_container(
             crate::panel_ops_docker_images::CreateContainerRequest {
@@ -675,6 +800,7 @@ pub async fn docker_create_container(
                 env: &env,
                 restart: &restart,
                 start,
+                owner: &owner_username,
             },
         )
     })

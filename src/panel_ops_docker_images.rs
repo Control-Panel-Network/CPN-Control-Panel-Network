@@ -336,6 +336,7 @@ pub struct CreateContainerRequest<'a> {
     pub env: &'a str,
     pub restart: &'a str,
     pub start: bool,
+    pub owner: &'a str,
 }
 
 /// Bind mount lines: `host_path:container_path` (host path should live under the CPN data root when possible).
@@ -407,6 +408,11 @@ pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, Strin
     for (k, v) in &envs {
         args.push("-e".into());
         args.push(format!("{k}={v}"));
+    }
+    let owner = req.owner.trim();
+    if !owner.is_empty() {
+        args.push("--label".into());
+        args.push(format!("com.cpn.owner={owner}"));
     }
     // Never label user-created containers as CPN-managed.
     args.push(run_image.clone());

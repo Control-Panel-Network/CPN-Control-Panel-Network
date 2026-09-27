@@ -52,10 +52,10 @@ fn docker_daemon_ok(bin: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn split_image_tag(image: &str) -> (String, String) {
+pub(crate) fn split_image_tag(image: &str) -> (String, String) {
     let image = image.trim();
     if image.is_empty() {
-        return ("unknown".into(), "unknown".into());
+        return ("Unknown".into(), "Unknown".into());
     }
     // Digest or last colon after last slash is usually the tag.
     if let Some(slash) = image.rfind('/') {
@@ -93,18 +93,26 @@ fn is_cpn_managed(labels: &[(String, String)]) -> bool {
     })
 }
 
-fn owner_from_labels(labels: &[(String, String)], cpn_managed: bool) -> String {
+pub fn owner_from_labels(labels: &[(String, String)], cpn_managed: bool) -> String {
     if let Some((_, v)) = labels
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case("com.cpn.owner") || k.eq_ignore_ascii_case("owner"))
-        && !v.is_empty()
     {
-        return v.clone();
+        let v = v.trim();
+        if !v.is_empty() && !v.eq_ignore_ascii_case("unknown") {
+            return v.to_string();
+        }
+    }
+    if labels.iter().any(|(k, v)| {
+        k.eq_ignore_ascii_case("com.cpn.system")
+            && (v == "1" || v.eq_ignore_ascii_case("true"))
+    }) {
+        return "System".into();
     }
     if cpn_managed {
         "CPN".into()
     } else {
-        "Host".into()
+        "Unassigned".into()
     }
 }
 
@@ -163,7 +171,7 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
         rows.push(DockerContainerRow {
             id,
             name: if name.is_empty() {
-                "unknown".into()
+                "(unnamed)".into()
             } else {
                 name
             },
@@ -281,6 +289,10 @@ pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String
         }
         "restart" => run_container_cmd(bin, &["restart", name])
             .map(|_| format!("Restarted container `{name}`.")),
+        "pause" => run_container_cmd(bin, &["pause", name])
+            .map(|_| format!("Paused container `{name}`.")),
+        "unpause" => run_container_cmd(bin, &["unpause", name])
+            .map(|_| format!("Unpaused container `{name}`.")),
         "remove" | "rm" | "delete" => {
             if container_is_cpn_managed(bin, name) {
                 return Err(format!(
@@ -583,5 +595,22 @@ mod tests {
     fn reject_bad_container_name() {
         assert!(container_action("start", "../evil").is_err());
         assert!(container_action("remove", "a;rm").is_err());
+    }
+
+    #[test]
+    fn owner_labels() {
+        assert_eq!(
+            owner_from_labels(&[("com.cpn.owner".into(), "Admin".into())], false),
+            "Admin"
+        );
+        assert_eq!(owner_from_labels(&[], true), "CPN");
+        assert_eq!(owner_from_labels(&[], false), "Unassigned");
+    }
+
+    #[test]
+    fn split_unknown_image() {
+        let (r, t) = split_image_tag("");
+        assert_eq!(r, "Unknown");
+        assert_eq!(t, "Unknown");
     }
 }
