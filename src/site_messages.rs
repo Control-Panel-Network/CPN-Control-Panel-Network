@@ -348,6 +348,7 @@ mod tests {
             suspended_by: by,
             php_version: None,
             aliases: Vec::new(),
+            staging_of: None,
         }
     }
 
