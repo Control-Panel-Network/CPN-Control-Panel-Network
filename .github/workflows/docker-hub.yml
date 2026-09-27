@@ -191,7 +191,7 @@ jobs:
           tags: |
             master3395/cpn-installer:${{ matrix.tag }}
             ${{ matrix.latest && 'master3395/cpn-installer:latest' || '' }}
-            ${{ steps.ver.outputs.version != '' && format('master3395/cpn-installer:{0}', steps.ver.outputs.version) || '' }}
+            ${{ matrix.latest && steps.ver.outputs.version != '' && format('master3395/cpn-installer:{0}', steps.ver.outputs.version) || '' }}
           build-args: |
             ALMA_VERSION=${{ matrix.alma }}
             UBUNTU_VERSION=${{ matrix.ubuntu_version }}

@@ -54,7 +54,7 @@ If a release does not contain an asset for your target OS and architecture, trea
 CPN also publishes a **maintainer/smoke** AlmaLinux + systemd container image (not a replacement for the native RPM/DEB install path):
 
 - Repository: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer)
-- Tags: `almalinux9`, `almalinux10`, `ubuntu22.04`, `ubuntu24.04`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`), plus the release semver (without a leading `v`) on each `v*` Git tag
+- Tags: `almalinux9`, `almalinux10`, `ubuntu22.04`, `ubuntu24.04`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`). On each `v*` Git tag, the semver (no leading `v`) is also pushed on the `almalinux9` image only (points at the primary EL runtime).
 - Alpha/prerelease: images track GitHub prereleases while CPN is **0.2.x-alpha** (not stable 1.x)
 
 Images are built and pushed automatically when a `v*` tag is pushed to `stable` (`.github/workflows/docker-hub.yml`). Requires repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. Operators can re-run **Docker Hub publish** manually from the Actions tab (`workflow_dispatch`, `os_tag=all`).
