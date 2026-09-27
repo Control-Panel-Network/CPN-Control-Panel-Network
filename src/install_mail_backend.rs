@@ -4,10 +4,137 @@ use crate::install_journal::{self, JournalAction};
 use crate::install_recipes::{DnfProgress, command, pkg_install};
 use crate::installer::{AppState, run_command};
 use crate::os_support::require_installable_guest;
-use std::process::Stdio;
+use std::path::Path;
+use std::process::{Command as StdCommand, Stdio};
 use tokio::process::Command;
 
 const STAGE: &str = "mail_backend";
+
+/// Postfix + Dovecot configuration shared by installer and Email host package heal.
+pub fn apply_local_mail_configuration() -> Result<(), String> {
+    let master_cf = "/etc/postfix/master.cf";
+    if Path::new(master_cf).exists() {
+        let raw = std::fs::read_to_string(master_cf).unwrap_or_default();
+        if !raw.contains("127.0.0.1:587") && !raw.contains("submission inet") {
+            let extra = "\n# CPN local submission (issue #9)\n127.0.0.1:587 inet n - n - - smtpd\n  -o syslog_name=postfix/submission\n  -o smtpd_tls_security_level=may\n  -o smtpd_sasl_auth_enable=yes\n  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n";
+            let updated = format!("{raw}{extra}");
+            install_journal::write_file_tracked(STAGE, Path::new(master_cf), &updated)?;
+        }
+    }
+
+    let main_cf = "/etc/postfix/main.cf";
+    if Path::new(main_cf).exists() {
+        let mut raw = std::fs::read_to_string(main_cf).unwrap_or_default();
+        let has_inet = raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("inet_interfaces"));
+        if !has_inet {
+            raw.push_str("\ninet_interfaces = loopback-only\n");
+            install_journal::write_file_tracked(STAGE, Path::new(main_cf), &raw)?;
+        }
+    }
+
+    let _ = StdCommand::new("postconf")
+        .args(["-e", "home_mailbox=Maildir/"])
+        .status();
+
+    let dovecot_conf = "/etc/dovecot/dovecot.conf";
+    if Path::new(dovecot_conf).exists() {
+        let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
+        if !raw.contains("protocols =") {
+            raw.push_str("\nprotocols = imap\n");
+            install_journal::write_file_tracked(STAGE, Path::new(dovecot_conf), &raw)?;
+        }
+    }
+
+    let mail_conf = "/etc/dovecot/conf.d/10-mail.conf";
+    if Path::new(mail_conf).exists() {
+        let raw = std::fs::read_to_string(mail_conf).unwrap_or_default();
+        let already = raw.lines().any(|line| {
+            let t = line.trim_start();
+            t.starts_with("mail_location") && !t.starts_with('#')
+        });
+        if !already {
+            let mut updated = raw;
+            if !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            updated.push_str("# CPN local Maildir (issue #9)\nmail_location = maildir:~/Maildir\n");
+            install_journal::write_file_tracked(STAGE, Path::new(mail_conf), &updated)?;
+        }
+    }
+
+    let listen = "/etc/dovecot/conf.d/10-master.conf";
+    if Path::new(listen).exists() {
+        let raw = std::fs::read_to_string(listen).unwrap_or_default();
+        if raw.contains("port = 0") || !raw.contains("inet_listener imap") {
+            install_journal::record(
+                STAGE,
+                JournalAction::Note,
+                listen,
+                None,
+                Some("using vendor dovecot listener config".into()),
+            )?;
+        }
+    }
+
+    let auth = "/etc/dovecot/conf.d/10-auth.conf";
+    if Path::new(auth).exists() {
+        let mut raw = std::fs::read_to_string(auth).unwrap_or_default();
+        let mut changed = false;
+        if raw.contains("disable_plaintext_auth = yes") {
+            raw = raw.replace(
+                "disable_plaintext_auth = yes",
+                "disable_plaintext_auth = no",
+            );
+            changed = true;
+        }
+        if !raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("auth_username_format"))
+        {
+            if !raw.ends_with('\n') {
+                raw.push('\n');
+            }
+            raw.push_str(
+                "# CPN: local-part only for PAM system mailboxes\nauth_username_format = %Ln\n",
+            );
+            changed = true;
+        }
+        if changed {
+            install_journal::write_file_tracked(STAGE, Path::new(auth), &raw)?;
+        }
+    }
+
+    let ssl = "/etc/dovecot/conf.d/10-ssl.conf";
+    if Path::new(ssl).exists() {
+        let raw = std::fs::read_to_string(ssl).unwrap_or_default();
+        if raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("ssl = required"))
+        {
+            let updated = raw
+                .lines()
+                .map(|l| {
+                    if l.trim_start().starts_with("ssl = required") {
+                        "ssl = yes"
+                    } else {
+                        l
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let updated = if raw.ends_with('\n') {
+                format!("{updated}\n")
+            } else {
+                updated
+            };
+            install_journal::write_file_tracked(STAGE, Path::new(ssl), &updated)?;
+        }
+    }
+
+    Ok(())
+}
 
 /// Install and configure a minimal local Postfix + Dovecot stack for webmail.
 pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String> {
@@ -46,35 +173,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         Some("mail backend packages".into()),
     )?;
 
-    // Keep submission on loopback for lab/local webmail; operators harden for public MX later.
-    let master_cf = "/etc/postfix/master.cf";
-    if std::path::Path::new(master_cf).exists() {
-        let raw = std::fs::read_to_string(master_cf).unwrap_or_default();
-        if !raw.contains("127.0.0.1:587") && !raw.contains("submission inet") {
-            let extra = "\n# CPN local submission (issue #9)\n127.0.0.1:587 inet n - n - - smtpd\n  -o syslog_name=postfix/submission\n  -o smtpd_tls_security_level=may\n  -o smtpd_sasl_auth_enable=yes\n  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n";
-            let updated = format!("{raw}{extra}");
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(master_cf), &updated)?;
-        }
-    }
-
-    let main_cf = "/etc/postfix/main.cf";
-    if std::path::Path::new(main_cf).exists() {
-        let mut raw = std::fs::read_to_string(main_cf).unwrap_or_default();
-        let has_inet = raw
-            .lines()
-            .any(|l| l.trim_start().starts_with("inet_interfaces"));
-        if !has_inet {
-            raw.push_str("\ninet_interfaces = loopback-only\n");
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(main_cf), &raw)?;
-        }
-    }
-
-    // Deliver into ~/Maildir so IMAP (Dovecot) and SMTP (Postfix) share one store (issue #9).
-    // Default RHEL/Alma Postfix uses /var/mail mbox, which the Maildir probe never sees.
-    let _ = Command::new("postconf")
-        .args(["-e", "home_mailbox=Maildir/"])
-        .status()
-        .await;
+    apply_local_mail_configuration()?;
     install_journal::record(
         STAGE,
         JournalAction::Note,
@@ -82,48 +181,6 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         None,
         Some("Maildir/ for local delivery".into()),
     )?;
-
-    let dovecot_conf = "/etc/dovecot/dovecot.conf";
-    if std::path::Path::new(dovecot_conf).exists() {
-        let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
-        if !raw.contains("protocols =") {
-            raw.push_str("\nprotocols = imap\n");
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(dovecot_conf), &raw)?;
-        }
-    }
-
-    let mail_conf = "/etc/dovecot/conf.d/10-mail.conf";
-    if std::path::Path::new(mail_conf).exists() {
-        let raw = std::fs::read_to_string(mail_conf).unwrap_or_default();
-        let already = raw.lines().any(|line| {
-            let t = line.trim_start();
-            t.starts_with("mail_location") && !t.starts_with('#')
-        });
-        if !already {
-            let mut updated = raw;
-            if !updated.ends_with('\n') {
-                updated.push('\n');
-            }
-            updated.push_str("# CPN local Maildir (issue #9)\nmail_location = maildir:~/Maildir\n");
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(mail_conf), &updated)?;
-        }
-    }
-
-    // Prefer cleartext IMAP on loopback for Roundcube defaults (localhost:143).
-    let listen = "/etc/dovecot/conf.d/10-master.conf";
-    if std::path::Path::new(listen).exists() {
-        let raw = std::fs::read_to_string(listen).unwrap_or_default();
-        if raw.contains("port = 0") || !raw.contains("inet_listener imap") {
-            // Leave vendor defaults when already listening; journal a note.
-            install_journal::record(
-                STAGE,
-                JournalAction::Note,
-                listen,
-                None,
-                Some("using vendor dovecot listener config".into()),
-            )?;
-        }
-    }
 
     run_command(
         state,
@@ -155,64 +212,6 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
     )
     .await?;
     install_journal::record(STAGE, JournalAction::EnabledService, "dovecot", None, None)?;
-
-    // Ensure cleartext IMAP is available on loopback for webmail defaults.
-    let auth = "/etc/dovecot/conf.d/10-auth.conf";
-    if std::path::Path::new(auth).exists() {
-        let mut raw = std::fs::read_to_string(auth).unwrap_or_default();
-        let mut changed = false;
-        if raw.contains("disable_plaintext_auth = yes") {
-            raw = raw.replace(
-                "disable_plaintext_auth = yes",
-                "disable_plaintext_auth = no",
-            );
-            changed = true;
-        }
-        // Strip @domain so SnappyMail full-address logins map to system users (PAM).
-        if !raw
-            .lines()
-            .any(|l| l.trim_start().starts_with("auth_username_format"))
-        {
-            if !raw.ends_with('\n') {
-                raw.push('\n');
-            }
-            raw.push_str(
-                "# CPN: local-part only for PAM system mailboxes\nauth_username_format = %Ln\n",
-            );
-            changed = true;
-        }
-        if changed {
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(auth), &raw)?;
-        }
-    }
-
-    // Prefer ssl=yes (not required) so localhost:143 cleartext works for webmail.
-    let ssl = "/etc/dovecot/conf.d/10-ssl.conf";
-    if std::path::Path::new(ssl).exists() {
-        let raw = std::fs::read_to_string(ssl).unwrap_or_default();
-        if raw
-            .lines()
-            .any(|l| l.trim_start().starts_with("ssl = required"))
-        {
-            let updated = raw
-                .lines()
-                .map(|l| {
-                    if l.trim_start().starts_with("ssl = required") {
-                        "ssl = yes"
-                    } else {
-                        l
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            let updated = if raw.ends_with('\n') {
-                format!("{updated}\n")
-            } else {
-                updated
-            };
-            install_journal::write_file_tracked(STAGE, std::path::Path::new(ssl), &updated)?;
-        }
-    }
 
     let _ = Command::new("systemctl")
         .args(["reload", "dovecot"])

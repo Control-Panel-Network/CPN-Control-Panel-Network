@@ -23,8 +23,23 @@ fn urlencoding_simple(value: &str) -> String {
     out
 }
 
-fn email_redirect(notice: Option<&str>, error: Option<&str>) -> String {
-    let mut url = "/email/accounts".to_string();
+fn safe_email_return_path(raw: &str) -> String {
+    let path = raw.trim();
+    if path.starts_with("/email/") && !path.contains("..") && !path.contains('\n') {
+        path.to_string()
+    } else {
+        "/email/accounts".into()
+    }
+}
+
+fn email_redirect(
+    return_to: Option<&str>,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    let mut url = return_to
+        .map(safe_email_return_path)
+        .unwrap_or_else(|| "/email/accounts".into());
     if let Some(notice) = notice {
         url.push_str(&format!("?notice={}", urlencoding_simple(notice)));
     } else if let Some(error) = error {
@@ -55,6 +70,8 @@ pub struct MailAccountCreateForm {
     smtp_password: String,
     #[serde(default)]
     mailbox_password: String,
+    #[serde(default)]
+    return_to: String,
 }
 
 impl MailAccountCreateForm {
@@ -132,11 +149,18 @@ pub async fn email_account_create(
         Ok(account) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                email_redirect(Some(&format!("Created mailbox {}", account.address)), None),
+                email_redirect(
+                    Some(&form.return_to),
+                    Some(&format!("Created mailbox {}", account.address)),
+                    None,
+                ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header(("Location", email_redirect(None, Some(&error))))
+            .append_header((
+                "Location",
+                email_redirect(Some(&form.return_to), None, Some(&error)),
+            ))
             .finish(),
     }
 }
@@ -154,11 +178,11 @@ pub async fn email_account_enable(
         Ok(account) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                email_redirect(Some(&format!("Enabled {}", account.address)), None),
+                email_redirect(None, Some(&format!("Enabled {}", account.address)), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header(("Location", email_redirect(None, Some(&error))))
+            .append_header(("Location", email_redirect(None, None, Some(&error))))
             .finish(),
     }
 }
@@ -176,11 +200,11 @@ pub async fn email_account_disable(
         Ok(account) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                email_redirect(Some(&format!("Disabled {}", account.address)), None),
+                email_redirect(None, Some(&format!("Disabled {}", account.address)), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header(("Location", email_redirect(None, Some(&error))))
+            .append_header(("Location", email_redirect(None, None, Some(&error))))
             .finish(),
     }
 }

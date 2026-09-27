@@ -12,6 +12,7 @@ pub mod account_totp;
 pub mod active_webmail;
 pub mod apps;
 pub mod apps_control;
+pub mod apps_email;
 pub mod apps_nextcloud;
 pub mod apps_phpmyadmin;
 pub mod apps_phpmyadmin_sso;

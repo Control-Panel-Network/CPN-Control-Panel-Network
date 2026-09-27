@@ -5,6 +5,7 @@
 //! CPN installs MariaDB only as the MySQL-compatible host database (not Oracle MySQL).
 //! PostgreSQL is opt-in and may coexist with MariaDB.
 
+use crate::apps_email::{detect_mail_stack_public, email_packages_installed};
 use crate::apps_pkg::{
     disable_now, enable_now, install_packages_dnf_or_apt, remove_packages_dnf_or_apt,
     rpm_or_dpkg_installed,
@@ -252,18 +253,19 @@ pub fn detect_app(id: AppId) -> AppStatus {
             }
         }
         AppId::Email => {
-            let postfix = systemd_unit_active("postfix");
-            let dovecot = systemd_unit_active("dovecot");
-            let pkgs = rpm_or_dpkg_installed(&["postfix", "dovecot"]);
-            let (state, detail) = if postfix && dovecot {
+            let stack = detect_mail_stack_public();
+            let postfix = stack.postfix_running;
+            let dovecot = stack.dovecot_running;
+            let pkgs = email_packages_installed();
+            let (state, detail) = if postfix && dovecot && stack.imap_listening {
                 (
                     AppStateKind::Running,
-                    "Postfix and Dovecot units are active.".into(),
+                    "Postfix and Dovecot are active; IMAP :143 is listening.".into(),
                 )
             } else if pkgs || postfix || dovecot {
                 (
                     AppStateKind::Installed,
-                    "Mail packages or units partially present.".into(),
+                    stack.detail,
                 )
             } else {
                 (
@@ -359,14 +361,13 @@ pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String>
             }
             AppId::Postgresql => install_postgresql()?,
             AppId::Phpmyadmin => crate::apps_phpmyadmin::install_and_expose()?,
-            AppId::Email => {
-                install_packages_dnf_or_apt(
-                    &["postfix", "dovecot"],
-                    &["postfix", "dovecot-core", "dovecot-imapd"],
-                )?;
-                enable_now(&["postfix", "dovecot"])?;
-                "Installed and started Email stack (Postfix + Dovecot).".to_string()
-            }
+            AppId::Email => crate::apps_email::start_email_stack().map(|msg| {
+                if current.state == AppStateKind::Installed {
+                    format!("Heal and start: {msg}")
+                } else {
+                    format!("Installed and started Email stack. {msg}")
+                }
+            })?,
             AppId::Rabbitmq => {
                 install_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
                 enable_now(&["rabbitmq-server"])?;

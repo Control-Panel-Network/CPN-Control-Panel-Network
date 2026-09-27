@@ -78,7 +78,7 @@ pub fn ensure_dkim_dir() -> Result<PathBuf, String> {
 pub fn ensure_dkim_store_ready() -> Result<String, String> {
     let dir = ensure_dkim_root()?;
     Ok(format!(
-        "DKIM directory ready at {} (keys are generated per domain on site create).",
+        "DKIM directory ready at {}. Keys are generated per domain when you create a site or run Ensure DKIM.",
         dir.display()
     ))
 }

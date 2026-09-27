@@ -15,6 +15,83 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+pub fn email_mail_stack_notice_html() -> String {
+    let stack = crate::apps_email::detect_mail_stack_public();
+    if stack.postfix_running && stack.dovecot_running && stack.imap_listening {
+        return String::new();
+    }
+    format!(
+        r#"<p class="panel-notice error" role="alert">{detail} <a href="/plugins?view=store&amp;category=Host&amp;q=email">Open Email host package</a> and use Start, or Install if missing.</p>"#,
+        detail = html_escape(&stack.detail),
+    )
+}
+
+/// Shared create-mailbox form (`return_path` is post-success redirect base).
+pub fn email_mailbox_create_form_html(return_path: &str) -> String {
+    let return_path = if return_path.trim().is_empty() {
+        "/email/accounts"
+    } else {
+        return_path.trim()
+    };
+    format!(
+        r#"
+      <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
+        <input type="hidden" name="return_to" value="{return_path}">
+        <label for="address">Mailbox address</label>
+        <input id="address" name="address" type="email" required placeholder="user@example.com">
+        <label for="domain">Site FQDN (optional)</label>
+        <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
+        <label for="mailbox_password">Mailbox password (local Postfix/Dovecot + webmail)</label>
+        <input id="mailbox_password" name="mailbox_password" type="password" autocomplete="new-password" placeholder="Required for local mail login">
+        <label for="smtp_mode">SMTP mode</label>
+        <select id="smtp_mode" name="smtp_mode">
+          <option value="postfix_local">Local Postfix (default)</option>
+          <option value="external">External SMTP</option>
+        </select>
+        <label for="smtp_host">External host</label>
+        <input id="smtp_host" name="smtp_host" type="text" placeholder="smtp.example.com">
+        <label for="smtp_port">Port</label>
+        <input id="smtp_port" name="smtp_port" type="number" value="587">
+        <label for="smtp_tls">Encryption</label>
+        <select id="smtp_tls" name="smtp_tls">
+          <option value="starttls">STARTTLS</option>
+          <option value="tls">TLS</option>
+          <option value="none">None</option>
+        </select>
+        <label for="smtp_username">SMTP username</label>
+        <input id="smtp_username" name="smtp_username" type="text" autocomplete="off">
+        <label for="smtp_password">SMTP password</label>
+        <input id="smtp_password" name="smtp_password" type="password" autocomplete="new-password">
+        <label><input type="checkbox" name="enabled" value="1" checked> Enable now (requires valid SMTP)</label>
+        <button type="submit" class="btn-primary">Create mailbox</button>
+      </form>"#,
+        return_path = html_escape(return_path),
+    )
+}
+
+pub fn email_create_main(notice: Option<&str>, error: Option<&str>) -> String {
+    format!(
+        r#"{heading}
+      {ok}
+      {err}
+      {stack}
+      <article class="section-card">
+        <h2>Create mailbox</h2>
+        <p>Add a local or external-SMTP mailbox. Local mail requires Postfix and Dovecot running on this host.</p>
+        {create}
+      </article>
+      <p class="muted"><a href="/email/accounts">View all mailboxes</a></p>"#,
+        heading = section_heading(
+            "Create Email",
+            "Provision a mailbox on this CPN host.",
+        ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
+        stack = email_mail_stack_notice_html(),
+        create = email_mailbox_create_form_html("/email/create"),
+    )
+}
+
 fn section_heading(title: &str, blurb: &str) -> String {
     format!(
         r#"
@@ -137,7 +214,8 @@ pub fn email_accounts_main(
     } else {
         "Not installed"
     };
-    let backend_ready = if mail_backend_ready {
+    let live_backend = crate::apps_email::mail_backend_ready_fast();
+    let backend_ready = if mail_backend_ready || live_backend {
         "Ready"
     } else {
         "Not verified"
@@ -262,41 +340,13 @@ pub fn email_accounts_main(
         crate::panel_hub_pages_mail_client::mail_client_config_html(&domain)
     };
 
-    let create_form = r#"
-      <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
-        <label for="address">Mailbox address</label>
-        <input id="address" name="address" type="email" required placeholder="user@example.com">
-        <label for="domain">Site FQDN (optional)</label>
-        <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
-        <label for="mailbox_password">Mailbox password (local Postfix/Dovecot + webmail)</label>
-        <input id="mailbox_password" name="mailbox_password" type="password" autocomplete="new-password" placeholder="Required for local mail login">
-        <label for="smtp_mode">SMTP mode</label>
-        <select id="smtp_mode" name="smtp_mode">
-          <option value="postfix_local">Local Postfix (default)</option>
-          <option value="external">External SMTP</option>
-        </select>
-        <label for="smtp_host">External host</label>
-        <input id="smtp_host" name="smtp_host" type="text" placeholder="smtp.example.com">
-        <label for="smtp_port">Port</label>
-        <input id="smtp_port" name="smtp_port" type="number" value="587">
-        <label for="smtp_tls">Encryption</label>
-        <select id="smtp_tls" name="smtp_tls">
-          <option value="starttls">STARTTLS</option>
-          <option value="tls">TLS</option>
-          <option value="none">None</option>
-        </select>
-        <label for="smtp_username">SMTP username</label>
-        <input id="smtp_username" name="smtp_username" type="text" autocomplete="off">
-        <label for="smtp_password">SMTP password</label>
-        <input id="smtp_password" name="smtp_password" type="password" autocomplete="new-password">
-        <label><input type="checkbox" name="enabled" value="1" checked> Enable now (requires valid SMTP)</label>
-        <button type="submit" class="btn-primary">Create mailbox</button>
-      </form>"#;
+    let create_form = email_mailbox_create_form_html("/email/accounts");
 
     format!(
         r#"{heading}
       {ok}
       {err}
+      {stack}
       <article class="section-card">
         <h2>Mail stack</h2>
         <ul class="kv-list">
@@ -322,6 +372,7 @@ pub fn email_accounts_main(
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
+        stack = email_mail_stack_notice_html(),
         mail = html_escape(mail),
         client = client_ready,
         backend = backend_ready,

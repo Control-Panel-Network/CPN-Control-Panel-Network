@@ -153,8 +153,8 @@ namespace inbox {
         let _ = fs::create_dir_all(parent);
     }
     fs::write(path, body).map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
-    let _ = Command::new("systemctl")
-        .args(["reload", "dovecot"])
+    let _ = Command::new("timeout")
+        .args(["8", "systemctl", "reload", "dovecot"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
