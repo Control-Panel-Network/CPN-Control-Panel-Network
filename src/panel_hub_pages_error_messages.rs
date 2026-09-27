@@ -18,12 +18,12 @@ pub fn error_messages_settings_page(notice: Option<&str>, error: Option<&str>) -
         .unwrap_or_default();
     let suspend_note = html_escape(builtin_suspend_message());
     let ready_note = html_escape(
-        "Site-ready and suspend visitor copy live under Site messages (plain text / HTML templates).",
+        "Site-ready and suspend visitor copy live under Site messages (Markdown and HTML templates).",
     );
     let body = format!(
         r#"{assets}
 {ok}{err}
-<p class="muted">CPN owner only. Each message supports Markdown (bold, italic, code, links, images, lists, headings, tables, horizontal rules). Scripts and unsafe URLs are stripped when rendered.</p>
+<p class="muted">CPN owner only. Each message supports Markdown (toolbar, Preview, and View HTML source). Scripts and unsafe URLs are stripped when rendered.</p>
 <p class="muted">{ready_note} Current factory suspend preview: {suspend_note}</p>
 <p class="muted"><a href="/settings/site-messages">Open Site messages</a> for suspend and site-ready templates.</p>
 <form method="post" action="/settings/error-messages" class="stack-form" style="margin-top:16px;max-width:48rem;">
@@ -111,6 +111,7 @@ mod tests {
         assert!(html.contains("403 Forbidden"));
         assert!(html.contains("data-md-action=\"bold\""));
         assert!(html.contains("Preview"));
+        assert!(html.contains("View HTML source"));
         assert!(html.contains("/settings/site-messages"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
         assert!(!html.contains('\u{2014}'));

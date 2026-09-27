@@ -22,7 +22,7 @@ use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_pages::panel_shell;
 use crate::site_messages::{
     SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
-    restore_factory_suspend_message, save_defaults,
+    restore_factory_suspend_message, sanitize_site_ready_html, save_defaults,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -961,6 +961,34 @@ pub struct SiteMessagesForm {
     suspend_message_html: String,
     #[serde(default)]
     site_ready_html: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SiteReadyPreviewForm {
+    #[serde(default)]
+    html: String,
+}
+
+#[post("/settings/site-messages/preview-site-ready")]
+pub async fn settings_site_messages_preview_site_ready(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SiteReadyPreviewForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return HttpResponse::Unauthorized().finish();
+    };
+    if !is_panel_admin(&user) {
+        return HttpResponse::Forbidden().finish();
+    }
+    match sanitize_site_ready_html(&form.html) {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(error) => HttpResponse::BadRequest()
+            .content_type("text/plain; charset=utf-8")
+            .body(error),
+    }
 }
 
 #[post("/settings/site-messages")]

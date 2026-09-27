@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Settings > Site messages**: Default suspend copy and site-ready templates now use the same Markdown/HTML editor as **Error messages** (formatting toolbar, Preview, and View HTML source). Suspend messages are stored as Markdown and rendered safely for visitors. Factory defaults include tasteful **CPN Control Panel Network** / News Targeted branding. Shared Markdown preview POST: `/settings/markdown/preview`; site-ready iframe preview: `/settings/site-messages/preview-site-ready`.
+
+### Changed
+
+- **Settings > Error messages**: Richer built-in 403/404/500 Markdown defaults and dark-mode friendly rendered pages. **View HTML source** toggles the sanitized HTML fragment beside Preview.
+
 ### Fixed
 
 - **Docker Host package compose provider**: Install/heal now pulls in `docker-compose-plugin` (Docker CE / moby) or `podman-compose` (Podman + podman-docker) so `docker compose` works for `/docker/stacks` Pull & Recreate. Re-running Install on an engine-only host adds the missing compose packages without touching CPN-managed stacks.

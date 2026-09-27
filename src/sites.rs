@@ -58,7 +58,7 @@ pub struct SiteRecord {
     /// Unique internal IPv4 when Nginx front / proxy-front mode is enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub internal_ip: Option<String>,
-    /// Owner-editable suspend copy (plain text). Used only when `suspended_by` is Owner.
+    /// Owner-editable suspend copy (Markdown). Used only when `suspended_by` is Owner.
     #[serde(default)]
     pub owner_suspend_message: String,
     /// Set on suspend; cleared on resume. Missing on legacy records → treat as Admin.

@@ -12,10 +12,23 @@ use std::path::PathBuf;
 const SCHEMA_VERSION: u32 = 1;
 const MAX_CHARS: usize = 12_000;
 
-pub const BUILTIN_FORBIDDEN: &str = "You do not have permission to view this page.";
-pub const BUILTIN_NOT_FOUND: &str = "The page you requested was not found.";
-pub const BUILTIN_INTERNAL: &str =
-    "Something went wrong on the panel. Please try again or contact the server owner.";
+pub const BUILTIN_FORBIDDEN: &str = r#"**Access denied**
+
+You do not have permission to open this part of the **CPN Panel**.
+
+Sign in with an account that has the required role, or ask your server administrator to adjust **Users & Plans** access."#;
+
+pub const BUILTIN_NOT_FOUND: &str = r#"**Page not found**
+
+The link may be outdated, or the feature was moved in a recent panel update.
+
+Use **Search** in the sidebar or open the **Dashboard** to find what you need."#;
+
+pub const BUILTIN_INTERNAL: &str = r#"**Something went wrong**
+
+The panel hit an unexpected error while handling your request.
+
+Try again in a moment. If the problem continues, check **Settings > Logs** (administrators) or contact your hosting provider."#;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanelErrorMessages {
@@ -148,15 +161,19 @@ fn shell_error_page(title: &str, status_label: &str, md: &str) -> String {
       font-family: system-ui, Segoe UI, sans-serif; background:#0b1220; color:#e2e8f0;
     }}
     main {{
-      width:min(40rem, 92vw); padding:28px 24px; border-radius:14px;
-      border:1px solid #334155; background:#111827;
+      width:min(40rem, 92vw); padding:32px 28px; border-radius:16px;
+      border:1px solid #334155;
+      background:linear-gradient(165deg, #111827 0%, #0f172a 100%);
+      box-shadow:0 18px 40px rgba(0,0,0,0.35);
     }}
-    .eyebrow {{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin:0 0 8px; }}
-    h1 {{ margin:0 0 14px; font-size:1.45rem; }}
-    .md :is(p, ul, ol, pre, blockquote, table) {{ margin:0.55em 0; }}
+    .eyebrow {{ font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; margin:0 0 10px; }}
+    h1 {{ margin:0 0 14px; font-size:1.55rem; }}
+    .md :is(p, ul, ol, pre, blockquote, table) {{ margin:0.55em 0; line-height:1.55; color:#cbd5e1; }}
+    .md h2, .md h3 {{ margin:0.65em 0 0.35em; color:#f1f5f9; }}
     .md a {{ color:#7dd3fc; }}
-    .actions {{ margin-top:18px; }}
-    .actions a {{ color:#93c5fd; }}
+    .md hr {{ border:0; border-top:1px solid #334155; margin:1em 0; }}
+    .actions {{ margin-top:20px; padding-top:14px; border-top:1px solid #334155; }}
+    .actions a {{ color:#93c5fd; font-weight:600; }}
   </style>
 </head>
 <body>

@@ -173,6 +173,7 @@ pub(crate) mod panel_icons_svg;
 pub mod panel_log_retention;
 pub mod panel_login_facts;
 pub mod panel_mail_routes;
+pub mod panel_markdown_editor;
 pub mod panel_markdown;
 pub mod panel_migrate;
 pub mod panel_minimalist_settings;
