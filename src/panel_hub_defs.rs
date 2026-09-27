@@ -247,19 +247,19 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 HubTile {
                     title: "Docker Apps",
                     subtitle: "Containerized apps overview",
-                    href: "/server/docker/apps",
+                    href: "/docker",
                     live: true,
                 },
                 HubTile {
                     title: "Containers",
                     subtitle: "List containers",
-                    href: "/server/docker/containers",
+                    href: "/docker",
                     live: true,
                 },
                 HubTile {
                     title: "Docker Images",
                     subtitle: "List images",
-                    href: "/server/docker/images",
+                    href: "/docker/images",
                     live: true,
                 },
             ],

@@ -211,6 +211,7 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
         | AppId::Roundcube
         | AppId::Nextcloud
         | AppId::Nextsnapmail
+        | AppId::Docker
         | AppId::Sogo => Ok(format!(
             "{} is a host webmail/app package (not site-scoped under {}).",
             app.label(),

@@ -42,6 +42,7 @@ pub struct InstalledOptionalFeatures {
     pub malware: bool,
     pub mta_sts: bool,
     pub bimi: bool,
+    pub docker: bool,
 }
 
 impl InstalledOptionalFeatures {
@@ -77,6 +78,7 @@ impl InstalledOptionalFeatures {
             malware: mal.installed || mal.engine == "nt-api",
             mta_sts: mta_sts_unlocked(),
             bimi: bimi_unlocked(),
+            docker: docker_installed(),
         }
     }
 
@@ -93,6 +95,12 @@ impl InstalledOptionalFeatures {
             "/security/fail2ban" => self.fail2ban,
             "/security/firewall" => self.firewall,
             "/security/malware-scan" => self.malware,
+            "/docker" => self.docker,
+            "/docker/images" => self.docker,
+            "/docker/logs" => self.docker,
+            "/server/docker/apps" => self.docker,
+            "/server/docker/containers" => self.docker,
+            "/server/docker/images" => self.docker,
             "/apps" => false, // folded into Plugins Store (Host category)
             _ => true,
         }
@@ -102,6 +110,12 @@ impl InstalledOptionalFeatures {
 /// True when phpMyAdmin packages or share path are present (Installed or Running).
 pub fn phpmyadmin_installed() -> bool {
     let status = detect_app(AppId::Phpmyadmin);
+    !matches!(status.state, AppStateKind::NotInstalled)
+}
+
+/// True when Docker Engine or Podman CLI is present (Host package installed).
+pub fn docker_installed() -> bool {
+    let status = detect_app(AppId::Docker);
     !matches!(status.state, AppStateKind::NotInstalled)
 }
 
@@ -201,6 +215,7 @@ mod tests {
             malware,
             mta_sts,
             bimi,
+            docker: false,
         }
     }
 
@@ -267,11 +282,27 @@ mod tests {
         assert!(!none.allows_href("/security/malware-scan"));
         assert!(none.allows_href("/security/ssh"));
         assert!(!none.allows_href("/apps"));
+        assert!(!none.allows_href("/docker"));
+        assert!(!none.allows_href("/server/docker/containers"));
 
         let all = feats(true, true, true, true, true, true, true, true, true);
         assert!(all.allows_href("/security/fail2ban"));
         assert!(all.allows_href("/security/firewall"));
         assert!(all.allows_href("/security/malware-scan"));
+    }
+
+    #[test]
+    fn gates_docker_until_installed() {
+        let none = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
+        assert!(!none.allows_href("/docker"));
+        assert!(!none.allows_href("/docker/images"));
+        let mut with_docker = none;
+        with_docker.docker = true;
+        assert!(with_docker.allows_href("/docker"));
+        assert!(with_docker.allows_href("/docker/images"));
+        assert!(with_docker.allows_href("/server/docker/apps"));
     }
 
     #[test]

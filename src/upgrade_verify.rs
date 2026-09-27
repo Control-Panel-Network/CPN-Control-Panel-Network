@@ -194,23 +194,6 @@ fn cpn_managed_container_ids() -> Vec<String> {
         .collect()
 }
 
-fn cpn_compose_dirs() -> Vec<std::path::PathBuf> {
-    let root = std::path::Path::new("/var/lib/cpn/docker");
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_dir()
-                && (p.join("compose.yml").is_file()
-                    || p.join("docker-compose.yml").is_file()
-                    || p.join("compose.yaml").is_file())
-        })
-        .collect()
-}
-
 /// Snapshot running CPN-managed container IDs before package ops.
 pub fn snapshot_cpn_docker_running() -> Vec<String> {
     cpn_managed_container_ids()
@@ -247,64 +230,15 @@ pub fn maybe_refresh_cpn_docker(bypass: bool) -> Vec<String> {
         return notes;
     };
 
-    let compose_dirs = cpn_compose_dirs();
-    if compose_dirs.is_empty() && cpn_managed_container_ids().is_empty() {
-        notes.push(
-            "no CPN-managed docker compose projects or labeled containers found under /var/lib/cpn/docker (user stacks left untouched)"
-                .into(),
-        );
+    let compose_notes = crate::panel_ops_docker_compose::refresh_all_cpn_compose_projects();
+    let no_compose = compose_notes
+        .first()
+        .is_some_and(|s| s.starts_with("no CPN compose projects found"));
+    if no_compose && cpn_managed_container_ids().is_empty() {
+        notes.extend(compose_notes);
         return notes;
     }
-
-    for dir in compose_dirs {
-        let compose_file = ["compose.yml", "docker-compose.yml", "compose.yaml"]
-            .into_iter()
-            .map(|n| dir.join(n))
-            .find(|p| p.is_file());
-        let Some(file) = compose_file else {
-            continue;
-        };
-        notes.push(format!(
-            "bypass: refreshing CPN compose project {}",
-            dir.display()
-        ));
-        let pull = Command::new(bin)
-            .args([
-                "compose",
-                "-f",
-                &file.to_string_lossy(),
-                "--project-directory",
-                &dir.to_string_lossy(),
-                "pull",
-            ])
-            .status();
-        if !pull.map(|s| s.success()).unwrap_or(false) {
-            notes.push(format!(
-                "bypass warning: compose pull failed for {} (continuing)",
-                dir.display()
-            ));
-        }
-        let up = Command::new(bin)
-            .args([
-                "compose",
-                "-f",
-                &file.to_string_lossy(),
-                "--project-directory",
-                &dir.to_string_lossy(),
-                "up",
-                "-d",
-                "--remove-orphans",
-            ])
-            .status();
-        if up.map(|s| s.success()).unwrap_or(false) {
-            notes.push(format!("bypass: compose up ok for {}", dir.display()));
-        } else {
-            notes.push(format!(
-                "bypass FAIL: compose up failed for {}",
-                dir.display()
-            ));
-        }
-    }
+    notes.extend(compose_notes);
 
     // Labeled standalone containers: pull image + recreate while keeping volumes.
     for line in cpn_managed_container_ids() {

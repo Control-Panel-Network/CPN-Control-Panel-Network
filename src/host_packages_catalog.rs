@@ -121,6 +121,23 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
                 "AMQP messaging for apps using this broker stops",
             ],
         },
+        AppId::Docker => HostPackageMeta {
+            category: "Utility",
+            version: "system",
+            pricing: "free",
+            released_on: "2026-09-26",
+            updated_on: "2026-09-26",
+            install_count: 90,
+            featured: true,
+            description: "Docker Engine (or Podman with docker-compatible CLI) for containers on this host. Manage Active Containers from /docker. Does not recreate CPN-managed compose stacks.",
+            install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops the Docker/Podman engine units when present",
+                "Removes Docker Engine packages (docker-ce / docker.io / moby / podman-docker)",
+                "Panel /docker manage UI and Server Docker tiles become unavailable until reinstalled",
+                "Does not delete /var/lib/cpn/docker compose projects or unlabeled container volumes",
+            ],
+        },
         AppId::Snappymail => HostPackageMeta {
             category: "Email",
             version: "2.38.2",

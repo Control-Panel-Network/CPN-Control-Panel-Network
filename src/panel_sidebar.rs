@@ -14,7 +14,7 @@ fn html_escape(value: &str) -> String {
 
 /// Extra searchable destinations beyond primary nav labels.
 pub fn search_catalog_json() -> String {
-    let entries: &[(&str, &str, &str)] = &[
+    let mut entries: Vec<(&str, &str, &str)> = vec![
         ("Dashboard", "/dashboard", "overview home"),
         ("Websites", "/websites", "sites domains"),
         ("WordPress", "/wordpress", "wordpress wp-cli plugins themes"),
@@ -24,7 +24,8 @@ pub fn search_catalog_json() -> String {
             "wordpress install plugins",
         ),
         ("Email", "/email", "mail postfix"),
-        ("Databases & FTP", "/databases", "mariadb ftp"),
+        ("Databases", "/databases", "mariadb"),
+        ("FTP", "/ftp/accounts", "sftp jail"),
         ("MariaDB Manager", "/databases/manager", "database"),
         ("Backups", "/backups", "restore"),
         ("Create Backup", "/backups/create", "backup"),
@@ -35,14 +36,17 @@ pub fn search_catalog_json() -> String {
         ),
         ("Plugins", "/plugins", "store extensions host packages"),
         ("Packages", "/packages", "plans hosting"),
-        ("Users & Plans", "/account/users", "accounts"),
+        ("Users", "/account/users", "accounts plans"),
         ("Server", "/server", "system services"),
+        ("PHP", "/server/php/extensions", "php extensions configs"),
+        ("Manage Services", "/server/services", "systemd services"),
+        ("SSL", "/security/ssl", "certificates tls"),
         (
             "Root File Manager",
             "/server/files",
             "files filesystem root admin",
         ),
-        ("Security", "/security", "firewall ssl"),
+        ("Security", "/security", "firewall"),
         ("Settings", "/settings", "design theme"),
         (
             "DNS Zones",
@@ -53,11 +57,34 @@ pub fn search_catalog_json() -> String {
         ("Default Nameservers", "/server/dns/defaults", "dns"),
         (
             "Cloudflare DNS",
-            "/server/dns/zones",
+            "/dns/cloudflare",
             "cloudflare dns management",
         ),
         ("Manage Websites", "/websites", "manage preview"),
     ];
+    if crate::panel_feature_gate::docker_installed() {
+        entries.push((
+            "Docker Containers",
+            "/docker",
+            "docker container podman active manage",
+        ));
+        entries.push((
+            "Docker Images",
+            "/docker/images",
+            "docker images pull hub container",
+        ));
+    } else {
+        entries.push((
+            "Install Docker (Host package)",
+            "/plugins?view=store&category=Host&q=docker&target=host",
+            "docker host package containers podman engine install store",
+        ));
+        entries.push((
+            "Plugin Store Host packages",
+            "/plugins?view=store&category=Host&target=host",
+            "host packages docker mariadb applications",
+        ));
+    }
     let items: Vec<String> = entries
         .iter()
         .map(|(label, href, keywords)| {
@@ -404,6 +431,18 @@ mod tests {
         let json = search_catalog_json();
         assert!(json.contains("/email"));
         assert!(json.contains("Cloudflare DNS") || json.contains("/server/dns/zones"));
+    }
+
+    #[test]
+    fn catalog_includes_docker_discovery() {
+        let json = search_catalog_json();
+        if crate::panel_feature_gate::docker_installed() {
+            assert!(json.contains("/docker"));
+            assert!(json.contains("Docker Images"));
+        } else {
+            assert!(json.contains("q=docker"));
+            assert!(json.contains("Install Docker"));
+        }
     }
 
     #[test]

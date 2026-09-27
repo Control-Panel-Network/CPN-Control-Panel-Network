@@ -350,6 +350,7 @@ mod tests {
             suspended_by: None,
             php_version: None,
             aliases: Vec::new(),
+            staging_of: None,
         }
     }
 

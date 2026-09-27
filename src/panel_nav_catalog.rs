@@ -1,4 +1,7 @@
-//! Static sidebar catalog: groups and child routes for CPN Panel.
+//! Static sidebar catalog: flatter sections and child routes for CPN Panel.
+//!
+//! Information architecture favors section-level icon rows (Main / Server /
+//! Security / Settings) over deep nest-only hubs. Routes stay unchanged.
 
 #[derive(Clone, Copy)]
 pub(crate) struct NavChild {
@@ -131,10 +134,9 @@ const DATABASES_CHILDREN: &[NavChild] = &[
         label: "phpMyAdmin",
         href: "/databases/phpmyadmin",
     },
-    NavChild {
-        label: "MariaDB Manager",
-        href: "/databases/manager",
-    },
+];
+
+const FTP_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "FTP Accounts",
         href: "/ftp/accounts",
@@ -150,6 +152,25 @@ const DATABASES_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Reset SFTP",
         href: "/ftp/reset",
+    },
+];
+
+const DNS_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "DNS Zones",
+        href: "/server/dns/zones",
+    },
+    NavChild {
+        label: "Cloudflare DNS",
+        href: "/dns/cloudflare",
+    },
+    NavChild {
+        label: "Nameservers",
+        href: "/server/dns/nameservers",
+    },
+    NavChild {
+        label: "Default Nameservers",
+        href: "/server/dns/defaults",
     },
 ];
 
@@ -169,6 +190,21 @@ const BACKUPS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Destinations",
         href: "/backups/destinations",
+    },
+];
+
+const SSL_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "Manage SSL",
+        href: "/security/ssl",
+    },
+    NavChild {
+        label: "Hostname SSL",
+        href: "/security/ssl/hostname",
+    },
+    NavChild {
+        label: "Mail SSL",
+        href: "/security/ssl/mail",
     },
 ];
 
@@ -199,11 +235,22 @@ const USERS_CHILDREN: &[NavChild] = &[
     },
 ];
 
-const SERVER_CHILDREN: &[NavChild] = &[
+const PHP_CHILDREN: &[NavChild] = &[
     NavChild {
-        label: "Services Status",
-        href: "/server/services",
+        label: "PHP Extensions",
+        href: "/server/php/extensions",
     },
+    NavChild {
+        label: "PHP Configurations",
+        href: "/server/php/configs",
+    },
+    NavChild {
+        label: "PHP Tuning",
+        href: "/server/php/tuning",
+    },
+];
+
+const LITESPEED_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Open OLS",
         href: "/server/openlitespeed",
@@ -215,30 +262,6 @@ const SERVER_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "LiteSpeed plans",
         href: "/server/litespeed",
-    },
-    NavChild {
-        label: "PHP Extensions",
-        href: "/server/php/extensions",
-    },
-    NavChild {
-        label: "PHP Configurations",
-        href: "/server/php/configs",
-    },
-    NavChild {
-        label: "Top Processes",
-        href: "/server/processes",
-    },
-    NavChild {
-        label: "Root File Manager",
-        href: "/server/files",
-    },
-    NavChild {
-        label: "DNS Zones",
-        href: "/server/dns/zones",
-    },
-    NavChild {
-        label: "Cloudflare DNS",
-        href: "/dns/cloudflare",
     },
 ];
 
@@ -254,14 +277,6 @@ const SECURITY_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Fail2ban",
         href: "/security/fail2ban",
-    },
-    NavChild {
-        label: "Manage SSL",
-        href: "/security/ssl",
-    },
-    NavChild {
-        label: "Hostname SSL",
-        href: "/security/ssl/hostname",
     },
     NavChild {
         label: "Malware scan",
@@ -315,11 +330,29 @@ const PLUGINS_CHILDREN: &[NavChild] = &[
     },
 ];
 
-pub(crate) const HOSTING: &[NavEntry] = &[
+const DOCKER_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "Containers",
+        href: "/docker",
+    },
+    NavChild {
+        label: "Images",
+        href: "/docker/images",
+    },
+];
+
+/// Main / hosting: frequent site and account tools at section level.
+pub(crate) const MAIN: &[NavEntry] = &[
     NavEntry::Link {
         id: "dashboard",
         href: "/dashboard",
         label: "Dashboard",
+    },
+    NavEntry::Group {
+        id: "users",
+        href: "/account/users",
+        label: "Users",
+        children: USERS_CHILDREN,
     },
     NavEntry::Group {
         id: "websites",
@@ -333,6 +366,11 @@ pub(crate) const HOSTING: &[NavEntry] = &[
         label: "WordPress",
         children: WORDPRESS_CHILDREN,
     },
+    NavEntry::Link {
+        id: "packages",
+        href: "/packages",
+        label: "Packages",
+    },
     NavEntry::Group {
         id: "email",
         href: "/email",
@@ -342,8 +380,20 @@ pub(crate) const HOSTING: &[NavEntry] = &[
     NavEntry::Group {
         id: "databases",
         href: "/databases",
-        label: "Databases & FTP",
+        label: "Databases",
         children: DATABASES_CHILDREN,
+    },
+    NavEntry::Group {
+        id: "ftp",
+        href: "/ftp/accounts",
+        label: "FTP",
+        children: FTP_CHILDREN,
+    },
+    NavEntry::Group {
+        id: "dns",
+        href: "/server/dns/zones",
+        label: "DNS",
+        children: DNS_CHILDREN,
     },
     NavEntry::Group {
         id: "backups",
@@ -352,49 +402,88 @@ pub(crate) const HOSTING: &[NavEntry] = &[
         children: BACKUPS_CHILDREN,
     },
     NavEntry::Group {
+        id: "ssl",
+        href: "/security/ssl",
+        label: "SSL",
+        children: SSL_CHILDREN,
+    },
+    NavEntry::Group {
         id: "plugins",
         href: "/plugins",
         label: "Plugins",
         children: PLUGINS_CHILDREN,
     },
+    NavEntry::Group {
+        id: "docker",
+        href: "/docker",
+        label: "Docker",
+        children: DOCKER_CHILDREN,
+    },
 ];
 
-pub(crate) const ACCOUNT: &[NavEntry] = &[
-    NavEntry::Group {
-        id: "users",
-        href: "/account/users",
-        label: "Users & Plans",
-        children: USERS_CHILDREN,
+/// Server tools promoted out of a single nested Server tree.
+pub(crate) const SERVER: &[NavEntry] = &[
+    NavEntry::Link {
+        id: "server",
+        href: "/server",
+        label: "Server",
     },
     NavEntry::Link {
-        id: "packages",
-        href: "/packages",
-        label: "Packages",
+        id: "mariadb",
+        href: "/databases/manager",
+        label: "MariaDB Manager",
     },
-];
-
-pub(crate) const ADMINISTRATION: &[NavEntry] = &[
     NavEntry::Link {
         id: "root-files",
         href: "/server/files",
         label: "Root File Manager",
     },
     NavEntry::Group {
-        id: "server",
-        href: "/server",
-        label: "Server",
-        children: SERVER_CHILDREN,
+        id: "php",
+        href: "/server/php/extensions",
+        label: "PHP",
+        children: PHP_CHILDREN,
+    },
+    NavEntry::Link {
+        id: "services",
+        href: "/server/services",
+        label: "Manage Services",
+    },
+    NavEntry::Link {
+        id: "processes",
+        href: "/server/processes",
+        label: "Top Processes",
+    },
+    NavEntry::Link {
+        id: "package-manager",
+        href: "/server/packages",
+        label: "Package Manager",
     },
     NavEntry::Group {
-        id: "security",
-        href: "/security",
-        label: "Security",
-        children: SECURITY_CHILDREN,
-    },
-    NavEntry::Group {
-        id: "settings",
-        href: "/settings",
-        label: "Settings",
-        children: SETTINGS_CHILDREN,
+        id: "litespeed",
+        href: "/server/litespeed",
+        label: "LiteSpeed",
+        children: LITESPEED_CHILDREN,
     },
 ];
+
+/// Security remains a shallow group (ACL id `security` preserved).
+pub(crate) const SECURITY: &[NavEntry] = &[NavEntry::Group {
+    id: "security",
+    href: "/security",
+    label: "Security",
+    children: SECURITY_CHILDREN,
+}];
+
+/// Settings hub with frequent panel preferences.
+pub(crate) const SETTINGS: &[NavEntry] = &[NavEntry::Group {
+    id: "settings",
+    href: "/settings",
+    label: "Settings",
+    children: SETTINGS_CHILDREN,
+}];
+
+/// All catalog sections in sidebar order (for ACL + path maps).
+pub(crate) fn all_sections() -> [&'static [NavEntry]; 4] {
+    [MAIN, SERVER, SECURITY, SETTINGS]
+}

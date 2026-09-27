@@ -63,6 +63,7 @@ impl GuestOs {
     /// Debian/Ubuntu suite name for LiteSpeed apt sources on installable guests.
     pub fn apt_codename(&self) -> Option<&'static str> {
         match (self.id.as_str(), self.major) {
+            ("ubuntu", 26) => Some("resolute"),
             ("ubuntu", 24) => Some("noble"),
             ("ubuntu", 22) => Some("jammy"),
             ("debian", 13) => Some("trixie"),
@@ -139,7 +140,7 @@ fn classify(id: &str, major: u32, version_id: &str) -> (PackageFamily, SupportSt
             (PackageFamily::Dnf, SupportStatus::Partial, label)
         }
         "centos" if matches!(major, 9 | 10) => (PackageFamily::Dnf, SupportStatus::Partial, label),
-        "ubuntu" if matches!(major, 22 | 24) => {
+        "ubuntu" if matches!(major, 22 | 24 | 26) => {
             (PackageFamily::Apt, SupportStatus::Supported, label)
         }
         // Ubuntu 20.04 is outside standard support and is not an upstream OLS target anymore.
@@ -399,6 +400,10 @@ mod tests {
         let noble = detect_from_os_release("ID=ubuntu\nVERSION_ID=\"24.04\"\n").unwrap();
         assert_eq!(noble.support, SupportStatus::Supported);
         assert_eq!(noble.apt_codename(), Some("noble"));
+
+        let resolute = detect_from_os_release("ID=ubuntu\nVERSION_ID=\"26.04\"\n").unwrap();
+        assert_eq!(resolute.support, SupportStatus::Supported);
+        assert_eq!(resolute.apt_codename(), Some("resolute"));
     }
 
     #[test]

@@ -199,6 +199,7 @@ mod tests {
             suspended_by: None,
             php_version: None,
             aliases: vec!["www.cpn-lab-test.example".into()],
+            staging_of: None,
         }
     }
 
