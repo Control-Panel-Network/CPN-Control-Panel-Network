@@ -85,6 +85,15 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
           color:var(--ink); font-size:14px; font-weight:600;
         }}
         .plugin-tab.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
+        .store-scope-toggle {{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; }}
+        .store-scope-label {{ font-size:13px; font-weight:600; color:var(--ink); margin-right:4px; }}
+        .store-scope-btn {{
+          display:inline-flex; align-items:center; min-height:36px; padding:0 14px;
+          border-radius:999px; border:1px solid var(--hairline); background:var(--canvas);
+          color:var(--ink); font-size:13px; font-weight:600; text-decoration:none;
+        }}
+        .store-scope-btn.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
+        .store-scope-hint {{ margin:8px 0 0; font-size:13px; }}
         .plugin-stats {{ display:flex; flex-wrap:wrap; gap:16px; margin:0 0 14px; font-size:14px; color:var(--ink); }}
         .plugin-stats strong {{ color:var(--ink); }}
         .plugin-grid {{
@@ -179,6 +188,235 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         domain_q = domain_q,
         hub_styles = plugins_hub_styles(),
     )
+}
+
+pub(crate) fn resolve_store_target(
+    requested: &str,
+    category: &str,
+    sites: &[SiteRecord],
+) -> &'static str {
+    match requested.trim().to_ascii_lowercase().as_str() {
+        "host" => "host",
+        "site" => "site",
+        _ => {
+            if category.trim().eq_ignore_ascii_case("host") {
+                "host"
+            } else if sites.is_empty() {
+                "host"
+            } else {
+                "site"
+            }
+        }
+    }
+}
+
+fn store_target_href(
+    view: &str,
+    target: &str,
+    category: &str,
+    domain: &str,
+    mode: &str,
+    per_page: usize,
+    q: &str,
+) -> String {
+    let mut href = format!(
+        "/plugins?view={}&target={}",
+        urlencoding_simple(view),
+        urlencoding_simple(target)
+    );
+    if !category.trim().is_empty() {
+        href.push_str(&format!(
+            "&category={}",
+            urlencoding_simple(category.trim())
+        ));
+    }
+    if target == "site" && !domain.trim().is_empty() {
+        href.push_str(&format!("&domain={}", urlencoding_simple(domain.trim())));
+    }
+    href.push_str(&format!(
+        "&mode={}&per_page={}",
+        urlencoding_simple(mode),
+        per_page
+    ));
+    if !q.trim().is_empty() {
+        href.push_str(&format!("&q={}", urlencoding_simple(q.trim())));
+    }
+    href
+}
+
+pub(crate) fn store_scope_query_suffix(
+    domain: &str,
+    target: &str,
+    mode: &str,
+    per_page: usize,
+    q: &str,
+) -> String {
+    let mut out = format!(
+        "&amp;mode={}&amp;per_page={}",
+        urlencoding_simple(mode),
+        per_page
+    );
+    if target == "host" {
+        out.push_str("&amp;target=host");
+    } else {
+        out.push_str("&amp;target=site");
+        if !domain.is_empty() {
+            out.push_str(&format!(
+                "&amp;domain={}",
+                urlencoding_simple(domain)
+            ));
+        }
+    }
+    if !q.trim().is_empty() {
+        out.push_str(&format!("&amp;q={}", urlencoding_simple(q)));
+    }
+    out
+}
+
+pub(crate) fn store_install_target_picker(
+    sites: &[SiteRecord],
+    selected_domain: &str,
+    target: &str,
+    view: &str,
+    category: &str,
+    q: &str,
+    mode: &str,
+    per_page: usize,
+) -> String {
+    let host_active = if target == "host" { " active" } else { "" };
+    let site_active = if target == "site" { " active" } else { "" };
+    let host_href = store_target_href(view, "host", category, "", mode, per_page, q);
+    let site_href = store_target_href(
+        view,
+        "site",
+        category,
+        selected_domain,
+        mode,
+        per_page,
+        q,
+    );
+    let toggle = format!(
+        r#"<div class="store-scope-toggle" role="group" aria-label="Install target">
+        <span class="store-scope-label">Install target</span>
+        <a class="store-scope-btn{host_active}" href="{host_href}">Host</a>
+        <a class="store-scope-btn{site_active}" href="{site_href}">Site</a>
+      </div>"#,
+        host_active = host_active,
+        site_active = site_active,
+        host_href = html_escape(&host_href),
+        site_href = html_escape(&site_href),
+    );
+    if target == "host" {
+        let site_hint = if sites.is_empty() {
+            String::new()
+        } else {
+            let site_link = store_target_href(
+                view,
+                "site",
+                category,
+                selected_domain,
+                mode,
+                per_page,
+                q,
+            );
+            format!(
+                r#"<p class="muted store-scope-hint">Host packages install once on this server. Sites only <strong>Activate</strong> or <strong>Deactivate</strong> them. <a href="{site_link}">Switch to Site</a> to pick a domain for site plugins or activation.</p>"#,
+                site_link = html_escape(&site_link),
+            )
+        };
+        return format!(
+            r#"{toggle}
+        {site_hint}
+        <p class="plugin-store-meta" style="margin-top:8px;">You are installing on the <strong>Host</strong>. The site dropdown is hidden because Host packages are not tied to one domain.</p>"#,
+            toggle = toggle,
+            site_hint = site_hint,
+        );
+    }
+    if sites.is_empty() {
+        return format!(
+            r#"{toggle}
+        <p class="muted">No websites yet. Use <strong>Host</strong> to install Host packages. Create a site to install domain or sub-domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
+            toggle = toggle,
+        );
+    }
+    let mut options = String::new();
+    for site in sites {
+        let sel = if site.domain == selected_domain {
+            " selected"
+        } else {
+            ""
+        };
+        options.push_str(&format!(
+            r#"<option value="{domain}"{sel}>{domain}</option>"#,
+            domain = html_escape(&site.domain),
+            sel = sel,
+        ));
+    }
+    format!(
+        r#"{toggle}
+      <form method="get" action="/plugins" class="domain-picker">
+        <input type="hidden" name="view" value="{view}">
+        <input type="hidden" name="target" value="site">
+        <input type="hidden" name="mode" value="{mode}">
+        <input type="hidden" name="per_page" value="{per_page}">
+        <input type="hidden" name="category" value="{category}">
+        <input type="hidden" name="q" value="{q}">
+        <div>
+          <label for="domain"><strong>Site</strong> (for site plugins and Activate)</label><br>
+          <select id="domain" name="domain">{options}</select>
+        </div>
+        <button type="submit" class="btn-secondary">Apply</button>
+      </form>
+      <p class="muted store-scope-hint">Site plugins install under the selected domain. Host packages still show here with <strong>Install on Host</strong>; use the <strong>Host</strong> target above to hide this dropdown.</p>"#,
+        toggle = toggle,
+        view = html_escape(view),
+        mode = html_escape(mode),
+        per_page = per_page,
+        category = html_escape(category),
+        q = html_escape(q),
+        options = options,
+    )
+}
+
+#[cfg(test)]
+mod store_target_tests {
+    use super::*;
+    use crate::sites::SiteRecord;
+
+    #[test]
+    fn resolve_store_target_defaults() {
+        let sites = vec![SiteRecord {
+            schema_version: 1,
+            domain: "example.com".into(),
+            owner: "admin".into(),
+            docroot: "/home/example.com/public_html".into(),
+            enabled: true,
+            engine: None,
+            notes: String::new(),
+            created_at_unix: 0,
+            updated_at_unix: 0,
+            vhost_wired: false,
+            ssl: Default::default(),
+            internal_ip: None,
+            owner_suspend_message: String::new(),
+            suspended_by: None,
+            php_version: None,
+            aliases: vec![],
+        }];
+        assert_eq!(resolve_store_target("", "Host", &sites), "host");
+        assert_eq!(resolve_store_target("", "", &sites), "site");
+        assert_eq!(resolve_store_target("host", "", &sites), "host");
+        assert_eq!(resolve_store_target("", "", &[]), "host");
+    }
+
+    #[test]
+    fn store_picker_shows_host_toggle() {
+        let html = store_install_target_picker(&[], "", "host", "store", "Host", "", "page", 4);
+        assert!(html.contains("Install target"));
+        assert!(html.contains("store-scope-btn active"));
+        assert!(html.contains(">Host</a>"));
+        assert!(!html.contains("name=\"domain\""));
+    }
 }
 
 pub(crate) fn domain_picker(sites: &[SiteRecord], selected: &str, view: &str) -> String {

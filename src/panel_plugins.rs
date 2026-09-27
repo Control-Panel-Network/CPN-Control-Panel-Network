@@ -3,7 +3,8 @@
 use crate::apps::list_apps;
 use crate::panel_plugins_installed::{InstalledPageOpts, render_installed};
 use crate::panel_plugins_markup::{
-    domain_picker, html_escape, notice_block, resolve_domain, section_heading, view_tabs,
+    domain_picker, html_escape, notice_block, resolve_domain, resolve_store_target,
+    section_heading, store_install_target_picker, view_tabs,
 };
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, plugins_hub_script,
@@ -23,6 +24,7 @@ pub struct PluginsPageQuery<'a> {
     pub category: &'a str,
     pub status: &'a str,
     pub domain: &'a str,
+    pub store_target: &'a str,
     pub notice: Option<&'a str>,
     pub error: Option<&'a str>,
     pub refresh: bool,
@@ -65,13 +67,32 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
     let per_page = per_page_from_query(&query.per_page.to_string());
     let page = page_from_query(&query.page.to_string());
     let sites = query.sites;
-    let domain = resolve_domain(sites, query.domain);
-    let picker = domain_picker(sites, &domain, view);
+    let store_target = resolve_store_target(query.store_target, category, sites);
+    let domain = if view == "store" && store_target == "host" {
+        String::new()
+    } else {
+        resolve_domain(sites, query.domain)
+    };
+    let picker = if view == "store" {
+        store_install_target_picker(
+            sites,
+            &domain,
+            store_target,
+            view,
+            category,
+            query.q,
+            mode,
+            per_page,
+        )
+    } else {
+        domain_picker(sites, &domain, view)
+    };
 
     if view == "store" {
         return render_store(
             PluginsPageQuery { category, ..query },
             &domain,
+            store_target,
             &picker,
             mode,
             page,
@@ -98,6 +119,7 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
 fn render_store(
     query: PluginsPageQuery<'_>,
     domain: &str,
+    store_target: &str,
     picker: &str,
     mode: &str,
     page: usize,
@@ -138,6 +160,7 @@ fn render_store(
                 r#"<p class="plugin-count">{count}</p>
           <form method="get" action="/plugins" class="plugin-search-row">
             <input type="hidden" name="view" value="store">
+            <input type="hidden" name="target" value="{store_target}">
             <input type="hidden" name="domain" value="{domain}">
             <input type="hidden" name="mode" value="{mode}">
             <input type="hidden" name="per_page" value="{per_page}">
@@ -150,6 +173,7 @@ fn render_store(
           {pills}
           {rows}"#,
                 count = html_escape(&count_label),
+                store_target = html_escape(store_target),
                 domain = html_escape(domain),
                 mode = html_escape(mode),
                 per_page = per_page,
@@ -160,6 +184,7 @@ fn render_store(
                     &entries,
                     query.category,
                     domain,
+                    store_target,
                     mode,
                     per_page,
                     query.q,
@@ -205,7 +230,7 @@ fn render_store(
       <article class="section-card">
         <h2>Store</h2>
         {picker}
-        <p class="plugin-store-meta">One catalog: host packages and community plugins share the same grid. Badges mark Host vs Site. Site installs use <code>{path}</code>. Host-scoped Security packages install once on the Host; sites Activate. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
+        <p class="plugin-store-meta">One catalog: host packages and community plugins share the same grid. Badges mark Host vs Site. Use <strong>Install target</strong> above: <strong>Host</strong> for one-time server installs; <strong>Site</strong> for domain plugins under <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
         <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install. Fail2ban and other Security plugins ship from Control-Panel-Network/CPN-Plugins.</p>
         {body}
       </article>"#,

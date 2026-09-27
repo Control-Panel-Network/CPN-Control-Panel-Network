@@ -705,7 +705,7 @@ pub async fn plugins_page(
         query.get("view").map(String::as_str),
         Some("host") | Some("apps")
     ) {
-        let mut loc = String::from("/plugins?view=store&category=Host");
+        let mut loc = String::from("/plugins?view=store&category=Host&target=host");
         for (key, value) in query.iter() {
             if key == "view" || key == "category" {
                 continue;
@@ -739,6 +739,7 @@ pub async fn plugins_page(
     let category = query.get("category").map(String::as_str).unwrap_or("");
     let status = query.get("status").map(String::as_str).unwrap_or("");
     let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let store_target = query.get("target").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let refresh = query.get("refresh").map(String::as_str) == Some("1");
@@ -773,6 +774,7 @@ pub async fn plugins_page(
         category,
         status,
         domain,
+        store_target,
         notice,
         error,
         refresh,

@@ -14,7 +14,7 @@ fn html_escape(value: &str) -> String {
 
 /// Extra searchable destinations beyond primary nav labels.
 pub fn search_catalog_json() -> String {
-    let entries: &[(&str, &str, &str)] = &[
+    let mut entries: Vec<(&str, &str, &str)> = vec![
         ("Dashboard", "/dashboard", "overview home"),
         ("Websites", "/websites", "sites domains"),
         ("WordPress", "/wordpress", "wordpress wp-cli plugins themes"),
@@ -40,7 +40,6 @@ pub fn search_catalog_json() -> String {
         ("Server", "/server", "system services"),
         ("PHP", "/server/php/extensions", "php extensions configs"),
         ("Manage Services", "/server/services", "systemd services"),
-        ("Docker", "/docker", "containers images"),
         ("SSL", "/security/ssl", "certificates tls"),
         (
             "Root File Manager",
@@ -63,6 +62,29 @@ pub fn search_catalog_json() -> String {
         ),
         ("Manage Websites", "/websites", "manage preview"),
     ];
+    if crate::panel_feature_gate::docker_installed() {
+        entries.push((
+            "Docker Containers",
+            "/docker",
+            "docker container podman active manage",
+        ));
+        entries.push((
+            "Docker Images",
+            "/docker/images",
+            "docker images pull hub container",
+        ));
+    } else {
+        entries.push((
+            "Install Docker (Host package)",
+            "/plugins?view=store&category=Host&q=docker&target=host",
+            "docker host package containers podman engine install store",
+        ));
+        entries.push((
+            "Plugin Store Host packages",
+            "/plugins?view=store&category=Host&target=host",
+            "host packages docker mariadb applications",
+        ));
+    }
     let items: Vec<String> = entries
         .iter()
         .map(|(label, href, keywords)| {
@@ -409,6 +431,18 @@ mod tests {
         let json = search_catalog_json();
         assert!(json.contains("/email"));
         assert!(json.contains("Cloudflare DNS") || json.contains("/server/dns/zones"));
+    }
+
+    #[test]
+    fn catalog_includes_docker_discovery() {
+        let json = search_catalog_json();
+        if crate::panel_feature_gate::docker_installed() {
+            assert!(json.contains("/docker"));
+            assert!(json.contains("Docker Images"));
+        } else {
+            assert!(json.contains("q=docker"));
+            assert!(json.contains("Install Docker"));
+        }
     }
 
     #[test]

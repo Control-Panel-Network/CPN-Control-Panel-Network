@@ -4,7 +4,7 @@ use crate::apps::{AppStatus, list_apps};
 use crate::host_packages_catalog::{filter_host_packages, host_categories};
 use crate::panel_admin::is_panel_admin;
 use crate::panel_apps::host_card;
-use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
+use crate::panel_plugins_markup::{html_escape, store_scope_query_suffix, urlencoding_simple};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
@@ -97,6 +97,7 @@ pub(crate) fn unified_category_pills(
     entries: &[CatalogEntry],
     active: &str,
     domain: &str,
+    store_target: &str,
     mode: &str,
     per_page: usize,
     q: &str,
@@ -111,15 +112,7 @@ pub(crate) fn unified_category_pills(
     cats.sort_by_key(|c| c.to_ascii_lowercase());
     cats.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
 
-    let mut domain_q = format!("&amp;domain={}", urlencoding_simple(domain));
-    domain_q.push_str(&format!(
-        "&amp;mode={}&amp;per_page={}",
-        urlencoding_simple(mode),
-        per_page
-    ));
-    if !q.trim().is_empty() {
-        domain_q.push_str(&format!("&amp;q={}", urlencoding_simple(q)));
-    }
+    let domain_q = store_scope_query_suffix(domain, store_target, mode, per_page, q);
     let mut out = String::from(r#"<div class="category-pills">"#);
     for (label, cat_val) in [
         ("All", ""),

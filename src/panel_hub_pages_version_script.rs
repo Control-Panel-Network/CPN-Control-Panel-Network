@@ -58,6 +58,68 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     return 0;
   }}
+  function formatPublishedAt(iso) {{
+    var raw = String(iso || "").trim();
+    if (!raw) return "-";
+    var datePart = raw.split("T")[0] || raw;
+    var parts = datePart.split("-");
+    if (parts.length !== 3 || parts[0].length !== 4) return raw;
+    var out = parts[2] + "/" + parts[1] + "/" + parts[0];
+    var timePart = raw.split("T")[1] || "";
+    if (timePart.length >= 5) {{
+      var hm = timePart.substring(0, 5);
+      if (hm.charAt(2) === ":") out += " " + hm;
+    }}
+    return out;
+  }}
+  function releaseRowForVersion(ver) {{
+    var want = norm(ver);
+    if (!want || !releaseCache.length) return null;
+    for (var i = 0; i < releaseCache.length; i++) {{
+      var r = releaseCache[i];
+      var v = norm(r.version || r.tag_name);
+      var t = norm(r.tag_name || r.version);
+      if (v === want || t === want) return r;
+    }}
+    return null;
+  }}
+  function paintReleaseDates(info) {{
+    var runningDateEl = document.getElementById("cpn-version-running-date");
+    var installedDateEl = document.getElementById("cpn-version-installed-date");
+    var runningRow = releaseRowForVersion(info && info.running_version);
+    var installedRow = releaseRowForVersion(info && info.installed_version);
+    if (runningDateEl) {{
+      runningDateEl.textContent = runningRow && runningRow.published_at
+        ? ("Released " + formatPublishedAt(runningRow.published_at))
+        : "";
+    }}
+    if (installedDateEl) {{
+      installedDateEl.textContent = installedRow && installedRow.published_at
+        ? ("Released " + formatPublishedAt(installedRow.published_at))
+        : "";
+    }}
+  }}
+  function supportedReleaseTags() {{
+    if (!releaseCache.length) return {{}};
+    var sorted = releaseCache.slice().sort(function (a, b) {{
+      var av = a.version || norm(a.tag_name);
+      var bv = b.version || norm(b.tag_name);
+      return -cmp(av, bv);
+    }});
+    var set = {{}};
+    for (var i = 0; i < Math.min(2, sorted.length); i++) {{
+      var tag = sorted[i].tag_name || sorted[i].version;
+      if (tag) set[norm(tag)] = true;
+    }}
+    return set;
+  }}
+  function isOutsideSupport(tag) {{
+    var key = norm(tag);
+    if (!key) return false;
+    var supported = supportedReleaseTags();
+    if (!Object.keys(supported).length) return false;
+    return !supported[key];
+  }}
   function retryMessage(secs) {{
     return "Checked recently; showing cached results. Try again in " + secs + " seconds.";
   }}
@@ -123,7 +185,11 @@ pub fn version_page_script(can_manage: bool) -> String {
   function armConfirm(action, version, label) {{
     if (!canManage || busy) return;
     pending = {{ action: action, version: version || null }};
-    if (confirmText) confirmText.textContent = "About to " + label + ". Click Confirm to start, or Cancel.";
+    var extra = "";
+    if (version && isOutsideSupport(version)) {{
+      extra = " Warning: this tag is outside CPN support (only the latest two releases are supported).";
+    }}
+    if (confirmText) confirmText.textContent = "About to " + label + "." + extra + " Click Confirm to start, or Cancel.";
     if (confirmGo) confirmGo.textContent = "Confirm " + label;
     if (confirmBox) confirmBox.style.display = "block";
     if (opError) opError.textContent = "";
@@ -179,9 +245,11 @@ pub fn version_page_script(can_manage: bool) -> String {
       var marks = [];
       if (norm(ver) === installed || norm(tag) === installed) marks.push("installed");
       if (latest && (norm(ver) === latest || norm(tag) === latest)) marks.push("latest");
+      if (isOutsideSupport(tag)) marks.push("outside support");
+      var dateLabel = r.published_at ? (" · " + formatPublishedAt(r.published_at)) : "";
       out.push({{
         tag: tag,
-        label: tag + (marks.length ? " (" + marks.join(", ") + ")" : "")
+        label: tag + dateLabel + (marks.length ? " (" + marks.join(", ") + ")" : "")
       }});
     }});
     return out;
@@ -286,6 +354,7 @@ pub fn version_page_script(can_manage: bool) -> String {
       return "<p>" + esc(l) + "</p>";
     }}).join("");
     fillPicker(info);
+    paintReleaseDates(info);
   }}
   function check(forceRefresh) {{
     if (forceRefresh && retryLeft > 0) return;

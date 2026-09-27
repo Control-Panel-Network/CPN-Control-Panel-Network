@@ -333,6 +333,28 @@ pub(crate) fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
     })
 }
 
+/// GitHub `published_at` (ISO 8601) to operator-facing `dd/mm/yyyy` or `dd/mm/yyyy HH:MM`.
+pub fn format_release_published_display(iso: &str) -> String {
+    let raw = iso.trim();
+    if raw.is_empty() {
+        return "-".into();
+    }
+    let date_part = raw.split('T').next().unwrap_or(raw);
+    let parts: Vec<&str> = date_part.split('-').collect();
+    if parts.len() != 3 || parts[0].len() != 4 {
+        return raw.to_string();
+    }
+    let mut out = format!("{}/{}/{}", parts[2], parts[1], parts[0]);
+    if let Some(time_part) = raw.split('T').nth(1) {
+        let hm: String = time_part.chars().take(5).collect();
+        if hm.len() == 5 && hm.as_bytes().get(2) == Some(&b':') {
+            out.push(' ');
+            out.push_str(&hm);
+        }
+    }
+    out
+}
+
 pub use crate::releases_fetch::{
     find_release, list_releases, list_releases_cached, list_releases_cached_opts,
     list_releases_for_repo, list_releases_for_repo_opts,
@@ -343,9 +365,9 @@ pub use crate::releases_version_check::{version_check, version_check_with_option
 mod tests {
     use super::{
         CpnRelease, ReleaseAsset, cargo_version_from_rpm, compare_versions, deb_name_matches,
-        expand_compact_prerelease, is_active_0_2_line, is_retag_migration,
-        is_retired_cpn_1_0_identity, normalize_version, pick_newest_publishable_release,
-        rpm_name_matches,
+        expand_compact_prerelease, format_release_published_display, is_active_0_2_line,
+        is_retag_migration, is_retired_cpn_1_0_identity, normalize_version,
+        pick_newest_publishable_release, rpm_name_matches,
     };
     use std::cmp::Ordering;
 
@@ -353,6 +375,16 @@ mod tests {
     fn normalizes_v_prefix() {
         assert_eq!(normalize_version("v0.2.0"), "0.2.0");
         assert_eq!(normalize_version("0.2.0"), "0.2.0");
+    }
+
+    #[test]
+    fn formats_github_published_at_for_ui() {
+        assert_eq!(
+            format_release_published_display("2026-03-19T14:30:00Z"),
+            "19/03/2026 14:30"
+        );
+        assert_eq!(format_release_published_display("2026-09-24"), "24/09/2026");
+        assert_eq!(format_release_published_display(""), "-");
     }
 
     #[test]
