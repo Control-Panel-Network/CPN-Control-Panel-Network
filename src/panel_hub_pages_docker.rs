@@ -165,35 +165,35 @@ fn create_container_form(prefill_image: &str) -> String {
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Create Container</h2>
       <p class="muted" style="margin:0 0 14px;">Run a local or pulled upstream image. For production data, prefer <a href="/docker/stacks">Compose Stacks</a> (host bind mounts). User containers are not labeled as CPN-managed.</p>
-      <form method="post" action="/docker/create" class="docker-create-form" style="display:grid;gap:12px;max-width:640px;">
+      <form method="post" action="/docker/create" class="docker-create-form">
         <label>Image <span class="muted">(required)</span>
-          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{img}" autocomplete="off" style="width:100%;">
+          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{img}" autocomplete="off">
         </label>
         <label>Container name <span class="muted">(optional)</span>
-          <input type="text" name="name" maxlength="64" placeholder="my-nginx" autocomplete="off" style="width:100%;">
+          <input type="text" name="name" maxlength="64" placeholder="my-nginx" autocomplete="off">
         </label>
         <label>Ports <span class="muted">(host:container, comma or newline)</span>
-          <input type="text" name="ports" maxlength="200" placeholder="8080:80" autocomplete="off" style="width:100%;">
+          <input type="text" name="ports" maxlength="200" placeholder="8080:80" autocomplete="off">
         </label>
         <label>Volumes <span class="muted">(host_path:container_path, optional)</span>
-          <input type="text" name="volumes" maxlength="400" placeholder="/var/lib/cpn/docker-data/myapp/data:/data" autocomplete="off" style="width:100%;">
+          <input type="text" name="volumes" maxlength="400" placeholder="/var/lib/cpn/docker-data/myapp/data:/data" autocomplete="off">
         </label>
         <label>Environment <span class="muted">(KEY=value, one per line)</span>
-          <textarea name="env" rows="3" maxlength="4000" placeholder="TZ=UTC" style="width:100%;font-family:monospace;"></textarea>
+          <textarea name="env" rows="3" maxlength="4000" placeholder="TZ=UTC"></textarea>
         </label>
         <label>Restart policy
-          <select name="restart" style="width:100%;max-width:280px;">
+          <select name="restart">
             <option value="no">no</option>
             <option value="unless-stopped" selected>unless-stopped</option>
             <option value="always">always</option>
             <option value="on-failure">on-failure</option>
           </select>
         </label>
-        <label style="display:flex;align-items:center;gap:8px;">
+        <label class="docker-inline-check">
           <input type="checkbox" name="start" value="1" checked>
           Start container after create
         </label>
-        <p style="margin:0;"><button type="submit" class="btn-primary">Create Container</button></p>
+        <p class="docker-form-actions"><button type="submit" class="btn-primary">Create Container</button></p>
       </form>
     </div>"#,
         img = img,
@@ -314,15 +314,15 @@ fn search_pull_card(query: &str, hits: &[DockerHubSearchHit]) -> String {
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Search &amp; Pull Images</h2>
       <p class="muted" style="margin:0 0 12px;">Search Docker Hub for official or maintainer images (Official badge first), pull, then run as a container or <a href="/docker/stacks">compose stack</a> with host volumes.</p>
-      <form method="get" action="/docker/images" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px;">
-        <label style="flex:1;min-width:200px;">Search Docker Hub
-          <input type="search" name="q" value="{q}" maxlength="100" placeholder="nginx, mariadb, redis" autocomplete="off" style="width:100%;">
+      <form method="get" action="/docker/images" class="docker-hub-form" style="grid-template-columns:1fr auto;align-items:end;margin-bottom:12px;">
+        <label>Search Docker Hub
+          <input type="search" name="q" value="{q}" maxlength="100" placeholder="nginx, mariadb, redis" autocomplete="off">
         </label>
         <button type="submit" class="btn-secondary">Search</button>
       </form>
-      <form method="post" action="/docker/images/pull" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
-        <label style="flex:1;min-width:200px;">Image to pull
-          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine (Docker Official Image)" value="{q}" autocomplete="off" style="width:100%;">
+      <form method="post" action="/docker/images/pull" class="docker-hub-form" style="grid-template-columns:1fr auto;align-items:end;">
+        <label>Image to pull
+          <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine (Docker Official Image)" value="{q}" autocomplete="off">
         </label>
         <button type="submit" class="btn-primary">Pull</button>
       </form>

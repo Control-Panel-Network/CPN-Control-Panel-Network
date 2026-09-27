@@ -1,6 +1,9 @@
 //! CPN-managed Docker Compose projects under `<data>/docker/` with host data under `<data>/docker-data/`.
 
 use crate::panel_ops_docker::docker_bin;
+use crate::panel_ops_docker_image_ref::{
+    normalize_container_image_ref, sanitize_container_cli_message,
+};
 use crate::paths::join_data;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -207,9 +210,48 @@ pub fn run_compose(project_dir: &Path, subcommand: &[&str]) -> Result<String, St
         Err(format!(
             "docker compose {} failed: {}",
             subcommand.first().unwrap_or(&""),
-            detail.chars().take(320).collect::<String>()
+            sanitize_container_cli_message(&detail)
         ))
     }
+}
+
+fn normalize_compose_image_refs(project_dir: &Path) -> Result<(), String> {
+    let Some(file) = find_compose_file(project_dir) else {
+        return Ok(());
+    };
+    let text =
+        fs::read_to_string(&file).map_err(|e| format!("Could not read compose file: {e}"))?;
+    let mut changed = false;
+    let mut out_lines = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("image:") {
+            let raw = trimmed
+                .trim_start_matches("image:")
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
+            let normalized = normalize_container_image_ref(raw);
+            if normalized != raw {
+                changed = true;
+                let indent = line.find("image:").unwrap_or(0);
+                let pad = " ".repeat(indent);
+                out_lines.push(format!("{pad}image: {normalized}"));
+                continue;
+            }
+        }
+        out_lines.push(line.to_string());
+    }
+    if changed {
+        let body = out_lines.join("\n");
+        let body = if text.ends_with('\n') {
+            format!("{body}\n")
+        } else {
+            body
+        };
+        fs::write(&file, body).map_err(|e| format!("Could not update compose images: {e}"))?;
+    }
+    Ok(())
 }
 
 /// `docker compose pull` then `up -d` for one CPN stack (volumes preserved).
@@ -221,6 +263,7 @@ pub fn refresh_compose_stack(stack_id: &str) -> Result<String, String> {
             "Stack `{id}` was not found under the CPN docker compose root."
         ));
     }
+    normalize_compose_image_refs(&project_dir)?;
     let _ = run_compose(&project_dir, &["pull"]);
     run_compose(&project_dir, &["up", "-d", "--remove-orphans"]).map(|detail| {
         let mut msg = format!(
@@ -271,6 +314,7 @@ pub struct CreateComposeStackRequest<'a> {
 pub fn create_compose_stack(req: CreateComposeStackRequest<'_>) -> Result<String, String> {
     let id = validate_stack_id(req.stack_id)?;
     let image = crate::panel_ops_docker_images::validate_image_ref(req.image)?;
+    let image = normalize_container_image_ref(&image);
     let data_path = validate_container_data_path(req.container_data_path)?;
     let ports = crate::panel_ops_docker_images::parse_port_mappings(req.ports)?;
     let envs = crate::panel_ops_docker_images::parse_env_vars(req.env)?;

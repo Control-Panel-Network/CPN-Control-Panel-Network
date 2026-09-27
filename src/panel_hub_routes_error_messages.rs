@@ -82,13 +82,30 @@ pub struct MarkdownPreviewForm {
     markdown: String,
 }
 
+#[post("/settings/markdown/preview")]
+pub async fn settings_markdown_preview(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<MarkdownPreviewForm>,
+) -> HttpResponse {
+    markdown_preview_response(&http, &state, &form.markdown)
+}
+
 #[post("/settings/error-messages/preview")]
 pub async fn settings_error_messages_preview(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     form: web::Form<MarkdownPreviewForm>,
 ) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
+    markdown_preview_response(&http, &state, &form.markdown)
+}
+
+fn markdown_preview_response(
+    http: &HttpRequest,
+    state: &web::Data<Arc<AppState>>,
+    markdown: &str,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(state, http) else {
         return HttpResponse::Unauthorized().finish();
     };
     if !is_panel_admin(&user) {
@@ -96,7 +113,7 @@ pub async fn settings_error_messages_preview(
     }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(render_safe_markdown(&form.markdown))
+        .body(render_safe_markdown(markdown))
 }
 
 #[post("/settings/error-messages/restore-forbidden")]

@@ -89,8 +89,9 @@ use cpn_installer::panel_hub_routes::{
     settings_error_messages_page, settings_error_messages_preview,
     settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
     settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
-    settings_error_messages_save, settings_logs_page, settings_logs_save, settings_page,
-    settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_error_messages_save, settings_logs_page, settings_logs_save,
+    settings_markdown_preview, settings_page, settings_port_page, settings_setup_page,
+    settings_setup_save, settings_site_messages_page, settings_site_messages_preview_site_ready,
     settings_site_messages_reset, settings_site_messages_restore_site_ready,
     settings_site_messages_restore_suspend, settings_site_messages_save, settings_version_page,
     sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
@@ -1291,11 +1292,13 @@ async fn main() -> std::io::Result<()> {
             .service(settings_connect_page)
             .service(settings_site_messages_page)
             .service(settings_site_messages_save)
+            .service(settings_site_messages_preview_site_ready)
             .service(settings_site_messages_restore_suspend)
             .service(settings_site_messages_restore_site_ready)
             .service(settings_site_messages_reset)
             .service(settings_error_messages_page)
             .service(settings_error_messages_save)
+            .service(settings_markdown_preview)
             .service(settings_error_messages_preview)
             .service(settings_error_messages_restore_forbidden)
             .service(settings_error_messages_restore_not_found)

@@ -4,6 +4,7 @@
 //! Site-owned suspend copy lives on each `SiteRecord`.
 
 use crate::account::{data_dir, now_unix};
+use crate::panel_markdown::render_safe_markdown;
 use crate::sites::{SiteRecord, SuspendActor};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf};
@@ -12,18 +13,54 @@ const SCHEMA_VERSION: u32 = 1;
 const MAX_SUSPEND_CHARS: usize = 8_000;
 const MAX_SITE_READY_CHARS: usize = 64_000;
 
-const BUILTIN_SUSPEND: &str = "This website is temporarily unavailable. Please try again later.";
+const BUILTIN_SUSPEND: &str = r#"## This site is temporarily offline
+
+This website has been **suspended** and is not available to visitors right now.
+
+If you are the site owner, review the site status in your **CPN Panel** or contact your hosting administrator.
+
+---
+
+*Document root hosted with [CPN Control Panel Network](https://cpn.newstargeted.com) by News Targeted.*
+"#;
 
 const BUILTIN_SITE_READY: &str = r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Site ready</title>
+  <title>Your site is ready</title>
+  <style>
+    :root { color-scheme: dark light; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: system-ui, Segoe UI, sans-serif; background: #0b1220; color: #e2e8f0;
+    }
+    main {
+      width: min(40rem, 92vw); padding: 32px 28px; border-radius: 16px;
+      border: 1px solid #334155; background: linear-gradient(165deg, #111827 0%, #0f172a 100%);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+    .eyebrow {
+      font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #94a3b8; margin: 0 0 10px;
+    }
+    h1 { margin: 0 0 12px; font-size: 1.65rem; }
+    p { line-height: 1.55; margin: 0.55em 0; color: #cbd5e1; }
+    a { color: #7dd3fc; }
+    .cta {
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155;
+      font-size: 0.92rem; color: #94a3b8;
+    }
+  </style>
 </head>
 <body>
-  <h1>Site ready</h1>
-  <p>This document root was created by CPN. Replace this file with your site.</p>
+  <main>
+    <p class="eyebrow">CPN Panel</p>
+    <h1>Your site is ready</h1>
+    <p>This document root was created by <strong>CPN Control Panel Network</strong>. Upload your application, or install WordPress from the panel, to replace this placeholder.</p>
+    <p class="cta">Powered by <a href="https://cpn.newstargeted.com" rel="noopener noreferrer">CPN Control Panel Network</a> from News Targeted.</p>
+  </main>
 </body>
 </html>
 "#;
@@ -31,7 +68,7 @@ const BUILTIN_SITE_READY: &str = r#"<!DOCTYPE html>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SiteMessageDefaults {
     pub schema_version: u32,
-    /// CPN/global default shown when an admin suspends a site (and as owner fallback).
+    /// CPN/global default suspend copy (Markdown; legacy JSON key name).
     pub suspend_message_html: String,
     /// Default `index.html` written into new document roots.
     pub site_ready_html: String,
@@ -42,8 +79,8 @@ impl Default for SiteMessageDefaults {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            suspend_message_html: BUILTIN_SUSPEND.to_string(),
-            site_ready_html: BUILTIN_SITE_READY.to_string(),
+            suspend_message_html: BUILTIN_SUSPEND.trim().to_string(),
+            site_ready_html: BUILTIN_SITE_READY.trim().to_string(),
             updated_at_unix: 0,
         }
     }
@@ -95,10 +132,10 @@ pub fn load_defaults() -> SiteMessageDefaults {
     };
     let mut loaded: SiteMessageDefaults = serde_json::from_str(&raw).unwrap_or_default();
     if loaded.suspend_message_html.trim().is_empty() {
-        loaded.suspend_message_html = BUILTIN_SUSPEND.to_string();
+        loaded.suspend_message_html = BUILTIN_SUSPEND.trim().to_string();
     }
     if loaded.site_ready_html.trim().is_empty() {
-        loaded.site_ready_html = BUILTIN_SITE_READY.to_string();
+        loaded.site_ready_html = BUILTIN_SITE_READY.trim().to_string();
     }
     loaded.schema_version = SCHEMA_VERSION;
     loaded
@@ -108,7 +145,7 @@ pub fn save_defaults(defaults: &SiteMessageDefaults) -> Result<(), String> {
     let mut out = defaults.clone();
     out.schema_version = SCHEMA_VERSION;
     out.updated_at_unix = now_unix();
-    out.suspend_message_html = sanitize_message_body(&out.suspend_message_html)?;
+    out.suspend_message_html = sanitize_suspend_markdown(&out.suspend_message_html)?;
     out.site_ready_html = sanitize_site_ready_html(&out.site_ready_html)?;
     let json = serde_json::to_string_pretty(&out)
         .map_err(|e| format!("Could not serialize site messages: {e}"))?;
@@ -126,27 +163,27 @@ pub fn builtin_suspend_message() -> &'static str {
 /// Restore only the global suspend message to the built-in factory text.
 pub fn restore_factory_suspend_message() -> Result<(), String> {
     let mut defaults = load_defaults();
-    defaults.suspend_message_html = BUILTIN_SUSPEND.to_string();
+    defaults.suspend_message_html = BUILTIN_SUSPEND.trim().to_string();
     save_defaults(&defaults)
 }
 
 /// Restore only the site-ready template to the built-in factory HTML.
 pub fn restore_factory_site_ready() -> Result<(), String> {
     let mut defaults = load_defaults();
-    defaults.site_ready_html = BUILTIN_SITE_READY.to_string();
+    defaults.site_ready_html = BUILTIN_SITE_READY.trim().to_string();
     save_defaults(&defaults)
 }
 
 pub fn site_ready_html_for_new_docroot() -> String {
     let defaults = load_defaults();
     if defaults.site_ready_html.trim().is_empty() {
-        BUILTIN_SITE_READY.to_string()
+        BUILTIN_SITE_READY.trim().to_string()
     } else {
         defaults.site_ready_html
     }
 }
 
-/// Escape plain text and turn newlines into `<br>` for safe HTML fragments.
+/// Legacy helper: escape plain text (prefer Markdown + `render_safe_markdown` for suspend pages).
 pub fn escape_plain_to_html(text: &str) -> String {
     html_escape(text).replace('\n', "<br>\n")
 }
@@ -160,8 +197,8 @@ fn html_escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-/// Suspend / owner messages: store as plain text (XSS-safe). Empty rejected only when required.
-pub fn sanitize_message_body(raw: &str) -> Result<String, String> {
+/// Suspend / owner messages: store as Markdown (rendered safely for visitors).
+pub fn sanitize_suspend_markdown(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.chars().count() > MAX_SUSPEND_CHARS {
         return Err(format!(
@@ -174,25 +211,19 @@ pub fn sanitize_message_body(raw: &str) -> Result<String, String> {
     {
         return Err("Message cannot include control characters".into());
     }
-    // Strip any HTML-looking tags so stored copy is plain text.
-    let mut out = String::with_capacity(trimmed.len());
-    let mut in_tag = false;
-    for ch in trimmed.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' if in_tag => in_tag = false,
-            _ if !in_tag => out.push(ch),
-            _ => {}
-        }
-    }
-    Ok(out.trim().to_string())
+    Ok(trimmed.to_string())
+}
+
+/// Backward-compatible alias for owner suspend saves.
+pub fn sanitize_message_body(raw: &str) -> Result<String, String> {
+    sanitize_suspend_markdown(raw)
 }
 
 /// Full HTML document for new sites: strip scripts, handlers, and dangerous URLs.
 pub fn sanitize_site_ready_html(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Ok(BUILTIN_SITE_READY.to_string());
+        return Ok(BUILTIN_SITE_READY.trim().to_string());
     }
     if trimmed.chars().count() > MAX_SITE_READY_CHARS {
         return Err(format!(
@@ -233,7 +264,7 @@ pub fn sanitize_site_ready_html(raw: &str) -> Result<String, String> {
 pub fn effective_suspend_message(site: &SiteRecord) -> String {
     let defaults = load_defaults();
     let global = if defaults.suspend_message_html.trim().is_empty() {
-        BUILTIN_SUSPEND.to_string()
+        BUILTIN_SUSPEND.trim().to_string()
     } else {
         defaults.suspend_message_html
     };
@@ -256,7 +287,8 @@ pub fn effective_suspend_message(site: &SiteRecord) -> String {
 
 /// HTML page served in preview (and available for future vhost ErrorDocument).
 pub fn render_suspend_page(site: &SiteRecord) -> String {
-    let body = escape_plain_to_html(&effective_suspend_message(site));
+    let md = effective_suspend_message(site);
+    let body = render_safe_markdown(&md);
     let domain = html_escape(&site.domain);
     format!(
         r#"<!DOCTYPE html>
@@ -266,16 +298,28 @@ pub fn render_suspend_page(site: &SiteRecord) -> String {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Site suspended · {domain}</title>
   <style>
-    body {{ font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f6f8; color: #1a1a1a; }}
-    main {{ max-width: 36rem; padding: 2rem; text-align: center; }}
-    h1 {{ font-size: 1.5rem; margin: 0 0 0.75rem; }}
-    p {{ line-height: 1.5; margin: 0; }}
+    :root {{ color-scheme: dark light; }}
+    body {{
+      margin:0; min-height:100vh; display:grid; place-items:center;
+      font-family: system-ui, Segoe UI, sans-serif; background:#0b1220; color:#e2e8f0;
+    }}
+    main {{
+      width:min(40rem, 92vw); padding:28px 24px; border-radius:14px;
+      border:1px solid #334155; background:#111827; text-align:left;
+    }}
+    .eyebrow {{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin:0 0 8px; }}
+    h1 {{ margin:0 0 14px; font-size:1.45rem; text-align:center; }}
+    .md :is(p, ul, ol, pre, blockquote, table) {{ margin:0.55em 0; }}
+    .md a {{ color:#7dd3fc; }}
+    .domain {{ text-align:center; font-size:0.85rem; color:#64748b; margin-top:14px; }}
   </style>
 </head>
 <body>
   <main>
+    <p class="eyebrow">CPN Panel</p>
     <h1>Site suspended</h1>
-    <p>{body}</p>
+    <div class="md">{body}</div>
+    <p class="domain">{domain}</p>
   </main>
 </body>
 </html>
@@ -358,7 +402,7 @@ mod tests {
             ensure_site_messages_migrated().unwrap();
             assert!(site_messages_path().is_file());
             let d = load_defaults();
-            assert!(d.site_ready_html.contains("Site ready"));
+            assert!(d.site_ready_html.contains("Your site is ready"));
             assert!(!d.suspend_message_html.is_empty());
         });
     }
@@ -369,7 +413,7 @@ mod tests {
             let site = sample_site(false, Some(SuspendActor::Admin), "Owner custom text");
             let msg = effective_suspend_message(&site);
             assert!(!msg.contains("Owner custom"));
-            assert!(msg.contains("temporarily unavailable") || !msg.is_empty());
+            assert!(msg.contains("offline") || msg.contains("suspended") || !msg.is_empty());
         });
     }
 
@@ -387,10 +431,10 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_strips_tags_and_blocks_scripts() {
+    fn sanitize_keeps_markdown_and_blocks_scripts() {
         assert_eq!(
-            sanitize_message_body("<b>Hi</b> there").unwrap(),
-            "Hi there"
+            sanitize_suspend_markdown("**Hi** there").unwrap(),
+            "**Hi** there"
         );
         assert!(sanitize_site_ready_html("<script>alert(1)</script><h1>x</h1>").is_err());
         assert!(sanitize_site_ready_html(BUILTIN_SITE_READY).is_ok());
@@ -406,7 +450,7 @@ mod tests {
             save_defaults(&d).unwrap();
             restore_factory_suspend_message().unwrap();
             let loaded = load_defaults();
-            assert_eq!(loaded.suspend_message_html, BUILTIN_SUSPEND);
+            assert_eq!(loaded.suspend_message_html, BUILTIN_SUSPEND.trim());
             assert!(loaded.site_ready_html.contains("keep"));
         });
     }
