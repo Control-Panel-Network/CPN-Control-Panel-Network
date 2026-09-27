@@ -278,7 +278,13 @@ detect_guest() {
   fi
 
   if [[ "$id" == "ubuntu" && "$major" -lt 22 ]]; then
-    die "Ubuntu ${version_id} is refused for new CPN installs (use 22.04 or 24.04)"
+    die "Ubuntu ${version_id} is refused for new CPN installs (use 22.04, 24.04, or 26.04)"
+  fi
+  if [[ "$id" == "ubuntu" && "$major" -gt 26 ]]; then
+    die "Ubuntu ${version_id} is not yet supported for new CPN installs"
+  fi
+  if [[ "$id" == "ubuntu" && "$major" != 22 && "$major" != 24 && "$major" != 26 ]]; then
+    die "Ubuntu ${version_id} is not supported for new CPN installs (use 22.04, 24.04, or 26.04)"
   fi
   if [[ "$id" == "debian" && "$major" -lt 12 ]]; then
     die "Debian ${version_id} is refused for new CPN installs (use 12 or newer)"
