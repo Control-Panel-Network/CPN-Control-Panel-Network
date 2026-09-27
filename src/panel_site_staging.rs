@@ -47,7 +47,7 @@ pub struct StagingExtras {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct StagingDbMapEntry {
     source_db: String,
     staging_db: String,

@@ -62,7 +62,7 @@ pub fn clone_stack_for_staging(
         &format!("com.cpn.stack: \"{new_id}\""),
     );
     body = body.replace(
-        &format!("com.cpn.stack: '{stack.id}'"),
+        &format!("com.cpn.stack: '{}'", stack.id),
         &format!("com.cpn.stack: '{new_id}'"),
     );
     if body.contains(CPN_MANAGED_LABEL) {
