@@ -48,6 +48,8 @@ pub mod cli_totp;
 pub mod cli_uninstall;
 mod cli_uninstall_ops;
 pub mod db_defaults;
+#[cfg(test)]
+mod docker_http_tests;
 pub mod environment;
 pub mod host_packages_catalog;
 pub mod http_helpers;
