@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-import paramiko
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "Test"))
+from lab_ssh_util import connect_cpn_lab  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = 2228
@@ -48,16 +51,12 @@ fi
 echo "RESULT=MARKER:$(cat "$MARKER")"
 EOS
 """
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
+    client = connect_cpn_lab(
         HOST,
         port=PORT,
         username=USER,
         password=PASSWORD,
         timeout=30,
-        allow_agent=False,
-        look_for_keys=False,
     )
     stdin, stdout, stderr = client.exec_command("bash -s", timeout=600)
     stdin.write(script)

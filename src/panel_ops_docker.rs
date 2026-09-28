@@ -241,13 +241,49 @@ pub fn list_images_detailed() -> Result<Vec<DockerImageRow>, String> {
     Ok(rows)
 }
 
+fn is_safe_docker_container_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Map user input to a container ID returned by the local engine (not passed through verbatim).
+pub fn resolve_trusted_container_id(user_ref: &str) -> Result<String, String> {
+    let user_ref = user_ref.trim();
+    if user_ref.is_empty()
+        || user_ref.contains('/')
+        || user_ref.contains('\\')
+        || user_ref.contains(' ')
+        || user_ref.contains(';')
+    {
+        return Err("Invalid container name.".into());
+    }
+    let rows = list_containers_detailed()?;
+    let row = rows.into_iter().find(|r| {
+        r.name == user_ref || r.id == user_ref || r.id.starts_with(user_ref)
+    });
+    let Some(row) = row else {
+        return Err(format!(
+            "Container `{user_ref}` was not found on this host."
+        ));
+    };
+    if !is_safe_docker_container_id(&row.id) {
+        return Err("Invalid container identifier from engine.".into());
+    }
+    Ok(row.id)
+}
+
 fn container_is_cpn_managed(bin: &str, name_or_id: &str) -> bool {
+    let id = match resolve_trusted_container_id(name_or_id) {
+        Ok(id) => id,
+        Err(_) => return false,
+    };
     let output = Command::new(bin)
         .args([
             "inspect",
             "--format",
             "{{index .Config.Labels \"com.cpn.managed\"}}",
-            name_or_id,
+            &id,
         ])
         .output();
     match output {
@@ -286,40 +322,30 @@ fn run_container_cmd(bin: &str, args: &[&str]) -> Result<String, String> {
 
 /// Start / stop / restart a container. CPN-managed stacks are allowed (operators may bounce them).
 pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String> {
-    let name = name_or_id.trim();
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains(' ')
-        || name.contains(';')
-    {
-        return Err("Invalid container name.".into());
-    }
+    let display = name_or_id.trim().to_string();
+    let id = resolve_trusted_container_id(name_or_id)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     match action.trim().to_ascii_lowercase().as_str() {
-        "start" => {
-            run_container_cmd(bin, &["start", name]).map(|_| format!("Started container `{name}`."))
-        }
-        "stop" => {
-            run_container_cmd(bin, &["stop", name]).map(|_| format!("Stopped container `{name}`."))
-        }
-        "restart" => run_container_cmd(bin, &["restart", name])
-            .map(|_| format!("Restarted container `{name}`.")),
-        "pause" => {
-            run_container_cmd(bin, &["pause", name]).map(|_| format!("Paused container `{name}`."))
-        }
-        "unpause" => run_container_cmd(bin, &["unpause", name])
-            .map(|_| format!("Unpaused container `{name}`.")),
+        "start" => run_container_cmd(bin, &["start", &id])
+            .map(|_| format!("Started container `{display}`.")),
+        "stop" => run_container_cmd(bin, &["stop", &id])
+            .map(|_| format!("Stopped container `{display}`.")),
+        "restart" => run_container_cmd(bin, &["restart", &id])
+            .map(|_| format!("Restarted container `{display}`.")),
+        "pause" => run_container_cmd(bin, &["pause", &id])
+            .map(|_| format!("Paused container `{display}`.")),
+        "unpause" => run_container_cmd(bin, &["unpause", &id])
+            .map(|_| format!("Unpaused container `{display}`.")),
         "remove" | "rm" | "delete" => {
-            if container_is_cpn_managed(bin, name) {
+            if container_is_cpn_managed(bin, &id) {
                 return Err(format!(
-                    "Refusing to remove `{name}`: labeled {CPN_MANAGED_LABEL}=1 (CPN-managed compose). Use CPN upgrade `--bypass` or manage that stack under /var/lib/cpn/docker."
+                    "Refusing to remove `{display}`: labeled {CPN_MANAGED_LABEL}=1 (CPN-managed compose). Use CPN upgrade `--bypass` or manage that stack under /var/lib/cpn/docker."
                 ));
             }
-            run_container_cmd(bin, &["rm", "-f", name])
-                .map(|_| format!("Removed container `{name}`."))
+            run_container_cmd(bin, &["rm", "-f", &id])
+                .map(|_| format!("Removed container `{display}`."))
         }
         other => Err(format!(
             "Unknown container action `{other}`. Use start, stop, restart, or remove."
@@ -328,16 +354,13 @@ pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String
 }
 
 pub fn container_logs(name_or_id: &str, lines: usize) -> Result<String, String> {
-    let name = name_or_id.trim();
-    if name.is_empty() || name.contains(' ') || name.contains(';') {
-        return Err("Invalid container name.".into());
-    }
+    let id = resolve_trusted_container_id(name_or_id)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let n = lines.clamp(20, 500).to_string();
     let output = Command::new(bin)
-        .args(["logs", "--tail", &n, name])
+        .args(["logs", "--tail", &n, &id])
         .output()
         .map_err(|e| format!("Could not read logs: {e}"))?;
     let mut text = String::from_utf8_lossy(&output.stdout).to_string();
