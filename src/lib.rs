@@ -24,6 +24,8 @@ pub mod apps_webmail;
 pub mod auth_api;
 #[cfg(test)]
 mod auth_http_tests;
+#[cfg(test)]
+mod docker_http_tests;
 pub mod auth_i18n;
 pub mod auth_pages;
 pub mod auth_password_reset_api;

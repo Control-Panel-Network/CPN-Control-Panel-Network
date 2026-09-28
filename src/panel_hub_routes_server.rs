@@ -381,7 +381,7 @@ pub async fn server_packages_page(
     ))
 }
 
-#[get("/server/docker/apps")]
+#[actix_web::route("/server/docker/apps", method = "GET", method = "HEAD")]
 pub async fn server_docker_apps(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -397,7 +397,7 @@ pub async fn server_docker_apps(
     ))
 }
 
-#[get("/server/docker/containers")]
+#[actix_web::route("/server/docker/containers", method = "GET", method = "HEAD")]
 pub async fn server_docker_containers(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -413,7 +413,7 @@ pub async fn server_docker_containers(
     ))
 }
 
-#[get("/server/docker/images")]
+#[actix_web::route("/server/docker/images", method = "GET", method = "HEAD")]
 pub async fn server_docker_images(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -429,7 +429,7 @@ pub async fn server_docker_images(
     ))
 }
 
-#[get("/docker")]
+#[actix_web::route("/docker", method = "GET", method = "HEAD")]
 pub async fn docker_home(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -449,7 +449,7 @@ pub async fn docker_home(
     ))
 }
 
-#[get("/docker/images")]
+#[actix_web::route("/docker/images", method = "GET", method = "HEAD")]
 pub async fn docker_images_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -484,7 +484,7 @@ pub async fn docker_images_route(
     ))
 }
 
-#[get("/docker/logs")]
+#[actix_web::route("/docker/logs", method = "GET", method = "HEAD")]
 pub async fn docker_logs_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -549,7 +549,7 @@ pub async fn docker_container_action(
     }
 }
 
-#[get("/docker/view/{name}")]
+#[actix_web::route("/docker/view/{name}", method = "GET", method = "HEAD")]
 pub async fn docker_view_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -614,7 +614,7 @@ pub async fn docker_view_exec(
     ))
 }
 
-#[get("/docker/export")]
+#[actix_web::route("/docker/export", method = "GET", method = "HEAD")]
 pub async fn docker_export_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -633,6 +633,16 @@ pub async fn docker_export_route(
     let name = query.get("name").map(String::as_str).unwrap_or("");
     if name.is_empty() {
         return redirect_notice("/docker", None, Some("Missing container name for export."));
+    }
+    if *http.method() == actix_web::http::Method::HEAD {
+        let filename = format!("{name}.tar");
+        return HttpResponse::Ok()
+            .content_type("application/x-tar")
+            .append_header((
+                "Content-Disposition",
+                format!("attachment; filename=\"{filename}\""),
+            ))
+            .finish();
     }
     let cname = name.to_string();
     let result = web::block(move || crate::panel_ops_docker_detail::container_export_tar(&cname))
@@ -815,7 +825,7 @@ pub async fn docker_create_container(
     }
 }
 
-#[get("/docker/stacks")]
+#[actix_web::route("/docker/stacks", method = "GET", method = "HEAD")]
 pub async fn docker_stacks_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
