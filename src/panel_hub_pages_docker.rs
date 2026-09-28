@@ -126,7 +126,7 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
         return r#"<p class="empty-state">No containers yet. Pull an image from Manage Images, then use Create Container.</p>"#.into();
     }
     let mut body = String::from(
-        r#"<div class="table-wrap docker-containers-wrap"><table class="data-table docker-containers-table">
+        r#"<div class="table-wrap docker-list-wrap"><table class="data-table docker-containers-table docker-card-list">
       <thead><tr>
         <th scope="col">Container</th>
         <th scope="col">Owner</th>
@@ -288,7 +288,7 @@ fn images_table(rows: &[DockerImageRow]) -> String {
         return r#"<p class="empty-state">No images on this host. Search Docker Hub above or pull by name (for example nginx:alpine).</p>"#.into();
     }
     let mut body = String::from(
-        r#"<div class="table-wrap"><table class="data-table">
+        r#"<div class="table-wrap docker-list-wrap"><table class="data-table docker-images-table docker-card-list">
       <thead><tr>
         <th scope="col">Image name</th>
         <th scope="col">Tags</th>
@@ -321,10 +321,10 @@ fn images_table(rows: &[DockerImageRow]) -> String {
         };
         body.push_str(&format!(
             r#"<tr>
-          <td><code>{repo}</code><br><code class="muted">{id}</code></td>
-          <td><code>{tag}</code></td>
-          <td>{size}</td>
-          <td class="docker-actions">
+          <td data-label="Image name"><code>{repo}</code><br><code class="muted">{id}</code></td>
+          <td data-label="Tags"><code>{tag}</code></td>
+          <td data-label="Size">{size}</td>
+          <td data-label="Actions" class="docker-actions">
             <form method="post" action="/docker/images/pull" class="inline-form" style="display:inline;">
               <input type="hidden" name="image" value="{ref_name}">
               <button type="submit" class="btn-primary" title="Pull / update this tag">Pull</button>

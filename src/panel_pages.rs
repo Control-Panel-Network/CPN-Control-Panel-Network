@@ -222,34 +222,44 @@ button { font:inherit; cursor:pointer; }
 .docker-actions .btn-primary, .docker-actions .btn-secondary, .docker-actions .btn-danger {
   min-height:40px; padding:0 14px; font-size:13px;
 }
-.docker-containers-wrap.table-wrap { overflow-x:visible; }
-@media (max-width: 820px) {
-  .docker-containers-table { width:100%; min-width:0; }
-  .docker-containers-table thead { display:none; }
-  .docker-containers-table tbody tr {
-    display:block; margin:0 0 14px; padding:14px;
-    border:1px solid var(--hairline); border-radius:14px; background:var(--canvas);
-  }
-  .docker-containers-table tbody tr td {
-    display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
-    gap:8px 12px; padding:10px 0; border-top:1px solid var(--hairline); white-space:normal;
-  }
-  .docker-containers-table tbody tr td:first-child { border-top:0; padding-top:0; }
-  .docker-containers-table tbody tr td::before {
-    content:attr(data-label); flex:0 0 38%; max-width:42%;
-    font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
-    letter-spacing:.03em;
-  }
-  .docker-containers-table tbody tr td[data-label="Container"] { display:block; }
-  .docker-containers-table tbody tr td[data-label="Container"]::before { display:none; }
-  .docker-containers-table tbody tr td[data-label="Actions"] {
-    display:block; padding-bottom:0;
-  }
-  .docker-containers-table tbody tr td[data-label="Actions"]::before {
-    display:block; margin-bottom:8px; flex:none; max-width:none;
-  }
-  .docker-containers-table td.docker-actions { white-space:normal; }
+.docker-list-wrap.table-wrap {
+  overflow-x:hidden; overflow-y:visible; overscroll-behavior-x:none;
 }
+.docker-card-list.data-table {
+  width:100%; min-width:0; max-width:100%;
+}
+.docker-card-list thead { display:none; }
+.docker-card-list tbody tr {
+  display:block; margin:0 0 14px; padding:14px;
+  border:1px solid var(--hairline); border-radius:14px; background:var(--canvas);
+}
+.docker-card-list tbody tr td {
+  display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+  gap:8px 12px; padding:10px 0; border-top:1px solid var(--hairline); white-space:normal;
+}
+.docker-card-list tbody tr td:first-child { border-top:0; padding-top:0; }
+.docker-card-list tbody tr td::before {
+  content:attr(data-label); flex:0 0 38%; max-width:42%;
+  font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.03em;
+}
+.docker-card-list tbody tr td[data-label="Container"],
+.docker-card-list tbody tr td[data-label="Stack"],
+.docker-card-list tbody tr td[data-label="Image name"] {
+  display:block;
+}
+.docker-card-list tbody tr td[data-label="Container"]::before,
+.docker-card-list tbody tr td[data-label="Stack"]::before,
+.docker-card-list tbody tr td[data-label="Image name"]::before {
+  display:none;
+}
+.docker-card-list tbody tr td[data-label="Actions"] {
+  display:block; padding-bottom:0;
+}
+.docker-card-list tbody tr td[data-label="Actions"]::before {
+  display:block; margin-bottom:8px; flex:none; max-width:none;
+}
+.docker-card-list td.docker-actions { white-space:normal; }
 .btn-primary {
   display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px;
   border-radius:999px; background:var(--blue); color:#fff; font-weight:700; border:0;
@@ -474,6 +484,14 @@ mod tests {
         assert!(
             css.contains("min-width:0"),
             "cards need min-width:0 so flex children do not blow out the page"
+        );
+        assert!(
+            css.contains(".docker-list-wrap") && css.contains("overflow-x:hidden"),
+            "docker lists must not use horizontal scroll wrappers"
+        );
+        assert!(
+            css.contains(".docker-card-list"),
+            "docker container/image/stack lists use stacked cards at all widths"
         );
     }
 }

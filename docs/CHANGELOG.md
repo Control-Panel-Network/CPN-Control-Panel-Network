@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Docker Active Containers UI**: Create Container moved to dedicated `/docker/create` (GET+HEAD); `/docker` lists containers only with a **+ Create Container** link. Container status shows **Running** (green, with uptime) or **Stopped** / **Dead** (red). Narrow viewports use a stacked card layout instead of a wide horizontal table.
+- **Docker Active Containers UI**: Create Container moved to dedicated `/docker/create` (GET+HEAD); `/docker` lists containers only with a **+ Create Container** link. Container status shows **Running** (green, with uptime) or **Stopped** / **Dead** (red). Active Containers, Manage Images, and Compose Stacks use a stacked card list at all panel widths (no horizontal table scroll); actions wrap inside each card.
 - **Settings > Error messages**: Richer built-in 403/404/500 Markdown defaults and dark-mode friendly rendered pages. **View HTML source** toggles the sanitized HTML fragment beside Preview.
 
 ### Fixed
