@@ -151,9 +151,7 @@ pub fn docker_container_view_page(
         row.status.clone()
     };
     let owner_cell = if row.owner == "Unassigned" {
-        format!(
-            r#"<span title="No com.cpn.owner label; created outside the panel.">Unassigned</span>"#
-        )
+        r#"<span title="No com.cpn.owner label; created outside the panel.">Unassigned</span>"#.to_string()
     } else {
         html_escape(&row.owner)
     };
