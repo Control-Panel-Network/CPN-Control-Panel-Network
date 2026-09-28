@@ -4,12 +4,12 @@ use crate::account::{
     PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
     with_test_data_dir, write_account_file,
 };
+use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
 use crate::panel_hub_routes::{
     docker_home, docker_images_route, docker_stacks_route, docker_view_route,
 };
-use crate::http_helpers::build_allowed_hosts;
 use actix_web::{App, http::StatusCode, web};
 use rand::Rng;
 use std::sync::Arc;
@@ -68,7 +68,10 @@ fn runtime() -> tokio::runtime::Runtime {
         .expect("runtime")
 }
 
-async fn head_status(app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>, uri: &str) -> StatusCode {
+async fn head_status(
+    app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>,
+    uri: &str,
+) -> StatusCode {
     let req = actix_web::test::TestRequest::default()
         .method(actix_web::http::Method::HEAD)
         .uri(uri)
@@ -76,7 +79,10 @@ async fn head_status(app: &impl actix_web::dev::Service<actix_web::dev::ServiceR
     actix_web::test::call_service(app, req).await.status()
 }
 
-async fn get_status(app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>, uri: &str) -> StatusCode {
+async fn get_status(
+    app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>,
+    uri: &str,
+) -> StatusCode {
     let req = actix_web::test::TestRequest::default()
         .method(actix_web::http::Method::GET)
         .uri(uri)
