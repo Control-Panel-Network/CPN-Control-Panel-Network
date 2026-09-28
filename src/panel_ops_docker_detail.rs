@@ -69,9 +69,7 @@ fn format_memory_limit(bytes: &str) -> String {
 }
 
 fn port_mappings(bin: &str, container_id: &str) -> String {
-    let output = Command::new(bin)
-        .args(["port", container_id])
-        .output();
+    let output = Command::new(bin).args(["port", container_id]).output();
     match output {
         Ok(o) if o.status.success() => {
             let text = String::from_utf8_lossy(&o.stdout).trim().to_string();

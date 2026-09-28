@@ -242,9 +242,7 @@ pub fn list_images_detailed() -> Result<Vec<DockerImageRow>, String> {
 }
 
 fn is_safe_docker_container_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 128
-        && id.chars().all(|c| c.is_ascii_hexdigit())
+    !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Map user input to a container ID returned by the local engine (not passed through verbatim).
@@ -259,9 +257,9 @@ pub fn resolve_trusted_container_id(user_ref: &str) -> Result<String, String> {
         return Err("Invalid container name.".into());
     }
     let rows = list_containers_detailed()?;
-    let row = rows.into_iter().find(|r| {
-        r.name == user_ref || r.id == user_ref || r.id.starts_with(user_ref)
-    });
+    let row = rows
+        .into_iter()
+        .find(|r| r.name == user_ref || r.id == user_ref || r.id.starts_with(user_ref));
     let Some(row) = row else {
         return Err(format!(
             "Container `{user_ref}` was not found on this host."
