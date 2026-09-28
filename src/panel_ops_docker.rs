@@ -75,6 +75,25 @@ pub(crate) fn split_image_tag(image: &str) -> (String, String) {
 }
 
 fn label_map(raw: &str) -> Vec<(String, String)> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+    // Podman ps --format {{.Labels}} uses Go map syntax: map[key:value key2:value2]
+    if raw.starts_with("map[") && raw.ends_with(']') {
+        let inner = raw[4..raw.len() - 1].trim();
+        return inner
+            .split_whitespace()
+            .filter_map(|pair| {
+                let pair = pair.trim();
+                if pair.is_empty() {
+                    return None;
+                }
+                let (k, v) = pair.split_once(':')?;
+                Some((k.trim().to_string(), v.trim().to_string()))
+            })
+            .collect();
+    }
     raw.split(',')
         .filter_map(|pair| {
             let pair = pair.trim();
@@ -605,6 +624,13 @@ mod tests {
         );
         assert_eq!(owner_from_labels(&[], true), "CPN");
         assert_eq!(owner_from_labels(&[], false), "Unassigned");
+    }
+
+    #[test]
+    fn label_map_podman_ps_format() {
+        let raw = "map[com.cpn.owner:cpnowner org.opencontainers.image.name:filebrowser]";
+        let labels = label_map(raw);
+        assert_eq!(owner_from_labels(&labels, false), "cpnowner");
     }
 
     #[test]
