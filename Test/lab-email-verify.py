@@ -4,9 +4,9 @@ import sys
 import urllib.parse
 
 try:
-    import paramiko
+    from lab_ssh_util import connect_cpn_lab
 except ImportError:
-    print("paramiko missing", file=sys.stderr)
+    print("lab_ssh_util missing", file=sys.stderr)
     sys.exit(2)
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -21,9 +21,9 @@ SUDO = f"echo '{PASSWORD}' | sudo -S "
 
 
 def main() -> int:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=25)
+    client = connect_cpn_lab(
+        HOST, port=PORT, username=USER, password=PASSWORD, timeout=25
+    )
     cmds = [
         "systemctl is-active postfix dovecot cpn-installer",
         "ss -tlnp | grep -E ':(143|25) ' || true",

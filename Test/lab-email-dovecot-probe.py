@@ -8,9 +8,9 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
-    import paramiko
+    from lab_ssh_util import connect_cpn_lab
 except ImportError:
-    print("paramiko missing", file=sys.stderr)
+    print("lab_ssh_util missing", file=sys.stderr)
     sys.exit(2)
 
 HOST = "127.0.0.1"
@@ -34,10 +34,10 @@ CMDS = [
 
 
 def main() -> int:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        client.connect(HOST, port=PORT, username=USER, password=PASSWORD, timeout=25)
+        client = connect_cpn_lab(
+            HOST, port=PORT, username=USER, password=PASSWORD, timeout=25
+        )
     except Exception as exc:
         print(f"connect failed: {exc}", file=sys.stderr)
         return 1

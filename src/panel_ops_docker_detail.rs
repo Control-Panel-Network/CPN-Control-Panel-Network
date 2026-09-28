@@ -1,6 +1,8 @@
 //! Container inspect, stats, processes, and extended lifecycle for Docker detail UI.
 
-use crate::panel_ops_docker::{DockerContainerRow, docker_bin, list_containers_detailed};
+use crate::panel_ops_docker::{
+    DockerContainerRow, docker_bin, list_containers_detailed, resolve_trusted_container_id,
+};
 use std::process::Command;
 
 #[derive(Debug, Clone)]
@@ -30,9 +32,9 @@ fn validate_name(name: &str) -> Result<&str, String> {
     Ok(name)
 }
 
-fn inspect_field(bin: &str, name: &str, format: &str) -> String {
+fn inspect_field(bin: &str, container_id: &str, format: &str) -> String {
     let output = Command::new(bin)
-        .args(["inspect", "--format", format, name])
+        .args(["inspect", "--format", format, container_id])
         .output();
     match output {
         Ok(o) if o.status.success() => {
@@ -66,8 +68,8 @@ fn format_memory_limit(bytes: &str) -> String {
     }
 }
 
-fn port_mappings(bin: &str, name: &str) -> String {
-    let output = Command::new(bin).args(["port", name]).output();
+fn port_mappings(bin: &str, container_id: &str) -> String {
+    let output = Command::new(bin).args(["port", container_id]).output();
     match output {
         Ok(o) if o.status.success() => {
             let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
@@ -80,7 +82,7 @@ fn port_mappings(bin: &str, name: &str) -> String {
         _ => {
             let raw = inspect_field(
                 bin,
-                name,
+                container_id,
                 r#"{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}} -> {{.HostIp}}:{{.HostPort}} {{end}}{{end}}"#,
             );
             if raw == "Unknown" || raw.is_empty() {
@@ -92,14 +94,14 @@ fn port_mappings(bin: &str, name: &str) -> String {
     }
 }
 
-fn container_stats(bin: &str, name: &str) -> (String, String, String) {
+fn container_stats(bin: &str, container_id: &str) -> (String, String, String) {
     let output = Command::new(bin)
         .args([
             "stats",
             "--no-stream",
             "--format",
             "{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}",
-            name,
+            container_id,
         ])
         .output();
     match output {
@@ -134,35 +136,36 @@ pub fn find_container_row(name: &str) -> Result<DockerContainerRow, String> {
 
 pub fn load_container_detail(name: &str) -> Result<DockerContainerDetail, String> {
     let name = validate_name(name)?;
+    let container_id = resolve_trusted_container_id(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let row = find_container_row(name)?;
-    let short_id = inspect_field(bin, name, "{{.Id}}");
+    let short_id = inspect_field(bin, &container_id, "{{.Id}}");
     let short_id = if short_id.len() > 12 {
         format!("{}…", &short_id[..12])
     } else {
         short_id
     };
-    let restart_policy = inspect_field(bin, name, "{{.HostConfig.RestartPolicy.Name}}");
+    let restart_policy = inspect_field(bin, &container_id, "{{.HostConfig.RestartPolicy.Name}}");
     let start_on_boot = match restart_policy.to_ascii_lowercase().as_str() {
         "always" | "unless-stopped" => "Enabled".into(),
         "no" | "" => "Disabled".into(),
         other => other.to_string(),
     };
-    let mem_limit_raw = inspect_field(bin, name, "{{.HostConfig.Memory}}");
+    let mem_limit_raw = inspect_field(bin, &container_id, "{{.HostConfig.Memory}}");
     let mem_limit = format_memory_limit(&mem_limit_raw);
     let (cpu_percent, mem_usage, mem_percent) = if row.running {
-        container_stats(bin, name)
+        container_stats(bin, &container_id)
     } else {
         ("0.00%".into(), "Not running".into(), "0.00%".into())
     };
-    let state = inspect_field(bin, name, "{{.State.Status}}");
+    let state = inspect_field(bin, &container_id, "{{.State.Status}}");
     let paused = state.eq_ignore_ascii_case("paused");
     Ok(DockerContainerDetail {
         row,
         short_id,
-        port_mappings: port_mappings(bin, name),
+        port_mappings: port_mappings(bin, &container_id),
         restart_policy,
         start_on_boot,
         cpu_percent,
@@ -174,12 +177,13 @@ pub fn load_container_detail(name: &str) -> Result<DockerContainerDetail, String
 }
 
 pub fn container_processes(name: &str) -> Result<String, String> {
-    let name = validate_name(name)?;
+    let _name = validate_name(name)?;
+    let container_id = resolve_trusted_container_id(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let output = Command::new(bin)
-        .args(["top", name])
+        .args(["top", &container_id])
         .output()
         .map_err(|e| format!("Could not list processes: {e}"))?;
     let mut text = String::from_utf8_lossy(&output.stdout).to_string();
@@ -193,7 +197,8 @@ pub fn container_processes(name: &str) -> Result<String, String> {
 }
 
 pub fn container_exec_command(name: &str, command: &str) -> Result<String, String> {
-    let name = validate_name(name)?;
+    let _name = validate_name(name)?;
+    let container_id = resolve_trusted_container_id(name)?;
     let cmd = command.trim();
     if cmd.is_empty() || cmd.len() > 200 {
         return Err("Command must be 1 to 200 characters.".into());
@@ -201,11 +206,18 @@ pub fn container_exec_command(name: &str, command: &str) -> Result<String, Strin
     if cmd.contains(';') || cmd.contains('&') || cmd.contains('|') || cmd.contains('`') {
         return Err("Command contains disallowed characters.".into());
     }
+    if cmd.contains('\0') || cmd.contains('\n') || cmd.contains('\r') {
+        return Err("Command contains disallowed characters.".into());
+    }
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let output = Command::new(bin)
-        .args(["exec", name, "sh", "-c", cmd])
+        .arg("exec")
+        .arg(&container_id)
+        .arg("sh")
+        .arg("-c")
+        .arg(cmd)
         .output()
         .map_err(|e| format!("Exec failed: {e}"))?;
     let mut text = String::from_utf8_lossy(&output.stdout).to_string();
@@ -227,12 +239,13 @@ pub fn container_exec_command(name: &str, command: &str) -> Result<String, Strin
 }
 
 pub fn container_export_tar(name: &str) -> Result<Vec<u8>, String> {
-    let name = validate_name(name)?;
+    let _name = validate_name(name)?;
+    let container_id = resolve_trusted_container_id(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let output = Command::new(bin)
-        .args(["export", name])
+        .args(["export", &container_id])
         .output()
         .map_err(|e| format!("Export failed: {e}"))?;
     if !output.status.success() {
