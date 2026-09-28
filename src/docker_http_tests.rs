@@ -68,28 +68,6 @@ fn runtime() -> tokio::runtime::Runtime {
         .expect("runtime")
 }
 
-async fn head_status(
-    app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>,
-    uri: &str,
-) -> StatusCode {
-    let req = actix_web::test::TestRequest::default()
-        .method(actix_web::http::Method::HEAD)
-        .uri(uri)
-        .to_request();
-    actix_web::test::call_service(app, req).await.status()
-}
-
-async fn get_status(
-    app: &impl actix_web::dev::Service<actix_web::dev::ServiceRequest>,
-    uri: &str,
-) -> StatusCode {
-    let req = actix_web::test::TestRequest::default()
-        .method(actix_web::http::Method::GET)
-        .uri(uri)
-        .to_request();
-    actix_web::test::call_service(app, req).await.status()
-}
-
 #[test]
 fn docker_routes_head_matches_get_when_unauthenticated() {
     with_test_data_dir(|| {
@@ -111,8 +89,15 @@ fn docker_routes_head_matches_get_when_unauthenticated() {
                 "/docker/stacks",
                 "/docker/view/example",
             ] {
-                let get_st = get_status(&app, uri).await;
-                let head_st = head_status(&app, uri).await;
+                let get_req = actix_web::test::TestRequest::get().uri(uri).to_request();
+                let get_st = actix_web::test::call_service(&app, get_req).await.status();
+
+                let head_req = actix_web::test::TestRequest::default()
+                    .method(actix_web::http::Method::HEAD)
+                    .uri(uri)
+                    .to_request();
+                let head_st = actix_web::test::call_service(&app, head_req).await.status();
+
                 assert_ne!(
                     head_st,
                     StatusCode::NOT_FOUND,
