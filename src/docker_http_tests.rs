@@ -8,7 +8,7 @@ use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
 use crate::panel_hub_routes::{
-    docker_home, docker_images_route, docker_stacks_route, docker_view_route,
+    docker_create_route, docker_home, docker_images_route, docker_stacks_route, docker_view_route,
 };
 use actix_web::{App, http::StatusCode, web};
 use rand::Rng;
@@ -77,6 +77,7 @@ fn docker_routes_head_matches_get_when_unauthenticated() {
                 App::new()
                     .app_data(test_state("completed"))
                     .service(docker_home)
+                    .service(docker_create_route)
                     .service(docker_images_route)
                     .service(docker_stacks_route)
                     .service(docker_view_route),
@@ -85,6 +86,7 @@ fn docker_routes_head_matches_get_when_unauthenticated() {
 
             for uri in [
                 "/docker",
+                "/docker/create",
                 "/docker/images",
                 "/docker/stacks",
                 "/docker/view/example",

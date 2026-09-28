@@ -44,6 +44,33 @@ fn action_form(action: &str, name: &str, label: &str, class: &str, confirm: &str
     )
 }
 
+fn container_status_html(row: &DockerContainerRow) -> String {
+    let lower = row.status.to_ascii_lowercase();
+    if row.running {
+        let uptime = row
+            .status
+            .strip_prefix("Up ")
+            .or_else(|| row.status.strip_prefix("up "))
+            .unwrap_or(row.status.as_str())
+            .trim();
+        format!(
+            r#"<span class="docker-status docker-status-running"><strong>Running</strong><span class="docker-status-detail"> · {uptime}</span></span>"#,
+            uptime = html_escape(uptime),
+        )
+    } else {
+        let headline = if lower.contains("dead") {
+            "Dead"
+        } else {
+            "Stopped"
+        };
+        format!(
+            r#"<span class="docker-status docker-status-stopped"><strong>{headline}</strong><span class="docker-status-detail"> · {detail}</span></span>"#,
+            headline = headline,
+            detail = html_escape(row.status.trim()),
+        )
+    }
+}
+
 fn container_actions(row: &DockerContainerRow) -> String {
     let mut out = format!(
         r#"<a class="btn-secondary" href="/docker/view/{name}" title="Manage container">Settings</a>"#,
@@ -99,7 +126,7 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
         return r#"<p class="empty-state">No containers yet. Pull an image from Manage Images, then use Create Container.</p>"#.into();
     }
     let mut body = String::from(
-        r#"<div class="table-wrap"><table class="data-table docker-containers-table">
+        r#"<div class="table-wrap docker-containers-wrap"><table class="data-table docker-containers-table">
       <thead><tr>
         <th scope="col">Container</th>
         <th scope="col">Owner</th>
@@ -123,12 +150,12 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
         };
         body.push_str(&format!(
             r#"<tr>
-          <td><strong><a href="/docker/view/{name_link}">{name}</a></strong>{managed}<br><code class="muted">{id}</code></td>
-          <td>{owner}</td>
-          <td><code>{image}</code></td>
-          <td><code>{tag}</code></td>
-          <td>{status}</td>
-          <td class="docker-actions">{actions}</td>
+          <td data-label="Container"><strong><a href="/docker/view/{name_link}">{name}</a></strong>{managed}<br><code class="muted">{id}</code></td>
+          <td data-label="Owner">{owner}</td>
+          <td data-label="Image"><code>{image}</code></td>
+          <td data-label="Tag"><code>{tag}</code></td>
+          <td data-label="Status">{status}</td>
+          <td data-label="Actions" class="docker-actions">{actions}</td>
         </tr>"#,
             name = html_escape(&row.name),
             name_link = urlencoding_simple(&row.name),
@@ -137,7 +164,7 @@ fn containers_table(rows: &[DockerContainerRow]) -> String {
             owner = owner_cell,
             image = html_escape(&row.image),
             tag = html_escape(&row.tag),
-            status = html_escape(&row.status),
+            status = container_status_html(row),
             actions = container_actions(row),
         ));
     }
@@ -241,7 +268,7 @@ fn search_results_html(hits: &[DockerHubSearchHit]) -> String {
               <input type="hidden" name="image" value="{name}:latest">
               <button type="submit" class="btn-primary">Pull</button>
             </form>
-            <a class="btn-secondary" href="/docker?image={enc}">Create</a>
+            <a class="btn-secondary" href="/docker/create?image={enc}">Create</a>
             <a class="btn-secondary" href="/docker/stacks?image={enc}&amp;template=custom">Stack</a>
           </td>
         </tr>"#,
@@ -302,7 +329,7 @@ fn images_table(rows: &[DockerImageRow]) -> String {
               <input type="hidden" name="image" value="{ref_name}">
               <button type="submit" class="btn-primary" title="Pull / update this tag">Pull</button>
             </form>
-            <a class="btn-secondary" href="/docker?image={enc}">Create</a>
+            <a class="btn-secondary" href="/docker/create?image={enc}">Create</a>
             {delete}
           </td>
         </tr>"#,
@@ -344,12 +371,43 @@ fn search_pull_card(query: &str, hits: &[DockerHubSearchHit]) -> String {
     )
 }
 
-/// Primary manage page: Active Containers + Create Container.
-pub fn docker_manage_page(
+/// Dedicated create-container page (form only).
+pub fn docker_create_page(
     notice: Option<&str>,
     error: Option<&str>,
     prefill_image: Option<&str>,
 ) -> String {
+    let status = docker_status();
+    if !status.installed || !status.running {
+        return docker_manage_page(notice, error);
+    }
+    let prefill = prefill_image.unwrap_or("");
+    let body = format!(
+        r##"{toolbar}
+      <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
+        <a class="btn-secondary" href="/docker">← Active Containers</a>
+      </p>
+      {create}"##,
+        toolbar = toolbar("containers"),
+        create = create_container_form(prefill),
+    );
+    feature_shell(
+        &[
+            ("Dashboard", Some("/dashboard")),
+            ("Server", Some("/server")),
+            ("Docker", Some("/docker")),
+            ("Create", None),
+        ],
+        "Create Container",
+        "Run a local or pulled upstream image on this host.",
+        &body,
+        notice,
+        error,
+    )
+}
+
+/// Primary manage page: Active Containers list.
+pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
     let status = docker_status();
     if !status.installed {
         return feature_shell(
@@ -400,20 +458,17 @@ pub fn docker_manage_page(
             html_escape(&e)
         ),
     };
-    let prefill = prefill_image.unwrap_or("");
     let body = format!(
         r##"{toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
-        <a class="btn-primary" href="#create-container">+ Create Container</a>
+        <a class="btn-primary" href="/docker/create">+ Create Container</a>
         <a class="btn-secondary" href="/docker/stacks">Compose Stacks</a>
         <a class="btn-secondary" href="/docker/images">Manage Images</a>
       </p>
       <h2 style="margin:18px 0 10px;">Active Containers</h2>
-      {table}
-      <div id="create-container">{create}</div>"##,
+      {table}"##,
         toolbar = toolbar("containers"),
         table = table,
-        create = create_container_form(prefill),
     );
     feature_shell(
         &[
@@ -437,7 +492,7 @@ pub fn docker_images_page(
 ) -> String {
     let status = docker_status();
     if !status.installed {
-        return docker_manage_page(notice, error, None);
+        return docker_manage_page(notice, error);
     }
     let q = query.unwrap_or("");
     let table = match list_images_detailed() {
@@ -450,7 +505,7 @@ pub fn docker_images_page(
     let body = format!(
         r##"{toolbar}
       <p class="stack-actions" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:8px;">
-        <a class="btn-primary" href="/docker#create-container">+ Create Container</a>
+        <a class="btn-primary" href="/docker/create">+ Create Container</a>
         <a class="btn-secondary" href="/docker/images">Manage Images</a>
       </p>
       {search}
@@ -511,6 +566,6 @@ pub fn docker_logs_page(name: &str, notice: Option<&str>, error: Option<&str>) -
 pub fn docker_page(kind: &str) -> String {
     match kind {
         "Docker Images" => docker_images_page(None, None, None, &[]),
-        _ => docker_manage_page(None, None, None),
+        _ => docker_manage_page(None, None),
     }
 }

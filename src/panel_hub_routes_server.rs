@@ -5,7 +5,9 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
     html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
-use crate::panel_hub_pages_docker::{docker_images_page, docker_logs_page, docker_manage_page};
+use crate::panel_hub_pages_docker::{
+    docker_create_page, docker_images_page, docker_logs_page, docker_manage_page,
+};
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
@@ -409,7 +411,7 @@ pub async fn server_docker_containers(
         &user,
         "server",
         "Containers",
-        &docker_manage_page(None, None, None),
+        &docker_manage_page(None, None),
     ))
 }
 
@@ -440,12 +442,42 @@ pub async fn docker_home(
     };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    let image = query.get("image").map(String::as_str);
+    if let Some(img) = query.get("image") {
+        let base = format!("/docker/create?image={}", urlencoding_simple(img.as_str()));
+        return redirect_notice(&base, notice, error);
+    }
     html_ok(panel_shell(
         &user,
         "server",
         "Docker",
-        &docker_manage_page(notice, error, image),
+        &docker_manage_page(notice, error),
+    ))
+}
+
+#[actix_web::route("/docker/create", method = "GET", method = "HEAD")]
+pub async fn docker_create_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker",
+            None,
+            Some("Only panel admins can create containers."),
+        );
+    }
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    let image = query.get("image").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "Create Container",
+        &docker_create_page(notice, error, image),
     ))
 }
 
@@ -821,7 +853,7 @@ pub async fn docker_create_container(
     .unwrap_or_else(|e| Err(format!("Create task failed: {e}")));
     match result {
         Ok(msg) => redirect_notice("/docker", Some(&msg), None),
-        Err(err) => redirect_notice("/docker", None, Some(&err)),
+        Err(err) => redirect_notice("/docker/create", None, Some(&err)),
     }
 }
 
