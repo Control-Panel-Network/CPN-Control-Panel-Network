@@ -202,6 +202,7 @@ pub mod panel_ops_dns;
 pub mod panel_ops_dns_ns;
 pub mod panel_ops_dns_zonefile;
 pub mod panel_ops_docker;
+pub mod panel_ops_docker_cli;
 pub mod panel_ops_docker_compose;
 pub mod panel_ops_docker_detail;
 pub mod panel_ops_docker_image_ref;
