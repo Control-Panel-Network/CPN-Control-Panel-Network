@@ -170,7 +170,7 @@ pub fn docker_stacks_page(
       <h2 style="margin:18px 0 10px;">Compose stacks</h2>
       {table}
       {create}
-      <p class="muted" style="margin-top:16px;">Need a one-off container without compose? <a href="/docker#create-container">Create Container</a> (add a bind mount under the CPN data root for persistence).</p>"##,
+      <p class="muted" style="margin-top:16px;">Need a one-off container without compose? <a href="/docker/create">Create Container</a> (add a bind mount under the CPN data root for persistence).</p>"##,
         toolbar = toolbar("stacks"),
         table = table,
         create = create_stack_form(prefill_image, prefill_template),

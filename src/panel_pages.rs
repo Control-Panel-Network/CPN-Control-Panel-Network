@@ -207,6 +207,49 @@ button { font:inherit; cursor:pointer; }
 }
 [data-color-mode=dark] .docker-create-form input::placeholder,
 [data-color-mode=dark] .docker-hub-form input::placeholder { color:#94a3b8; }
+.docker-status { font-size:14px; line-height:1.4; }
+.docker-status-running { color:#027a48; font-weight:600; }
+.docker-status-running .docker-status-detail { font-weight:500; color:#039855; }
+.docker-status-stopped { color:#b42318; font-weight:600; }
+.docker-status-stopped .docker-status-detail { font-weight:500; color:#d92d20; }
+[data-color-mode=dark] .docker-status-running { color:#6ce9a6; }
+[data-color-mode=dark] .docker-status-running .docker-status-detail { color:#32d583; }
+[data-color-mode=dark] .docker-status-stopped { color:#fda29b; }
+[data-color-mode=dark] .docker-status-stopped .docker-status-detail { color:#f97066; }
+.docker-actions {
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.docker-actions .btn-primary, .docker-actions .btn-secondary, .docker-actions .btn-danger {
+  min-height:40px; padding:0 14px; font-size:13px;
+}
+.docker-containers-wrap.table-wrap { overflow-x:visible; }
+@media (max-width: 820px) {
+  .docker-containers-table { width:100%; min-width:0; }
+  .docker-containers-table thead { display:none; }
+  .docker-containers-table tbody tr {
+    display:block; margin:0 0 14px; padding:14px;
+    border:1px solid var(--hairline); border-radius:14px; background:var(--canvas);
+  }
+  .docker-containers-table tbody tr td {
+    display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+    gap:8px 12px; padding:10px 0; border-top:1px solid var(--hairline); white-space:normal;
+  }
+  .docker-containers-table tbody tr td:first-child { border-top:0; padding-top:0; }
+  .docker-containers-table tbody tr td::before {
+    content:attr(data-label); flex:0 0 38%; max-width:42%;
+    font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  .docker-containers-table tbody tr td[data-label="Container"] { display:block; }
+  .docker-containers-table tbody tr td[data-label="Container"]::before { display:none; }
+  .docker-containers-table tbody tr td[data-label="Actions"] {
+    display:block; padding-bottom:0;
+  }
+  .docker-containers-table tbody tr td[data-label="Actions"]::before {
+    display:block; margin-bottom:8px; flex:none; max-width:none;
+  }
+  .docker-containers-table td.docker-actions { white-space:normal; }
+}
 .btn-primary {
   display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 16px;
   border-radius:999px; background:var(--blue); color:#fff; font-weight:700; border:0;
