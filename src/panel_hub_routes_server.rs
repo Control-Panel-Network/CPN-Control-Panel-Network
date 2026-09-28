@@ -443,10 +443,7 @@ pub async fn docker_home(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     if let Some(img) = query.get("image") {
-        let base = format!(
-            "/docker/create?image={}",
-            urlencoding_simple(img.as_str())
-        );
+        let base = format!("/docker/create?image={}", urlencoding_simple(img.as_str()));
         return redirect_notice(&base, notice, error);
     }
     html_ok(panel_shell(

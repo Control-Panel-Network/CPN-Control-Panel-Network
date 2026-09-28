@@ -8,8 +8,7 @@ use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
 use crate::panel_hub_routes::{
-    docker_create_route, docker_home, docker_images_route, docker_stacks_route,
-    docker_view_route,
+    docker_create_route, docker_home, docker_images_route, docker_stacks_route, docker_view_route,
 };
 use actix_web::{App, http::StatusCode, web};
 use rand::Rng;
