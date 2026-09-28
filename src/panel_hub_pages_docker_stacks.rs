@@ -16,7 +16,7 @@ fn stacks_table(rows: &[ComposeStackRow]) -> String {
         );
     }
     let mut body = String::from(
-        r#"<div class="table-wrap"><table class="data-table">
+        r#"<div class="table-wrap docker-list-wrap"><table class="data-table docker-stacks-table docker-card-list">
       <thead><tr>
         <th scope="col">Stack</th>
         <th scope="col">Image</th>
@@ -27,10 +27,10 @@ fn stacks_table(rows: &[ComposeStackRow]) -> String {
     for row in rows {
         body.push_str(&format!(
             r#"<tr>
-          <td><strong>{id}</strong><br><code class="muted">{dir}</code></td>
-          <td><code>{image}</code></td>
-          <td><code>{data}</code></td>
-          <td class="docker-actions">
+          <td data-label="Stack"><strong>{id}</strong><br><code class="muted">{dir}</code></td>
+          <td data-label="Image"><code>{image}</code></td>
+          <td data-label="Host data"><code>{data}</code></td>
+          <td data-label="Actions" class="docker-actions">
             <form method="post" action="/docker/stacks/refresh" class="inline-form" style="display:inline;" onsubmit="return confirm('Pull latest images and recreate containers for stack {id}? Host data is kept.');">
               <input type="hidden" name="stack" value="{id}">
               <button type="submit" class="btn-primary" title="docker compose pull && up -d">Pull &amp; Recreate</button>
