@@ -75,8 +75,7 @@ fn port_mappings(bin: &str, user_ref: &str) -> String {
             }
             _ => Err("port failed".into()),
         }
-    })
-    && text != "(none published)"
+    }) && text != "(none published)"
     {
         return text;
     }
