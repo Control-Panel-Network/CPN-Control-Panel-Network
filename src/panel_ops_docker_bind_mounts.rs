@@ -94,10 +94,10 @@ fn image_user_ids(image_ref: &str) -> Option<(u32, u32)> {
         if let Some(ids) = parse_user_spec(&user) {
             return Some(ids);
         }
-        if !user.is_empty() {
-            if let Some(ids) = runtime_uid_gid_from_image(image_ref) {
-                return Some(ids);
-            }
+        if !user.is_empty()
+            && let Some(ids) = runtime_uid_gid_from_image(image_ref)
+        {
+            return Some(ids);
         }
     }
     runtime_uid_gid_from_image(image_ref).or(Some((DEFAULT_CONTAINER_UID, DEFAULT_CONTAINER_GID)))
@@ -135,7 +135,7 @@ pub fn ensure_bind_mount_host_dirs(
     if bindings.is_empty() {
         return Ok(());
     }
-    let user_ids = image_ref.and_then(|img| image_user_ids(img));
+    let user_ids = image_ref.and_then(image_user_ids);
     let (uid, gid) = user_ids.unwrap_or((DEFAULT_CONTAINER_UID, DEFAULT_CONTAINER_GID));
 
     for binding in bindings {
@@ -167,11 +167,11 @@ pub fn ensure_bind_mount_host_dirs(
         chown_path(&host, uid, gid);
 
         // Ensure parent chain under docker-data is traversable.
-        if is_under_cpn_docker_data(&host) {
-            if let Some(parent) = host.parent() {
-                set_mode(parent, 0o775);
-                chown_path(parent, uid, gid);
-            }
+        if is_under_cpn_docker_data(&host)
+            && let Some(parent) = host.parent()
+        {
+            set_mode(parent, 0o775);
+            chown_path(parent, uid, gid);
         }
     }
     Ok(())
