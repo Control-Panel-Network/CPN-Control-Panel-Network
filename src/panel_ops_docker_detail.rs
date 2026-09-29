@@ -1,8 +1,7 @@
 //! Container inspect, stats, processes, and extended lifecycle for Docker detail UI.
 
-use crate::panel_ops_docker::{
-    DockerContainerRow, docker_bin, list_containers_detailed, resolve_trusted_container_id,
-};
+use crate::panel_ops_docker::{DockerContainerRow, docker_bin, list_containers_detailed};
+use crate::panel_ops_docker_cli::{validate_container_ref, with_listed_container_id};
 use std::process::Command;
 
 #[derive(Debug, Clone)]
@@ -19,34 +18,28 @@ pub struct DockerContainerDetail {
     pub paused: bool,
 }
 
-fn validate_name(name: &str) -> Result<&str, String> {
-    let name = name.trim();
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains(' ')
-        || name.contains(';')
-    {
-        return Err("Invalid container name.".into());
-    }
-    Ok(name)
-}
+const EXEC_ALLOW: &[&str] = &[
+    "cat", "df", "du", "env", "find", "grep", "head", "hostname", "id", "ls", "printenv", "ps",
+    "pwd", "tail", "uname", "wc", "whoami",
+];
 
-fn inspect_field(bin: &str, container_id: &str, format: &str) -> String {
-    let output = Command::new(bin)
-        .args(["inspect", "--format", format, container_id])
-        .output();
-    match output {
-        Ok(o) if o.status.success() => {
-            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if v.is_empty() || v == "<no value>" {
-                "Unknown".into()
-            } else {
-                v
-            }
+fn inspect_field(bin: &str, user_ref: &str, format: &str) -> String {
+    with_listed_container_id(user_ref, |row| {
+        let output = Command::new(bin)
+            .args(["inspect", "--format", format, &row.id])
+            .output()
+            .map_err(|e| format!("inspect failed: {e}"))?;
+        if !output.status.success() {
+            return Ok("Unknown".into());
         }
-        _ => "Unknown".into(),
-    }
+        let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(if v.is_empty() || v == "<no value>" {
+            "Unknown".into()
+        } else {
+            v
+        })
+    })
+    .unwrap_or_else(|_| "Unknown".into())
 }
 
 fn format_memory_limit(bytes: &str) -> String {
@@ -68,66 +61,72 @@ fn format_memory_limit(bytes: &str) -> String {
     }
 }
 
-fn port_mappings(bin: &str, container_id: &str) -> String {
-    let output = Command::new(bin).args(["port", container_id]).output();
-    match output {
-        Ok(o) if o.status.success() => {
-            let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if text.is_empty() {
-                "(none published)".into()
-            } else {
-                text.lines().take(12).collect::<Vec<_>>().join(", ")
+fn port_mappings(bin: &str, user_ref: &str) -> String {
+    if let Ok(text) = with_listed_container_id(user_ref, |row| {
+        let output = Command::new(bin).args(["port", &row.id]).output();
+        match output {
+            Ok(o) if o.status.success() => {
+                let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                Ok(if text.is_empty() {
+                    "(none published)".into()
+                } else {
+                    text.lines().take(12).collect::<Vec<_>>().join(", ")
+                })
             }
+            _ => Err("port failed".into()),
         }
-        _ => {
-            let raw = inspect_field(
-                bin,
-                container_id,
-                r#"{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}} -> {{.HostIp}}:{{.HostPort}} {{end}}{{end}}"#,
-            );
-            if raw == "Unknown" || raw.is_empty() {
-                "(none published)".into()
-            } else {
-                raw
-            }
-        }
+    }) && text != "(none published)"
+    {
+        return text;
+    }
+    let raw = inspect_field(
+        bin,
+        user_ref,
+        r#"{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}} -> {{.HostIp}}:{{.HostPort}} {{end}}{{end}}"#,
+    );
+    if raw == "Unknown" || raw.is_empty() {
+        "(none published)".into()
+    } else {
+        raw
     }
 }
 
-fn container_stats(bin: &str, container_id: &str) -> (String, String, String) {
-    let output = Command::new(bin)
-        .args([
-            "stats",
-            "--no-stream",
-            "--format",
-            "{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}",
-            container_id,
-        ])
-        .output();
-    match output {
-        Ok(o) if o.status.success() => {
-            let line = String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .to_string();
-            let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 3 {
-                (
-                    parts[0].trim().to_string(),
-                    parts[1].trim().to_string(),
-                    parts[2].trim().to_string(),
-                )
-            } else {
-                ("0.00%".into(), "Unknown".into(), "0.00%".into())
-            }
+fn container_stats(bin: &str, user_ref: &str) -> (String, String, String) {
+    with_listed_container_id(user_ref, |row| {
+        let output = Command::new(bin)
+            .args([
+                "stats",
+                "--no-stream",
+                "--format",
+                "{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}",
+                &row.id,
+            ])
+            .output()
+            .map_err(|e| format!("stats failed: {e}"))?;
+        if !output.status.success() {
+            return Ok(("0.00%".into(), "Unknown".into(), "0.00%".into()));
         }
-        _ => ("0.00%".into(), "Unknown".into(), "0.00%".into()),
-    }
+        let line = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_string();
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 3 {
+            Ok((
+                parts[0].trim().to_string(),
+                parts[1].trim().to_string(),
+                parts[2].trim().to_string(),
+            ))
+        } else {
+            Ok(("0.00%".into(), "Unknown".into(), "0.00%".into()))
+        }
+    })
+    .unwrap_or(("0.00%".into(), "Unknown".into(), "0.00%".into()))
 }
 
 pub fn find_container_row(name: &str) -> Result<DockerContainerRow, String> {
-    let name = validate_name(name)?;
+    let name = validate_container_ref(name)?;
     let rows = list_containers_detailed()?;
     rows.into_iter()
         .find(|r| r.name == name)
@@ -135,37 +134,36 @@ pub fn find_container_row(name: &str) -> Result<DockerContainerRow, String> {
 }
 
 pub fn load_container_detail(name: &str) -> Result<DockerContainerDetail, String> {
-    let name = validate_name(name)?;
-    let container_id = resolve_trusted_container_id(name)?;
+    let name = validate_container_ref(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     let row = find_container_row(name)?;
-    let short_id = inspect_field(bin, &container_id, "{{.Id}}");
+    let short_id = inspect_field(bin, name, "{{.Id}}");
     let short_id = if short_id.len() > 12 {
         format!("{}…", &short_id[..12])
     } else {
         short_id
     };
-    let restart_policy = inspect_field(bin, &container_id, "{{.HostConfig.RestartPolicy.Name}}");
+    let restart_policy = inspect_field(bin, name, "{{.HostConfig.RestartPolicy.Name}}");
     let start_on_boot = match restart_policy.to_ascii_lowercase().as_str() {
         "always" | "unless-stopped" => "Enabled".into(),
         "no" | "" => "Disabled".into(),
         other => other.to_string(),
     };
-    let mem_limit_raw = inspect_field(bin, &container_id, "{{.HostConfig.Memory}}");
+    let mem_limit_raw = inspect_field(bin, name, "{{.HostConfig.Memory}}");
     let mem_limit = format_memory_limit(&mem_limit_raw);
     let (cpu_percent, mem_usage, mem_percent) = if row.running {
-        container_stats(bin, &container_id)
+        container_stats(bin, name)
     } else {
         ("0.00%".into(), "Not running".into(), "0.00%".into())
     };
-    let state = inspect_field(bin, &container_id, "{{.State.Status}}");
+    let state = inspect_field(bin, name, "{{.State.Status}}");
     let paused = state.eq_ignore_ascii_case("paused");
     Ok(DockerContainerDetail {
         row,
         short_id,
-        port_mappings: port_mappings(bin, &container_id),
+        port_mappings: port_mappings(bin, name),
         restart_policy,
         start_on_boot,
         cpu_percent,
@@ -177,91 +175,105 @@ pub fn load_container_detail(name: &str) -> Result<DockerContainerDetail, String
 }
 
 pub fn container_processes(name: &str) -> Result<String, String> {
-    let _name = validate_name(name)?;
-    let container_id = resolve_trusted_container_id(name)?;
+    let _name = validate_container_ref(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
-    let output = Command::new(bin)
-        .args(["top", &container_id])
-        .output()
-        .map_err(|e| format!("Could not list processes: {e}"))?;
-    let mut text = String::from_utf8_lossy(&output.stdout).to_string();
-    if text.is_empty() {
-        text = String::from_utf8_lossy(&output.stderr).to_string();
-    }
-    if text.is_empty() {
-        text = "(no process data)".into();
-    }
-    Ok(text.chars().take(8000).collect())
+    with_listed_container_id(name, |row| {
+        let output = Command::new(bin)
+            .args(["top", &row.id])
+            .output()
+            .map_err(|e| format!("Could not list processes: {e}"))?;
+        let mut text = String::from_utf8_lossy(&output.stdout).to_string();
+        if text.is_empty() {
+            text = String::from_utf8_lossy(&output.stderr).to_string();
+        }
+        if text.is_empty() {
+            text = "(no process data)".into();
+        }
+        Ok(text.chars().take(8000).collect())
+    })
 }
 
 pub fn container_exec_command(name: &str, command: &str) -> Result<String, String> {
-    let _name = validate_name(name)?;
-    let container_id = resolve_trusted_container_id(name)?;
+    let _name = validate_container_ref(name)?;
     let cmd = command.trim();
     if cmd.is_empty() || cmd.len() > 200 {
         return Err("Command must be 1 to 200 characters.".into());
     }
-    if cmd.contains(';') || cmd.contains('&') || cmd.contains('|') || cmd.contains('`') {
-        return Err("Command contains disallowed characters.".into());
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    if parts.is_empty() {
+        return Err("Command must be 1 to 200 characters.".into());
     }
-    if cmd.contains('\0') || cmd.contains('\n') || cmd.contains('\r') {
-        return Err("Command contains disallowed characters.".into());
+    if !EXEC_ALLOW.contains(&parts[0]) {
+        return Err("Command not allowed. Use a basic read-only utility.".into());
+    }
+    for part in &parts[1..] {
+        if part.contains(';')
+            || part.contains('&')
+            || part.contains('|')
+            || part.contains('`')
+            || part.contains('\0')
+            || part.contains('\n')
+            || part.contains('\r')
+        {
+            return Err("Command contains disallowed characters.".into());
+        }
     }
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
-    let output = Command::new(bin)
-        .arg("exec")
-        .arg(&container_id)
-        .arg("sh")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .map_err(|e| format!("Exec failed: {e}"))?;
-    let mut text = String::from_utf8_lossy(&output.stdout).to_string();
-    if !output.stderr.is_empty() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        if !text.is_empty() {
-            text.push('\n');
+    with_listed_container_id(name, |row| {
+        let mut command = Command::new(bin);
+        command.arg("exec").arg(&row.id);
+        for part in parts {
+            command.arg(part);
         }
-        text.push_str(&err);
-    }
-    if text.is_empty() {
-        text = if output.status.success() {
-            "(command completed with no output)".into()
-        } else {
-            "Command failed.".into()
-        };
-    }
-    Ok(text.chars().take(8000).collect())
+        let output = command.output().map_err(|e| format!("Exec failed: {e}"))?;
+        let mut text = String::from_utf8_lossy(&output.stdout).to_string();
+        if !output.stderr.is_empty() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(&err);
+        }
+        if text.is_empty() {
+            text = if output.status.success() {
+                "(command completed with no output)".into()
+            } else {
+                "Command failed.".into()
+            };
+        }
+        Ok(text.chars().take(8000).collect())
+    })
 }
 
 pub fn container_export_tar(name: &str) -> Result<Vec<u8>, String> {
-    let _name = validate_name(name)?;
-    let container_id = resolve_trusted_container_id(name)?;
+    let _name = validate_container_ref(name)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
-    let output = Command::new(bin)
-        .args(["export", &container_id])
-        .output()
-        .map_err(|e| format!("Export failed: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "Export failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-                .trim()
-                .chars()
-                .take(200)
-                .collect::<String>()
-        ));
-    }
-    if output.stdout.is_empty() {
-        return Err("Export returned no data.".into());
-    }
-    Ok(output.stdout)
+    with_listed_container_id(name, |row| {
+        let output = Command::new(bin)
+            .args(["export", &row.id])
+            .output()
+            .map_err(|e| format!("Export failed: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "Export failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+                    .trim()
+                    .chars()
+                    .take(200)
+                    .collect::<String>()
+            ));
+        }
+        if output.stdout.is_empty() {
+            return Err("Export returned no data.".into());
+        }
+        Ok(output.stdout)
+    })
 }
 
 #[cfg(test)]
