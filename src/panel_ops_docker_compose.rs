@@ -326,12 +326,8 @@ pub fn create_compose_stack(req: CreateComposeStackRequest<'_>) -> Result<String
         ));
     }
     let host_data = compose_host_data_root().join(&id).join("data");
-    fs::create_dir_all(&host_data).map_err(|e| format!("Could not create data directory: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&host_data, fs::Permissions::from_mode(0o750));
-    }
+    let bind_line = format!("{}:{}", host_data.display(), data_path);
+    crate::panel_ops_docker_bind_mounts::ensure_bind_mount_host_dirs(&[bind_line], Some(&image))?;
 
     fs::create_dir_all(&project_dir)
         .map_err(|e| format!("Could not create stack directory: {e}"))?;

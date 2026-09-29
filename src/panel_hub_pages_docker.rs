@@ -46,6 +46,12 @@ fn action_form(action: &str, name: &str, label: &str, class: &str, confirm: &str
 
 fn container_status_html(row: &DockerContainerRow) -> String {
     let lower = row.status.to_ascii_lowercase();
+    if row.restarting {
+        return format!(
+            r#"<span class="docker-status docker-status-stopped"><strong>Restarting</strong><span class="docker-status-detail"> · {detail}</span></span>"#,
+            detail = html_escape(row.status.trim()),
+        );
+    }
     if row.running {
         let uptime = row
             .status
