@@ -75,10 +75,10 @@ fn port_mappings(bin: &str, user_ref: &str) -> String {
             }
             _ => Err("port failed".into()),
         }
-    }) {
-        if text != "(none published)" {
-            return text;
-        }
+    })
+    && text != "(none published)"
+    {
+        return text;
     }
     let raw = inspect_field(
         bin,
