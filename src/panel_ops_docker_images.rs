@@ -382,6 +382,7 @@ pub fn create_container(req: CreateContainerRequest<'_>) -> Result<String, Strin
     let ports = parse_port_mappings(req.ports)?;
     let volumes = parse_volume_bindings(req.volumes)?;
     let envs = parse_env_vars(req.env)?;
+    crate::panel_ops_docker_bind_mounts::ensure_bind_mount_host_dirs(&volumes, Some(&image))?;
     let bin = require_bin()?;
 
     let mut args: Vec<String> = if req.start {

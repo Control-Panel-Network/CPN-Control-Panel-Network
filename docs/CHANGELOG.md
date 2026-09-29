@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Docker bind mount host paths**: Create Container and Compose stack provisioning now create bind-mount host directories under `/var/lib/cpn/docker-data/` with mode `775` and ownership aligned to the container image user when inspect succeeds (default UID/GID 1000), so empty root-owned mounts no longer cause permission denied crash loops on first start.
+- **Docker Active Containers UI**: Status shows **Restarting** in red when the engine reports a restart loop, separate from **Running** and **Stopped**.
+
 - **Docker routes and HEAD monitoring**: `/docker`, `/docker/images`, `/docker/stacks`, `/docker/view/{name}`, legacy `/server/docker/*`, and related GET pages now register HEAD alongside GET so `curl -I` returns the same redirect or success status as GET (no 404 from the catch-all).
 - **Podman / docker-compatible pulls without TTY**: Hub search, manual pull, Create Container, and compose stack refresh now qualify unqualified Docker Hub names to `docker.io/...` before `pull`/`run`, strip podman-docker shim noise from panel errors, and heal Podman hosts with `/etc/containers/nodocker` plus `unqualified-search-registries = ["docker.io"]` on Docker Host package install when Podman is the engine.
 - **Docker Host package compose provider**: Install/heal now pulls in `docker-compose-plugin` (Docker CE / moby) or `podman-compose` (Podman + podman-docker) so `docker compose` works for `/docker/stacks` Pull & Recreate. Re-running Install on an engine-only host adds the missing compose packages without touching CPN-managed stacks.

@@ -25,6 +25,7 @@ pub struct DockerContainerRow {
     pub owner: String,
     pub cpn_managed: bool,
     pub running: bool,
+    pub restarting: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -184,9 +185,13 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
             .map(|s| s.trim().to_ascii_lowercase())
             .unwrap_or_default();
         let cpn_managed = is_cpn_managed(&labels);
-        let running = state == "running"
-            || status.to_ascii_lowercase().starts_with("up ")
-            || status.to_ascii_lowercase().contains("(healthy)");
+        let status_lower = status.to_ascii_lowercase();
+        let restarting =
+            state == "restarting" || status_lower.contains("restarting");
+        let running = !restarting
+            && (state == "running"
+                || status_lower.starts_with("up ")
+                || status_lower.contains("(healthy)"));
         rows.push(DockerContainerRow {
             id,
             name: if name.is_empty() {
@@ -200,6 +205,7 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
             owner: owner_from_labels(&labels, cpn_managed),
             cpn_managed,
             running,
+            restarting,
         });
         if rows.len() >= 200 {
             break;
