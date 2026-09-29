@@ -300,31 +300,29 @@ pub fn container_action(action: &str, name_or_id: &str) -> Result<String, String
         return Err("Docker/Podman CLI not found.".into());
     };
     let action = action.trim().to_ascii_lowercase();
-    with_listed_container_id(name_or_id, |row| {
-        match action.as_str() {
-            "start" => run_container_cmd(bin, &["start", &row.id])
-                .map(|_| format!("Started container `{display}`.")),
-            "stop" => run_container_cmd(bin, &["stop", &row.id])
-                .map(|_| format!("Stopped container `{display}`.")),
-            "restart" => run_container_cmd(bin, &["restart", &row.id])
-                .map(|_| format!("Restarted container `{display}`.")),
-            "pause" => run_container_cmd(bin, &["pause", &row.id])
-                .map(|_| format!("Paused container `{display}`.")),
-            "unpause" => run_container_cmd(bin, &["unpause", &row.id])
-                .map(|_| format!("Unpaused container `{display}`.")),
-            "remove" | "rm" | "delete" => {
-                if container_is_cpn_managed(bin, &row.id) {
-                    return Err(format!(
-                        "Refusing to remove `{display}`: labeled {CPN_MANAGED_LABEL}=1 (CPN-managed compose). Use CPN upgrade `--bypass` or manage that stack under /var/lib/cpn/docker."
-                    ));
-                }
-                run_container_cmd(bin, &["rm", "-f", &row.id])
-                    .map(|_| format!("Removed container `{display}`."))
+    with_listed_container_id(name_or_id, |row| match action.as_str() {
+        "start" => run_container_cmd(bin, &["start", &row.id])
+            .map(|_| format!("Started container `{display}`.")),
+        "stop" => run_container_cmd(bin, &["stop", &row.id])
+            .map(|_| format!("Stopped container `{display}`.")),
+        "restart" => run_container_cmd(bin, &["restart", &row.id])
+            .map(|_| format!("Restarted container `{display}`.")),
+        "pause" => run_container_cmd(bin, &["pause", &row.id])
+            .map(|_| format!("Paused container `{display}`.")),
+        "unpause" => run_container_cmd(bin, &["unpause", &row.id])
+            .map(|_| format!("Unpaused container `{display}`.")),
+        "remove" | "rm" | "delete" => {
+            if container_is_cpn_managed(bin, &row.id) {
+                return Err(format!(
+                    "Refusing to remove `{display}`: labeled {CPN_MANAGED_LABEL}=1 (CPN-managed compose). Use CPN upgrade `--bypass` or manage that stack under /var/lib/cpn/docker."
+                ));
             }
-            other => Err(format!(
-                "Unknown container action `{other}`. Use start, stop, restart, or remove."
-            )),
+            run_container_cmd(bin, &["rm", "-f", &row.id])
+                .map(|_| format!("Removed container `{display}`."))
         }
+        other => Err(format!(
+            "Unknown container action `{other}`. Use start, stop, restart, or remove."
+        )),
     })
 }
 

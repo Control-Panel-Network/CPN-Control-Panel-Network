@@ -230,9 +230,7 @@ pub fn container_exec_command(name: &str, command: &str) -> Result<String, Strin
         for part in parts {
             command.arg(part);
         }
-        let output = command
-            .output()
-            .map_err(|e| format!("Exec failed: {e}"))?;
+        let output = command.output().map_err(|e| format!("Exec failed: {e}"))?;
         let mut text = String::from_utf8_lossy(&output.stdout).to_string();
         if !output.stderr.is_empty() {
             let err = String::from_utf8_lossy(&output.stderr);
