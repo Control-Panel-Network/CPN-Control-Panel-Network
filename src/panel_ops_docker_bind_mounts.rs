@@ -33,7 +33,11 @@ fn parse_user_spec(raw: &str) -> Option<(u32, u32)> {
     if let Some((u, g)) = raw.split_once(':') {
         let uid = u.trim().parse::<u32>().ok()?;
         let g = g.trim();
-        let gid = if g.is_empty() { uid } else { g.parse::<u32>().ok()? };
+        let gid = if g.is_empty() {
+            uid
+        } else {
+            g.parse::<u32>().ok()?
+        };
         return Some((uid, gid));
     }
     None
@@ -96,8 +100,7 @@ fn image_user_ids(image_ref: &str) -> Option<(u32, u32)> {
             }
         }
     }
-    runtime_uid_gid_from_image(image_ref)
-        .or(Some((DEFAULT_CONTAINER_UID, DEFAULT_CONTAINER_GID)))
+    runtime_uid_gid_from_image(image_ref).or(Some((DEFAULT_CONTAINER_UID, DEFAULT_CONTAINER_GID)))
 }
 
 #[cfg(unix)]
@@ -125,7 +128,10 @@ fn set_mode(path: &Path, mode: u32) {
 fn set_mode(_path: &Path, _mode: u32) {}
 
 /// Create host bind-mount paths with modes suitable for non-root container users.
-pub fn ensure_bind_mount_host_dirs(bindings: &[String], image_ref: Option<&str>) -> Result<(), String> {
+pub fn ensure_bind_mount_host_dirs(
+    bindings: &[String],
+    image_ref: Option<&str>,
+) -> Result<(), String> {
     if bindings.is_empty() {
         return Ok(());
     }
@@ -136,7 +142,10 @@ pub fn ensure_bind_mount_host_dirs(bindings: &[String], image_ref: Option<&str>)
         let Some(host) = host_path_from_binding(binding) else {
             continue;
         };
-        if host.components().any(|c| c == std::path::Component::ParentDir) {
+        if host
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
             return Err(format!(
                 "Invalid bind mount host path `{}`.",
                 host.display()

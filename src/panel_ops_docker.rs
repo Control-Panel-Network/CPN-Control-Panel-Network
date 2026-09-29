@@ -186,8 +186,7 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
             .unwrap_or_default();
         let cpn_managed = is_cpn_managed(&labels);
         let status_lower = status.to_ascii_lowercase();
-        let restarting =
-            state == "restarting" || status_lower.contains("restarting");
+        let restarting = state == "restarting" || status_lower.contains("restarting");
         let running = !restarting
             && (state == "running"
                 || status_lower.starts_with("up ")
