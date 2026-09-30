@@ -14,8 +14,10 @@ ENV container=docker
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
+  && apt-get -y dist-upgrade \
   && apt-get install -y --no-install-recommends \
     systemd systemd-sysv dbus curl ca-certificates hostname \
+  && apt-get -y autoremove \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && rm -f /lib/systemd/system/multi-user.target.wants/* \
@@ -24,8 +26,10 @@ RUN apt-get update \
 
 COPY cpn-installer.deb /tmp/cpn-installer.deb
 RUN apt-get update \
+  && apt-get -y dist-upgrade \
   && apt-get install -y /tmp/cpn-installer.deb \
   && rm -f /tmp/cpn-installer.deb \
+  && apt-get -y autoremove \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && systemctl enable cpn-installer.service
