@@ -7,8 +7,8 @@ Keep this table aligned with [SUPPORT.md](SUPPORT.md) and the root [README](../R
 | AlmaLinux 9 | Supported | RPM el9 | `almalinux9`, `latest` | Primary EL; OS matrix + Hub publish |
 | AlmaLinux 10 | Supported | RPM el10 | `almalinux10` | OS matrix + Hub publish |
 | Rocky Linux 9 | Supported | RPM el9 | (use `almalinux9` runtime for smoke only) | OS matrix RPM path |
-| Ubuntu 22.04 | Supported | DEB | `ubuntu22.04` | OS matrix apt + Hub publish |
-| Ubuntu 24.04 | Supported | DEB | `ubuntu24.04` | OS matrix apt + Hub publish |
+| Ubuntu 22.04 | Supported | DEB | n/a (retired, use native DEB) | OS matrix apt; Docker tag retired, issue #353 |
+| Ubuntu 24.04 | Supported | DEB | n/a (retired, use native DEB) | OS matrix apt; Docker tag retired, issue #353 |
 | Ubuntu 26.04 / 26.04.1 | Supported | DEB | `ubuntu26.04` | apt codename `resolute`; Hub publish |
 | AlmaLinux 8 | Partial | dnf recipes | n/a | No release RPM (WebAuthn toolchain) |
 | Rocky 8 / 10 | Partial | RPM/recipes | n/a | Less smoke evidence |

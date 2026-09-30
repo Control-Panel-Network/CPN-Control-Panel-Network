@@ -3,7 +3,9 @@ name: Docker Hub publish
 # Builds native packages, then docker/Dockerfile.* runtime images, and pushes
 # master3395/cpn-installer tags to Docker Hub (alpha/prerelease product line).
 #
-# OS tags: almalinux9, almalinux10, ubuntu22.04, ubuntu24.04, ubuntu26.04, latest
+# OS tags: almalinux9, almalinux10, ubuntu26.04, latest
+# ubuntu22.04 and ubuntu24.04 container tags are retired from Hub (Scout findings with no vendor fix, issue #353).
+# Ubuntu 22.04 and 24.04 hosts keep native DEB installs; only the Docker runtime tags were removed.
 # latest tracks almalinux9 (primary EL baseline). Semver tags come from v* Git tags.
 #
 # Triggers on v* tag push because GitHub Releases created with GITHUB_TOKEN do not
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       os_tag:
-        description: OS tag (almalinux9, almalinux10, ubuntu22.04, ubuntu24.04, ubuntu26.04, or all)
+        description: OS tag (almalinux9, almalinux10, ubuntu26.04, or all)
         required: false
         default: all
 
@@ -49,16 +51,6 @@ jobs:
             tag: almalinux10
             latest: false
             dockerfile: docker/Dockerfile.almalinux
-          - family: ubuntu
-            ubuntu_version: "22.04"
-            tag: ubuntu22.04
-            latest: false
-            dockerfile: docker/Dockerfile.ubuntu
-          - family: ubuntu
-            ubuntu_version: "24.04"
-            tag: ubuntu24.04
-            latest: false
-            dockerfile: docker/Dockerfile.ubuntu
           - family: ubuntu
             ubuntu_version: "26.04"
             tag: ubuntu26.04
