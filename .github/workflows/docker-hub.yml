@@ -223,7 +223,7 @@ jobs:
           else
             docker run --rm --entrypoint /bin/bash \
               "master3395/cpn-installer:${{ matrix.tag }}" \
-              -lc 'dpkg -l cpn-installer | grep -q ^ii && systemctl is-enabled cpn-installer.service'
+              -lc 'dpkg -l cpn-installer | grep -q ^ii && systemctl is-enabled cpn-installer.service && apt-get check && ! dpkg -s libdevmapper1.02.1 >/dev/null 2>&1'
           fi
 
       - name: Report pushed digest
