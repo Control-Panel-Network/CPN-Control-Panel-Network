@@ -1,0 +1,68 @@
+name: Docker Hub prune retired tags
+
+# Deletes retired master3395/cpn-installer tags from Docker Hub (for example
+# ubuntu22.04 and ubuntu24.04, retired in issue #353). Idempotent: a tag that is
+# already gone (HTTP 404) counts as success.
+#
+# Required repository secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
+# The token needs Read, Write and Delete scope on master3395/cpn-installer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Space separated Hub tags to delete
+        required: false
+        default: "ubuntu22.04 ubuntu24.04"
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete retired tags from Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          TAGS: ${{ github.event.inputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DOCKERHUB_USERNAME}" ] || [ -z "${DOCKERHUB_TOKEN}" ]; then
+            echo "::error::Missing DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets."
+            exit 1
+          fi
+          repo="master3395/cpn-installer"
+          tags="${TAGS:-ubuntu22.04 ubuntu24.04}"
+          login_body="$(python3 -c 'import json,os; print(json.dumps({"username": os.environ["DOCKERHUB_USERNAME"], "password": os.environ["DOCKERHUB_TOKEN"]}))')"
+          token="$(curl -fsS -X POST -H 'Content-Type: application/json' -d "${login_body}" https://hub.docker.com/v2/users/login/ | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          echo "::add-mask::${token}"
+          failed=0
+          for tag in ${tags}; do
+            case "${tag}" in
+              almalinux9|almalinux10|ubuntu26.04|latest)
+                echo "::error::Refusing to delete protected tag ${tag}"
+                failed=1
+                continue
+                ;;
+            esac
+            if ! [[ "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+              echo "::error::Invalid tag name"
+              failed=1
+              continue
+            fi
+            code="$(curl -sS -o /tmp/hub-del.json -w '%{http_code}' -X DELETE \
+              -H "Authorization: JWT ${token}" \
+              "https://hub.docker.com/v2/repositories/${repo}/tags/${tag}/")"
+            case "${code}" in
+              200|202|204) echo "Deleted ${repo}:${tag} (HTTP ${code})" ;;
+              404) echo "${repo}:${tag} already absent (HTTP 404)" ;;
+              *) echo "::error::Delete ${tag} returned HTTP ${code}"; cat /tmp/hub-del.json; failed=1 ;;
+            esac
+          done
+          echo "Remaining tags:"
+          curl -fsS "https://hub.docker.com/v2/repositories/${repo}/tags/?page_size=100" \
+            | python3 -c 'import json,sys; [print(" -", t["name"], t.get("last_updated","")) for t in json.load(sys.stdin)["results"]]'
+          exit "${failed}"
