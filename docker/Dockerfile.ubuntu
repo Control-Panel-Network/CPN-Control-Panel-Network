@@ -1,7 +1,7 @@
 # CPN installer runtime image (Ubuntu + systemd) for development/smoke testing.
 # Privileged mode and cgroup mounts are required at run time; see scripts/docker-run.sh.
 
-ARG UBUNTU_VERSION=22.04
+ARG UBUNTU_VERSION=26.04
 
 # Stage 1: build a tiny placeholder for libcryptsetup12.
 # systemd declares Depends: libcryptsetup12, but only dlopen()s it for
@@ -37,7 +37,7 @@ RUN apt-get update \
 # Stage 2: runtime image.
 FROM ubuntu:${UBUNTU_VERSION}
 
-ARG UBUNTU_VERSION=22.04
+ARG UBUNTU_VERSION=26.04
 LABEL org.opencontainers.image.title="CPN Installer (Ubuntu)"
 LABEL org.opencontainers.image.description="CPN Control Panel Network web installer on Ubuntu (alpha/prerelease)"
 LABEL org.opencontainers.image.source="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network"

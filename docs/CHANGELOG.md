@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Docker Hub**: Retired the `master3395/cpn-installer` tags `ubuntu22.04` and `ubuntu24.04` (Docker Scout Medium/Low findings in base-distro packages with no Canonical fix yet, issue #353). Docker Hub now publishes `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, and the release semver. Ubuntu 22.04 and 24.04 hosts remain supported through the native DEB install; only the container runtime tags changed.
+
 ### Added
 
 - **Settings > Site messages**: Default suspend copy and site-ready templates now use the same Markdown/HTML editor as **Error messages** (formatting toolbar, Preview, and View HTML source). Suspend messages are stored as Markdown and rendered safely for visitors. Factory defaults include tasteful **CPN Control Panel Network** / News Targeted branding. Shared Markdown preview POST: `/settings/markdown/preview`; site-ready iframe preview: `/settings/site-messages/preview-site-ready`.

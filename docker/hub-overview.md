@@ -1,6 +1,6 @@
 # CPN Control Panel Network installer
 
-AlmaLinux and Ubuntu runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer smoke tests and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
+AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer smoke tests and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
 
 ## Status: alpha / prerelease
 
@@ -11,8 +11,6 @@ CPN is **alpha-only** (0.2.x-alpha line). These images are **not** a production-
 ```bash
 docker pull master3395/cpn-installer:almalinux9
 docker pull master3395/cpn-installer:almalinux10
-docker pull master3395/cpn-installer:ubuntu22.04
-docker pull master3395/cpn-installer:ubuntu24.04
 docker pull master3395/cpn-installer:ubuntu26.04
 docker pull master3395/cpn-installer:latest   # same baseline as almalinux9
 ```
@@ -21,9 +19,9 @@ docker pull master3395/cpn-installer:latest   # same baseline as almalinux9
 |-----|------|
 | `almalinux9`, `latest` | AlmaLinux 9 |
 | `almalinux10` | AlmaLinux 10 |
-| `ubuntu22.04` | Ubuntu 22.04 LTS |
-| `ubuntu24.04` | Ubuntu 24.04 LTS |
 | `ubuntu26.04` | Ubuntu 26.04 |
+
+**Ubuntu container tag:** the Docker Ubuntu image is **26.04 only**. The `ubuntu22.04` and `ubuntu24.04` tags were retired from Docker Hub because Docker Scout reports Medium/Low findings in base-distro packages that Canonical has not fixed yet. On Ubuntu 22.04 or 24.04 hosts, use the native **DEB/apt** install from GitHub Releases (`docs/INSTALL.md`), not these container tags. Tracking: issue #353.
 
 On each `v*` Git release tag, the semver (without leading `v`) is also pushed on the `almalinux9` image.
 

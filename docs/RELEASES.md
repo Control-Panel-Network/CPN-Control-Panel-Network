@@ -54,7 +54,7 @@ If a release does not contain an asset for your target OS and architecture, trea
 CPN also publishes **maintainer/smoke** AlmaLinux and Ubuntu + systemd container images (not a replacement for the native RPM/DEB install path):
 
 - Repository: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer)
-- Tags: `almalinux9`, `almalinux10`, `ubuntu22.04`, `ubuntu24.04`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`). On each `v*` Git tag, the semver (no leading `v`) is also pushed on the `almalinux9` image only (points at the primary EL runtime).
+- Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`). The Docker Ubuntu image is 26.04 only; `ubuntu22.04` and `ubuntu24.04` container tags are retired (vendor CVE fixes pending, issue #353). Ubuntu 22.04 and 24.04 hosts use the native DEB install. On each `v*` Git tag, the semver (no leading `v`) is also pushed on the `almalinux9` image only (points at the primary EL runtime).
 - Alpha/prerelease: images track GitHub prereleases while CPN is **0.2.x-alpha** (not stable 1.x)
 
 Images are built and pushed automatically when a `v*` tag is pushed to `stable` (`.github/workflows/docker-hub.yml`). Requires **repository** secrets on `Control-Panel-Network/CPN-Control-Panel-Network`: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Docker Hub access token). Without them, CI does not push to Hub. Re-run **Docker Hub publish** from Actions (`workflow_dispatch`, `os_tag=all`) after secrets are set.
