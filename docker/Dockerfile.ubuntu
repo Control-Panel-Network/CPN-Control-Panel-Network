@@ -2,6 +2,39 @@
 # Privileged mode and cgroup mounts are required at run time; see scripts/docker-run.sh.
 
 ARG UBUNTU_VERSION=22.04
+
+# Stage 1: build a tiny placeholder for libcryptsetup12.
+# systemd declares Depends: libcryptsetup12, but only dlopen()s it for
+# systemd-cryptsetup/veritysetup/homed, which the installer container never uses.
+# The real package drags in libdevmapper1.02.1 (Ubuntu source package lvm2), libargon2-1
+# and libjson-c5, and Docker Scout reports CVEs against lvm2 that Ubuntu has not fixed.
+# The placeholder keeps dpkg/apt consistent (apt-get check stays clean) while leaving
+# those packages out of the final image. Version 2:2.99~cpn1 sorts above every real
+# 2.x release, so dist-upgrade never swaps the real package back in.
+FROM ubuntu:${UBUNTU_VERSION} AS stubs
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends equivs \
+  && mkdir -p /out /build \
+  && cd /build \
+  && printf '%s\n' \
+    'Section: misc' \
+    'Priority: optional' \
+    'Standards-Version: 3.9.2' \
+    'Package: libcryptsetup12' \
+    'Version: 2:2.99~cpn1' \
+    'Architecture: all' \
+    'Maintainer: CPN contributors <noreply@github.com>' \
+    'Description: placeholder for libcryptsetup12 in the CPN installer container' \
+    ' systemd only dlopen()s libcryptsetup for disk encryption tools that are not' \
+    ' used inside the CPN installer container. This empty package satisfies the' \
+    ' systemd dependency so libdevmapper (lvm2) is not shipped in the image.' \
+    > libcryptsetup12-stub \
+  && equivs-build libcryptsetup12-stub \
+  && cp -f /build/libcryptsetup12_*_all.deb /out/libcryptsetup12-stub.deb \
+  && ls -l /out
+
+# Stage 2: runtime image.
 FROM ubuntu:${UBUNTU_VERSION}
 
 ARG UBUNTU_VERSION=22.04
@@ -13,12 +46,17 @@ LABEL cpn.ubuntu.version="${UBUNTU_VERSION}"
 ENV container=docker
 ENV DEBIAN_FRONTEND=noninteractive
 
+COPY --from=stubs /out/libcryptsetup12-stub.deb /tmp/libcryptsetup12-stub.deb
+
 # Full distro security upgrade before app deps (reduces Docker Scout OS CVEs).
+# The placeholder goes in first so systemd never pulls the real libcryptsetup12 stack.
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
+  && apt-get install -y --no-install-recommends /tmp/libcryptsetup12-stub.deb \
   && apt-get install -y --no-install-recommends \
     systemd curl ca-certificates hostname \
+  && rm -f /tmp/libcryptsetup12-stub.deb \
   && apt-get -y autoremove --purge \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
