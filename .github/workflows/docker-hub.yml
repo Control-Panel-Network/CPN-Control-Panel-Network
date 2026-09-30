@@ -178,6 +178,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          pull: true
           load: true
           push: false
           tags: master3395/cpn-installer:${{ matrix.tag }}
@@ -191,6 +192,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          pull: true
           push: true
           tags: |
             master3395/cpn-installer:${{ matrix.tag }}
@@ -231,3 +233,30 @@ jobs:
           docker pull "master3395/cpn-installer:${{ matrix.tag }}"
           digest="$(docker inspect --format='{{index .RepoDigests 0}}' "master3395/cpn-installer:${{ matrix.tag }}")"
           echo "Pushed master3395/cpn-installer:${{ matrix.tag }} (${digest})"
+
+      - name: Sync Docker Hub repository overview
+        if: >-
+          steps.want.outputs.run == 'true'
+          && steps.hub.outputs.available == 'true'
+          && matrix.tag == 'almalinux9'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          overview="$(python3 -c 'import json, pathlib; print(json.dumps(pathlib.Path("docker/hub-overview.md").read_text(encoding="utf-8")))')"
+          token="$(curl -fsSL -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"${DOCKERHUB_USERNAME}\",\"password\":\"${DOCKERHUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+          http_code="$(curl -fsSL -o /tmp/hub-patch.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: JWT ${token}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"full_description\":${overview}}" \
+            https://hub.docker.com/v2/repositories/master3395/cpn-installer/)"
+          if [ "${http_code}" != '200' ]; then
+            echo "::error::Docker Hub overview PATCH returned HTTP ${http_code}"
+            cat /tmp/hub-patch.json
+            exit 1
+          fi
+          echo "Updated Docker Hub overview for master3395/cpn-installer"
