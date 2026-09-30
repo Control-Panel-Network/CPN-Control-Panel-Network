@@ -12,11 +12,16 @@ LABEL cpn.almalinux.version="${ALMA_VERSION}"
 
 ENV container=docker
 
+# Full distro security upgrade before app deps (reduces Docker Scout OS CVEs).
 RUN dnf -y makecache \
+  && dnf -y upgrade --refresh \
+  && dnf -y upgrade --security || true \
   && dnf -y upgrade \
   && dnf -y install --allowerasing systemd systemd-udev dnf-plugins-core curl which hostname \
+  && dnf -y upgrade --security || true \
   && dnf -y upgrade \
   && dnf clean all \
+  && rm -rf /var/cache/dnf /var/cache/yum \
   && rm -f /lib/systemd/system/multi-user.target.wants/* \
   && rm -f /etc/systemd/system/*.wants/* \
   && rm -f /lib/systemd/system/local-fs.target.wants/* \
@@ -27,12 +32,17 @@ RUN dnf -y makecache \
   && systemctl set-default multi-user.target
 
 COPY cpn-installer.rpm /tmp/cpn-installer.rpm
+# Re-apply security upgrades after package install (catch transitive base updates).
 RUN dnf -y makecache \
+  && dnf -y upgrade --refresh \
+  && dnf -y upgrade --security || true \
   && dnf -y upgrade \
   && dnf -y install /tmp/cpn-installer.rpm \
   && rm -f /tmp/cpn-installer.rpm \
+  && dnf -y upgrade --security || true \
   && dnf -y upgrade \
   && dnf clean all \
+  && rm -rf /var/cache/dnf /var/cache/yum \
   && systemctl enable cpn-installer.service
 
 EXPOSE 2087

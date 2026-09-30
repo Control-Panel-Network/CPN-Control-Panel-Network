@@ -13,8 +13,10 @@ LABEL cpn.ubuntu.version="${UBUNTU_VERSION}"
 ENV container=docker
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Full distro security upgrade before app deps (reduces Docker Scout OS CVEs).
 RUN apt-get update \
-  && apt-get -y dist-upgrade \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   && apt-get install -y --no-install-recommends \
     systemd systemd-sysv dbus curl ca-certificates hostname \
   && apt-get -y autoremove \
@@ -25,10 +27,13 @@ RUN apt-get update \
   && systemctl set-default multi-user.target
 
 COPY cpn-installer.deb /tmp/cpn-installer.deb
+# Re-apply security upgrades after package install (catch transitive base updates).
 RUN apt-get update \
-  && apt-get -y dist-upgrade \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   && apt-get install -y /tmp/cpn-installer.deb \
   && rm -f /tmp/cpn-installer.deb \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
   && apt-get -y autoremove \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
