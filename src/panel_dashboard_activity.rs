@@ -5,6 +5,7 @@ use crate::panel_dashboard_activity_list::{
     activity_list_script, activity_list_styles, wrap_activity_table,
 };
 use crate::panel_dashboard_activity_ssh::ssh_logs_panel;
+use crate::panel_hub_pages_server_logs::panel_actions_table;
 use crate::panel_ops_activity::{ActivityLogRow, recent_ssh_logins, ssh_security_analysis};
 use crate::panel_ops_activity_host::{
     cpu_activity, disk_io_snapshot, format_bytes, network_traffic,
@@ -361,6 +362,7 @@ pub fn activity_board_html(username: &str) -> String {
     let tabs = [
         tab_btn("ssh-logins", "Recent SSH Logins", true, None),
         tab_btn("ssh-logs", "Recent SSH Logs", false, badge),
+        tab_btn("panel-actions", "Panel Actions", false, None),
         tab_btn("top-process", "Top Process", false, None),
         tab_btn("traffic", "Traffic", false, None),
         tab_btn("disk-io", "Disk IO", false, None),
@@ -371,6 +373,7 @@ pub fn activity_board_html(username: &str) -> String {
     let panels = [
         panel("ssh-logins", false, &ssh_logins_panel()),
         panel("ssh-logs", true, &ssh_logs_panel(username, &analysis)),
+        panel("panel-actions", true, &panel_actions_table(username)),
         panel("top-process", true, &top_process_panel()),
         panel("traffic", true, &traffic_panel()),
         panel("disk-io", true, &disk_io_panel()),

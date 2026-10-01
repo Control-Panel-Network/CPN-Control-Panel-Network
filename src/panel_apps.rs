@@ -269,21 +269,23 @@ pub(crate) fn host_action_buttons(
             if !domain.is_empty() && is_associable(status.id) {
                 if bound {
                     out.push_str(&format!(
-                        r#"<span class="plugin-badge installed">Activated</span>
-            <form method="post" action="/apps/deactivate" class="inline-form">
+                        r#"<span class="plugin-badge installed">Installed on Host</span>
+            <span class="plugin-badge featured">Attached to site</span>
+            <form method="post" action="/apps/deactivate" class="inline-form" onsubmit="return confirm('Detach from this site? The host install is not removed.');">
               <input type="hidden" name="name" value="{name}">
               {hidden}
-              <button type="submit" class="btn-warn">Deactivate</button>
+              <button type="submit" class="btn-warn">Detach from site</button>
             </form>"#,
                         name = html_escape(name),
                         hidden = hidden,
                     ));
                 } else {
                     out.push_str(&format!(
-                        r#"<form method="post" action="/apps/activate" class="inline-form">
+                        r#"<span class="plugin-badge installed">Installed on Host</span>
+            <form method="post" action="/apps/activate" class="inline-form">
               <input type="hidden" name="name" value="{name}">
               {hidden}
-              <button type="submit" class="btn-primary">Activate</button>
+              <button type="submit" class="btn-primary" title="Grants this site access. Nothing is installed again.">Attach to site</button>
             </form>"#,
                         name = html_escape(name),
                         hidden = hidden,
@@ -393,9 +395,9 @@ pub(crate) fn host_card(
             .filter(|b| b.app == status.id.as_str())
             .collect();
         if mine.is_empty() {
-            String::new()
+            r#"<p class="plugin-meta">Installed once on the host. Attaching only grants this site access; nothing is installed again.</p>"#.to_string()
         } else {
-            r#"<p class="plugin-meta">Bound to selected site</p>"#.to_string()
+            r#"<p class="plugin-meta">Installed once on the host and attached to the selected site (site access only).</p>"#.to_string()
         }
     } else if is_site_scoped(status.id) {
         r#"<p class="plugin-meta">May drop paths under the selected site home.</p>"#.into()
@@ -416,7 +418,7 @@ pub(crate) fn host_card(
             {status_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
-          <p class="plugin-meta">Status: {state} · Id: <code>{id}</code></p>
+          <p class="plugin-meta">Status: {state} Â· Id: <code>{id}</code></p>
           <p class="plugin-meta">{detail}</p>
           {dates}
           {binding}
@@ -629,7 +631,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> · <code>cpn app activate --name roundcube</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> Â· <code>cpn app activate --name roundcube</code></p>
         {picker}
       </article>
       {fragment}"#,

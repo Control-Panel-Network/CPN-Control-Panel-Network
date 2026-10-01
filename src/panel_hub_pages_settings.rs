@@ -4,15 +4,55 @@ use crate::panel_hub_defs::settings_hub_sections;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
 use crate::panel_theme_chrome::design_settings_panel;
 
+/// Settings pages that only the panel owner may open (tiles are hidden for other accounts).
+const OWNER_ONLY_SETTINGS: &[&str] = &[
+    "/settings/logs",
+    "/settings/site-messages",
+    "/settings/error-messages",
+];
+
 pub fn settings_hub_main() -> String {
+    settings_hub_main_with(true, None, None)
+}
+
+/// Settings overview. `is_owner` hides owner-only tiles for other accounts; `notice` / `error`
+/// carry the message of a redirect (for example "Admin only") so it is never dropped silently.
+pub fn settings_hub_main_with(is_owner: bool, notice: Option<&str>, error: Option<&str>) -> String {
     let mut body = section_heading(
         "Settings",
         "Panel version, design, onboarding, community links, and listen port.",
     );
+    if let Some(msg) = notice.filter(|m| !m.trim().is_empty()) {
+        body.push_str(&format!(
+            r#"<p class="panel-notice ok">{}</p>"#,
+            escape_text(msg)
+        ));
+    }
+    if let Some(msg) = error.filter(|m| !m.trim().is_empty()) {
+        body.push_str(&format!(
+            r#"<p class="panel-notice error">{}</p>"#,
+            escape_text(msg)
+        ));
+    }
     for (title, tiles) in settings_hub_sections() {
+        let tiles: Vec<_> = tiles
+            .into_iter()
+            .filter(|tile| is_owner || !OWNER_ONLY_SETTINGS.contains(&tile.href))
+            .collect();
+        if tiles.is_empty() {
+            continue;
+        }
         body.push_str(&hub_tiles_grid(title, &tiles));
     }
     body
+}
+
+fn escape_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// Kept for callers that still import the stub name (parallel hub PRs).
@@ -161,6 +201,17 @@ pub fn connect_page() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn non_owner_hub_hides_owner_only_tiles_and_shows_message() {
+        let owner = settings_hub_main_with(true, None, None);
+        assert!(owner.contains("/settings/logs"));
+        let other = settings_hub_main_with(false, None, Some("Admin only <b>"));
+        assert!(!other.contains("/settings/logs"));
+        assert!(!other.contains("/settings/site-messages"));
+        assert!(other.contains("/settings/design"));
+        assert!(other.contains("Admin only &lt;b&gt;"));
+    }
 
     #[test]
     fn hub_lists_four_primary_tiles() {

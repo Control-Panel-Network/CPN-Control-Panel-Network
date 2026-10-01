@@ -141,7 +141,7 @@ pub fn is_site_scoped(app: AppId) -> bool {
     matches!(app, AppId::Phpmyadmin | AppId::Email)
 }
 
-/// Host engines may still be associated with a domain for ACL/display only.
+/// Host engines may be attached to a domain (site ACL and display only; the engine stays host-wide).
 pub fn is_associable(app: AppId) -> bool {
     matches!(
         app,
@@ -201,7 +201,7 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
         AppId::Mariadb | AppId::Postgresql | AppId::Rabbitmq => {
             upsert_binding(app, &site.domain, "")?;
             Ok(format!(
-                "Associated host app `{}` with `{}` for ACL/display (engine stays system-wide)",
+                "Attached `{}` to `{}` (site access only). The engine is installed once on the host and nothing was installed again",
                 app.as_str(),
                 site.domain
             ))
@@ -237,7 +237,7 @@ pub fn clear_site_scope(app: AppId, domain: &str) -> Result<String, String> {
     }
     remove_binding(app, &site.domain)?;
     Ok(format!(
-        "Cleared `{}` association for `{}`",
+        "Detached `{}` from `{}` (site access removed). The host install is unchanged",
         app.as_str(),
         site.domain
     ))

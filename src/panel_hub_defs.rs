@@ -305,6 +305,35 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 },
             ],
         ),
+        (
+            "Logs",
+            vec![
+                HubTile {
+                    title: "Panel Activity Log",
+                    subtitle: "Plugin and host package actions",
+                    href: "/server/logs",
+                    live: true,
+                },
+                HubTile {
+                    title: "Website Logs",
+                    subtitle: "Access and error logs per site",
+                    href: "/websites",
+                    live: true,
+                },
+                HubTile {
+                    title: "SSH Logs",
+                    subtitle: "Logins and auth log (Activity Board)",
+                    href: "/dashboard?activity=ssh-logs",
+                    live: true,
+                },
+                HubTile {
+                    title: "Log Retention",
+                    subtitle: "Keep window for site logs",
+                    href: "/settings/logs",
+                    live: true,
+                },
+            ],
+        ),
     ]
 }
 
