@@ -37,6 +37,8 @@ pub struct RestoreRequest {
     pub confirm_import_databases: bool,
     /// Explicit confirmation for optional email / docker / DNS / panel-config entities.
     pub confirm_optional_entities: bool,
+    /// Explicit confirmation for Users / ACL / Packages merge (destructive-ish).
+    pub confirm_users_acl_packages: bool,
     /// Selected entity ids from the plan page (`website`, `db:name`, `site:x`, …).
     pub entities: Vec<String>,
 }
@@ -67,6 +69,7 @@ impl RestoreRequest {
         confirm_overwrite_files: &str,
         confirm_import_databases: &str,
         confirm_optional_entities: &str,
+        confirm_users_acl_packages: &str,
         entities: Vec<String>,
     ) -> Self {
         Self {
@@ -81,6 +84,7 @@ impl RestoreRequest {
             confirm_overwrite_files: flag_true(confirm_overwrite_files),
             confirm_import_databases: flag_true(confirm_import_databases),
             confirm_optional_entities: flag_true(confirm_optional_entities),
+            confirm_users_acl_packages: flag_true(confirm_users_acl_packages),
             entities,
         }
     }
@@ -102,6 +106,9 @@ fn opts_from_selection(sel: &EntitySelection) -> RestoreApplyOpts {
         include_docker: sel.wants_docker(),
         include_dns: sel.wants_dns(),
         include_panel_config: sel.wants_panel_config(),
+        restore_users: sel.wants_users(),
+        restore_acl: sel.wants_acl(),
+        restore_packages: sel.wants_packages(),
     }
 }
 
@@ -265,10 +272,19 @@ pub fn restore_backup(req: &RestoreRequest) -> Result<RestoreResult, String> {
     let mut detected = detect_from_members(&hit.name, &members);
     let discovered = discover_entities(&hit.name, &members);
     let sel = selection_from_request(req);
+    let wants_accounts = sel.wants_users() || sel.wants_acl() || sel.wants_packages();
+    if wants_accounts && !req.confirm_users_acl_packages {
+        return Err(
+            "Users / ACL / Packages are selected. Confirm the destructive merge warning before continuing."
+                .into(),
+        );
+    }
     if !sel.is_empty()
-        && discovered
-            .iter()
-            .any(|e| e.needs_extra_confirm && sel.contains(&e.id))
+        && discovered.iter().any(|e| {
+            e.needs_extra_confirm
+                && sel.contains(&e.id)
+                && !matches!(e.id.as_str(), "users" | "acl" | "packages")
+        })
         && !req.confirm_optional_entities
     {
         return Err(

@@ -165,6 +165,8 @@ pub struct RestoreRunForm {
     confirm_import_databases: String,
     #[serde(default)]
     confirm_optional_entities: String,
+    #[serde(default)]
+    confirm_users_acl_packages: String,
     /// Multi-select entity ids (`website`, `db:name`, `site:x`, …).
     /// Browsers may post one value or many; accept both (avoids Actix parse 400).
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
@@ -215,6 +217,7 @@ pub async fn backups_restore_run(
         &form.confirm_overwrite_files,
         &form.confirm_import_databases,
         &form.confirm_optional_entities,
+        &form.confirm_users_acl_packages,
         entity_ids,
     );
     req.owner = user.clone();
@@ -399,9 +402,10 @@ mod tests {
 
     #[test]
     fn restore_run_form_accepts_single_entity_string() {
-        let form: RestoreRunForm =
-            serde_json::from_str(r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#)
-                .expect("single entity");
+        let form: RestoreRunForm = serde_json::from_str(
+            r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#,
+        )
+        .expect("single entity");
         assert_eq!(form.entity, vec!["site:newstargeted.com".to_string()]);
         assert_eq!(form.archive, "a.tar.gz");
     }

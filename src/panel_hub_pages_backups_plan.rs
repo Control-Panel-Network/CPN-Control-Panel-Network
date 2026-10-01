@@ -212,6 +212,7 @@ pub fn backups_restore_plan_page(
                   <label><input type="checkbox" name="confirm_overwrite_files" value="1" required> Confirm overwrite website files</label>
                   <label><input type="checkbox" name="confirm_import_databases" value="1"> Confirm import databases / SQL</label>
                   <label><input type="checkbox" name="confirm_optional_entities" value="1"> Confirm optional email / Docker / DNS / panel-config</label>
+                  <label><input type="checkbox" name="confirm_users_acl_packages" value="1"> Confirm Users / ACL / Packages merge (may create accounts and grants; does not wipe MFA; source passwords are not reused)</label>
                   <button type="submit" class="btn-primary" onclick="{confirm_js}">Restore selected</button>
                 </form>
                 <script>{script}</script>"#,

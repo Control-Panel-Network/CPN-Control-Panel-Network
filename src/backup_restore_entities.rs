@@ -15,6 +15,9 @@ pub enum EntityKind {
     Docker,
     Dns,
     PanelConfig,
+    Users,
+    Acl,
+    Packages,
 }
 
 impl EntityKind {
@@ -29,6 +32,9 @@ impl EntityKind {
             Self::Docker => "docker",
             Self::Dns => "dns",
             Self::PanelConfig => "panel-config",
+            Self::Users => "users",
+            Self::Acl => "acl",
+            Self::Packages => "packages",
         }
     }
 
@@ -43,6 +49,9 @@ impl EntityKind {
             Self::Docker => "Docker / compose",
             Self::Dns => "DNS / zone data",
             Self::PanelConfig => "Panel config",
+            Self::Users => "Users / accounts",
+            Self::Acl => "ACL / permissions",
+            Self::Packages => "Packages / plans",
         }
     }
 }
@@ -113,6 +122,18 @@ impl EntitySelection {
 
     pub fn wants_panel_config(&self) -> bool {
         self.contains("panel-config")
+    }
+
+    pub fn wants_users(&self) -> bool {
+        self.contains("users")
+    }
+
+    pub fn wants_acl(&self) -> bool {
+        self.contains("acl")
+    }
+
+    pub fn wants_packages(&self) -> bool {
+        self.contains("packages")
     }
 
     /// `None` means import all SQL (legacy full restore or "databases" dump).
@@ -494,6 +515,48 @@ pub fn discover_entities(filename: &str, members: &[String]) -> Vec<RestoreEntit
         );
     }
 
+    let (has_users, has_acl, has_packages) =
+        crate::backup_restore_accounts::members_suggest_accounts_payload(members);
+    if has_users {
+        push_unique(
+            &mut entities,
+            RestoreEntity {
+                id: "users".into(),
+                kind: EntityKind::Users,
+                label: EntityKind::Users.label().into(),
+                detail: "Owner account from classic meta.xml and/or optional users.json. Requires confirmation; passwords are reset (source hashes are not portable). MFA is never wiped.".into(),
+                needs_extra_confirm: true,
+                default_selected: false,
+            },
+        );
+    }
+    if has_acl {
+        push_unique(
+            &mut entities,
+            RestoreEntity {
+                id: "acl".into(),
+                kind: EntityKind::Acl,
+                label: EntityKind::Acl.label().into(),
+                detail: "Best-effort map of source aclName (and optional site-acl.json) into CPN site ACL grants. Not 1:1 source-panel ACL parity.".into(),
+                needs_extra_confirm: true,
+                default_selected: false,
+            },
+        );
+    }
+    if has_packages {
+        push_unique(
+            &mut entities,
+            RestoreEntity {
+                id: "packages".into(),
+                kind: EntityKind::Packages,
+                label: EntityKind::Packages.label().into(),
+                detail: "Best-effort package from websites limit in meta.xml and/or optional packages.json. Typical website archives lack a full package catalog.".into(),
+                needs_extra_confirm: true,
+                default_selected: false,
+            },
+        );
+    }
+
     // Always expose at least website when nothing structured was found but members exist.
     if entities.is_empty() && !paths.is_empty() {
         push_unique(
@@ -532,9 +595,15 @@ mod tests {
         assert!(ids.contains(&"db:news_cms"));
         assert!(ids.contains(&"db:news_disco"));
         assert!(ids.contains(&"email"));
+        assert!(ids.contains(&"users"));
+        assert!(ids.contains(&"acl"));
+        assert!(ids.contains(&"packages"));
         let email = ents.iter().find(|e| e.id == "email").unwrap();
         assert!(email.needs_extra_confirm);
         assert!(!email.default_selected);
+        let users = ents.iter().find(|e| e.id == "users").unwrap();
+        assert!(users.needs_extra_confirm);
+        assert!(!users.default_selected);
     }
 
     #[test]

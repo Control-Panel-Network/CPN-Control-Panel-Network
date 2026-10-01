@@ -22,6 +22,9 @@ pub struct RestoreApplyOpts {
     pub include_docker: bool,
     pub include_dns: bool,
     pub include_panel_config: bool,
+    pub restore_users: bool,
+    pub restore_acl: bool,
+    pub restore_packages: bool,
 }
 
 impl Default for RestoreApplyOpts {
@@ -34,6 +37,9 @@ impl Default for RestoreApplyOpts {
             include_docker: false,
             include_dns: false,
             include_panel_config: false,
+            restore_users: false,
+            restore_acl: false,
+            restore_packages: false,
         }
     }
 }
@@ -206,6 +212,15 @@ pub(crate) fn restore_cpn(
             );
         }
     }
+    crate::backup_restore_accounts::restore_accounts_from_staging(
+        staging,
+        &crate::backup_restore_accounts::AccountsRestoreOpts {
+            restore_users: opts.restore_users,
+            restore_acl: opts.restore_acl,
+            restore_packages: opts.restore_packages,
+        },
+        warnings,
+    )?;
     Ok(())
 }
 
@@ -410,6 +425,15 @@ pub(crate) fn restore_cyberpanel(
                 .into(),
         );
     }
+    crate::backup_restore_accounts::restore_accounts_from_staging(
+        staging,
+        &crate::backup_restore_accounts::AccountsRestoreOpts {
+            restore_users: opts.restore_users,
+            restore_acl: opts.restore_acl,
+            restore_packages: opts.restore_packages,
+        },
+        warnings,
+    )?;
     Ok(())
 }
 

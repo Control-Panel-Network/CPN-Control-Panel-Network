@@ -28,6 +28,8 @@ pub mod auth_i18n;
 pub mod auth_pages;
 pub mod auth_password_reset_api;
 pub mod backup_restore;
+pub mod backup_restore_accounts;
+pub mod backup_restore_accounts_apply;
 pub mod backup_restore_apply;
 pub mod backup_restore_detect;
 pub mod backup_restore_entities;
