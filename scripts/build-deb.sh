@@ -97,7 +97,8 @@ exit 0
 EOF
 chmod 0755 "$pkg_root/DEBIAN/postrm"
 
-dpkg-deb --build "$pkg_root" "$out_dir/cpn-installer_${deb_version}_${arch}.deb"
+# xz keeps the package readable by every supported apt/dpkg (22.04 through 26.04, Debian 12/13).
+dpkg-deb -Zxz --root-owner-group --build "$pkg_root" "$out_dir/cpn-installer_${deb_version}_${arch}.deb"
 
 if [[ -f "$cleanup_script" ]]; then
   bash "$cleanup_script" --keep "$project_dir" --keep-count 0 || true
