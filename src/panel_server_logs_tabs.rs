@@ -108,12 +108,12 @@ mod tests {
     #[test]
     fn primary_strip_is_compact_and_detail_tabs_live_in_more() {
         let html = log_tabs(None);
-        let nav = html.split("log-more-menu").next().unwrap();
+        let nav = html.split(r#"class="log-more-menu""#).next().unwrap();
         assert!(nav.contains("Main Log"));
         assert!(nav.contains("Access Logs"));
         assert!(nav.contains("Error Logs"));
         assert!(!nav.contains("ModSec Audit"));
-        let menu = html.split("log-more-menu").nth(1).unwrap();
+        let menu = html.split(r#"class="log-more-menu""#).nth(1).unwrap();
         assert!(menu.contains("Email Log"));
         assert!(menu.contains("FTP Logs"));
         assert!(menu.contains("ModSec Audit"));
