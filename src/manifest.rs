@@ -45,6 +45,9 @@ pub struct InstallManifest {
     pub package_version: String,
     #[serde(default)]
     pub release_tag: String,
+    /// Git commit SHA for tip/source installs (and optional release commit tracking).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_commit: String,
     pub installed_at_unix: u64,
     pub source: ManifestSource,
     pub core_files: Vec<CoreFileEntry>,
@@ -188,6 +191,24 @@ pub fn record_install(
     selected_server: Option<ServerEngine>,
     selected_mail: Option<MailSystem>,
 ) -> Result<InstallManifest, String> {
+    record_install_with_commit(
+        package_version,
+        release_tag,
+        source,
+        None,
+        selected_server,
+        selected_mail,
+    )
+}
+
+pub fn record_install_with_commit(
+    package_version: &str,
+    release_tag: &str,
+    source: ManifestSource,
+    source_commit: Option<&str>,
+    selected_server: Option<ServerEngine>,
+    selected_mail: Option<MailSystem>,
+) -> Result<InstallManifest, String> {
     let previous = load_manifest();
     let mut core_files = previous
         .as_ref()
@@ -201,6 +222,17 @@ pub fn record_install(
         .map(|item| item.preserve_paths.clone())
         .filter(|paths| !paths.is_empty())
         .unwrap_or_else(default_preserve_paths);
+    let commit = source_commit
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            previous
+                .as_ref()
+                .map(|item| item.source_commit.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or_default();
     let manifest = InstallManifest {
         schema_version: 1,
         package_version: package_version.trim().trim_start_matches('v').to_string(),
@@ -209,6 +241,7 @@ pub fn record_install(
         } else {
             release_tag.trim().to_string()
         },
+        source_commit: commit,
         installed_at_unix: now_unix(),
         source,
         core_files,
@@ -220,6 +253,13 @@ pub fn record_install(
     };
     save_manifest(&manifest)?;
     Ok(manifest)
+}
+
+/// Source commit recorded on the install manifest (tip/hot-deploy installs).
+pub fn manifest_source_commit() -> Option<String> {
+    load_manifest()
+        .map(|item| item.source_commit.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn rpm_installed_version() -> Option<String> {
@@ -247,7 +287,10 @@ fn resolve_package_version(
     rpm_version: Option<String>,
     running_version: &str,
 ) -> String {
-    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity, normalize_version};
+    use crate::releases::{
+        compare_versions, is_active_0_2_line, is_retired_cpn_1_0_identity, normalize_version,
+    };
+    use std::cmp::Ordering;
 
     match (from_manifest, rpm_version) {
         (Some(manifest_ver), Some(rpm_ver))
@@ -271,16 +314,25 @@ fn resolve_package_version(
             // Stale manifest after bootstrap upgrade.sh / binary replace: trust RPM.
             rpm_ver
         }
+        (Some(manifest_ver), Some(rpm_ver))
+            if compare_versions(&manifest_ver, &rpm_ver) == Ordering::Less =>
+        {
+            // Stale alpha/0.2.x (or older) manifest while RPM is already on 1.0.0+: trust RPM.
+            rpm_ver
+        }
         (Some(manifest_ver), _) => manifest_ver,
         (None, Some(rpm_ver)) => rpm_ver,
         (None, None) => running_version.to_string(),
     }
 }
 
-/// Rewrite install-manifest when it still claims retired `1.0.0`/`1.0.1` but the live
-/// RPM (or running binary on a binary-only host) is already on `0.2.x`.
+/// Rewrite install-manifest when it lags the live RPM/running identity.
+///
+/// Covers: retired `1.0.0`/`1.0.1` while live is `0.2.x`, and stale `0.2.x-alpha.*`
+/// while the live RPM is already on `1.0.0+`.
 pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String> {
-    use crate::releases::{is_active_0_2_line, is_retired_cpn_1_0_identity};
+    use crate::releases::{compare_versions, is_active_0_2_line, is_retired_cpn_1_0_identity};
+    use std::cmp::Ordering;
 
     #[cfg(unix)]
     {
@@ -290,15 +342,30 @@ pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String>
     }
 
     let manifest = load_manifest()?;
-    if !is_retired_cpn_1_0_identity(&manifest.package_version) {
-        return None;
-    }
     let rpm = rpm_installed_version();
     let target = match &rpm {
-        Some(v) if is_active_0_2_line(v) => v.clone(),
-        None if is_active_0_2_line(running_version) => running_version.to_string(),
+        Some(v)
+            if is_retired_cpn_1_0_identity(&manifest.package_version) && is_active_0_2_line(v) =>
+        {
+            v.clone()
+        }
+        None if is_retired_cpn_1_0_identity(&manifest.package_version)
+            && is_active_0_2_line(running_version) =>
+        {
+            running_version.to_string()
+        }
+        Some(v)
+            if is_active_0_2_line(&manifest.package_version)
+                && compare_versions(&manifest.package_version, v) == Ordering::Less =>
+        {
+            // e.g. manifest 0.2.6-alpha.49 while RPM is 1.0.0
+            v.clone()
+        }
         _ => return None,
     };
+    if normalize_version_local(&manifest.package_version) == normalize_version_local(&target) {
+        return None;
+    }
     let tag = format!("v{target}");
     match record_install(
         &target,
@@ -313,6 +380,10 @@ pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String>
         )),
         Err(_) => None,
     }
+}
+
+fn normalize_version_local(value: &str) -> String {
+    crate::releases::normalize_version(value)
 }
 
 pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
@@ -450,6 +521,11 @@ mod tests {
                 "0.2.6-alpha.24"
             ),
             "0.2.6-alpha.24"
+        );
+        // Stale alpha manifest must not beat a live 1.0.0 RPM.
+        assert_eq!(
+            resolve_package_version(Some("0.2.6-alpha.49".into()), Some("1.0.0".into()), "1.0.0"),
+            "1.0.0"
         );
     }
 }

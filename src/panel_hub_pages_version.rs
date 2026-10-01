@@ -58,7 +58,8 @@ pub fn version_management_page(can_manage: bool) -> String {
     style="display:none;list-style:none;margin:4px 0 0;padding:0;max-height:220px;overflow:auto;border:1px solid var(--cpn-border, #334155);border-radius:8px;background:var(--cpn-surface, #0f172a);"></ul>
   <p class="muted" style="margin-top:8px;">Selected: <strong id="cpn-version-selected-label">-</strong></p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
-    <button type="button" class="btn-primary" id="cpn-version-upgrade-latest">Upgrade to latest</button>
+    <button type="button" class="btn-primary" id="cpn-version-upgrade-latest">Upgrade to latest release</button>
+    <button type="button" class="btn-primary" id="cpn-version-upgrade-stable">Upgrade to stable tip</button>
     <button type="button" class="btn-primary" id="cpn-version-apply">Apply selected version</button>
     <button type="button" class="btn-primary" id="cpn-version-repair">Repair selected</button>
   </div>
@@ -86,11 +87,12 @@ pub fn version_management_page(can_manage: bool) -> String {
     }
     let body = format!(
         r#"<ul class="kv-list">
-  <li><span>Running</span><span><strong id="cpn-version-running">{running}</strong><br><span class="muted" id="cpn-version-running-date"></span></span></li>
+  <li><span>Running</span><span><strong id="cpn-version-running">{running}</strong><br><span class="muted" id="cpn-version-running-date"></span><br><span class="muted" id="cpn-version-running-sha"></span></span></li>
   <li><span>Installed package</span><span><strong id="cpn-version-installed">{installed}</strong><br><span class="muted" id="cpn-version-installed-date"></span></span></li>
   <li><span>Your source</span><strong id="cpn-version-source-tip">-</strong></li>
   <li><span>Upstream official</span><strong id="cpn-version-upstream-tip">-</strong></li>
-  <li><span>Latest (configured source)</span><strong id="cpn-version-latest">-</strong></li>
+  <li><span>Latest release</span><strong id="cpn-version-latest">-</strong></li>
+  <li><span>Stable tip</span><strong id="cpn-version-stable-tip">-</strong></li>
   <li><span>Manifest</span><strong>{manifest}</strong></li>
 </ul>
 <p id="cpn-version-status" class="muted" role="status">Checking for updates...</p>
@@ -102,7 +104,8 @@ pub fn version_management_page(can_manage: bool) -> String {
 {manage_block}
 <p class="muted" style="margin-top:14px;max-width:640px;">
   CPN supports the <strong>latest two published releases</strong> only (current tip plus the previous release).
-  Older tags remain listed for lab use, but they are outside support. Prefer upgrade to the newest release.
+  Older tags remain listed for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
+  When <code>stable</code> advances without a new tag, use <strong>Upgrade to stable tip</strong> (commit path: builds from the branch tip SHA).
 </p>
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
@@ -147,7 +150,9 @@ mod tests {
         assert!(html.contains("cpn-version-search"));
         assert!(html.contains("Type to search tags"));
         assert!(!html.contains("id=\"cpn-version-select\""));
-        assert!(html.contains("Upgrade to latest"));
+        assert!(html.contains("Upgrade to latest release"));
+        assert!(html.contains("Upgrade to stable tip"));
+        assert!(html.contains("cpn-version-stable-tip"));
         assert!(html.contains("latest two published releases"));
         assert!(html.contains("cpn-version-running-date"));
         assert!(html.contains("startRetryCountdown"));

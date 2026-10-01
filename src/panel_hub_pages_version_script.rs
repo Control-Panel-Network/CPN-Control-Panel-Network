@@ -300,10 +300,30 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (runningEl && info.running_version) runningEl.textContent = info.running_version;
     if (installedEl && info.installed_version) installedEl.textContent = info.installed_version;
     if (latestEl) latestEl.textContent = info.latest_version || info.latest_tag || "-";
+    var stableTipEl = document.getElementById("cpn-version-stable-tip");
+    if (stableTipEl) {{
+      stableTipEl.textContent = info.stable_tip_label
+        || (info.stable_branch && info.stable_tip_short
+          ? (info.stable_branch + " @ " + info.stable_tip_short)
+          : "-");
+    }}
+    var runningShaEl = document.getElementById("cpn-version-running-sha");
+    if (runningShaEl) {{
+      if (info.running_sha) {{
+        var shortRun = String(info.running_sha).substring(0, 7);
+        runningShaEl.textContent = "Commit " + shortRun
+          + (info.running_sha_source ? (" (" + info.running_sha_source + ")") : "");
+      }} else {{
+        runningShaEl.textContent = "";
+      }}
+    }}
     var sourceTip = info.latest_version || info.latest_tag || "-";
+    if (info.stable_tip_label) {{
+      sourceTip = info.stable_tip_label + (info.latest_tag ? (" / Release " + info.latest_tag) : "");
+    }}
     if (sourceTipEl) {{
       if (info.using_fork) {{
-        sourceTipEl.textContent = "fork tip " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
+        sourceTipEl.textContent = "fork " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
       }} else {{
         sourceTipEl.textContent = "official " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
       }}
@@ -328,14 +348,26 @@ pub fn version_page_script(can_manage: bool) -> String {
       }} else if (info.rate_limited && info.cache_note) {{
         statusEl.textContent = info.cache_note;
       }} else if (info.update_available) {{
-        statusEl.textContent = "Update available: " + (info.latest_version || info.latest_tag || "newer release");
+        if (info.stable_update_available && !info.release_update_available) {{
+          statusEl.textContent = "Update available: " + (info.stable_tip_label || "stable tip")
+            + " (commit ahead of running build; no new release tag)";
+        }} else if (info.stable_update_available && info.release_update_available) {{
+          statusEl.textContent = "Update available: Release "
+            + (info.latest_version || info.latest_tag || "newer")
+            + " and " + (info.stable_tip_label || "stable tip");
+        }} else {{
+          statusEl.textContent = "Update available: Release "
+            + (info.latest_version || info.latest_tag || "newer release");
+        }}
       }} else if (info.cache_note) {{
         statusEl.textContent = info.cache_note;
       }} else if (info.check_error && hasTip) {{
         statusEl.textContent = "Showing available release info. Note: " + info.check_error;
       }} else {{
-        statusEl.textContent = "You are on the latest known release" +
-          (info.latest_version ? (" (" + info.latest_version + ")") : "") + ".";
+        statusEl.textContent = "You are on the latest known release"
+          + (info.latest_version ? (" (" + info.latest_version + ")") : "")
+          + (info.stable_tip_label ? (" and " + info.stable_tip_label) : "")
+          + ".";
       }}
     }}
     var lines = [];
@@ -346,7 +378,13 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (info.using_fork && (info.upstream_latest_version || info.upstream_latest_tag)) {{
       lines.push("Upstream official: " + (info.upstream_latest_version || info.upstream_latest_tag));
     }}
-    if (info.latest_tag) lines.push("Latest tag: " + info.latest_tag);
+    if (info.latest_tag) lines.push("Latest release tag: " + info.latest_tag);
+    if (info.stable_tip_label) lines.push("Stable tip: " + info.stable_tip_label);
+    if (info.running_sha) {{
+      lines.push("Running commit: " + String(info.running_sha).substring(0, 12)
+        + (info.running_sha_source ? (" (" + info.running_sha_source + ")") : ""));
+    }}
+    if (info.tip_check_error) lines.push("Tip check note: " + info.tip_check_error);
     if (info.from_cache) lines.push("Release list: cached" + (info.cache_age_secs != null ? (" (" + info.cache_age_secs + "s old)") : ""));
     if (info.cache_note && !liveRetry) lines.push(info.cache_note);
     if (info.check_error && hasTip) lines.push("API note: " + info.check_error);
@@ -585,7 +623,18 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     if (upLatest) upLatest.addEventListener("click", function () {{
       var latest = infoCache && (infoCache.latest_tag || infoCache.latest_version);
-      armConfirm("upgrade", latest || null, "upgrade to latest" + (latest ? (" (" + latest + ")") : ""));
+      armConfirm("upgrade", latest || null, "upgrade to latest release" + (latest ? (" (" + latest + ")") : ""));
+    }});
+    var upStable = document.getElementById("cpn-version-upgrade-stable");
+    if (upStable) upStable.addEventListener("click", function () {{
+      var tipToken = null;
+      if (infoCache && infoCache.stable_tip_short) {{
+        tipToken = "stable@" + infoCache.stable_tip_short;
+      }} else {{
+        tipToken = "stable";
+      }}
+      var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : "stable tip";
+      armConfirm("upgrade", tipToken, "upgrade to " + label + " (commit/source build)");
     }});
     if (applyBtn) applyBtn.addEventListener("click", function () {{
       var tag = selectedTag || (searchEl && searchEl.value);
@@ -629,6 +678,10 @@ mod tests {
         assert!(js.contains("Waiting for panel after restart"));
         assert!(js.contains("window.location.origin"));
         assert!(js.contains("probeLoginThen"));
+        assert!(js.contains("cpn-version-stable-tip"));
+        assert!(js.contains("stable_update_available"));
+        assert!(js.contains("cpn-version-upgrade-stable"));
+        assert!(js.contains("stable@"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

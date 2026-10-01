@@ -68,6 +68,26 @@ pub struct VersionCheck {
     pub upstream_latest_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upstream_latest_tag: Option<String>,
+
+    /// Running panel git SHA (build embed, manifest, or installed tag commit).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_sha_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stable_tip_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stable_tip_short: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stable_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stable_tip_label: Option<String>,
+    #[serde(default)]
+    pub stable_update_available: bool,
+    #[serde(default)]
+    pub release_update_available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tip_check_error: Option<String>,
 }
 
 pub fn github_repo() -> String {

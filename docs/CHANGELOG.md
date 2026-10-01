@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Version Management stable tip updates**: `/settings/version` compares the running panel commit (build embed, install-manifest `source_commit`, or installed release tag SHA) to the configured repo `stable` branch HEAD. Shows **Update available** when the tip SHA differs even if the semver string is still `1.0.0`. Operators can **Upgrade to stable tip** (commit/source build labeled `stable @ abc1234`) beside the existing release picker. No new GitHub Release tag is required for incremental `stable` merges.
+- **Install-manifest vs RPM identity**: stale `0.2.x-alpha.*` `install-manifest.json` no longer wins over a live `1.0.0` RPM; version resolve and reconcile prefer the newer package identity.
+
 ## [1.0.0] - 01/10/2026
 
 First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0.0 (Cargo, RPM and DEB metadata). This cut contains everything merged on `stable` up to the alpha.50 tip, including the Logs hub with real access, FTP/SFTP and ModSecurity viewers, per-site monthly bandwidth metering, admin-only Users and ACL pages, the unified Plugins Store, the Docker Active Containers UI, webmail clients under Email, and the Docker Hub tags `latest`, `almalinux9`, `almalinux10` and `ubuntu26.04`. See the sections below for per-feature detail.
