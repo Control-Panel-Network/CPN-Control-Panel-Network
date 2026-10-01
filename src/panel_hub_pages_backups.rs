@@ -66,7 +66,8 @@ fn format_options(selected: &str) -> String {
         ("cpn", BackupFormat::Cpn.label()),
         ("wordpress", BackupFormat::WordPress.label()),
         ("cpanel", BackupFormat::Cpanel.label()),
-        ("cyberpanel", BackupFormat::CyberPanel.label()),
+        // UI value stays `classic` (never brand a third-party panel in product HTML).
+        ("classic", BackupFormat::CyberPanel.label()),
     ];
     let mut out = String::new();
     for (value, label) in items {
@@ -122,7 +123,7 @@ pub fn backups_restore_page(
     }
     body.push_str(
         r#"<p>Restore a CPN archive, or import WordPress / cPanel / source control-panel backups into a chosen site. Prefer that site's <code>backups/</code> folder; fallback paths are also scanned.</p>
-        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); classic source control-panel archives with <code>meta.xml</code>. SQL restore uses the local MariaDB host database. Email import is best-effort only. CPN is not CyberPanel; CyberPanel-style archives are a supported <em>source format</em> only.</p>"#,
+        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); classic source control-panel archives with <code>meta.xml</code>. SQL restore uses the local MariaDB host database. Email import is best-effort only.</p>"#,
     );
     body.push_str(&upload_locations_html());
     body.push_str(&format!(
@@ -320,4 +321,29 @@ pub fn save_backup_destinations(
 /// Deprecated name: Settings hub lives in `panel_hub_pages_settings`.
 pub fn settings_stub_page() -> String {
     crate::panel_hub_pages_settings::settings_hub_main()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restore_page_html_avoids_third_party_panel_brand() {
+        let html = backups_restore_page("panel", "", None, None);
+        let lower = html.to_ascii_lowercase();
+        assert!(
+            !lower.contains("cyberpanel"),
+            "restore UI must not mention third-party panel brands"
+        );
+        assert!(lower.contains("source control-panel") || lower.contains("classic"));
+        assert!(html.contains("value=\"classic\""));
+        assert!(!html.contains("value=\"cyberpanel\""));
+    }
+
+    #[test]
+    fn format_options_use_classic_token() {
+        let html = format_options("classic");
+        assert!(html.contains("value=\"classic\" selected"));
+        assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
+    }
 }

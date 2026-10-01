@@ -1,4 +1,4 @@
-//! Format-specific restore apply helpers (WordPress, cPanel, CyberPanel source, CPN).
+//! Format-specific restore apply helpers (WordPress, cPanel, classic source meta.xml, CPN).
 
 use crate::backup_restore_extract::copy_tree;
 use crate::panel_ops_db::{
@@ -247,7 +247,8 @@ pub(crate) fn restore_cyberpanel(
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     let src = find_dir_named(staging, "public_html").ok_or_else(|| {
-        "CyberPanel archive missing public_html/ (expected classic meta.xml backup).".to_string()
+        "Source control-panel archive missing public_html/ (expected classic meta.xml backup)."
+            .to_string()
     })?;
     let nested = src.join("public_html");
     let files_src = if nested.is_dir() { nested } else { src };
@@ -255,9 +256,10 @@ pub(crate) fn restore_cyberpanel(
 
     let sqls = collect_sql_files(staging);
     if sqls.is_empty() {
-        warnings.push("No database .sql files found in CyberPanel archive.".into());
+        warnings.push("No database .sql files found in source control-panel archive.".into());
     } else {
         for sql in sqls {
+            // Filename-based DB create/USE happens inside import_sql_best_effort.
             import_sql_best_effort(&sql, None, warnings)?;
         }
     }
@@ -268,7 +270,7 @@ pub(crate) fn restore_cyberpanel(
     }
     if find_file_named(staging, "meta.xml").is_some() {
         warnings.push(
-            "meta.xml was detected (CyberPanel source format). Site/email account recreation from meta is not applied."
+            "meta.xml was detected (source control-panel format). Site/email account recreation from meta is not applied yet; use Create domain if missing for the primary site."
                 .into(),
         );
     }
@@ -327,6 +329,31 @@ fn remap_wp_config_db(
     Ok(())
 }
 
+/// Infer a MariaDB database name from a dump filename (`news_disco.sql` -> `news_disco`).
+fn guess_db_name_from_sql_filename(name: &str) -> Option<String> {
+    let base = name
+        .trim()
+        .trim_end_matches(".sql.gz")
+        .trim_end_matches(".sql")
+        .trim_end_matches(".gz");
+    let cleaned: String = base
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim_matches('_');
+    if cleaned.is_empty() || cleaned == "dump" || cleaned == "database" || cleaned == "db" {
+        return None;
+    }
+    // Classic source-panel dumps often look like `news_cms.sql` / `prefix_dbname.sql`.
+    Some(cleaned.to_string())
+}
+
 fn import_sql_best_effort(
     sql_path: &Path,
     prefer_db: Option<&str>,
@@ -352,15 +379,35 @@ fn import_sql_best_effort(
         .unwrap_or("dump.sql")
         .to_string();
 
-    if let Some(dbn) = prefer_db {
-        let _ = create_database(dbn);
+    // Classic meta.xml archives dump one .sql per database with no USE statement.
+    // Prefer an explicit target DB, else infer from the dump filename.
+    let inferred = guess_db_name_from_sql_filename(&name);
+    let target_db = prefer_db
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or(inferred);
+
+    if let Some(ref dbn) = target_db {
+        match create_database(dbn) {
+            Ok(_) => {}
+            Err(e) => warnings.push(format!(
+                "Could not ensure database `{dbn}` before importing `{name}`: {e}"
+            )),
+        }
+    } else {
+        warnings.push(format!(
+            "SQL `{name}` has no target database name; import may fail with \"No database selected\"."
+        ));
     }
 
     let mut cmd = Command::new(bin);
-    if let Some(dbn) = prefer_db {
+    if let Some(ref dbn) = target_db {
         cmd.arg(dbn);
     }
-    cmd.stdin(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start {bin}: {e}"))?;
@@ -381,19 +428,39 @@ fn import_sql_best_effort(
         fs::read(sql_path).map_err(|e| format!("read sql: {e}"))?
     };
 
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(&data)
-            .map_err(|e| format!("write sql stdin: {e}"))?;
+    // Prefix USE when we have a target DB and the dump never selects one.
+    let mut payload = Vec::with_capacity(data.len() + 64);
+    if let Some(ref dbn) = target_db {
+        payload.extend_from_slice(format!("USE `{dbn}`;\n").as_bytes());
     }
-    let status = child.wait().map_err(|e| format!("wait for {bin}: {e}"))?;
-    if status.success() {
-        warnings.push(format!("Imported SQL `{name}` into MariaDB."));
+    payload.extend_from_slice(&data);
+
+    let mut write_err: Option<String> = None;
+    if let Some(mut stdin) = child.stdin.take() {
+        if let Err(e) = stdin.write_all(&payload) {
+            // Client often exits early (auth / no DB); broken pipe must not abort file restore.
+            write_err = Some(format!("write sql stdin: {e}"));
+        }
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("wait for {bin}: {e}"))?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr_trim = stderr.trim();
+    if output.status.success() {
+        let into = target_db
+            .as_deref()
+            .map(|d| format!(" into `{d}`"))
+            .unwrap_or_default();
+        warnings.push(format!("Imported SQL `{name}`{into} via MariaDB."));
         let _ = list_databases();
     } else {
-        warnings.push(format!(
-            "SQL import of `{name}` failed (check dump format and local MariaDB auth)."
-        ));
+        let detail = if stderr_trim.is_empty() {
+            write_err.unwrap_or_else(|| "check dump format and local MariaDB auth".into())
+        } else {
+            stderr_trim.chars().take(240).collect::<String>()
+        };
+        warnings.push(format!("SQL import of `{name}` failed ({detail})."));
     }
     Ok(())
 }
@@ -418,6 +485,19 @@ mod tests {
             Some("my_wp_db")
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn guesses_db_from_classic_sql_filename() {
+        assert_eq!(
+            guess_db_name_from_sql_filename("news_disco.sql").as_deref(),
+            Some("news_disco")
+        );
+        assert_eq!(
+            guess_db_name_from_sql_filename("news_cms.sql.gz").as_deref(),
+            Some("news_cms")
+        );
+        assert!(guess_db_name_from_sql_filename("dump.sql").is_none());
     }
 
     #[test]
