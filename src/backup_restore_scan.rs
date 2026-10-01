@@ -180,11 +180,7 @@ fn candidate_archive_dirs(scope: &str, domain: &str) -> Vec<(PathBuf, String, bo
         dirs.push((dir, display, true));
     }
     let panel = panel_backups_dir();
-    dirs.push((
-        panel.clone(),
-        format!("Panel ({})", panel.display()),
-        false,
-    ));
+    dirs.push((panel.clone(), format!("Panel ({})", panel.display()), false));
     let legacy = legacy_panel_backups_dir();
     if legacy != panel {
         dirs.push((

@@ -64,12 +64,7 @@ pub async fn backups_restore_route(
             &user,
             "backups",
             "Restore Backup",
-            &backups_restore_page(
-                &scope,
-                &domain,
-                notice.as_deref(),
-                error.as_deref(),
-            ),
+            &backups_restore_page(&scope, &domain, notice.as_deref(), error.as_deref()),
         )
     })
     .await
@@ -214,9 +209,9 @@ pub async fn backups_restore_run(
     // Restore can take a while; never occupy an Actix worker with tar extract / SQL import.
     let outcome = match web::block(move || restore_backup(&req)).await {
         Ok(inner) => inner,
-        Err(_) => Err(
-            "Restore worker failed unexpectedly. Reload the plan page and try again.".into(),
-        ),
+        Err(_) => {
+            Err("Restore worker failed unexpectedly. Reload the plan page and try again.".into())
+        }
     };
     match outcome {
         Ok(result) => {
