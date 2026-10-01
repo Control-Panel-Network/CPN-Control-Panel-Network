@@ -327,15 +327,14 @@ pub fn discover_entities(filename: &str, members: &[String]) -> Vec<RestoreEntit
             }
         }
         // Top-level domain directories: example.com/public_html/...
-        if let Some((first, rest)) = p.split_once('/') {
-            if looks_like_domain(first)
-                && (rest.starts_with("public_html")
-                    || rest == "public_html"
-                    || rest.ends_with(".sql")
-                    || rest.starts_with("mysql/"))
-            {
-                domains.insert(first.to_string());
-            }
+        if let Some((first, rest)) = p.split_once('/')
+            && looks_like_domain(first)
+            && (rest.starts_with("public_html")
+                || rest == "public_html"
+                || rest.ends_with(".sql")
+                || rest.starts_with("mysql/"))
+        {
+            domains.insert(first.to_string());
         }
     }
 

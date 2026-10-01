@@ -176,16 +176,16 @@ pub(crate) fn restore_cpn(
     } else {
         warnings.push("Skipped website files (not selected).".into());
     }
-    if opts.restore_plugins {
-        if let Some(plugins) = find_dir_named(staging, "plugins") {
-            let home = Path::new(&site.docroot)
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| PathBuf::from("/home").join(&site.domain));
-            let dest = home.join("plugins");
-            let _ = fs::remove_dir_all(&dest);
-            copy_tree(&plugins, &dest)?;
-        }
+    if opts.restore_plugins
+        && let Some(plugins) = find_dir_named(staging, "plugins")
+    {
+        let home = Path::new(&site.docroot)
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home").join(&site.domain));
+        let dest = home.join("plugins");
+        let _ = fs::remove_dir_all(&dest);
+        copy_tree(&plugins, &dest)?;
     }
     if let Some(sql) = find_file_named(staging, "databases.sql") {
         if sql_allowed(&sql, &opts.database_names) {
@@ -572,11 +572,11 @@ fn import_sql_best_effort(
     payload.extend_from_slice(&data);
 
     let mut write_err: Option<String> = None;
-    if let Some(mut stdin) = child.stdin.take() {
-        if let Err(e) = stdin.write_all(&payload) {
-            // Client often exits early (auth / no DB); broken pipe must not abort file restore.
-            write_err = Some(format!("write sql stdin: {e}"));
-        }
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(e) = stdin.write_all(&payload)
+    {
+        // Client often exits early (auth / no DB); broken pipe must not abort file restore.
+        write_err = Some(format!("write sql stdin: {e}"));
     }
     let output = child
         .wait_with_output()

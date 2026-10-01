@@ -55,6 +55,7 @@ fn flag_true(raw: &str) -> bool {
 }
 
 impl RestoreRequest {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_form_flags(
         scope: String,
         domain: String,
@@ -297,17 +298,17 @@ pub fn restore_backup(req: &RestoreRequest) -> Result<RestoreResult, String> {
     }
 
     // Infer domain from classic backup-* filename when operator left domain empty.
-    if domain.is_empty() {
-        if let Some(inferred) = infer_domain_from_archive_name(&hit.name) {
-            domain = inferred;
-        }
+    if domain.is_empty()
+        && let Some(inferred) = infer_domain_from_archive_name(&hit.name)
+    {
+        domain = inferred;
     }
     // Prefer first selected site/subdomain when provided.
     let selected_domains = sel.selected_domains();
-    if !selected_domains.is_empty() {
-        if domain.is_empty() || !selected_domains.iter().any(|d| d == &domain) {
-            domain = selected_domains[0].clone();
-        }
+    if !selected_domains.is_empty()
+        && (domain.is_empty() || !selected_domains.iter().any(|d| d == &domain))
+    {
+        domain = selected_domains[0].clone();
     }
 
     let opts = opts_from_selection(&sel);

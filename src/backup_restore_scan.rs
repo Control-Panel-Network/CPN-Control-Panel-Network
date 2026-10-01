@@ -146,17 +146,15 @@ pub fn list_restore_archives_with_fallback(
     let mut preferred_display: Option<String> = None;
 
     // Preferred path when scope/domain resolve.
-    match BackupScope::parse(scope) {
-        Ok(parsed) => match resolve_archive_dir(parsed, domain) {
-            Ok((dir, display)) => {
-                preferred_display = Some(display.clone());
-                push_dir_hits(&dir, &display, true, &mut out, &mut seen);
-            }
-            Err(_) => {
-                // Domain missing is OK for panel-wide / recreate flows; still scan fallbacks.
-            }
-        },
-        Err(err) => return Err(err),
+    let parsed = BackupScope::parse(scope)?;
+    match resolve_archive_dir(parsed, domain) {
+        Ok((dir, display)) => {
+            preferred_display = Some(display.clone());
+            push_dir_hits(&dir, &display, true, &mut out, &mut seen);
+        }
+        Err(_) => {
+            // Domain missing is OK for panel-wide / recreate flows; still scan fallbacks.
+        }
     }
 
     // Known panel / legacy locations.
