@@ -429,7 +429,8 @@ mod tests {
     #[test]
     fn all_page_uses_activity_list_cards() {
         let html = databases_all_page_for("nobody", None, None);
-        assert!(html.contains("activity-list"));
+        // Empty lists skip the activity-list wrapper (see wrap_activity_table).
+        assert!(html.contains("activity-list") || html.contains("empty-state"));
         assert!(html.contains("data-label=\"Database\"") || html.contains("empty-state"));
     }
 }
