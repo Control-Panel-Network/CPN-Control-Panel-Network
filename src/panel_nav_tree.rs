@@ -451,4 +451,62 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn logs_is_a_collapsible_group_with_a_child_per_viewer() {
+        use crate::account::{
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
+        };
+        with_test_data_dir(|| {
+            let boot = PanelBootstrap {
+                schema_version: 1,
+                username: "owner".into(),
+                recovery_email: "owner@example.com".into(),
+                password_hash: "x".into(),
+                password_salt: new_password_salt(),
+                password_policy: default_password_policy(),
+                language: "en".into(),
+                created_at_unix: 1,
+                must_change_password: false,
+                totp_required: false,
+                disabled: false,
+            };
+            write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
+            let admin = nav_links_html("logs", "owner");
+            let start = admin.find("data-nav-group=\"logs\"").expect("logs group");
+            let group = &admin[start..];
+            let group = &group[..group.find("</details>").expect("group end")];
+            assert!(
+                group.contains("nav-chevron"),
+                "Logs needs a chevron like PHP"
+            );
+            assert!(group.starts_with("data-nav-group=\"logs\" open"));
+            for (label, href) in [
+                ("Overview", "/server/logs"),
+                ("Main Log", "/server/logs/panel"),
+                ("Access Logs", "/server/logs/access"),
+                ("Error Logs", "/server/logs/error"),
+                ("Email Log", "/server/logs/email"),
+                ("FTP Logs", "/server/logs/ftp"),
+                ("ModSec Audit", "/server/logs/modsec"),
+            ] {
+                assert!(
+                    group.contains(&format!(
+                        r#"href="{href}" data-nav-child="1"><span>{label}</span>"#
+                    )),
+                    "missing child {label}"
+                );
+            }
+            // Other accounts only get the per-site viewers in the sidebar.
+            let guest = nav_links_html("dashboard", "enrolltest");
+            let start = guest.find("data-nav-group=\"logs\"").expect("logs group");
+            let group = &guest[start..];
+            let group = &group[..group.find("</details>").expect("group end")];
+            assert!(group.contains("/server/logs/access"));
+            assert!(group.contains("/server/logs/error"));
+            assert!(!group.contains("/server/logs/email"));
+            assert!(!group.contains("/server/logs/modsec"));
+        });
+    }
 }

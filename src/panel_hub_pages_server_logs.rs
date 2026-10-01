@@ -120,10 +120,11 @@ pub fn server_logs_page(username: &str) -> String {
         },
     ]);
     let body = format!(
-        r#"{tiles}
+        r#"{tabs}{tiles}
 <h2 style="margin:20px 0 6px;">Panel activity</h2>
 <p class="muted">Plugin and host-package actions: install, activate, deactivate, attach to a site, start, stop and uninstall. Times are shown in your browser time zone.</p>
 {table}<script>{script}</script>"#,
+        tabs = crate::panel_server_logs_tabs::log_tabs(None),
         tiles = hub_tiles_grid("Log sources", &tiles),
         table = panel_actions_table(username),
         script = activity_list_script(),
