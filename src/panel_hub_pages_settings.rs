@@ -66,7 +66,8 @@ pub fn design_settings_page(username: &str) -> String {
     let panel = design_settings_panel(username);
     let themes = crate::panel_theme_store::themes_catalog_panel(username);
     let note = r#"<p class="plugin-store-meta" style="margin-bottom:14px;">
-  Light/dark mode and Minimalist mode are per signed-in user. Built-in presets and catalog themes from
+  Minimalist mode is per signed-in user. Design Light/Dark presets update panel-wide tokens and also
+  set your personal light/dark color mode so chrome surfaces change. Catalog themes from
   <a href="https://github.com/Control-Panel-Network/CPN-Themes" target="_blank" rel="noopener noreferrer">Control-Panel-Network/CPN-Themes</a>
   apply panel-wide chrome. Only the panel admin can change Design tokens.
 </p>"#;

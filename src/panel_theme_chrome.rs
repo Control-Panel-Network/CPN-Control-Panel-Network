@@ -199,6 +199,7 @@ pub fn design_settings_panel(username: &str) -> String {
 </style>
 <script>
 (function () {{
+{helpers}
   var root = document.getElementById("cpn-design-dialog");
   if (!root) return;
   var canEdit = {can_edit};
@@ -232,17 +233,22 @@ pub fn design_settings_panel(username: &str) -> String {
     setActivePreset(payload.preset || "default");
   }}
 
+  function applyColorMode(mode) {{
+    if (mode !== "light" && mode !== "dark") return;
+    document.documentElement.setAttribute("data-color-mode", mode);
+    if (document.body) document.body.setAttribute("data-color-mode", mode);
+    try {{ window.localStorage.setItem("cpn-color-mode", mode); }} catch (e) {{}}
+  }}
+
+  function reloadDesignPage() {{
+    window.location.assign(window.location.pathname + window.location.search);
+  }}
+
   function postJson(url, body) {{
-    return fetch(url, {{
+    return cpnDesignFetchJson(url, {{
       method: "POST",
-      credentials: "same-origin",
       headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
       body: JSON.stringify(body || {{}})
-    }}).then(function (res) {{
-      return res.json().then(function (data) {{
-        if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
-        return data;
-      }});
     }});
   }}
 
@@ -251,7 +257,11 @@ pub fn design_settings_panel(username: &str) -> String {
       if (!canEdit) return;
       var preset = btn.getAttribute("data-preset");
       postJson("/api/panel/design/preset", {{ preset: preset }})
-        .then(function (data) {{ applyServerTokens(data); window.location.reload(); }})
+        .then(function (data) {{
+          applyServerTokens(data);
+          if (data.color_mode) applyColorMode(data.color_mode);
+          reloadDesignPage();
+        }})
         .catch(function (err) {{ alert(err.message || String(err)); }});
     }});
   }});
@@ -260,7 +270,7 @@ pub fn design_settings_panel(username: &str) -> String {
   if (saveBtn) {{
     saveBtn.addEventListener("click", function () {{
       postJson("/api/panel/design", {{ tokens: readTokens() }})
-        .then(function () {{ window.location.reload(); }})
+        .then(function () {{ reloadDesignPage(); }})
         .catch(function (err) {{ alert(err.message || String(err)); }});
     }});
   }}
@@ -270,7 +280,7 @@ pub fn design_settings_panel(username: &str) -> String {
     restoreBtn.addEventListener("click", function () {{
       if (!window.confirm("Restore immutable Default design and clear saved Custom?")) return;
       postJson("/api/panel/design/restore", {{}})
-        .then(function () {{ window.location.reload(); }})
+        .then(function () {{ reloadDesignPage(); }})
         .catch(function (err) {{ alert(err.message || String(err)); }});
     }});
   }}
@@ -279,6 +289,7 @@ pub fn design_settings_panel(username: &str) -> String {
 }})();
 </script>"#,
         minimalist = minimalist,
+        helpers = crate::panel_minimalist_settings::design_fetch_js_helpers(),
         preset = html_escape(preset),
         fields = fields,
         save_row = save_row,
@@ -399,6 +410,13 @@ pub fn manage_design_controls(username: &str) -> String {
     setActivePreset(payload.preset || "default");
   }}
 
+  function applyColorMode(mode) {{
+    if (mode !== "light" && mode !== "dark") return;
+    document.documentElement.setAttribute("data-color-mode", mode);
+    if (document.body) document.body.setAttribute("data-color-mode", mode);
+    try {{ window.localStorage.setItem("cpn-color-mode", mode); }} catch (e) {{}}
+  }}
+
   function postJson(url, body) {{
     return fetch(url, {{
       method: "POST",
@@ -418,7 +436,11 @@ pub fn manage_design_controls(username: &str) -> String {
       if (!canEdit) return;
       var preset = btn.getAttribute("data-preset");
       postJson("/api/panel/design/preset", {{ preset: preset }})
-        .then(function (data) {{ applyServerTokens(data); window.location.reload(); }})
+        .then(function (data) {{
+          applyServerTokens(data);
+          if (data.color_mode) applyColorMode(data.color_mode);
+          window.location.reload();
+        }})
         .catch(function (err) {{ alert(err.message || String(err)); }});
     }});
   }});

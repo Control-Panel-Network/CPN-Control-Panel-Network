@@ -263,6 +263,11 @@ body {{ font-size:calc(17px * var(--cpn-font-scale)); }}
 .resource-card, .status-card, .activity-card, .section-card, .server-summary {{
   border-radius:var(--cpn-radius);
 }}
+.sidebar nav a.active {{
+  background:color-mix(in srgb, var(--cpn-accent, var(--blue)) 16%, transparent);
+  color:var(--blue);
+}}
+.btn-primary, a.btn-primary {{ background:var(--cpn-accent, var(--blue)); }}
 .site-manage {{
   --m-accent:var(--cpn-accent);
 }}
@@ -289,7 +294,8 @@ pub fn color_mode_styles() -> &'static str {
 }
 [data-color-mode="dark"] .sidebar nav a { color:#c5cad3; }
 [data-color-mode="dark"] .sidebar nav a.active {
-  background:rgba(59,130,246,.18); color:var(--blue);
+  background:color-mix(in srgb, var(--cpn-accent, var(--blue)) 22%, transparent);
+  color:var(--blue);
 }
 [data-color-mode="dark"] .mobile-header,
 html[data-color-mode="dark"] .mobile-header,

@@ -50,6 +50,7 @@ pub fn themes_catalog_panel(username: &str) -> String {
 </style>
 <script>
 (function () {{
+{helpers}
   var statusEl = document.getElementById("cpn-themes-status");
   var grid = document.getElementById("cpn-themes-grid");
   var refreshBtn = document.getElementById("cpn-themes-refresh");
@@ -85,17 +86,17 @@ pub fn themes_catalog_panel(username: &str) -> String {
     grid.querySelectorAll(".cpn-theme-apply").forEach(function (btn) {{
       btn.addEventListener("click", function () {{
         var id = btn.getAttribute("data-id");
-        fetch("/api/panel/themes/apply", {{
+        statusEl.textContent = "Applying theme...";
+        cpnDesignFetchJson("/api/panel/themes/apply", {{
           method: "POST",
-          credentials: "same-origin",
           headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
           body: JSON.stringify({{ id: id }})
-        }}).then(function (res) {{
-          return res.json().then(function (data) {{
-            if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
-            window.location.reload();
-          }});
-        }}).catch(function (err) {{ alert(err.message || String(err)); }});
+        }}).then(function () {{
+          window.location.assign(window.location.pathname + window.location.search);
+        }}).catch(function (err) {{
+          statusEl.textContent = err.message || String(err);
+          alert(err.message || String(err));
+        }});
       }});
     }});
   }}
@@ -103,12 +104,9 @@ pub fn themes_catalog_panel(username: &str) -> String {
   function load(force) {{
     statusEl.textContent = "Loading themes...";
     var url = "/api/panel/themes/catalog" + (force ? "?refresh=1" : "");
-    fetch(url, {{ credentials: "same-origin", headers: {{ "Accept": "application/json" }} }})
-      .then(function (res) {{
-        return res.json().then(function (data) {{
-          if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
-          render(data.themes || [], (data.repo || "") + (data.fetched_at_local ? (" - " + data.fetched_at_local) : ""));
-        }});
+    cpnDesignFetchJson(url, {{ headers: {{ "Accept": "application/json" }} }})
+      .then(function (data) {{
+        render(data.themes || [], (data.repo || "") + (data.fetched_at_local ? (" - " + data.fetched_at_local) : ""));
       }})
       .catch(function (err) {{
         statusEl.textContent = "Could not load themes: " + (err.message || String(err));
@@ -121,5 +119,6 @@ pub fn themes_catalog_panel(username: &str) -> String {
 }})();
 </script>"##,
         can_edit = if can_edit { "true" } else { "false" },
+        helpers = crate::panel_minimalist_settings::design_fetch_js_helpers(),
     )
 }

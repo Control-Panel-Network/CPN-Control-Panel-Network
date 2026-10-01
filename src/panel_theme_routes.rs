@@ -190,9 +190,19 @@ pub async fn panel_design_preset(
     };
     match apply_design_preset(preset) {
         Ok(design) => {
+            // Light/Dark design presets also set this operator's color mode so the
+            // chrome surfaces change visibly (not only accent tokens).
+            let synced_color = match preset {
+                DesignPreset::Light => save_user_color_mode(&user, ColorMode::Light).ok(),
+                DesignPreset::Dark => save_user_color_mode(&user, ColorMode::Dark).ok(),
+                DesignPreset::Default | DesignPreset::Custom => None,
+            };
             let mut payload = design_public_json(&design);
             if let Some(obj) = payload.as_object_mut() {
                 obj.insert("ok".into(), serde_json::json!(true));
+                if let Some(mode) = synced_color {
+                    obj.insert("color_mode".into(), serde_json::json!(mode.as_str()));
+                }
             }
             json_ok(payload)
         }
