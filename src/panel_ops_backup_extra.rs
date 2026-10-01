@@ -1,6 +1,5 @@
 //! Backup destinations, schedules, and restore listing helpers.
 
-use crate::backups::{BackupScope, list_backup_files, resolve_archive_dir};
 use crate::paths::join_data;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -72,9 +71,14 @@ pub fn list_restore_candidates(
     scope: &str,
     domain: &str,
 ) -> Result<(String, Vec<(String, u64)>), String> {
-    let scope = BackupScope::parse(scope)?;
-    let (dir, path_display) = resolve_archive_dir(scope, domain)?;
-    Ok((path_display, list_backup_files(&dir)))
+    let (preferred, hits) =
+        crate::backup_restore_scan::list_restore_archives_with_fallback(scope, domain)?;
+    let display = preferred.unwrap_or_else(|| "panel + fallback locations".into());
+    let files = hits
+        .into_iter()
+        .map(|h| (h.name, h.size))
+        .collect::<Vec<_>>();
+    Ok((display, files))
 }
 
 #[cfg(test)]

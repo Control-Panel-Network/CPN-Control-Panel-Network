@@ -31,6 +31,7 @@ pub mod backup_restore;
 pub mod backup_restore_apply;
 pub mod backup_restore_detect;
 pub mod backup_restore_extract;
+pub mod backup_restore_scan;
 pub mod backups;
 pub mod blocked_passwords;
 pub mod cli_apps;

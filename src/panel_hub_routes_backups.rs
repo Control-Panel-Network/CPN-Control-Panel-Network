@@ -71,6 +71,14 @@ pub struct RestoreRunForm {
     format: String,
     #[serde(default)]
     db_name: String,
+    #[serde(default)]
+    create_domain_if_missing: String,
+    #[serde(default)]
+    confirm_create_domain: String,
+    #[serde(default)]
+    confirm_overwrite_files: String,
+    #[serde(default)]
+    confirm_import_databases: String,
 }
 
 #[post("/backups/restore/run")]
@@ -79,7 +87,7 @@ pub async fn backups_restore_run(
     state: web::Data<Arc<AppState>>,
     form: web::Form<RestoreRunForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
     let scope = if form.scope.trim().is_empty() {
@@ -93,13 +101,19 @@ pub async fn backups_restore_run(
         urlencoding_simple(scope),
         urlencoding_simple(domain)
     );
-    match restore_backup(&RestoreRequest {
-        scope: scope.to_string(),
-        domain: domain.to_string(),
-        archive: form.archive.clone(),
-        format: form.format.clone(),
-        db_name: form.db_name.clone(),
-    }) {
+    let mut req = RestoreRequest::from_form_flags(
+        scope.to_string(),
+        domain.to_string(),
+        form.archive.clone(),
+        form.format.clone(),
+        form.db_name.clone(),
+        &form.create_domain_if_missing,
+        &form.confirm_create_domain,
+        &form.confirm_overwrite_files,
+        &form.confirm_import_databases,
+    );
+    req.owner = user.clone();
+    match restore_backup(&req) {
         Ok(result) => {
             let mut msg = result.message;
             if !result.warnings.is_empty() {

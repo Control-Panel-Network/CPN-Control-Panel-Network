@@ -146,6 +146,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
             html_escape(&path_display)
         )
     };
+    let upload_hint = r#"<p class="muted">Restore scans preferred <code>/home/&lt;domain&gt;/backups/</code>, panel <code>/home/cpn-panel/backups/</code> (legacy <code>/var/lib/cpn/backups/</code>), and operator drops under <code>/home/cpn/backups/</code>, <code>/root/</code>, <code>/home/</code>, and <code>/</code>.</p>"#;
     let legacy = legacy_panel_backups_dir();
     let migrate_note = if scope == BackupScope::Panel
         && legacy.is_dir()
@@ -264,6 +265,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
       <article class="section-card">
         <h2>Selective backup</h2>
         {path_blurb}
+        {upload_hint}
         {migrate}
         <form method="get" action="/backups" class="stack-form" style="max-width:560px;">
           <fieldset style="border:1px solid #eeeef0;border-radius:12px;padding:12px 14px;">
@@ -296,6 +298,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
         path_blurb = path_blurb,
+        upload_hint = upload_hint,
         migrate = migrate_note,
         sp = scope_panel,
         ss = scope_site,

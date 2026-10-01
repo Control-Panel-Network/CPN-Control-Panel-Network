@@ -1,12 +1,13 @@
 //! Hub HTML for Backups, Settings, and Security stubs.
 
 use crate::backup_restore_detect::BackupFormat;
+use crate::backup_restore_scan::{documented_upload_locations, list_restore_archives_with_fallback};
 use crate::panel_backups::{BackupsPageQuery, backups_create_main};
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
 use crate::panel_ops_backup_extra::{
-    BackupDestinations, BackupSchedule, list_restore_candidates, load_destinations, load_schedule,
-    save_destinations, save_schedule,
+    BackupDestinations, BackupSchedule, load_destinations, load_schedule, save_destinations,
+    save_schedule,
 };
 use crate::sites::{SiteRecord, list_sites};
 
@@ -40,7 +41,7 @@ pub fn backups_create_page(q: BackupsPageQuery<'_>) -> String {
 }
 
 fn site_options(sites: &[SiteRecord], selected: &str) -> String {
-    let mut out = String::from(r#"<option value="">Select domain</option>"#);
+    let mut out = String::from(r#"<option value="">Select domain (optional for recreate)</option>"#);
     for site in sites {
         let sel = if site.domain == selected {
             " selected"
@@ -77,6 +78,24 @@ fn format_options(selected: &str) -> String {
     out
 }
 
+fn upload_locations_html() -> String {
+    let mut out = String::from(
+        r#"<div class="panel-card" style="margin:14px 0;padding:12px 14px;">
+        <h3 style="margin:0 0 8px;font-size:1rem;">Archive upload locations</h3>
+        <p class="muted" style="margin:0 0 8px;">Copy archives onto the server, then list. Preferred paths are scanned first; fallback drops are detected with provenance.</p>
+        <ul style="margin:0;padding-left:1.2rem;">"#,
+    );
+    for (label, path) in documented_upload_locations() {
+        out.push_str(&format!(
+            r#"<li><strong>{}</strong>: <code>{}</code></li>"#,
+            html_escape(label),
+            html_escape(path)
+        ));
+    }
+    out.push_str("</ul></div>");
+    out
+}
+
 pub fn backups_restore_page(
     scope: &str,
     domain: &str,
@@ -99,19 +118,21 @@ pub fn backups_restore_page(
         ));
     }
     body.push_str(
-        r#"<p>Restore a CPN archive, or import WordPress / cPanel / CyberPanel source backups into a chosen site. Place the archive under that site's <code>backups/</code> folder first.</p>
-        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); CyberPanel classic with <code>meta.xml</code>. SQL restore uses the local MariaDB host database (not Oracle MySQL). Email import is best-effort only. CPN is not CyberPanel; CyberPanel is a supported source format only.</p>"#,
+        r#"<p>Restore a CPN archive, or import WordPress / cPanel / source control-panel backups into a chosen site. Prefer that site's <code>backups/</code> folder; fallback paths are also scanned.</p>
+        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); classic source control-panel archives with <code>meta.xml</code>. SQL restore uses the local MariaDB host database. Email import is best-effort only. CPN is not CyberPanel; CyberPanel-style archives are a supported <em>source format</em> only.</p>"#,
     );
+    body.push_str(&upload_locations_html());
     body.push_str(&format!(
-        r#"<form method="get" action="/backups/restore" class="stack-form" style="max-width:560px;">
+        r#"<form method="get" action="/backups/restore" class="stack-form" style="max-width:640px;">
           <label for="scope">Scope</label>
           <select id="scope" name="scope">
             <option value="site"{ss}>Site</option>
             <option value="subdomain"{su}>Subdomain</option>
-            <option value="panel"{sp}>Panel (list panel archives)</option>
+            <option value="panel"{sp}>Panel (list panel + fallback archives)</option>
           </select>
-          <label for="domain">Target domain (required for restore)</label>
+          <label for="domain">Target domain (optional when recreating from archive metadata)</label>
           <select id="domain" name="domain">{opts}</select>
+          <p class="muted">Leave domain empty and choose Panel scope to list fallback drops. For recreate, use a <code>backup-&lt;domain&gt;-...</code> filename or set the domain before Restore.</p>
           <button type="submit" class="btn-primary">List archives</button>
         </form>"#,
         ss = scope_sel("site"),
@@ -120,23 +141,37 @@ pub fn backups_restore_page(
         opts = site_options(&sites, domain),
     ));
 
-    match list_restore_candidates(scope, domain) {
-        Ok((path, files)) => {
-            body.push_str(&format!(
-                r#"<p>Archives under <code>{}</code>.</p>"#,
-                html_escape(&path)
-            ));
-            if files.is_empty() {
-                body.push_str(r#"<p class="empty-state">No archives found for this scope. Copy a supported archive into this folder, then list again.</p>"#);
+    match list_restore_archives_with_fallback(scope, domain) {
+        Ok((preferred, files)) => {
+            if let Some(path) = preferred {
+                body.push_str(&format!(
+                    r#"<p>Preferred folder: <code>{}</code>. Also scanning fallback upload locations.</p>"#,
+                    html_escape(&path)
+                ));
             } else {
-                body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Restore</th></tr></thead><tbody>"#);
-                for (name, size) in files {
+                body.push_str(
+                    r#"<p>No preferred site folder resolved (domain optional). Showing panel + fallback archives.</p>"#,
+                );
+            }
+            if files.is_empty() {
+                body.push_str(r#"<p class="empty-state">No archives found. Copy a supported archive into a documented upload location, then list again.</p>"#);
+            } else {
+                body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th></tr></thead><tbody>"#);
+                for hit in files {
+                    let target_domain = if domain.trim().is_empty() {
+                        crate::backup_restore::infer_domain_from_archive_name(&hit.name)
+                            .unwrap_or_default()
+                    } else {
+                        domain.to_string()
+                    };
+                    let confirm_js = "return confirm('Restore this archive? Confirm the checkboxes for create/overwrite/database actions. Website files and databases may change.');";
                     body.push_str(&format!(
                         r#"<tr>
                           <td><code>{name}</code></td>
                           <td>{size} bytes</td>
+                          <td><span class="muted">{prov}</span><br><code style="font-size:11px;">{dir}</code></td>
                           <td>
-                            <form method="post" action="/backups/restore/run" class="stack-form" style="margin:0;gap:6px;">
+                            <form method="post" action="/backups/restore/run" class="stack-form" style="margin:0;gap:6px;max-width:280px;">
                               <input type="hidden" name="scope" value="{scope}">
                               <input type="hidden" name="domain" value="{domain}">
                               <input type="hidden" name="archive" value="{name}">
@@ -144,15 +179,22 @@ pub fn backups_restore_page(
                               <select id="fmt-{name}" name="format">{formats}</select>
                               <label class="muted" for="db-{name}">Target DB (WordPress, optional)</label>
                               <input id="db-{name}" name="db_name" type="text" placeholder="optional" style="max-width:160px;">
-                              <button type="submit" class="btn-primary" onclick="return confirm('Restore this archive into the selected domain? Website files may be overwritten.');">Restore</button>
+                              <label><input type="checkbox" name="create_domain_if_missing" value="1"> Create domain if missing</label>
+                              <label><input type="checkbox" name="confirm_create_domain" value="1"> Confirm create domain / emails / DNS hooks</label>
+                              <label><input type="checkbox" name="confirm_overwrite_files" value="1" required> Confirm overwrite website files</label>
+                              <label><input type="checkbox" name="confirm_import_databases" value="1"> Confirm import databases / SQL</label>
+                              <button type="submit" class="btn-primary" onclick="{confirm_js}">Restore</button>
                             </form>
                           </td>
                         </tr>"#,
-                        name = html_escape(&name),
-                        size = size,
+                        name = html_escape(&hit.name),
+                        size = hit.size,
+                        prov = html_escape(&hit.provenance),
+                        dir = html_escape(&hit.dir.display().to_string()),
                         scope = html_escape(scope),
-                        domain = html_escape(domain),
+                        domain = html_escape(&target_domain),
                         formats = format_options("auto"),
+                        confirm_js = confirm_js,
                     ));
                 }
                 body.push_str("</tbody></table></div>");
@@ -161,7 +203,7 @@ pub fn backups_restore_page(
         Err(err) => {
             body.push_str(&not_configured_body(
                 &err,
-                "Select a valid scope and target domain, then list again.",
+                "Select a valid scope (Panel works without a domain), then list again.",
             ));
         }
     }

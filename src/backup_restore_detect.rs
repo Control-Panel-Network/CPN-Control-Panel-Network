@@ -25,7 +25,7 @@ impl BackupFormat {
             Self::Cpn => "CPN archive",
             Self::WordPress => "WordPress backup",
             Self::Cpanel => "cPanel backup",
-            Self::CyberPanel => "CyberPanel backup (source format)",
+            Self::CyberPanel => "Source control-panel backup (classic meta.xml)",
             Self::Unknown => "Unknown / unsupported",
         }
     }
@@ -265,8 +265,9 @@ mod tests {
     }
 
     #[test]
-    fn labels_never_claim_cpn_is_cyberpanel() {
-        assert!(BackupFormat::CyberPanel.label().contains("source format"));
+    fn labels_prefer_source_control_panel_wording() {
+        let label = BackupFormat::CyberPanel.label().to_ascii_lowercase();
+        assert!(label.contains("source control-panel") || label.contains("source format"));
         assert!(
             !BackupFormat::Cpn
                 .label()
