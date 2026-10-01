@@ -62,13 +62,98 @@ pub fn settings_stub_page() -> String {
 
 pub use crate::panel_hub_pages_version::version_management_page;
 
+/// Normalize Design page tab (`?tab=`). Default is Design; `installed` / `store` mirror Plugins.
+pub fn design_settings_tab(raw: Option<&str>) -> &'static str {
+    match raw.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+        Some("store") | Some("theme-store") | Some("themes") => "store",
+        Some("installed") | Some("theme-installed") | Some("my-themes") => "installed",
+        _ => "design",
+    }
+}
+
+fn design_view_tabs(active: &str) -> String {
+    let design = if active == "design" { " active" } else { "" };
+    let installed = if active == "installed" { " active" } else { "" };
+    let store = if active == "store" { " active" } else { "" };
+    format!(
+        r#"<div class="plugin-tabs" role="tablist" aria-label="Design views">
+  <a class="plugin-tab{design}" href="/settings/design?tab=design" role="tab" aria-selected="{design_sel}">Design</a>
+  <a class="plugin-tab{installed}" href="/settings/design?tab=installed" role="tab" aria-selected="{installed_sel}">Installed</a>
+  <a class="plugin-tab{store}" href="/settings/design?tab=store" role="tab" aria-selected="{store_sel}">Store</a>
+</div>
+<style>
+  .plugin-tabs {{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }}
+  .plugin-tab {{
+    display:inline-flex; align-items:center; min-height:40px; padding:0 16px;
+    border-radius:999px; border:1px solid var(--hairline); background:var(--canvas);
+    color:var(--ink); font-size:14px; font-weight:600; text-decoration:none;
+  }}
+  .plugin-tab.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
+</style>"#,
+        design = design,
+        installed = installed,
+        store = store,
+        design_sel = if active == "design" { "true" } else { "false" },
+        installed_sel = if active == "installed" {
+            "true"
+        } else {
+            "false"
+        },
+        store_sel = if active == "store" { "true" } else { "false" },
+    )
+}
+
 pub fn design_settings_page(username: &str) -> String {
+    design_settings_page_with_tab(username, "design")
+}
+
+pub fn design_settings_page_with_tab(username: &str, tab: &str) -> String {
+    let active = design_settings_tab(Some(tab));
+    let tabs = design_view_tabs(active);
+    if active == "store" || active == "installed" {
+        let themes = crate::panel_theme_store::themes_catalog_panel(username, active);
+        let (crumb, title, blurb, note) = if active == "installed" {
+            (
+                "Installed",
+                "Installed themes",
+                "Apply, update, or uninstall panel themes",
+                r#"<p class="plugin-store-meta" style="margin-bottom:14px;">
+  Manage themes already installed on this panel. Apply sets panel-wide chrome.
+  Browse more packages on the Store tab. Light/Dark/Minimalist stay on the Design tab.
+</p>"#,
+            )
+        } else {
+            (
+                "Store",
+                "Theme Store",
+                "Install themes from CPN-Themes",
+                r#"<p class="plugin-store-meta" style="margin-bottom:14px;">
+  Browse and install available theme packages from
+  <a href="https://github.com/Control-Panel-Network/CPN-Themes" target="_blank" rel="noopener noreferrer">Control-Panel-Network/CPN-Themes</a>.
+  After install, use the Installed tab to Apply, Update, or Uninstall. Light/Dark/Minimalist stay on the Design tab.
+</p>"#,
+            )
+        };
+        return feature_shell(
+            &[
+                ("Dashboard", Some("/dashboard")),
+                ("Settings", Some("/settings")),
+                ("Design", Some("/settings/design?tab=design")),
+                (crumb, None),
+            ],
+            title,
+            blurb,
+            &format!("{tabs}{note}{themes}"),
+            None,
+            None,
+        );
+    }
+
     let panel = design_settings_panel(username);
-    let themes = crate::panel_theme_store::themes_catalog_panel(username);
     let note = r#"<p class="plugin-store-meta" style="margin-bottom:14px;">
-  Light/dark mode and Minimalist mode are per signed-in user. Built-in presets and catalog themes from
-  <a href="https://github.com/Control-Panel-Network/CPN-Themes" target="_blank" rel="noopener noreferrer">Control-Panel-Network/CPN-Themes</a>
-  apply panel-wide chrome. Only the panel admin can change Design tokens.
+  Minimalist mode is per signed-in user. Design Light/Dark presets update panel-wide tokens and also
+  set your personal light/dark color mode so chrome surfaces change. Only the panel admin can change Design tokens.
+  Install catalog themes from the Store tab; manage them on Installed.
 </p>"#;
     feature_shell(
         &[
@@ -78,7 +163,7 @@ pub fn design_settings_page(username: &str) -> String {
         ],
         "Design",
         "Theme & custom CSS",
-        &format!("{note}{panel}{themes}"),
+        &format!("{tabs}{note}{panel}"),
         None,
         None,
     )
@@ -251,5 +336,50 @@ mod tests {
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn design_tab_normalizes_store_aliases() {
+        assert_eq!(design_settings_tab(None), "design");
+        assert_eq!(design_settings_tab(Some("")), "design");
+        assert_eq!(design_settings_tab(Some("Design")), "design");
+        assert_eq!(design_settings_tab(Some("store")), "store");
+        assert_eq!(design_settings_tab(Some("Theme-Store")), "store");
+        assert_eq!(design_settings_tab(Some("themes")), "store");
+        assert_eq!(design_settings_tab(Some("installed")), "installed");
+        assert_eq!(design_settings_tab(Some("My-Themes")), "installed");
+    }
+
+    #[test]
+    fn design_page_splits_appearance_installed_and_store_tabs() {
+        let design = design_settings_page_with_tab("owner", "design");
+        assert!(design.contains("href=\"/settings/design?tab=design\""));
+        assert!(design.contains("href=\"/settings/design?tab=installed\""));
+        assert!(design.contains("href=\"/settings/design?tab=store\""));
+        assert!(design.contains(">Installed</a>"));
+        assert!(design.contains(">Store</a>"));
+        assert!(design.contains("cpn-minimalist-card") || design.contains("Minimalist mode"));
+        assert!(!design.contains("id=\"cpn-themes-catalog\""));
+        assert!(!design.to_lowercase().contains("cyberpanel"));
+
+        let store = design_settings_page_with_tab("owner", "store");
+        assert!(store.contains("id=\"cpn-themes-catalog\""));
+        assert!(store.contains("data-view=\"store\""));
+        assert!(store.contains("cpn-themes-q"));
+        assert!(store.contains("Refresh catalog"));
+        assert!(store.contains("/api/panel/themes/install"));
+        assert!(!store.contains("cpn-minimalist-card"));
+        assert!(!store.to_lowercase().contains("cyberpanel"));
+        assert!(!store.contains('\u{2014}'));
+        assert!(!store.contains('\u{2013}'));
+
+        let installed = design_settings_page_with_tab("owner", "installed");
+        assert!(installed.contains("id=\"cpn-themes-catalog\""));
+        assert!(installed.contains("data-view=\"installed\""));
+        assert!(installed.contains("cpn-themes-q"));
+        assert!(installed.contains("Installed themes"));
+        assert!(!installed.contains("id=\"cpn-themes-refresh\""));
+        assert!(installed.contains("/api/panel/themes/apply"));
+        assert!(!installed.to_lowercase().contains("cyberpanel"));
     }
 }

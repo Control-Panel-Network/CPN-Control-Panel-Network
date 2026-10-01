@@ -21,8 +21,8 @@ use crate::panel_hub_pages_server::{
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
-    connect_page, design_settings_page, settings_hub_main_with, setup_wizard_page_with,
-    version_management_page,
+    connect_page, design_settings_page_with_tab, design_settings_tab, settings_hub_main_with,
+    setup_wizard_page_with, version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_pages::panel_shell;
@@ -1015,15 +1015,22 @@ pub async fn settings_version_page(
 pub async fn settings_design_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let tab = design_settings_tab(query.get("tab").map(String::as_str));
+    let title = match tab {
+        "store" => "Theme Store",
+        "installed" => "Installed themes",
+        _ => "Design",
+    };
     html_ok(panel_shell(
         &user,
         "settings",
-        "Design",
-        &design_settings_page(&user),
+        title,
+        &design_settings_page_with_tab(&user, tab),
     ))
 }
 

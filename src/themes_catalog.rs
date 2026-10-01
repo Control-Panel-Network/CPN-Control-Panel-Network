@@ -3,7 +3,7 @@
 //! Catalog archive: https://github.com/Control-Panel-Network/CPN-Themes
 
 use crate::account::{data_dir, now_unix};
-use crate::panel_theme::DesignTokens;
+use crate::panel_theme::{DesignTokens, ThemeBackground};
 use crate::plugins_catalog::curl_bytes;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -18,6 +18,10 @@ const CATALOG_REPO: &str = "Control-Panel-Network/CPN-Themes";
 const CATALOG_TARBALL: &str =
     "https://codeload.github.com/Control-Panel-Network/CPN-Themes/tar.gz/refs/heads/main";
 
+fn default_free_pricing() -> String {
+    "free".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeCatalogEntry {
     pub id: String,
@@ -25,7 +29,17 @@ pub struct ThemeCatalogEntry {
     pub description: String,
     pub author: String,
     pub version: String,
+    #[serde(default = "default_free_pricing")]
+    pub pricing: String,
+    #[serde(default)]
+    pub grant_plugin: String,
+    #[serde(default)]
+    pub purchase_url: String,
+    #[serde(default)]
+    pub store_url: String,
     pub tokens: DesignTokens,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<ThemeBackground>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +58,45 @@ pub fn themes_repo_slug() -> &'static str {
 
 fn cache_path() -> PathBuf {
     data_dir().join("theme-catalog-cache.json")
+}
+fn catalog_assets_root() -> PathBuf {
+    data_dir().join("theme-catalog-assets")
+}
+
+fn cache_extracted_theme_assets(theme_id: &str, theme_src: &Path) {
+    let id = theme_id.trim().to_ascii_lowercase();
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    {
+        return;
+    }
+    let src_assets = theme_src.join("assets");
+    if !src_assets.is_dir() {
+        return;
+    }
+    let dest = catalog_assets_root().join(&id);
+    if fs::create_dir_all(&dest).is_err() {
+        return;
+    }
+    for name in [
+        "preview.webp",
+        "bg.webp",
+        "preview.png",
+        "bg.png",
+        "preview.jpg",
+        "bg.jpg",
+        "preview.jpeg",
+        "bg.jpeg",
+        "preview.svg",
+        "bg.svg",
+    ] {
+        let from = src_assets.join(name);
+        if from.is_file() {
+            let _ = fs::copy(&from, dest.join(name));
+        }
+    }
 }
 
 fn cache_is_fresh(cache: &ThemesCache) -> bool {
@@ -87,6 +140,8 @@ struct ThemeJsonFile {
     #[serde(default)]
     version: String,
     tokens: DesignTokens,
+    #[serde(default)]
+    background: Option<ThemeBackground>,
 }
 
 fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, String> {
@@ -105,6 +160,17 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
         return Err("Theme id is invalid".into());
     }
     let tokens = parsed.tokens.validate()?;
+    let background = match parsed.background {
+        Some(bg) => {
+            let validated = bg.validate()?;
+            if validated.is_empty() {
+                None
+            } else {
+                Some(validated)
+            }
+        }
+        None => None,
+    };
     Ok(ThemeCatalogEntry {
         id,
         name: parsed.name.trim().to_string(),
@@ -123,8 +189,21 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
         } else {
             parsed.version.trim().to_string()
         },
+        pricing: default_free_pricing(),
+        grant_plugin: String::new(),
+        purchase_url: String::new(),
+        store_url: String::new(),
         tokens,
+        background,
     })
+}
+
+/// Public parser for install/apply paths that load `theme.json` from disk.
+pub fn parse_theme_json_for_install(
+    fallback_id: &str,
+    body: &str,
+) -> Result<ThemeCatalogEntry, String> {
+    parse_theme_file(fallback_id, body)
 }
 
 fn walk_themes(dir: &Path, out: &mut Vec<ThemeCatalogEntry>) {
@@ -148,6 +227,7 @@ fn walk_themes(dir: &Path, out: &mut Vec<ThemeCatalogEntry>) {
                     String::from_utf8_lossy(&raw).into_owned()
                 };
                 if let Ok(theme) = parse_theme_file(id, &body) {
+                    cache_extracted_theme_assets(&theme.id, &path);
                     out.push(theme);
                     continue;
                 }
@@ -214,10 +294,44 @@ pub fn fetch_themes_catalog(force_refresh: bool) -> Result<(Vec<ThemeCatalogEntr
 pub fn find_theme(id: &str, force_refresh: bool) -> Result<ThemeCatalogEntry, String> {
     let want = id.trim();
     let (entries, _) = fetch_themes_catalog(force_refresh)?;
-    entries
+    let merged = merge_with_paid_catalog(entries);
+    merged
         .into_iter()
         .find(|t| t.id.eq_ignore_ascii_case(want))
-        .ok_or_else(|| format!("Theme `{want}` was not found in the CPN-Themes catalog"))
+        .ok_or_else(|| format!("Theme `{want}` was not found in the theme catalog"))
+}
+
+/// Merge free GitHub catalog rows with paid api.newstargeted.com themes (best-effort).
+pub fn merge_with_paid_catalog(mut free: Vec<ThemeCatalogEntry>) -> Vec<ThemeCatalogEntry> {
+    let paid = crate::theme_entitlements::fetch_paid_themes_catalog().unwrap_or_default();
+    for meta in paid {
+        if free.iter().any(|e| e.id.eq_ignore_ascii_case(&meta.id)) {
+            continue;
+        }
+        free.push(ThemeCatalogEntry {
+            id: meta.id,
+            name: meta.name,
+            description: if meta.description.trim().is_empty() {
+                "Paid CPN theme.".into()
+            } else {
+                meta.description
+            },
+            author: meta.author,
+            version: meta.version,
+            pricing: "paid".into(),
+            grant_plugin: meta.grant_plugin,
+            purchase_url: meta.purchase_url,
+            store_url: meta.store_url,
+            tokens: meta.tokens,
+            background: meta.background,
+        });
+    }
+    free.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
+    free
 }
 
 pub fn themes_next_refresh_unix(fetched_at: u64) -> u64 {
@@ -242,10 +356,27 @@ mod tests {
             "radius_px": 12,
             "density": "comfortable",
             "font_scale": 1.0
+          },
+          "background": {
+            "color_mode": "dark",
+            "body": "linear-gradient(160deg, #0b1c33 0%, #123456 100%)",
+            "surface": "#0f172a",
+            "ink": "#e2e8f0",
+            "image": "assets/bg.webp",
+            "preview_image": "assets/preview.webp"
           }
         }"##;
         let theme = parse_theme_file("ocean-blue", body).unwrap();
         assert_eq!(theme.id, "ocean-blue");
         assert_eq!(theme.tokens.accent, "#2563eb");
+        assert!(theme.background.is_some());
+        assert_eq!(
+            theme.background.as_ref().unwrap().color_mode.as_deref(),
+            Some("dark")
+        );
+        assert_eq!(
+            theme.background.as_ref().unwrap().image.as_deref(),
+            Some("assets/bg.webp")
+        );
     }
 }
