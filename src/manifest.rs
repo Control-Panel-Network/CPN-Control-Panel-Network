@@ -331,9 +331,7 @@ fn resolve_package_version(
 /// Covers: retired `1.0.0`/`1.0.1` while live is `0.2.x`, and stale `0.2.x-alpha.*`
 /// while the live RPM is already on `1.0.0+`.
 pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String> {
-    use crate::releases::{
-        compare_versions, is_active_0_2_line, is_retired_cpn_1_0_identity,
-    };
+    use crate::releases::{compare_versions, is_active_0_2_line, is_retired_cpn_1_0_identity};
     use std::cmp::Ordering;
 
     #[cfg(unix)]
@@ -346,12 +344,13 @@ pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String>
     let manifest = load_manifest()?;
     let rpm = rpm_installed_version();
     let target = match &rpm {
-        Some(v) if is_retired_cpn_1_0_identity(&manifest.package_version) && is_active_0_2_line(v) => {
+        Some(v)
+            if is_retired_cpn_1_0_identity(&manifest.package_version) && is_active_0_2_line(v) =>
+        {
             v.clone()
         }
-        None
-            if is_retired_cpn_1_0_identity(&manifest.package_version)
-                && is_active_0_2_line(running_version) =>
+        None if is_retired_cpn_1_0_identity(&manifest.package_version)
+            && is_active_0_2_line(running_version) =>
         {
             running_version.to_string()
         }
@@ -525,11 +524,7 @@ mod tests {
         );
         // Stale alpha manifest must not beat a live 1.0.0 RPM.
         assert_eq!(
-            resolve_package_version(
-                Some("0.2.6-alpha.49".into()),
-                Some("1.0.0".into()),
-                "1.0.0"
-            ),
+            resolve_package_version(Some("0.2.6-alpha.49".into()), Some("1.0.0".into()), "1.0.0"),
             "1.0.0"
         );
     }
