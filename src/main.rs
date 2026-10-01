@@ -27,6 +27,9 @@ use cpn_installer::model::{
     MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_admin::is_panel_admin;
+use cpn_installer::panel_dashboard_layout_routes::{
+    panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
+};
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
@@ -134,9 +137,6 @@ use cpn_installer::panel_routes::{
 };
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
-};
-use cpn_installer::panel_dashboard_layout_routes::{
-    panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
 };
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,

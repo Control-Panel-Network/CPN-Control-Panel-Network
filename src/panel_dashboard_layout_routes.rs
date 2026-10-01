@@ -3,10 +3,10 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_dashboard_layout::{
-    load_dashboard_widgets, restore_dashboard_layout, save_dashboard_layout, DEFAULT_DASH_WIDGETS,
+    DEFAULT_DASH_WIDGETS, load_dashboard_widgets, restore_dashboard_layout, save_dashboard_layout,
 };
 use crate::panel_user_prefs::load_user_ui_prefs;
-use actix_web::{get, post, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
 

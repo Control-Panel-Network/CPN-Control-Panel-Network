@@ -59,7 +59,11 @@ pub(crate) fn log_table(rows: &[ActivityLogRow], empty: &str) -> String {
     t
 }
 
-fn compare_chart(title: &str, caption: &str, rows: &[(String, String, u64, String, u64)]) -> String {
+fn compare_chart(
+    title: &str,
+    caption: &str,
+    rows: &[(String, String, u64, String, u64)],
+) -> String {
     if rows.is_empty() {
         return String::new();
     }

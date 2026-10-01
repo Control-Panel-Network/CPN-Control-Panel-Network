@@ -1,6 +1,6 @@
 //! Per-user dashboard overview widget order and edit-mode chrome.
 
-use crate::panel_user_prefs::{load_user_ui_prefs, save_user_ui_prefs, UserUiPrefs};
+use crate::panel_user_prefs::{UserUiPrefs, load_user_ui_prefs, save_user_ui_prefs};
 
 pub const DEFAULT_DASH_WIDGETS: [&str; 5] = ["sites", "gauges", "tools", "health", "activity"];
 
