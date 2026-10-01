@@ -263,7 +263,7 @@ fn metrics_snapshot_script(input: SnapshotInput<'_>) -> String {
     let detail = if input.minimalist {
         "Host metrics snapshot (minimalist). Refresh the page to update."
     } else {
-        "Host live metrics (not per-site). Site-level CPU/bandwidth metering ships later."
+        "Host live metrics (not per-site). Site-level CPU metering ships later; bandwidth is metered monthly from access logs."
     };
     let payload = serde_json::json!({
         "ok": true,

@@ -160,6 +160,7 @@ button { font:inherit; cursor:pointer; }
 .data-table th { color:var(--muted); font-weight:600; border-top:0; }
 .data-table th:last-child, .data-table td:last-child { white-space:nowrap; }
 .badge-ok { display:inline-block; padding:2px 8px; border-radius:999px; background:#ecfdf3; color:#027a48; font-size:12px; font-weight:700; }
+.badge-warn { display:inline-block; padding:2px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:12px; font-weight:700; }
 .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 .status-dot.ok { background:#12b76a; }
 .status-dot.off { background:#98a2b3; }

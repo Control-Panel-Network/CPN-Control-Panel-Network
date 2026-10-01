@@ -21,6 +21,7 @@ pub enum QuotaResource {
     Databases,
     FtpAccounts,
     DiskMb,
+    BandwidthMb,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +30,7 @@ pub struct Package {
     pub name: String,
     /// Disk quota in MB (`-1` = unlimited).
     pub disk_mb: i64,
-    /// Bandwidth quota in MB (`-1` = unlimited). Metering is not enforced yet.
+    /// Monthly bandwidth quota in MB (`-1` = unlimited), metered from site access logs.
     pub bandwidth_mb: i64,
     pub domains: i64,
     pub emails: i64,
@@ -95,6 +96,7 @@ pub struct PackageUsage {
     pub ftp_limit: i64,
     pub disk_mb_used: u64,
     pub disk_mb_limit: i64,
+    pub bandwidth_mb_used: u64,
     pub bandwidth_mb_limit: i64,
     pub fqdn_enabled: bool,
 }

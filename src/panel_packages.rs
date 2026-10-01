@@ -220,6 +220,25 @@ fn bulk_toolbar() -> String {
         .into()
 }
 
+/// Percent used plus an over-limit badge for the monthly bandwidth line.
+fn bandwidth_note(usage: &PackageUsage) -> String {
+    let limit = usage.bandwidth_mb_limit;
+    if limit == crate::packages::UNLIMITED {
+        return String::new();
+    }
+    if limit <= 0 {
+        return r#" <span class="badge-warn">Over limit</span>"#.into();
+    }
+    let pct = (usage.bandwidth_mb_used.saturating_mul(100)) / (limit as u64);
+    if usage.bandwidth_mb_used >= limit as u64 {
+        format!(
+            r#" ({pct}%) <span class="badge-warn">Over limit: new websites are blocked until next month or a larger package</span>"#
+        )
+    } else {
+        format!(" ({pct}%)")
+    }
+}
+
 fn usage_card(usage: &PackageUsage) -> String {
     format!(
         r#"<div class="panel-card" style="margin-bottom:18px;">
@@ -231,7 +250,7 @@ fn usage_card(usage: &PackageUsage) -> String {
         <li>Databases: {db_used} / {db_limit}</li>
         <li>FTP accounts: {f_used} / {f_limit}</li>
         <li>Disk: {disk_used} MB / {disk_limit}</li>
-        <li>Bandwidth limit: {bw} (metering later)</li>
+        <li>Bandwidth (this month): {bw_used} MB / {bw}{bw_note}</li>
         <li>FQDN / subdomains: {fqdn}</li>
       </ul>
     </div>"#,
@@ -246,7 +265,9 @@ fn usage_card(usage: &PackageUsage) -> String {
         f_limit = html_escape(&format_limit_display(usage.ftp_limit, "")),
         disk_used = usage.disk_mb_used,
         disk_limit = html_escape(&format_limit_display(usage.disk_mb_limit, "MB")),
+        bw_used = usage.bandwidth_mb_used,
         bw = html_escape(&format_limit_display(usage.bandwidth_mb_limit, "MB")),
+        bw_note = bandwidth_note(usage),
         fqdn = if usage.fqdn_enabled {
             "Enabled"
         } else {

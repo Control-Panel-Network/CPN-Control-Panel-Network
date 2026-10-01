@@ -75,7 +75,7 @@ pub async fn websites_manage_metrics(
         "scope": "host",
         "domain": site.domain,
         "window_seconds": WINDOW_SECS,
-        "detail": "Host live metrics (not per-site). Site-level CPU/bandwidth metering ships later.",
+        "detail": "Host live metrics (not per-site). Site-level CPU metering ships later; bandwidth is metered monthly from access logs.",
         "cpu": {
             "current": pct_json(cpu_cur),
             "avg": pct_json(cpu_avg),

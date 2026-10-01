@@ -83,7 +83,7 @@ pub fn sum_bytes_from_access_log(
     (today, month_total, lines)
 }
 
-fn parse_response_bytes(line: &str) -> Option<u64> {
+pub(crate) fn parse_response_bytes(line: &str) -> Option<u64> {
     // Prefer bytes after the request line that ends with HTTP/x.y".
     let after = if let Some(http_at) = line.find("HTTP/") {
         let tail = &line[http_at..];
@@ -114,6 +114,35 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
     let (access, _) = candidate_log_paths(site);
     let day = local_day_token();
     let month = local_month_token();
+
+    // Preferred: persistent monthly ledger fed incrementally from the access log.
+    if first_existing_log(site, &access).is_some() {
+        let period = crate::package_bandwidth::current_period();
+        let bytes = crate::package_bandwidth::site_month_bytes(site, &period);
+        let mut label = format!("{} (this month)", format_bytes(bytes));
+        let mut hint = String::from(
+            "Metered from this site's access log (calendar month). Package limits apply to the total of all sites you own.",
+        );
+        if let Some(q) = quota_mb {
+            if q != UNLIMITED && q > 0 {
+                label = format!(
+                    "{} / {} (this month)",
+                    format_bytes(bytes),
+                    format_limit_display(q, "MB")
+                );
+            } else {
+                hint.push_str(" Package bandwidth is unlimited.");
+            }
+        }
+        return BandwidthInfo {
+            label,
+            hint,
+            bytes: Some(bytes),
+            period: Some("this month"),
+            source: "access_log_ledger",
+            quota_mb,
+        };
+    }
 
     if let Some(path) = first_existing_log(site, &access)
         && let Ok(text) = read_log_tail(site, &path, 2_000_000)
@@ -159,7 +188,7 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
         if q == UNLIMITED {
             return BandwidthInfo {
                 label: "Unlimited quota".into(),
-                hint: "Package bandwidth is unlimited; per-vhost transfer counters are not enforced yet."
+                hint: "Package bandwidth is unlimited; no access log was found to meter this site yet."
                     .into(),
                 bytes: None,
                 period: None,

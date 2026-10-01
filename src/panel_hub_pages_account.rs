@@ -33,6 +33,29 @@ pub fn users_plans_hub_main() -> String {
     body
 }
 
+/// Users & Plans hub for a signed-in viewer: admin-only tiles are hidden for non-admins and a
+/// short `error` / `notice` code is shown as readable text.
+pub fn users_plans_hub_main_for(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    let admin = is_panel_admin(viewer);
+    let mut body = section_heading(
+        "Users & Plans",
+        "Accounts, hosting plans, site ACL, and admin tools.",
+    );
+    body.push_str(&crate::panel_hubs::notice_block("ok", notice));
+    body.push_str(&crate::panel_hubs::notice_block("error", error));
+    for (title, tiles) in users_plans_hub_sections() {
+        let tiles: Vec<_> = tiles
+            .into_iter()
+            .filter(|t| admin || !crate::panel_hub_admin_gate::is_admin_only_href(t.href))
+            .collect();
+        if tiles.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(title, &tiles));
+    }
+    body
+}
+
 pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let admin = is_panel_admin(viewer);
     let accounts = list_accounts().unwrap_or_default();
@@ -421,5 +444,16 @@ mod tests {
         assert!(html.contains("hub-tile"));
         assert!(!html.contains("Not configured yet"));
         assert!(!html.contains("CyberPanel"));
+    }
+
+    #[test]
+    fn non_admin_hub_hides_admin_tiles_and_decodes_error_code() {
+        let html = users_plans_hub_main_for("enrolltest", None, Some("admin-only"));
+        assert!(!html.contains("/account/acl/modify"));
+        assert!(!html.contains("/account/acl/create"));
+        assert!(!html.contains("/account/users/create"));
+        assert!(html.contains("/account/users/list"));
+        assert!(html.contains("Only the panel admin can manage users and ACL"));
+        assert!(!html.contains("error=admin-only"));
     }
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Package bandwidth metering**: Monthly transfer is now measured from each site's access log into a per-site ledger under `/var/lib/cpn/bandwidth/` (incremental reads, survives log rotation, resets each calendar month). **Packages > Your limits** shows used and limit with a percentage and an Over limit badge, the site Overview bandwidth card shows the month total against the package limit, and creating a new website is blocked while the account is over its monthly bandwidth limit (the same soft policy as disk). The "metering later" placeholder is gone.
+- **Admin only Users & ACL pages**: Non-admin accounts no longer see Create New User, Create ACL, or Modify ACL in the sidebar or the Users & Plans hub. Opening those URLs directly shows an in-page 403 that names the signed-in account, and denied actions redirect with the short code `error=admin-only` (no spaces or `%20` in the URL).
 ### Changed
 
 - **Docker Hub**: Retired the `master3395/cpn-installer` tags `ubuntu22.04` and `ubuntu24.04` (Docker Scout Medium/Low findings in base-distro packages with no Canonical fix yet, issue #353). Docker Hub now publishes `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, and the release semver. Ubuntu 22.04 and 24.04 hosts remain supported through the native DEB install; only the container runtime tags changed.
