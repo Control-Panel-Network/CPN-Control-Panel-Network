@@ -223,12 +223,11 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 /// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
 /// are not locked out. Cached briefly to keep `/login` fast under poll load.
 pub fn evaluate_login_services() -> LoginServiceStatus {
-    if let Ok(guard) = LOGIN_GATE_CACHE.lock() {
-        if let Some((at, ref status)) = *guard {
-            if at.elapsed() < LOGIN_GATE_CACHE_TTL {
-                return status.clone();
-            }
-        }
+    if let Ok(guard) = LOGIN_GATE_CACHE.lock()
+        && let Some((at, ref status)) = *guard
+        && at.elapsed() < LOGIN_GATE_CACHE_TTL
+    {
+        return status.clone();
     }
 
     let status = evaluate_login_services_fresh();
