@@ -516,9 +516,7 @@ fn theme_background_css(bg: &ThemeBackground) -> String {
         out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"], :root {\n");
         out.push_str(&root_vars);
         out.push_str("}\n");
-        out.push_str(
-            "html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"] {\n",
-        );
+        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"] {\n");
         out.push_str(&root_vars);
         out.push_str("}\n");
     }
