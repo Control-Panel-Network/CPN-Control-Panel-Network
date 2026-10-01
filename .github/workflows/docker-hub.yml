@@ -1,7 +1,7 @@
 name: Docker Hub publish
 
 # Builds native packages, then docker/Dockerfile.* runtime images, and pushes
-# master3395/cpn-installer tags to Docker Hub (alpha/prerelease product line).
+# master3395/cpn-installer tags to Docker Hub (CPN stable 1.x product line).
 #
 # OS tags: almalinux9, almalinux10, ubuntu26.04, latest
 # ubuntu22.04 and ubuntu24.04 container tags are retired from Hub (Scout findings with no vendor fix, issue #353).
@@ -244,7 +244,7 @@ jobs:
           http_code="$(curl -fsSL -o /tmp/hub-patch.json -w '%{http_code}' -X PATCH \
             -H "Authorization: JWT ${token}" \
             -H 'Content-Type: application/json' \
-            -d "{\"description\":\"CPN installer runtime (AlmaLinux 9/10 and Ubuntu 26.04 + systemd). Alpha/prerelease.\",\"full_description\":${overview}}" \
+            -d "{\"description\":\"CPN installer runtime (AlmaLinux 9/10 and Ubuntu 26.04 + systemd). Stable 1.x.\",\"full_description\":${overview}}" \
             https://hub.docker.com/v2/repositories/master3395/cpn-installer/)"
           if [ "${http_code}" != '200' ]; then
             echo "::error::Docker Hub overview PATCH returned HTTP ${http_code}"
