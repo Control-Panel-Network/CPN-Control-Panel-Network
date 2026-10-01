@@ -197,17 +197,17 @@ pub fn databases_password_page_for(
 
     let mut user_options =
         String::from("<option value=\"\">Enter username below if empty</option>");
-    if !selected.is_empty() {
-        if let Ok(users) = list_usernames_for_database(selected) {
-            for u in users {
-                if is_protected_db_user(&u) {
-                    continue;
-                }
-                user_options.push_str(&format!(
-                    "<option value=\"{u}\">{u}</option>",
-                    u = html_escape(&u)
-                ));
+    if !selected.is_empty()
+        && let Ok(users) = list_usernames_for_database(selected)
+    {
+        for u in users {
+            if is_protected_db_user(&u) {
+                continue;
             }
+            user_options.push_str(&format!(
+                "<option value=\"{u}\">{u}</option>",
+                u = html_escape(&u)
+            ));
         }
     }
 
