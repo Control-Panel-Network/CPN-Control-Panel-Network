@@ -6,7 +6,7 @@ FROM almalinux:${ALMA_VERSION}
 
 ARG ALMA_VERSION=9
 LABEL org.opencontainers.image.title="CPN Installer"
-LABEL org.opencontainers.image.description="CPN Control Panel Network web installer on AlmaLinux (alpha/prerelease)"
+LABEL org.opencontainers.image.description="CPN Control Panel Network web installer on AlmaLinux"
 LABEL org.opencontainers.image.source="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network"
 LABEL cpn.almalinux.version="${ALMA_VERSION}"
 
