@@ -11,10 +11,6 @@ use crate::panel_user_prefs::{
     load_user_color_mode, load_user_minimalist_mode, save_user_color_mode,
     save_user_minimalist_mode,
 };
-use crate::plugins::format_unix_local;
-use crate::themes_catalog::{
-    fetch_themes_catalog, find_theme, themes_next_refresh_unix, themes_repo_slug, themes_repo_url,
-};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -190,9 +186,19 @@ pub async fn panel_design_preset(
     };
     match apply_design_preset(preset) {
         Ok(design) => {
+            // Light/Dark design presets also set this operator's color mode so the
+            // chrome surfaces change visibly (not only accent tokens).
+            let synced_color = match preset {
+                DesignPreset::Light => save_user_color_mode(&user, ColorMode::Light).ok(),
+                DesignPreset::Dark => save_user_color_mode(&user, ColorMode::Dark).ok(),
+                DesignPreset::Default | DesignPreset::Custom => None,
+            };
             let mut payload = design_public_json(&design);
             if let Some(obj) = payload.as_object_mut() {
                 obj.insert("ok".into(), serde_json::json!(true));
+                if let Some(mode) = synced_color {
+                    obj.insert("color_mode".into(), serde_json::json!(mode.as_str()));
+                }
             }
             json_ok(payload)
         }
@@ -224,73 +230,5 @@ pub async fn panel_design_restore(
             json_ok(payload)
         }
         Err(err) => json_err(500, &err),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ThemesCatalogQuery {
-    #[serde(default)]
-    refresh: Option<String>,
-}
-
-#[get("/api/panel/themes/catalog")]
-pub async fn panel_themes_catalog(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    query: web::Query<ThemesCatalogQuery>,
-) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
-        return json_err(401, "Login required");
-    };
-    let force = query
-        .refresh
-        .as_deref()
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    match fetch_themes_catalog(force) {
-        Ok((entries, fetched_at)) => json_ok(serde_json::json!({
-            "ok": true,
-            "repo": themes_repo_slug(),
-            "repo_url": themes_repo_url(),
-            "fetched_at_unix": fetched_at,
-            "next_refresh_unix": themes_next_refresh_unix(fetched_at),
-            "fetched_at_local": format_unix_local(fetched_at),
-            "themes": entries,
-        })),
-        Err(err) => json_err(500, &err),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ThemeApplyBody {
-    id: String,
-}
-
-#[post("/api/panel/themes/apply")]
-pub async fn panel_themes_apply(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-    body: web::Json<ThemeApplyBody>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return json_err(401, "Login required");
-    };
-    if !is_panel_admin(&user) {
-        return json_err(403, "Only the panel admin can apply Design themes");
-    }
-    match find_theme(&body.id, false) {
-        Ok(theme) => match save_custom_tokens(theme.tokens.clone()) {
-            Ok(design) => {
-                let mut payload = design_public_json(&design);
-                if let Some(obj) = payload.as_object_mut() {
-                    obj.insert("ok".into(), serde_json::json!(true));
-                    obj.insert("applied_theme".into(), serde_json::json!(theme.id));
-                    obj.insert("applied_theme_name".into(), serde_json::json!(theme.name));
-                }
-                json_ok(payload)
-            }
-            Err(err) => json_err(400, &err),
-        },
-        Err(err) => json_err(404, &err),
     }
 }

@@ -57,6 +57,12 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/plugins/uninstall" => Some("plugin.uninstall"),
         "/plugins/enable" => Some("plugin.activate"),
         "/plugins/disable" => Some("plugin.deactivate"),
+        // Theme JSON APIs record via handlers (not PRG Location); keys listed for labels.
+        "/api/panel/themes/install" => Some("theme.install"),
+        "/api/panel/themes/uninstall" => Some("theme.uninstall"),
+        "/api/panel/themes/apply" => Some("theme.apply"),
+        "/api/panel/themes/update-all" => Some("theme.update-all"),
+        "/api/panel/themes/redeem" => Some("theme.redeem"),
         _ => None,
     }
 }
@@ -79,6 +85,12 @@ pub fn action_label(action: &str) -> &'static str {
         "plugin.uninstall" => "Plugin: uninstall",
         "plugin.activate" => "Plugin: activate",
         "plugin.deactivate" => "Plugin: deactivate",
+        "theme.install" => "Theme: install",
+        "theme.update" => "Theme: update",
+        "theme.uninstall" => "Theme: uninstall",
+        "theme.apply" => "Theme: apply",
+        "theme.update-all" => "Theme: update all",
+        "theme.redeem" => "Theme: redeem",
         _ => "Panel action",
     }
 }
@@ -263,8 +275,13 @@ mod tests {
             action_for_path("/plugins/install-host/"),
             Some("plugin.install-host")
         );
+        assert_eq!(
+            action_for_path("/api/panel/themes/update-all"),
+            Some("theme.update-all")
+        );
         assert_eq!(action_for_path("/plugins/settings"), None);
         assert_eq!(action_for_path("/dashboard"), None);
+        assert_eq!(action_label("theme.install"), "Theme: install");
     }
 
     #[test]

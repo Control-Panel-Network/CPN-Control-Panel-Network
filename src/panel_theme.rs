@@ -85,6 +85,192 @@ pub struct DesignTokens {
     pub font_scale: f32,
 }
 
+/// Optional catalog theme backgrounds (gradients / surface colors). Not used by manual Custom edits alone.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ThemeBackground {
+    /// Preferred operator color mode when applying (`light` or `dark`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_mode: Option<String>,
+    /// CSS `background` value for `body` / `.panel-layout` (gradients preferred).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    /// CSS `background` for `.sidebar`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_soft: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ink: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muted: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hairline: Option<String>,
+    /// Theme Store card swatch CSS background (falls back to body / accent gradient).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    /// Relative package image layered under the body scrim (e.g. `assets/bg.webp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+    /// Relative package image for Theme Store cards (e.g. `assets/preview.webp`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_image: Option<String>,
+}
+
+impl ThemeBackground {
+    pub fn is_empty(&self) -> bool {
+        self.color_mode.is_none()
+            && self.body.is_none()
+            && self.sidebar.is_none()
+            && self.surface.is_none()
+            && self.canvas.is_none()
+            && self.surface_soft.is_none()
+            && self.ink.is_none()
+            && self.muted.is_none()
+            && self.hairline.is_none()
+            && self.preview.is_none()
+            && self.image.is_none()
+            && self.preview_image.is_none()
+    }
+
+    pub fn validate(mut self) -> Result<Self, String> {
+        if let Some(mode) = self.color_mode.take() {
+            let normalized = mode.trim().to_ascii_lowercase();
+            if normalized != "light" && normalized != "dark" {
+                return Err("background.color_mode must be light or dark".into());
+            }
+            self.color_mode = Some(normalized);
+        }
+        self.body = Self::validate_css_bg(self.body.take(), "background.body")?;
+        self.sidebar = Self::validate_css_bg(self.sidebar.take(), "background.sidebar")?;
+        self.preview = Self::validate_css_bg(self.preview.take(), "background.preview")?;
+        self.surface = Self::validate_color_or_none(self.surface.take(), "background.surface")?;
+        self.canvas = Self::validate_color_or_none(self.canvas.take(), "background.canvas")?;
+        self.surface_soft =
+            Self::validate_color_or_none(self.surface_soft.take(), "background.surface_soft")?;
+        self.ink = Self::validate_color_or_none(self.ink.take(), "background.ink")?;
+        self.muted = Self::validate_color_or_none(self.muted.take(), "background.muted")?;
+        self.hairline = Self::validate_color_or_none(self.hairline.take(), "background.hairline")?;
+        self.image = validate_theme_asset_path(self.image.take(), "background.image")?;
+        self.preview_image =
+            validate_theme_asset_path(self.preview_image.take(), "background.preview_image")?;
+        Ok(self)
+    }
+
+    fn validate_color_or_none(raw: Option<String>, field: &str) -> Result<Option<String>, String> {
+        let Some(value) = raw else {
+            return Ok(None);
+        };
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(normalize_hex_color(trimmed, field)?))
+    }
+
+    fn validate_css_bg(raw: Option<String>, field: &str) -> Result<Option<String>, String> {
+        let Some(value) = raw else {
+            return Ok(None);
+        };
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        if trimmed.len() > 1200 {
+            return Err(format!("{field} is too long"));
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.contains("url(")
+            || lower.contains("expression(")
+            || lower.contains("javascript:")
+            || lower.contains("@import")
+            || lower.contains("</")
+            || lower.contains("behavior:")
+            || trimmed.contains(';')
+            || trimmed.contains('{')
+            || trimmed.contains('}')
+        {
+            return Err(format!("{field} contains disallowed CSS"));
+        }
+        let allowed = lower.starts_with('#')
+            || lower.starts_with("rgb(")
+            || lower.starts_with("rgba(")
+            || lower.starts_with("hsl(")
+            || lower.starts_with("hsla(")
+            || lower.starts_with("linear-gradient(")
+            || lower.starts_with("radial-gradient(")
+            || lower.starts_with("repeating-linear-gradient(")
+            || lower.starts_with("repeating-radial-gradient(")
+            || lower.starts_with("conic-gradient(");
+        if !allowed {
+            return Err(format!(
+                "{field} must be a color or CSS gradient (no external urls)"
+            ));
+        }
+        Ok(Some(trimmed.to_string()))
+    }
+}
+
+/// Validate a package-relative theme asset path (`assets/name.ext` only).
+pub fn validate_theme_asset_path(
+    raw: Option<String>,
+    field: &str,
+) -> Result<Option<String>, String> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim().replace('\\', "/");
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.contains("..") || trimmed.starts_with('/') || trimmed.contains(':') {
+        return Err(format!("{field} must be a relative assets/ path"));
+    }
+    let Some((prefix, name)) = trimmed.split_once('/') else {
+        return Err(format!("{field} must live under assets/"));
+    };
+    if !prefix.eq_ignore_ascii_case("assets") || name.contains('/') {
+        return Err(format!("{field} must be assets/<filename>"));
+    }
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.')
+    {
+        return Err(format!("{field} filename is invalid"));
+    }
+    let lower = name.to_ascii_lowercase();
+    let ok_ext = lower.ends_with(".webp")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".png")
+        || lower.ends_with(".svg");
+    if !ok_ext {
+        return Err(format!("{field} must be .webp, .jpg, .jpeg, .png, or .svg"));
+    }
+    Ok(Some(format!("assets/{name}")))
+}
+
+/// Same-origin URL for an installed or catalog-cached theme asset.
+pub fn theme_asset_public_url(theme_id: &str, asset_path: &str) -> Option<String> {
+    let id = theme_id.trim().to_ascii_lowercase();
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    {
+        return None;
+    }
+    let Ok(Some(path)) = validate_theme_asset_path(Some(asset_path.to_string()), "asset") else {
+        return None;
+    };
+    let file = path.trim_start_matches("assets/");
+    Some(format!("/api/panel/themes/assets/{id}/{file}"))
+}
+
 impl DesignTokens {
     pub fn validate(mut self) -> Result<Self, String> {
         self.accent = normalize_hex_color(&self.accent, "accent")?;
@@ -143,6 +329,15 @@ pub struct PanelDesignFile {
     pub preset: DesignPreset,
     #[serde(default)]
     pub custom: Option<DesignTokens>,
+    /// Catalog theme id currently applied as Custom (panel-wide).
+    #[serde(default)]
+    pub active_theme_id: Option<String>,
+    /// Background package from the active catalog theme (cleared when leaving theme Custom).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_theme_background: Option<ThemeBackground>,
+    /// Optional sanitized extra CSS from the active theme `theme.css` file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_theme_extra_css: Option<String>,
 }
 
 impl Default for PanelDesignFile {
@@ -151,6 +346,9 @@ impl Default for PanelDesignFile {
             schema_version: 1,
             preset: DesignPreset::Default,
             custom: None,
+            active_theme_id: None,
+            active_theme_background: None,
+            active_theme_extra_css: None,
         }
     }
 }
@@ -210,9 +408,15 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
         DesignPreset::Default => {
             // Keep any saved custom profile on disk, but activate Default.
             design.preset = DesignPreset::Default;
+            design.active_theme_id = None;
+            design.active_theme_background = None;
+            design.active_theme_extra_css = None;
         }
         DesignPreset::Light | DesignPreset::Dark => {
             design.preset = preset;
+            design.active_theme_id = None;
+            design.active_theme_background = None;
+            design.active_theme_extra_css = None;
         }
         DesignPreset::Custom => {
             if design.custom.is_none() {
@@ -226,12 +430,95 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
 }
 
 pub fn save_custom_tokens(tokens: DesignTokens) -> Result<PanelDesignFile, String> {
+    save_custom_tokens_with_theme(tokens, None, None, None)
+}
+
+/// Save custom tokens and optionally mark which installed catalog theme is active.
+pub fn save_custom_tokens_with_theme(
+    tokens: DesignTokens,
+    active_theme_id: Option<&str>,
+    background: Option<ThemeBackground>,
+    extra_css: Option<String>,
+) -> Result<PanelDesignFile, String> {
     let tokens = tokens.validate()?;
+    let background = match background {
+        Some(bg) => {
+            let validated = bg.validate()?;
+            if validated.is_empty() {
+                None
+            } else {
+                Some(validated)
+            }
+        }
+        None => None,
+    };
+    let extra_css = extra_css
+        .map(|css| {
+            let rewritten = if let Some(id) = active_theme_id {
+                rewrite_theme_asset_urls(&css, id)
+            } else {
+                css
+            };
+            sanitize_theme_extra_css(&rewritten)
+        })
+        .filter(|css| !css.trim().is_empty());
     let mut design = load_panel_design();
     design.custom = Some(tokens);
     design.preset = DesignPreset::Custom;
+    let theme_id = active_theme_id
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    design.active_theme_id = theme_id.clone();
+    if theme_id.is_some() {
+        design.active_theme_background = background;
+        design.active_theme_extra_css = extra_css;
+    } else {
+        design.active_theme_background = None;
+        design.active_theme_extra_css = None;
+    }
     save_panel_design(&design)?;
     Ok(design)
+}
+
+/// Strip risky constructs from optional theme.css (keep gradients, selectors, same-origin assets).
+pub fn sanitize_theme_extra_css(raw: &str) -> String {
+    let mut out = String::new();
+    for line in raw.lines() {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("@import")
+            || lower.contains("javascript:")
+            || lower.contains("expression(")
+            || lower.contains("behavior:")
+            || lower.contains("</")
+            || lower.contains("url(http://")
+            || lower.contains("url(https://")
+            || lower.contains("url(//")
+            || lower.contains("url(data:")
+        {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if out.len() > 24_000 {
+        out.truncate(24_000);
+    }
+    out
+}
+
+/// Rewrite relative `url(assets/...)` references to authenticated panel asset routes.
+pub fn rewrite_theme_asset_urls(css: &str, theme_id: &str) -> String {
+    let id = theme_id.trim().to_ascii_lowercase();
+    if id.is_empty() {
+        return css.to_string();
+    }
+    let base = format!("/api/panel/themes/assets/{id}/");
+    css.replace("url(./assets/", &format!("url({base}"))
+        .replace("url('./assets/", &format!("url('{base}"))
+        .replace("url(\"./assets/", &format!("url(\"{base}"))
+        .replace("url(assets/", &format!("url({base}"))
+        .replace("url('assets/", &format!("url('{base}"))
+        .replace("url(\"assets/", &format!("url(\"{base}"))
 }
 
 /// Wipe custom profile and return to immutable Default.
@@ -249,7 +536,7 @@ pub fn design_css_vars(design: &PanelDesignFile) -> String {
     } else {
         "1"
     };
-    format!(
+    let mut css = format!(
         r#":root {{
   --cpn-accent:{accent};
   --cpn-accent-focus:{focus};
@@ -263,6 +550,11 @@ body {{ font-size:calc(17px * var(--cpn-font-scale)); }}
 .resource-card, .status-card, .activity-card, .section-card, .server-summary {{
   border-radius:var(--cpn-radius);
 }}
+.sidebar nav a.active {{
+  background:color-mix(in srgb, var(--cpn-accent, var(--blue)) 16%, transparent);
+  color:var(--blue);
+}}
+.btn-primary, a.btn-primary {{ background:var(--cpn-accent, var(--blue)); }}
 .site-manage {{
   --m-accent:var(--cpn-accent);
 }}
@@ -272,7 +564,90 @@ body {{ font-size:calc(17px * var(--cpn-font-scale)); }}
         radius = tokens.radius_px,
         density = density_pad,
         scale = tokens.font_scale,
-    )
+    );
+    if design.preset == DesignPreset::Custom {
+        if let Some(bg) = design.active_theme_background.as_ref() {
+            css.push_str(&theme_background_css(bg, design.active_theme_id.as_deref()));
+        }
+        if let Some(extra) = design.active_theme_extra_css.as_deref() {
+            let cleaned = sanitize_theme_extra_css(extra);
+            if !cleaned.trim().is_empty() {
+                css.push('\n');
+                css.push_str(&cleaned);
+                css.push('\n');
+            }
+        }
+    }
+    css
+}
+
+fn theme_background_css(bg: &ThemeBackground, theme_id: Option<&str>) -> String {
+    let mut root_vars = String::new();
+    if let Some(v) = bg.surface.as_deref() {
+        root_vars.push_str(&format!("  --surface:{v};\n"));
+    }
+    if let Some(v) = bg.canvas.as_deref() {
+        root_vars.push_str(&format!("  --canvas:{v};\n"));
+    }
+    if let Some(v) = bg.surface_soft.as_deref() {
+        root_vars.push_str(&format!("  --surface-soft:{v};\n"));
+    }
+    if let Some(v) = bg.ink.as_deref() {
+        root_vars.push_str(&format!("  --ink:{v};\n"));
+    }
+    if let Some(v) = bg.muted.as_deref() {
+        root_vars.push_str(&format!("  --muted:{v};\n"));
+    }
+    if let Some(v) = bg.hairline.as_deref() {
+        root_vars.push_str(&format!("  --hairline:{v};\n"));
+    }
+    let mut out = String::new();
+    if !root_vars.is_empty() {
+        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"], :root {\n");
+        out.push_str(&root_vars);
+        out.push_str("}\n");
+        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"] {\n");
+        out.push_str(&root_vars);
+        out.push_str("}\n");
+    }
+    let image_url = theme_id
+        .zip(bg.image.as_deref())
+        .and_then(|(id, path)| theme_asset_public_url(id, path));
+    if image_url.is_some() || bg.body.is_some() {
+        let layers = match (bg.body.as_deref(), image_url.as_deref()) {
+            (Some(scrim), Some(url)) => format!("{scrim}, url({url})"),
+            (Some(scrim), None) => scrim.to_string(),
+            (None, Some(url)) => format!("url({url})"),
+            (None, None) => String::new(),
+        };
+        let (size, position, repeat, attachment) = if image_url.is_some() && bg.body.is_some() {
+            (
+                "auto, cover",
+                "center, center",
+                "no-repeat, no-repeat",
+                "fixed, fixed",
+            )
+        } else if image_url.is_some() {
+            ("cover", "center", "no-repeat", "fixed")
+        } else {
+            ("auto", "center", "no-repeat", "fixed")
+        };
+        out.push_str(&format!(
+            "html[data-color-mode=\"dark\"] body,\n\
+html[data-color-mode=\"light\"] body,\n\
+html[data-color-mode=\"dark\"] .panel-layout,\n\
+html[data-color-mode=\"light\"] .panel-layout,\n\
+body, .panel-layout {{\n  background-image:{layers};\n  background-size:{size};\n  background-position:{position};\n  background-repeat:{repeat};\n  background-attachment:{attachment};\n}}\n"
+        ));
+    }
+    if let Some(sidebar) = bg.sidebar.as_deref() {
+        out.push_str(&format!(
+            "html[data-color-mode=\"dark\"] .sidebar,\n\
+html[data-color-mode=\"light\"] .sidebar,\n\
+.sidebar {{\n  background:{sidebar};\n  border-right-color:var(--hairline);\n}}\n"
+        ));
+    }
+    out
 }
 
 /// Dark color-mode surface overrides (extends existing light `:root` tokens).
@@ -289,7 +664,8 @@ pub fn color_mode_styles() -> &'static str {
 }
 [data-color-mode="dark"] .sidebar nav a { color:#c5cad3; }
 [data-color-mode="dark"] .sidebar nav a.active {
-  background:rgba(59,130,246,.18); color:var(--blue);
+  background:color-mix(in srgb, var(--cpn-accent, var(--blue)) 22%, transparent);
+  color:var(--blue);
 }
 [data-color-mode="dark"] .mobile-header,
 html[data-color-mode="dark"] .mobile-header,
@@ -392,6 +768,9 @@ pub fn design_public_json(design: &PanelDesignFile) -> serde_json::Value {
         "tokens": tokens,
         "default_tokens": default_tokens(),
         "has_custom": design.custom.is_some(),
+        "active_theme_id": design.active_theme_id,
+        "has_theme_background": design.active_theme_background.is_some(),
+        "active_theme_background": design.active_theme_background,
         "scope": "panel-global",
         "note": "Design applies to panel chrome and Manage dashboard look for all operators. Not per-site branding."
     })
@@ -475,5 +854,23 @@ mod tests {
             assert!(design.custom.is_some());
             assert_eq!(resolve_tokens(&design), default_tokens());
         });
+    }
+
+    #[test]
+    fn theme_asset_path_and_url_helpers() {
+        assert!(
+            validate_theme_asset_path(Some("assets/bg.webp".into()), "image")
+                .unwrap()
+                .is_some()
+        );
+        assert!(validate_theme_asset_path(Some("../etc/passwd".into()), "image").is_err());
+        assert!(validate_theme_asset_path(Some("assets/bg.gif".into()), "image").is_err());
+        assert_eq!(
+            theme_asset_public_url("aurora-teal", "assets/bg.webp").as_deref(),
+            Some("/api/panel/themes/assets/aurora-teal/bg.webp")
+        );
+        let rewritten =
+            rewrite_theme_asset_urls("body{background-image:url(assets/bg.webp);}", "ocean-blue");
+        assert!(rewritten.contains("/api/panel/themes/assets/ocean-blue/bg.webp"));
     }
 }
