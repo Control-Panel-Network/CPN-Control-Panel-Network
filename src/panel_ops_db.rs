@@ -312,6 +312,15 @@ pub fn list_usernames_for_database(db_name: &str) -> Result<Vec<String>, String>
     Ok(names)
 }
 
+fn redact_db_cli_stderr(raw: &str) -> String {
+    let mut out = raw.trim().to_string();
+    // Never echo IDENTIFIED BY payloads (MariaDB repeats the SQL in stderr).
+    if let Some(idx) = out.to_ascii_lowercase().find("identified by") {
+        out = format!("{}[redacted]", &out[..idx]);
+    }
+    out.chars().take(400).collect()
+}
+
 /// Change password for a MariaDB user on common local hosts. Never logs the password.
 pub fn change_database_user_password(user: &str, password: &str) -> Result<String, String> {
     let user = sanitize_db_ident(user)?;
@@ -339,11 +348,12 @@ pub fn change_database_user_password(user: &str, password: &str) -> Result<Strin
         if out.status.success() {
             changed.push(format!("`{user}`@`{host}`"));
         } else {
-            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let err = redact_db_cli_stderr(&String::from_utf8_lossy(&out.stderr));
             let lower = err.to_ascii_lowercase();
             if !lower.contains("cannot find")
                 && !lower.contains("unknown user")
                 && !lower.contains("operation create user failed")
+                && !lower.contains("operation alter user failed")
             {
                 errors.push(format!("{user}@{host}: {err}"));
             }
@@ -468,6 +478,14 @@ mod tests {
         assert!(is_protected_db_user("cpn_pma_ab12cd34"));
         assert!(!is_protected_db_user("app_user"));
         assert!(change_database_user_password("root", "x").is_err());
+    }
+
+    #[test]
+    fn redacts_identified_by_from_stderr() {
+        let raw = "--------------\nALTER USER 'u'@'localhost' IDENTIFIED BY 'SuperSecret9!'\n--------------\nERROR 1396";
+        let cleaned = redact_db_cli_stderr(raw);
+        assert!(!cleaned.contains("SuperSecret9"));
+        assert!(cleaned.contains("[redacted]"));
     }
 
     #[test]
