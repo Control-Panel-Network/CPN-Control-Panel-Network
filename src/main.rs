@@ -33,17 +33,17 @@ use cpn_installer::panel_hub_routes::{
     account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
     acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
     api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
-    backups_destinations_save, backups_gdrive_route, backups_remote_route, backups_restore_route,
-    backups_restore_run, backups_schedule_route, backups_schedule_save, cloudflare_add_post,
-    cloudflare_delete_post, cloudflare_dns_get, cloudflare_oauth_callback_get,
-    cloudflare_oauth_client_post, cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post,
-    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
-    cloudflare_update_post, dashboard_ssh_security_review_show,
-    dashboard_ssh_security_review_snooze, databases_all_route, databases_create_get,
-    databases_create_post, databases_delete_get, databases_delete_post, databases_manager_route,
-    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
-    docker_create_container, docker_create_route, docker_export_route, docker_home,
-    docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
+    backups_destinations_save, backups_gdrive_route, backups_remote_route,
+    backups_restore_plan_route, backups_restore_route, backups_restore_run, backups_schedule_route,
+    backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
+    cloudflare_oauth_callback_get, cloudflare_oauth_client_post, cloudflare_oauth_connect_post,
+    cloudflare_oauth_disconnect_post, cloudflare_proxy_post, cloudflare_settings_post,
+    cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
+    dashboard_ssh_security_review_show, dashboard_ssh_security_review_snooze, databases_all_route,
+    databases_create_get, databases_create_post, databases_delete_get, databases_delete_post,
+    databases_manager_route, databases_phpmyadmin_open, databases_phpmyadmin_route,
+    docker_container_action, docker_create_container, docker_create_route, docker_export_route,
+    docker_home, docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
     docker_logs_route, docker_stack_create, docker_stack_refresh, docker_stacks_route,
     docker_view_exec, docker_view_route, email_accounts_route, email_bimi_push_cf,
     email_bimi_route, email_bimi_save, email_catchall_route, email_catchall_save,
@@ -1213,6 +1213,7 @@ async fn main() -> std::io::Result<()> {
             .service(backups_run)
             .service(backups_create_route)
             .service(backups_restore_route)
+            .service(backups_restore_plan_route)
             .service(backups_restore_run)
             .service(backups_schedule_route)
             .service(backups_schedule_save)

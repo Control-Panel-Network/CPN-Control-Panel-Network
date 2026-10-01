@@ -5,6 +5,7 @@ use crate::packages::{
     Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin,
     list_packages, package_for_account, usage_for_account,
 };
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 
 fn html_escape(value: &str) -> String {
     value
@@ -93,13 +94,15 @@ fn package_rows(packages: &[Package]) -> String {
         let dup_default = format!("{} Copy", pkg.name);
         rows.push_str(&format!(
             r#"<tr>
-          <td>
+          <td data-label="Select">
             <input type="checkbox" class="pkg-row-check" value="{id}" aria-label="Select {name}">
           </td>
-          <td><strong>{name}</strong>{assigned_note}<div class="muted" style="font-size:12px;">{id}</div></td>
-          <td>{disk}</td><td>{bw}</td><td>{domains}</td><td>{emails}</td>
-          <td>{dbs}</td><td>{ftp}</td><td>{fqdn}</td>
-          <td>
+          <td data-label="Package name"><strong>{name}</strong>{assigned_note}<div class="muted" style="font-size:12px;">{id}</div></td>
+          <td data-label="Disk space">{disk}</td><td data-label="Bandwidth">{bw}</td>
+          <td data-label="Domains">{domains}</td><td data-label="Emails">{emails}</td>
+          <td data-label="Databases">{dbs}</td><td data-label="FTP accounts">{ftp}</td>
+          <td data-label="FQDN status">{fqdn}</td>
+          <td data-label="Actions">
             <a href="/packages/edit?id={id}">Edit</a>
             &nbsp;|&nbsp;
             <form method="post" action="/packages/duplicate" class="inline-form" style="display:inline;" onsubmit="return cpnPkgDuplicate(this);">
@@ -131,7 +134,11 @@ fn package_rows(packages: &[Package]) -> String {
         ));
     }
     rows.push_str("</tbody></table></div>");
-    rows
+    format!(
+        r#"{}<script>{}</script>"#,
+        wrap_activity_table_sized("packages", "Filter package name or id", &rows, 10),
+        activity_list_script(),
+    )
 }
 
 fn bulk_toolbar() -> String {

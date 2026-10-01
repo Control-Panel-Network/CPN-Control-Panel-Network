@@ -7,10 +7,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Paths that must never be deleted by upgrade cleanup (logged when matched).
+///
+/// MFA material lives under `/var/lib/cpn/mfa/` (mode 600). Upgrade, downgrade,
+/// and RPM maintenance must never wipe or recreate that tree. The `/var/lib/cpn`
+/// prefix already covers it; the explicit `/var/lib/cpn/mfa` entry documents the
+/// contract and keeps regression tests sharp.
 pub fn preserve_path_prefixes() -> Vec<&'static str> {
     vec![
         "/etc/cpn",
         "/var/lib/cpn",
+        "/var/lib/cpn/mfa",
         "/var/lib/cpn-webmail",
         "/home/",
         "/opt/cpn-webmail/snappymail",
@@ -262,6 +268,39 @@ mod tests {
         assert!(is_preserved(Path::new("/var/lib/cpn-webmail/snappymail")));
         assert!(!is_preserved(Path::new("/var/tmp/cpn-upgrade-abc")));
         assert!(!is_preserved(Path::new("/tmp/cpn-installer-status.json")));
+    }
+
+    #[test]
+    fn upgrade_cleanup_never_targets_mfa_tree() {
+        assert!(is_preserved(Path::new("/var/lib/cpn/mfa")));
+        assert!(is_preserved(Path::new(
+            "/var/lib/cpn/mfa/mfa-encryption.key"
+        )));
+        assert!(is_preserved(Path::new("/var/lib/cpn/mfa/cpnowner.json")));
+        assert!(is_preserved(Path::new(
+            "/var/lib/cpn/mfa/passkeys/cpnowner.json"
+        )));
+        // Removable allowlist must not include MFA paths.
+        for path in removable_exact_files() {
+            assert!(
+                !path.contains("/mfa"),
+                "removable allowlist must not include MFA path: {path}"
+            );
+        }
+        let report = cleanup_stale_packaging();
+        for removed in &report.removed {
+            assert!(
+                !removed.contains("/var/lib/cpn/mfa"),
+                "cleanup must not remove MFA path: {removed}"
+            );
+        }
+        assert!(
+            report
+                .notes
+                .iter()
+                .any(|n| n.to_ascii_lowercase().contains("mfa")),
+            "cleanup notes should mention MFA preservation"
+        );
     }
 
     #[test]

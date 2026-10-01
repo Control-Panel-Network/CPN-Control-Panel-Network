@@ -10,6 +10,7 @@ use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
     save_backup_destinations, save_backup_schedule,
 };
+use crate::panel_hub_pages_backups_plan::backups_restore_plan_page;
 use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -59,6 +60,39 @@ pub async fn backups_restore_route(
     ))
 }
 
+#[get("/backups/restore/plan")]
+pub async fn backups_restore_plan_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let archive = query.get("archive").map(String::as_str).unwrap_or("");
+    if archive.trim().is_empty() {
+        return redirect_notice(
+            "/backups/restore",
+            None,
+            Some("Choose an archive, then Select entities."),
+        );
+    }
+    html_ok(panel_shell(
+        &user,
+        "backups",
+        "Select restore entities",
+        &backups_restore_plan_page(
+            query.get("scope").map(String::as_str).unwrap_or("site"),
+            query.get("domain").map(String::as_str).unwrap_or(""),
+            archive,
+            query.get("format").map(String::as_str).unwrap_or("auto"),
+            query.get("db_name").map(String::as_str).unwrap_or(""),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct RestoreRunForm {
     #[serde(default)]
@@ -71,6 +105,22 @@ pub struct RestoreRunForm {
     format: String,
     #[serde(default)]
     db_name: String,
+    #[serde(default)]
+    create_domain_if_missing: String,
+    #[serde(default)]
+    confirm_create_domain: String,
+    #[serde(default)]
+    confirm_overwrite_files: String,
+    #[serde(default)]
+    confirm_import_databases: String,
+    #[serde(default)]
+    confirm_optional_entities: String,
+    #[serde(default)]
+    confirm_users_acl_packages: String,
+    /// Comma-separated entity ids from the plan page (`website`, `db:name`, `site:x`, …).
+    /// Checkboxes sync into this hidden field so Actix never sees repeated `entity` keys.
+    #[serde(default)]
+    entities: String,
 }
 
 #[post("/backups/restore/run")]
@@ -79,7 +129,7 @@ pub async fn backups_restore_run(
     state: web::Data<Arc<AppState>>,
     form: web::Form<RestoreRunForm>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
     let scope = if form.scope.trim().is_empty() {
@@ -89,19 +139,47 @@ pub async fn backups_restore_run(
     };
     let domain = form.domain.trim();
     let mut return_base = format!(
-        "/backups/restore?scope={}&domain={}",
+        "/backups/restore/plan?scope={}&domain={}&archive={}",
         urlencoding_simple(scope),
-        urlencoding_simple(domain)
+        urlencoding_simple(domain),
+        urlencoding_simple(form.archive.trim())
     );
-    match restore_backup(&RestoreRequest {
-        scope: scope.to_string(),
-        domain: domain.to_string(),
-        archive: form.archive.clone(),
-        format: form.format.clone(),
-        db_name: form.db_name.clone(),
-    }) {
+    let mut entity_ids: Vec<String> = form
+        .entities
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    // Deduplicate while preserving order.
+    let mut seen = std::collections::HashSet::new();
+    entity_ids.retain(|id| seen.insert(id.clone()));
+    let mut req = RestoreRequest::from_form_flags(
+        scope.to_string(),
+        domain.to_string(),
+        form.archive.clone(),
+        form.format.clone(),
+        form.db_name.clone(),
+        &form.create_domain_if_missing,
+        &form.confirm_create_domain,
+        &form.confirm_overwrite_files,
+        &form.confirm_import_databases,
+        &form.confirm_optional_entities,
+        &form.confirm_users_acl_packages,
+        entity_ids,
+    );
+    req.owner = user.clone();
+    match restore_backup(&req) {
         Ok(result) => {
             let mut msg = result.message;
+            if !result.entity_statuses.is_empty() {
+                let summary: Vec<String> = result
+                    .entity_statuses
+                    .iter()
+                    .map(|s| format!("{}:{}", s.id, s.status))
+                    .collect();
+                msg.push_str(" Entities: ");
+                msg.push_str(&summary.join(", "));
+            }
             if !result.warnings.is_empty() {
                 msg.push(' ');
                 msg.push_str(&result.warnings.join(" "));
@@ -263,4 +341,27 @@ pub async fn backups_remote_route(
             "Remote transfer targets are not configured yet.",
         ),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RestoreRunForm;
+
+    #[test]
+    fn restore_run_form_parses_comma_entities() {
+        let form: RestoreRunForm = serde_json::from_str(
+            r#"{"entities":"site:newstargeted.com,website,db:news_disco","archive":"a.tar.gz"}"#,
+        )
+        .expect("entities");
+        assert_eq!(form.archive, "a.tar.gz");
+        assert!(form.entities.contains("website"));
+        assert!(form.entities.contains("db:news_disco"));
+    }
+
+    #[test]
+    fn restore_run_form_allows_empty_entities() {
+        let form: RestoreRunForm =
+            serde_json::from_str(r#"{"archive":"a.tar.gz"}"#).expect("empty entities");
+        assert!(form.entities.is_empty());
+    }
 }

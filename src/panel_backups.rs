@@ -1,6 +1,7 @@
 //! Backups panel page HTML (selective chooser).
 
 use crate::backups::{BackupScope, is_subdomain_site, list_backup_files, resolve_archive_dir};
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::paths::{legacy_panel_backups_dir, panel_backups_dir};
 use crate::service_detect::detect_database;
 use crate::sites::{SiteRecord, list_sites};
@@ -56,13 +57,17 @@ fn backup_rows(files: &[(String, u64)], empty_msg: &str) -> String {
     );
     for (name, size) in files {
         rows.push_str(&format!(
-            r#"<tr><td><code>{name}</code></td><td>{size} bytes</td></tr>"#,
+            r#"<tr><td data-label="File"><code>{name}</code></td><td data-label="Size">{size} bytes</td></tr>"#,
             name = html_escape(name),
             size = size,
         ));
     }
     rows.push_str("</tbody></table></div>");
-    rows
+    format!(
+        r#"{}<script>{}</script>"#,
+        wrap_activity_table_sized("backup-archives", "Filter archive name", &rows, 10),
+        activity_list_script(),
+    )
 }
 
 fn site_options(sites: &[SiteRecord], selected: &str, subdomains_only: bool) -> String {
@@ -146,6 +151,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
             html_escape(&path_display)
         )
     };
+    let upload_hint = r#"<p class="muted">Restore scans preferred <code>/home/&lt;domain&gt;/backups/</code>, panel <code>/home/cpn-panel/backups/</code> (legacy <code>/var/lib/cpn/backups/</code>), and operator drops under <code>/home/cpn/backups/</code>, <code>/root/</code>, <code>/home/</code>, and <code>/</code>.</p>"#;
     let legacy = legacy_panel_backups_dir();
     let migrate_note = if scope == BackupScope::Panel
         && legacy.is_dir()
@@ -264,6 +270,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
       <article class="section-card">
         <h2>Selective backup</h2>
         {path_blurb}
+        {upload_hint}
         {migrate}
         <form method="get" action="/backups" class="stack-form" style="max-width:560px;">
           <fieldset style="border:1px solid #eeeef0;border-radius:12px;padding:12px 14px;">
@@ -296,6 +303,7 @@ pub fn backups_create_main(q: BackupsPageQuery<'_>) -> String {
         ok = notice_block("ok", q.notice),
         err = notice_block("error", q.error),
         path_blurb = path_blurb,
+        upload_hint = upload_hint,
         migrate = migrate_note,
         sp = scope_panel,
         ss = scope_site,

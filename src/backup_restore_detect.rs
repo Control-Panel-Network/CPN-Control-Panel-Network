@@ -10,12 +10,13 @@ pub enum BackupFormat {
 }
 
 impl BackupFormat {
+    /// Stable form/API token for this format (product UI must never emit third-party panel brands).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Cpn => "cpn",
             Self::WordPress => "wordpress",
             Self::Cpanel => "cpanel",
-            Self::CyberPanel => "cyberpanel",
+            Self::CyberPanel => "classic",
             Self::Unknown => "unknown",
         }
     }
@@ -25,7 +26,7 @@ impl BackupFormat {
             Self::Cpn => "CPN archive",
             Self::WordPress => "WordPress backup",
             Self::Cpanel => "cPanel backup",
-            Self::CyberPanel => "CyberPanel backup (source format)",
+            Self::CyberPanel => "Source control-panel backup (classic meta.xml)",
             Self::Unknown => "Unknown / unsupported",
         }
     }
@@ -36,9 +37,15 @@ impl BackupFormat {
             "cpn" | "native" => Ok(Self::Cpn),
             "wordpress" | "wp" => Ok(Self::WordPress),
             "cpanel" | "cpmove" => Ok(Self::Cpanel),
-            "cyberpanel" | "cp" => Ok(Self::CyberPanel),
+            // `classic` is the product UI value; silent aliases kept for API/back-compat only.
+            "classic"
+            | "source"
+            | "source_panel"
+            | "source-control-panel"
+            | "cp"
+            | "cyberpanel" => Ok(Self::CyberPanel),
             other => Err(format!(
-                "Unknown format `{other}`. Use: auto, cpn, wordpress, cpanel, cyberpanel"
+                "Unknown format `{other}`. Use: auto, cpn, wordpress, cpanel, classic"
             )),
         }
     }
@@ -81,8 +88,8 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
     let has = |needle: &str| paths.iter().any(|p| p == needle || p.ends_with(needle));
     let contains = |needle: &str| paths.iter().any(|p| p.contains(needle));
 
-    // CyberPanel classic: meta.xml + public_html (source format only; CPN is not CyberPanel).
-    let cyber = has("meta.xml")
+    // Classic meta.xml + public_html source-panel layout (product UI never names the source brand).
+    let classic = has("meta.xml")
         || (name.starts_with("backup-") && contains("meta.xml"))
         || (has("meta.xml") && contains("public_html/"));
 
@@ -121,9 +128,9 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
                 .into(),
         );
     }
-    if cyber {
+    if classic {
         notes.push(
-            "Import CyberPanel backup: files map to the chosen site docroot; databases import when MariaDB is available. Email (vmail) is best-effort only."
+            "Classic source control-panel backup: files map to the chosen site docroot; databases import when MariaDB is available. Email (vmail) is best-effort only."
                 .into(),
         );
     }
@@ -135,7 +142,7 @@ pub fn detect_from_members(filename: &str, members: &[String]) -> DetectedBackup
     }
 
     // Prefer stronger structural markers over filename heuristics.
-    if cyber && !cpanel {
+    if classic && !cpanel {
         return DetectedBackup {
             format: BackupFormat::CyberPanel,
             confidence: "high",
@@ -265,13 +272,33 @@ mod tests {
     }
 
     #[test]
-    fn labels_never_claim_cpn_is_cyberpanel() {
-        assert!(BackupFormat::CyberPanel.label().contains("source format"));
+    fn labels_prefer_source_control_panel_wording() {
+        let label = BackupFormat::CyberPanel.label().to_ascii_lowercase();
+        assert!(label.contains("source control-panel") || label.contains("source format"));
+        assert!(!label.contains("cyberpanel"));
+        assert_eq!(BackupFormat::CyberPanel.as_str(), "classic");
+        assert_eq!(
+            BackupFormat::parse("classic").unwrap(),
+            BackupFormat::CyberPanel
+        );
         assert!(
             !BackupFormat::Cpn
                 .label()
                 .to_ascii_lowercase()
                 .contains("cyberpanel")
         );
+    }
+
+    #[test]
+    fn classic_notes_avoid_third_party_panel_brand() {
+        let members = vec![
+            "./meta.xml".into(),
+            "./public_html/index.html".into(),
+            "./site_db.sql".into(),
+        ];
+        let d = detect_from_members("backup-example.com-01.tar.gz", &members);
+        let blob = d.notes.join(" ").to_ascii_lowercase();
+        assert!(!blob.contains("cyberpanel"));
+        assert!(blob.contains("source control-panel") || blob.contains("classic"));
     }
 }
