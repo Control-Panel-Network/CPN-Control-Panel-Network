@@ -93,6 +93,9 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         .filter(|f| names_equal(&f.owner, username))
         .count() as u64;
     let disk_mb_used = disk_used_mb(username)?;
+    let bandwidth_mb_used = crate::package_bandwidth::bytes_to_mb_ceil(
+        crate::package_bandwidth::account_month_bytes(username),
+    );
     Ok(PackageUsage {
         package_id: package.id,
         package_name: package.name,
@@ -106,6 +109,7 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         ftp_limit: package.ftp_accounts,
         disk_mb_used,
         disk_mb_limit: package.disk_mb,
+        bandwidth_mb_used,
         bandwidth_mb_limit: package.bandwidth_mb,
         fqdn_enabled: package.fqdn_enabled,
     })
@@ -130,6 +134,11 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
         QuotaResource::Databases => ("databases", usage.databases_used, usage.databases_limit),
         QuotaResource::FtpAccounts => ("FTP accounts", usage.ftp_used, usage.ftp_limit),
         QuotaResource::DiskMb => ("disk (MB)", usage.disk_mb_used, usage.disk_mb_limit),
+        QuotaResource::BandwidthMb => (
+            "monthly bandwidth (MB)",
+            usage.bandwidth_mb_used,
+            usage.bandwidth_mb_limit,
+        ),
     };
     if limit_reached(used, limit) {
         return Err(format!(
@@ -145,6 +154,7 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
 pub fn require_site_create_allowed(owner: &str, domain_raw: &str) -> Result<(), String> {
     require_quota(owner, QuotaResource::Domains)?;
     require_quota(owner, QuotaResource::DiskMb)?;
+    require_quota(owner, QuotaResource::BandwidthMb)?;
     let domain = domain_raw.trim().to_ascii_lowercase();
     let is_subdomain = !parent_domain_candidates(&domain).is_empty();
     if is_subdomain {

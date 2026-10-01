@@ -151,7 +151,13 @@ fn render_section(
                 } else {
                     &[]
                 };
-                let block = group_block(id, href, label, children, active, feats, extras);
+                // Admin-only pages (create user, ACL) are not offered to other accounts.
+                let kids: Vec<NavChild> = children
+                    .iter()
+                    .copied()
+                    .filter(|c| admin || !crate::panel_hub_admin_gate::is_admin_only_href(c.href))
+                    .collect();
+                let block = group_block(id, href, label, &kids, active, feats, extras);
                 if !block.is_empty() {
                     tiles.push(block);
                 }
@@ -261,8 +267,12 @@ mod tests {
         assert!(html.contains("nav-tile-grid"));
         assert!(html.contains("nav-tile"));
         assert!(html.contains("View Profile"));
-        assert!(html.contains("Create New User"));
         assert!(html.contains("List Users"));
+        assert!(html.contains("Modify User"));
+        // No bootstrap admin here, so admin-only links must not be offered.
+        assert!(!html.contains("Create New User"));
+        assert!(!html.contains("/account/acl/modify"));
+        assert!(!html.contains("/account/acl/create"));
         assert!(html.contains("/account/users/profile"));
         assert!(html.contains("nav-child-btn"));
         assert!(html.contains(" open"));
@@ -270,6 +280,39 @@ mod tests {
         assert!(
             html.contains("/plugins?view=store") || html.contains("data-nav-group=\"plugins\"")
         );
+    }
+
+    #[test]
+    fn admin_sees_create_user_and_acl_links() {
+        use crate::account::{
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
+        };
+        with_test_data_dir(|| {
+            let boot = PanelBootstrap {
+                schema_version: 1,
+                username: "owner".into(),
+                recovery_email: "owner@example.com".into(),
+                password_hash: "x".into(),
+                password_salt: new_password_salt(),
+                password_policy: default_password_policy(),
+                language: "en".into(),
+                created_at_unix: 1,
+                must_change_password: false,
+                totp_required: false,
+                disabled: false,
+            };
+            write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
+            let admin = nav_links_html("users", "owner");
+            assert!(admin.contains("Create New User"));
+            assert!(admin.contains("/account/acl/modify"));
+            assert!(admin.contains("/account/acl/create"));
+            let guest = nav_links_html("users", "enrolltest");
+            assert!(!guest.contains("Create New User"));
+            assert!(!guest.contains("/account/acl/modify"));
+            assert!(!guest.contains("/account/acl/create"));
+            assert!(guest.contains("List Users"));
+        });
     }
 
     #[test]

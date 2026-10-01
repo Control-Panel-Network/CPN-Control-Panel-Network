@@ -42,7 +42,7 @@ pub fn notice_block(kind: &str, message: Option<&str>) -> String {
     };
     format!(
         r#"<p class="{class}" role="status">{msg}</p>"#,
-        msg = html_escape(message)
+        msg = html_escape(&crate::panel_hub_admin_gate::decode_notice_code(message))
     )
 }
 
