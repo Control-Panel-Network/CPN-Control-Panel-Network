@@ -99,13 +99,28 @@ fn html_escape(value: &str) -> String {
 /// Wrap a rendered data table with search + pagination controls (default 10 per page).
 /// Pass `None` / empty inner when there is no table (caller shows empty-state instead).
 pub fn wrap_activity_table(list_id: &str, search_placeholder: &str, table_html: &str) -> String {
+    wrap_activity_table_sized(list_id, search_placeholder, table_html, 10)
+}
+
+/// Same as [`wrap_activity_table`] with a chosen starting page size (5, 10, 20 or 50).
+pub fn wrap_activity_table_sized(
+    list_id: &str,
+    search_placeholder: &str,
+    table_html: &str,
+    page_size: usize,
+) -> String {
+    let page_size = if matches!(page_size, 5 | 10 | 20 | 50) {
+        page_size
+    } else {
+        10
+    };
     if table_html.trim().is_empty() || table_html.contains("empty-state") {
         return table_html.to_string();
     }
     let id = html_escape(list_id);
     let ph = html_escape(search_placeholder);
     format!(
-        r#"<div class="activity-list" data-activity-list id="activity-list-{id}" data-page-size="10">
+        r#"<div class="activity-list" data-activity-list id="activity-list-{id}" data-page-size="{size}">
   <div class="activity-list-controls" role="group" aria-label="Table search and pagination">
     <div class="activity-list-search-wrap">
       <label for="activity-search-{id}">Search</label>
@@ -115,10 +130,7 @@ pub fn wrap_activity_table(list_id: &str, search_placeholder: &str, table_html: 
     <div class="activity-list-pager">
       <label for="activity-per-page-{id}">Show
         <select class="activity-list-per-page" id="activity-per-page-{id}" aria-label="Rows per page">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
+          {opts}
         </select>
         per page
       </label>
@@ -137,6 +149,15 @@ pub fn wrap_activity_table(list_id: &str, search_placeholder: &str, table_html: 
   <p class="empty-state activity-list-empty" data-activity-empty hidden>No matching rows.</p>
 </div>"#,
         id = id,
+        size = page_size,
+        opts = [5usize, 10, 20, 50]
+            .iter()
+            .map(|n| {
+                let sel = if *n == page_size { " selected" } else { "" };
+                format!(r#"<option value="{n}"{sel}>{n}</option>"#)
+            })
+            .collect::<Vec<_>>()
+            .join("\n          "),
         ph = ph,
         table = table_html,
     )
@@ -246,6 +267,20 @@ mod tests {
         let out = wrap_activity_table("x", "Find", r#"<p class="empty-state">None</p>"#);
         assert!(out.contains("empty-state"));
         assert!(!out.contains("data-activity-list"));
+    }
+
+    #[test]
+    fn sized_wrap_starts_at_the_chosen_page_size() {
+        use super::wrap_activity_table_sized;
+        let table = r#"<div class="table-wrap"><table class="data-table"><tbody><tr><td>a</td></tr></tbody></table></div>"#;
+        let out = wrap_activity_table_sized("logs", "Find", table, 5);
+        assert!(out.contains(r#"data-page-size="5""#));
+        assert!(out.contains(r#"value="5" selected"#));
+        assert!(!out.contains(r#"value="10" selected"#));
+        assert!(out.contains(r#"<option value="10">10</option>"#));
+        // Unsupported sizes fall back to 10.
+        let odd = wrap_activity_table_sized("logs", "Find", table, 7);
+        assert!(odd.contains(r#"data-page-size="10""#));
     }
 
     #[test]

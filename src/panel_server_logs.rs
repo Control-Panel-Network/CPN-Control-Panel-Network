@@ -283,19 +283,20 @@ mod tests {
     }
 
     #[test]
-    fn paginate_defaults_to_ten_newest_first_searchable_and_clamped() {
+    fn paginate_defaults_to_five_newest_first_searchable_and_clamped() {
         let text = (1..=120)
             .map(|i| format!("line {i} {}", if i % 2 == 0 { "even" } else { "odd" }))
             .collect::<Vec<_>>()
             .join("\n");
         let p = paginate_text(HostLogKind::Error, "/x", &text, "", 1, DEFAULT_PER_PAGE);
         assert_eq!(p.total_lines, 120);
-        assert_eq!(p.total_pages, 12);
+        assert_eq!(p.total_pages, 24);
         assert_eq!(
             p.entries.first().map(|e| e.text.as_str()),
             Some("line 120 even")
         );
-        assert_eq!(p.entries.len(), 10);
+        assert_eq!(p.entries.len(), 5);
+        assert_eq!(p.per_page, 5);
 
         let last = paginate_text(HostLogKind::Error, "/x", &text, "", 99, 25);
         assert_eq!(last.page, 5);

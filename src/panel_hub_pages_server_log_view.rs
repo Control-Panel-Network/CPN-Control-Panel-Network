@@ -345,6 +345,30 @@ mod tests {
     }
 
     #[test]
+    fn viewers_default_to_five_per_page_and_keep_larger_choices() {
+        let text = (1..=12)
+            .map(|i| format!("l{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let page = paginate_text(
+            HostLogKind::Email,
+            "/x",
+            &text,
+            "",
+            1,
+            crate::panel_server_logs::DEFAULT_PER_PAGE,
+        );
+        assert_eq!(page.per_page, 5);
+        assert_eq!(page.total_pages, 3);
+        let html = controls(&page);
+        assert!(html.contains(r#"<option value="5" selected>5</option>"#));
+        for n in [10, 25, 50, 100, 200] {
+            assert!(html.contains(&format!(r#"<option value="{n}">{n}</option>"#)));
+        }
+        assert!(html.contains("Page 1 / 3"));
+    }
+
+    #[test]
     fn search_and_pager_chrome_matches_the_overview_classes() {
         let page = paginate_text(HostLogKind::Error, "/x", "a\nb", "", 1, 10);
         let html = controls(&page);

@@ -3,8 +3,8 @@
 //! The request never supplies a path: only these files and systemd units are ever read.
 
 /// Page sizes offered in the UI (default is the first entry that equals [`DEFAULT_PER_PAGE`]).
-pub const PAGE_SIZES: [usize; 5] = [10, 25, 50, 100, 200];
-pub const DEFAULT_PER_PAGE: usize = 10;
+pub const PAGE_SIZES: [usize; 6] = [5, 10, 25, 50, 100, 200];
+pub const DEFAULT_PER_PAGE: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostLogKind {
@@ -200,8 +200,9 @@ mod tests {
     }
 
     #[test]
-    fn default_page_size_is_ten_and_offered() {
-        assert_eq!(DEFAULT_PER_PAGE, 10);
+    fn default_page_size_is_five_and_offered() {
+        assert_eq!(DEFAULT_PER_PAGE, 5);
+        assert!(PAGE_SIZES.contains(&10));
         assert!(PAGE_SIZES.contains(&DEFAULT_PER_PAGE));
     }
 

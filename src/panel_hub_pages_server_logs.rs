@@ -2,7 +2,7 @@
 
 use crate::panel_action_log::{ActionRecord, action_label, recent};
 use crate::panel_admin::is_panel_admin;
-use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table};
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::panel_hubs::{HubTile, feature_shell, hub_tiles_grid};
 use crate::panel_ops_ssl_inspect::format_dd_mm_yyyy;
 use crate::panel_server_logs::HostLogKind;
@@ -68,6 +68,12 @@ document.querySelectorAll('time[data-ts]').forEach(function(t){var d=new Date(pa
 /// Searchable, paginated table of plugin and host-package actions. Panel admins see every
 /// account; other users only see their own actions.
 pub fn panel_actions_table(username: &str) -> String {
+    panel_actions_table_sized(username, 10)
+}
+
+/// Same table with a chosen starting page size (Server > Logs starts at
+/// [`crate::panel_server_logs::DEFAULT_PER_PAGE`]).
+pub fn panel_actions_table_sized(username: &str, page_size: usize) -> String {
     let filter = if is_panel_admin(username) {
         None
     } else {
@@ -80,10 +86,11 @@ pub fn panel_actions_table(username: &str) -> String {
     }
     format!(
         "{}{}",
-        wrap_activity_table(
+        wrap_activity_table_sized(
             "panel-actions",
             "Filter user, action, site or details",
-            &rows_table(&rows)
+            &rows_table(&rows),
+            page_size
         ),
         local_time_script()
     )
@@ -126,7 +133,7 @@ pub fn server_logs_page(username: &str) -> String {
 {table}<script>{script}</script>"#,
         tabs = crate::panel_server_logs_tabs::log_tabs(None),
         tiles = hub_tiles_grid("Log sources", &tiles),
-        table = panel_actions_table(username),
+        table = panel_actions_table_sized(username, crate::panel_server_logs::DEFAULT_PER_PAGE),
         script = activity_list_script(),
     );
     feature_shell(
