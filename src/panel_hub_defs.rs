@@ -181,6 +181,12 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "System Repair",
+                    subtitle: "Diagnose and heal install issues",
+                    href: "/server/system-repair",
+                    live: true,
+                },
+                HubTile {
                     title: "Open OLS",
                     subtitle: "OpenLiteSpeed WebAdmin",
                     href: "/server/openlitespeed",
@@ -382,6 +388,12 @@ pub fn settings_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     title: "Version Management",
                     subtitle: "Update CPN",
                     href: "/settings/version",
+                    live: true,
+                },
+                HubTile {
+                    title: "System Repair",
+                    subtitle: "Owner diagnostics and safe heals",
+                    href: "/settings/system-repair",
                     live: true,
                 },
                 HubTile {

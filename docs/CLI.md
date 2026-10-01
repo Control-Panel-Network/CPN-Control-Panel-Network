@@ -31,12 +31,26 @@ Top-level groups:
 | `plugin` | Per-site plugin management |
 | `app` | Host applications and services |
 | `package` | Hosting packages and account assignments |
-| `doctor` | Health checks: CLI paths, panel unit, `/login`, core manifest, host/plugin summary |
+| `doctor` | **System Repair**: panel/CLI health, email ports, phpMyAdmin, PHP, WordPress, MariaDB, firewall, MFA presence, Docker (aliases: `troubleshoot`, `repair`, `system-repair`) |
 | `uninstall` | Remove CPN from this host (same engine as `cpn-installer --uninstall`) |
 
-## Repair, upgrade, uninstall, and `cpn doctor`
+## Repair, upgrade, uninstall, and System Repair (`cpn doctor`)
 
-There is **no** `cpn --repair`. Repair, upgrade, and product uninstall belong to the installer binary (uninstall is also exposed as `cpn uninstall`):
+There is **no** `cpn --repair` installer flag alias on the CLI binary name alone. Product repair, upgrade, and uninstall belong to the installer binary (uninstall is also exposed as `cpn uninstall`). **System Repair** (`cpn doctor`) is the operator diagnostics suite:
+
+```bash
+cpn doctor                      # run all checks
+cpn doctor --json               # machine-readable report
+cpn doctor check --id email.stack
+sudo cpn doctor --heal          # safe heals, then re-check (also: cpn doctor heal)
+sudo cpn doctor heal --id phpmyadmin
+cpn troubleshoot                # alias of doctor
+cpn repair check                # alias of doctor
+```
+
+Panel (owner only): **Server > System Repair** or **Settings > System Repair** (`/server/system-repair`).
+
+There is **no** `cpn --repair` as a global installer switch on `cpn` itself for package re-apply. Use:
 
 ```bash
 sudo cpn-installer --upgrade          # tip package (or --to X.Y.Z); preserves accounts/sites

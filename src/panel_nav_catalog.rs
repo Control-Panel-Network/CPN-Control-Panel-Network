@@ -323,6 +323,10 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
         href: "/settings/version",
     },
     NavChild {
+        label: "System Repair",
+        href: "/server/system-repair",
+    },
+    NavChild {
         label: "Design",
         href: "/settings/design",
     },
@@ -481,6 +485,11 @@ pub(crate) const SERVER: &[NavEntry] = &[
         id: "services",
         href: "/server/services",
         label: "Manage Services",
+    },
+    NavEntry::Link {
+        id: "system-repair",
+        href: "/server/system-repair",
+        label: "System Repair",
     },
     NavEntry::Link {
         id: "processes",

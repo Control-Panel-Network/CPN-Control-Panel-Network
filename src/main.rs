@@ -87,7 +87,9 @@ use cpn_installer::panel_hub_routes::{
     server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
     server_php_extensions_install, server_php_extensions_set_default,
     server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
-    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    server_processes_page, server_services_control, server_services_page,
+    settings_system_repair_redirect, system_repair_api_route, system_repair_heal_route,
+    system_repair_route, settings_connect_page,
     settings_design_page, settings_error_messages_page, settings_error_messages_preview,
     settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
     settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
@@ -1226,6 +1228,10 @@ async fn main() -> std::io::Result<()> {
             .service(server_log_view_route)
             .service(server_services_page)
             .service(server_services_control)
+            .service(system_repair_route)
+            .service(system_repair_api_route)
+            .service(system_repair_heal_route)
+            .service(settings_system_repair_redirect)
             .service(server_openlitespeed_page)
             .service(server_openlitespeed_password)
             .service(server_openlitespeed_reset_cpn)
