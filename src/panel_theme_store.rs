@@ -1,4 +1,4 @@
-//! Theme Store UI for Settings > Design (CPN-Themes catalog, Plugin Store-like install).
+//! Theme Store UI for Settings > Design (`?tab=store`; CPN-Themes catalog).
 
 use crate::panel_admin::is_panel_admin;
 
@@ -19,7 +19,7 @@ pub fn themes_catalog_panel(username: &str) -> String {
   <div id="cpn-themes-grid" class="plugin-grid" aria-live="polite"></div>
 </article>
 <style>
-.cpn-themes-catalog {{ margin-top:18px; }}
+.cpn-themes-catalog {{ margin-top:0; }}
 .cpn-themes-head {{ display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }}
 .cpn-themes-catalog h2 {{ margin:0 0 6px; font-size:18px; color:var(--ink); }}
 .cpn-theme-swatch {{
@@ -122,7 +122,7 @@ pub fn themes_catalog_panel(username: &str) -> String {
           headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
           body: JSON.stringify({{ id: id }})
         }}).then(function () {{
-          window.location.assign(window.location.pathname + window.location.search);
+          window.location.assign("/settings/design?tab=store");
         }}).catch(function (err) {{
           statusEl.textContent = err.message || String(err);
           alert(err.message || String(err));
