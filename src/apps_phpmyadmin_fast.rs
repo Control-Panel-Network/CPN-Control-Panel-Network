@@ -150,7 +150,12 @@ mod tests {
 
     #[test]
     fn fpm_pool_keeps_a_warm_worker() {
-        let body = fpm_pool_body(Path::new("/usr/share/phpMyAdmin"), "nobody", "nobody", "0660");
+        let body = fpm_pool_body(
+            Path::new("/usr/share/phpMyAdmin"),
+            "nobody",
+            "nobody",
+            "0660",
+        );
         assert!(body.contains("pm = dynamic"));
         assert!(body.contains("pm.min_spare_servers = 1"));
         assert!(!body.contains("pm = ondemand"));
