@@ -62,6 +62,7 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/api/panel/themes/uninstall" => Some("theme.uninstall"),
         "/api/panel/themes/apply" => Some("theme.apply"),
         "/api/panel/themes/update-all" => Some("theme.update-all"),
+        "/api/panel/themes/redeem" => Some("theme.redeem"),
         _ => None,
     }
 }
@@ -89,6 +90,7 @@ pub fn action_label(action: &str) -> &'static str {
         "theme.uninstall" => "Theme: uninstall",
         "theme.apply" => "Theme: apply",
         "theme.update-all" => "Theme: update all",
+        "theme.redeem" => "Theme: redeem",
         _ => "Panel action",
     }
 }

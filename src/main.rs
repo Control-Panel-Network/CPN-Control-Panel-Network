@@ -138,7 +138,7 @@ use cpn_installer::panel_theme_routes::{
 };
 use cpn_installer::panel_themes_api::{
     panel_themes_actions, panel_themes_apply, panel_themes_asset, panel_themes_catalog,
-    panel_themes_install, panel_themes_uninstall, panel_themes_update_all,
+    panel_themes_install, panel_themes_redeem, panel_themes_uninstall, panel_themes_update_all,
 };
 use cpn_installer::panel_website_alias_cron_routes::{
     websites_alias_add, websites_alias_remove, websites_cron_add, websites_cron_delete,
@@ -1178,6 +1178,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_design_restore)
             .service(panel_themes_catalog)
             .service(panel_themes_asset)
+            .service(panel_themes_redeem)
             .service(panel_themes_install)
             .service(panel_themes_uninstall)
             .service(panel_themes_update_all)

@@ -10,7 +10,8 @@ use crate::panel_theme::{
 use crate::panel_user_prefs::save_user_color_mode;
 use crate::plugins::format_unix_local;
 use crate::themes_catalog::{
-    fetch_themes_catalog, themes_next_refresh_unix, themes_repo_slug, themes_repo_url,
+    fetch_themes_catalog, merge_with_paid_catalog, themes_next_refresh_unix, themes_repo_slug,
+    themes_repo_url,
 };
 use crate::themes_install::{
     enrich_catalog_for_store, install_theme, list_installed_themes, load_installed_theme,
@@ -76,19 +77,27 @@ pub async fn panel_themes_catalog(
         Ok((entries, fetched_at)) => {
             let design = load_panel_design();
             let active = design.active_theme_id.as_deref();
-            let themes = enrich_catalog_for_store(&entries, active);
+            let merged = merge_with_paid_catalog(entries);
+            let themes = enrich_catalog_for_store(&merged, active);
             let installed = list_installed_themes();
             let new_count = themes.iter().filter(|t| !t.installed).count();
+            let paid_count = themes
+                .iter()
+                .filter(|t| crate::theme_entitlements::theme_is_paid(&t.entry.pricing))
+                .count();
             json_ok(serde_json::json!({
                 "ok": true,
                 "repo": themes_repo_slug(),
                 "repo_url": themes_repo_url(),
+                "shop_catalog_url": crate::theme_entitlements::shop_purchase_url(),
+                "store_category_url": crate::theme_entitlements::store_category_url(),
                 "fetched_at_unix": fetched_at,
                 "next_refresh_unix": themes_next_refresh_unix(fetched_at),
                 "fetched_at_local": format_unix_local(fetched_at),
                 "active_theme_id": design.active_theme_id,
                 "installed_count": installed.len(),
                 "available_count": new_count,
+                "paid_count": paid_count,
                 "themes": themes,
             }))
         }
@@ -99,6 +108,70 @@ pub async fn panel_themes_catalog(
 #[derive(Debug, Deserialize)]
 pub struct ThemeIdBody {
     id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ThemeRedeemBody {
+    id: String,
+    #[serde(default)]
+    activation_key: String,
+    #[serde(default)]
+    license_email: String,
+    #[serde(default)]
+    grant_plugin: String,
+}
+
+#[post("/api/panel/themes/redeem")]
+pub async fn panel_themes_redeem(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<ThemeRedeemBody>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    if !is_panel_admin(&user) {
+        return json_err(403, "Only the panel admin can redeem theme licenses");
+    }
+    let id = body.id.trim().to_ascii_lowercase();
+    if id.is_empty() {
+        return json_err(400, "theme id is required");
+    }
+    let grant = if body.grant_plugin.trim().is_empty() {
+        // Prefer catalog grant_plugin when omitted.
+        crate::theme_entitlements::fetch_paid_themes_catalog()
+            .ok()
+            .and_then(|paid| {
+                paid.into_iter()
+                    .find(|p| p.id.eq_ignore_ascii_case(&id))
+                    .map(|p| p.grant_plugin)
+            })
+            .unwrap_or_else(|| format!("cpn-theme-{id}"))
+    } else {
+        body.grant_plugin.trim().to_string()
+    };
+    match crate::theme_entitlements::redeem_theme_activation_key(
+        &id,
+        &grant,
+        &body.activation_key,
+        &body.license_email,
+    ) {
+        Ok(entry) => {
+            let msg = format!("Unlocked {} ({})", entry.theme_id, entry.via);
+            log_theme_action(&user, "theme.redeem", &id, true, &msg);
+            json_ok(serde_json::json!({
+                "ok": true,
+                "message": msg,
+                "theme_id": entry.theme_id,
+                "entitled": entry.entitled,
+                "via": entry.via,
+            }))
+        }
+        Err(err) => {
+            log_theme_action(&user, "theme.redeem", &id, false, &err);
+            json_err(400, &err)
+        }
+    }
 }
 
 #[post("/api/panel/themes/install")]
@@ -295,10 +368,11 @@ pub async fn panel_themes_update_all(
         }
     };
     let design = load_panel_design();
-    let rows = enrich_catalog_for_store(&entries, design.active_theme_id.as_deref());
+    let merged = merge_with_paid_catalog(entries);
+    let rows = enrich_catalog_for_store(&merged, design.active_theme_id.as_deref());
     let pending: Vec<_> = rows
         .into_iter()
-        .filter(|row| row.update_available)
+        .filter(|row| row.update_available && !row.locked)
         .collect();
     if pending.is_empty() {
         log_theme_action(

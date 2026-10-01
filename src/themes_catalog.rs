@@ -18,6 +18,10 @@ const CATALOG_REPO: &str = "Control-Panel-Network/CPN-Themes";
 const CATALOG_TARBALL: &str =
     "https://codeload.github.com/Control-Panel-Network/CPN-Themes/tar.gz/refs/heads/main";
 
+fn default_free_pricing() -> String {
+    "free".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeCatalogEntry {
     pub id: String,
@@ -25,6 +29,14 @@ pub struct ThemeCatalogEntry {
     pub description: String,
     pub author: String,
     pub version: String,
+    #[serde(default = "default_free_pricing")]
+    pub pricing: String,
+    #[serde(default)]
+    pub grant_plugin: String,
+    #[serde(default)]
+    pub purchase_url: String,
+    #[serde(default)]
+    pub store_url: String,
     pub tokens: DesignTokens,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background: Option<ThemeBackground>,
@@ -177,6 +189,10 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
         } else {
             parsed.version.trim().to_string()
         },
+        pricing: default_free_pricing(),
+        grant_plugin: String::new(),
+        purchase_url: String::new(),
+        store_url: String::new(),
         tokens,
         background,
     })
@@ -278,10 +294,44 @@ pub fn fetch_themes_catalog(force_refresh: bool) -> Result<(Vec<ThemeCatalogEntr
 pub fn find_theme(id: &str, force_refresh: bool) -> Result<ThemeCatalogEntry, String> {
     let want = id.trim();
     let (entries, _) = fetch_themes_catalog(force_refresh)?;
-    entries
+    let merged = merge_with_paid_catalog(entries);
+    merged
         .into_iter()
         .find(|t| t.id.eq_ignore_ascii_case(want))
-        .ok_or_else(|| format!("Theme `{want}` was not found in the CPN-Themes catalog"))
+        .ok_or_else(|| format!("Theme `{want}` was not found in the theme catalog"))
+}
+
+/// Merge free GitHub catalog rows with paid api.newstargeted.com themes (best-effort).
+pub fn merge_with_paid_catalog(mut free: Vec<ThemeCatalogEntry>) -> Vec<ThemeCatalogEntry> {
+    let paid = crate::theme_entitlements::fetch_paid_themes_catalog().unwrap_or_default();
+    for meta in paid {
+        if free.iter().any(|e| e.id.eq_ignore_ascii_case(&meta.id)) {
+            continue;
+        }
+        free.push(ThemeCatalogEntry {
+            id: meta.id,
+            name: meta.name,
+            description: if meta.description.trim().is_empty() {
+                "Paid CPN theme.".into()
+            } else {
+                meta.description
+            },
+            author: meta.author,
+            version: meta.version,
+            pricing: "paid".into(),
+            grant_plugin: meta.grant_plugin,
+            purchase_url: meta.purchase_url,
+            store_url: meta.store_url,
+            tokens: meta.tokens,
+            background: meta.background,
+        });
+    }
+    free.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
+    free
 }
 
 pub fn themes_next_refresh_unix(fetched_at: u64) -> u64 {

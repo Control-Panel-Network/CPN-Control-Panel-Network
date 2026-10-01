@@ -362,6 +362,7 @@ pub mod smtp_settings;
 pub mod status_pages;
 pub mod themes_catalog;
 pub mod themes_install;
+pub mod theme_entitlements;
 pub mod uninstall_confirm;
 pub mod upgrade;
 pub mod upgrade_apply;

@@ -242,16 +242,33 @@ pub fn list_installed_themes() -> Vec<InstalledThemeManifest> {
     out
 }
 
-/// Install (or reinstall/update) a theme package from the CPN-Themes GitHub archive.
+/// Install (or reinstall/update) a theme package from CPN-Themes or the paid API.
 pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
     let id = normalize_theme_id(theme_id)?;
+    // Paid themes: entitle then download package from api.newstargeted.com.
+    if let Ok(paid) = crate::theme_entitlements::fetch_paid_themes_catalog()
+        && let Some(meta) = paid.iter().find(|p| p.id.eq_ignore_ascii_case(&id))
+    {
+        crate::theme_entitlements::ensure_paid_theme_entitled(&id, &meta.grant_plugin)?;
+        let bytes = crate::theme_entitlements::download_paid_theme_package(&id)?;
+        return install_theme_from_archive_bytes(&id, &bytes, "paid-api", "api.newstargeted.com");
+    }
     let bytes = curl_bytes(CATALOG_TARBALL)?;
+    install_theme_from_archive_bytes(&id, &bytes, "catalog", themes_repo_slug())
+}
+
+fn install_theme_from_archive_bytes(
+    id: &str,
+    bytes: &[u8],
+    source: &str,
+    catalog_repo: &str,
+) -> Result<InstalledThemeManifest, String> {
     let tar_path =
         std::env::temp_dir().join(format!("cpn-theme-install-{}.tar.gz", std::process::id()));
     let extract = std::env::temp_dir().join(format!("cpn-theme-install-{}", std::process::id()));
     let _ = fs::remove_dir_all(&extract);
     fs::create_dir_all(&extract).map_err(|e| format!("Could not create temp dir: {e}"))?;
-    fs::write(&tar_path, &bytes).map_err(|e| format!("Could not write tarball: {e}"))?;
+    fs::write(&tar_path, bytes).map_err(|e| format!("Could not write tarball: {e}"))?;
     let status = Command::new("tar")
         .args(["-xzf"])
         .arg(&tar_path)
@@ -264,16 +281,14 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
         let _ = fs::remove_dir_all(&extract);
         return Err("Failed to extract theme archive".into());
     }
-    let Some(src) = find_theme_src(&extract, &id) else {
+    let Some(src) = find_theme_src(&extract, id) else {
         let _ = fs::remove_dir_all(&extract);
-        return Err(format!(
-            "Theme `{id}` was not found in the CPN-Themes catalog archive"
-        ));
+        return Err(format!("Theme `{id}` was not found in the theme archive"));
     };
     let raw = fs::read_to_string(src.join("theme.json"))
         .map_err(|e| format!("Could not read theme.json: {e}"))?;
-    let entry = crate::themes_catalog::parse_theme_json_for_install(&id, &raw)?;
-    let dest = theme_dir(&id);
+    let entry = crate::themes_catalog::parse_theme_json_for_install(id, &raw)?;
+    let dest = theme_dir(id);
     if dest.exists() {
         let _ = fs::remove_dir_all(&dest);
     }
@@ -288,14 +303,13 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
         description: entry.description.clone(),
         author: entry.author.clone(),
         installed_at_unix: now_unix(),
-        source: "catalog".into(),
-        catalog_repo: themes_repo_slug().into(),
+        source: source.into(),
+        catalog_repo: catalog_repo.into(),
         tokens: entry.tokens.clone(),
         background: entry.background.clone(),
         has_theme_css,
     };
-    write_json(&manifest_path(&id), &manifest)?;
-    // Keep a clean theme.json copy for operators inspecting the package.
+    write_json(&manifest_path(id), &manifest)?;
     let mut theme_json = serde_json::json!({
         "schema_version": 1,
         "id": entry.id,
@@ -303,6 +317,7 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
         "description": entry.description,
         "author": entry.author,
         "version": entry.version,
+        "pricing": entry.pricing,
         "tokens": entry.tokens,
     });
     if let Some(bg) = entry.background.as_ref()
@@ -313,7 +328,7 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
             serde_json::to_value(bg).unwrap_or(serde_json::Value::Null),
         );
     }
-    write_json(&theme_json_path(&id), &theme_json)?;
+    write_json(&theme_json_path(id), &theme_json)?;
     Ok(manifest)
 }
 
@@ -327,7 +342,7 @@ pub fn uninstall_theme(theme_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Catalog row enriched with install/active state for Theme Store UI.
+/// Catalog row enriched with install/active/entitlement state for Theme Store UI.
 #[derive(Debug, Clone, Serialize)]
 pub struct ThemeStoreRow {
     #[serde(flatten)]
@@ -337,6 +352,8 @@ pub struct ThemeStoreRow {
     pub update_available: bool,
     pub active: bool,
     pub status: String,
+    pub locked: bool,
+    pub entitled: bool,
     /// Authenticated same-origin preview image URL when a package image exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview_url: Option<String>,
@@ -361,12 +378,23 @@ pub fn enrich_catalog_for_store(
             let active = active_theme_id
                 .map(|a| a.eq_ignore_ascii_case(&entry.id))
                 .unwrap_or(false);
+            let is_paid = crate::theme_entitlements::theme_is_paid(&entry.pricing);
+            let entitled = if is_paid {
+                crate::theme_entitlements::local_theme_entitled(&entry.id) || installed_flag
+            } else {
+                true
+            };
+            let locked = is_paid && !entitled && !installed_flag;
             let status = if active {
                 "Active".to_string()
+            } else if locked {
+                "Locked".to_string()
             } else if update_available {
                 "Update available".to_string()
             } else if installed_flag {
                 "Installed".to_string()
+            } else if entitled && is_paid {
+                "Entitled".to_string()
             } else {
                 "Available".to_string()
             };
@@ -389,6 +417,8 @@ pub fn enrich_catalog_for_store(
                 update_available,
                 active,
                 status,
+                locked,
+                entitled,
                 preview_url,
             }
         })
