@@ -399,17 +399,19 @@ mod tests {
 
     #[test]
     fn restore_run_form_accepts_single_entity_string() {
-        let form: RestoreRunForm =
-            serde_urlencoded::from_str("entity=site%3Anewstargeted.com&archive=a.tar.gz")
-                .expect("single entity");
+        let form: RestoreRunForm = serde_json::from_str(
+            r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#,
+        )
+        .expect("single entity");
         assert_eq!(form.entity, vec!["site:newstargeted.com".to_string()]);
         assert_eq!(form.archive, "a.tar.gz");
     }
 
     #[test]
     fn restore_run_form_accepts_repeated_entity_keys() {
-        let form: RestoreRunForm = serde_urlencoded::from_str(
-            "entity=website&entity=db%3Anews_disco&entities=website%2Cdb%3Anews_disco",
+        // Form posts map repeated keys to a sequence; JSON array exercises the same path.
+        let form: RestoreRunForm = serde_json::from_str(
+            r#"{"entity":["website","db:news_disco"],"entities":"website,db:news_disco"}"#,
         )
         .expect("multi entity");
         assert_eq!(
