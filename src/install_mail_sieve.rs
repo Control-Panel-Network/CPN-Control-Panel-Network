@@ -123,41 +123,81 @@ pub fn ensure_dovecot_sieve_sync() -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_sieve_dovecot_config() -> Result<(), String> {
-    // Ensure protocols include sieve (ManageSieve).
-    let dovecot_conf = "/etc/dovecot/dovecot.conf";
-    if Path::new(dovecot_conf).exists() {
-        let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
-        let mut changed = false;
-        if let Some(idx) = raw.find("protocols =") {
-            let line_end = raw[idx..].find('\n').map(|n| idx + n).unwrap_or(raw.len());
-            let line = &raw[idx..line_end];
-            if !line.contains("sieve") {
-                let new_line = "protocols = imap sieve";
-                raw.replace_range(idx..line_end, new_line);
-                changed = true;
-            }
-        } else {
-            if !raw.ends_with('\n') {
-                raw.push('\n');
-            }
-            raw.push_str("protocols = imap sieve\n");
+/// True when `line` is an active (uncommented) `protocols = ...` assignment.
+fn is_active_protocols_line(line: &str) -> bool {
+    let t = line.trim_start();
+    if t.starts_with('#') {
+        return false;
+    }
+    match t.strip_prefix("protocols") {
+        Some(rest) => rest.trim_start().starts_with('='),
+        None => false,
+    }
+}
+
+/// True when any active `protocols =` line already lists `sieve`.
+fn has_active_sieve_protocol(raw: &str) -> bool {
+    raw.lines()
+        .any(|l| is_active_protocols_line(l) && l.split_whitespace().any(|w| w == "sieve"))
+}
+
+/// Append `sieve` to an active `protocols =` line that lacks it. Commented lines are ignored
+/// (stock EL `dovecot.conf` ships `#protocols = imap sieve`, which must not count as enabled).
+fn append_sieve_to_active_protocols(raw: &str) -> Option<String> {
+    let mut changed = false;
+    let mut out: Vec<String> = Vec::new();
+    for line in raw.lines() {
+        if is_active_protocols_line(line) && !line.split_whitespace().any(|w| w == "sieve") {
+            out.push(format!("{} sieve", line.trim_end()));
             changed = true;
-        }
-        if changed {
-            install_journal::write_file_tracked(STAGE, Path::new(dovecot_conf), &raw)?;
+        } else {
+            out.push(line.to_string());
         }
     }
-
-    let conf = r#"# Managed by CPN: ensure ManageSieve listens on 4190.
-# Vendor 20-managesieve.conf / 90-sieve.conf ship with dovecot-pigeonhole.
-service managesieve-login {
-  inet_listener sieve {
-    port = 4190
-  }
+    if !changed {
+        return None;
+    }
+    let mut joined = out.join("\n");
+    if raw.ends_with('\n') {
+        joined.push('\n');
+    }
+    Some(joined)
 }
-"#;
-    install_journal::write_file_tracked(STAGE, Path::new(CPN_SIEVE_CONF), conf)?;
+
+fn sieve_conf_body(add_protocols: bool) -> String {
+    let mut conf = String::from(
+        "# Managed by CPN: ensure ManageSieve listens on 4190.\n\
+         # Vendor 20-managesieve.conf / 90-sieve.conf ship with dovecot-pigeonhole.\n",
+    );
+    if add_protocols {
+        conf.push_str("protocols = $protocols sieve\n");
+    }
+    conf.push_str(
+        "service managesieve-login {\n  inet_listener sieve {\n    port = 4190\n  }\n}\n",
+    );
+    conf
+}
+
+fn ensure_sieve_dovecot_config() -> Result<(), String> {
+    // Ensure protocols include sieve (ManageSieve). Only active lines count: the stock
+    // `#protocols = imap sieve` comment must not suppress enabling the listener.
+    let dovecot_conf = "/etc/dovecot/dovecot.conf";
+    let mut main_has_sieve = false;
+    if Path::new(dovecot_conf).exists() {
+        let raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();
+        if let Some(updated) = append_sieve_to_active_protocols(&raw) {
+            install_journal::write_file_tracked(STAGE, Path::new(dovecot_conf), &updated)?;
+            main_has_sieve = true;
+        } else if has_active_sieve_protocol(&raw) {
+            main_has_sieve = true;
+        }
+    }
+    let vendor =
+        std::fs::read_to_string("/etc/dovecot/conf.d/20-managesieve.conf").unwrap_or_default();
+    let add_protocols = !main_has_sieve && !has_active_sieve_protocol(&vendor);
+
+    let conf = sieve_conf_body(add_protocols);
+    install_journal::write_file_tracked(STAGE, Path::new(CPN_SIEVE_CONF), &conf)?;
     Ok(())
 }
 
@@ -189,5 +229,28 @@ mod tests {
         let sample = include_str!("install_mail_sieve.rs");
         assert!(sample.contains("4190"));
         assert!(sample.contains("managesieve"));
+    }
+
+    #[test]
+    fn commented_protocols_line_does_not_count_as_enabled() {
+        let stock = "#protocols = imap sieve\n!include conf.d/*.conf\n";
+        assert!(!super::has_active_sieve_protocol(stock));
+        assert!(super::append_sieve_to_active_protocols(stock).is_none());
+    }
+
+    #[test]
+    fn active_protocols_line_gets_sieve_appended() {
+        let raw = "protocols = imap pop3 lmtp\nfoo = bar\n";
+        let out = super::append_sieve_to_active_protocols(raw).expect("changed");
+        assert_eq!(out, "protocols = imap pop3 lmtp sieve\nfoo = bar\n");
+        assert!(super::has_active_sieve_protocol(&out));
+        assert!(super::append_sieve_to_active_protocols(&out).is_none());
+    }
+
+    #[test]
+    fn sieve_conf_adds_protocols_only_when_needed() {
+        assert!(super::sieve_conf_body(true).contains("protocols = $protocols sieve"));
+        assert!(!super::sieve_conf_body(false).contains("protocols"));
+        assert!(super::sieve_conf_body(false).contains("port = 4190"));
     }
 }
