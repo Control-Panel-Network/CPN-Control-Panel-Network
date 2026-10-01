@@ -10,6 +10,7 @@ use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
     save_backup_destinations, save_backup_schedule,
 };
+use crate::panel_hub_pages_backups_plan::backups_restore_plan_page;
 use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -59,6 +60,39 @@ pub async fn backups_restore_route(
     ))
 }
 
+#[get("/backups/restore/plan")]
+pub async fn backups_restore_plan_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let archive = query.get("archive").map(String::as_str).unwrap_or("");
+    if archive.trim().is_empty() {
+        return redirect_notice(
+            "/backups/restore",
+            None,
+            Some("Choose an archive, then Select entities."),
+        );
+    }
+    html_ok(panel_shell(
+        &user,
+        "backups",
+        "Select restore entities",
+        &backups_restore_plan_page(
+            query.get("scope").map(String::as_str).unwrap_or("site"),
+            query.get("domain").map(String::as_str).unwrap_or(""),
+            archive,
+            query.get("format").map(String::as_str).unwrap_or("auto"),
+            query.get("db_name").map(String::as_str).unwrap_or(""),
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct RestoreRunForm {
     #[serde(default)]
@@ -79,6 +113,14 @@ pub struct RestoreRunForm {
     confirm_overwrite_files: String,
     #[serde(default)]
     confirm_import_databases: String,
+    #[serde(default)]
+    confirm_optional_entities: String,
+    /// Multi-select entity ids (`website`, `db:name`, `site:x`, …).
+    #[serde(default)]
+    entity: Vec<String>,
+    /// Comma-separated fallback when a client posts a single field.
+    #[serde(default)]
+    entities: String,
 }
 
 #[post("/backups/restore/run")]
@@ -97,10 +139,20 @@ pub async fn backups_restore_run(
     };
     let domain = form.domain.trim();
     let mut return_base = format!(
-        "/backups/restore?scope={}&domain={}",
+        "/backups/restore/plan?scope={}&domain={}&archive={}",
         urlencoding_simple(scope),
-        urlencoding_simple(domain)
+        urlencoding_simple(domain),
+        urlencoding_simple(form.archive.trim())
     );
+    let mut entity_ids = form.entity.clone();
+    if entity_ids.is_empty() && !form.entities.trim().is_empty() {
+        entity_ids = form
+            .entities
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
     let mut req = RestoreRequest::from_form_flags(
         scope.to_string(),
         domain.to_string(),
@@ -111,11 +163,22 @@ pub async fn backups_restore_run(
         &form.confirm_create_domain,
         &form.confirm_overwrite_files,
         &form.confirm_import_databases,
+        &form.confirm_optional_entities,
+        entity_ids,
     );
     req.owner = user.clone();
     match restore_backup(&req) {
         Ok(result) => {
             let mut msg = result.message;
+            if !result.entity_statuses.is_empty() {
+                let summary: Vec<String> = result
+                    .entity_statuses
+                    .iter()
+                    .map(|s| format!("{}:{}", s.id, s.status))
+                    .collect();
+                msg.push_str(" Entities: ");
+                msg.push_str(&summary.join(", "));
+            }
             if !result.warnings.is_empty() {
                 msg.push(' ');
                 msg.push_str(&result.warnings.join(" "));

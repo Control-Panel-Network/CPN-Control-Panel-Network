@@ -5,10 +5,68 @@ use crate::panel_ops_db::{
     create_database, list_databases, local_mariadb_ready, mariadb_client_bin,
 };
 use crate::sites::SiteRecord;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+/// Selective apply flags for multi-entity restore.
+#[derive(Debug, Clone)]
+pub struct RestoreApplyOpts {
+    pub restore_website: bool,
+    pub restore_plugins: bool,
+    /// `None` = all SQL dumps; `Some(names)` = only matching basenames (empty = skip).
+    pub database_names: Option<BTreeSet<String>>,
+    pub include_email: bool,
+    pub include_docker: bool,
+    pub include_dns: bool,
+    pub include_panel_config: bool,
+}
+
+impl Default for RestoreApplyOpts {
+    fn default() -> Self {
+        Self {
+            restore_website: true,
+            restore_plugins: true,
+            database_names: None,
+            include_email: false,
+            include_docker: false,
+            include_dns: false,
+            include_panel_config: false,
+        }
+    }
+}
+
+fn sql_allowed(path: &Path, filter: &Option<BTreeSet<String>>) -> bool {
+    let Some(names) = filter else {
+        return true;
+    };
+    if names.is_empty() {
+        return false;
+    }
+    let file = path
+        .file_name()
+        .and_then(|v| v.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let stem = file
+        .trim_end_matches(".sql.gz")
+        .trim_end_matches(".sql")
+        .trim_end_matches(".gz");
+    let stem_clean: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let stem_clean = stem_clean.trim_matches('_').to_string();
+    names.contains(&stem_clean) || names.contains(&file) || names.contains(&stem.to_string())
+}
 
 pub(crate) fn find_dir_named(root: &Path, name: &str) -> Option<PathBuf> {
     if !root.is_dir() {
@@ -106,30 +164,48 @@ pub(crate) fn restore_docroot_from(src: &Path, site: &SiteRecord) -> Result<(), 
 pub(crate) fn restore_cpn(
     staging: &Path,
     site: &SiteRecord,
+    opts: &RestoreApplyOpts,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
-    if let Some(pub_html) = find_dir_named(staging, "public_html") {
-        restore_docroot_from(&pub_html, site)?;
+    if opts.restore_website {
+        if let Some(pub_html) = find_dir_named(staging, "public_html") {
+            restore_docroot_from(&pub_html, site)?;
+        } else {
+            warnings.push("CPN archive had no public_html/; skipped website files.".into());
+        }
     } else {
-        warnings.push("CPN archive had no public_html/; skipped website files.".into());
+        warnings.push("Skipped website files (not selected).".into());
     }
-    if let Some(plugins) = find_dir_named(staging, "plugins") {
-        let home = Path::new(&site.docroot)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("/home").join(&site.domain));
-        let dest = home.join("plugins");
-        let _ = fs::remove_dir_all(&dest);
-        copy_tree(&plugins, &dest)?;
+    if opts.restore_plugins {
+        if let Some(plugins) = find_dir_named(staging, "plugins") {
+            let home = Path::new(&site.docroot)
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("/home").join(&site.domain));
+            let dest = home.join("plugins");
+            let _ = fs::remove_dir_all(&dest);
+            copy_tree(&plugins, &dest)?;
+        }
     }
     if let Some(sql) = find_file_named(staging, "databases.sql") {
-        import_sql_best_effort(&sql, None, warnings)?;
+        if sql_allowed(&sql, &opts.database_names) {
+            import_sql_best_effort(&sql, None, warnings)?;
+        } else {
+            warnings.push("Skipped databases.sql (not selected).".into());
+        }
     }
     if find_dir_named(staging, "panel-config").is_some() {
-        warnings.push(
-            "Panel-config payload was present but not applied (site restore only). Use a panel-scoped restore path for panel data."
-                .into(),
-        );
+        if opts.include_panel_config {
+            warnings.push(
+                "Panel-config was selected but not applied to live panel data (avoids wiping MFA keys and sessions). Use a dedicated panel recovery path if needed."
+                    .into(),
+            );
+        } else {
+            warnings.push(
+                "Panel-config payload was present but not selected (site restore only)."
+                    .into(),
+            );
+        }
     }
     Ok(())
 }
@@ -138,6 +214,7 @@ pub(crate) fn restore_wordpress(
     staging: &Path,
     site: &SiteRecord,
     db_name_override: &str,
+    opts: &RestoreApplyOpts,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     let wp_root = if find_file_named(staging, "wp-config.php").is_some()
@@ -159,14 +236,26 @@ pub(crate) fn restore_wordpress(
         staging.to_path_buf()
     };
 
-    restore_docroot_from(&wp_root, site)?;
+    if opts.restore_website {
+        restore_docroot_from(&wp_root, site)?;
+    } else {
+        warnings.push("Skipped WordPress website files (not selected).".into());
+    }
 
-    let sql_files = collect_sql_files(staging);
+    let sql_files: Vec<PathBuf> = collect_sql_files(staging)
+        .into_iter()
+        .filter(|p| sql_allowed(p, &opts.database_names))
+        .collect();
     let db_name = if !db_name_override.is_empty() {
         Some(db_name_override.to_string())
     } else {
         guess_db_name_from_wp_config(&PathBuf::from(&site.docroot).join("wp-config.php"))
     };
+
+    if opts.database_names.as_ref().is_some_and(|s| s.is_empty()) {
+        warnings.push("Skipped SQL import (no databases selected).".into());
+        return Ok(());
+    }
 
     if let Some(name) = db_name.as_ref() {
         match create_database(name) {
@@ -176,24 +265,26 @@ pub(crate) fn restore_wordpress(
     }
 
     if sql_files.is_empty() {
-        warnings.push("No .sql dump found in the WordPress archive.".into());
+        warnings.push("No selected .sql dump found in the WordPress archive.".into());
     } else {
         for sql in &sql_files {
             import_sql_best_effort(sql, db_name.as_deref(), warnings)?;
         }
     }
 
-    if let Some(name) = db_name.as_ref() {
-        remap_wp_config_db(
-            &PathBuf::from(&site.docroot).join("wp-config.php"),
-            name,
-            warnings,
-        )?;
-    } else {
-        warnings.push(
-            "Could not determine DB name for wp-config remap. Set Target DB name on restore if needed."
-                .into(),
-        );
+    if opts.restore_website {
+        if let Some(name) = db_name.as_ref() {
+            remap_wp_config_db(
+                &PathBuf::from(&site.docroot).join("wp-config.php"),
+                name,
+                warnings,
+            )?;
+        } else {
+            warnings.push(
+                "Could not determine DB name for wp-config remap. Set Target DB name on restore if needed."
+                    .into(),
+            );
+        }
     }
     Ok(())
 }
@@ -201,17 +292,22 @@ pub(crate) fn restore_wordpress(
 pub(crate) fn restore_cpanel(
     staging: &Path,
     site: &SiteRecord,
+    opts: &RestoreApplyOpts,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
-    let src = if let Some(homedir) = find_dir_named(staging, "homedir") {
-        let pub_html = homedir.join("public_html");
-        if pub_html.is_dir() { pub_html } else { homedir }
-    } else if let Some(pub_html) = find_dir_named(staging, "public_html") {
-        pub_html
+    if opts.restore_website {
+        let src = if let Some(homedir) = find_dir_named(staging, "homedir") {
+            let pub_html = homedir.join("public_html");
+            if pub_html.is_dir() { pub_html } else { homedir }
+        } else if let Some(pub_html) = find_dir_named(staging, "public_html") {
+            pub_html
+        } else {
+            return Err("cPanel archive missing homedir/public_html.".into());
+        };
+        restore_docroot_from(&src, site)?;
     } else {
-        return Err("cPanel archive missing homedir/public_html.".into());
-    };
-    restore_docroot_from(&src, site)?;
+        warnings.push("Skipped cPanel website files (not selected).".into());
+    }
 
     let mysql_dir = find_dir_named(staging, "mysql");
     let mut sqls = Vec::new();
@@ -224,9 +320,10 @@ pub(crate) fn restore_cpanel(
     }));
     sqls.sort();
     sqls.dedup();
+    sqls.retain(|p| sql_allowed(p, &opts.database_names));
     if sqls.is_empty() {
         warnings.push(
-            "No SQL dumps found under the cPanel `mysql/` folder (compatibility path; imports run against MariaDB)."
+            "No selected SQL dumps found under the cPanel `mysql/` folder (compatibility path; imports run against MariaDB)."
                 .into(),
         );
     } else {
@@ -234,29 +331,51 @@ pub(crate) fn restore_cpanel(
             import_sql_best_effort(&sql, None, warnings)?;
         }
     }
-    warnings.push(
-        "cPanel email / DNS / reseller metadata is not fully imported (files + DB best-effort)."
-            .into(),
-    );
+    if opts.include_email {
+        warnings.push(
+            "cPanel email was selected; account recreation from the archive is best-effort only (files + DB applied)."
+                .into(),
+        );
+    }
+    if opts.include_dns {
+        warnings.push(
+            "cPanel DNS/zone data was selected; automatic DNS publish is not applied yet (confirm zones manually)."
+                .into(),
+        );
+    }
+    if !opts.include_email && !opts.include_dns {
+        warnings.push(
+            "cPanel email / DNS / reseller metadata is not fully imported (files + DB best-effort)."
+                .into(),
+        );
+    }
     Ok(())
 }
 
 pub(crate) fn restore_cyberpanel(
     staging: &Path,
     site: &SiteRecord,
+    opts: &RestoreApplyOpts,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
-    let src = find_dir_named(staging, "public_html").ok_or_else(|| {
-        "Source control-panel archive missing public_html/ (expected classic meta.xml backup)."
-            .to_string()
-    })?;
-    let nested = src.join("public_html");
-    let files_src = if nested.is_dir() { nested } else { src };
-    restore_docroot_from(&files_src, site)?;
+    if opts.restore_website {
+        let src = find_dir_named(staging, "public_html").ok_or_else(|| {
+            "Source control-panel archive missing public_html/ (expected classic meta.xml backup)."
+                .to_string()
+        })?;
+        let nested = src.join("public_html");
+        let files_src = if nested.is_dir() { nested } else { src };
+        restore_docroot_from(&files_src, site)?;
+    } else {
+        warnings.push("Skipped website files (not selected).".into());
+    }
 
-    let sqls = collect_sql_files(staging);
+    let sqls: Vec<PathBuf> = collect_sql_files(staging)
+        .into_iter()
+        .filter(|p| sql_allowed(p, &opts.database_names))
+        .collect();
     if sqls.is_empty() {
-        warnings.push("No database .sql files found in source control-panel archive.".into());
+        warnings.push("No selected database .sql files found in source control-panel archive.".into());
     } else {
         for sql in sqls {
             // Filename-based DB create/USE happens inside import_sql_best_effort.
@@ -264,8 +383,27 @@ pub(crate) fn restore_cyberpanel(
         }
     }
     if find_dir_named(staging, "vmail").is_some() {
+        if opts.include_email {
+            warnings.push(
+                "vmail/ email data was selected; mailbox import is best-effort and may be skipped on this host."
+                    .into(),
+            );
+        } else {
+            warnings.push(
+                "vmail/ email data was present but not selected.".into(),
+            );
+        }
+    }
+    if opts.include_docker {
         warnings.push(
-            "vmail/ email data was present but not imported (best-effort: files/DB only).".into(),
+            "Docker/compose payload was selected; stacks are not auto-recreated from this archive yet."
+                .into(),
+        );
+    }
+    if opts.include_dns {
+        warnings.push(
+            "DNS/zone payload was selected; automatic Cloudflare/DNS publish is not applied yet."
+                .into(),
         );
     }
     if find_file_named(staging, "meta.xml").is_some() {

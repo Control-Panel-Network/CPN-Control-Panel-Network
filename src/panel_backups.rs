@@ -1,6 +1,9 @@
 //! Backups panel page HTML (selective chooser).
 
 use crate::backups::{BackupScope, is_subdomain_site, list_backup_files, resolve_archive_dir};
+use crate::panel_dashboard_activity_list::{
+    activity_list_script, wrap_activity_table_sized,
+};
 use crate::paths::{legacy_panel_backups_dir, panel_backups_dir};
 use crate::service_detect::detect_database;
 use crate::sites::{SiteRecord, list_sites};
@@ -56,13 +59,17 @@ fn backup_rows(files: &[(String, u64)], empty_msg: &str) -> String {
     );
     for (name, size) in files {
         rows.push_str(&format!(
-            r#"<tr><td><code>{name}</code></td><td>{size} bytes</td></tr>"#,
+            r#"<tr><td data-label="File"><code>{name}</code></td><td data-label="Size">{size} bytes</td></tr>"#,
             name = html_escape(name),
             size = size,
         ));
     }
     rows.push_str("</tbody></table></div>");
-    rows
+    format!(
+        r#"{}<script>{}</script>"#,
+        wrap_activity_table_sized("backup-archives", "Filter archive name", &rows, 10),
+        activity_list_script(),
+    )
 }
 
 fn site_options(sites: &[SiteRecord], selected: &str, subdomains_only: bool) -> String {

@@ -5,6 +5,9 @@ use crate::backup_restore_scan::{
     documented_upload_locations, list_restore_archives_with_fallback,
 };
 use crate::panel_backups::{BackupsPageQuery, backups_create_main};
+use crate::panel_dashboard_activity_list::{
+    activity_list_script, wrap_activity_table_sized,
+};
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
 use crate::panel_ops_backup_extra::{
@@ -12,6 +15,38 @@ use crate::panel_ops_backup_extra::{
     save_schedule,
 };
 use crate::sites::{SiteRecord, list_sites};
+
+/// Default page size for the Restore archive list (matches Server > Logs density).
+const RESTORE_LIST_PER_PAGE: usize = 5;
+
+fn restore_list_styles() -> &'static str {
+    r#"
+<style>
+#activity-list-restore-archives .data-table td[data-label="Restore"] .stack-form {
+  max-width:100%; width:100%; margin:0; gap:8px;
+}
+#activity-list-restore-archives .data-table td[data-label="Restore"] .stack-form input,
+#activity-list-restore-archives .data-table td[data-label="Restore"] .stack-form select {
+  max-width:100%;
+}
+#activity-list-restore-archives .data-table td[data-label="File"] code,
+#activity-list-restore-archives .data-table td[data-label="Location"] code {
+  overflow-wrap:anywhere; word-break:break-word; white-space:normal;
+}
+@container (max-width: 720px) {
+  #activity-list-restore-archives .data-table td[data-label="Restore"] {
+    display:block; grid-template-columns:1fr;
+  }
+  #activity-list-restore-archives .data-table td[data-label="Restore"]::before {
+    display:block; margin-bottom:6px;
+  }
+  #activity-list-restore-archives .data-table td[data-label="Restore"] .stack-form {
+    max-width:none;
+  }
+}
+</style>
+"#
+}
 
 fn html_escape(value: &str) -> String {
     value
@@ -122,8 +157,8 @@ pub fn backups_restore_page(
         ));
     }
     body.push_str(
-        r#"<p>Restore a CPN archive, or import WordPress / cPanel / source control-panel backups into a chosen site. Prefer that site's <code>backups/</code> folder; fallback paths are also scanned.</p>
-        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); classic source control-panel archives with <code>meta.xml</code>. SQL restore uses the local MariaDB host database. Email import is best-effort only.</p>"#,
+        r#"<p>Restore a CPN archive, or import WordPress / cPanel / source control-panel backups into one or more selected entities. Prefer that site's <code>backups/</code> folder; fallback paths are also scanned.</p>
+        <p class="muted">Supported: CPN <code>.tar.gz</code>; WordPress zip/tar with <code>wp-content</code> + SQL (UpdraftPlus / Duplicator / plain); cPanel <code>cpmove-*.tar.gz</code> / <code>homedir</code>+<code>mysql/</code> dump folder (imported into MariaDB); classic source control-panel archives with <code>meta.xml</code>. After listing, use <strong>Select entities</strong> to multi-select domains, subdomains, databases, and optional email/Docker/DNS. SQL restore uses the local MariaDB host database.</p>"#,
     );
     body.push_str(&upload_locations_html());
     body.push_str(&format!(
@@ -160,7 +195,9 @@ pub fn backups_restore_page(
             if files.is_empty() {
                 body.push_str(r#"<p class="empty-state">No archives found. Copy a supported archive into a documented upload location, then list again.</p>"#);
             } else {
-                body.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th></tr></thead><tbody>"#);
+                let mut table = String::from(
+                    r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th></tr></thead><tbody>"#,
+                );
                 for hit in files {
                     let target_domain = if domain.trim().is_empty() {
                         crate::backup_restore::infer_domain_from_archive_name(&hit.name)
@@ -168,26 +205,23 @@ pub fn backups_restore_page(
                     } else {
                         domain.to_string()
                     };
-                    let confirm_js = "return confirm('Restore this archive? Confirm the checkboxes for create/overwrite/database actions. Website files and databases may change.');";
-                    body.push_str(&format!(
+                    // Safe DOM id fragment: archive names are filesystem basenames.
+                    let id_frag = html_escape(&hit.name)
+                        .replace([' ', '.', '/', '\\', ':'], "-");
+                    table.push_str(&format!(
                         r#"<tr>
-                          <td><code>{name}</code></td>
-                          <td>{size} bytes</td>
-                          <td><span class="muted">{prov}</span><br><code style="font-size:11px;">{dir}</code></td>
-                          <td>
-                            <form method="post" action="/backups/restore/run" class="stack-form" style="margin:0;gap:6px;max-width:280px;">
+                          <td data-label="File"><code>{name}</code></td>
+                          <td data-label="Size">{size} bytes</td>
+                          <td data-label="Location"><span class="muted">{prov}</span><br><code style="font-size:11px;">{dir}</code></td>
+                          <td data-label="Restore">
+                            <form method="get" action="/backups/restore/plan" class="stack-form">
                               <input type="hidden" name="scope" value="{scope}">
                               <input type="hidden" name="domain" value="{domain}">
                               <input type="hidden" name="archive" value="{name}">
-                              <label class="muted" for="fmt-{name}">Format</label>
-                              <select id="fmt-{name}" name="format">{formats}</select>
-                              <label class="muted" for="db-{name}">Target DB (WordPress, optional)</label>
-                              <input id="db-{name}" name="db_name" type="text" placeholder="optional" style="max-width:160px;">
-                              <label><input type="checkbox" name="create_domain_if_missing" value="1"> Create domain if missing</label>
-                              <label><input type="checkbox" name="confirm_create_domain" value="1"> Confirm create domain / emails / DNS hooks</label>
-                              <label><input type="checkbox" name="confirm_overwrite_files" value="1" required> Confirm overwrite website files</label>
-                              <label><input type="checkbox" name="confirm_import_databases" value="1"> Confirm import databases / SQL</label>
-                              <button type="submit" class="btn-primary" onclick="{confirm_js}">Restore</button>
+                              <label class="muted" for="fmt-{id}">Format (optional)</label>
+                              <select id="fmt-{id}" name="format">{formats}</select>
+                              <p class="muted" style="margin:0;">Opens entity multi-select (domains, databases, optional email/Docker/DNS).</p>
+                              <button type="submit" class="btn-primary">Select entities</button>
                             </form>
                           </td>
                         </tr>"#,
@@ -198,10 +232,18 @@ pub fn backups_restore_page(
                         scope = html_escape(scope),
                         domain = html_escape(&target_domain),
                         formats = format_options("auto"),
-                        confirm_js = confirm_js,
+                        id = id_frag,
                     ));
                 }
-                body.push_str("</tbody></table></div>");
+                table.push_str("</tbody></table></div>");
+                body.push_str(restore_list_styles());
+                body.push_str(&wrap_activity_table_sized(
+                    "restore-archives",
+                    "Filter file, path or provenance",
+                    &table,
+                    RESTORE_LIST_PER_PAGE,
+                ));
+                body.push_str(&format!("<script>{}</script>", activity_list_script()));
             }
         }
         Err(err) => {
@@ -345,5 +387,30 @@ mod tests {
         let html = format_options("classic");
         assert!(html.contains("value=\"classic\" selected"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn restore_list_uses_stacked_activity_pattern() {
+        // Empty list: no activity wrapper (empty-state only).
+        let empty = backups_restore_page("panel", "", None, None);
+        assert!(
+            empty.contains("empty-state") || empty.contains("No archives"),
+            "empty restore should show a hint"
+        );
+        assert!(
+            empty.contains("Select entities")
+                || empty.contains("entity multi-select")
+                || empty.contains("Multi-select"),
+            "restore copy should mention multi-entity selection"
+        );
+        // Markup contract when wrapping a non-empty table (unit-level, no FS scan).
+        let table = r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>File</th><th>Size</th><th>Location</th><th>Restore</th></tr></thead><tbody>
+<tr><td data-label="File"><code>a.tar.gz</code></td><td data-label="Size">1 bytes</td><td data-label="Location">x</td><td data-label="Restore">y</td></tr>
+</tbody></table></div>"#;
+        let wrapped = wrap_activity_table_sized("restore-archives", "Filter", table, 5);
+        assert!(wrapped.contains(r#"data-page-size="5""#));
+        assert!(wrapped.contains("activity-list"));
+        assert!(wrapped.contains(r#"data-label="Restore""#));
+        assert!(!wrapped.contains("cyberpanel"));
     }
 }
