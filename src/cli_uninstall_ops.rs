@@ -99,11 +99,11 @@ pub(crate) fn stop_and_disable_unit(dry_run: bool) {
 
 fn docker_bin() -> Option<&'static str> {
     ["docker", "podman"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        crate::panel_ops_docker_probe::probe_ok(
+            candidate,
+            &["--version"],
+            crate::panel_ops_docker_probe::VERSION_TIMEOUT,
+        )
     })
 }
 

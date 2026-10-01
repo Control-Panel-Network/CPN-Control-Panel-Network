@@ -1,8 +1,8 @@
 //! Qualify Docker Hub short names for non-interactive Podman pulls and sanitize CLI noise.
 
+use crate::panel_ops_docker_probe::{VERSION_TIMEOUT, output_with_timeout};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 /// True when the active CLI is Podman or the docker-compatible Podman shim.
 pub fn container_engine_is_podman() -> bool {
@@ -15,9 +15,7 @@ pub fn container_engine_is_podman() -> bool {
     if bin != "docker" {
         return false;
     }
-    Command::new("docker")
-        .arg("--version")
-        .output()
+    output_with_timeout("docker", &["--version"], VERSION_TIMEOUT)
         .map(|o| {
             let text = format!(
                 "{}{}",

@@ -1,6 +1,9 @@
 //! Docker / Podman detection, listing, and container lifecycle for Server + Host package.
 
 use crate::panel_ops_docker_cli::with_listed_container_id;
+use crate::panel_ops_docker_probe::{
+    COMPOSE_TIMEOUT, INFO_TIMEOUT, LIST_TIMEOUT, VERSION_TIMEOUT, output_with_timeout, probe_ok,
+};
 use std::process::Command;
 
 const CPN_MANAGED_LABEL: &str = "com.cpn.managed";
@@ -37,21 +40,13 @@ pub struct DockerImageRow {
 }
 
 pub fn docker_bin() -> Option<&'static str> {
-    ["docker", "podman"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    })
+    ["docker", "podman"]
+        .into_iter()
+        .find(|&candidate| probe_ok(candidate, &["--version"], VERSION_TIMEOUT))
 }
 
 fn docker_daemon_ok(bin: &str) -> bool {
-    Command::new(bin)
-        .args(["info"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    probe_ok(bin, &["info"], INFO_TIMEOUT)
 }
 
 pub(crate) fn split_image_tag(image: &str) -> (String, String) {
@@ -145,15 +140,17 @@ pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
             "`{bin}` CLI found but the container engine is not running."
         ));
     }
-    let output = Command::new(bin)
-        .args([
+    let output = output_with_timeout(
+        bin,
+        &[
             "ps",
             "-a",
             "--format",
             "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}\t{{.State}}",
-        ])
-        .output()
-        .map_err(|e| format!("Could not list containers: {e}"))?;
+        ],
+        LIST_TIMEOUT,
+    )
+    .map_err(|e| format!("Could not list containers: {e}"))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(format!(
@@ -217,14 +214,16 @@ pub fn list_images_detailed() -> Result<Vec<DockerImageRow>, String> {
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
-    let output = Command::new(bin)
-        .args([
+    let output = output_with_timeout(
+        bin,
+        &[
             "images",
             "--format",
             "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}",
-        ])
-        .output()
-        .map_err(|e| format!("Could not list images: {e}"))?;
+        ],
+        LIST_TIMEOUT,
+    )
+    .map_err(|e| format!("Could not list images: {e}"))?;
     if !output.status.success() {
         return Err("Could not list images.".into());
     }
@@ -254,14 +253,16 @@ pub fn resolve_trusted_container_id(user_ref: &str) -> Result<String, String> {
 
 fn container_is_cpn_managed(bin: &str, name_or_id: &str) -> bool {
     with_listed_container_id(name_or_id, |row| {
-        let output = Command::new(bin)
-            .args([
+        let output = output_with_timeout(
+            bin,
+            &[
                 "inspect",
                 "--format",
                 "{{index .Config.Labels \"com.cpn.managed\"}}",
                 &row.id,
-            ])
-            .output();
+            ],
+            LIST_TIMEOUT,
+        );
         match output {
             Ok(o) if o.status.success() => {
                 let v = String::from_utf8_lossy(&o.stdout)
@@ -395,11 +396,7 @@ pub fn docker_status() -> DockerStatus {
 }
 
 pub fn compose_cli_ok(bin: &str) -> bool {
-    Command::new(bin)
-        .args(["compose", "version"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    probe_ok(bin, &["compose", "version"], COMPOSE_TIMEOUT)
 }
 
 /// Install a compose provider when the engine CLI exists but `compose` subcommand does not.
