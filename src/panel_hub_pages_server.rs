@@ -35,6 +35,44 @@ pub fn server_hub_main() -> String {
     body
 }
 
+fn service_status_badge(label: &str) -> String {
+    let class = match label {
+        "Active" | "Enabled" => "svc-badge svc-badge-ok",
+        "Inactive" | "Deactivated" | "Static" | "Linked" => "svc-badge svc-badge-idle",
+        "Failed" | "Masked" | "Invalid" | "Unavailable" => "svc-badge svc-badge-bad",
+        "Not installed" => "svc-badge svc-badge-missing",
+        "Starting" | "Stopping" | "Reloading" | "Maintenance" => "svc-badge svc-badge-busy",
+        _ => "svc-badge",
+    };
+    format!(
+        r#"<span class="{class}">{label}</span>"#,
+        class = class,
+        label = html_escape(label),
+    )
+}
+
+fn services_page_styles() -> &'static str {
+    r#"<style>
+.svc-badge{
+  display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  background:#eef2f6;color:#0f172a;
+}
+.svc-badge-ok{background:#dcfce7;color:#14532d;}
+.svc-badge-idle{background:#e2e8f0;color:#334155;}
+.svc-badge-bad{background:#fee2e2;color:#991b1b;}
+.svc-badge-missing{background:#f1f5f9;color:#64748b;}
+.svc-badge-busy{background:#ffedd5;color:#9a3412;}
+[data-color-mode="dark"] .svc-badge{background:#334155;color:#f8fafc;}
+[data-color-mode="dark"] .svc-badge-ok{background:rgba(22,163,74,.28);color:#bbf7d0;}
+[data-color-mode="dark"] .svc-badge-idle{background:#475569;color:#e2e8f0;}
+[data-color-mode="dark"] .svc-badge-bad{background:rgba(220,38,38,.28);color:#fecaca;}
+[data-color-mode="dark"] .svc-badge-missing{background:#1e293b;color:#94a3b8;}
+[data-color-mode="dark"] .svc-badge-busy{background:rgba(234,88,12,.28);color:#fed7aa;}
+.inline-form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+</style>"#
+}
+
 pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
     let rows = list_known_services();
     let mut table = String::from(
@@ -54,19 +92,19 @@ pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) 
         } else if !is_admin {
             "<span class=\"muted\">Admin only</span>".into()
         } else {
-            "<span class=\"muted\">Not present</span>".into()
+            "<span class=\"muted\">Not installed</span>".into()
         };
         table.push_str(&format!(
             r#"<tr><td><code>{unit}</code></td><td>{active}</td><td>{enabled}</td><td>{actions}</td></tr>"#,
             unit = html_escape(&row.unit),
-            active = html_escape(&row.active),
-            enabled = html_escape(&row.enabled),
+            active = service_status_badge(&row.active),
+            enabled = service_status_badge(&row.enabled),
             actions = actions,
         ));
     }
     table.push_str("</tbody></table></div>");
     let note = if is_admin {
-        "<p class=\"muted\">Actions call systemctl for an allowlisted unit set only.</p>"
+        "<p class=\"muted\">Runtime shows Active or Inactive. Boot policy shows Enabled or Deactivated (Plugins-style). Missing units show Not installed. Actions call systemctl for an allowlisted unit set only.</p>"
     } else {
         "<p class=\"muted\">Only the panel admin can start or stop services.</p>"
     };
@@ -78,7 +116,7 @@ pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) 
         ],
         "Services Status",
         "Start and stop known hosting services.",
-        &format!("{table}{note}"),
+        &format!("{}{table}{note}", services_page_styles()),
         notice,
         error,
     )
