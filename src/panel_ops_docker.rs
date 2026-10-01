@@ -45,7 +45,8 @@ pub fn docker_bin() -> Option<&'static str> {
         .find(|&candidate| probe_ok(candidate, &["--version"], VERSION_TIMEOUT))
 }
 
-fn docker_daemon_ok(bin: &str) -> bool {
+/// True when the container engine answers `info` within the probe timeout.
+pub fn docker_daemon_ok(bin: &str) -> bool {
     probe_ok(bin, &["info"], INFO_TIMEOUT)
 }
 
