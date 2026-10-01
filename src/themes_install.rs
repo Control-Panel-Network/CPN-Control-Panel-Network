@@ -83,8 +83,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         if from.is_dir() {
             copy_dir_recursive(&from, &to)?;
         } else {
-            fs::copy(&from, &to)
-                .map_err(|e| format!("Could not copy {}: {e}", from.display()))?;
+            fs::copy(&from, &to).map_err(|e| format!("Could not copy {}: {e}", from.display()))?;
         }
     }
     Ok(())
@@ -262,7 +261,9 @@ pub fn enrich_catalog_for_store(
     entries
         .iter()
         .map(|entry| {
-            let local = installed.iter().find(|m| m.id.eq_ignore_ascii_case(&entry.id));
+            let local = installed
+                .iter()
+                .find(|m| m.id.eq_ignore_ascii_case(&entry.id));
             let installed_flag = local.is_some();
             let installed_version = local.map(|m| m.version.clone());
             let update_available = local
