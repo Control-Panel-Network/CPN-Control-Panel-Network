@@ -203,11 +203,7 @@ pub async fn apply_tip_ref(
     state
         .progress("installing", 75, format!("Installing binaries ({label})"))
         .await;
-    install_binary(
-        built_installer.to_str().unwrap_or(""),
-        installer_bin(),
-    )
-    .await?;
+    install_binary(built_installer.to_str().unwrap_or(""), installer_bin()).await?;
     if built_cli.is_file() {
         let _ = install_binary(built_cli.to_str().unwrap_or(""), cli_bin()).await;
     }

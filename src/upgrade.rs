@@ -285,10 +285,7 @@ pub async fn run_maintenance(
             }
         }
 
-        let message = format!(
-            "Updated to {} ({})",
-            tip.branch_label, tip.package_version
-        );
+        let message = format!("Updated to {} ({})", tip.branch_label, tip.package_version);
         let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
         status.phase = "completed";
         status.progress = 100;
@@ -325,7 +322,6 @@ pub async fn run_maintenance(
         state.progress("completed", 100, message).await;
         return Ok(());
     }
-
 
     let release =
         resolve_target_release(request.action, request.version.as_deref(), &installed).await?;

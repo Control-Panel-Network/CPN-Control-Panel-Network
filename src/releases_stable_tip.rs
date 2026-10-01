@@ -151,7 +151,10 @@ pub async fn resolve_running_sha(
     if let Some(embedded) = Some(build_meta::embedded_git_sha()).filter(|s| !s.is_empty()) {
         return (Some(embedded.to_string()), "build".into());
     }
-    if let Some(manifest) = manifest_source_commit.map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(manifest) = manifest_source_commit
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         return (Some(manifest.to_string()), "manifest".into());
     }
     let candidates = [
@@ -215,7 +218,10 @@ mod tests {
 
     #[test]
     fn parses_tip_targets() {
-        assert_eq!(parse_tip_upgrade_target("stable").as_deref(), Some("stable"));
+        assert_eq!(
+            parse_tip_upgrade_target("stable").as_deref(),
+            Some("stable")
+        );
         assert_eq!(
             parse_tip_upgrade_target("stable@a7dc8f9").as_deref(),
             Some("a7dc8f9")
