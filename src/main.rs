@@ -1526,10 +1526,15 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .keep_alive(actix_web::http::KeepAlive::Disabled)
+    // Actix answers `408 Request Timeout` when a worker cannot read a request head within
+    // this budget (default 5s). Panel handlers do synchronous host probes, so a briefly busy
+    // worker must not turn healthy pages (enroll-2fa, plugins, docker) into 408 for the browser.
+    .client_request_timeout(std::time::Duration::from_secs(30))
     // GHA matrix guests often expose 1 CPU. One Actix worker + sync install
-    // work freezes /api/status for the whole smoke. Keep at least two workers.
+    // work freezes /api/status for the whole smoke. Keep at least four workers so a
+    // couple of slow sync handlers cannot starve login and the MFA enroll gate.
     .workers(std::cmp::max(
-        2,
+        4,
         std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(2),

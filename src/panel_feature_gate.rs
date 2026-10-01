@@ -17,10 +17,14 @@ use crate::panel_ops_security_ssl::malware_scan_status;
 use crate::plugins::plugin_id_enabled_anywhere;
 use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// Avoid re-running host probes (firewall-cmd, fail2ban, clam) on every HTML shell render.
 const FEATURE_DETECT_TTL: Duration = Duration::from_secs(45);
+
+/// Container-engine presence is probed at most this often (the sidebar asks on every render).
+const DOCKER_PROBE_TTL: Duration = Duration::from_secs(45);
 
 struct FeatureDetectCache {
     at: Instant,
@@ -28,6 +32,40 @@ struct FeatureDetectCache {
 }
 
 static FEATURE_DETECT_CACHE: Mutex<Option<FeatureDetectCache>> = Mutex::new(None);
+
+/// True while a background refresh of `FEATURE_DETECT_CACHE` is running.
+static FEATURE_REFRESHING: AtomicBool = AtomicBool::new(false);
+
+static DOCKER_PROBE_CACHE: Mutex<Option<(Instant, bool)>> = Mutex::new(None);
+
+/// Clears the cached host probes so the next panel render re-detects (call after install or
+/// uninstall of a host package so the sidebar reflects the change immediately).
+pub fn invalidate_feature_cache() {
+    if let Ok(mut guard) = FEATURE_DETECT_CACHE.lock() {
+        *guard = None;
+    }
+    if let Ok(mut guard) = DOCKER_PROBE_CACHE.lock() {
+        *guard = None;
+    }
+}
+
+fn store_feature_cache(value: InstalledOptionalFeatures) {
+    if let Ok(mut guard) = FEATURE_DETECT_CACHE.lock() {
+        *guard = Some(FeatureDetectCache {
+            at: Instant::now(),
+            value,
+        });
+    }
+}
+
+/// Resets `FEATURE_REFRESHING` even if the refresh thread panics.
+struct RefreshGuard;
+
+impl Drop for RefreshGuard {
+    fn drop(&mut self) {
+        FEATURE_REFRESHING.store(false, Ordering::Release);
+    }
+}
 
 /// Detected optional software that backs specific nav/hub links.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,21 +84,46 @@ pub struct InstalledOptionalFeatures {
 }
 
 impl InstalledOptionalFeatures {
+    /// Cached host-feature snapshot for sidebar and hub rendering.
+    ///
+    /// Panel pages render on Actix worker threads; a slow probe (stopped firewalld, wedged
+    /// podman, busy package database) used to block the worker and, once every worker was
+    /// busy, the browser saw `408 Request Timeout` on otherwise healthy pages such as
+    /// `/account/security/enroll-2fa`. Only the very first call computes inline; once a
+    /// snapshot exists a stale one is served immediately while a single background thread
+    /// refreshes it.
     pub fn detect() -> Self {
-        if let Ok(guard) = FEATURE_DETECT_CACHE.lock()
-            && let Some(cached) = guard.as_ref()
-            && cached.at.elapsed() < FEATURE_DETECT_TTL
-        {
-            return cached.value;
+        let cached = FEATURE_DETECT_CACHE
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(|c| (c.at, c.value)));
+        match cached {
+            Some((at, value)) if at.elapsed() < FEATURE_DETECT_TTL => value,
+            Some((_, stale)) => {
+                Self::spawn_refresh();
+                stale
+            }
+            None => {
+                let value = Self::detect_uncached();
+                store_feature_cache(value);
+                value
+            }
         }
-        let value = Self::detect_uncached();
-        if let Ok(mut guard) = FEATURE_DETECT_CACHE.lock() {
-            *guard = Some(FeatureDetectCache {
-                at: Instant::now(),
-                value,
+    }
+
+    fn spawn_refresh() {
+        if FEATURE_REFRESHING.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let spawned = std::thread::Builder::new()
+            .name("cpn-feature-refresh".into())
+            .spawn(|| {
+                let _guard = RefreshGuard;
+                store_feature_cache(Self::detect_uncached());
             });
+        if spawned.is_err() {
+            FEATURE_REFRESHING.store(false, Ordering::Release);
         }
-        value
     }
 
     fn detect_uncached() -> Self {
@@ -114,9 +177,22 @@ pub fn phpmyadmin_installed() -> bool {
 }
 
 /// True when Docker Engine or Podman CLI is present (Host package installed).
+///
+/// The sidebar, search catalog and nav tree ask this on every panel render, so it only checks
+/// that a CLI answers `--version` (bounded) and caches the answer. It deliberately does not run
+/// `info`, `ps` or `images`; those belong to the `/docker` pages.
 pub fn docker_installed() -> bool {
-    let status = detect_app(AppId::Docker);
-    !matches!(status.state, AppStateKind::NotInstalled)
+    if let Ok(guard) = DOCKER_PROBE_CACHE.lock()
+        && let Some((at, value)) = *guard
+        && at.elapsed() < DOCKER_PROBE_TTL
+    {
+        return value;
+    }
+    let value = crate::panel_ops_docker::docker_bin().is_some();
+    if let Ok(mut guard) = DOCKER_PROBE_CACHE.lock() {
+        *guard = Some((Instant::now(), value));
+    }
+    value
 }
 
 /// True when a panel-proxied or Nextcloud webmail client is present.
@@ -217,6 +293,27 @@ mod tests {
             bimi,
             docker: false,
         }
+    }
+
+    #[test]
+    fn invalidate_clears_feature_snapshot() {
+        let value = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
+        super::store_feature_cache(value);
+        super::invalidate_feature_cache();
+        let cleared = super::FEATURE_DETECT_CACHE
+            .lock()
+            .map(|guard| guard.is_none())
+            .unwrap_or(false);
+        assert!(cleared);
+    }
+
+    #[test]
+    fn docker_installed_answers_are_stable_between_calls() {
+        super::invalidate_feature_cache();
+        let first = super::docker_installed();
+        assert_eq!(first, super::docker_installed());
     }
 
     #[test]
