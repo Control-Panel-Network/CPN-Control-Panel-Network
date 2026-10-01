@@ -1021,10 +1021,10 @@ pub async fn settings_design_page(
         return login_redirect(&http);
     };
     let tab = design_settings_tab(query.get("tab").map(String::as_str));
-    let title = if tab == "store" {
-        "Theme Store"
-    } else {
-        "Design"
+    let title = match tab {
+        "store" => "Theme Store",
+        "installed" => "Installed themes",
+        _ => "Design",
     };
     html_ok(panel_shell(
         &user,
