@@ -265,6 +265,14 @@ const SFTP_OPERATIONS: [&str; 14] = [
 /// and anything sshd says about a jailed SFTP account.
 pub fn sftp_line_matches(line: &str, members: &[String]) -> bool {
     let lower = line.to_ascii_lowercase();
+    // Commands that merely mention these words (sudo, su, cron) are not SFTP activity.
+    let padded = format!(" {lower}");
+    if [" sudo[", " sudo:", " su[", " su:", " cron[", " crond["]
+        .iter()
+        .any(|tag| padded.contains(tag))
+    {
+        return false;
+    }
     if lower.contains("internal-sftp") || lower.contains("sftp-server") {
         return true;
     }
