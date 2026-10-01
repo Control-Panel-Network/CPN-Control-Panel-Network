@@ -330,7 +330,10 @@ mod tests {
         let p = "root:x:0:0::/root:/bin/bash\ndave:x:1001:990::/home/d:/usr/sbin/nologin\nalice:x:1002:990::/home/a:/usr/sbin/nologin\n";
         assert_eq!(group_members(g, "", "cpn-sftp"), vec!["alice", "bob"]);
         // Primary-group accounts are found through /etc/passwd, without duplicating listed ones.
-        assert_eq!(group_members(g, p, "cpn-sftp"), vec!["alice", "bob", "dave"]);
+        assert_eq!(
+            group_members(g, p, "cpn-sftp"),
+            vec!["alice", "bob", "dave"]
+        );
         assert!(group_members(g, p, "missing").is_empty());
         assert!(group_members("cpn-sftp:x:990:\n", "", "cpn-sftp").is_empty());
     }
