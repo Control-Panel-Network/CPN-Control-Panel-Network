@@ -73,11 +73,7 @@ pub fn design_settings_tab(raw: Option<&str>) -> &'static str {
 
 fn design_view_tabs(active: &str) -> String {
     let design = if active == "design" { " active" } else { "" };
-    let installed = if active == "installed" {
-        " active"
-    } else {
-        ""
-    };
+    let installed = if active == "installed" { " active" } else { "" };
     let store = if active == "store" { " active" } else { "" };
     format!(
         r#"<div class="plugin-tabs" role="tablist" aria-label="Design views">
