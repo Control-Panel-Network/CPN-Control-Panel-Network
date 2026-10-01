@@ -6,7 +6,6 @@
 //! Email MTA-STS / BIMI appear only when their catalog plugins (or host feature flags)
 //! are installed.
 
-use crate::apps::{AppId, AppStateKind, detect_app};
 use crate::litespeed_stack::{
     any_litespeed_installed, litespeed_enterprise_installed, openlitespeed_installed,
 };
@@ -170,10 +169,12 @@ impl InstalledOptionalFeatures {
     }
 }
 
-/// True when phpMyAdmin packages or share path are present (Installed or Running).
+/// True when the phpMyAdmin share path is present.
+///
+/// Path-only: the `/phpmyadmin` proxy and sidebar call this often. Do not run
+/// `rpm -q` or a :8081 probe here (those belong to Apps detect, not Open).
 pub fn phpmyadmin_installed() -> bool {
-    let status = detect_app(AppId::Phpmyadmin);
-    !matches!(status.state, AppStateKind::NotInstalled)
+    crate::apps_phpmyadmin::phpmyadmin_share_dir().is_some()
 }
 
 /// True when Docker Engine or Podman CLI is present (Host package installed).

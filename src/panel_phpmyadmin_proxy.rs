@@ -38,22 +38,21 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
             .content_type("text/plain; charset=utf-8")
             .body("phpMyAdmin is not installed on this host.");
     }
-    // Always refresh TempDir/upload ownership so OLS/php-fpm (nobody) can write
-    // even when the :8081 listener was already up from a prior boot.
-    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
-    // OLS :8081 can be up while php-fpm is in start-limit-hit (no sock -> 503).
-    if !std::path::Path::new("/run/php-fpm/cpn-phpmyadmin.sock").exists() {
+    if crate::apps_phpmyadmin_fast::runtime_dirs_need_heal() {
+        let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    }
+    if !crate::apps_phpmyadmin_fast::pma_sock_ready() {
         let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
     }
-    if !port_open("127.0.0.1:8081", 200) {
+    if !crate::apps_phpmyadmin_fast::pma_listener_ready() {
         let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
-    }
-    if !port_open("127.0.0.1:8081", 500) {
-        return HttpResponse::BadGateway()
-            .content_type("text/plain; charset=utf-8")
-            .body(format!(
-                "phpMyAdmin loopback listener is not ready ({BACKEND}). Open auto-login wires OpenLiteSpeed :8081 when needed."
-            ));
+        if !port_open("127.0.0.1:8081", 200) {
+            return HttpResponse::BadGateway()
+                .content_type("text/plain; charset=utf-8")
+                .body(format!(
+                    "phpMyAdmin loopback listener is not ready ({BACKEND}). Open auto-login wires OpenLiteSpeed :8081 when needed."
+                ));
+        }
     }
     let Some(backend_path) = backend_path(req.path()) else {
         return HttpResponse::NotFound().finish();

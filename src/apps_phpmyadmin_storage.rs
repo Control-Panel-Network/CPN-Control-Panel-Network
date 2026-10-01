@@ -29,13 +29,7 @@ fn random_password() -> String {
 }
 
 fn mariadb_cli() -> Option<&'static str> {
-    ["mariadb", "mysql"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    })
+    crate::apps_phpmyadmin_fast::mariadb_cli()
 }
 
 fn secret_path() -> PathBuf {
@@ -171,6 +165,11 @@ fn ensure_config_has_storage(conf_inc: &Path, pass: &str) -> Result<(), String> 
 /// Create pmadb tables + controluser and wire them into phpMyAdmin config.
 /// Control password lives only under `/var/lib/cpn/phpmyadmin/control.secret` (mode 600).
 pub fn ensure_phpmyadmin_configuration_storage() -> Result<String, String> {
+    if crate::apps_phpmyadmin_fast::configuration_storage_ready() {
+        return Ok(format!(
+            "phpMyAdmin configuration storage ready (database `{CONTROL_DB}`, control user `{CONTROL_USER}`)."
+        ));
+    }
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;

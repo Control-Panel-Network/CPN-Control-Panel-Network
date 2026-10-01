@@ -39,13 +39,7 @@ fn random_password() -> String {
 }
 
 fn mariadb_cli() -> Option<&'static str> {
-    ["mariadb", "mysql"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    })
+    crate::apps_phpmyadmin_fast::mariadb_cli()
 }
 
 fn ols_vhconf(docroot: &str, sock: &str) -> String {
@@ -106,14 +100,22 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
-    let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
-    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    if crate::apps_phpmyadmin_fast::runtime_dirs_need_heal() {
+        let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    }
+    if !crate::apps_phpmyadmin_fast::pma_sock_ready() {
+        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+    }
     let sock = resolve_fpm_sock();
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{OLS_VHOST}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("Could not create OLS vhost dir: {e}"))?;
     let vhconf = vh_dir.join("vhconf.conf");
-    fs::write(&vhconf, ols_vhconf(&share.display().to_string(), &sock))
-        .map_err(|e| format!("Could not write phpMyAdmin vhconf: {e}"))?;
+    let desired = ols_vhconf(&share.display().to_string(), &sock);
+    let previous = fs::read_to_string(&vhconf).unwrap_or_default();
+    if previous != desired {
+        fs::write(&vhconf, desired)
+            .map_err(|e| format!("Could not write phpMyAdmin vhconf: {e}"))?;
+    }
 
     let mut conf = fs::read_to_string(HTTPD_CONF)
         .map_err(|e| format!("Could not read httpd_config.conf: {e}"))?;
@@ -156,7 +158,6 @@ pub fn ensure_ols_phpmyadmin_listener() -> Result<String, String> {
 }
 
 /// Refresh cpn-signon.php and migrate SignonURL to the panel remint route.
-/// Safe after host PHP default changes (php-fpm restart) and on Open.
 pub fn refresh_phpmyadmin_signon() -> Result<String, String> {
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
@@ -180,15 +181,14 @@ fn phpmyadmin_config_candidates(share: &Path) -> Vec<PathBuf> {
 }
 
 fn write_signon_bridge(share: &Path) -> Result<(), String> {
+    if crate::apps_phpmyadmin_fast::signon_bridge_ready(share, PANEL_PMA_OPEN_URL) {
+        return Ok(());
+    }
     let conf_dir = join_data("phpmyadmin");
     fs::create_dir_all(&conf_dir)
         .map_err(|e| format!("Could not create phpmyadmin data dir: {e}"))?;
     let signon_php = conf_dir.join("signon.php");
-    // Location stays root-relative on the loopback backend; the panel proxy
-    // rewrites it to /phpmyadmin/index.php for host browsers.
-    // Missing/expired tokens redirect to the panel open route so a live CPN
-    // session remints SSO without requiring a full panel re-login. Location is
-    // rewritten by the panel proxy only for PMA-relative paths.
+    // Token file is consumed once; missing/expired tokens remint via PANEL_PMA_OPEN_URL.
     let body = format!(
         r#"<?php
 declare(strict_types=1);
@@ -266,8 +266,6 @@ fn ensure_config_includes_signon(conf_inc: &Path, session: &str) -> Result<(), S
         return Ok(());
     }
     // Append after distro cookie defaults so panel mount + sign-on win.
-    // SignonURL is the panel open route so a live CPN session remints tokens
-    // after php-fpm restarts (host PHP default changes).
     let append = format!(
         "\n// CPN-SIGNON-PANEL\n\
          $cfg['PmaAbsoluteUri'] = '/phpmyadmin/';\n\
@@ -364,6 +362,9 @@ fn token_dir(share: &Path) -> PathBuf {
 
 fn ensure_token_dir(share: &Path) -> Result<PathBuf, String> {
     let dir = token_dir(share);
+    if dir.is_dir() {
+        return Ok(dir);
+    }
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create token dir: {e}"))?;
     #[cfg(unix)]
     {
@@ -415,10 +416,14 @@ fn mint_phpmyadmin_open_url(db_names: Option<&[String]>) -> Result<String, Strin
         "phpMyAdmin share path not found under /usr/share/phpMyAdmin.".to_string()
     })?;
     write_signon_bridge(&share)?;
-    let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    if crate::apps_phpmyadmin_fast::runtime_dirs_need_heal() {
+        let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
+    }
     if openlitespeed_installed() {
-        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
-        if !port_open("127.0.0.1:8081", 200) {
+        if !crate::apps_phpmyadmin_fast::pma_sock_ready() {
+            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+        }
+        if !crate::apps_phpmyadmin_fast::pma_listener_ready() {
             let _ = ensure_ols_phpmyadmin_listener();
         }
     }
@@ -456,7 +461,7 @@ fn mint_phpmyadmin_open_url(db_names: Option<&[String]>) -> Result<String, Strin
 
 pub fn phpmyadmin_open_status() -> (bool, String) {
     let installed = phpmyadmin_share_dir().is_some();
-    let listening = port_open("127.0.0.1:8081", 200);
+    let listening = crate::apps_phpmyadmin_fast::pma_listener_ready();
     let mount = crate::panel_phpmyadmin_proxy::PMA_MOUNT;
     let detail = if !installed {
         "phpMyAdmin packages are not installed.".into()

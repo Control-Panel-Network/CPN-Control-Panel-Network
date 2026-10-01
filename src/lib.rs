@@ -15,6 +15,7 @@ pub mod apps_control;
 pub mod apps_email;
 pub mod apps_nextcloud;
 pub mod apps_phpmyadmin;
+pub mod apps_phpmyadmin_fast;
 pub mod apps_phpmyadmin_sso;
 pub mod apps_phpmyadmin_storage;
 pub mod apps_pkg;

@@ -54,6 +54,7 @@ pub fn ensure_phpmyadmin_runtime_dirs() -> Result<String, String> {
         }
     }
     ensure_tempdir_in_config();
+    crate::apps_phpmyadmin_fast::mark_runtime_dirs_ok();
     Ok(format!(
         "phpMyAdmin runtime dirs under {LIB_DIR} owned by {user}:{group} (mode 770)."
     ))
@@ -311,21 +312,7 @@ fn write_fpm_pool(share: &Path) -> Result<(), String> {
     } else {
         ("nobody", "nobody", "0666")
     };
-    let body = format!(
-        "[cpn-phpmyadmin]\n\
-         user = {owner}\n\
-         group = {group}\n\
-         listen = /run/php-fpm/cpn-phpmyadmin.sock\n\
-         listen.owner = {owner}\n\
-         listen.group = {group}\n\
-         listen.mode = {mode}\n\
-         pm = ondemand\n\
-         pm.max_children = 5\n\
-         php_admin_value[open_basedir] = {share}:/etc/phpMyAdmin:/etc/phpmyadmin:/var/lib/phpMyAdmin:/var/lib/cpn/phpmyadmin:/tmp\n\
-         php_admin_flag[allow_url_fopen] = on\n",
-        share = share.display()
-    );
-    fs::write(FPM_POOL, body).map_err(|error| format!("Could not write {FPM_POOL}: {error}"))?;
+    crate::apps_phpmyadmin_fast::write_fpm_pool_file(share, owner, group, mode)?;
     Ok(())
 }
 
