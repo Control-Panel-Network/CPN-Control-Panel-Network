@@ -38,9 +38,12 @@ impl BackupFormat {
             "wordpress" | "wp" => Ok(Self::WordPress),
             "cpanel" | "cpmove" => Ok(Self::Cpanel),
             // `classic` is the product UI value; silent aliases kept for API/back-compat only.
-            "classic" | "source" | "source_panel" | "source-control-panel" | "cp" | "cyberpanel" => {
-                Ok(Self::CyberPanel)
-            }
+            "classic"
+            | "source"
+            | "source_panel"
+            | "source-control-panel"
+            | "cp"
+            | "cyberpanel" => Ok(Self::CyberPanel),
             other => Err(format!(
                 "Unknown format `{other}`. Use: auto, cpn, wordpress, cpanel, classic"
             )),
