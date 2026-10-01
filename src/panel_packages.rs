@@ -5,9 +5,7 @@ use crate::packages::{
     Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin,
     list_packages, package_for_account, usage_for_account,
 };
-use crate::panel_dashboard_activity_list::{
-    activity_list_script, wrap_activity_table_sized,
-};
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 
 fn html_escape(value: &str) -> String {
     value

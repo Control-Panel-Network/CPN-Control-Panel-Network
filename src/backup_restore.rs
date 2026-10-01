@@ -4,10 +4,10 @@ use crate::backup_restore_apply::{
     RestoreApplyOpts, restore_cpanel, restore_cpn, restore_cyberpanel, restore_wordpress,
 };
 use crate::backup_restore_detect::{BackupFormat, DetectedBackup, detect_from_members};
+pub use crate::backup_restore_entities::infer_domain_from_archive_name;
 use crate::backup_restore_entities::{
     EntitySelection, EntityStatus, RestoreEntity, discover_entities,
 };
-pub use crate::backup_restore_entities::infer_domain_from_archive_name;
 use crate::backup_restore_extract::{
     ArchiveKind, archive_kind, extract_archive_safe, list_archive_members,
 };
@@ -142,13 +142,7 @@ fn ensure_target_site(
             } else {
                 req.owner.trim()
             };
-            create_site(
-                domain,
-                owner,
-                None,
-                None,
-                Some("Created by backup restore"),
-            )
+            create_site(domain, owner, None, None, Some("Created by backup restore"))
         }
     }
 }

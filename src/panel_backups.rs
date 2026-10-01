@@ -1,9 +1,7 @@
 //! Backups panel page HTML (selective chooser).
 
 use crate::backups::{BackupScope, is_subdomain_site, list_backup_files, resolve_archive_dir};
-use crate::panel_dashboard_activity_list::{
-    activity_list_script, wrap_activity_table_sized,
-};
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::paths::{legacy_panel_backups_dir, panel_backups_dir};
 use crate::service_detect::detect_database;
 use crate::sites::{SiteRecord, list_sites};

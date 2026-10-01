@@ -89,7 +89,10 @@ impl EntitySelection {
 
     pub fn wants_website(&self) -> bool {
         self.contains("website")
-            || self.ids.iter().any(|id| id.starts_with("site:") || id.starts_with("subdomain:"))
+            || self
+                .ids
+                .iter()
+                .any(|id| id.starts_with("site:") || id.starts_with("subdomain:"))
     }
 
     pub fn wants_plugins(&self) -> bool {
@@ -216,11 +219,7 @@ fn sql_db_name(path: &str) -> Option<String> {
         })
         .collect();
     let name = name.trim_matches('_').to_string();
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
+    if name.is_empty() { None } else { Some(name) }
 }
 
 fn push_unique(entities: &mut Vec<RestoreEntity>, entity: RestoreEntity) {
@@ -284,9 +283,15 @@ pub fn discover_entities(filename: &str, members: &[String]) -> Vec<RestoreEntit
             || p.contains("/public_html/")
             || p.ends_with("/public_html")
     });
-    let has_homedir = paths.iter().any(|p| p.starts_with("homedir/") || p == "homedir");
-    let has_plugins = paths.iter().any(|p| p == "plugins" || p.starts_with("plugins/"));
-    let has_vmail = paths.iter().any(|p| p == "vmail" || p.starts_with("vmail/"));
+    let has_homedir = paths
+        .iter()
+        .any(|p| p.starts_with("homedir/") || p == "homedir");
+    let has_plugins = paths
+        .iter()
+        .any(|p| p == "plugins" || p.starts_with("plugins/"));
+    let has_vmail = paths
+        .iter()
+        .any(|p| p == "vmail" || p.starts_with("vmail/"));
     let has_docker = paths.iter().any(|p| {
         p == "docker"
             || p.starts_with("docker/")
@@ -455,7 +460,9 @@ pub fn discover_entities(filename: &str, members: &[String]) -> Vec<RestoreEntit
                 id: "docker".into(),
                 kind: EntityKind::Docker,
                 label: EntityKind::Docker.label().into(),
-                detail: "Present in archive. Requires confirmation; stacks are not auto-recreated yet.".into(),
+                detail:
+                    "Present in archive. Requires confirmation; stacks are not auto-recreated yet."
+                        .into(),
                 needs_extra_confirm: true,
                 default_selected: false,
             },

@@ -5,9 +5,7 @@ use crate::backup_restore_scan::{
     documented_upload_locations, list_restore_archives_with_fallback,
 };
 use crate::panel_backups::{BackupsPageQuery, backups_create_main};
-use crate::panel_dashboard_activity_list::{
-    activity_list_script, wrap_activity_table_sized,
-};
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
 use crate::panel_ops_backup_extra::{
@@ -206,8 +204,7 @@ pub fn backups_restore_page(
                         domain.to_string()
                     };
                     // Safe DOM id fragment: archive names are filesystem basenames.
-                    let id_frag = html_escape(&hit.name)
-                        .replace([' ', '.', '/', '\\', ':'], "-");
+                    let id_frag = html_escape(&hit.name).replace([' ', '.', '/', '\\', ':'], "-");
                     table.push_str(&format!(
                         r#"<tr>
                           <td data-label="File"><code>{name}</code></td>

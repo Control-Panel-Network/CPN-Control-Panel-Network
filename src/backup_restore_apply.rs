@@ -202,8 +202,7 @@ pub(crate) fn restore_cpn(
             );
         } else {
             warnings.push(
-                "Panel-config payload was present but not selected (site restore only)."
-                    .into(),
+                "Panel-config payload was present but not selected (site restore only).".into(),
             );
         }
     }
@@ -375,7 +374,8 @@ pub(crate) fn restore_cyberpanel(
         .filter(|p| sql_allowed(p, &opts.database_names))
         .collect();
     if sqls.is_empty() {
-        warnings.push("No selected database .sql files found in source control-panel archive.".into());
+        warnings
+            .push("No selected database .sql files found in source control-panel archive.".into());
     } else {
         for sql in sqls {
             // Filename-based DB create/USE happens inside import_sql_best_effort.
@@ -389,9 +389,7 @@ pub(crate) fn restore_cyberpanel(
                     .into(),
             );
         } else {
-            warnings.push(
-                "vmail/ email data was present but not selected.".into(),
-            );
+            warnings.push("vmail/ email data was present but not selected.".into());
         }
     }
     if opts.include_docker {
