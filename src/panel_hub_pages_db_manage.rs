@@ -18,7 +18,10 @@ fn html_escape(value: &str) -> String {
 
 fn db_delete_impacts(db: &ManagedDatabase, users: &[String]) -> Vec<String> {
     let mut impacts = vec![
-        format!("Permanently drops MariaDB database `{}` and all of its tables/data", db.name),
+        format!(
+            "Permanently drops MariaDB database `{}` and all of its tables/data",
+            db.name
+        ),
         "This cannot be undone without a backup restore".into(),
     ];
     if db.in_registry {
@@ -27,10 +30,7 @@ fn db_delete_impacts(db: &ManagedDatabase, users: &[String]) -> Vec<String> {
             db.name
         ));
     }
-    let droppable: Vec<&String> = users
-        .iter()
-        .filter(|u| !is_protected_db_user(u))
-        .collect();
+    let droppable: Vec<&String> = users.iter().filter(|u| !is_protected_db_user(u)).collect();
     if droppable.is_empty() {
         impacts.push(
             "No dedicated MariaDB users with schema grants on this database were found to remove"
@@ -131,11 +131,7 @@ fn urlencoding_path(value: &str) -> String {
     out
 }
 
-pub fn databases_all_page_for(
-    username: &str,
-    notice: Option<&str>,
-    error: Option<&str>,
-) -> String {
+pub fn databases_all_page_for(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let status = list_databases();
     let managed = list_managed_databases(username);
     let kv = status_kv(&[
@@ -199,7 +195,8 @@ pub fn databases_password_page_for(
             .join("")
     };
 
-    let mut user_options = String::from("<option value=\"\">Enter username below if empty</option>");
+    let mut user_options =
+        String::from("<option value=\"\">Enter username below if empty</option>");
     if !selected.is_empty() {
         if let Ok(users) = list_usernames_for_database(selected) {
             for u in users {
@@ -422,7 +419,11 @@ mod tests {
         assert!(impacts.iter().any(|i| i.contains("shop_db")));
         assert!(impacts.iter().any(|i| i.contains("registry")));
         assert!(impacts.iter().any(|i| i.contains("`shop_db`")));
-        assert!(!impacts.iter().any(|i| i.contains("`root`") && i.contains("May remove")));
+        assert!(
+            !impacts
+                .iter()
+                .any(|i| i.contains("`root`") && i.contains("May remove"))
+        );
     }
 
     #[test]

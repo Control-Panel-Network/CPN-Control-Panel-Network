@@ -203,7 +203,6 @@ pub fn create_ftp_account(
     Ok(record)
 }
 
-
 pub fn find_database(name_raw: &str) -> Option<DatabaseRecord> {
     let name = name_raw.trim();
     if name.is_empty() {

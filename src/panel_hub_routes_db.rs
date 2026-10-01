@@ -128,7 +128,11 @@ pub async fn databases_delete_post(
     let name = form.name.trim();
     let confirm_name = form.confirm_name.trim();
     if name.is_empty() {
-        return redirect_notice("/databases/delete", None, Some("Database name is required."));
+        return redirect_notice(
+            "/databases/delete",
+            None,
+            Some("Database name is required."),
+        );
     }
     if confirm_name != name {
         return redirect_notice(

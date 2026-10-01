@@ -382,7 +382,9 @@ pub fn drop_database_with_optional_users(name: &str, drop_users: bool) -> Result
     }
 
     let Some(bin) = mariadb_cli() else {
-        return Ok(format!("{msg} (could not drop users: MariaDB client missing)"));
+        return Ok(format!(
+            "{msg} (could not drop users: MariaDB client missing)"
+        ));
     };
 
     let mut dropped_users = Vec::new();

@@ -67,16 +67,11 @@ pub fn list_managed_databases(username: &str) -> Vec<ManagedDatabase> {
             if is_system_database(name) {
                 continue;
             }
-            let rec = registry
-                .iter()
-                .find(|r| r.name.eq_ignore_ascii_case(name));
+            let rec = registry.iter().find(|r| r.name.eq_ignore_ascii_case(name));
             out.push(row_from(name, rec, true));
         }
         for rec in &registry {
-            if out
-                .iter()
-                .any(|r| r.name.eq_ignore_ascii_case(&rec.name))
-            {
+            if out.iter().any(|r| r.name.eq_ignore_ascii_case(&rec.name)) {
                 continue;
             }
             out.push(row_from(
@@ -98,7 +93,11 @@ pub fn list_managed_databases(username: &str) -> Vec<ManagedDatabase> {
         }
     }
 
-    out.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    out.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     out
 }
 
