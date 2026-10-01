@@ -26,6 +26,7 @@ fn path_if_exists(p: &str) -> Option<String> {
 pub fn modsec_status() -> ModsecStatus {
     let mut hits: Vec<String> = Vec::new();
     for p in [
+        "/usr/local/lsws/modules/mod_security.so",
         "/etc/httpd/conf.d/mod_security.conf",
         "/etc/httpd/conf.modules.d/10-mod_security.conf",
         "/etc/nginx/modsec/main.conf",
@@ -58,7 +59,9 @@ pub fn modsec_status() -> ModsecStatus {
             rule_paths,
         };
     }
-    let engine = if hits.iter().any(|h| h.contains("nginx")) {
+    let engine = if hits.iter().any(|h| h.contains("/lsws/")) {
+        "openlitespeed-modsecurity"
+    } else if hits.iter().any(|h| h.contains("nginx")) {
         "nginx-modsecurity"
     } else if hits
         .iter()

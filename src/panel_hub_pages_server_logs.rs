@@ -46,7 +46,7 @@ fn rows_table(rows: &[ActionRecord]) -> String {
             r#"<span class="plugin-badge paid">Failed</span>"#
         };
         table.push_str(&format!(
-            r#"<tr><td><time data-ts="{ts}" title="UTC">{stamp} UTC</time></td><td>{actor}</td><td>{label}</td><td>{scope}</td><td>{result}</td><td>{msg}</td></tr>"#,
+            r#"<tr><td data-label="Time"><time data-ts="{ts}" title="UTC">{stamp} UTC</time></td><td data-label="User">{actor}</td><td data-label="Action">{label}</td><td data-label="Scope">{scope}</td><td data-label="Result">{result}</td><td data-label="Details">{msg}</td></tr>"#,
             ts = row.ts,
             stamp = utc_stamp(row.ts),
             actor = html_escape(&row.actor),
@@ -167,6 +167,8 @@ mod tests {
             assert!(html.contains("Failed"));
             assert!(html.contains("Boom &lt;b&gt;"));
             assert!(html.contains("data-ts="));
+            // Cells carry their column name so narrow screens can stack each row as a card.
+            assert!(html.contains(r#"data-label="Details""#));
             // A different non-admin user sees nothing of alice's actions.
             assert!(panel_actions_table("bob").contains("No plugin or host-package actions"));
         });

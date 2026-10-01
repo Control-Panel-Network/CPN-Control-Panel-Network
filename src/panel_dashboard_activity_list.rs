@@ -41,6 +41,39 @@ pub fn activity_list_styles() -> &'static str {
   min-height:34px; padding:0 12px; border-radius:999px; font-weight:700; font-size:13px;
 }
 .activity-list-empty { margin:8px 0 0; }
+.activity-list { container-type:inline-size; }
+.activity-list .table-wrap { overflow-x:visible; }
+.activity-list .data-table { width:100%; min-width:0; table-layout:auto; }
+.activity-list .data-table th, .activity-list .data-table td {
+  overflow-wrap:anywhere; word-break:break-word;
+}
+.activity-list .data-table td:last-child, .activity-list .data-table th:last-child { white-space:normal; }
+.activity-list .data-table td time { white-space:nowrap; }
+.activity-list .data-table tr[hidden] { display:none !important; }
+@container (max-width: 720px) {
+  .activity-list .data-table thead {
+    position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;
+  }
+  .activity-list .data-table, .activity-list .data-table tbody,
+  .activity-list .data-table tr, .activity-list .data-table td { display:block; width:100%; }
+  .activity-list .data-table tr {
+    margin:0 0 10px; padding:6px 12px; border:1px solid var(--hairline);
+    border-radius:10px; background:var(--canvas);
+  }
+  .activity-list .data-table td, .activity-list .data-table td:first-child,
+  .activity-list .data-table td:last-child {
+    display:grid; grid-template-columns:minmax(72px,30%) minmax(0,1fr); gap:4px 10px;
+    position:static; box-shadow:none; background:transparent; border:0; padding:6px 0;
+  }
+  .activity-list .data-table td::before {
+    content:attr(data-label); font-weight:700; font-size:12px; color:var(--muted);
+  }
+  .activity-list .data-table td[data-label=""]::before { content:none; }
+}
+@container (max-width: 480px) {
+  .activity-list .data-table td, .activity-list .data-table td:first-child,
+  .activity-list .data-table td:last-child { grid-template-columns:1fr; gap:0; }
+}
 @media (max-width:719.98px) {
   .activity-list-controls { padding:10px; }
   .activity-list-pager { margin-left:0; width:100%; }
@@ -128,6 +161,12 @@ pub fn activity_list_script() -> &'static str {
     var gotoInput=root.querySelector('.activity-list-goto-input');
     var emptyEl=root.querySelector('[data-activity-empty]');
     var wrap=root.querySelector('.table-wrap');
+    var heads=[].slice.call(table.querySelectorAll('thead th')).map(function(th){return (th.textContent||'').trim();});
+    rows.forEach(function(tr){
+      [].slice.call(tr.cells).forEach(function(td,i){
+        if(!td.hasAttribute('data-label')&&heads[i]){ td.setAttribute('data-label',heads[i]); }
+      });
+    });
     var page=1;
     var perPage=parseInt(root.getAttribute('data-page-size')||'10',10)||10;
     if(perSel){ perSel.value=String(perPage); }

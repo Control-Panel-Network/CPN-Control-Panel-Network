@@ -223,7 +223,7 @@ fn sshd_dropin_contents() -> String {
 # Do not grant shell access to members of this group.
 Match Group {SFTP_GROUP}
     ChrootDirectory %h
-    ForceCommand internal-sftp
+    ForceCommand internal-sftp -l INFO
     AllowTcpForwarding no
     X11Forwarding no
     PermitTunnel no
