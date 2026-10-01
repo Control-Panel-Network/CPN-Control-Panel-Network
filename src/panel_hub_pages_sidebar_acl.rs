@@ -46,10 +46,10 @@ fn sidebar_grant_rows() -> String {
 
 fn sidebar_checkboxes(selected: &[String]) -> String {
     let mut out = String::from(
-        r#"<fieldset style="border:1px solid var(--hairline,#d0d5dd);border-radius:8px;padding:12px;">
-      <legend style="padding:0 6px;">Hide sidebar sections</legend>
-      <p class="muted" style="margin:0 0 8px;">Checked sections are hidden for this member (and blocked with 403 if opened by URL). Dashboard always stays available.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">"#,
+        r#"<fieldset class="cpn-check-fieldset">
+      <legend>Hide sidebar sections</legend>
+      <p class="muted" style="margin:0 0 10px;">Checked sections are hidden for this member (and blocked with 403 if opened by URL). Dashboard always stays available.</p>
+      <div class="cpn-check-grid">"#,
     );
     for item in controllable_nav_items() {
         let checked = if selected.iter().any(|id| id == item.id) {
@@ -58,9 +58,9 @@ fn sidebar_checkboxes(selected: &[String]) -> String {
             ""
         };
         out.push_str(&format!(
-            r#"<label style="display:flex;align-items:center;gap:8px;">
+            r#"<label class="cpn-check-item">
           <input type="checkbox" name="hidden_nav_ids" value="{id}"{checked}>
-          {label}
+          <span>{label}</span>
         </label>"#,
             id = html_escape(item.id),
             checked = checked,
@@ -79,9 +79,9 @@ pub fn sidebar_acl_form() -> String {
           <input name="member" type="text" required maxlength="128" placeholder="ops">
         </label>
         {checks}
-        <label style="display:flex;align-items:center;gap:8px;">
+        <label class="cpn-check-item cpn-check-single">
           <input name="restrict_admin" type="checkbox" value="1">
-          Also apply when this member is the panel owner/admin
+          <span>Also apply when this member is the panel owner/admin</span>
         </label>
         <button type="submit" class="btn-primary">Save sidebar visibility</button>
       </form>

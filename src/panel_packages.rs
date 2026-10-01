@@ -354,9 +354,9 @@ fn package_sidebar_fields(pkg: Option<&Package>) -> String {
             ""
         };
         checks.push_str(&format!(
-            r#"<label style="display:flex;align-items:center;gap:8px;">
+            r#"<label class="cpn-check-item">
           <input type="checkbox" name="sidebar_hidden_nav_ids" value="{id}"{checked}>
-          Hide {label}
+          <span>Hide {label}</span>
         </label>"#,
             id = html_escape(item.id),
             checked = checked,
@@ -364,10 +364,10 @@ fn package_sidebar_fields(pkg: Option<&Package>) -> String {
         ));
     }
     format!(
-        r#"<fieldset style="border:1px solid var(--hairline,#d0d5dd);border-radius:8px;padding:12px;">
-      <legend style="padding:0 6px;">Sidebar visibility (plan)</legend>
-      <p class="muted" style="margin:0 0 8px;">Accounts on this package cannot see or open checked sections (403 on direct URL). Dashboard stays available. Owner/admin keeps full access unless separately restricted in ACL.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">{checks}</div>
+        r#"<fieldset class="cpn-check-fieldset">
+      <legend>Sidebar visibility (plan)</legend>
+      <p class="muted" style="margin:0 0 10px;">Accounts on this package cannot see or open checked sections (403 on direct URL). Dashboard stays available. Owner/admin keeps full access unless separately restricted in ACL.</p>
+      <div class="cpn-check-grid">{checks}</div>
     </fieldset>"#,
         checks = checks,
     )
