@@ -97,6 +97,16 @@ pub async fn load_maintenance_info_with_options(force_network: bool) -> Maintena
         upstream_repo: check.upstream_repo,
         upstream_latest_version: check.upstream_latest_version,
         upstream_latest_tag: check.upstream_latest_tag,
+
+        running_sha: check.running_sha,
+        running_sha_source: check.running_sha_source,
+        stable_tip_sha: check.stable_tip_sha,
+        stable_tip_short: check.stable_tip_short,
+        stable_branch: check.stable_branch,
+        stable_tip_label: check.stable_tip_label,
+        stable_update_available: check.stable_update_available,
+        release_update_available: check.release_update_available,
+        tip_check_error: check.tip_check_error,
     }
 }
 
@@ -297,6 +307,15 @@ pub async fn start_maintenance(
             upstream_repo: releases::OFFICIAL_GITHUB_REPO.to_string(),
             upstream_latest_version: None,
             upstream_latest_tag: None,
+            running_sha: None,
+            running_sha_source: None,
+            stable_tip_sha: None,
+            stable_tip_short: None,
+            stable_branch: None,
+            stable_tip_label: None,
+            stable_update_available: false,
+            release_update_available: false,
+            tip_check_error: None,
         });
     }
     current.phase = "downloading";

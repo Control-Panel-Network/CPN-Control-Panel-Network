@@ -45,6 +45,9 @@ pub struct InstallManifest {
     pub package_version: String,
     #[serde(default)]
     pub release_tag: String,
+    /// Git commit SHA for tip/source installs (and optional release commit tracking).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_commit: String,
     pub installed_at_unix: u64,
     pub source: ManifestSource,
     pub core_files: Vec<CoreFileEntry>,
@@ -188,6 +191,24 @@ pub fn record_install(
     selected_server: Option<ServerEngine>,
     selected_mail: Option<MailSystem>,
 ) -> Result<InstallManifest, String> {
+    record_install_with_commit(
+        package_version,
+        release_tag,
+        source,
+        None,
+        selected_server,
+        selected_mail,
+    )
+}
+
+pub fn record_install_with_commit(
+    package_version: &str,
+    release_tag: &str,
+    source: ManifestSource,
+    source_commit: Option<&str>,
+    selected_server: Option<ServerEngine>,
+    selected_mail: Option<MailSystem>,
+) -> Result<InstallManifest, String> {
     let previous = load_manifest();
     let mut core_files = previous
         .as_ref()
@@ -201,6 +222,17 @@ pub fn record_install(
         .map(|item| item.preserve_paths.clone())
         .filter(|paths| !paths.is_empty())
         .unwrap_or_else(default_preserve_paths);
+    let commit = source_commit
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            previous
+                .as_ref()
+                .map(|item| item.source_commit.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or_default();
     let manifest = InstallManifest {
         schema_version: 1,
         package_version: package_version.trim().trim_start_matches('v').to_string(),
@@ -209,6 +241,7 @@ pub fn record_install(
         } else {
             release_tag.trim().to_string()
         },
+        source_commit: commit,
         installed_at_unix: now_unix(),
         source,
         core_files,
@@ -220,6 +253,13 @@ pub fn record_install(
     };
     save_manifest(&manifest)?;
     Ok(manifest)
+}
+
+/// Source commit recorded on the install manifest (tip/hot-deploy installs).
+pub fn manifest_source_commit() -> Option<String> {
+    load_manifest()
+        .map(|item| item.source_commit.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn rpm_installed_version() -> Option<String> {
