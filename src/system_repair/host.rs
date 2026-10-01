@@ -267,11 +267,7 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
                 "Docker/Podman installed but engine does not look running"
             },
             false,
-            if running {
-                None
-            } else {
-                Some("docker.engine")
-            },
+            if running { None } else { Some("docker.engine") },
         );
     } else {
         push(

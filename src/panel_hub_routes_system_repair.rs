@@ -102,11 +102,7 @@ pub async fn system_repair_heal_route(
         };
         redirect_notice("/server/system-repair", Some(&msg), None)
     } else {
-        redirect_notice(
-            "/server/system-repair",
-            None,
-            Some(&failed.join(" | ")),
-        )
+        redirect_notice("/server/system-repair", None, Some(&failed.join(" | ")))
     }
 }
 

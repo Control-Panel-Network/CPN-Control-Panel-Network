@@ -99,11 +99,7 @@ impl RepairReport {
     }
 
     pub fn exit_code(&self) -> i32 {
-        if self.required_failures == 0 {
-            0
-        } else {
-            1
-        }
+        if self.required_failures == 0 { 0 } else { 1 }
     }
 
     pub fn to_json(&self) -> Result<String, String> {
@@ -189,11 +185,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
 
 /// Heal (optional), then re-check. Used by CLI and panel.
 pub fn run_suite(heal: bool, heal_id: Option<&str>, filter_id: Option<&str>) -> RepairReport {
-    let heals = if heal {
-        run_heals(heal_id)
-    } else {
-        Vec::new()
-    };
+    let heals = if heal { run_heals(heal_id) } else { Vec::new() };
     let checks = run_checks(filter_id);
     RepairReport::from_checks(checks, heals)
 }
@@ -220,10 +212,7 @@ pub fn print_human(report: &RepairReport) -> i32 {
             .as_ref()
             .map(|id| format!(" heal={id}"))
             .unwrap_or_default();
-        println!(
-            "[{mark}] {}: {} ({}){heal}",
-            c.id, c.title, c.detail
-        );
+        println!("[{mark}] {}: {} ({}){heal}", c.id, c.title, c.detail);
     }
     println!();
     if report.required_failures == 0 {

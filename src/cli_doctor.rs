@@ -27,17 +27,13 @@ fn emit(report: &RepairReport, json: bool) -> Result<(), String> {
     if json {
         println!("{}", report.to_json()?);
         if report.exit_code() != 0 {
-            return Err(format!(
-                "{PRODUCT_NAME} reported required failures"
-            ));
+            return Err(format!("{PRODUCT_NAME} reported required failures"));
         }
         return Ok(());
     }
     let code = system_repair::print_human(report);
     if code != 0 {
-        return Err(format!(
-            "{PRODUCT_NAME} reported required failures"
-        ));
+        return Err(format!("{PRODUCT_NAME} reported required failures"));
     }
     Ok(())
 }

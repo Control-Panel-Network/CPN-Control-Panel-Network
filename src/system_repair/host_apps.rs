@@ -137,9 +137,7 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
         let mut ok_n = 0usize;
         for site in &wp_sites {
             let root = if site.docroot.trim().is_empty() {
-                Path::new("/home")
-                    .join(&site.domain)
-                    .join("public_html")
+                Path::new("/home").join(&site.domain).join("public_html")
             } else {
                 Path::new(site.docroot.trim()).to_path_buf()
             };
@@ -284,8 +282,8 @@ pub fn heal_phpmyadmin() -> HealResult {
         Ok(()) => notes.push("FPM socket ensured for OLS".into()),
         Err(e) => notes.push(format!("FPM socket: {e}")),
     }
-    let ok = port_open("127.0.0.1:8081", 500)
-        || Path::new("/run/php-fpm/cpn-phpmyadmin.sock").exists();
+    let ok =
+        port_open("127.0.0.1:8081", 500) || Path::new("/run/php-fpm/cpn-phpmyadmin.sock").exists();
     HealResult {
         heal_id: "phpmyadmin".into(),
         ok,

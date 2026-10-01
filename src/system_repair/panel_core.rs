@@ -301,10 +301,7 @@ pub fn heal_local_override() -> HealResult {
         HealResult {
             heal_id: "cli.local_override".into(),
             ok: true,
-            message: format!(
-                "{}; run hash -r in open shells",
-                notes.join("; ")
-            ),
+            message: format!("{}; run hash -r in open shells", notes.join("; ")),
         }
     }
 }

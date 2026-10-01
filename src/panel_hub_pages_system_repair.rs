@@ -1,9 +1,7 @@
 //! Owner-only System Repair hub UI (stacked cards, pass/warn/fail + Heal).
 
-use crate::system_repair::{
-    CheckStatus, PRODUCT_NAME, RepairCheck, RepairReport, run_suite,
-};
 use crate::panel_hubs::feature_shell;
+use crate::system_repair::{CheckStatus, PRODUCT_NAME, RepairCheck, RepairReport, run_suite};
 
 fn html_escape(value: &str) -> String {
     value

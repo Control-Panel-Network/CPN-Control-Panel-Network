@@ -19,9 +19,7 @@ const MAIL_PORTS: &[(u16, &str, &str)] = &[
 ];
 
 fn selinux_note() -> Option<String> {
-    let out = std::process::Command::new("getenforce")
-        .output()
-        .ok()?;
+    let out = std::process::Command::new("getenforce").output().ok()?;
     let mode = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if mode.eq_ignore_ascii_case("Enforcing") {
         Some(
@@ -106,11 +104,7 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
                 format!("not listening on 127.0.0.1:{port}")
             },
             !optional && !open,
-            if open {
-                None
-            } else {
-                Some("email.stack")
-            },
+            if open { None } else { Some("email.stack") },
         );
     }
 

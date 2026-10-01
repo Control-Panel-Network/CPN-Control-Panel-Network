@@ -357,7 +357,9 @@ fn run() -> Result<(), String> {
                 "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, ...)"
             );
             println!("package  Manage hosting packages and account assignments");
-            println!("doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)");
+            println!(
+                "doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)"
+            );
             println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
