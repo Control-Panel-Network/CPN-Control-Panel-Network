@@ -176,6 +176,25 @@ button { font:inherit; cursor:pointer; }
   padding:10px 12px; border:1px solid var(--hairline); border-radius:10px;
   background:var(--canvas); color:var(--ink);
 }
+.cpn-check-fieldset { border:1px solid var(--hairline,#d0d5dd); border-radius:8px; padding:12px 14px 14px; margin:0; min-width:0; }
+.cpn-check-fieldset legend { padding:0 6px; font-weight:600; }
+.cpn-check-grid {
+  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:10px 16px; align-items:start;
+}
+.stack-form label.cpn-check-item, label.cpn-check-item {
+  display:flex; flex-direction:row; align-items:flex-start; gap:10px;
+  font-weight:500; font-size:14px; line-height:1.35; margin:0; cursor:pointer;
+  min-width:0; overflow-wrap:anywhere;
+}
+.stack-form .cpn-check-item input[type=checkbox], .cpn-check-item input[type=checkbox] {
+  flex:0 0 auto; width:16px; height:16px; min-width:16px; padding:0; margin:2px 0 0;
+  border-radius:4px; accent-color:var(--accent,#0b66ff);
+}
+.cpn-check-item > span { flex:1 1 auto; min-width:0; }
+.cpn-check-single { margin-top:2px; }
+@media (max-width:900px) { .cpn-check-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+@media (max-width:520px) { .cpn-check-grid { grid-template-columns:minmax(0, 1fr); } }
 .docker-create-form, .docker-hub-form {
   display:grid; gap:14px; max-width:640px; margin-top:4px;
 }
