@@ -16,7 +16,7 @@ use crate::panel_webauthn::{
     RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
     start_authentication_for_user, start_registration, webauthn_for_request,
 };
-use actix_web::{HttpRequest, HttpResponse, post, web};
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
 use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
@@ -45,6 +45,16 @@ fn strip_urls(message: &str) -> String {
 fn json_err(status: actix_web::http::StatusCode, message: &str) -> HttpResponse {
     let safe = strip_urls(message);
     HttpResponse::build(status).json(serde_json::json!({ "error": safe }))
+}
+
+/// The MFA pending cookie is missing, expired, or invalid: tell the page to go back
+/// to /login (client redirects after a short notice) instead of trapping on passkey.
+fn mfa_session_expired_json() -> HttpResponse {
+    HttpResponse::Unauthorized().json(serde_json::json!({
+        "error": "Your sign-in session expired. Returning to sign in...",
+        "code": "mfa_session_expired",
+        "redirect": "/login",
+    }))
 }
 
 fn json_ok(value: serde_json::Value) -> HttpResponse {
@@ -323,13 +333,19 @@ fn mfa_pending_username(http: &HttpRequest, state: &AppState) -> Option<String> 
     read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret))
 }
 
+/// Lightweight probe so an open /login/2fa page can leave once its session is gone.
+#[get("/login/2fa/session")]
+pub async fn login_mfa_session(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    let valid = mfa_pending_username(&http, &state).is_some();
+    HttpResponse::Ok()
+        .insert_header(("Cache-Control", "no-store"))
+        .json(serde_json::json!({ "valid": valid, "redirect": "/login" }))
+}
+
 #[post("/login/2fa/passkey/start")]
 pub async fn passkey_mfa_start(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(username) = mfa_pending_username(&http, &state) else {
-        return json_err(
-            actix_web::http::StatusCode::UNAUTHORIZED,
-            "Sign in again, then complete two-factor authentication.",
-        );
+        return mfa_session_expired_json();
     };
     let https = request_https_from_headers(&http);
     let webauthn = match webauthn_for_request(host_header(&http), https) {
@@ -363,10 +379,7 @@ pub async fn passkey_mfa_finish(
     body: web::Json<PasskeyLoginFinishBody>,
 ) -> HttpResponse {
     let Some(pending_user) = mfa_pending_username(&http, &state) else {
-        return json_err(
-            actix_web::http::StatusCode::UNAUTHORIZED,
-            "Sign in again, then complete two-factor authentication.",
-        );
+        return mfa_session_expired_json();
     };
     let https = request_https_from_headers(&http);
     let webauthn = match webauthn_for_request(host_header(&http), https) {

@@ -31,11 +31,28 @@ fn kill_timed_child(child: &mut std::process::Child) {
 }
 
 fn run_command_timed(bin: &str, args: &[&str], timeout: Duration) -> Option<Output> {
+    run_command_timed_inner(bin, args, timeout, false)
+}
+
+fn run_command_timed_capture(bin: &str, args: &[&str], timeout: Duration) -> Option<Output> {
+    run_command_timed_inner(bin, args, timeout, true)
+}
+
+fn run_command_timed_inner(
+    bin: &str,
+    args: &[&str],
+    timeout: Duration,
+    capture_stderr: bool,
+) -> Option<Output> {
     let mut cmd = Command::new(bin);
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(if capture_stderr {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        });
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -80,6 +97,27 @@ pub(crate) fn cmd_ok(bin: &str, args: &[&str]) -> bool {
     run_command_timed(bin, args, CMD_TIMEOUT)
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+/// Like `cmd_ok` with a caller-chosen budget (service starts can exceed the probe default).
+pub(crate) fn cmd_ok_timeout(bin: &str, args: &[&str], secs: u64) -> bool {
+    run_command_timed(bin, args, Duration::from_secs(secs))
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Run a command with a budget and return (success, stdout, stderr).
+pub(crate) fn cmd_output_timeout(
+    bin: &str,
+    args: &[&str],
+    secs: u64,
+) -> Option<(bool, String, String)> {
+    let out = run_command_timed_capture(bin, args, Duration::from_secs(secs))?;
+    Some((
+        out.status.success(),
+        String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        String::from_utf8_lossy(&out.stderr).trim().to_string(),
+    ))
 }
 
 pub(crate) fn cmd_stdout(bin: &str, args: &[&str]) -> Option<String> {
@@ -188,7 +226,7 @@ pub fn firewall_status() -> FirewallStatus {
     }
 }
 
-fn append_firewall_journal(line: &str) {
+pub(crate) fn append_firewall_journal(line: &str) {
     let path = default_data_dir().join("firewall-journal.txt");
     let stamp = chrono_like_stamp();
     let entry = format!("{stamp} {line}\n");

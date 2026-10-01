@@ -338,6 +338,31 @@ pub struct MfaPageOptions {
     pub passkey_available: bool,
 }
 
+/// Leaves /login/2fa for /login when the MFA pending session is gone (expired cookie,
+/// restarted panel, finished in another tab) instead of trapping on a dead page.
+const MFA_SESSION_WATCH_JS: &str = r#"
+(function(){
+  var back=(document.getElementById('cpn-mfa-back')||{}).href||'/login';
+  var leaving=false;
+  window.cpnMfaExpired=function(msg){
+    if(leaving) return; leaving=true;
+    var b=document.getElementById('i18n-login-error');
+    if(b){ b.hidden=false; b.removeAttribute('hidden'); b.textContent=msg||'Your sign-in session expired. Returning to sign in...'; }
+    setTimeout(function(){ location.replace(back); },1200);
+  };
+  function check(){
+    if(leaving) return;
+    fetch('/login/2fa/session',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d && d.valid===false) window.cpnMfaExpired(); })
+      .catch(function(){});
+  }
+  setInterval(check,15000);
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) check(); });
+  window.addEventListener('pageshow',function(e){ if(e.persisted) check(); });
+})();
+"#;
+
 pub fn panel_mfa_html(
     status: &InstallerStatus,
     error: Option<&str>,
@@ -427,16 +452,18 @@ pub fn panel_mfa_html(
       {totp_form}
       {passkey_block}
       {passkey_only_recovery}
-      <p class="hint"><a href="{back_href}">Back to sign in</a></p>
+      <p class="hint"><a id="cpn-mfa-back" href="{back_href}">Back to sign in</a></p>
     </section>
   </main>
   <script>{passkey_script}</script>
+  <script>{watch_script}</script>
   {script}
 </body>
 </html>"#,
         locale = initial_locale,
         favicons = brand_favicon_links(),
         styles = shared_auth_styles(),
+        watch_script = MFA_SESSION_WATCH_JS,
         intro = html_escape(intro),
         error_block = error_block,
         totp_form = totp_form,
@@ -694,6 +721,21 @@ mod tests {
         assert!(!html.contains("sudo cpn mfa clear"));
     }
 
+    #[test]
+    fn mfa_page_leaves_for_login_when_session_is_gone() {
+        let html = panel_mfa_html(
+            &InstallerStatus::default(),
+            None,
+            None,
+            MfaPageOptions {
+                totp_available: true,
+                passkey_available: true,
+            },
+        );
+        assert!(html.contains("/login/2fa/session"));
+        assert!(html.contains("cpnMfaExpired"));
+        assert!(html.contains("id=\"cpn-mfa-back\""));
+    }
     #[test]
     fn mfa_page_passkey_only_shows_operator_recovery_hint() {
         let html = panel_mfa_html(

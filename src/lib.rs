@@ -225,6 +225,7 @@ pub mod panel_ops_email_queue;
 pub mod panel_ops_files;
 pub mod panel_ops_files_archive;
 pub mod panel_ops_firewall;
+pub mod panel_ops_firewall_heal;
 pub mod panel_ops_ftp;
 pub mod panel_ops_mail_dns;
 pub mod panel_ops_mail_extra;

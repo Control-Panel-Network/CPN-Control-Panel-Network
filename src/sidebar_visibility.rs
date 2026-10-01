@@ -346,6 +346,7 @@ pub fn path_is_exempt(path: &str) -> bool {
         path,
         "/" | "/login"
             | "/login/2fa"
+            | "/login/2fa/session"
             | "/logout"
             | "/status"
             | "/api/status"

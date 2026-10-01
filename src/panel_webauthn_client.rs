@@ -157,7 +157,11 @@ async function cpnJson(url,body){{
     body:JSON.stringify(body||{{}})
   }});
   const data=await res.json().catch(()=>({{}}));
-  if(!res.ok) throw new Error(cpnStripUrls(data.error||('Request failed ('+res.status+')')));
+  if(!res.ok){{
+    const e=new Error(cpnStripUrls(data.error||('Request failed ('+res.status+')')));
+    e.status=res.status; e.code=data.code||''; e.redirect=data.redirect||'';
+    throw e;
+  }}
   return data;
 }}
 function cpnShowPasskeyError(message){{
@@ -340,6 +344,10 @@ async function cpnMfaPasskey(){{
     }});
     location.href=finish.redirect||'/dashboard';
   }}catch(err){{
+    if(err&&err.code==='mfa_session_expired'&&typeof window.cpnMfaExpired==='function'){{
+      window.cpnMfaExpired(err.message);
+      return;
+    }}
     cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
   }}
 }}

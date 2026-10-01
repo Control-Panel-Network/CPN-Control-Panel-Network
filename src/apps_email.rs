@@ -95,6 +95,8 @@ pub fn start_email_stack() -> Result<String, String> {
             st.detail
         ));
     }
+    // Open the mail ports on the host firewall when firewalld is present (no-op otherwise).
+    let _ = crate::panel_ops_firewall_heal::heal_firewalld("email stack start");
     Ok("Started Email stack (Postfix + Dovecot). IMAP :143 and local SMTP are ready.".into())
 }
 
