@@ -130,7 +130,6 @@ fn theme_css_path(id: &str) -> PathBuf {
     theme_dir(id).join("theme.css")
 }
 
-
 fn catalog_assets_root() -> PathBuf {
     data_dir().join("theme-catalog-assets")
 }

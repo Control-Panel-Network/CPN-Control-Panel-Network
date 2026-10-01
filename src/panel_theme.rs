@@ -249,9 +249,7 @@ pub fn validate_theme_asset_path(
         || lower.ends_with(".png")
         || lower.ends_with(".svg");
     if !ok_ext {
-        return Err(format!(
-            "{field} must be .webp, .jpg, .jpeg, .png, or .svg"
-        ));
+        return Err(format!("{field} must be .webp, .jpg, .jpeg, .png, or .svg"));
     }
     Ok(Some(format!("assets/{name}")))
 }
@@ -623,7 +621,12 @@ fn theme_background_css(bg: &ThemeBackground, theme_id: Option<&str>) -> String 
             (None, None) => String::new(),
         };
         let (size, position, repeat, attachment) = if image_url.is_some() && bg.body.is_some() {
-            ("auto, cover", "center, center", "no-repeat, no-repeat", "fixed, fixed")
+            (
+                "auto, cover",
+                "center, center",
+                "no-repeat, no-repeat",
+                "fixed, fixed",
+            )
         } else if image_url.is_some() {
             ("cover", "center", "no-repeat", "fixed")
         } else {

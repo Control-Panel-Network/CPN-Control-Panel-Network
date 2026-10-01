@@ -87,8 +87,6 @@ fn cache_extracted_theme_assets(theme_id: &str, theme_src: &Path) {
     }
 }
 
-
-
 fn cache_is_fresh(cache: &ThemesCache) -> bool {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
