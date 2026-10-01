@@ -7,11 +7,11 @@
 //!
 //! Never writes under `/var/lib/cpn/mfa/` (or `$CPN_DATA_DIR/mfa/`).
 
+use crate::account::now_unix;
 use crate::backup_restore_accounts_apply::{
     apply_acl_for_user, apply_package_hint, ensure_imported_account, merge_optional_packages_json,
     merge_optional_site_acl_json, merge_optional_users_json, remap_reserved_username,
 };
-use crate::account::now_unix;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -186,12 +186,7 @@ pub fn restore_accounts_from_staging(
         }
         if !imported_user.is_empty() {
             if let Some(ref m) = meta {
-                apply_package_hint(
-                    &imported_user,
-                    &m.master_domain,
-                    m.websites_limit,
-                    warnings,
-                )?;
+                apply_package_hint(&imported_user, &m.master_domain, m.websites_limit, warnings)?;
             }
         } else {
             warnings.push(

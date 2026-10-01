@@ -73,7 +73,9 @@ pub(crate) fn ensure_imported_account(
     let username = match require_new_username(&remapped) {
         Ok(u) => u,
         Err(e) => {
-            warnings.push(format!("Could not create `{remapped}` as new username: {e}"));
+            warnings.push(format!(
+                "Could not create `{remapped}` as new username: {e}"
+            ));
             require_username(&remapped)?
         }
     };
@@ -269,7 +271,10 @@ fn find_named_json(staging: &Path, names: &[&str]) -> Option<PathBuf> {
     None
 }
 
-pub(crate) fn merge_optional_users_json(staging: &Path, warnings: &mut Vec<String>) -> Result<(), String> {
+pub(crate) fn merge_optional_users_json(
+    staging: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
     let Some(path) = find_named_json(staging, &["users.json", "accounts.json"]) else {
         return Ok(());
     };
@@ -294,7 +299,10 @@ pub(crate) fn merge_optional_users_json(staging: &Path, warnings: &mut Vec<Strin
     Ok(())
 }
 
-pub(crate) fn merge_optional_packages_json(staging: &Path, warnings: &mut Vec<String>) -> Result<(), String> {
+pub(crate) fn merge_optional_packages_json(
+    staging: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
     let Some(path) = find_named_json(staging, &["packages.json"]) else {
         return Ok(());
     };
@@ -353,7 +361,10 @@ pub(crate) fn merge_optional_packages_json(staging: &Path, warnings: &mut Vec<St
     Ok(())
 }
 
-pub(crate) fn merge_optional_site_acl_json(staging: &Path, warnings: &mut Vec<String>) -> Result<(), String> {
+pub(crate) fn merge_optional_site_acl_json(
+    staging: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
     let Some(path) = find_named_json(staging, &["site-acl.json", "acl.json"]) else {
         return Ok(());
     };
@@ -377,4 +388,3 @@ pub(crate) fn merge_optional_site_acl_json(staging: &Path, warnings: &mut Vec<St
     ));
     Ok(())
 }
-

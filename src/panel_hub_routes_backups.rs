@@ -402,10 +402,9 @@ mod tests {
 
     #[test]
     fn restore_run_form_accepts_single_entity_string() {
-        let form: RestoreRunForm = serde_json::from_str(
-            r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#,
-        )
-        .expect("single entity");
+        let form: RestoreRunForm =
+            serde_json::from_str(r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#)
+                .expect("single entity");
         assert_eq!(form.entity, vec!["site:newstargeted.com".to_string()]);
         assert_eq!(form.archive, "a.tar.gz");
     }
