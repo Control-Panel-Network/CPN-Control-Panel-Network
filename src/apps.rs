@@ -346,6 +346,13 @@ pub fn install_app(id: AppId) -> Result<String, String> {
 
 /// Install host packages and optionally associate/drop site-scoped pieces under a domain home.
 pub fn install_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
+    let result = install_app_on_inner(id, domain);
+    // Sidebar/hub gating caches host probes; drop them so a new install shows up at once.
+    crate::panel_feature_gate::invalidate_feature_cache();
+    result
+}
+
+fn install_app_on_inner(id: AppId, domain: Option<&str>) -> Result<String, String> {
     enforce_mariadb_only(id)?;
     let current = detect_app(id);
     let mut messages = Vec::new();
@@ -409,6 +416,12 @@ pub fn uninstall_app(id: AppId) -> Result<String, String> {
 }
 
 pub fn uninstall_app_on(id: AppId, domain: Option<&str>) -> Result<String, String> {
+    let result = uninstall_app_on_inner(id, domain);
+    crate::panel_feature_gate::invalidate_feature_cache();
+    result
+}
+
+fn uninstall_app_on_inner(id: AppId, domain: Option<&str>) -> Result<String, String> {
     let mut messages = Vec::new();
     if let Some(domain) = domain.map(str::trim).filter(|v| !v.is_empty()) {
         if crate::apps_site::is_associable(id) {
