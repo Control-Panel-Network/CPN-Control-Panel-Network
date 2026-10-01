@@ -1,6 +1,7 @@
 //! Activity Board SSH logs panel and security review snooze UI.
 
 use crate::panel_dashboard_activity_list::wrap_activity_table;
+use crate::panel_dashboard_activity_panels::log_table;
 use crate::panel_ops_activity::{SshSecurityAnalysis, recent_ssh_logs};
 use crate::panel_user_prefs::{
     SSH_SECURITY_REVIEW_SNOOZE_DEFAULT_DAYS, format_epoch_dd_mm_yyyy,
@@ -13,24 +14,6 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-fn log_table(rows: &[crate::panel_ops_activity::ActivityLogRow], empty: &str) -> String {
-    if rows.is_empty() {
-        return format!(r#"<p class="empty-state">{e}</p>"#, e = html_escape(empty));
-    }
-    let mut t = String::from(
-        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Timestamp</th><th>Message</th></tr></thead><tbody>"#,
-    );
-    for row in rows {
-        t.push_str(&format!(
-            r#"<tr><td><time>{ts}</time></td><td><code>{msg}</code></td></tr>"#,
-            ts = html_escape(&row.timestamp),
-            msg = html_escape(&row.message),
-        ));
-    }
-    t.push_str("</tbody></table></div>");
-    t
 }
 
 fn ssh_security_review_card(analysis: &SshSecurityAnalysis) -> String {

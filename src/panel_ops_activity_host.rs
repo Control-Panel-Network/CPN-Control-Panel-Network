@@ -145,6 +145,19 @@ pub fn cpu_activity() -> CpuActivity {
     }
 }
 
+/// European-style grouping with a narrow no-break space (no US commas).
+pub fn format_grouped_u64(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, ch) in digits.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            out.push('\u{202F}');
+        }
+        out.push(ch);
+    }
+    out.chars().rev().collect()
+}
+
 pub fn format_bytes(n: u64) -> String {
     const KIB: f64 = 1024.0;
     const MIB: f64 = KIB * 1024.0;
@@ -173,6 +186,15 @@ mod tests {
         assert_eq!(format_bytes(500), "500 B");
         assert!(format_bytes(2048).contains("KiB"));
         assert!(format_bytes(5 * 1024 * 1024).contains("MiB"));
+    }
+
+    #[test]
+    fn format_grouped_u64_uses_narrow_spaces() {
+        assert_eq!(format_grouped_u64(0), "0");
+        assert_eq!(format_grouped_u64(999), "999");
+        assert_eq!(format_grouped_u64(1000), "1\u{202F}000");
+        assert_eq!(format_grouped_u64(606721), "606\u{202F}721");
+        assert_eq!(format_grouped_u64(55_910_461), "55\u{202F}910\u{202F}461");
     }
 
     #[test]

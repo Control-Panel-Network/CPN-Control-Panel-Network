@@ -99,7 +99,7 @@ fn html_escape(value: &str) -> String {
 /// Wrap a rendered data table with search + pagination controls (default 10 per page).
 /// Pass `None` / empty inner when there is no table (caller shows empty-state instead).
 pub fn wrap_activity_table(list_id: &str, search_placeholder: &str, table_html: &str) -> String {
-    wrap_activity_table_sized(list_id, search_placeholder, table_html, 10)
+    wrap_activity_table_sized(list_id, search_placeholder, table_html, 5)
 }
 
 /// Same as [`wrap_activity_table`] with a chosen starting page size (5, 10, 20 or 50).
@@ -112,7 +112,7 @@ pub fn wrap_activity_table_sized(
     let page_size = if matches!(page_size, 5 | 10 | 20 | 50) {
         page_size
     } else {
-        10
+        5
     };
     if table_html.trim().is_empty() || table_html.contains("empty-state") {
         return table_html.to_string();
@@ -189,7 +189,7 @@ pub fn activity_list_script() -> &'static str {
       });
     });
     var page=1;
-    var perPage=parseInt(root.getAttribute('data-page-size')||'10',10)||10;
+    var perPage=parseInt(root.getAttribute('data-page-size')||'5',10)||5;
     if(perSel){ perSel.value=String(perPage); }
 
     function q(){ return (search&&search.value||'').trim().toLowerCase(); }
@@ -226,7 +226,7 @@ pub fn activity_list_script() -> &'static str {
     if(perSel){
       perSel.addEventListener('change', function(){
         var n=parseInt(perSel.value,10);
-        perPage=(n===5||n===10||n===20||n===50)?n:10;
+        perPage=(n===5||n===10||n===20||n===50)?n:5;
         root.setAttribute('data-page-size', String(perPage));
         page=1;
         render();
@@ -280,7 +280,7 @@ mod tests {
         assert!(out.contains(r#"<option value="10">10</option>"#));
         // Unsupported sizes fall back to 10.
         let odd = wrap_activity_table_sized("logs", "Find", table, 7);
-        assert!(odd.contains(r#"data-page-size="10""#));
+        assert!(odd.contains(r#"data-page-size="5""#));
     }
 
     #[test]
@@ -290,6 +290,6 @@ mod tests {
         assert!(out.contains("data-activity-list"));
         assert!(out.contains("Go to page"));
         assert!(out.contains("activity-list-search"));
-        assert!(out.contains("value=\"10\" selected"));
+        assert!(out.contains("value=\"5\" selected"));
     }
 }

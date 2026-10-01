@@ -135,6 +135,9 @@ use cpn_installer::panel_routes::{
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
 };
+use cpn_installer::panel_dashboard_layout_routes::{
+    panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
+};
 use cpn_installer::panel_theme_routes::{
     panel_color_mode_get, panel_color_mode_set, panel_design_get, panel_design_preset,
     panel_design_restore, panel_design_save, panel_minimalist_mode_get, panel_minimalist_mode_set,
@@ -1166,6 +1169,9 @@ async fn main() -> std::io::Result<()> {
             .service(panel_color_mode_set)
             .service(panel_minimalist_mode_get)
             .service(panel_minimalist_mode_set)
+            .service(panel_dashboard_layout_get)
+            .service(panel_dashboard_layout_set)
+            .service(panel_dashboard_layout_restore)
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)

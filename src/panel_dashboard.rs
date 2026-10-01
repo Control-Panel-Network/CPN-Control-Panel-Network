@@ -147,16 +147,16 @@ pub fn panel_dashboard_html(username: &str) -> String {
     let status_class =
         |label: &str| -> &'static str { if label == "Running" { "ok" } else { "warn" } };
 
-    let main = format!(
-        r#"
-      <div class="dashboard-heading">
-        <div>
-          <h1>Dashboard</h1>
-          <p>Signed in as {user}.</p>
-        </div>
-      </div>
-      {sites}
-      <div class="resource-grid">
+    let sites = crate::panel_dashboard_layout::wrap_dash_widget(
+        "sites",
+        "Sites",
+        &crate::panel_dashboard_tools::dashboard_sites_panel(),
+    );
+    let gauges = crate::panel_dashboard_layout::wrap_dash_widget(
+        "gauges",
+        "Usage gauges",
+        &format!(
+            r#"<div class="resource-grid">
         <article class="resource-card">
           <h2 title="Average CPU usage since boot">CPU Usage</h2>
           <div class="gauge" role="img" aria-label="CPU Usage: {cpu_pct}%">
@@ -178,9 +178,28 @@ pub fn panel_dashboard_html(username: &str) -> String {
             <div class="gauge-copy"><strong style="color:{disk_tone}">{disk_pct}%</strong><span>{disk_detail}</span></div>
           </div>
         </article>
-      </div>
-      {tools}
-      <div class="dashboard-lower-grid">
+      </div>"#,
+            cpu_pct = cpu_pct,
+            ram_pct = ram_pct,
+            disk_pct = disk_pct,
+            cpu = cpu,
+            ram = ram,
+            disk = disk,
+            cpu_tone = cpu_tone,
+            ram_tone = ram_tone,
+            disk_tone = disk_tone,
+        ),
+    );
+    let tools = crate::panel_dashboard_layout::wrap_dash_widget(
+        "tools",
+        "Tools",
+        &crate::panel_dashboard_tools::dashboard_tool_groups(),
+    );
+    let health = crate::panel_dashboard_layout::wrap_dash_widget(
+        "health",
+        "System health",
+        &format!(
+            r#"<div class="dashboard-lower-grid">
         <article class="status-card">
           <div class="status-card-heading">
             <div>
@@ -195,28 +214,52 @@ pub fn panel_dashboard_html(username: &str) -> String {
           </ul>
           <p class="muted" style="margin-top:14px;">Health uses the same live detection as the Databases and Email pages (no placeholder Running states).</p>
         </article>
+      </div>"#,
+            health_heading = html_escape(health_heading),
+            web = html_escape(&web_label),
+            db = html_escape(&db_label),
+            mail = html_escape(&mail_label),
+            web_cls = status_class(&web_label),
+            db_cls = status_class(&db_label),
+            mail_cls = status_class(&mail_label),
+        ),
+    );
+    let activity = crate::panel_dashboard_layout::wrap_dash_widget(
+        "activity",
+        "Activity Board",
+        &crate::panel_dashboard_activity::activity_board_html(username),
+    );
+    let mut by_id = std::collections::HashMap::new();
+    by_id.insert("sites", sites);
+    by_id.insert("gauges", gauges);
+    by_id.insert("tools", tools);
+    by_id.insert("health", health);
+    by_id.insert("activity", activity);
+    let stack = crate::panel_dashboard_layout::load_dashboard_widgets(username)
+        .into_iter()
+        .filter_map(|id| by_id.remove(id.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let main = format!(
+        r#"
+      <div class="dashboard-heading">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Signed in as {user}.</p>
+        </div>
       </div>
-      {activity}"#,
+      <div class="dash-layout" id="dash-layout">
+      {toolbar}
+      <div class="dash-layout-stack">
+      {stack}
+      </div>
+      </div>
+      <script>{layout_js}</script>"#,
         user = user,
-        sites = crate::panel_dashboard_tools::dashboard_sites_panel(),
-        tools = crate::panel_dashboard_tools::dashboard_tool_groups(),
-        activity = crate::panel_dashboard_activity::activity_board_html(username),
-        cpu_pct = cpu_pct,
-        ram_pct = ram_pct,
-        disk_pct = disk_pct,
-        cpu = cpu,
-        ram = ram,
-        disk = disk,
-        cpu_tone = cpu_tone,
-        ram_tone = ram_tone,
-        disk_tone = disk_tone,
-        health_heading = html_escape(health_heading),
-        web = html_escape(&web_label),
-        db = html_escape(&db_label),
-        mail = html_escape(&mail_label),
-        web_cls = status_class(&web_label),
-        db_cls = status_class(&db_label),
-        mail_cls = status_class(&mail_label),
+        toolbar = crate::panel_dashboard_layout::dashboard_layout_toolbar(),
+        stack = stack,
+        layout_js = crate::panel_dashboard_layout::dashboard_layout_script(),
     );
     panel_shell(username, "dashboard", "Dashboard", &main)
 }
