@@ -3,14 +3,37 @@
 use crate::service_detect::systemd_unit_file_exists;
 use std::process::{Command, Stdio};
 
+/// Probe a package manager binary quietly (no stdout/stderr leak into the panel journal).
+fn manager_runs(bin: &str) -> bool {
+    Command::new(bin)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
+}
+
+/// Detect dnf or apt-get once per process. Host app status checks call this for
+/// every card on each page load; spawning `dnf --version` each time cost seconds
+/// per request and flooded the journal. Only a successful probe is cached so a
+/// package manager installed later is still picked up.
 pub fn package_manager() -> Result<&'static str, String> {
-    if Command::new("dnf").arg("--version").status().is_ok() {
-        return Ok("dnf");
+    static DETECTED: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+    if let Some(pm) = DETECTED.get() {
+        return Ok(*pm);
     }
-    if Command::new("apt-get").arg("--version").status().is_ok() {
-        return Ok("apt");
+    let found = if manager_runs("dnf") {
+        Some("dnf")
+    } else if manager_runs("apt-get") {
+        Some("apt")
+    } else {
+        None
+    };
+    match found {
+        Some(pm) => Ok(*DETECTED.get_or_init(|| pm)),
+        None => Err("No supported package manager found (need dnf or apt-get).".into()),
     }
-    Err("No supported package manager found (need dnf or apt-get).".into())
 }
 
 pub fn run_pkg(args: &[&str]) -> Result<(), String> {
