@@ -58,36 +58,36 @@ use cpn_installer::panel_hub_routes::{
     email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
     email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
     ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
-    ftp_reset_post, passkey_delete_post, passkey_login_finish, passkey_login_start,
-    passkey_mfa_finish, passkey_mfa_start, passkey_register_finish, passkey_register_start,
-    passkey_rename_post, security_fail2ban, security_firewall, security_firewall_ban_add,
-    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
-    security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
-    security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
-    security_firewall_rules_import, security_firewall_start, security_firewall_stop,
-    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
-    security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
-    security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
-    security_ssl_mark_custom, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
-    security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
-    server_dns_nameservers, server_dns_nameservers_add, server_dns_nameservers_delete,
-    server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete, server_dns_zones,
-    server_dns_zones_create_get, server_dns_zones_create_post, server_dns_zones_delete,
-    server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
-    server_docker_images, server_filemanager_alias, server_files_op, server_files_page,
-    server_files_upload, server_litespeed_downgrade, server_litespeed_enterprise_page,
-    server_litespeed_page, server_litespeed_serial, server_litespeed_tier,
-    server_litespeed_upgrade, server_litespeed_webadmin_url, server_openlitespeed_guest,
-    server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
-    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
-    server_php_configs_post, server_php_configs_restart, server_php_configs_save_advanced,
-    server_php_configs_save_basic, server_php_configs_set_default,
-    server_php_configs_set_default_get, server_php_extensions, server_php_extensions_install,
-    server_php_extensions_set_default, server_php_extensions_set_default_get,
-    server_php_extensions_uninstall, server_php_tuning, server_processes_page,
-    server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_error_messages_page, settings_error_messages_preview,
+    ftp_reset_post, login_mfa_session, passkey_delete_post, passkey_login_finish,
+    passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
+    passkey_register_start, passkey_rename_post, security_fail2ban, security_firewall,
+    security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
+    security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
+    security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
+    security_firewall_rule_delete, security_firewall_rules_import, security_firewall_start,
+    security_firewall_stop, security_firewall_trusted_add, security_firewall_trusted_delete,
+    security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
+    security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
+    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
+    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
+    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
+    server_dns_defaults_save, server_dns_nameservers, server_dns_nameservers_add,
+    server_dns_nameservers_delete, server_dns_nameservers_save, server_dns_record_add,
+    server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
+    server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
+    server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
+    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
+    server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
+    server_litespeed_webadmin_url, server_openlitespeed_guest, server_openlitespeed_guest_remove,
+    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
+    server_packages_page, server_page, server_php_configs, server_php_configs_post,
+    server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
+    server_php_extensions_install, server_php_extensions_set_default,
+    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    settings_design_page, settings_error_messages_page, settings_error_messages_preview,
     settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
     settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
     settings_error_messages_save, settings_logs_page, settings_logs_save,
@@ -910,6 +910,11 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
     });
+    // Minimal installs ship firewalld stopped; bring it up with a safe baseline
+    // unless the operator stopped it on purpose.
+    std::thread::spawn(|| {
+        let _ = cpn_installer::panel_ops_firewall_heal::heal_firewalld("panel start");
+    });
     let token: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)
@@ -1096,6 +1101,7 @@ async fn main() -> std::io::Result<()> {
             .service(login_mfa_submit)
             .service(passkey_login_start)
             .service(passkey_login_finish)
+            .service(login_mfa_session)
             .service(passkey_mfa_start)
             .service(passkey_mfa_finish)
             .service(dashboard_page)
