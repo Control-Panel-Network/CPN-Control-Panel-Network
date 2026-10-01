@@ -379,9 +379,15 @@ mod tests {
             "Oct  1 15:59:16 h sshd-session[138561]: open \"/public_html/a.txt\" flags WRITE mode 0666 [postauth]",
             &members
         ));
-        assert!(sftp_line_matches("Oct  1 15:59:16 h sshd-session[1]: opendir \"/\" [postauth]", &members));
+        assert!(sftp_line_matches(
+            "Oct  1 15:59:16 h sshd-session[1]: opendir \"/\" [postauth]",
+            &members
+        ));
         // A sudo command that merely mentions sftp is not an SFTP record.
-        assert!(!sftp_line_matches("sudo[1]: cpn : COMMAND=/bin/grep sftp /var/log/secure", &members));
+        assert!(!sftp_line_matches(
+            "sudo[1]: cpn : COMMAND=/bin/grep sftp /var/log/secure",
+            &members
+        ));
         assert!(!sftp_line_matches(
             "sshd[1]: Accepted password for root from 1.2.3.4",
             &members
