@@ -160,12 +160,17 @@ pub fn themes_catalog_panel(username: &str) -> String {
     grid.innerHTML = themes.map(function (t) {{
       var a = (t.tokens && t.tokens.accent) || "#2563eb";
       var b = (t.tokens && t.tokens.accent_focus) || a;
+      var preview = (t.background && (t.background.preview || t.background.body)) || "";
+      var swatchStyle = preview
+        ? ('background:' + esc(preview) + ';')
+        : ('--swatch-a:' + esc(a) + ';--swatch-b:' + esc(b) + ';');
       return '<article class="plugin-card">' +
-        '<div class="cpn-theme-swatch" style="--swatch-a:' + esc(a) + ';--swatch-b:' + esc(b) + ';"></div>' +
+        '<div class="cpn-theme-swatch" style="' + swatchStyle + '"></div>' +
         '<h3>' + esc(t.name) + '</h3>' +
         '<div class="plugin-badges">' + badgeFor(t) + '</div>' +
         '<p class="plugin-desc">' + esc(t.description) + '</p>' +
         '<p class="plugin-meta">Author: ' + esc(t.author) +
+          (t.background ? ' · Background' : '') +
           (t.installed_version ? (' · Installed v' + esc(t.installed_version)) : '') + '</p>' +
         '<div class="plugin-actions">' + actionsFor(t) + '</div></article>';
     }}).join("");

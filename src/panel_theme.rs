@@ -85,6 +85,124 @@ pub struct DesignTokens {
     pub font_scale: f32,
 }
 
+/// Optional catalog theme backgrounds (gradients / surface colors). Not used by manual Custom edits alone.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ThemeBackground {
+    /// Preferred operator color mode when applying (`light` or `dark`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_mode: Option<String>,
+    /// CSS `background` value for `body` / `.panel-layout` (gradients preferred).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    /// CSS `background` for `.sidebar`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_soft: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ink: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub muted: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hairline: Option<String>,
+    /// Theme Store card swatch CSS background (falls back to body / accent gradient).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+}
+
+impl ThemeBackground {
+    pub fn is_empty(&self) -> bool {
+        self.color_mode.is_none()
+            && self.body.is_none()
+            && self.sidebar.is_none()
+            && self.surface.is_none()
+            && self.canvas.is_none()
+            && self.surface_soft.is_none()
+            && self.ink.is_none()
+            && self.muted.is_none()
+            && self.hairline.is_none()
+            && self.preview.is_none()
+    }
+
+    pub fn validate(mut self) -> Result<Self, String> {
+        if let Some(mode) = self.color_mode.take() {
+            let normalized = mode.trim().to_ascii_lowercase();
+            if normalized != "light" && normalized != "dark" {
+                return Err("background.color_mode must be light or dark".into());
+            }
+            self.color_mode = Some(normalized);
+        }
+        self.body = Self::validate_css_bg(self.body.take(), "background.body")?;
+        self.sidebar = Self::validate_css_bg(self.sidebar.take(), "background.sidebar")?;
+        self.preview = Self::validate_css_bg(self.preview.take(), "background.preview")?;
+        self.surface = Self::validate_color_or_none(self.surface.take(), "background.surface")?;
+        self.canvas = Self::validate_color_or_none(self.canvas.take(), "background.canvas")?;
+        self.surface_soft =
+            Self::validate_color_or_none(self.surface_soft.take(), "background.surface_soft")?;
+        self.ink = Self::validate_color_or_none(self.ink.take(), "background.ink")?;
+        self.muted = Self::validate_color_or_none(self.muted.take(), "background.muted")?;
+        self.hairline = Self::validate_color_or_none(self.hairline.take(), "background.hairline")?;
+        Ok(self)
+    }
+
+    fn validate_color_or_none(raw: Option<String>, field: &str) -> Result<Option<String>, String> {
+        let Some(value) = raw else {
+            return Ok(None);
+        };
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(normalize_hex_color(trimmed, field)?))
+    }
+
+    fn validate_css_bg(raw: Option<String>, field: &str) -> Result<Option<String>, String> {
+        let Some(value) = raw else {
+            return Ok(None);
+        };
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        if trimmed.len() > 1200 {
+            return Err(format!("{field} is too long"));
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.contains("url(")
+            || lower.contains("expression(")
+            || lower.contains("javascript:")
+            || lower.contains("@import")
+            || lower.contains("</")
+            || lower.contains("behavior:")
+            || trimmed.contains(';')
+            || trimmed.contains('{')
+            || trimmed.contains('}')
+        {
+            return Err(format!("{field} contains disallowed CSS"));
+        }
+        let allowed = lower.starts_with('#')
+            || lower.starts_with("rgb(")
+            || lower.starts_with("rgba(")
+            || lower.starts_with("hsl(")
+            || lower.starts_with("hsla(")
+            || lower.starts_with("linear-gradient(")
+            || lower.starts_with("radial-gradient(")
+            || lower.starts_with("repeating-linear-gradient(")
+            || lower.starts_with("repeating-radial-gradient(")
+            || lower.starts_with("conic-gradient(");
+        if !allowed {
+            return Err(format!(
+                "{field} must be a color or CSS gradient (no external urls)"
+            ));
+        }
+        Ok(Some(trimmed.to_string()))
+    }
+}
+
 impl DesignTokens {
     pub fn validate(mut self) -> Result<Self, String> {
         self.accent = normalize_hex_color(&self.accent, "accent")?;
@@ -146,6 +264,12 @@ pub struct PanelDesignFile {
     /// Catalog theme id currently applied as Custom (panel-wide).
     #[serde(default)]
     pub active_theme_id: Option<String>,
+    /// Background package from the active catalog theme (cleared when leaving theme Custom).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_theme_background: Option<ThemeBackground>,
+    /// Optional sanitized extra CSS from the active theme `theme.css` file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_theme_extra_css: Option<String>,
 }
 
 impl Default for PanelDesignFile {
@@ -155,6 +279,8 @@ impl Default for PanelDesignFile {
             preset: DesignPreset::Default,
             custom: None,
             active_theme_id: None,
+            active_theme_background: None,
+            active_theme_extra_css: None,
         }
     }
 }
@@ -215,10 +341,14 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
             // Keep any saved custom profile on disk, but activate Default.
             design.preset = DesignPreset::Default;
             design.active_theme_id = None;
+            design.active_theme_background = None;
+            design.active_theme_extra_css = None;
         }
         DesignPreset::Light | DesignPreset::Dark => {
             design.preset = preset;
             design.active_theme_id = None;
+            design.active_theme_background = None;
+            design.active_theme_extra_css = None;
         }
         DesignPreset::Custom => {
             if design.custom.is_none() {
@@ -232,23 +362,72 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
 }
 
 pub fn save_custom_tokens(tokens: DesignTokens) -> Result<PanelDesignFile, String> {
-    save_custom_tokens_with_theme(tokens, None)
+    save_custom_tokens_with_theme(tokens, None, None, None)
 }
 
 /// Save custom tokens and optionally mark which installed catalog theme is active.
 pub fn save_custom_tokens_with_theme(
     tokens: DesignTokens,
     active_theme_id: Option<&str>,
+    background: Option<ThemeBackground>,
+    extra_css: Option<String>,
 ) -> Result<PanelDesignFile, String> {
     let tokens = tokens.validate()?;
+    let background = match background {
+        Some(bg) => {
+            let validated = bg.validate()?;
+            if validated.is_empty() {
+                None
+            } else {
+                Some(validated)
+            }
+        }
+        None => None,
+    };
+    let extra_css = extra_css
+        .map(|css| sanitize_theme_extra_css(&css))
+        .filter(|css| !css.trim().is_empty());
     let mut design = load_panel_design();
     design.custom = Some(tokens);
     design.preset = DesignPreset::Custom;
-    design.active_theme_id = active_theme_id
+    let theme_id = active_theme_id
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty());
+    design.active_theme_id = theme_id.clone();
+    if theme_id.is_some() {
+        design.active_theme_background = background;
+        design.active_theme_extra_css = extra_css;
+    } else {
+        design.active_theme_background = None;
+        design.active_theme_extra_css = None;
+    }
     save_panel_design(&design)?;
     Ok(design)
+}
+
+/// Strip risky constructs from optional theme.css (keep gradients and selectors).
+pub fn sanitize_theme_extra_css(raw: &str) -> String {
+    let mut out = String::new();
+    for line in raw.lines() {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("@import")
+            || lower.contains("javascript:")
+            || lower.contains("expression(")
+            || lower.contains("behavior:")
+            || lower.contains("</")
+            || lower.contains("url(http://")
+            || lower.contains("url(https://")
+            || lower.contains("url(//")
+        {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if out.len() > 24_000 {
+        out.truncate(24_000);
+    }
+    out
 }
 
 /// Wipe custom profile and return to immutable Default.
@@ -266,7 +445,7 @@ pub fn design_css_vars(design: &PanelDesignFile) -> String {
     } else {
         "1"
     };
-    format!(
+    let mut css = format!(
         r#":root {{
   --cpn-accent:{accent};
   --cpn-accent-focus:{focus};
@@ -294,7 +473,73 @@ body {{ font-size:calc(17px * var(--cpn-font-scale)); }}
         radius = tokens.radius_px,
         density = density_pad,
         scale = tokens.font_scale,
-    )
+    );
+    if design.preset == DesignPreset::Custom {
+        if let Some(bg) = design.active_theme_background.as_ref() {
+            css.push_str(&theme_background_css(bg));
+        }
+        if let Some(extra) = design.active_theme_extra_css.as_deref() {
+            let cleaned = sanitize_theme_extra_css(extra);
+            if !cleaned.trim().is_empty() {
+                css.push('\n');
+                css.push_str(&cleaned);
+                css.push('\n');
+            }
+        }
+    }
+    css
+}
+
+fn theme_background_css(bg: &ThemeBackground) -> String {
+    let mut root_vars = String::new();
+    if let Some(v) = bg.surface.as_deref() {
+        root_vars.push_str(&format!("  --surface:{v};\n"));
+    }
+    if let Some(v) = bg.canvas.as_deref() {
+        root_vars.push_str(&format!("  --canvas:{v};\n"));
+    }
+    if let Some(v) = bg.surface_soft.as_deref() {
+        root_vars.push_str(&format!("  --surface-soft:{v};\n"));
+    }
+    if let Some(v) = bg.ink.as_deref() {
+        root_vars.push_str(&format!("  --ink:{v};\n"));
+    }
+    if let Some(v) = bg.muted.as_deref() {
+        root_vars.push_str(&format!("  --muted:{v};\n"));
+    }
+    if let Some(v) = bg.hairline.as_deref() {
+        root_vars.push_str(&format!("  --hairline:{v};\n"));
+    }
+    let mut out = String::new();
+    if !root_vars.is_empty() {
+        // Beat color-mode attribute selectors that set surface tokens.
+        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"], :root {\n");
+        out.push_str(&root_vars);
+        out.push_str("}\n");
+        out.push_str(
+            "html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"] {\n",
+        );
+        out.push_str(&root_vars);
+        out.push_str("}\n");
+    }
+    if let Some(body) = bg.body.as_deref() {
+        // Higher specificity than `[data-color-mode] body` so theme gradients stick.
+        out.push_str(&format!(
+            "html[data-color-mode=\"dark\"] body,\n\
+html[data-color-mode=\"light\"] body,\n\
+html[data-color-mode=\"dark\"] .panel-layout,\n\
+html[data-color-mode=\"light\"] .panel-layout,\n\
+body, .panel-layout {{\n  background:{body};\n  background-attachment:fixed;\n}}\n"
+        ));
+    }
+    if let Some(sidebar) = bg.sidebar.as_deref() {
+        out.push_str(&format!(
+            "html[data-color-mode=\"dark\"] .sidebar,\n\
+html[data-color-mode=\"light\"] .sidebar,\n\
+.sidebar {{\n  background:{sidebar};\n  border-right-color:var(--hairline);\n}}\n"
+        ));
+    }
+    out
 }
 
 /// Dark color-mode surface overrides (extends existing light `:root` tokens).
@@ -416,6 +661,8 @@ pub fn design_public_json(design: &PanelDesignFile) -> serde_json::Value {
         "default_tokens": default_tokens(),
         "has_custom": design.custom.is_some(),
         "active_theme_id": design.active_theme_id,
+        "has_theme_background": design.active_theme_background.is_some(),
+        "active_theme_background": design.active_theme_background,
         "scope": "panel-global",
         "note": "Design applies to panel chrome and Manage dashboard look for all operators. Not per-site branding."
     })

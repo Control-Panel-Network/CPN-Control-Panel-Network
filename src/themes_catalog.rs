@@ -3,7 +3,7 @@
 //! Catalog archive: https://github.com/Control-Panel-Network/CPN-Themes
 
 use crate::account::{data_dir, now_unix};
-use crate::panel_theme::DesignTokens;
+use crate::panel_theme::{DesignTokens, ThemeBackground};
 use crate::plugins_catalog::curl_bytes;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -26,6 +26,8 @@ pub struct ThemeCatalogEntry {
     pub author: String,
     pub version: String,
     pub tokens: DesignTokens,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<ThemeBackground>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +89,8 @@ struct ThemeJsonFile {
     #[serde(default)]
     version: String,
     tokens: DesignTokens,
+    #[serde(default)]
+    background: Option<ThemeBackground>,
 }
 
 fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, String> {
@@ -105,6 +109,17 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
         return Err("Theme id is invalid".into());
     }
     let tokens = parsed.tokens.validate()?;
+    let background = match parsed.background {
+        Some(bg) => {
+            let validated = bg.validate()?;
+            if validated.is_empty() {
+                None
+            } else {
+                Some(validated)
+            }
+        }
+        None => None,
+    };
     Ok(ThemeCatalogEntry {
         id,
         name: parsed.name.trim().to_string(),
@@ -124,6 +139,7 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
             parsed.version.trim().to_string()
         },
         tokens,
+        background,
     })
 }
 
@@ -250,10 +266,21 @@ mod tests {
             "radius_px": 12,
             "density": "comfortable",
             "font_scale": 1.0
+          },
+          "background": {
+            "color_mode": "dark",
+            "body": "linear-gradient(160deg, #0b1c33 0%, #123456 100%)",
+            "surface": "#0f172a",
+            "ink": "#e2e8f0"
           }
         }"##;
         let theme = parse_theme_file("ocean-blue", body).unwrap();
         assert_eq!(theme.id, "ocean-blue");
         assert_eq!(theme.tokens.accent, "#2563eb");
+        assert!(theme.background.is_some());
+        assert_eq!(
+            theme.background.as_ref().unwrap().color_mode.as_deref(),
+            Some("dark")
+        );
     }
 }

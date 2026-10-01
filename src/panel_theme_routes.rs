@@ -17,7 +17,7 @@ use crate::themes_catalog::{
 };
 use crate::themes_install::{
     enrich_catalog_for_store, install_theme, list_installed_themes, load_installed_theme,
-    theme_is_installed, uninstall_theme,
+    load_installed_theme_extra_css, theme_is_installed, uninstall_theme,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -336,6 +336,8 @@ pub async fn panel_themes_uninstall(
             if was_active {
                 let mut cleared = design;
                 cleared.active_theme_id = None;
+                cleared.active_theme_background = None;
+                cleared.active_theme_extra_css = None;
                 let _ = crate::panel_theme::save_panel_design(&cleared);
             }
             json_ok(serde_json::json!({
@@ -374,14 +376,34 @@ pub async fn panel_themes_apply(
             Err(err) => return json_err(404, &err),
         }
     };
-    match save_custom_tokens_with_theme(theme.tokens.clone(), Some(&theme.id)) {
+    let extra_css = load_installed_theme_extra_css(&theme.id);
+    match save_custom_tokens_with_theme(
+        theme.tokens.clone(),
+        Some(&theme.id),
+        theme.background.clone(),
+        extra_css,
+    ) {
         Ok(design) => {
+            // Prefer the theme's intended light/dark surfaces so backgrounds read correctly.
+            let synced_color = theme
+                .background
+                .as_ref()
+                .and_then(|bg| bg.color_mode.as_deref())
+                .and_then(ColorMode::parse)
+                .and_then(|mode| save_user_color_mode(&user, mode).ok());
             let mut payload = design_public_json(&design);
             if let Some(obj) = payload.as_object_mut() {
                 obj.insert("ok".into(), serde_json::json!(true));
                 obj.insert("applied_theme".into(), serde_json::json!(theme.id));
                 obj.insert("applied_theme_name".into(), serde_json::json!(theme.name));
                 obj.insert("installed".into(), serde_json::json!(true));
+                obj.insert(
+                    "has_background".into(),
+                    serde_json::json!(theme.background.is_some()),
+                );
+                if let Some(mode) = synced_color {
+                    obj.insert("color_mode".into(), serde_json::json!(mode.as_str()));
+                }
             }
             json_ok(payload)
         }

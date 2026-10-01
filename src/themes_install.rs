@@ -3,7 +3,7 @@
 //! Packages land under `/var/lib/cpn/installed-themes/<id>/` (theme.json + manifest).
 
 use crate::account::{data_dir, now_unix};
-use crate::panel_theme::DesignTokens;
+use crate::panel_theme::{DesignTokens, ThemeBackground, sanitize_theme_extra_css};
 use crate::plugins_catalog::curl_bytes;
 use crate::themes_catalog::{ThemeCatalogEntry, themes_repo_slug};
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,10 @@ pub struct InstalledThemeManifest {
     pub source: String,
     pub catalog_repo: String,
     pub tokens: DesignTokens,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<ThemeBackground>,
+    #[serde(default)]
+    pub has_theme_css: bool,
 }
 
 fn installed_root() -> PathBuf {
@@ -119,10 +123,37 @@ pub fn theme_is_installed(id: &str) -> bool {
     theme_json_path(&id).is_file()
 }
 
+fn theme_css_path(id: &str) -> PathBuf {
+    theme_dir(id).join("theme.css")
+}
+
+pub fn load_installed_theme_extra_css(id: &str) -> Option<String> {
+    let Ok(id) = normalize_theme_id(id) else {
+        return None;
+    };
+    let raw = fs::read_to_string(theme_css_path(&id)).ok()?;
+    let cleaned = sanitize_theme_extra_css(&raw);
+    if cleaned.trim().is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
+}
+
 pub fn load_installed_theme(id: &str) -> Result<InstalledThemeManifest, String> {
     let id = normalize_theme_id(id)?;
     if let Ok(raw) = fs::read_to_string(manifest_path(&id)) {
-        if let Ok(manifest) = serde_json::from_str::<InstalledThemeManifest>(&raw) {
+        if let Ok(mut manifest) = serde_json::from_str::<InstalledThemeManifest>(&raw) {
+            if manifest.background.is_none() {
+                if let Ok(theme_raw) = fs::read_to_string(theme_json_path(&id)) {
+                    if let Ok(entry) =
+                        crate::themes_catalog::parse_theme_json_for_install(&id, &theme_raw)
+                    {
+                        manifest.background = entry.background;
+                    }
+                }
+            }
+            manifest.has_theme_css = theme_css_path(&id).is_file();
             return Ok(manifest);
         }
     }
@@ -140,6 +171,8 @@ pub fn load_installed_theme(id: &str) -> Result<InstalledThemeManifest, String> 
         source: "catalog".into(),
         catalog_repo: themes_repo_slug().into(),
         tokens: entry.tokens,
+        background: entry.background,
+        has_theme_css: theme_css_path(&id).is_file(),
     })
 }
 
@@ -202,6 +235,7 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
     }
     copy_dir_recursive(&src, &dest)?;
     let _ = fs::remove_dir_all(&extract);
+    let has_theme_css = dest.join("theme.css").is_file();
     let manifest = InstalledThemeManifest {
         schema_version: SCHEMA_VERSION,
         id: entry.id.clone(),
@@ -213,21 +247,29 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
         source: "catalog".into(),
         catalog_repo: themes_repo_slug().into(),
         tokens: entry.tokens.clone(),
+        background: entry.background.clone(),
+        has_theme_css,
     };
     write_json(&manifest_path(&id), &manifest)?;
     // Keep a clean theme.json copy for operators inspecting the package.
-    write_json(
-        &theme_json_path(&id),
-        &serde_json::json!({
-            "schema_version": 1,
-            "id": entry.id,
-            "name": entry.name,
-            "description": entry.description,
-            "author": entry.author,
-            "version": entry.version,
-            "tokens": entry.tokens,
-        }),
-    )?;
+    let mut theme_json = serde_json::json!({
+        "schema_version": 1,
+        "id": entry.id,
+        "name": entry.name,
+        "description": entry.description,
+        "author": entry.author,
+        "version": entry.version,
+        "tokens": entry.tokens,
+    });
+    if let Some(bg) = entry.background.as_ref() {
+        if let Some(obj) = theme_json.as_object_mut() {
+            obj.insert(
+                "background".into(),
+                serde_json::to_value(bg).unwrap_or(serde_json::Value::Null),
+            );
+        }
+    }
+    write_json(&theme_json_path(&id), &theme_json)?;
     Ok(manifest)
 }
 
