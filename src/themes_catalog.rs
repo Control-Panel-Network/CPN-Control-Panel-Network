@@ -127,6 +127,14 @@ fn parse_theme_file(fallback_id: &str, body: &str) -> Result<ThemeCatalogEntry, 
     })
 }
 
+/// Public parser for install/apply paths that load `theme.json` from disk.
+pub fn parse_theme_json_for_install(
+    fallback_id: &str,
+    body: &str,
+) -> Result<ThemeCatalogEntry, String> {
+    parse_theme_file(fallback_id, body)
+}
+
 fn walk_themes(dir: &Path, out: &mut Vec<ThemeCatalogEntry>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;

@@ -5,7 +5,7 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_theme::{
     ColorMode, DesignPreset, DesignTokens, apply_design_preset, design_public_json,
-    load_panel_design, restore_default_design, save_custom_tokens,
+    load_panel_design, restore_default_design, save_custom_tokens, save_custom_tokens_with_theme,
 };
 use crate::panel_user_prefs::{
     load_user_color_mode, load_user_minimalist_mode, save_user_color_mode,
@@ -13,7 +13,11 @@ use crate::panel_user_prefs::{
 };
 use crate::plugins::format_unix_local;
 use crate::themes_catalog::{
-    fetch_themes_catalog, find_theme, themes_next_refresh_unix, themes_repo_slug, themes_repo_url,
+    fetch_themes_catalog, themes_next_refresh_unix, themes_repo_slug, themes_repo_url,
+};
+use crate::themes_install::{
+    enrich_catalog_for_store, install_theme, list_installed_themes, load_installed_theme,
+    theme_is_installed, uninstall_theme,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -258,29 +262,98 @@ pub async fn panel_themes_catalog(
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     match fetch_themes_catalog(force) {
-        Ok((entries, fetched_at)) => json_ok(serde_json::json!({
-            "ok": true,
-            "repo": themes_repo_slug(),
-            "repo_url": themes_repo_url(),
-            "fetched_at_unix": fetched_at,
-            "next_refresh_unix": themes_next_refresh_unix(fetched_at),
-            "fetched_at_local": format_unix_local(fetched_at),
-            "themes": entries,
-        })),
+        Ok((entries, fetched_at)) => {
+            let design = load_panel_design();
+            let active = design.active_theme_id.as_deref();
+            let themes = enrich_catalog_for_store(&entries, active);
+            let installed = list_installed_themes();
+            let new_count = themes.iter().filter(|t| !t.installed).count();
+            json_ok(serde_json::json!({
+                "ok": true,
+                "repo": themes_repo_slug(),
+                "repo_url": themes_repo_url(),
+                "fetched_at_unix": fetched_at,
+                "next_refresh_unix": themes_next_refresh_unix(fetched_at),
+                "fetched_at_local": format_unix_local(fetched_at),
+                "active_theme_id": design.active_theme_id,
+                "installed_count": installed.len(),
+                "available_count": new_count,
+                "themes": themes,
+            }))
+        }
         Err(err) => json_err(500, &err),
     }
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ThemeApplyBody {
+pub struct ThemeIdBody {
     id: String,
+}
+
+#[post("/api/panel/themes/install")]
+pub async fn panel_themes_install(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<ThemeIdBody>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    if !is_panel_admin(&user) {
+        return json_err(403, "Only the panel admin can install Design themes");
+    }
+    match install_theme(&body.id) {
+        Ok(manifest) => json_ok(serde_json::json!({
+            "ok": true,
+            "installed": true,
+            "theme": manifest,
+        })),
+        Err(err) => json_err(400, &err),
+    }
+}
+
+#[post("/api/panel/themes/uninstall")]
+pub async fn panel_themes_uninstall(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    body: web::Json<ThemeIdBody>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    if !is_panel_admin(&user) {
+        return json_err(403, "Only the panel admin can uninstall Design themes");
+    }
+    let id = body.id.trim();
+    let design = load_panel_design();
+    let was_active = design
+        .active_theme_id
+        .as_deref()
+        .map(|a| a.eq_ignore_ascii_case(id))
+        .unwrap_or(false);
+    match uninstall_theme(id) {
+        Ok(()) => {
+            if was_active {
+                let mut cleared = design;
+                cleared.active_theme_id = None;
+                let _ = crate::panel_theme::save_panel_design(&cleared);
+            }
+            json_ok(serde_json::json!({
+                "ok": true,
+                "uninstalled": true,
+                "id": id,
+                "cleared_active": was_active,
+            }))
+        }
+        Err(err) => json_err(404, &err),
+    }
 }
 
 #[post("/api/panel/themes/apply")]
 pub async fn panel_themes_apply(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
-    body: web::Json<ThemeApplyBody>,
+    body: web::Json<ThemeIdBody>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return json_err(401, "Login required");
@@ -288,19 +361,30 @@ pub async fn panel_themes_apply(
     if !is_panel_admin(&user) {
         return json_err(403, "Only the panel admin can apply Design themes");
     }
-    match find_theme(&body.id, false) {
-        Ok(theme) => match save_custom_tokens(theme.tokens.clone()) {
-            Ok(design) => {
-                let mut payload = design_public_json(&design);
-                if let Some(obj) = payload.as_object_mut() {
-                    obj.insert("ok".into(), serde_json::json!(true));
-                    obj.insert("applied_theme".into(), serde_json::json!(theme.id));
-                    obj.insert("applied_theme_name".into(), serde_json::json!(theme.name));
-                }
-                json_ok(payload)
+    let id = body.id.trim();
+    // Prefer installed package; auto-install from catalog when missing (Plugin Store parity).
+    let theme = if theme_is_installed(id) {
+        match load_installed_theme(id) {
+            Ok(m) => m,
+            Err(err) => return json_err(404, &err),
+        }
+    } else {
+        match install_theme(id) {
+            Ok(m) => m,
+            Err(err) => return json_err(404, &err),
+        }
+    };
+    match save_custom_tokens_with_theme(theme.tokens.clone(), Some(&theme.id)) {
+        Ok(design) => {
+            let mut payload = design_public_json(&design);
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("ok".into(), serde_json::json!(true));
+                obj.insert("applied_theme".into(), serde_json::json!(theme.id));
+                obj.insert("applied_theme_name".into(), serde_json::json!(theme.name));
+                obj.insert("installed".into(), serde_json::json!(true));
             }
-            Err(err) => json_err(400, &err),
-        },
-        Err(err) => json_err(404, &err),
+            json_ok(payload)
+        }
+        Err(err) => json_err(400, &err),
     }
 }

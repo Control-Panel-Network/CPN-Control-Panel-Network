@@ -143,6 +143,9 @@ pub struct PanelDesignFile {
     pub preset: DesignPreset,
     #[serde(default)]
     pub custom: Option<DesignTokens>,
+    /// Catalog theme id currently applied as Custom (panel-wide).
+    #[serde(default)]
+    pub active_theme_id: Option<String>,
 }
 
 impl Default for PanelDesignFile {
@@ -151,6 +154,7 @@ impl Default for PanelDesignFile {
             schema_version: 1,
             preset: DesignPreset::Default,
             custom: None,
+            active_theme_id: None,
         }
     }
 }
@@ -210,9 +214,11 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
         DesignPreset::Default => {
             // Keep any saved custom profile on disk, but activate Default.
             design.preset = DesignPreset::Default;
+            design.active_theme_id = None;
         }
         DesignPreset::Light | DesignPreset::Dark => {
             design.preset = preset;
+            design.active_theme_id = None;
         }
         DesignPreset::Custom => {
             if design.custom.is_none() {
@@ -226,10 +232,21 @@ pub fn apply_design_preset(preset: DesignPreset) -> Result<PanelDesignFile, Stri
 }
 
 pub fn save_custom_tokens(tokens: DesignTokens) -> Result<PanelDesignFile, String> {
+    save_custom_tokens_with_theme(tokens, None)
+}
+
+/// Save custom tokens and optionally mark which installed catalog theme is active.
+pub fn save_custom_tokens_with_theme(
+    tokens: DesignTokens,
+    active_theme_id: Option<&str>,
+) -> Result<PanelDesignFile, String> {
     let tokens = tokens.validate()?;
     let mut design = load_panel_design();
     design.custom = Some(tokens);
     design.preset = DesignPreset::Custom;
+    design.active_theme_id = active_theme_id
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
     save_panel_design(&design)?;
     Ok(design)
 }
@@ -398,6 +415,7 @@ pub fn design_public_json(design: &PanelDesignFile) -> serde_json::Value {
         "tokens": tokens,
         "default_tokens": default_tokens(),
         "has_custom": design.custom.is_some(),
+        "active_theme_id": design.active_theme_id,
         "scope": "panel-global",
         "note": "Design applies to panel chrome and Manage dashboard look for all operators. Not per-site branding."
     })
