@@ -375,8 +375,11 @@ mod tests {
             "restore UI must not mention third-party panel brands"
         );
         assert!(lower.contains("source control-panel") || lower.contains("classic"));
-        assert!(html.contains("value=\"classic\""));
-        assert!(!html.contains("value=\"cyberpanel\""));
+        // Empty list does not render format <select>; classic token lives in format_options.
+        let formats = format_options("auto");
+        assert!(formats.contains("value=\"classic\""));
+        assert!(!formats.contains("value=\"cyberpanel\""));
+        assert!(!formats.to_ascii_lowercase().contains("cyberpanel"));
     }
 
     #[test]
