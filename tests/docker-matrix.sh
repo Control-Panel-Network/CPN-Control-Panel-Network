@@ -326,7 +326,10 @@ install_pkg() {
   local name="$1" pkg="$2" image="$3"
   local base
   base="$(basename "$pkg")"
-  "$engine" cp "$pkg" "$name:/tmp/$base"
+  # /var/tmp, not /tmp: systemd in the guest (Ubuntu 26.04) mounts a tmpfs on /tmp that hides
+  # files copied before the mount, which showed up as a missing/unsupported .deb.
+  "$engine" exec "$name" mkdir -p /var/tmp
+  "$engine" cp "$pkg" "$name:/var/tmp/$base"
   if is_apt_image "$image"; then
     # Install from /tmp with a ./ path so apt treats the argument as a local file; on
     # failure dump diagnostics (apt/dpkg versions, DEB members) before failing the case.
@@ -335,7 +338,7 @@ install_pkg() {
     "$engine" exec "$name" bash -lc "
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -y >/dev/null
-      cd /tmp && chmod 0644 ./$base
+      cd /var/tmp && chmod 0644 ./$base
       if ! apt-get install -y ./$base >/dev/null; then
         echo '[DIAG] apt-get install failed' >&2
         apt --version >&2 || true
@@ -349,7 +352,7 @@ install_pkg() {
       fi
     "
   else
-    "$engine" exec "$name" dnf install -y "/tmp/$base" >/dev/null
+    "$engine" exec "$name" dnf install -y "/var/tmp/$base" >/dev/null
   fi
 }
 
