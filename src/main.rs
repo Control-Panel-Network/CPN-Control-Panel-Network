@@ -79,16 +79,16 @@ use cpn_installer::panel_hub_routes::{
     server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
     server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
-    server_litespeed_webadmin_url, server_logs_route, server_openlitespeed_guest,
-    server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
-    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
-    server_php_configs_post, server_php_configs_restart, server_php_configs_save_advanced,
-    server_php_configs_save_basic, server_php_configs_set_default,
-    server_php_configs_set_default_get, server_php_extensions, server_php_extensions_install,
-    server_php_extensions_set_default, server_php_extensions_set_default_get,
-    server_php_extensions_uninstall, server_php_tuning, server_processes_page,
-    server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_error_messages_page, settings_error_messages_preview,
+    server_litespeed_webadmin_url, server_log_view_route, server_logs_route,
+    server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
+    server_openlitespeed_password, server_openlitespeed_reset_cpn, server_packages_page,
+    server_page, server_php_configs, server_php_configs_post, server_php_configs_restart,
+    server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
+    server_php_extensions_install, server_php_extensions_set_default,
+    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
+    server_processes_page, server_services_control, server_services_page, settings_connect_page,
+    settings_design_page, settings_error_messages_page, settings_error_messages_preview,
     settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
     settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
     settings_error_messages_save, settings_logs_page, settings_logs_save,
@@ -1213,6 +1213,7 @@ async fn main() -> std::io::Result<()> {
             .service(backups_remote_route)
             .service(server_page)
             .service(server_logs_route)
+            .service(server_log_view_route)
             .service(server_services_page)
             .service(server_services_control)
             .service(server_openlitespeed_page)

@@ -455,6 +455,11 @@ pub(crate) const SERVER: &[NavEntry] = &[
         label: "Top Processes",
     },
     NavEntry::Link {
+        id: "logs",
+        href: "/server/logs",
+        label: "Logs",
+    },
+    NavEntry::Link {
         id: "package-manager",
         href: "/server/packages",
         label: "Package Manager",

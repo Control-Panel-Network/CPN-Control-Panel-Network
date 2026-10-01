@@ -1,4 +1,4 @@
-﻿//! Hub tile catalogs for Server, Email, Databases & FTP, Backups, Users & Plans, and Security.
+//! Hub tile catalogs for Server, Email, Databases & FTP, Backups, Users & Plans, and Security.
 
 use crate::panel_hubs::HubTile;
 
@@ -308,6 +308,42 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
         (
             "Logs",
             vec![
+                HubTile {
+                    title: "Main Log",
+                    subtitle: "CPN panel log",
+                    href: "/server/logs/panel",
+                    live: true,
+                },
+                HubTile {
+                    title: "Access Logs",
+                    subtitle: "Web access",
+                    href: "/server/logs/access",
+                    live: true,
+                },
+                HubTile {
+                    title: "Error Logs",
+                    subtitle: "Web errors",
+                    href: "/server/logs/error",
+                    live: true,
+                },
+                HubTile {
+                    title: "Email Log",
+                    subtitle: "Mail log",
+                    href: "/server/logs/email",
+                    live: true,
+                },
+                HubTile {
+                    title: "FTP Logs",
+                    subtitle: "FTP log",
+                    href: "/server/logs/ftp",
+                    live: true,
+                },
+                HubTile {
+                    title: "ModSec Audit",
+                    subtitle: "WAF audit log",
+                    href: "/server/logs/modsec",
+                    live: true,
+                },
                 HubTile {
                     title: "Panel Activity Log",
                     subtitle: "Plugin and host package actions",
