@@ -14,57 +14,7 @@ use crate::panel_hub_pages_backups_plan::backups_restore_plan_page;
 use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
-use serde::Deserializer;
 use std::sync::Arc;
-
-/// Accept a lone form value or repeated keys for multi-select `entity`.
-fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct V;
-    impl<'de> serde::de::Visitor<'de> for V {
-        type Value = Vec<String>;
-
-        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a string or a sequence of strings")
-        }
-
-        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-            if v.trim().is_empty() {
-                Ok(Vec::new())
-            } else {
-                Ok(vec![v.to_string()])
-            }
-        }
-
-        fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
-            self.visit_str(&v)
-        }
-
-        fn visit_seq<A: serde::de::SeqAccess<'de>>(
-            self,
-            mut seq: A,
-        ) -> Result<Self::Value, A::Error> {
-            let mut out = Vec::new();
-            while let Some(item) = seq.next_element::<String>()? {
-                if !item.trim().is_empty() {
-                    out.push(item);
-                }
-            }
-            Ok(out)
-        }
-
-        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-            Ok(Vec::new())
-        }
-
-        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-            Ok(Vec::new())
-        }
-    }
-    deserializer.deserialize_any(V)
-}
 
 #[get("/backups/create")]
 pub async fn backups_create_route(
@@ -167,11 +117,8 @@ pub struct RestoreRunForm {
     confirm_optional_entities: String,
     #[serde(default)]
     confirm_users_acl_packages: String,
-    /// Multi-select entity ids (`website`, `db:name`, `site:x`, …).
-    /// Browsers may post one value or many; accept both (avoids Actix parse 400).
-    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
-    entity: Vec<String>,
-    /// Comma-separated fallback when a client posts a single field.
+    /// Comma-separated entity ids from the plan page (`website`, `db:name`, `site:x`, …).
+    /// Checkboxes sync into this hidden field so Actix never sees repeated `entity` keys.
     #[serde(default)]
     entities: String,
 }
@@ -197,15 +144,15 @@ pub async fn backups_restore_run(
         urlencoding_simple(domain),
         urlencoding_simple(form.archive.trim())
     );
-    let mut entity_ids = form.entity.clone();
-    if entity_ids.is_empty() && !form.entities.trim().is_empty() {
-        entity_ids = form
-            .entities
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-    }
+    let mut entity_ids: Vec<String> = form
+        .entities
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    // Deduplicate while preserving order.
+    let mut seen = std::collections::HashSet::new();
+    entity_ids.retain(|id| seen.insert(id.clone()));
     let mut req = RestoreRequest::from_form_flags(
         scope.to_string(),
         domain.to_string(),
@@ -401,25 +348,20 @@ mod tests {
     use super::RestoreRunForm;
 
     #[test]
-    fn restore_run_form_accepts_single_entity_string() {
-        let form: RestoreRunForm =
-            serde_json::from_str(r#"{"entity":"site:newstargeted.com","archive":"a.tar.gz"}"#)
-                .expect("single entity");
-        assert_eq!(form.entity, vec!["site:newstargeted.com".to_string()]);
+    fn restore_run_form_parses_comma_entities() {
+        let form: RestoreRunForm = serde_json::from_str(
+            r#"{"entities":"site:newstargeted.com,website,db:news_disco","archive":"a.tar.gz"}"#,
+        )
+        .expect("entities");
         assert_eq!(form.archive, "a.tar.gz");
+        assert!(form.entities.contains("website"));
+        assert!(form.entities.contains("db:news_disco"));
     }
 
     #[test]
-    fn restore_run_form_accepts_repeated_entity_keys() {
-        // Form posts map repeated keys to a sequence; JSON array exercises the same path.
-        let form: RestoreRunForm = serde_json::from_str(
-            r#"{"entity":["website","db:news_disco"],"entities":"website,db:news_disco"}"#,
-        )
-        .expect("multi entity");
-        assert_eq!(
-            form.entity,
-            vec!["website".to_string(), "db:news_disco".to_string()]
-        );
-        assert!(form.entities.contains("website"));
+    fn restore_run_form_allows_empty_entities() {
+        let form: RestoreRunForm =
+            serde_json::from_str(r#"{"archive":"a.tar.gz"}"#).expect("empty entities");
+        assert!(form.entities.is_empty());
     }
 }

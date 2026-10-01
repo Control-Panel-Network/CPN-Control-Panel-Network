@@ -55,7 +55,7 @@ fn entity_rows(entities: &[RestoreEntity]) -> String {
         out.push_str(&format!(
             r#"<li class="restore-entity-card">
               <label class="restore-entity-label">
-                <input type="checkbox" class="restore-entity-cb" name="entity" value="{id}" data-extra="{extra}"{checked}>
+                <input type="checkbox" class="restore-entity-cb" value="{id}" data-entity-id="{id}" data-extra="{extra}"{checked}>
                 <span>
                   <strong>{label}</strong>{badge}
                   <span class="muted" style="display:block;font-weight:400;">{detail}</span>
@@ -309,7 +309,9 @@ mod tests {
             },
         ];
         let html = entity_rows(&ents);
-        assert!(html.contains("name=\"entity\""));
+        assert!(html.contains("class=\"restore-entity-cb\""));
+        assert!(html.contains("data-entity-id=\"website\""));
+        assert!(!html.contains("name=\"entity\""));
         assert!(html.contains("value=\"db:news_cms\""));
         assert!(html.contains("restore-select-all"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
