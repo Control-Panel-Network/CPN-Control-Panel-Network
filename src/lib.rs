@@ -301,6 +301,8 @@ pub mod panel_theme;
 pub mod panel_theme_chrome;
 pub mod panel_theme_routes;
 pub mod panel_theme_store;
+pub mod panel_theme_store_extra;
+pub mod panel_themes_api;
 pub mod panel_user_prefs;
 pub mod panel_webauthn;
 pub mod panel_webauthn_client;

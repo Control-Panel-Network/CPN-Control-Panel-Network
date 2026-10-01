@@ -12,16 +12,13 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
         "Theme Store"
     };
     let blurb = if installed_view {
-        "Themes already on this panel. Apply sets panel-wide chrome. Uninstall removes the package from storage."
+        "Themes already on this panel. Apply sets panel-wide chrome. Uninstall removes the package from storage. Update all refreshes packages with newer catalog versions."
     } else {
         "Free themes from CPN-Themes on GitHub. Paid themes from the News Targeted CPN shop category unlock via Shop Grants or activation key, then Install."
     };
-    let refresh = if installed_view {
-        String::new()
-    } else {
-        r#"<button type="button" class="manage-btn" id="cpn-themes-refresh">Refresh catalog</button>"#
-            .to_string()
-    };
+    let header_actions =
+        crate::panel_theme_store_extra::theme_header_actions(installed_view, can_edit);
+    let activity = crate::panel_theme_store_extra::theme_activity_section();
     let redeem_row = if installed_view {
         String::new()
     } else {
@@ -51,7 +48,7 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
       <p class="plugin-store-meta">{catalog_links}</p>
       <p class="plugin-store-meta">{blurb}</p>
     </div>
-    {refresh}
+    {header_actions}
   </header>
   {redeem_row}
   <div class="plugin-search-row">
@@ -86,6 +83,7 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
   </div>
   <p id="cpn-themes-status" class="plugin-store-meta" role="status">Loading themes...</p>
   <div id="cpn-themes-grid" class="plugin-grid" aria-live="polite"></div>
+  {activity}
 </article>
 <style>
 .cpn-themes-catalog {{ margin-top:0; }}
@@ -260,6 +258,7 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
           headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
           body: JSON.stringify({{ id: id }})
         }}).then(function () {{
+          if (typeof loadActivity === "function") loadActivity();
           if (!installedView) {{
             window.location.assign("/settings/design?tab=installed");
             return;
@@ -296,7 +295,10 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
           method: "POST",
           headers: {{ "Content-Type": "application/json", "Accept": "application/json" }},
           body: JSON.stringify({{ id: id }})
-        }}).then(function () {{ load(false); }})
+        }}).then(function () {{
+          if (typeof loadActivity === "function") loadActivity();
+          load(false);
+        }})
           .catch(function (err) {{
             statusEl.textContent = err.message || String(err);
             alert(err.message || String(err));
@@ -452,6 +454,7 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
     }});
   }});
   load(false);
+{extra_js}
 }})();
 </script>"##,
         view = if installed_view { "installed" } else { "store" },
@@ -459,10 +462,12 @@ pub fn themes_catalog_panel(username: &str, view: &str) -> String {
         blurb = blurb,
         catalog_links = catalog_links,
         redeem_row = redeem_row,
-        refresh = refresh,
+        header_actions = header_actions,
+        activity = activity,
         search_ph = search_ph,
         can_edit = if can_edit { "true" } else { "false" },
         installed_view = if installed_view { "true" } else { "false" },
         helpers = crate::panel_minimalist_settings::design_fetch_js_helpers(),
+        extra_js = crate::panel_theme_store_extra::theme_update_all_and_activity_js(),
     )
 }
