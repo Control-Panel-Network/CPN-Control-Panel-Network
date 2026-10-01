@@ -3,7 +3,10 @@
 //! Packages land under `/var/lib/cpn/installed-themes/<id>/` (theme.json + manifest).
 
 use crate::account::{data_dir, now_unix};
-use crate::panel_theme::{DesignTokens, ThemeBackground, sanitize_theme_extra_css};
+use crate::panel_theme::{
+    DesignTokens, ThemeBackground, sanitize_theme_extra_css, theme_asset_public_url,
+    validate_theme_asset_path,
+};
 use crate::plugins_catalog::curl_bytes;
 use crate::themes_catalog::{ThemeCatalogEntry, themes_repo_slug};
 use serde::{Deserialize, Serialize};
@@ -125,6 +128,51 @@ pub fn theme_is_installed(id: &str) -> bool {
 
 fn theme_css_path(id: &str) -> PathBuf {
     theme_dir(id).join("theme.css")
+}
+
+
+fn catalog_assets_root() -> PathBuf {
+    data_dir().join("theme-catalog-assets")
+}
+
+fn catalog_theme_assets_dir(id: &str) -> PathBuf {
+    catalog_assets_root().join(id)
+}
+
+/// Resolve a safe theme asset file from installed package, else catalog cache.
+pub fn resolve_theme_asset_file(theme_id: &str, file_name: &str) -> Result<PathBuf, String> {
+    let id = normalize_theme_id(theme_id)?;
+    let Ok(Some(rel)) =
+        validate_theme_asset_path(Some(format!("assets/{file_name}")), "theme asset")
+    else {
+        return Err("Theme asset path is invalid".into());
+    };
+    let file = rel.trim_start_matches("assets/");
+    let installed = theme_dir(&id).join("assets").join(file);
+    if installed.is_file() {
+        return Ok(installed);
+    }
+    let cached = catalog_theme_assets_dir(&id).join(file);
+    if cached.is_file() {
+        return Ok(cached);
+    }
+    Err(format!("Theme asset `{file}` was not found for `{id}`"))
+}
+
+pub fn theme_asset_content_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "webp" => "image/webp",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "svg" => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
 }
 
 pub fn load_installed_theme_extra_css(id: &str) -> Option<String> {
@@ -290,6 +338,9 @@ pub struct ThemeStoreRow {
     pub update_available: bool,
     pub active: bool,
     pub status: String,
+    /// Authenticated same-origin preview image URL when a package image exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_url: Option<String>,
 }
 
 pub fn enrich_catalog_for_store(
@@ -320,6 +371,18 @@ pub fn enrich_catalog_for_store(
             } else {
                 "Available".to_string()
             };
+            let preview_path = entry
+                .background
+                .as_ref()
+                .and_then(|bg| bg.preview_image.clone().or_else(|| bg.image.clone()));
+            let preview_url = preview_path.and_then(|path| {
+                let file = path.trim_start_matches("assets/");
+                if resolve_theme_asset_file(&entry.id, file).is_ok() {
+                    theme_asset_public_url(&entry.id, &path)
+                } else {
+                    None
+                }
+            });
             ThemeStoreRow {
                 entry: entry.clone(),
                 installed: installed_flag,
@@ -327,6 +390,7 @@ pub fn enrich_catalog_for_store(
                 update_available,
                 active,
                 status,
+                preview_url,
             }
         })
         .collect()

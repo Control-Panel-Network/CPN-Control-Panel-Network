@@ -17,7 +17,8 @@ use crate::themes_catalog::{
 };
 use crate::themes_install::{
     enrich_catalog_for_store, install_theme, list_installed_themes, load_installed_theme,
-    load_installed_theme_extra_css, theme_is_installed, uninstall_theme,
+    load_installed_theme_extra_css, resolve_theme_asset_file, theme_asset_content_type,
+    theme_is_installed, uninstall_theme,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -408,5 +409,30 @@ pub async fn panel_themes_apply(
             json_ok(payload)
         }
         Err(err) => json_err(400, &err),
+    }
+}
+
+#[get("/api/panel/themes/assets/{id}/{file}")]
+pub async fn panel_themes_asset(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    path: web::Path<(String, String)>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return json_err(401, "Login required");
+    };
+    let (id, file) = path.into_inner();
+    match resolve_theme_asset_file(&id, &file) {
+        Ok(asset_path) => match std::fs::read(&asset_path) {
+            Ok(bytes) => HttpResponse::Ok()
+                .insert_header((
+                    actix_web::http::header::CACHE_CONTROL,
+                    "private, max-age=3600",
+                ))
+                .content_type(theme_asset_content_type(&asset_path))
+                .body(bytes),
+            Err(_) => json_err(404, "Theme asset could not be read"),
+        },
+        Err(err) => json_err(404, &err),
     }
 }

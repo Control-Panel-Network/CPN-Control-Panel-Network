@@ -47,6 +47,47 @@ pub fn themes_repo_slug() -> &'static str {
 fn cache_path() -> PathBuf {
     data_dir().join("theme-catalog-cache.json")
 }
+fn catalog_assets_root() -> PathBuf {
+    data_dir().join("theme-catalog-assets")
+}
+
+fn cache_extracted_theme_assets(theme_id: &str, theme_src: &Path) {
+    let id = theme_id.trim().to_ascii_lowercase();
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    {
+        return;
+    }
+    let src_assets = theme_src.join("assets");
+    if !src_assets.is_dir() {
+        return;
+    }
+    let dest = catalog_assets_root().join(&id);
+    if fs::create_dir_all(&dest).is_err() {
+        return;
+    }
+    for name in [
+        "preview.webp",
+        "bg.webp",
+        "preview.png",
+        "bg.png",
+        "preview.jpg",
+        "bg.jpg",
+        "preview.jpeg",
+        "bg.jpeg",
+        "preview.svg",
+        "bg.svg",
+    ] {
+        let from = src_assets.join(name);
+        if from.is_file() {
+            let _ = fs::copy(&from, dest.join(name));
+        }
+    }
+}
+
+
 
 fn cache_is_fresh(cache: &ThemesCache) -> bool {
     let now = SystemTime::now()
@@ -172,6 +213,7 @@ fn walk_themes(dir: &Path, out: &mut Vec<ThemeCatalogEntry>) {
                     String::from_utf8_lossy(&raw).into_owned()
                 };
                 if let Ok(theme) = parse_theme_file(id, &body) {
+                    cache_extracted_theme_assets(&theme.id, &path);
                     out.push(theme);
                     continue;
                 }
@@ -271,7 +313,9 @@ mod tests {
             "color_mode": "dark",
             "body": "linear-gradient(160deg, #0b1c33 0%, #123456 100%)",
             "surface": "#0f172a",
-            "ink": "#e2e8f0"
+            "ink": "#e2e8f0",
+            "image": "assets/bg.webp",
+            "preview_image": "assets/preview.webp"
           }
         }"##;
         let theme = parse_theme_file("ocean-blue", body).unwrap();
@@ -281,6 +325,10 @@ mod tests {
         assert_eq!(
             theme.background.as_ref().unwrap().color_mode.as_deref(),
             Some("dark")
+        );
+        assert_eq!(
+            theme.background.as_ref().unwrap().image.as_deref(),
+            Some("assets/bg.webp")
         );
     }
 }

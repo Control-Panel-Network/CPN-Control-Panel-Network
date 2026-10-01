@@ -23,8 +23,12 @@ pub fn themes_catalog_panel(username: &str) -> String {
 .cpn-themes-head {{ display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }}
 .cpn-themes-catalog h2 {{ margin:0 0 6px; font-size:18px; color:var(--ink); }}
 .cpn-theme-swatch {{
-  width:100%; height:48px; border-radius:12px; border:1px solid var(--hairline);
+  width:100%; height:120px; border-radius:12px; border:1px solid var(--hairline);
   background:linear-gradient(90deg, var(--swatch-a, #2563eb), var(--swatch-b, #1d4ed8));
+  background-size:cover; background-position:center; overflow:hidden;
+}}
+.cpn-theme-swatch img {{
+  display:block; width:100%; height:100%; object-fit:cover;
 }}
 .cpn-themes-catalog .plugin-grid {{
   display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; margin-top:10px;
@@ -161,16 +165,24 @@ pub fn themes_catalog_panel(username: &str) -> String {
       var a = (t.tokens && t.tokens.accent) || "#2563eb";
       var b = (t.tokens && t.tokens.accent_focus) || a;
       var preview = (t.background && (t.background.preview || t.background.body)) || "";
-      var swatchStyle = preview
-        ? ('background:' + esc(preview) + ';')
-        : ('--swatch-a:' + esc(a) + ';--swatch-b:' + esc(b) + ';');
+      var previewUrl = t.preview_url || "";
+      var swatchInner = previewUrl
+        ? ('<img src="' + esc(previewUrl) + '" alt="' + esc(t.name) + ' preview" loading="lazy">')
+        : "";
+      var swatchStyle = previewUrl
+        ? ""
+        : (preview
+          ? ('background:' + esc(preview) + ';')
+          : ('--swatch-a:' + esc(a) + ';--swatch-b:' + esc(b) + ';'));
+      var bgLabel = (t.preview_url || (t.background && t.background.image))
+        ? " · Background image"
+        : (t.background ? " · Background" : "");
       return '<article class="plugin-card">' +
-        '<div class="cpn-theme-swatch" style="' + swatchStyle + '"></div>' +
+        '<div class="cpn-theme-swatch" style="' + swatchStyle + '">' + swatchInner + '</div>' +
         '<h3>' + esc(t.name) + '</h3>' +
         '<div class="plugin-badges">' + badgeFor(t) + '</div>' +
         '<p class="plugin-desc">' + esc(t.description) + '</p>' +
-        '<p class="plugin-meta">Author: ' + esc(t.author) +
-          (t.background ? ' · Background' : '') +
+        '<p class="plugin-meta">Author: ' + esc(t.author) + bgLabel +
           (t.installed_version ? (' · Installed v' + esc(t.installed_version)) : '') + '</p>' +
         '<div class="plugin-actions">' + actionsFor(t) + '</div></article>';
     }}).join("");
