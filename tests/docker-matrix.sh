@@ -330,7 +330,24 @@ install_pkg() {
   if is_apt_image "$image"; then
     # Install from /tmp with a ./ path so apt treats the argument as a local file; on
     # failure dump diagnostics (apt/dpkg versions, DEB members) before failing the case.
-    "$engine" exec "$name" bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null && cd /tmp && chmod 0644 ./$base && (apt-get install -y ./$base >/dev/null || { echo '[DIAG] apt-get install failed' >&2; apt --version >&2 || true; dpkg --version | head -1 >&2 || true; ls -l ./$base >&2 || true; ar t ./$base >&2 || true; dpkg-deb -I ./$base >&2 || true; apt-get install -y ./$base 2>&1 | tail -5 >&2 || true; false; })"
+    # If apt still refuses the file, fall back to dpkg -i plus apt-get install -f so
+    # dependencies resolve, then require the package to be fully installed.
+    "$engine" exec "$name" bash -lc "
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y >/dev/null
+      cd /tmp && chmod 0644 ./$base
+      if ! apt-get install -y ./$base >/dev/null; then
+        echo '[DIAG] apt-get install failed' >&2
+        apt --version >&2 || true
+        dpkg --version | head -1 >&2 || true
+        ls -l ./$base >&2 || true
+        ar t ./$base >&2 || true
+        dpkg-deb -I ./$base >&2 || true
+        dpkg -i ./$base || true
+        apt-get install -f -y >/dev/null
+        dpkg -s cpn-installer | grep -q '^Status: install ok installed'
+      fi
+    "
   else
     "$engine" exec "$name" dnf install -y "/tmp/$base" >/dev/null
   fi
