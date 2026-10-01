@@ -108,7 +108,11 @@ fn hms(b: &[u8], at: usize) -> Option<(u32, u32, u32)> {
     if b.get(at + 2) != Some(&b':') || b.get(at + 5) != Some(&b':') {
         return None;
     }
-    Some((digits(b, at, 2)?, digits(b, at + 3, 2)?, digits(b, at + 6, 2)?))
+    Some((
+        digits(b, at, 2)?,
+        digits(b, at + 3, 2)?,
+        digits(b, at + 6, 2)?,
+    ))
 }
 
 /// `2026-10-01T15:02:01.123+0200` or `2026-10-01 02:35:12.123456` at the start of the line.
@@ -138,7 +142,9 @@ fn iso(line: &str) -> Option<Split> {
     }
     if b.get(end) == Some(&b'Z') {
         end += 1;
-    } else if matches!(b.get(end), Some(b'+') | Some(b'-')) && b.get(end + 1).is_some_and(u8::is_ascii_digit) {
+    } else if matches!(b.get(end), Some(b'+') | Some(b'-'))
+        && b.get(end + 1).is_some_and(u8::is_ascii_digit)
+    {
         end += 1;
         while b.get(end).is_some_and(|c| c.is_ascii_digit() || *c == b':') {
             end += 1;
@@ -204,7 +210,10 @@ fn clf(line: &str) -> Option<Split> {
     while let Some(off) = line[from..].find('[') {
         let i = from + off;
         from = i + 1;
-        if b.get(i + 3) != Some(&b'/') || b.get(i + 7) != Some(&b'/') || b.get(i + 12) != Some(&b':') {
+        if b.get(i + 3) != Some(&b'/')
+            || b.get(i + 7) != Some(&b'/')
+            || b.get(i + 12) != Some(&b':')
+        {
             continue;
         }
         let Some(month) = line.get(i + 4..i + 7).and_then(month_number) else {

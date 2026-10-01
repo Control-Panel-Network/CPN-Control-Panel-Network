@@ -160,10 +160,14 @@ impl HostLogKind {
     pub fn quiet_hint(self) -> &'static str {
         match self {
             Self::Panel => "The panel log is empty.",
-            Self::Access => "The access logs are empty so far. Lines appear as the web server serves requests.",
+            Self::Access => {
+                "The access logs are empty so far. Lines appear as the web server serves requests."
+            }
             Self::Error => "The error logs are empty so far, which means no errors were recorded.",
             Self::Email => "The mail log is empty so far.",
-            Self::Ftp => "No FTP or SFTP activity has been recorded yet. Logins and transfers appear here.",
+            Self::Ftp => {
+                "No FTP or SFTP activity has been recorded yet. Logins and transfers appear here."
+            }
             Self::ModSec => {
                 "ModSecurity is installed but its audit log has no transactions yet. Entries appear when a rule matches a request."
             }
@@ -203,7 +207,10 @@ mod tests {
 
     #[test]
     fn only_access_and_error_are_per_site() {
-        let sites: Vec<_> = HostLogKind::ALL.into_iter().filter(|k| k.per_site()).collect();
+        let sites: Vec<_> = HostLogKind::ALL
+            .into_iter()
+            .filter(|k| k.per_site())
+            .collect();
         assert_eq!(sites, vec![HostLogKind::Access, HostLogKind::Error]);
     }
 }

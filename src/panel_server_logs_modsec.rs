@@ -4,9 +4,9 @@
 //! matched request data is never copied, only the rule id and rule message, so request bodies and
 //! credentials stay out of the viewer.
 
+use crate::panel_ops_security_ssl::modsec_status;
 use crate::panel_server_logs_kind::HostLogKind;
 use crate::panel_server_logs_sources::{Collected, TAIL_BYTES, read_tail};
-use crate::panel_ops_security_ssl::modsec_status;
 use std::path::Path;
 fn quoted(haystack: &str, key: &str) -> Option<String> {
     let start = haystack.find(key)? + key.len();
@@ -80,7 +80,11 @@ impl Txn {
             rules.push(format!("+{} more", self.messages.len() - 3));
         }
         let blocked = if self.intercepted { " [blocked]" } else { "" };
-        let request = if self.request.is_empty() { "-" } else { &self.request };
+        let request = if self.request.is_empty() {
+            "-"
+        } else {
+            &self.request
+        };
         Some(format!(
             "{stamp} {client} {request} -> {code}{blocked} | {}",
             if rules.is_empty() {
@@ -95,7 +99,9 @@ impl Txn {
 fn modsec_json_summary(line: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(line).ok()?;
     let t = v.get("transaction")?;
-    let s = |p: &serde_json::Value, k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("-").to_string();
+    let s = |p: &serde_json::Value, k: &str| {
+        p.get(k).and_then(|x| x.as_str()).unwrap_or("-").to_string()
+    };
     let req = t.get("request").cloned().unwrap_or_default();
     let code = t
         .get("response")
@@ -220,7 +226,8 @@ pub fn collect_modsec() -> Option<Collected> {
         }
     }
     if let Some(path) = existing {
-        out.sources.push(format!("{path} (audit log, no transactions yet)"));
+        out.sources
+            .push(format!("{path} (audit log, no transactions yet)"));
         return Some(out);
     }
     if modsec_installed() {
@@ -276,8 +283,12 @@ mod tests {
 
     #[test]
     fn ols_conf_detection_ignores_comments() {
-        assert!(ols_conf_enables_modsec("module mod_security {\n  ls_enabled 1\n}\n"));
-        assert!(!ols_conf_enables_modsec("# module mod_security {\nmodule cache {\n}\n"));
+        assert!(ols_conf_enables_modsec(
+            "module mod_security {\n  ls_enabled 1\n}\n"
+        ));
+        assert!(!ols_conf_enables_modsec(
+            "# module mod_security {\nmodule cache {\n}\n"
+        ));
         assert!(!ols_conf_enables_modsec(""));
     }
 

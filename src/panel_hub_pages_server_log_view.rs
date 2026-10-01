@@ -96,7 +96,9 @@ fn pager_button(page: &LogPage, label: &str, target: Option<usize>) -> String {
             r#"<a class="btn-secondary" href="{}">{label}</a>"#,
             html_escape(&page_href(page, t))
         ),
-        None => format!(r#"<span class="btn-secondary is-disabled" aria-disabled="true">{label}</span>"#),
+        None => format!(
+            r#"<span class="btn-secondary is-disabled" aria-disabled="true">{label}</span>"#
+        ),
     }
 }
 
@@ -156,12 +158,18 @@ fn entry_html(entry: &LogEntry) -> String {
     let time = if entry.stamp.is_empty() {
         r#"<span class="log-time none">-</span>"#.to_string()
     } else {
-        format!(r#"<time class="log-time">{}</time>"#, html_escape(&entry.stamp))
+        format!(
+            r#"<time class="log-time">{}</time>"#,
+            html_escape(&entry.stamp)
+        )
     };
     let scope = if entry.scope.is_empty() {
         String::new()
     } else {
-        format!(r#"<span class="log-scope">{}</span>"#, html_escape(&entry.scope))
+        format!(
+            r#"<span class="log-scope">{}</span>"#,
+            html_escape(&entry.scope)
+        )
     };
     let msg = if entry.text.chars().count() > FOLD_CHARS {
         let preview: String = entry.text.chars().take(FOLD_PREVIEW_CHARS).collect();
@@ -220,7 +228,10 @@ fn lines_view(page: &LogPage, scoped_to_sites: bool) -> String {
         return format!(r#"{meta}<p class="empty-state">{}</p>"#, html_escape(why));
     }
     let items: String = page.entries.iter().map(entry_html).collect();
-    format!(r#"{meta}<ol class="log-entries" role="log" aria-label="{} entries">{items}</ol>"#, page.kind.title())
+    format!(
+        r#"{meta}<ol class="log-entries" role="log" aria-label="{} entries">{items}</ol>"#,
+        page.kind.title()
+    )
 }
 
 /// Plain-language 403 for host-wide logs (they can contain other accounts' activity).
@@ -347,7 +358,10 @@ mod tests {
 
     #[test]
     fn controls_have_every_required_element_and_default_ten() {
-        let text = (1..=35).map(|i| format!("l{i}")).collect::<Vec<_>>().join("\n");
+        let text = (1..=35)
+            .map(|i| format!("l{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let page = paginate_text(HostLogKind::Panel, "/x", &text, "", 2, 10);
         let html = controls(&page);
         for needle in [

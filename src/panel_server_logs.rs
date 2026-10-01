@@ -139,7 +139,11 @@ fn ordered_entries(lines: &[RawLine]) -> Vec<LogEntry> {
         let (stamp, text, epoch) = match split_stamp(&redacted, now) {
             Some(s) => (s.stamp.display(), s.rest, s.stamp.epoch()),
             None => {
-                let inherited = if raw.scope == last_scope { last_epoch } else { 0 };
+                let inherited = if raw.scope == last_scope {
+                    last_epoch
+                } else {
+                    0
+                };
                 (String::new(), redacted, inherited)
             }
         };
@@ -287,7 +291,10 @@ mod tests {
         let p = paginate_text(HostLogKind::Error, "/x", &text, "", 1, DEFAULT_PER_PAGE);
         assert_eq!(p.total_lines, 120);
         assert_eq!(p.total_pages, 12);
-        assert_eq!(p.entries.first().map(|e| e.text.as_str()), Some("line 120 even"));
+        assert_eq!(
+            p.entries.first().map(|e| e.text.as_str()),
+            Some("line 120 even")
+        );
         assert_eq!(p.entries.len(), 10);
 
         let last = paginate_text(HostLogKind::Error, "/x", &text, "", 99, 25);
@@ -314,8 +321,14 @@ mod tests {
     fn several_sources_merge_by_time_newest_first() {
         let mut c = Collected::default();
         c.sources.push("a".into());
-        c.push_text("a.example", "[01/Oct/2026:10:00:00 +0000] a1\n[01/Oct/2026:12:00:00 +0000] a2");
-        c.push_text("b.example", "[01/Oct/2026:11:00:00 +0000] b1\n[01/Oct/2026:13:00:00 +0000] b2\ncontinuation");
+        c.push_text(
+            "a.example",
+            "[01/Oct/2026:10:00:00 +0000] a1\n[01/Oct/2026:12:00:00 +0000] a2",
+        );
+        c.push_text(
+            "b.example",
+            "[01/Oct/2026:11:00:00 +0000] b1\n[01/Oct/2026:13:00:00 +0000] b2\ncontinuation",
+        );
         let p = paginate(HostLogKind::Access, &c, "", 1, 10);
         let order: Vec<&str> = p.entries.iter().map(|e| e.text.as_str()).collect();
         assert_eq!(order, vec!["continuation", "b2", "a2", "b1", "a1"]);

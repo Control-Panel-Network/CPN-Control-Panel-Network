@@ -319,11 +319,20 @@ mod tests {
     #[test]
     fn sftp_lines_match_by_keyword_or_jailed_user() {
         let members = vec!["alice".to_string()];
-        assert!(sftp_line_matches("sshd[1]: Accepted password for alice from 1.2.3.4", &members));
+        assert!(sftp_line_matches(
+            "sshd[1]: Accepted password for alice from 1.2.3.4",
+            &members
+        ));
         assert!(sftp_line_matches("internal-sftp[2]: open \"/x\"", &members));
-        assert!(!sftp_line_matches("sshd[1]: Accepted password for root from 1.2.3.4", &members));
+        assert!(!sftp_line_matches(
+            "sshd[1]: Accepted password for root from 1.2.3.4",
+            &members
+        ));
         assert!(!sftp_line_matches("sudo: alice : TTY=pts/0", &members));
-        assert!(!sftp_line_matches("sshd[1]: Failed for malice from 1.2.3.4", &members));
+        assert!(!sftp_line_matches(
+            "sshd[1]: Failed for malice from 1.2.3.4",
+            &members
+        ));
     }
 
     #[test]
