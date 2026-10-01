@@ -28,6 +28,8 @@ pub struct LogPage {
     pub kind: HostLogKind,
     /// Where the lines came from; empty when nothing was found at all.
     pub sources: Vec<String>,
+    /// Optional explanation for an empty but existing source (for example ModSecurity not enabled).
+    pub note: String,
     pub search: String,
     pub page: usize,
     pub per_page: usize,
@@ -195,6 +197,7 @@ pub fn paginate(
     LogPage {
         kind,
         sources: collected.sources.clone(),
+        note: collected.note.clone(),
         search: search.trim().chars().take(120).collect(),
         page,
         per_page,

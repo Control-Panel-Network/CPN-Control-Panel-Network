@@ -38,6 +38,8 @@ pub struct RawLine {
 #[derive(Debug, Clone, Default)]
 pub struct Collected {
     pub sources: Vec<String>,
+    /// Shown instead of the generic quiet-state sentence when `lines` is empty.
+    pub note: String,
     /// Oldest first within each source.
     pub lines: Vec<RawLine>,
 }

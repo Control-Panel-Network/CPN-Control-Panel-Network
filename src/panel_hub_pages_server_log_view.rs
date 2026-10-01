@@ -210,10 +210,12 @@ fn lines_view(page: &LogPage, scoped_to_sites: bool) -> String {
     }
     let meta = meta(page, scoped_to_sites);
     if page.entries.is_empty() {
-        let why = if page.search.is_empty() {
-            page.kind.quiet_hint()
-        } else {
+        let why = if !page.search.is_empty() {
             "No lines match the search."
+        } else if !page.note.is_empty() {
+            page.note.as_str()
+        } else {
+            page.kind.quiet_hint()
         };
         return format!(r#"{meta}<p class="empty-state">{}</p>"#, html_escape(why));
     }
@@ -313,6 +315,17 @@ mod tests {
         let html = lines_view(&page, false);
         assert!(html.contains("empty so far"));
         assert!(!html.contains("No access log found"));
+    }
+
+    #[test]
+    fn note_explains_an_existing_but_idle_source() {
+        let mut c = Collected::default();
+        c.sources.push("ModSecurity module detected".into());
+        c.note = "Module installed but not enabled.".into();
+        let page = paginate(HostLogKind::ModSec, &c, "", 1, 10);
+        assert!(lines_view(&page, false).contains("not enabled"));
+        let searched = paginate(HostLogKind::ModSec, &c, "zzz", 1, 10);
+        assert!(lines_view(&searched, false).contains("No lines match"));
     }
 
     #[test]

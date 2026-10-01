@@ -226,9 +226,29 @@ pub fn collect_modsec() -> Option<Collected> {
     if modsec_installed() {
         out.sources
             .push("ModSecurity module detected (no audit log written yet)".into());
+        if ols_module_installed() && ols_modsec_enabled() == Some(false) {
+            out.note = "The ModSecurity module is installed for OpenLiteSpeed but is not enabled in the web server configuration yet, so no audit log is written. Once it is enabled, blocked and flagged requests are listed here.".into();
+        }
         return Some(out);
     }
     None
+}
+
+fn ols_module_installed() -> bool {
+    Path::new("/usr/local/lsws/modules/mod_security.so").exists()
+}
+
+/// Whether `httpd_config.conf` loads the OpenLiteSpeed ModSecurity module. `None` when unreadable.
+fn ols_modsec_enabled() -> Option<bool> {
+    let conf = std::fs::read_to_string("/usr/local/lsws/conf/httpd_config.conf").ok()?;
+    Some(ols_conf_enables_modsec(&conf))
+}
+
+fn ols_conf_enables_modsec(conf: &str) -> bool {
+    conf.lines().any(|l| {
+        let l = l.trim_start().to_ascii_lowercase();
+        !l.starts_with('#') && l.starts_with("module mod_security")
+    })
 }
 
 #[cfg(test)]
@@ -252,6 +272,13 @@ mod tests {
     fn partial_leading_transaction_is_skipped() {
         let text = format!("Host: cut\n--c8a4b6d1-H--\nMessage: stray\n{SERIAL}");
         assert_eq!(modsec_summaries(&text).len(), 1);
+    }
+
+    #[test]
+    fn ols_conf_detection_ignores_comments() {
+        assert!(ols_conf_enables_modsec("module mod_security {\n  ls_enabled 1\n}\n"));
+        assert!(!ols_conf_enables_modsec("# module mod_security {\nmodule cache {\n}\n"));
+        assert!(!ols_conf_enables_modsec(""));
     }
 
     #[test]
