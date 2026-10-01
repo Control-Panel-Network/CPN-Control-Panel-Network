@@ -50,7 +50,7 @@ pub fn activity_list_styles() -> &'static str {
 .activity-list .data-table td:last-child, .activity-list .data-table th:last-child { white-space:normal; }
 .activity-list .data-table td time { white-space:nowrap; }
 .activity-list .data-table tr[hidden] { display:none !important; }
-@container (max-width: 860px) {
+@container (max-width: 720px) {
   .activity-list .data-table thead {
     position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;
   }

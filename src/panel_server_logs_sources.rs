@@ -212,24 +212,37 @@ fn collect_web(kind: HostLogKind, scope: &Scope) -> Option<Collected> {
     Some(out)
 }
 
-/// Members of the jailed SFTP group from `/etc/group` contents.
-pub fn group_members(group_file: &str, group: &str) -> Vec<String> {
-    group_file
-        .lines()
-        .find_map(|l| {
-            let mut parts = l.splitn(4, ':');
-            (parts.next()? == group).then(|| parts.nth(2).unwrap_or("").to_string())
-        })
-        .map(|m| {
-            m.split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
+/// Members of the jailed SFTP group: names listed in `/etc/group` plus accounts whose primary
+/// group it is (those are only recorded in `/etc/passwd`).
+pub fn group_members(group_file: &str, passwd_file: &str, group: &str) -> Vec<String> {
+    let mut gid = String::new();
+    let mut members: Vec<String> = Vec::new();
+    for l in group_file.lines() {
+        let mut parts = l.splitn(4, ':');
+        if parts.next() != Some(group) {
+            continue;
+        }
+        gid = parts.nth(1).unwrap_or("").trim().to_string();
+        members = parts
+            .next()
+            .unwrap_or("")
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        break;
+    }
+    if !gid.is_empty() {
+        for l in passwd_file.lines() {
+            let fields: Vec<&str> = l.split(':').collect();
+            if fields.len() > 3 && fields[3] == gid && !members.iter().any(|m| m == fields[0]) {
+                members.push(fields[0].to_string());
+            }
+        }
+    }
+    members
 }
-
 /// True for SSH auth log lines that belong to SFTP or to a jailed SFTP account.
 pub fn sftp_line_matches(line: &str, members: &[String]) -> bool {
     let lower = line.to_ascii_lowercase();
@@ -257,7 +270,10 @@ fn collect_ftp() -> Option<Collected> {
         out.push_text("ftp", &text);
     }
     let members = fs::read_to_string("/etc/group")
-        .map(|g| group_members(&g, SFTP_GROUP))
+        .map(|g| {
+            let passwd = fs::read_to_string("/etc/passwd").unwrap_or_default();
+            group_members(&g, &passwd, SFTP_GROUP)
+        })
         .unwrap_or_default();
     if !members.is_empty() {
         let mut found: Option<(String, String)> = None;
@@ -311,9 +327,12 @@ mod tests {
     #[test]
     fn group_members_parse() {
         let g = "root:x:0:\ncpn-sftp:x:990:alice,bob,\nother:x:5:carol\n";
-        assert_eq!(group_members(g, "cpn-sftp"), vec!["alice", "bob"]);
-        assert!(group_members(g, "missing").is_empty());
-        assert!(group_members("cpn-sftp:x:990:\n", "cpn-sftp").is_empty());
+        let p = "root:x:0:0::/root:/bin/bash\ndave:x:1001:990::/home/d:/usr/sbin/nologin\nalice:x:1002:990::/home/a:/usr/sbin/nologin\n";
+        assert_eq!(group_members(g, "", "cpn-sftp"), vec!["alice", "bob"]);
+        // Primary-group accounts are found through /etc/passwd, without duplicating listed ones.
+        assert_eq!(group_members(g, p, "cpn-sftp"), vec!["alice", "bob", "dave"]);
+        assert!(group_members(g, p, "missing").is_empty());
+        assert!(group_members("cpn-sftp:x:990:\n", "", "cpn-sftp").is_empty());
     }
 
     #[test]
