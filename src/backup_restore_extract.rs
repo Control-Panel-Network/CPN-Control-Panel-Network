@@ -1,8 +1,17 @@
 //! Safe archive listing and extraction (reject zip-slip / path traversal).
 
+use crate::panel_ops_docker_probe::output_with_timeout;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
+
+/// Hard ceiling for member inventory (plan page / zip-slip validation).
+pub const MAX_ARCHIVE_MEMBERS: usize = 50_000;
+/// Bound `tar`/`unzip` listing so a wedged archive cannot hang the panel worker.
+/// Kept under [`crate::panel_hub_http::HUB_RENDER_BUDGET`] so the plan page returns
+/// a clear error instead of a browser connection reset.
+pub const ARCHIVE_LIST_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {
@@ -99,41 +108,69 @@ pub fn list_archive_members(archive: &Path) -> Result<Vec<String>, String> {
     }
 }
 
+fn collect_member_lines(stdout: &[u8]) -> Result<Vec<String>, String> {
+    let mut members = Vec::new();
+    for line in String::from_utf8_lossy(stdout).lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        members.push(trimmed.to_string());
+        if members.len() > MAX_ARCHIVE_MEMBERS {
+            return Err(format!(
+                "Archive lists more than {MAX_ARCHIVE_MEMBERS} members. Split the backup or restore with a smaller archive."
+            ));
+        }
+    }
+    Ok(members)
+}
+
 fn list_tar_members(archive: &Path) -> Result<Vec<String>, String> {
     let name = archive
         .file_name()
         .and_then(|v| v.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
-    let mut cmd = Command::new("tar");
-    if name.ends_with(".tar") && !name.ends_with(".tar.gz") {
-        cmd.arg("-tf");
+    let flag = if name.ends_with(".tar") && !name.ends_with(".tar.gz") {
+        "-tf"
     } else {
-        cmd.arg("-tzf");
-    }
-    let out = cmd
-        .arg(archive)
-        .output()
-        .map_err(|e| format!("Could not list tar archive: {e}"))?;
+        "-tzf"
+    };
+    let path = archive.to_string_lossy();
+    let out = output_with_timeout("tar", &[flag, path.as_ref()], ARCHIVE_LIST_TIMEOUT).map_err(
+        |e| {
+            if e.kind() == std::io::ErrorKind::TimedOut {
+                format!(
+                    "Listing the archive timed out after {}s. The file may be corrupt or too large to inventory.",
+                    ARCHIVE_LIST_TIMEOUT.as_secs()
+                )
+            } else {
+                format!("Could not list tar archive: {e}")
+            }
+        },
+    )?;
     if !out.status.success() {
         return Err(format!(
             "tar list failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect())
+    collect_member_lines(&out.stdout)
 }
 
 fn list_zip_members(archive: &Path) -> Result<Vec<String>, String> {
-    let out = Command::new("unzip")
-        .args(["-Z1"])
-        .arg(archive)
-        .output()
-        .map_err(|e| format!("Could not list zip archive (is unzip installed?): {e}"))?;
+    let path = archive.to_string_lossy();
+    let out = output_with_timeout("unzip", &["-Z1", path.as_ref()], ARCHIVE_LIST_TIMEOUT)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::TimedOut {
+                format!(
+                    "Listing the zip archive timed out after {}s. The file may be corrupt or too large to inventory.",
+                    ARCHIVE_LIST_TIMEOUT.as_secs()
+                )
+            } else {
+                format!("Could not list zip archive (is unzip installed?): {e}")
+            }
+        })?;
     if !out.status.success() {
         // Fallback: unzip -l parse is brittle; prefer -Z1.
         return Err(format!(
@@ -141,11 +178,7 @@ fn list_zip_members(archive: &Path) -> Result<Vec<String>, String> {
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect())
+    collect_member_lines(&out.stdout)
 }
 
 /// Extract into `dest` after validating every member path. Dest must exist.
@@ -312,5 +345,15 @@ mod tests {
     fn validate_list_surfaces_bad_paths() {
         let members = vec!["ok/file.txt".into(), "../evil".into()];
         assert!(validate_member_list(&members).is_err());
+    }
+
+    #[test]
+    fn collect_member_lines_enforces_ceiling() {
+        let mut blob = String::new();
+        for i in 0..(MAX_ARCHIVE_MEMBERS + 2) {
+            blob.push_str(&format!("file-{i}.txt\n"));
+        }
+        let err = collect_member_lines(blob.as_bytes()).unwrap_err();
+        assert!(err.contains(&MAX_ARCHIVE_MEMBERS.to_string()));
     }
 }

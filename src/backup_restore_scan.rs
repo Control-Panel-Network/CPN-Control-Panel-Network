@@ -77,6 +77,22 @@ fn scan_shallow(
     push_dir_hits(dir, provenance, false, out, seen);
 }
 
+/// Skip lab build trees and package caches under `/home/*` (especially `/home/cpn`).
+fn skip_home_entry(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with('.')
+        || lower.starts_with("cpn-build")
+        || lower == "target"
+        || lower == "node_modules"
+        || lower == ".cargo"
+        || lower == ".rustup"
+        || lower == ".npm"
+        || lower == ".cache"
+        || lower == "ui-dist"
+        || lower.ends_with(".tgz")
+        || lower.ends_with(".rpm")
+}
+
 /// Optional one-level recursion under `/home` for `*/backups` and loose archives.
 fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections::HashSet<PathBuf>) {
     let home = Path::new("/home");
@@ -92,29 +108,114 @@ fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections:
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
-        // Skip huge application trees; only look at backups dirs and top-level archives.
+        if skip_home_entry(&name) {
+            continue;
+        }
+        // Prefer backups/ folders; only shallow-list the home for loose archives.
         let backups = path.join("backups");
         push_dir_hits(&backups, &format!("/home/{name}/backups"), false, out, seen);
         scan_shallow(&path, &format!("/home/{name}"), out, seen);
+        // Operator lab homes (e.g. /home/cpn) have many build trees; only site homes
+        // use the subdomain /home/<parent>/<sub.fqdn>/backups layout.
+        if name == "cpn" || name == "root" {
+            continue;
+        }
         // Subdomain layout: /home/<parent>/<sub.fqdn>/backups
-        if let Ok(children) = fs::read_dir(&path) {
-            for child in children.flatten() {
-                let child_path = child.path();
-                if !child_path.is_dir() {
-                    continue;
-                }
-                let child_name = child.file_name().to_string_lossy().to_string();
-                let sub_backups = child_path.join("backups");
-                push_dir_hits(
-                    &sub_backups,
-                    &format!("/home/{name}/{child_name}/backups"),
+        // Bound child walk so large site trees cannot stall restore listing.
+        let Ok(children) = fs::read_dir(&path) else {
+            continue;
+        };
+        let mut child_n = 0usize;
+        for child in children.flatten() {
+            child_n += 1;
+            if child_n > 256 {
+                break;
+            }
+            let child_path = child.path();
+            if !child_path.is_dir() {
+                continue;
+            }
+            let child_name = child.file_name().to_string_lossy().to_string();
+            if skip_home_entry(&child_name) {
+                continue;
+            }
+            let sub_backups = child_path.join("backups");
+            push_dir_hits(
+                &sub_backups,
+                &format!("/home/{name}/{child_name}/backups"),
+                false,
+                out,
+                seen,
+            );
+        }
+    }
+}
+
+fn hit_from_file(path: &Path, provenance: &str, preferred: bool) -> Option<RestoreArchiveHit> {
+    if !path.is_file() {
+        return None;
+    }
+    let name = path.file_name()?.to_str()?.to_string();
+    if !is_archive_name(&name) {
+        return None;
+    }
+    let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let dir = path.parent().unwrap_or(path).to_path_buf();
+    Some(RestoreArchiveHit {
+        name,
+        size,
+        dir,
+        path: path.to_path_buf(),
+        provenance: provenance.to_string(),
+        preferred,
+    })
+}
+
+/// Cheap candidates before a full fallback scan (plan page / restore run).
+fn candidate_archive_dirs(scope: &str, domain: &str) -> Vec<(PathBuf, String, bool)> {
+    let mut dirs = Vec::new();
+    if let Ok(parsed) = BackupScope::parse(scope)
+        && let Ok((dir, display)) = resolve_archive_dir(parsed, domain)
+    {
+        dirs.push((dir, display, true));
+    }
+    let panel = panel_backups_dir();
+    dirs.push((
+        panel.clone(),
+        format!("Panel ({})", panel.display()),
+        false,
+    ));
+    let legacy = legacy_panel_backups_dir();
+    if legacy != panel {
+        dirs.push((
+            legacy.clone(),
+            format!("Legacy panel ({})", legacy.display()),
+            false,
+        ));
+    }
+    if !cfg!(windows) {
+        dirs.push((
+            PathBuf::from("/home/cpn/backups"),
+            "/home/cpn/backups".into(),
+            false,
+        ));
+    }
+    if !domain.trim().is_empty()
+        && let Ok(sites) = list_sites()
+    {
+        for site in sites {
+            if site.domain.eq_ignore_ascii_case(domain.trim()) {
+                let dir = site_backups_dir(&site);
+                dirs.push((
+                    dir.clone(),
+                    format!("Site {} ({})", site.domain, dir.display()),
                     false,
-                    out,
-                    seen,
-                );
+                ));
+                break;
             }
         }
     }
+    dirs
 }
 
 /// Documented upload locations shown on the Restore UI (always, even if empty).
@@ -218,6 +319,9 @@ pub fn list_restore_archives_with_fallback(
 }
 
 /// Resolve an archive by basename under preferred + fallback scan (path traversal safe).
+///
+/// Tries common upload folders first so `/backups/restore/plan` does not need a full
+/// `/home` walk when the operator already picked a known archive name.
 pub fn find_restore_archive(
     scope: &str,
     domain: &str,
@@ -226,6 +330,11 @@ pub fn find_restore_archive(
     let name = archive_name.trim();
     if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return Err("Archive name must be a single filename (no path).".into());
+    }
+    for (dir, provenance, preferred) in candidate_archive_dirs(scope, domain) {
+        if let Some(hit) = hit_from_file(&dir.join(name), &provenance, preferred) {
+            return Ok(hit);
+        }
     }
     let (_pref, hits) = list_restore_archives_with_fallback(scope, domain)?;
     hits.into_iter().find(|h| h.name == name).ok_or_else(|| {
@@ -271,5 +380,15 @@ mod tests {
     fn rejects_path_traversal_names() {
         assert!(find_restore_archive("panel", "", "../x.tar.gz").is_err());
         assert!(find_restore_archive("panel", "", "a/b.tar.gz").is_err());
+    }
+
+    #[test]
+    fn skips_lab_build_tree_names() {
+        assert!(skip_home_entry("cpn-build-stable-head"));
+        assert!(skip_home_entry(".cargo"));
+        assert!(skip_home_entry("target"));
+        assert!(!skip_home_entry("newstargeted.com"));
+        assert!(!skip_home_entry("cpn"));
+        assert!(!skip_home_entry("backups"));
     }
 }

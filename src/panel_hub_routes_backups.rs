@@ -4,7 +4,7 @@ use crate::backup_restore::{RestoreRequest, restore_backup};
 use crate::installer::AppState;
 use crate::panel_backups::BackupsPageQuery;
 use crate::panel_hub_http::{
-    html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
@@ -47,17 +47,32 @@ pub async fn backups_restore_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "backups",
-        "Restore Backup",
-        &backups_restore_page(
-            query.get("scope").map(String::as_str).unwrap_or("site"),
-            query.get("domain").map(String::as_str).unwrap_or(""),
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+    let scope = query
+        .get("scope")
+        .map(String::as_str)
+        .unwrap_or("site")
+        .to_string();
+    let domain = query
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    html_blocking(move || {
+        panel_shell(
+            &user,
+            "backups",
+            "Restore Backup",
+            &backups_restore_page(
+                &scope,
+                &domain,
+                notice.as_deref(),
+                error.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[get("/backups/restore/plan")]
@@ -77,20 +92,48 @@ pub async fn backups_restore_plan_route(
             Some("Choose an archive, then Select entities."),
         );
     }
-    html_ok(panel_shell(
-        &user,
-        "backups",
-        "Select restore entities",
-        &backups_restore_plan_page(
-            query.get("scope").map(String::as_str).unwrap_or("site"),
-            query.get("domain").map(String::as_str).unwrap_or(""),
-            archive,
-            query.get("format").map(String::as_str).unwrap_or("auto"),
-            query.get("db_name").map(String::as_str).unwrap_or(""),
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+    let scope = query
+        .get("scope")
+        .map(String::as_str)
+        .unwrap_or("site")
+        .to_string();
+    let domain = query
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
+    let archive = archive.to_string();
+    let format = query
+        .get("format")
+        .map(String::as_str)
+        .unwrap_or("auto")
+        .to_string();
+    let db_name = query
+        .get("db_name")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    // Inventory runs on the blocking pool with a hard budget so a slow/hung tar
+    // list cannot reset the browser connection or starve Actix workers.
+    html_blocking(move || {
+        panel_shell(
+            &user,
+            "backups",
+            "Select restore entities",
+            &backups_restore_plan_page(
+                &scope,
+                &domain,
+                &archive,
+                &format,
+                &db_name,
+                notice.as_deref(),
+                error.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -168,7 +211,14 @@ pub async fn backups_restore_run(
         entity_ids,
     );
     req.owner = user.clone();
-    match restore_backup(&req) {
+    // Restore can take a while; never occupy an Actix worker with tar extract / SQL import.
+    let outcome = match web::block(move || restore_backup(&req)).await {
+        Ok(inner) => inner,
+        Err(_) => Err(
+            "Restore worker failed unexpectedly. Reload the plan page and try again.".into(),
+        ),
+    };
+    match outcome {
         Ok(result) => {
             let mut msg = result.message;
             if !result.entity_statuses.is_empty() {
