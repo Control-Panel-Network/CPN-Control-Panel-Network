@@ -243,19 +243,47 @@ pub fn group_members(group_file: &str, passwd_file: &str, group: &str) -> Vec<St
     }
     members
 }
-/// True for SSH auth log lines that belong to SFTP or to a jailed SFTP account.
+/// Messages `internal-sftp -l INFO` writes through sshd for file operations and sessions.
+const SFTP_OPERATIONS: [&str; 14] = [
+    "open \"",
+    "opendir \"",
+    "close \"",
+    "remove \"",
+    "rename \"",
+    "mkdir \"",
+    "rmdir \"",
+    "setstat \"",
+    "symlink ",
+    "readlink \"",
+    "realpath \"",
+    "session opened for local user",
+    "session closed for local user",
+    "received client version",
+];
+
+/// True for SSH auth log lines that belong to SFTP: sftp-server records, logged file operations
+/// and anything sshd says about a jailed SFTP account.
 pub fn sftp_line_matches(line: &str, members: &[String]) -> bool {
     let lower = line.to_ascii_lowercase();
-    if lower.contains("sftp") {
+    if lower.contains("internal-sftp") || lower.contains("sftp-server") {
         return true;
     }
     if !lower.contains("sshd") {
         return false;
     }
+    if lower.contains("sftp") {
+        return true;
+    }
+    if let Some((_, message)) = line.split_once("]: ")
+        && SFTP_OPERATIONS
+            .iter()
+            .any(|op| message.trim_start().starts_with(op))
+    {
+        return true;
+    }
     line.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')))
         .any(|tok| members.iter().any(|m| m == tok))
 }
-
 /// FTP daemon log (if any) plus jailed SFTP lines from the SSH auth log.
 fn collect_ftp() -> Option<Collected> {
     let mut out = Collected::default();
@@ -346,6 +374,14 @@ mod tests {
             &members
         ));
         assert!(sftp_line_matches("internal-sftp[2]: open \"/x\"", &members));
+        // File operations arrive as plain sshd records without the account name.
+        assert!(sftp_line_matches(
+            "Oct  1 15:59:16 h sshd-session[138561]: open \"/public_html/a.txt\" flags WRITE mode 0666 [postauth]",
+            &members
+        ));
+        assert!(sftp_line_matches("Oct  1 15:59:16 h sshd-session[1]: opendir \"/\" [postauth]", &members));
+        // A sudo command that merely mentions sftp is not an SFTP record.
+        assert!(!sftp_line_matches("sudo[1]: cpn : COMMAND=/bin/grep sftp /var/log/secure", &members));
         assert!(!sftp_line_matches(
             "sshd[1]: Accepted password for root from 1.2.3.4",
             &members
@@ -381,6 +417,59 @@ mod tests {
         assert!(safe_site_file(&real));
         assert!(!safe_site_file(&logs.join("missing.log")));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn temp_site(name: &str) -> (SiteRecord, std::path::PathBuf) {
+        let home = std::env::temp_dir().join(format!("cpn-logs-{name}-{}", std::process::id()));
+        fs::create_dir_all(home.join("public_html")).unwrap();
+        fs::create_dir_all(home.join("logs")).unwrap();
+        let site = SiteRecord {
+            schema_version: 1,
+            domain: "example.com".into(),
+            owner: "alice".into(),
+            docroot: home.join("public_html").to_string_lossy().into_owned(),
+            enabled: true,
+            engine: None,
+            notes: String::new(),
+            created_at_unix: 0,
+            updated_at_unix: 0,
+            vhost_wired: false,
+            ssl: Default::default(),
+            internal_ip: None,
+            owner_suspend_message: String::new(),
+            suspended_by: None,
+            php_version: None,
+            aliases: Vec::new(),
+            staging_of: None,
+        };
+        (site, home)
+    }
+
+    #[test]
+    fn site_scope_reads_only_the_jailed_site_log_with_domain_badge() {
+        let (site, home) = temp_site("scope");
+        fs::write(
+            home.join("logs/access.log"),
+            "1.1.1.1 - - [01/Oct/2026:10:00:00 +0200] \"GET / HTTP/1.1\" 200 1\n",
+        )
+        .unwrap();
+        let got = collect(HostLogKind::Access, &Scope::Sites(vec![site])).unwrap();
+        assert_eq!(got.lines.len(), 1);
+        assert_eq!(got.lines[0].scope, "example.com");
+        assert_eq!(got.sources.len(), 1);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_site_log_is_never_followed() {
+        let (site, home) = temp_site("symlink");
+        let secret = home.join("secret.txt");
+        fs::write(&secret, "top secret\n").unwrap();
+        std::os::unix::fs::symlink(&secret, home.join("logs/access.log")).unwrap();
+        let got = collect(HostLogKind::Access, &Scope::Sites(vec![site]));
+        assert!(got.is_none());
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]
