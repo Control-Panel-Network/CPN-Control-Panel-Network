@@ -22,8 +22,9 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const VIRTUAL_DOMAINS_PATH: &str = "/etc/postfix/cpn_virtual_domains";
 pub const VIRTUAL_ALIASES_PATH: &str = "/etc/postfix/cpn_virtual_aliases";
 
-const DOMAINS_REF: &str = "hash:/etc/postfix/cpn_virtual_domains";
-const ALIASES_REF: &str = "hash:/etc/postfix/cpn_virtual_aliases";
+/// Fallback map type when `postconf default_database_type` is unavailable.
+/// AlmaLinux 10 ships Postfix without the `hash` type (it uses `lmdb`).
+const FALLBACK_MAP_TYPE: &str = "hash";
 
 /// Desired hosted-domain routing derived from the panel mailbox registry.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -123,20 +124,36 @@ pub fn render_virtual_aliases(plan: &HostedMailPlan, target_host: &str) -> Strin
     out
 }
 
-/// Append `reference` to an existing Postfix list value unless already present.
+/// Map type reference such as `lmdb:/etc/postfix/cpn_virtual_domains`.
+pub fn map_reference(map_type: &str, path: &str) -> String {
+    format!("{map_type}:{path}")
+}
+
+/// Add `reference` to an existing Postfix list value unless already present.
+///
+/// Entries that point at the same file with a different map type (for example a
+/// leftover `hash:` reference after the host switched to `lmdb:`) are replaced.
 pub fn merge_list_value(existing: &str, reference: &str) -> String {
-    let current = existing.trim();
-    if current.is_empty() {
-        return reference.to_string();
-    }
-    let present = current
+    let exact = existing
         .split(|c: char| c == ',' || c.is_whitespace())
         .any(|part| part == reference);
-    if present {
-        current.to_string()
-    } else {
-        format!("{current}, {reference}")
+    if exact {
+        return existing.trim().to_string();
     }
+    let path = reference.split_once(':').map_or(reference, |(_, p)| p);
+    let mut parts: Vec<String> = Vec::new();
+    for part in existing
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|p| !p.is_empty())
+    {
+        let same_file = part.split_once(':').is_some_and(|(_, p)| p == path);
+        if same_file {
+            continue;
+        }
+        parts.push(part.to_string());
+    }
+    parts.push(reference.to_string());
+    parts.join(", ")
 }
 
 #[cfg(unix)]
@@ -166,10 +183,28 @@ mod unix_impl {
             .collect()
     }
 
-    fn write_map_if_changed(path: &str, body: &str) -> Result<bool, String> {
+    /// Postfix map type for this host (`lmdb` on AlmaLinux 10, `hash` on older releases).
+    fn map_type() -> String {
+        let value = postconf_value(&["-h", "default_database_type"]);
+        let known = !value.is_empty()
+            && value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+        if known {
+            value
+        } else {
+            FALLBACK_MAP_TYPE.to_string()
+        }
+    }
+
+    fn map_db_exists(map_type: &str, path: &str) -> bool {
+        let suffix = if map_type == "lmdb" { "lmdb" } else { "db" };
+        Path::new(&format!("{path}.{suffix}")).exists()
+    }
+
+    fn write_map_if_changed(map_type: &str, path: &str, body: &str) -> Result<bool, String> {
         let current = fs::read_to_string(path).unwrap_or_default();
-        let db_present = Path::new(&format!("{path}.lmdb")).exists()
-            || Path::new(&format!("{path}.db")).exists();
+        let db_present = map_db_exists(map_type, path);
         if current == body && db_present {
             return Ok(false);
         }
@@ -178,15 +213,15 @@ mod unix_impl {
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o644));
         }
-        let status = Command::new("postmap")
-            .arg(format!("hash:{path}"))
+        let output = Command::new("postmap")
+            .arg(map_reference(map_type, path))
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
+            .output()
             .map_err(|e| format!("postmap failed to start for {path}: {e}"))?;
-        if !status.success() {
-            return Err(format!("postmap failed for {path}"));
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            let detail = detail.trim().lines().last().unwrap_or("").trim();
+            return Err(format!("postmap ({map_type}) failed for {path}: {detail}"));
         }
         let _ = Command::new("restorecon")
             .args(["-F", path])
@@ -263,14 +298,25 @@ mod unix_impl {
             ..HostedMailReport::default()
         };
         // Aliases first so a domain is never accepted without its mailbox table.
+        let map_type = map_type();
         report.files_changed |= write_map_if_changed(
+            &map_type,
             VIRTUAL_ALIASES_PATH,
             &render_virtual_aliases(&plan, &target_host),
         )?;
-        report.files_changed |=
-            write_map_if_changed(VIRTUAL_DOMAINS_PATH, &render_virtual_domains(&plan))?;
-        report.main_cf_changed |= set_postconf_list("virtual_alias_maps", ALIASES_REF)?;
-        report.main_cf_changed |= set_postconf_list("virtual_alias_domains", DOMAINS_REF)?;
+        report.files_changed |= write_map_if_changed(
+            &map_type,
+            VIRTUAL_DOMAINS_PATH,
+            &render_virtual_domains(&plan),
+        )?;
+        report.main_cf_changed |= set_postconf_list(
+            "virtual_alias_maps",
+            &map_reference(&map_type, VIRTUAL_ALIASES_PATH),
+        )?;
+        report.main_cf_changed |= set_postconf_list(
+            "virtual_alias_domains",
+            &map_reference(&map_type, VIRTUAL_DOMAINS_PATH),
+        )?;
         if report.files_changed || report.main_cf_changed {
             reload_postfix();
         }
@@ -406,9 +452,18 @@ mod tests {
 
     #[test]
     fn merge_list_value_is_idempotent_and_preserves_existing() {
-        assert_eq!(merge_list_value("", DOMAINS_REF), DOMAINS_REF);
-        let merged = merge_list_value("hash:/etc/postfix/virtual", DOMAINS_REF);
-        assert_eq!(merged, format!("hash:/etc/postfix/virtual, {DOMAINS_REF}"));
-        assert_eq!(merge_list_value(&merged, DOMAINS_REF), merged);
+        let domains = map_reference("lmdb", VIRTUAL_DOMAINS_PATH);
+        assert_eq!(merge_list_value("", &domains), domains);
+        let merged = merge_list_value("hash:/etc/postfix/virtual", &domains);
+        assert_eq!(merged, format!("hash:/etc/postfix/virtual, {domains}"));
+        assert_eq!(merge_list_value(&merged, &domains), merged);
+    }
+
+    #[test]
+    fn merge_list_value_replaces_stale_map_type_for_same_file() {
+        let lmdb = map_reference("lmdb", VIRTUAL_ALIASES_PATH);
+        let stale = map_reference("hash", VIRTUAL_ALIASES_PATH);
+        let merged = merge_list_value(&format!("hash:/etc/postfix/virtual, {stale}"), &lmdb);
+        assert_eq!(merged, format!("hash:/etc/postfix/virtual, {lmdb}"));
     }
 }
