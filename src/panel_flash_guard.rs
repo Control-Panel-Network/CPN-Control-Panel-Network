@@ -12,12 +12,12 @@
 //!   handlers, so every existing page keeps reading `notice` and `error` unchanged, and the
 //!   cookie is cleared once a page rendered.
 
+use actix_web::Error;
 use actix_web::HttpResponse;
 use actix_web::body::EitherBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{ACCEPT, HeaderValue, LOCATION, SET_COOKIE};
 use actix_web::http::{Method, Uri};
-use actix_web::{Error, HttpMessage};
 use futures_util::future::LocalBoxFuture;
 use std::future::{Ready, ready};
 use std::rc::Rc;
