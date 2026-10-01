@@ -1,7 +1,9 @@
 //! Hub HTML for Backups, Settings, and Security stubs.
 
 use crate::backup_restore_detect::BackupFormat;
-use crate::backup_restore_scan::{documented_upload_locations, list_restore_archives_with_fallback};
+use crate::backup_restore_scan::{
+    documented_upload_locations, list_restore_archives_with_fallback,
+};
 use crate::panel_backups::{BackupsPageQuery, backups_create_main};
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
@@ -41,7 +43,8 @@ pub fn backups_create_page(q: BackupsPageQuery<'_>) -> String {
 }
 
 fn site_options(sites: &[SiteRecord], selected: &str) -> String {
-    let mut out = String::from(r#"<option value="">Select domain (optional for recreate)</option>"#);
+    let mut out =
+        String::from(r#"<option value="">Select domain (optional for recreate)</option>"#);
     for site in sites {
         let sel = if site.domain == selected {
             " selected"

@@ -261,10 +261,8 @@ mod tests {
     #[test]
     fn infer_domain_from_classic_backup_name() {
         assert_eq!(
-            infer_domain_from_archive_name(
-                "backup-newstargeted.com-10.01.2026_19-33-23.tar.gz"
-            )
-            .as_deref(),
+            infer_domain_from_archive_name("backup-newstargeted.com-10.01.2026_19-33-23.tar.gz")
+                .as_deref(),
             Some("newstargeted.com")
         );
         assert_eq!(

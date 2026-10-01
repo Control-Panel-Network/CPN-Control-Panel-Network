@@ -273,7 +273,9 @@ mod tests {
     #[test]
     fn upgrade_cleanup_never_targets_mfa_tree() {
         assert!(is_preserved(Path::new("/var/lib/cpn/mfa")));
-        assert!(is_preserved(Path::new("/var/lib/cpn/mfa/mfa-encryption.key")));
+        assert!(is_preserved(Path::new(
+            "/var/lib/cpn/mfa/mfa-encryption.key"
+        )));
         assert!(is_preserved(Path::new("/var/lib/cpn/mfa/cpnowner.json")));
         assert!(is_preserved(Path::new(
             "/var/lib/cpn/mfa/passkeys/cpnowner.json"

@@ -68,7 +68,12 @@ fn push_dir_hits(
 }
 
 /// Shallow scan of a directory (non-recursive) for archive-like files.
-fn scan_shallow(dir: &Path, provenance: &str, out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections::HashSet<PathBuf>) {
+fn scan_shallow(
+    dir: &Path,
+    provenance: &str,
+    out: &mut Vec<RestoreArchiveHit>,
+    seen: &mut std::collections::HashSet<PathBuf>,
+) {
     push_dir_hits(dir, provenance, false, out, seen);
 }
 
@@ -89,13 +94,7 @@ fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections:
         let name = entry.file_name().to_string_lossy().to_string();
         // Skip huge application trees; only look at backups dirs and top-level archives.
         let backups = path.join("backups");
-        push_dir_hits(
-            &backups,
-            &format!("/home/{name}/backups"),
-            false,
-            out,
-            seen,
-        );
+        push_dir_hits(&backups, &format!("/home/{name}/backups"), false, out, seen);
         scan_shallow(&path, &format!("/home/{name}"), out, seen);
         // Subdomain layout: /home/<parent>/<sub.fqdn>/backups
         if let Ok(children) = fs::read_dir(&path) {
@@ -121,10 +120,7 @@ fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections:
 /// Documented upload locations shown on the Restore UI (always, even if empty).
 pub fn documented_upload_locations() -> Vec<(&'static str, &'static str)> {
     vec![
-        (
-            "Preferred (site)",
-            "/home/<domain>/backups/",
-        ),
+        ("Preferred (site)", "/home/<domain>/backups/"),
         (
             "Preferred (subdomain)",
             "/home/<parent>/<sub.fqdn>/backups/",
@@ -234,13 +230,9 @@ pub fn find_restore_archive(
         return Err("Archive name must be a single filename (no path).".into());
     }
     let (_pref, hits) = list_restore_archives_with_fallback(scope, domain)?;
-    hits.into_iter()
-        .find(|h| h.name == name)
-        .ok_or_else(|| {
-            format!(
-                "Archive `{name}` was not found under preferred or fallback upload locations."
-            )
-        })
+    hits.into_iter().find(|h| h.name == name).ok_or_else(|| {
+        format!("Archive `{name}` was not found under preferred or fallback upload locations.")
+    })
 }
 
 #[cfg(test)]
@@ -252,9 +244,15 @@ mod tests {
     #[test]
     fn documents_preferred_and_fallback_paths() {
         let docs = documented_upload_locations();
-        assert!(docs.iter().any(|(_, p)| p.contains("/home/<domain>/backups")));
+        assert!(
+            docs.iter()
+                .any(|(_, p)| p.contains("/home/<domain>/backups"))
+        );
         assert!(docs.iter().any(|(_, p)| p.contains("/var/lib/cpn/backups")));
-        assert!(docs.iter().any(|(label, _)| label.contains("Operator drop")));
+        assert!(
+            docs.iter()
+                .any(|(label, _)| label.contains("Operator drop"))
+        );
     }
 
     #[test]
