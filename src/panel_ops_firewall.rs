@@ -6,11 +6,10 @@ use crate::panel_firewall_store::{
     is_protected_ip, load_store, purge_expired_bans, save_store, validate_ip_or_cidr,
 };
 use crate::panel_host_info::host_sidebar_info;
-use crate::panel_ops_security::{cmd_ok, firewall_status, which_exists};
+use crate::panel_ops_security::{cmd_output_timeout, firewall_status, which_exists};
 use crate::panel_session::session_secret;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
-use std::process::Command;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -53,21 +52,26 @@ pub fn verify_firewall_csrf(username: &str, token: &str) -> bool {
     expected == sig
 }
 
-fn firewall_cmd(args: &[&str]) -> Result<String, String> {
+/// Run firewall-cmd with a wall-clock budget. Refuses when firewalld is not running,
+/// because firewall-cmd blocks on D-Bus ("Waiting on dbus connection...") in that state.
+pub(crate) fn firewall_cmd_timed(args: &[&str]) -> Result<String, String> {
     if !which_exists("firewall-cmd") {
         return Err("firewall-cmd not found".into());
     }
-    let out = Command::new("firewall-cmd")
-        .args(args)
-        .output()
-        .map_err(|e| format!("firewall-cmd failed: {e}"))?;
-    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if !out.status.success() {
+    if crate::panel_ops_security::systemctl_active("firewalld") != "active" {
+        return Err("firewalld is not running".into());
+    }
+    let (ok, stdout, stderr) = cmd_output_timeout("firewall-cmd", args, 15)
+        .ok_or_else(|| format!("firewall-cmd {} timed out", args.join(" ")))?;
+    if !ok {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         return Err(format!("firewall-cmd {}: {detail}", args.join(" ")));
     }
     Ok(stdout)
+}
+
+fn firewall_cmd(args: &[&str]) -> Result<String, String> {
+    firewall_cmd_timed(args)
 }
 
 pub fn panel_listen_port() -> u16 {
@@ -92,20 +96,17 @@ pub fn start_firewall() -> Result<String, String> {
     if !which_exists("firewall-cmd") {
         return Err("firewalld is not installed".into());
     }
-    if !cmd_ok("systemctl", &["enable", "--now", "firewalld"]) {
-        return Err("Could not start firewalld".into());
-    }
+    crate::panel_ops_firewall_heal::clear_operator_stopped();
+    let msg = crate::panel_ops_firewall_heal::start_with_baseline()?;
     ensure_panel_port_open()?;
-    let _ = firewall_cmd(&["--permanent", "--add-service=http"]);
-    let _ = firewall_cmd(&["--permanent", "--add-service=https"]);
-    let _ = firewall_cmd(&["--permanent", "--add-service=ssh"]);
-    let _ = firewall_cmd(&["--reload"]);
-    ensure_panel_port_open()?;
-    Ok("Firewall started and panel port kept open".into())
+    Ok(msg)
 }
 
 pub fn stop_firewall() -> Result<String, String> {
-    if !cmd_ok("systemctl", &["stop", "firewalld"]) {
+    // Remember the operator's choice so the start-up heal does not undo it.
+    crate::panel_ops_firewall_heal::mark_operator_stopped();
+    if !crate::panel_ops_security::cmd_ok_timeout("systemctl", &["stop", "firewalld"], 30) {
+        crate::panel_ops_firewall_heal::clear_operator_stopped();
         return Err("Could not stop firewalld".into());
     }
     Ok("Firewall stopped. Panel remains reachable until you start it again.".into())
