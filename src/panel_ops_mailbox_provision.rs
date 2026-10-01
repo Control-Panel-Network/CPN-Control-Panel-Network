@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-fn local_part(address: &str) -> Result<String, String> {
+pub(crate) fn local_part(address: &str) -> Result<String, String> {
     let address = address.trim().to_ascii_lowercase();
     let Some((user, domain)) = address.split_once('@') else {
         return Err("Mailbox address must include @domain".into());
@@ -25,7 +25,7 @@ fn local_part(address: &str) -> Result<String, String> {
     Ok(user.to_string())
 }
 
-fn user_exists(user: &str) -> bool {
+pub(crate) fn user_exists(user: &str) -> bool {
     Command::new("id")
         .arg(user)
         .stdin(Stdio::null())
