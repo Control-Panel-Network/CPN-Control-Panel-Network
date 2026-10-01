@@ -133,11 +133,9 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
     );
 
     if let Some((free_mb, total_mb)) = free_disk_mb("/") {
-        let pct_free = if total_mb == 0 {
-            100
-        } else {
-            (free_mb * 100) / total_mb
-        };
+        let pct_free = (free_mb.saturating_mul(100))
+            .checked_div(total_mb)
+            .unwrap_or(100);
         let status = if pct_free < 5 {
             CheckStatus::Fail
         } else if pct_free < 15 {

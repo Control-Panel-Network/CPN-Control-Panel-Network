@@ -108,6 +108,7 @@ impl RepairReport {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push(
     checks: &mut Vec<RepairCheck>,
     id: &str,
@@ -171,14 +172,14 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         };
         out.push(result);
     }
-    if out.is_empty() {
-        if let Some(w) = want {
-            out.push(HealResult {
-                heal_id: w.into(),
-                ok: false,
-                message: format!("No heal registered for id `{w}`"),
-            });
-        }
+    if out.is_empty()
+        && let Some(w) = want
+    {
+        out.push(HealResult {
+            heal_id: w.into(),
+            ok: false,
+            message: format!("No heal registered for id `{w}`"),
+        });
     }
     out
 }
