@@ -112,6 +112,12 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/server/docker/apps", "boxes", IconTone::Cyan),
         ("/server/docker/containers", "container", IconTone::Blue),
         ("/server/docker/images", "hard-drive", IconTone::Violet),
+        ("/server/logs/panel", "file", IconTone::Violet),
+        ("/server/logs/access", "globe", IconTone::Blue),
+        ("/server/logs/error", "file", IconTone::Rose),
+        ("/server/logs/email", "mail", IconTone::Cyan),
+        ("/server/logs/ftp", "folder", IconTone::Amber),
+        ("/server/logs/modsec", "shield-alert", IconTone::Violet),
         ("/server/logs", "file", IconTone::Amber),
         ("/server/files", "folder", IconTone::Amber),
         ("/websites/files", "folder", IconTone::Amber),
@@ -163,7 +169,9 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
         "ssl" => ("lock", IconTone::Green),
         "apps" | "docker" => ("boxes", IconTone::Cyan),
         "users" | "packages" => ("users", IconTone::Blue),
-        "server" | "services" | "processes" | "package-manager" => ("server", IconTone::Slate),
+        "server" | "services" | "processes" | "logs" | "package-manager" => {
+            ("server", IconTone::Slate)
+        }
         "root-files" => ("folder", IconTone::Amber),
         "php" => ("plug", IconTone::Violet),
         "litespeed" => ("rocket", IconTone::Amber),

@@ -2,9 +2,10 @@
 
 use crate::panel_action_log::{ActionRecord, action_label, recent};
 use crate::panel_admin::is_panel_admin;
-use crate::panel_dashboard_activity_list::wrap_activity_table;
+use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table};
 use crate::panel_hubs::{HubTile, feature_shell, hub_tiles_grid};
 use crate::panel_ops_ssl_inspect::format_dd_mm_yyyy;
+use crate::panel_server_logs::HostLogKind;
 
 /// Rows shown in the table (newest first).
 pub const TABLE_LIMIT: usize = 200;
@@ -89,7 +90,16 @@ pub fn panel_actions_table(username: &str) -> String {
 }
 
 pub fn server_logs_page(username: &str) -> String {
-    let tiles = [
+    let mut tiles: Vec<HubTile<'static>> = Vec::new();
+    for kind in HostLogKind::ALL {
+        tiles.push(HubTile {
+            title: kind.title(),
+            subtitle: kind.subtitle(),
+            href: kind.href(),
+            live: true,
+        });
+    }
+    tiles.extend([
         HubTile {
             title: "Website access and error logs",
             subtitle: "Per site, jailed to each home (Manage > Logs)",
@@ -108,14 +118,15 @@ pub fn server_logs_page(username: &str) -> String {
             href: "/settings/logs",
             live: true,
         },
-    ];
+    ]);
     let body = format!(
         r#"{tiles}
 <h2 style="margin:20px 0 6px;">Panel activity</h2>
 <p class="muted">Plugin and host-package actions: install, activate, deactivate, attach to a site, start, stop and uninstall. Times are shown in your browser time zone.</p>
-{table}"#,
+{table}<script>{script}</script>"#,
         tiles = hub_tiles_grid("Log sources", &tiles),
         table = panel_actions_table(username),
+        script = activity_list_script(),
     );
     feature_shell(
         &[
