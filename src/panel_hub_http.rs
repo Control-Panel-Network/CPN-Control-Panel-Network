@@ -68,6 +68,52 @@ fn urldecoding_simple(value: &str) -> String {
     out
 }
 
+/// Longest a hub page may spend rendering before the browser gets a clean 503 instead of a
+/// hung connection that Actix would eventually answer with `408 Request Timeout`.
+pub const HUB_RENDER_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Render a hub page on the blocking pool so slow host probes (package database, container
+/// engine, firewall daemon) cannot occupy an Actix worker, and bound the wait.
+pub async fn html_blocking<F>(render: F) -> HttpResponse
+where
+    F: FnOnce() -> String + Send + 'static,
+{
+    match tokio::time::timeout(HUB_RENDER_BUDGET, tokio::task::spawn_blocking(render)).await {
+        Ok(Ok(body)) => html_ok(body),
+        Ok(Err(_)) => HttpResponse::InternalServerError()
+            .content_type("text/html; charset=utf-8")
+            .body("<!DOCTYPE html><title>Error</title><p>This page could not be rendered. Reload to try again.</p>"),
+        Err(_) => HttpResponse::ServiceUnavailable()
+            .insert_header(("Retry-After", "5"))
+            .content_type("text/html; charset=utf-8")
+            .body("<!DOCTYPE html><title>Busy</title><p>The panel is still gathering host status. Reload in a few seconds.</p>"),
+    }
+}
+
+/// In-page 403 for panel-owner-only pages. Replaces a redirect to the hub so the visitor sees
+/// why access was refused and which account is signed in, instead of a page that reloads.
+pub fn owner_only_html(username: &str, active: &str, title: &str) -> HttpResponse {
+    let who = username
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '@'))
+        .collect::<String>();
+    let body = format!(
+        r#"<div class="dashboard-heading"><div><p class="eyebrow">CPN PANEL</p><h1>{title}</h1></div></div>
+<article class="section-card">
+  <p class="panel-notice error">This page is only available to the panel owner account.</p>
+  <p class="muted">You are signed in as <strong>{who}</strong>. Sign out and sign in with the owner account (the first account created at install) to change this setting.</p>
+  <p><a class="btn-primary" href="/settings">Back to Settings overview</a> <a class="btn-secondary" href="/dashboard">Dashboard</a></p>
+</article>"#,
+        title = title.replace('&', "&amp;").replace('<', "&lt;"),
+        who = who,
+    );
+    HttpResponse::Forbidden()
+        .content_type("text/html; charset=utf-8")
+        .body(crate::panel_pages::panel_shell(
+            username, active, title, &body,
+        ))
+}
+
 pub fn redirect(path: &str) -> HttpResponse {
     HttpResponse::SeeOther()
         .append_header(("Location", path.to_string()))

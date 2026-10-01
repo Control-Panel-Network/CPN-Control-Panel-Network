@@ -112,6 +112,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/server/docker/apps", "boxes", IconTone::Cyan),
         ("/server/docker/containers", "container", IconTone::Blue),
         ("/server/docker/images", "hard-drive", IconTone::Violet),
+        ("/server/logs", "file", IconTone::Amber),
         ("/server/files", "folder", IconTone::Amber),
         ("/websites/files", "folder", IconTone::Amber),
         ("/filemanager", "folder", IconTone::Amber),

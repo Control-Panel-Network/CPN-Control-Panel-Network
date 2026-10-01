@@ -6,7 +6,9 @@ use crate::panel_error_messages::{
     PanelErrorMessages, load_messages, restore_all_builtins, restore_forbidden, restore_internal,
     restore_not_found, save_messages,
 };
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_error_messages::error_messages_settings_page;
 use crate::panel_markdown::render_safe_markdown;
 use crate::panel_pages::panel_shell;
@@ -23,9 +25,7 @@ pub async fn settings_error_messages_page(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Owner%20only"))
-            .finish();
+        return owner_only_html(&user, "settings", "Error messages");
     }
     html_ok(panel_shell(
         &user,

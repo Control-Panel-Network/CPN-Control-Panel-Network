@@ -225,7 +225,7 @@ pub async fn apps_activate(
                         &form.return_view,
                         "",
                         None,
-                        Some("Select a domain or subdomain to Activate"),
+                        Some("Select a domain or subdomain to attach to"),
                     ),
                 ))
                 .finish();
@@ -241,7 +241,7 @@ pub async fn apps_activate(
     };
     match (|| {
         if !is_associable(parsed) {
-            return Err("This host package cannot be activated per site".into());
+            return Err("This host package cannot be attached to a site".into());
         }
         let status = crate::apps::detect_app(parsed);
         if status.state == crate::apps::AppStateKind::NotInstalled {
@@ -286,7 +286,7 @@ pub async fn apps_deactivate(
                         &form.return_view,
                         "",
                         None,
-                        Some("Select a domain to Deactivate"),
+                        Some("Select a site to detach from"),
                     ),
                 ))
                 .finish();
@@ -392,7 +392,7 @@ pub async fn apps_uninstall(
                     &form.domain,
                     None,
                     Some(
-                        "Only the panel admin can uninstall Host packages. Use Deactivate for your site.",
+                        "Only the panel admin can uninstall Host packages. Use Detach from site for your site.",
                     ),
                 ),
             ))

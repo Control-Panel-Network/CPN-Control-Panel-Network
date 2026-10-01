@@ -3,7 +3,8 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+    html_blocking, html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
+    urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{
     docker_create_page, docker_images_page, docker_logs_page, docker_manage_page,
@@ -20,7 +21,7 @@ use crate::panel_hub_pages_server::{
 };
 use crate::panel_hub_pages_server_net::change_port_page;
 use crate::panel_hub_pages_settings::{
-    connect_page, design_settings_page, settings_hub_main, setup_wizard_page_with,
+    connect_page, design_settings_page, settings_hub_main_with, setup_wizard_page_with,
     version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
@@ -37,7 +38,9 @@ pub async fn server_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> 
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(&user, "server", "Server", &server_hub_main()))
+    // Host probes behind the sidebar and hub tiles run on the blocking pool with a bounded
+    // wait, so a slow probe can no longer pin a worker and surface as `408 Request Timeout`.
+    html_blocking(move || panel_shell(&user, "server", "Server", &server_hub_main())).await
 }
 
 #[get("/server/services")]
@@ -969,16 +972,26 @@ pub async fn docker_stack_refresh(
 }
 
 #[get("/settings")]
-pub async fn settings_page(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+pub async fn settings_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
-        &user,
-        "settings",
-        "Settings",
-        &settings_hub_main(),
-    ))
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    html_blocking(move || {
+        let owner = is_panel_admin(&user);
+        panel_shell(
+            &user,
+            "settings",
+            "Settings",
+            &settings_hub_main_with(owner, notice.as_deref(), error.as_deref()),
+        )
+    })
+    .await
 }
 
 #[get("/settings/version")]
@@ -1111,9 +1124,7 @@ pub async fn settings_site_messages_page(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return owner_only_html(&user, "settings", "Site messages");
     }
     html_ok(panel_shell(
         &user,
