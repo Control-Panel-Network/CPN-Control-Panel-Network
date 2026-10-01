@@ -411,6 +411,8 @@ mod tests {
             "/databases",
             "/databases/all",
             "/databases/create",
+            "/databases/password",
+            "/databases/delete",
             "/databases/manager",
             "/ftp/create",
             "/email/accounts",

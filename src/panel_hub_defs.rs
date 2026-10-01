@@ -494,8 +494,14 @@ pub fn databases_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 },
                 HubTile {
                     title: "Delete Database",
-                    subtitle: "Remove a database",
+                    subtitle: "Confirm and remove",
                     href: "/databases/delete",
+                    live: true,
+                },
+                HubTile {
+                    title: "Change password",
+                    subtitle: "Reset MariaDB user password",
+                    href: "/databases/password",
                     live: true,
                 },
                 HubTile {

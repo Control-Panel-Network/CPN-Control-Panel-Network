@@ -410,7 +410,7 @@ pub fn databases_status_main(notice: Option<&str>, error: Option<&str>) -> Strin
         <p class="muted">phpMyAdmin: {pma_detail} Local URL when wired: <code>{pma_url}</code>.</p>
         {install}
         <p class="muted">Default stack is MariaDB plus phpMyAdmin. CPN does not install Oracle MySQL as a host package.</p>
-        <p class="muted">Registry entries below count toward package quotas. Full MariaDB user grants land in a later release.</p>
+        <p class="muted">Use <a href="/databases/all">All Databases</a> to change passwords or delete with typed-name confirmation. Registry entries below still count toward package quotas.</p>
         <h3 style="margin:18px 0 8px;font-size:15px;">Register database (quota)</h3>
         <form method="post" action="/databases/create" class="stack-form" style="display:grid;gap:10px;max-width:420px;">
           <label>Name <input name="name" required maxlength="64" placeholder="app_db"></label>

@@ -131,6 +131,14 @@ const DATABASES_CHILDREN: &[NavChild] = &[
         href: "/databases/create",
     },
     NavChild {
+        label: "Change password",
+        href: "/databases/password",
+    },
+    NavChild {
+        label: "Delete Database",
+        href: "/databases/delete",
+    },
+    NavChild {
         label: "phpMyAdmin",
         href: "/databases/phpmyadmin",
     },

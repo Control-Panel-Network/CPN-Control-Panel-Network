@@ -203,6 +203,38 @@ pub fn create_ftp_account(
     Ok(record)
 }
 
+
+pub fn find_database(name_raw: &str) -> Option<DatabaseRecord> {
+    let name = name_raw.trim();
+    if name.is_empty() {
+        return None;
+    }
+    list_databases()
+        .into_iter()
+        .find(|d| d.name.eq_ignore_ascii_case(name))
+}
+
+pub fn delete_database(name_raw: &str) -> Result<DatabaseRecord, String> {
+    let name = name_raw.trim().to_ascii_lowercase();
+    if name.is_empty() {
+        return Err("Database name is required".into());
+    }
+    let mut file = load_databases_file();
+    let Some(pos) = file
+        .databases
+        .iter()
+        .position(|d| d.name.eq_ignore_ascii_case(&name))
+    else {
+        return Err(format!("Database {name} not found in registry"));
+    };
+    let removed = file.databases.remove(pos);
+    file.schema_version = SCHEMA_VERSION;
+    let raw = serde_json::to_string_pretty(&file)
+        .map_err(|e| format!("Could not serialize databases: {e}"))?;
+    write_json(&databases_path(), &raw)?;
+    Ok(removed)
+}
+
 pub fn delete_ftp_account(username_raw: &str) -> Result<(), String> {
     let username = username_raw.trim().to_ascii_lowercase();
     if username.is_empty() {
@@ -239,6 +271,10 @@ mod tests {
             delete_ftp_account("siteftp").unwrap();
             assert!(list_ftp_accounts().is_empty());
             assert!(create_database("admin", "app_db", "").is_err());
+            let removed = delete_database("app_db").unwrap();
+            assert_eq!(removed.name, "app_db");
+            assert!(list_databases().is_empty());
+            assert!(find_database("app_db").is_none());
         });
     }
 }
