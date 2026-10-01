@@ -210,8 +210,7 @@ pub fn mark_restarting(message: &str) -> Result<(), String> {
 pub fn clear_with_reason(_reason: &str) -> Result<(), String> {
     let path = flag_path();
     if path.exists() {
-        fs::remove_file(&path)
-            .map_err(|e| format!("Could not clear {}: {e}", path.display()))?;
+        fs::remove_file(&path).map_err(|e| format!("Could not clear {}: {e}", path.display()))?;
     }
     let html = static_html_path();
     if html.exists() {
