@@ -84,7 +84,7 @@ const TOOL_GROUPS: &[ToolGroup] = &[
             },
             ToolLink {
                 label: "Forwarders",
-                href: "/email/forwarders",
+                href: "/email/forwarding",
                 icon_id: "email",
             },
         ],
@@ -101,7 +101,7 @@ const TOOL_GROUPS: &[ToolGroup] = &[
             },
             ToolLink {
                 label: "FTP / SFTP",
-                href: "/ftp",
+                href: "/ftp/accounts",
                 icon_id: "databases",
             },
             ToolLink {
@@ -412,4 +412,22 @@ pub fn dashboard_tool_groups() -> String {
     }
     out.push_str("</div>");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TOOL_GROUPS;
+
+    #[test]
+    fn dashboard_tool_links_avoid_known_dead_routes() {
+        for group in TOOL_GROUPS {
+            for tool in group.tools {
+                assert!(
+                    tool.href != "/email/forwarders" && tool.href != "/ftp",
+                    "dead dashboard link {}",
+                    tool.href
+                );
+            }
+        }
+    }
 }
