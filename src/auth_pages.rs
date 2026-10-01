@@ -346,9 +346,23 @@ const MFA_SESSION_WATCH_JS: &str = r#"
   var leaving=false;
   window.cpnMfaExpired=function(msg){
     if(leaving) return; leaving=true;
+    window.__cpnMfaLeaving=true;
+    try{ if(window.__cpnPasskeyAbort) window.__cpnPasskeyAbort.abort(); }catch(e){}
+    var status=document.getElementById('cpn-passkey-login-status');
+    if(status){ status.textContent=''; status.style.color=''; status.style.fontWeight=''; }
+    var btn=document.getElementById('i18n-passkey');
+    if(btn) btn.disabled=true;
     var b=document.getElementById('i18n-login-error');
     if(b){ b.hidden=false; b.removeAttribute('hidden'); b.textContent=msg||'Your sign-in session expired. Returning to sign in...'; }
-    setTimeout(function(){ location.replace(back); },1200);
+    var dest='/login?error=mfa_session_expired';
+    try{
+      var u=new URL(back, location.origin);
+      if(u.pathname.indexOf('/login')===0){
+        u.searchParams.set('error','mfa_session_expired');
+        dest=u.pathname+u.search;
+      }
+    }catch(e){}
+    setTimeout(function(){ location.replace(dest); },1200);
   };
   function check(){
     if(leaving) return;
@@ -735,6 +749,14 @@ mod tests {
         assert!(html.contains("/login/2fa/session"));
         assert!(html.contains("cpnMfaExpired"));
         assert!(html.contains("id=\"cpn-mfa-back\""));
+        assert!(
+            html.contains("error=mfa_session_expired") || html.contains("'mfa_session_expired'"),
+            "expiry redirect must carry a visible login error code"
+        );
+        assert!(
+            html.contains("__cpnPasskeyAbort") || html.contains("Waiting for authenticator"),
+            "passkey wait state must be clearable on expiry"
+        );
     }
     #[test]
     fn mfa_page_passkey_only_shows_operator_recovery_hint() {

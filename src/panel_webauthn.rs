@@ -35,7 +35,8 @@ use webauthn_rs::prelude::{
 
 pub use crate::panel_webauthn_client::passkey_client_script;
 
-const CEREMONY_TTL_SECS: u64 = 300;
+/// Keep in sync with `MFA_PENDING_TTL_SECONDS` so a passkey challenge outlives the MFA cookie.
+const CEREMONY_TTL_SECS: u64 = crate::panel_session::MFA_PENDING_TTL_SECONDS;
 const MAX_HOST_LEN: usize = 253;
 
 /// Which authenticator class register/start should enroll (UI stays one button).

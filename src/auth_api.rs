@@ -16,9 +16,9 @@ use crate::http_helpers::{
 };
 use crate::installer::AppState;
 use crate::login_next::{
-    clear_login_return_cookie_header, first_safe_next, login_location, login_return_cookie_header,
-    mfa_location, post_login_location, read_login_return_cookie, referer_return_path,
-    request_return_path,
+    clear_login_return_cookie_header, first_safe_next, login_error_message, login_location,
+    login_return_cookie_header, mfa_location, post_login_location, read_login_return_cookie,
+    referer_return_path, request_return_path,
 };
 use crate::login_service_gate::{evaluate_login_services, login_services_ready};
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
@@ -204,8 +204,36 @@ pub async fn login_page(
         return redirect_authed_after_login(&session_user, next.as_deref());
     }
     let secure = request_secure(&http);
+    let error_msg = login_error_message(query.error.as_deref()).map(str::to_string);
+    let payload_for_html = payload.clone();
+    let next_for_html = next.clone();
+    // Keep /login off the Actix worker for host probes, and never hang long enough for a
+    // browser `408` blank page (client_request_timeout) while other handlers are busy.
+    let body = match tokio::time::timeout(
+        std::time::Duration::from_secs(4),
+        tokio::task::spawn_blocking(move || {
+            panel_login_html(
+                &payload_for_html,
+                error_msg.as_deref(),
+                next_for_html.as_deref(),
+            )
+        }),
+    )
+    .await
+    {
+        Ok(Ok(html)) => html,
+        Ok(Err(_)) => login_fail_fast_html(
+            "Sign-in page could not be rendered. Reload to try again.",
+            next.as_deref(),
+        ),
+        Err(_) => login_fail_fast_html(
+            "The panel is busy checking host services. Reload in a few seconds to sign in.",
+            next.as_deref(),
+        ),
+    };
     let mut builder = HttpResponse::Ok();
     builder.content_type("text/html; charset=utf-8");
+    builder.insert_header(("Cache-Control", "no-store"));
     if let Some(ref path) = next
         && let Some(cookie) = login_return_cookie_header(path, secure)
     {
@@ -213,12 +241,48 @@ pub async fn login_page(
     } else if next.is_none() {
         builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
     }
-    builder.body(panel_login_html(&payload, None, next.as_deref()))
+    builder.body(body)
+}
+
+/// Minimal HTML so a timed-out /login render never returns an empty body.
+fn login_fail_fast_html(message: &str, next: Option<&str>) -> String {
+    let safe = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let href = crate::login_next::login_location(next);
+    format!(
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · CPN Panel</title></head><body style="font-family:Segoe UI,system-ui,sans-serif;margin:48px 20px;background:#f5f5f7;color:#1d1d1f;"><main style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #e0e0e0;border-radius:16px;padding:28px;"><p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p><h1 style="margin:0 0 12px;font-size:1.5rem;">Sign in</h1><p role="alert" style="margin:0 0 16px;padding:12px 14px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-weight:650;">{safe}</p><p><a href="{href}">Reload sign in</a></p></main></body></html>"#,
+        safe = safe,
+        href = href.replace('"', "&quot;"),
+    )
 }
 
 #[get("/api/login/services")]
 pub async fn login_services_status() -> HttpResponse {
-    HttpResponse::Ok().json(evaluate_login_services())
+    // Off the Actix worker so a slow gate cannot starve other /login requests.
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        tokio::task::spawn_blocking(evaluate_login_services),
+    )
+    .await
+    {
+        Ok(Ok(status)) => HttpResponse::Ok().json(status),
+        Ok(Err(_)) => HttpResponse::InternalServerError().json(serde_json::json!({
+            "ready": true,
+            "message": "Could not check panel services. Sign-in may still work; reload if the form stays disabled.",
+            "blocking": [],
+            "warnings": ["Service check failed unexpectedly."],
+        })),
+        Err(_) => HttpResponse::Ok()
+            .insert_header(("Retry-After", "3"))
+            .json(serde_json::json!({
+                "ready": true,
+                "message": "Service check is slow; sign-in is allowed. Reload if something looks wrong.",
+                "blocking": [],
+                "warnings": ["Service check timed out; sign-in left open."],
+            })),
+    }
 }
 
 fn services_not_ready_login(

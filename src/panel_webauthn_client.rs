@@ -328,14 +328,18 @@ async function cpnLoginPasskey(){{
 }}
 async function cpnMfaPasskey(){{
   const status=document.getElementById('cpn-passkey-login-status');
+  let abort=null;
   try{{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     if(cpnPreferLocalhostForPasskeys()) return;
     if(status){{ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }}
+    try{{ abort=new AbortController(); window.__cpnPasskeyAbort=abort; }}catch(e){{ abort=null; }}
     const start=await cpnJson('/login/2fa/passkey/start',{{}});
     const pk=await cpnDecodeGetOptions(start.publicKey);
-    const cred=await navigator.credentials.get({{publicKey:pk}});
+    const getOpts={{publicKey:pk}};
+    if(abort) getOpts.signal=abort.signal;
+    const cred=await navigator.credentials.get(getOpts);
     if(!cred) throw new Error('Passkey sign-in did not complete.');
     const finish=await cpnJson('/login/2fa/passkey/finish',{{
       ceremony_id:start.ceremony_id,
@@ -344,11 +348,17 @@ async function cpnMfaPasskey(){{
     }});
     location.href=finish.redirect||'/dashboard';
   }}catch(err){{
+    if(err&&err.name==='AbortError'&&window.__cpnMfaLeaving){{
+      // Session watch aborted an in-flight WebAuthn prompt; expiry banner already shown.
+      return;
+    }}
     if(err&&err.code==='mfa_session_expired'&&typeof window.cpnMfaExpired==='function'){{
       window.cpnMfaExpired(err.message);
       return;
     }}
     cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
+  }}finally{{
+    if(window.__cpnPasskeyAbort===abort) window.__cpnPasskeyAbort=null;
   }}
 }}
 "#
@@ -439,6 +449,10 @@ mod tests {
         assert!(
             script.contains("Waiting for authenticator..."),
             "single-button status must say Waiting for authenticator"
+        );
+        assert!(
+            script.contains("__cpnMfaLeaving") && script.contains("__cpnPasskeyAbort"),
+            "MFA passkey must abort cleanly on session expiry without silencing user cancel"
         );
         assert!(
             !script.contains("Waiting for Windows Hello"),

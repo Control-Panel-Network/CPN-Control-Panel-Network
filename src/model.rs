@@ -402,6 +402,9 @@ pub struct OptionalTokenQuery {
     /// Post-login return path (validated server-side; relative panel paths only).
     #[serde(default)]
     pub next: Option<String>,
+    /// Short auth error code shown on the login form (for example `mfa_session_expired`).
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
