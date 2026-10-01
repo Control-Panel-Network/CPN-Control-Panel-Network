@@ -14,7 +14,9 @@ use std::{
 pub const SESSION_COOKIE: &str = "cpn_panel_session";
 pub const MFA_PENDING_COOKIE: &str = "cpn_panel_mfa_pending";
 pub const SESSION_TTL_SECONDS: u64 = 60 * 60 * 12;
-pub const MFA_PENDING_TTL_SECONDS: u64 = 60 * 5;
+/// Password-ok / MFA-pending window. Must cover a normal WebAuthn prompt (Windows Hello,
+/// security key, PIN) without forcing the operator back to /login mid-ceremony.
+pub const MFA_PENDING_TTL_SECONDS: u64 = 60 * 15;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -300,5 +302,16 @@ mod tests {
         assert!(secure.contains("Secure"));
         let clear = clear_session_cookie_header(false);
         assert!(clear.contains("Max-Age=0"));
+    }
+
+    #[test]
+    fn mfa_pending_ttl_covers_authenticator_prompt() {
+        assert!(
+            MFA_PENDING_TTL_SECONDS >= 60 * 10,
+            "MFA pending cookie must survive a normal passkey prompt (got {}s)",
+            MFA_PENDING_TTL_SECONDS
+        );
+        let set = mfa_pending_cookie_header("tok", false);
+        assert!(set.contains(&format!("Max-Age={MFA_PENDING_TTL_SECONDS}")));
     }
 }

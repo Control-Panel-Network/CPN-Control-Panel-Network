@@ -6,6 +6,9 @@
 //! routes stay reachable outside this gate.
 //!
 //! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
+//!
+//! Results are cached briefly so `/login` and `/api/login/services` never spam
+//! `systemctl` on every poll (worker starvation → browser `408` blank page).
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
@@ -14,6 +17,13 @@ use crate::service_detect::{
 };
 use serde::Serialize;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// Reuse the last evaluation for a few seconds (login poll interval is 4s).
+const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(3);
+
+static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct LoginServiceStatus {
@@ -119,11 +129,7 @@ fn is_running_label(label: &str) -> bool {
     label == "Running"
 }
 
-/// Evaluate whether the login form may accept credentials.
-///
-/// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
-/// are not locked out.
-pub fn evaluate_login_services() -> LoginServiceStatus {
+fn evaluate_login_services_fresh() -> LoginServiceStatus {
     if gate_disabled_by_env() {
         return ready_status_unrestricted("");
     }
@@ -212,6 +218,32 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
     }
 }
 
+/// Evaluate whether the login form may accept credentials.
+///
+/// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
+/// are not locked out. Cached briefly to keep `/login` fast under poll load.
+pub fn evaluate_login_services() -> LoginServiceStatus {
+    if let Ok(guard) = LOGIN_GATE_CACHE.lock()
+        && let Some((at, ref status)) = *guard
+        && at.elapsed() < LOGIN_GATE_CACHE_TTL
+    {
+        return status.clone();
+    }
+
+    let status = evaluate_login_services_fresh();
+    if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
+        *guard = Some((Instant::now(), status.clone()));
+    }
+    status
+}
+
+/// Drop the cached gate result (tests / after service heal).
+pub fn invalidate_login_services_cache() {
+    if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
+        *guard = None;
+    }
+}
+
 /// True when password/passkey POST handlers may proceed.
 pub fn login_services_ready() -> bool {
     evaluate_login_services().ready
@@ -257,6 +289,7 @@ mod tests {
 
     #[test]
     fn evaluate_returns_struct_without_panic() {
+        invalidate_login_services_cache();
         let status = evaluate_login_services();
         let _ = status.ready;
         let _ = serde_json::to_string(&status).expect("serialize");
@@ -264,6 +297,7 @@ mod tests {
 
     #[test]
     fn env_can_disable_gate() {
+        invalidate_login_services_cache();
         unsafe {
             std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
         }
@@ -271,7 +305,23 @@ mod tests {
         unsafe {
             std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
         }
+        invalidate_login_services_cache();
         assert!(status.ready);
         assert!(status.blocking.is_empty());
+    }
+
+    #[test]
+    fn cache_reuses_recent_evaluation() {
+        invalidate_login_services_cache();
+        unsafe {
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
+        }
+        let first = evaluate_login_services();
+        let second = evaluate_login_services();
+        unsafe {
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
+        }
+        invalidate_login_services_cache();
+        assert_eq!(first, second);
     }
 }

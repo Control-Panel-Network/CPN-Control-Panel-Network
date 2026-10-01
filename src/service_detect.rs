@@ -2,8 +2,8 @@
 
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::Command;
-use std::time::Duration;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseStatus {
@@ -11,6 +11,60 @@ pub struct DatabaseStatus {
     pub service_label: String,
     pub listening_3306: bool,
     pub detail: String,
+}
+
+/// Bound for optional `systemctl` probes on the auth / dashboard path.
+const SYSTEMCTL_PROBE_BUDGET: Duration = Duration::from_millis(1500);
+
+fn kill_child(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// `systemctl` with a hard wall clock so a wedged systemd D-Bus never pins an Actix worker.
+fn systemctl_quiet_ok(args: &[&str]) -> bool {
+    let mut cmd = Command::new("systemctl");
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let Ok(mut child) = cmd.spawn() else {
+        return false;
+    };
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => {
+                if start.elapsed() >= SYSTEMCTL_PROBE_BUDGET {
+                    #[cfg(unix)]
+                    {
+                        let pid = child.id() as i32;
+                        if pid > 1 {
+                            let _ = Command::new("kill")
+                                .args(["-9", &format!("-{pid}")])
+                                .stdin(Stdio::null())
+                                .stdout(Stdio::null())
+                                .stderr(Stdio::null())
+                                .status();
+                        }
+                    }
+                    kill_child(&mut child);
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(_) => {
+                kill_child(&mut child);
+                return false;
+            }
+        }
+    }
 }
 
 /// True when a systemd unit file exists under `/usr/lib` or `/etc`.
@@ -33,11 +87,7 @@ pub fn systemd_unit_active(name: &str) -> bool {
     if !systemd_unit_file_exists(name) {
         return false;
     }
-    Command::new("systemctl")
-        .args(["is-active", "--quiet", name])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    systemctl_quiet_ok(&["is-active", "--quiet", name])
 }
 
 /// True when `systemctl is-enabled --quiet <name>` succeeds.
@@ -46,15 +96,7 @@ pub fn systemd_unit_enabled(name: &str) -> bool {
     if !systemd_unit_file_exists(name) {
         return false;
     }
-    use std::process::Stdio;
-    Command::new("systemctl")
-        .args(["is-enabled", "--quiet", name])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    systemctl_quiet_ok(&["is-enabled", "--quiet", name])
 }
 
 /// First matching active unit among `names`, with a human label.

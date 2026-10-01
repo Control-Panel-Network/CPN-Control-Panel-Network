@@ -81,6 +81,39 @@ pub fn login_location(next: Option<&str>) -> String {
     }
 }
 
+/// `/login` with a short `error=` code (and optional safe `next=`) so the form can show
+/// a visible message after MFA expiry instead of a silent blank reload.
+pub fn login_location_with_error(next: Option<&str>, error: &str) -> String {
+    let code = error
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .take(64)
+        .collect::<String>();
+    if code.is_empty() {
+        return login_location(next);
+    }
+    match next.and_then(sanitize_login_next) {
+        Some(n) => format!(
+            "/login?error={}&next={}",
+            percent_encode(&code),
+            percent_encode(&n)
+        ),
+        None => format!("/login?error={}", percent_encode(&code)),
+    }
+}
+
+/// Map short login `?error=` codes to operator-facing copy (never echo raw query text).
+pub fn login_query_error_message(code: Option<&str>) -> Option<&'static str> {
+    match code.map(str::trim).unwrap_or("") {
+        "mfa_session_expired" | "session_expired" => {
+            Some("Your sign-in session expired. Sign in again to continue.")
+        }
+        "passkey_failed" => Some("Passkey sign-in did not complete. Try again."),
+        "timeout" => Some("The panel took too long to respond. Try signing in again."),
+        _ => None,
+    }
+}
+
 pub fn mfa_location(next: Option<&str>) -> String {
     match next.and_then(sanitize_login_next) {
         Some(n) => format!("/login/2fa?next={}", percent_encode(&n)),
@@ -299,5 +332,22 @@ mod tests {
         let loc = login_location(Some("/websites?x=1"));
         assert!(loc.starts_with("/login?next="));
         assert!(loc.contains("%2Fwebsites"));
+    }
+
+    #[test]
+    fn login_error_codes_map_to_visible_copy() {
+        assert_eq!(
+            login_query_error_message(Some("mfa_session_expired")),
+            Some("Your sign-in session expired. Sign in again to continue.")
+        );
+        assert!(login_query_error_message(Some("<script>")).is_none());
+        assert_eq!(
+            login_location_with_error(None, "mfa_session_expired"),
+            "/login?error=mfa_session_expired"
+        );
+        assert!(
+            login_location_with_error(Some("/dashboard"), "mfa_session_expired")
+                .contains("error=mfa_session_expired")
+        );
     }
 }
