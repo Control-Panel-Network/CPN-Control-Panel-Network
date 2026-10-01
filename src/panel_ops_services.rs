@@ -1,4 +1,4 @@
-﻿//! Service status helpers (systemctl) for the Server hub.
+//! Service status helpers (systemctl) for the Server hub.
 
 use crate::service_detect::systemd_unit_file_exists;
 use std::process::{Command, Stdio};
@@ -65,11 +65,7 @@ fn systemctl_token(args: &[&str]) -> Option<String> {
         .unwrap_or("")
         .trim()
         .to_string();
-    if token.is_empty() {
-        None
-    } else {
-        Some(token)
-    }
+    if token.is_empty() { None } else { Some(token) }
 }
 
 /// Map systemd `ActiveState` / `is-active` tokens to panel UI copy.
