@@ -76,15 +76,20 @@ start_container() {
     # Minimal Rocky (and some apt) images omit systemd; install then exec as PID 1.
     entry=(
       bash -lc
-      'if command -v dnf >/dev/null 2>&1; then dnf install -y systemd systemd-udev; elif command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y systemd systemd-sysv; else echo missing systemd and no package manager >&2; exit 1; fi; exec /usr/lib/systemd/systemd'
+      'if command -v dnf >/dev/null 2>&1; then dnf install -y --setopt=fastestmirror=1 --setopt=max_parallel_downloads=10 --setopt=timeout=60 --setopt=retries=10 systemd systemd-udev; elif command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y systemd systemd-sysv; else echo missing systemd and no package manager >&2; exit 1; fi; exec /usr/lib/systemd/systemd'
     )
   fi
 
   "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
     --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
     -e container=docker "$image" "${entry[@]}" >/dev/null
-  # Rocky minimal may dnf-install systemd first; allow several minutes.
-  for _ in {1..360}; do
+  # Rocky minimal may dnf-install systemd first; mirrors on GHA can be slow (BaseOS
+  # metadata alone took about 6 minutes in one run), so allow up to 15 minutes.
+  for _ in {1..900}; do
+    if [[ "$("$engine" inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo false)" != "true" ]]; then
+      echo "Container $name exited before systemd was ready" >&2
+      break
+    fi
     if ! "$engine" exec "$name" bash -lc 'command -v systemctl >/dev/null' 2>/dev/null; then
       sleep 1
       continue
@@ -321,11 +326,33 @@ install_pkg() {
   local name="$1" pkg="$2" image="$3"
   local base
   base="$(basename "$pkg")"
-  "$engine" cp "$pkg" "$name:/tmp/$base"
+  # /var/tmp, not /tmp: systemd in the guest (Ubuntu 26.04) mounts a tmpfs on /tmp that hides
+  # files copied before the mount, which showed up as a missing/unsupported .deb.
+  "$engine" exec "$name" mkdir -p /var/tmp
+  "$engine" cp "$pkg" "$name:/var/tmp/$base"
   if is_apt_image "$image"; then
-    "$engine" exec "$name" bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y >/dev/null && apt-get install -y /tmp/$base >/dev/null"
+    # Install from /tmp with a ./ path so apt treats the argument as a local file; on
+    # failure dump diagnostics (apt/dpkg versions, DEB members) before failing the case.
+    # If apt still refuses the file, fall back to dpkg -i plus apt-get install -f so
+    # dependencies resolve, then require the package to be fully installed.
+    "$engine" exec "$name" bash -lc "
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y >/dev/null
+      cd /var/tmp && chmod 0644 ./$base
+      if ! apt-get install -y ./$base >/dev/null; then
+        echo '[DIAG] apt-get install failed' >&2
+        apt --version >&2 || true
+        dpkg --version | head -1 >&2 || true
+        ls -l ./$base >&2 || true
+        ar t ./$base >&2 || true
+        dpkg-deb -I ./$base >&2 || true
+        dpkg -i ./$base || true
+        apt-get install -f -y >/dev/null
+        dpkg -s cpn-installer | grep -q '^Status: install ok installed'
+      fi
+    "
   else
-    "$engine" exec "$name" dnf install -y "/tmp/$base" >/dev/null
+    "$engine" exec "$name" dnf install -y "/var/tmp/$base" >/dev/null
   fi
 }
 

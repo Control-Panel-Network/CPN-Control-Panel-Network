@@ -92,7 +92,7 @@ jobs:
       - name: Build matching DEB
         env:
           CPN_BUILD_IMAGE: ${{ matrix.image }}
-        run: ./scripts/docker-build-deb.sh
+        run: bash ./scripts/docker-build-deb.sh
       - name: Nginx smoke
         env:
           CPN_TEST_IMAGE: ${{ matrix.image }}
@@ -176,7 +176,7 @@ jobs:
         if: matrix.pkg == 'deb'
         env:
           CPN_BUILD_IMAGE: ${{ matrix.image }}
-        run: ./scripts/docker-build-deb.sh
+        run: bash ./scripts/docker-build-deb.sh
       - name: Nginx smoke
         env:
           CPN_TEST_IMAGE: ${{ matrix.image }}
