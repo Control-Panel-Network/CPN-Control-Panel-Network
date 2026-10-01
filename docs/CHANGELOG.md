@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 01/10/2026
+
+First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0.0 (Cargo, RPM and DEB metadata). This cut contains everything merged on `stable` up to the alpha.50 tip, including the Logs hub with real access, FTP/SFTP and ModSecurity viewers, per-site monthly bandwidth metering, admin-only Users and ACL pages, the unified Plugins Store, the Docker Active Containers UI, webmail clients under Email, and the Docker Hub tags `latest`, `almalinux9`, `almalinux10` and `ubuntu26.04`. See the sections below for per-feature detail.
+
 ### Added
 
 - **Package bandwidth metering**: Monthly transfer is now measured from each site's access log into a per-site ledger under `/var/lib/cpn/bandwidth/` (incremental reads, survives log rotation, resets each calendar month). **Packages > Your limits** shows used and limit with a percentage and an Over limit badge, the site Overview bandwidth card shows the month total against the package limit, and creating a new website is blocked while the account is over its monthly bandwidth limit (the same soft policy as disk). The "metering later" placeholder is gone.
