@@ -108,6 +108,7 @@ pub mod panel_error_messages;
 pub mod panel_feature_flags;
 pub mod panel_feature_gate;
 pub mod panel_firewall_store;
+pub mod panel_flash_guard;
 pub mod panel_footer_chrome;
 pub mod panel_host_info;
 pub mod panel_hub_defs;

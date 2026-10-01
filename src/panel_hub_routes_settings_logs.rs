@@ -3,7 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
+    html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_log_retention::log_retention_settings_page;
 use crate::panel_log_retention::{LogRetentionPrefs, save_log_retention};
@@ -52,9 +52,7 @@ pub async fn settings_logs_save(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return redirect_flash("/settings", None, Some("Admin only"));
     }
     let days = form
         .retention_days

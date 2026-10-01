@@ -1085,6 +1085,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cpn_installer::sidebar_access_guard::SidebarAccessGuard)
             .wrap(cpn_installer::panel_action_log_guard::ActionLogGuard)
+            .wrap(cpn_installer::panel_flash_guard::FlashGuard)
             .app_data(web::Data::new(state.clone()))
             .app_data(web::JsonConfig::default().limit(64 * 1024))
             .app_data(web::PayloadConfig::new(64 * 1024))

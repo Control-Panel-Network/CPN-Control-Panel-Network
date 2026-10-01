@@ -3,8 +3,8 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
-    urlencoding_simple,
+    html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
+    require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_docker::{
     docker_create_page, docker_images_page, docker_logs_page, docker_manage_page,
@@ -1183,9 +1183,7 @@ pub async fn settings_site_messages_save(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return redirect_flash("/settings", None, Some("Admin only"));
     }
     let mut defaults = load_defaults();
     defaults.suspend_message_html = form.suspend_message_html.clone();
@@ -1205,9 +1203,7 @@ pub async fn settings_site_messages_restore_suspend(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return redirect_flash("/settings", None, Some("Admin only"));
     }
     match restore_factory_suspend_message() {
         Ok(()) => redirect_notice(
@@ -1228,9 +1224,7 @@ pub async fn settings_site_messages_restore_site_ready(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return redirect_flash("/settings", None, Some("Admin only"));
     }
     match restore_factory_site_ready() {
         Ok(()) => redirect_notice(
@@ -1251,9 +1245,7 @@ pub async fn settings_site_messages_reset(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return HttpResponse::SeeOther()
-            .append_header(("Location", "/settings?error=Admin%20only"))
-            .finish();
+        return redirect_flash("/settings", None, Some("Admin only"));
     }
     match save_defaults(&SiteMessageDefaults {
         site_ready_html: builtin_site_ready_html().to_string(),
