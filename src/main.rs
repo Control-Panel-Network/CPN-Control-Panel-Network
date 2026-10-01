@@ -913,6 +913,8 @@ async fn main() -> std::io::Result<()> {
     println!("\nCPN Server Panel Â· Installer {VERSION}");
     println!("Starting the web installer (language detected from browser/system)...\n");
     cpn_installer::motd::ensure_motd_installed();
+    // Clear restarting / expired upgrade maintenance flags after a healthy boot.
+    cpn_installer::panel_maintenance_mode::heal_on_startup();
     // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
     std::thread::spawn(|| {
         cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
@@ -1092,6 +1094,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cpn_installer::sidebar_access_guard::SidebarAccessGuard)
             .wrap(cpn_installer::panel_action_log_guard::ActionLogGuard)
             .wrap(cpn_installer::panel_flash_guard::FlashGuard)
+            .wrap(cpn_installer::panel_maintenance_guard::PanelMaintenanceGuard)
             .app_data(web::Data::new(state.clone()))
             .app_data(web::JsonConfig::default().limit(64 * 1024))
             .app_data(web::PayloadConfig::new(64 * 1024))
@@ -1512,6 +1515,8 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
+            .service(cpn_installer::panel_maintenance_api::api_panel_maintenance)
+            .service(cpn_installer::panel_maintenance_api::maintenance_page)
             .route("/api/events", web::get().to(websocket))
             // Dedicated phpMyAdmin mount (must not fall through to installer SPA).
             .route(

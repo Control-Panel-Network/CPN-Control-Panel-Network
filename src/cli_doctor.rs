@@ -4,6 +4,13 @@ use crate::system_repair::{self, PRODUCT_NAME, RepairReport};
 
 /// Run System Repair. `heal` runs safe heals first. Optional `id` filters check or heal.
 pub fn run(heal: bool, json: bool, id: Option<&str>) -> Result<(), String> {
+    if heal {
+        if let Some(note) = crate::panel_maintenance_mode::heal_stuck() {
+            if !json {
+                println!("heal: {note}");
+            }
+        }
+    }
     let filter = id.map(str::trim).filter(|s| !s.is_empty());
     let report = system_repair::run_suite(heal, filter, filter);
     emit(&report, json)
@@ -18,6 +25,11 @@ pub fn run_check(json: bool, id: Option<&str>) -> Result<(), String> {
 
 /// Explicit heal subcommand (then re-check).
 pub fn run_heal(json: bool, id: Option<&str>) -> Result<(), String> {
+    if let Some(note) = crate::panel_maintenance_mode::heal_stuck() {
+        if !json {
+            println!("heal: {note}");
+        }
+    }
     let filter = id.map(str::trim).filter(|s| !s.is_empty());
     let report = system_repair::run_suite(true, filter, None);
     emit(&report, json)
