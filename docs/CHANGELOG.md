@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Version Management stable tip updates**: `/settings/version` compares the running panel commit (build embed, install-manifest `source_commit`, or installed release tag SHA) to the configured repo `stable` branch HEAD. Shows **Update available** when the tip SHA differs even if the semver string is still `1.0.0`. Operators can **Upgrade to stable tip** (commit/source build labeled `stable @ abc1234`) beside the existing release picker. No new GitHub Release tag is required for incremental `stable` merges.
+- **Install-manifest vs RPM identity**: stale `0.2.x-alpha.*` `install-manifest.json` no longer wins over a live `1.0.0` RPM; version resolve and reconcile prefer the newer package identity.
 
 ## [1.0.0] - 01/10/2026
 
