@@ -42,6 +42,16 @@ pub fn mail_for_app(id: AppId) -> Result<MailSystem, String> {
     }
 }
 
+fn app_id_for_mail(mail: MailSystem) -> Option<AppId> {
+    match mail {
+        MailSystem::Snappymail => Some(AppId::Snappymail),
+        MailSystem::Tachyon => Some(AppId::Tachyon),
+        MailSystem::Roundcube => Some(AppId::Roundcube),
+        MailSystem::Nextsnapmail => Some(AppId::Nextsnapmail),
+        MailSystem::Sogo | MailSystem::Thunderbird => None,
+    }
+}
+
 pub fn is_active_webmail(id: AppId) -> bool {
     let Ok(mail) = mail_for_app(id) else {
         return false;
@@ -307,7 +317,22 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
                     .to_string()
             })?;
             let state = quiet_app_state(engine);
+            // Installing a second client must not steal the operator's active webmail
+            // (product default is Tachyon). Remember it and restore after install.
+            let previous_active = crate::panel_webmail::detect_webmail_client()
+                .filter(|prev| *prev != mail && client_files_present(*prev));
             block_on_runtime(install_webmail(&state, mail, engine))?;
+            if let Some(prev) = previous_active
+                && let Some(prev_app) = app_id_for_mail(prev)
+            {
+                let restored = activate_webmail_app(prev_app)?;
+                return Ok(format!(
+                    "Installed {} under /opt/cpn-webmail. Active panel webmail stays {} (use Set as active to switch). {}",
+                    id.label(),
+                    prev_app.label(),
+                    restored
+                ));
+            }
             // Install already configured runtime + current symlink; persist preference + public path.
             save_active_pref(mail)?;
             let mut cfg = load_webmail_config();
