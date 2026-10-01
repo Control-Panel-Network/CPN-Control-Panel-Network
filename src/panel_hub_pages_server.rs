@@ -73,6 +73,29 @@ fn services_page_styles() -> &'static str {
 </style>"#
 }
 
+fn service_unit_label(row: &crate::panel_ops_services::ServiceRow) -> String {
+    let unit = html_escape(&row.unit);
+    match row.via.as_deref() {
+        Some("cli") => format!(r#"<code>{unit}</code> <span class="muted">(CLI)</span>"#),
+        Some(via) => format!(
+            r#"<code>{unit}</code> <span class="muted">(via {via})</span>"#,
+            via = html_escape(via),
+        ),
+        None => format!(r#"<code>{unit}</code>"#),
+    }
+}
+
+fn service_install_action(row: &crate::panel_ops_services::ServiceRow) -> String {
+    let href = row
+        .install_href
+        .clone()
+        .unwrap_or_else(|| crate::panel_ops_services::store_install_href(&row.unit));
+    format!(
+        r#"<a class="btn-secondary" href="{href}">Install from Plugin Store</a>"#,
+        href = html_escape(&href),
+    )
+}
+
 pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) -> String {
     let rows = list_known_services();
     let mut table = String::from(
@@ -91,12 +114,14 @@ pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) 
             )
         } else if !is_admin {
             "<span class=\"muted\">Admin only</span>".into()
+        } else if !row.present {
+            service_install_action(row)
         } else {
-            "<span class=\"muted\">Not installed</span>".into()
+            "<span class=\"muted\">Unavailable</span>".into()
         };
         table.push_str(&format!(
-            r#"<tr><td><code>{unit}</code></td><td>{active}</td><td>{enabled}</td><td>{actions}</td></tr>"#,
-            unit = html_escape(&row.unit),
+            r#"<tr><td>{unit}</td><td>{active}</td><td>{enabled}</td><td>{actions}</td></tr>"#,
+            unit = service_unit_label(row),
             active = service_status_badge(&row.active),
             enabled = service_status_badge(&row.enabled),
             actions = actions,
@@ -104,7 +129,7 @@ pub fn services_page(notice: Option<&str>, error: Option<&str>, is_admin: bool) 
     }
     table.push_str("</tbody></table></div>");
     let note = if is_admin {
-        "<p class=\"muted\">Runtime shows Active or Inactive. Boot policy shows Enabled or Deactivated (Plugins-style). Missing units show Not installed. Actions call systemctl for an allowlisted unit set only.</p>"
+        "<p class=\"muted\">Runtime shows Active or Inactive. Boot policy shows Enabled or Deactivated (Plugins-style). Missing units offer Install from Plugin Store (Host packages). The <code>docker</code> row also detects Podman (<code>podman.socket</code> / <code>podman</code>). Actions call systemctl for an allowlisted unit set only.</p>"
     } else {
         "<p class=\"muted\">Only the panel admin can start or stop services.</p>"
     };

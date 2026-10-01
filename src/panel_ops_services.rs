@@ -22,6 +22,9 @@ const KNOWN_UNITS: &[&str] = &[
     "firewalld",
 ];
 
+/// Units that may back the logical `docker` Services row (Docker Engine or Podman).
+const CONTAINER_BACKEND_UNITS: &[&str] = &["docker", "podman.socket", "podman"];
+
 #[derive(Debug, Clone)]
 pub struct ServiceRow {
     pub unit: String,
@@ -30,10 +33,31 @@ pub struct ServiceRow {
     /// UI label for boot enablement (Enabled, Deactivated, Static, Not installed, ...).
     pub enabled: String,
     pub present: bool,
+    /// When set, the row is backed by a different systemd unit (for example `podman.socket`).
+    pub via: Option<String>,
+    /// Plugin Store (Host) deep link when the unit is missing and can be installed.
+    pub install_href: Option<String>,
 }
 
 pub fn known_units() -> &'static [&'static str] {
     KNOWN_UNITS
+}
+
+/// Host Plugin Store URL for installing a missing allowlisted unit.
+pub fn store_install_href(unit: &str) -> String {
+    let q = match unit {
+        "docker" => "docker",
+        "mariadb" | "mysqld" => "mariadb",
+        "postfix" | "dovecot" => "email",
+        "pure-ftpd" | "vsftpd" => "ftp",
+        "pdns" | "named" => "dns",
+        "php-fpm" => "php",
+        "nginx" | "httpd" => "nginx",
+        "lsws" | "lshttpd" | "openlitespeed" => "litespeed",
+        "firewalld" => "firewall",
+        other => other,
+    };
+    format!("/plugins?view=store&category=Host&q={q}")
 }
 
 fn systemctl_available() -> bool {
@@ -130,13 +154,91 @@ fn unit_is_present(unit: &str) -> bool {
     }
 }
 
+/// Prefer Docker Engine; otherwise Podman socket/service; otherwise a docker/podman CLI.
+fn resolve_container_backend() -> Option<&'static str> {
+    for unit in CONTAINER_BACKEND_UNITS {
+        if unit_is_present(unit) {
+            return Some(*unit);
+        }
+    }
+    if crate::panel_ops_docker::docker_bin().is_some() {
+        return Some("cli");
+    }
+    None
+}
+
+fn container_engine_status() -> ServiceRow {
+    let install_href = store_install_href("docker");
+    let Some(backend) = resolve_container_backend() else {
+        return ServiceRow {
+            unit: "docker".into(),
+            active: "Not installed".into(),
+            enabled: "Not installed".into(),
+            present: false,
+            via: None,
+            install_href: Some(install_href),
+        };
+    };
+
+    if backend == "cli" {
+        let running = crate::panel_ops_docker::docker_bin()
+            .map(crate::panel_ops_docker::docker_daemon_ok)
+            .unwrap_or(false);
+        return ServiceRow {
+            unit: "docker".into(),
+            active: if running {
+                "Active".into()
+            } else {
+                "Inactive".into()
+            },
+            enabled: "Enabled".into(),
+            present: true,
+            via: Some("cli".into()),
+            install_href: None,
+        };
+    }
+
+    let active_raw = systemctl_token(&["is-active", backend]).unwrap_or_else(|| "inactive".into());
+    // Socket units are often `enabled` while the oneshot `podman.service` stays inactive;
+    // prefer enabled state from the resolved backend, with a fallback to sibling units.
+    let enabled_raw = systemctl_token(&["is-enabled", backend])
+        .or_else(|| {
+            CONTAINER_BACKEND_UNITS
+                .iter()
+                .filter(|u| **u != backend && unit_is_present(u))
+                .find_map(|u| systemctl_token(&["is-enabled", u]))
+        })
+        .unwrap_or_else(|| "disabled".into());
+
+    let via = if backend == "docker" {
+        None
+    } else {
+        Some(backend.to_string())
+    };
+
+    ServiceRow {
+        unit: "docker".into(),
+        active: map_active_label(&active_raw, true),
+        enabled: map_enabled_label(&enabled_raw, true),
+        present: true,
+        via,
+        install_href: None,
+    }
+}
+
 fn unit_status(unit: &str) -> ServiceRow {
+    if unit == "docker" {
+        return container_engine_status();
+    }
+
     if !systemctl_available() {
         return ServiceRow {
             unit: unit.to_string(),
             active: "Unavailable".into(),
             enabled: "Unavailable".into(),
             present: false,
+            via: None,
+            install_href: Some(store_install_href(unit)),
         };
     }
 
@@ -147,6 +249,8 @@ fn unit_status(unit: &str) -> ServiceRow {
             active: "Not installed".into(),
             enabled: "Not installed".into(),
             present: false,
+            via: None,
+            install_href: Some(store_install_href(unit)),
         };
     }
 
@@ -158,11 +262,30 @@ fn unit_status(unit: &str) -> ServiceRow {
         active: map_active_label(&active_raw, true),
         enabled: map_enabled_label(&enabled_raw, true),
         present: true,
+        via: None,
+        install_href: None,
     }
 }
 
 pub fn list_known_services() -> Vec<ServiceRow> {
     KNOWN_UNITS.iter().map(|u| unit_status(u)).collect()
+}
+
+fn resolve_control_unit(unit: &str) -> Result<String, String> {
+    if unit == "docker" {
+        match resolve_container_backend() {
+            Some("cli") => Err(
+                "Container CLI is present but no docker/podman systemd unit was found to control"
+                    .into(),
+            ),
+            Some(backend) => Ok(backend.to_string()),
+            None => Err("Unit `docker` is not installed on this host".into()),
+        }
+    } else if unit_is_present(unit) {
+        Ok(unit.to_string())
+    } else {
+        Err(format!("Unit `{unit}` is not installed on this host"))
+    }
 }
 
 pub fn control_service(unit: &str, action: &str) -> Result<String, String> {
@@ -176,19 +299,29 @@ pub fn control_service(unit: &str, action: &str) -> Result<String, String> {
     if !systemctl_available() {
         return Err("systemctl is not available on this host".into());
     }
-    if !unit_is_present(unit) {
-        return Err(format!("Unit `{unit}` is not installed on this host"));
-    }
+    let target = resolve_control_unit(unit)?;
     let out = Command::new("systemctl")
-        .args([action, unit])
+        .args([action, &target])
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("Failed to run systemctl: {e}"))?;
     if out.status.success() {
-        Ok(format!("{action} issued for {unit}"))
+        // Host package / sidebar gates read a short-lived docker CLI cache; clear it after
+        // start/stop so Services and Docker tiles stay consistent.
+        if unit == "docker" {
+            crate::panel_feature_gate::invalidate_feature_cache();
+        }
+        if target == unit {
+            Ok(format!("{action} issued for {unit}"))
+        } else {
+            Ok(format!("{action} issued for {unit} via {target}"))
+        }
     } else {
         let err = String::from_utf8_lossy(&out.stderr);
-        Err(format!("systemctl {action} {unit} failed: {}", err.trim()))
+        Err(format!(
+            "systemctl {action} {target} failed: {}",
+            err.trim()
+        ))
     }
 }
 
@@ -228,6 +361,18 @@ mod tests {
     }
 
     #[test]
+    fn store_install_href_targets_host_plugin_store() {
+        let docker = store_install_href("docker");
+        assert!(docker.contains("/plugins?view=store"));
+        assert!(docker.contains("category=Host"));
+        assert!(docker.contains("q=docker"));
+        assert!(store_install_href("pure-ftpd").contains("q=ftp"));
+        assert!(store_install_href("pdns").contains("q=dns"));
+        assert!(store_install_href("mariadb").contains("q=mariadb"));
+        assert!(store_install_href("postfix").contains("q=email"));
+    }
+
+    #[test]
     #[cfg(target_os = "linux")]
     fn live_known_units_never_report_unknown() {
         for row in list_known_services() {
@@ -243,9 +388,16 @@ mod tests {
                 row.unit,
                 row.enabled
             );
+            if !row.present {
+                assert!(
+                    row.install_href.is_some(),
+                    "missing unit {} should link to Plugin Store",
+                    row.unit
+                );
+            }
             eprintln!(
-                "svc {} active={} enabled={} present={}",
-                row.unit, row.active, row.enabled, row.present
+                "svc {} active={} enabled={} present={} via={:?}",
+                row.unit, row.active, row.enabled, row.present, row.via
             );
         }
     }
