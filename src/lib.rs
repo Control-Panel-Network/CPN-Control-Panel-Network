@@ -209,6 +209,7 @@ pub mod panel_ops_docker_compose;
 pub mod panel_ops_docker_detail;
 pub mod panel_ops_docker_image_ref;
 pub mod panel_ops_docker_images;
+pub mod panel_ops_docker_probe;
 pub mod panel_ops_domain_ready;
 pub mod panel_ops_email_acl;
 pub mod panel_ops_email_antispam;

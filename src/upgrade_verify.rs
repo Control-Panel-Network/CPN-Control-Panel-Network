@@ -163,11 +163,11 @@ fn check_cli_binaries(report: &mut VerifyReport) {
 
 fn cpn_managed_container_ids() -> Vec<String> {
     let Some(bin) = ["docker", "podman"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        crate::panel_ops_docker_probe::probe_ok(
+            candidate,
+            &["--version"],
+            crate::panel_ops_docker_probe::VERSION_TIMEOUT,
+        )
     }) else {
         return Vec::new();
     };
@@ -219,11 +219,11 @@ pub fn maybe_refresh_cpn_docker(bypass: bool) -> Vec<String> {
     }
 
     let bin = ["docker", "podman"].into_iter().find(|&candidate| {
-        Command::new(candidate)
-            .arg("--version")
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        crate::panel_ops_docker_probe::probe_ok(
+            candidate,
+            &["--version"],
+            crate::panel_ops_docker_probe::VERSION_TIMEOUT,
+        )
     });
     let Some(bin) = bin else {
         notes.push("docker/podman not installed; bypass docker refresh skipped".into());

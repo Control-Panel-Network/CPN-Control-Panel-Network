@@ -2,6 +2,7 @@
 
 use crate::panel_ops_docker::{DockerContainerRow, docker_bin, list_containers_detailed};
 use crate::panel_ops_docker_cli::{validate_container_ref, with_listed_container_id};
+use crate::panel_ops_docker_probe::{LIST_TIMEOUT, output_with_timeout};
 use std::process::Command;
 
 #[derive(Debug, Clone)]
@@ -25,10 +26,9 @@ const EXEC_ALLOW: &[&str] = &[
 
 fn inspect_field(bin: &str, user_ref: &str, format: &str) -> String {
     with_listed_container_id(user_ref, |row| {
-        let output = Command::new(bin)
-            .args(["inspect", "--format", format, &row.id])
-            .output()
-            .map_err(|e| format!("inspect failed: {e}"))?;
+        let output =
+            output_with_timeout(bin, &["inspect", "--format", format, &row.id], LIST_TIMEOUT)
+                .map_err(|e| format!("inspect failed: {e}"))?;
         if !output.status.success() {
             return Ok("Unknown".into());
         }
@@ -63,7 +63,7 @@ fn format_memory_limit(bytes: &str) -> String {
 
 fn port_mappings(bin: &str, user_ref: &str) -> String {
     if let Ok(text) = with_listed_container_id(user_ref, |row| {
-        let output = Command::new(bin).args(["port", &row.id]).output();
+        let output = output_with_timeout(bin, &["port", &row.id], LIST_TIMEOUT);
         match output {
             Ok(o) if o.status.success() => {
                 let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
@@ -93,16 +93,18 @@ fn port_mappings(bin: &str, user_ref: &str) -> String {
 
 fn container_stats(bin: &str, user_ref: &str) -> (String, String, String) {
     with_listed_container_id(user_ref, |row| {
-        let output = Command::new(bin)
-            .args([
+        let output = output_with_timeout(
+            bin,
+            &[
                 "stats",
                 "--no-stream",
                 "--format",
                 "{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}",
                 &row.id,
-            ])
-            .output()
-            .map_err(|e| format!("stats failed: {e}"))?;
+            ],
+            LIST_TIMEOUT,
+        )
+        .map_err(|e| format!("stats failed: {e}"))?;
         if !output.status.success() {
             return Ok(("0.00%".into(), "Unknown".into(), "0.00%".into()));
         }

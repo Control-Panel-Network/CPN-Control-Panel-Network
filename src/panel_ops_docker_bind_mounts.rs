@@ -2,6 +2,7 @@
 
 use crate::panel_ops_docker::docker_bin;
 use crate::panel_ops_docker_image_ref::normalize_container_image_ref;
+use crate::panel_ops_docker_probe::{LIST_TIMEOUT, output_with_timeout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -82,13 +83,12 @@ fn runtime_uid_gid_from_image(image_ref: &str) -> Option<(u32, u32)> {
 fn image_user_ids(image_ref: &str) -> Option<(u32, u32)> {
     let bin = docker_bin()?;
     let image = normalize_container_image_ref(image_ref);
-    let output = Command::new(bin)
-        .args(["inspect", "--format", "{{.Config.User}}", &image])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+    let output = output_with_timeout(
+        bin,
+        &["inspect", "--format", "{{.Config.User}}", &image],
+        LIST_TIMEOUT,
+    )
+    .ok()?;
     if output.status.success() {
         let user = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if let Some(ids) = parse_user_spec(&user) {
