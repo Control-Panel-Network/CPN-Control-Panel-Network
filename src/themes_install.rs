@@ -142,20 +142,17 @@ pub fn load_installed_theme_extra_css(id: &str) -> Option<String> {
 
 pub fn load_installed_theme(id: &str) -> Result<InstalledThemeManifest, String> {
     let id = normalize_theme_id(id)?;
-    if let Ok(raw) = fs::read_to_string(manifest_path(&id)) {
-        if let Ok(mut manifest) = serde_json::from_str::<InstalledThemeManifest>(&raw) {
-            if manifest.background.is_none() {
-                if let Ok(theme_raw) = fs::read_to_string(theme_json_path(&id)) {
-                    if let Ok(entry) =
-                        crate::themes_catalog::parse_theme_json_for_install(&id, &theme_raw)
-                    {
-                        manifest.background = entry.background;
-                    }
-                }
-            }
-            manifest.has_theme_css = theme_css_path(&id).is_file();
-            return Ok(manifest);
+    if let Ok(raw) = fs::read_to_string(manifest_path(&id))
+        && let Ok(mut manifest) = serde_json::from_str::<InstalledThemeManifest>(&raw)
+    {
+        if manifest.background.is_none()
+            && let Ok(theme_raw) = fs::read_to_string(theme_json_path(&id))
+            && let Ok(entry) = crate::themes_catalog::parse_theme_json_for_install(&id, &theme_raw)
+        {
+            manifest.background = entry.background;
         }
+        manifest.has_theme_css = theme_css_path(&id).is_file();
+        return Ok(manifest);
     }
     let raw = fs::read_to_string(theme_json_path(&id))
         .map_err(|_| format!("Theme `{id}` is not installed"))?;
@@ -194,7 +191,7 @@ pub fn list_installed_themes() -> Vec<InstalledThemeManifest> {
             out.push(manifest);
         }
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 
@@ -261,13 +258,13 @@ pub fn install_theme(theme_id: &str) -> Result<InstalledThemeManifest, String> {
         "version": entry.version,
         "tokens": entry.tokens,
     });
-    if let Some(bg) = entry.background.as_ref() {
-        if let Some(obj) = theme_json.as_object_mut() {
-            obj.insert(
-                "background".into(),
-                serde_json::to_value(bg).unwrap_or(serde_json::Value::Null),
-            );
-        }
+    if let Some(bg) = entry.background.as_ref()
+        && let Some(obj) = theme_json.as_object_mut()
+    {
+        obj.insert(
+            "background".into(),
+            serde_json::to_value(bg).unwrap_or(serde_json::Value::Null),
+        );
     }
     write_json(&theme_json_path(&id), &theme_json)?;
     Ok(manifest)
