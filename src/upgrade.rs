@@ -286,22 +286,24 @@ pub async fn run_maintenance(
         }
 
         let message = format!("Updated to {} ({})", tip.branch_label, tip.package_version);
-        let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
-        status.phase = "completed";
-        status.progress = 100;
-        status.error = None;
-        status.message = message.clone();
-        if let Some(info) = status.maintenance.as_mut() {
-            info.installed_version = tip.package_version.clone();
-            info.running_sha = Some(tip.sha.clone());
-            info.stable_tip_label = Some(tip.branch_label.clone());
-            info.stable_update_available = false;
-            info.update_available = false;
+        state.progress("completed", 100, message.clone()).await;
+        {
+            let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
+            status.phase = "completed";
+            status.progress = 100;
+            status.error = None;
+            status.message = message;
+            if let Some(info) = status.maintenance.as_mut() {
+                info.installed_version = tip.package_version.clone();
+                info.running_sha = Some(tip.sha.clone());
+                info.stable_tip_label = Some(tip.branch_label.clone());
+                info.stable_update_available = false;
+                info.update_available = false;
+            }
+            let _ = state.events.send(crate::model::InstallerEvent::Completed {
+                status: status.clone(),
+            });
         }
-        let _ = state.events.send(crate::model::InstallerEvent::Completed {
-            status: status.clone(),
-        });
-        drop(status);
 
         if matches!(
             request.action,
@@ -319,7 +321,6 @@ pub async fn run_maintenance(
                 ),
             }
         }
-        state.progress("completed", 100, message).await;
         return Ok(());
     }
 
