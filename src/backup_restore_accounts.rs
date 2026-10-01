@@ -7,7 +7,6 @@
 //!
 //! Never writes under `/var/lib/cpn/mfa/` (or `$CPN_DATA_DIR/mfa/`).
 
-use crate::account::now_unix;
 use crate::backup_restore_accounts_apply::{
     apply_acl_for_user, apply_package_hint, ensure_imported_account, merge_optional_packages_json,
     merge_optional_site_acl_json, merge_optional_users_json, remap_reserved_username,
@@ -207,6 +206,7 @@ pub fn restore_accounts_from_staging(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::now_unix;
     use std::io::Write;
 
     #[test]
