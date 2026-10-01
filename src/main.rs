@@ -906,6 +906,10 @@ async fn main() -> std::io::Result<()> {
     println!("\nCPN Server Panel Â· Installer {VERSION}");
     println!("Starting the web installer (language detected from browser/system)...\n");
     cpn_installer::motd::ensure_motd_installed();
+    // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
+    std::thread::spawn(|| {
+        cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
+    });
     let token: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)

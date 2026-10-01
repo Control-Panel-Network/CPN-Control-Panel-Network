@@ -133,6 +133,9 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
         }
     }
 
+    // Accept mail for hosted domains and deliver it to the local mailbox users.
+    crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mail configuration");
+
     Ok(())
 }
 

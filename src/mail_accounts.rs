@@ -246,6 +246,10 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
     }
     file.accounts.push(account.clone());
     save_file(&file)?;
+    if account.smtp_mode == MailSmtpMode::PostfixLocal {
+        // Route mail for this hosted domain to the local mailbox instead of the public MX.
+        crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("create mailbox");
+    }
     Ok(account)
 }
 
@@ -261,6 +265,9 @@ pub fn set_account_enabled(id: &str, enabled: bool) -> Result<MailAccount, Strin
     account.updated_at_unix = now_unix();
     let out = account.clone();
     save_file(&file)?;
+    if out.smtp_mode == MailSmtpMode::PostfixLocal {
+        crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("toggle mailbox");
+    }
     Ok(out)
 }
 

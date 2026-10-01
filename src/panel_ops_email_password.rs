@@ -85,7 +85,10 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     account.mailbox_password = new_password.to_string();
     account.updated_at_unix = crate::account::now_unix();
     save_accounts_file(&file)?;
-    match provision_local_mailbox(&address, new_password) {
+    let provisioned = provision_local_mailbox(&address, new_password);
+    // The system user may have just been created; refresh hosted-domain routing.
+    crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mailbox password");
+    match provisioned {
         Ok(_provision) => Ok(format!(
             "Password updated for `{address}`. Local mailbox ready."
         )),
