@@ -129,7 +129,9 @@ pub fn load_raw() -> Option<MaintenanceFlag> {
 
 /// Clear expired / inactive flags. Returns the active flag when maintenance applies.
 pub fn load_active() -> Option<MaintenanceFlag> {
-    let mut flag = load_raw()?;
+    let Some(flag) = load_raw() else {
+        return None;
+    };
     if !flag.active {
         return None;
     }

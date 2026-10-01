@@ -20,34 +20,37 @@ USER = "cpn"
 REMOTE_BUILD = "/home/cpn/cpn-maint-build"
 REMOTE_TAR = "/tmp/cpn-maint-src.tar.gz"
 
-FILES = [
-    "Cargo.toml",
-    "Cargo.lock",
-    "src/lib.rs",
-    "src/main.rs",
-    "src/installer.rs",
-    "src/upgrade.rs",
-    "src/cli_doctor.rs",
-    "src/panel_maintenance_mode.rs",
-    "src/panel_maintenance_page.rs",
-    "src/panel_maintenance_guard.rs",
-    "src/panel_maintenance_api.rs",
-    "src/panel_brand.rs",
-    "packaging/cpn-installer.service",
-]
+INCLUDE_DIRS = ("src", "sql", "docs", "packaging", "assets", "installer-ui")
+INCLUDE_FILES = ("Cargo.toml", "Cargo.lock", "build.rs")
 
 
 def ssh_password() -> str:
-    # Prefer env; fall back to shared lab SSH password from operator env only.
     return os.environ.get("CPN_LAB_SSH_PASSWORD", "")
 
 
 def run(client, cmd: str, timeout: int = 600) -> tuple[int, str, str]:
-    stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
+    _stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
     out = stdout.read().decode("utf-8", errors="replace")
     err = stderr.read().decode("utf-8", errors="replace")
     code = stdout.channel.recv_exit_status()
     return code, out, err
+
+
+def add_tree(tar: tarfile.TarFile, rel: str) -> None:
+    path = ROOT / rel
+    if not path.exists():
+        return
+    if path.is_file():
+        tar.add(path, arcname=rel.replace("\\", "/"))
+        return
+    for child in path.rglob("*"):
+        if not child.is_file():
+            continue
+        parts = set(child.parts)
+        if "target" in parts or "__pycache__" in parts or "node_modules" in parts or ".git" in parts:
+            continue
+        arc = str(child.relative_to(ROOT)).replace("\\", "/")
+        tar.add(child, arcname=arc)
 
 
 def main() -> int:
@@ -59,17 +62,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tar_path = Path(tmp) / "src.tar.gz"
         with tarfile.open(tar_path, "w:gz") as tar:
-            for rel in FILES:
-                path = ROOT / rel
-                if not path.is_file():
-                    print(f"missing {rel}", file=sys.stderr)
-                    return 2
-                tar.add(path, arcname=rel)
-            # Include full src tree so cargo can link the crate.
-            src = ROOT / "src"
-            for path in src.rglob("*"):
-                if path.is_file():
-                    tar.add(path, arcname=str(path.relative_to(ROOT)).replace("\\", "/"))
+            for rel in INCLUDE_FILES:
+                add_tree(tar, rel)
+            for rel in INCLUDE_DIRS:
+                add_tree(tar, rel)
 
         client = connect_cpn_lab(HOST, PORT, USER, password)
         try:
@@ -83,13 +79,11 @@ def main() -> int:
                 f"cd {REMOTE_BUILD} && cargo build --release -p cpn-installer 2>&1",
             ]
             for cmd in cmds:
-                print(f">>> {cmd[:80]}...")
+                print(f">>> {cmd[:90]}...")
                 code, out, err = run(client, cmd, timeout=1200)
                 text = (out + err).strip()
                 if text:
-                    # Print last 40 lines only.
-                    lines = text.splitlines()
-                    print("\n".join(lines[-40:]))
+                    print("\n".join(text.splitlines()[-50:]))
                 if code != 0:
                     print(f"FAIL exit={code} for: {cmd}", file=sys.stderr)
                     return code or 1
@@ -106,7 +100,6 @@ def main() -> int:
             if code != 0:
                 return code or 1
 
-            # Simulate flag on (without full upgrade).
             flag = {
                 "active": True,
                 "phase": "installing",
@@ -126,18 +119,25 @@ def main() -> int:
                 + flag_json
                 + "\nEOF\n"
                 "sudo chmod 600 /var/lib/cpn/maintenance.json\n"
-                "curl -sI http://127.0.0.1:2087/dashboard | head -8\n"
+                "echo '--- dashboard headers ---'\n"
+                "curl -sI http://127.0.0.1:2087/dashboard | head -10\n"
+                "echo '--- api ---'\n"
                 "curl -s http://127.0.0.1:2087/api/panel-maintenance\n"
+                "echo\n"
+                "echo '--- page snippet ---'\n"
+                "curl -s http://127.0.0.1:2087/maintenance | head -c 500; echo\n"
             )
             print(">>> flag ON smoke...")
             code, out, err = run(client, write_flag, timeout=60)
-            print((out + err).strip()[:2000])
+            print((out + err).strip()[:3000])
             if code != 0:
                 return code or 1
 
             clear = (
                 "sudo rm -f /var/lib/cpn/maintenance.json /var/lib/cpn/maintenance-page.html\n"
+                "echo '--- login after clear ---'\n"
                 "curl -sI http://127.0.0.1:2087/login | head -5\n"
+                "echo '--- api ---'\n"
                 "curl -s http://127.0.0.1:2087/api/panel-maintenance\n"
             )
             print(">>> flag OFF smoke...")
