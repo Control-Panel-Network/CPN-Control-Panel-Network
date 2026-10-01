@@ -83,6 +83,7 @@ async fn attach_stable_tip(repo: &str, installed_version: &str) -> TipTuple {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fill_version_check(
     running_version: &str,
     installed_version: &str,
