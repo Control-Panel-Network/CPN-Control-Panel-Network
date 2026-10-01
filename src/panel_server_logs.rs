@@ -164,7 +164,7 @@ fn ordered_entries(lines: &[RawLine]) -> Vec<LogEntry> {
         .skip(1)
         .any(|l| l.scope != lines.first().map(|f| f.scope.as_str()).unwrap_or(""));
     if multi {
-        ranked.sort_by(|a, b| (b.0, b.1).cmp(&(a.0, a.1)));
+        ranked.sort_by_key(|r| std::cmp::Reverse((r.0, r.1)));
     } else {
         ranked.reverse();
     }
