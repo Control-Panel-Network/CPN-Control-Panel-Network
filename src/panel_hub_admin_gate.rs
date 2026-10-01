@@ -16,6 +16,11 @@ const ADMIN_ONLY_HREFS: &[&str] = &[
     "/account/acl/create",
     "/account/acl/modify",
     "/account/acl/sidebar",
+    // Host-wide logs can hold other accounts' activity (see panel_hub_pages_server_log_view).
+    "/server/logs/panel",
+    "/server/logs/email",
+    "/server/logs/ftp",
+    "/server/logs/modsec",
 ];
 
 /// True when `href` is an admin-only account or ACL page (hidden from non-admin navigation).

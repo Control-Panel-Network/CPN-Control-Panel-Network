@@ -14,7 +14,7 @@ pub async fn server_logs_route(http: HttpRequest, state: web::Data<Arc<AppState>
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_blocking(move || panel_shell(&user, "server", "Logs", &server_logs_page(&user))).await
+    html_blocking(move || panel_shell(&user, "logs", "Logs", &server_logs_page(&user))).await
 }
 
 /// One searchable, paginated page per host log (`/server/logs/panel`, `access`, `error`, `email`,

@@ -250,6 +250,39 @@ const PHP_CHILDREN: &[NavChild] = &[
     },
 ];
 
+/// Server > Logs: overview (panel activity) plus one viewer per host log. Log retention stays
+/// under Settings because it is a panel preference, not a log viewer.
+const LOGS_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "Overview",
+        href: "/server/logs",
+    },
+    NavChild {
+        label: "Main Log",
+        href: "/server/logs/panel",
+    },
+    NavChild {
+        label: "Access Logs",
+        href: "/server/logs/access",
+    },
+    NavChild {
+        label: "Error Logs",
+        href: "/server/logs/error",
+    },
+    NavChild {
+        label: "Email Log",
+        href: "/server/logs/email",
+    },
+    NavChild {
+        label: "FTP Logs",
+        href: "/server/logs/ftp",
+    },
+    NavChild {
+        label: "ModSec Audit",
+        href: "/server/logs/modsec",
+    },
+];
+
 const LITESPEED_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Open OLS",
@@ -454,10 +487,11 @@ pub(crate) const SERVER: &[NavEntry] = &[
         href: "/server/processes",
         label: "Top Processes",
     },
-    NavEntry::Link {
+    NavEntry::Group {
         id: "logs",
         href: "/server/logs",
         label: "Logs",
+        children: LOGS_CHILDREN,
     },
     NavEntry::Link {
         id: "package-manager",
