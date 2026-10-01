@@ -103,7 +103,7 @@ pub fn login_location_with_error(next: Option<&str>, error: &str) -> String {
 }
 
 /// Map short login `?error=` codes to operator-facing copy (never echo raw query text).
-pub fn login_error_message(code: Option<&str>) -> Option<&'static str> {
+pub fn login_query_error_message(code: Option<&str>) -> Option<&'static str> {
     match code.map(str::trim).unwrap_or("") {
         "mfa_session_expired" | "session_expired" => {
             Some("Your sign-in session expired. Sign in again to continue.")
@@ -337,10 +337,10 @@ mod tests {
     #[test]
     fn login_error_codes_map_to_visible_copy() {
         assert_eq!(
-            login_error_message(Some("mfa_session_expired")),
+            login_query_error_message(Some("mfa_session_expired")),
             Some("Your sign-in session expired. Sign in again to continue.")
         );
-        assert!(login_error_message(Some("<script>")).is_none());
+        assert!(login_query_error_message(Some("<script>")).is_none());
         assert_eq!(
             login_location_with_error(None, "mfa_session_expired"),
             "/login?error=mfa_session_expired"

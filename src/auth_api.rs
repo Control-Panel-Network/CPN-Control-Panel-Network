@@ -16,7 +16,7 @@ use crate::http_helpers::{
 };
 use crate::installer::AppState;
 use crate::login_next::{
-    clear_login_return_cookie_header, first_safe_next, login_error_message, login_location,
+    clear_login_return_cookie_header, first_safe_next, login_location, login_query_error_message,
     login_return_cookie_header, mfa_location, post_login_location, read_login_return_cookie,
     referer_return_path, request_return_path,
 };
@@ -204,7 +204,7 @@ pub async fn login_page(
         return redirect_authed_after_login(&session_user, next.as_deref());
     }
     let secure = request_secure(&http);
-    let error_msg = login_error_message(query.error.as_deref()).map(str::to_string);
+    let error_msg = login_query_error_message(query.error.as_deref()).map(str::to_string);
     let payload_for_html = payload.clone();
     let next_for_html = next.clone();
     // Keep /login off the Actix worker for host probes, and never hang long enough for a
