@@ -6,7 +6,7 @@ use crate::panel_hub_pages_version_source_script::version_fetch_helpers_script;
 pub fn version_page_script(can_manage: bool) -> String {
     let can_manage_js = if can_manage { "true" } else { "false" };
     format!(
-        r#"{helpers}<script>
+        r##"{helpers}<script>
 (function () {{
   var canManage = {can_manage_js};
   var statusEl = document.getElementById("cpn-version-status");
@@ -703,7 +703,7 @@ pub fn version_page_script(can_manage: bool) -> String {
   }}
   check(false);
 }})();
-</script>"#,
+</script>"##,
         helpers = version_fetch_helpers_script(),
         can_manage_js = can_manage_js
     )
