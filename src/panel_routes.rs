@@ -13,13 +13,13 @@ use crate::panel_plugin_settings::{
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
     run_mariadb_install, set_websites_docroot_pref, set_websites_remote_preview_pref,
-    subdomains_main, websites_main,
 };
 use crate::panel_website_manage::website_manage_main;
 use crate::panel_websites_create_ui::{
     require_domain_in_cloudflare_zones, resolve_create_domain, subdomains_create_main,
     websites_create_main,
 };
+use crate::panel_websites_list_ui::{subdomains_main, websites_main};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
     is_host_owned_install, is_host_scoped_plugin, uninstall_host_plugin,
@@ -79,11 +79,12 @@ pub async fn websites_page(
     }
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let q = query.get("q").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "websites",
         "Websites",
-        &websites_main(&user, notice, error),
+        &websites_main(&user, notice, error, q),
     ))
 }
 
@@ -126,11 +127,12 @@ pub async fn subdomains_page(
     }
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let q = query.get("q").map(String::as_str);
     html_ok(panel_shell(
         &user,
         "websites",
         "Sub-domains",
-        &subdomains_main(&user, notice, error),
+        &subdomains_main(&user, notice, error, q),
     ))
 }
 

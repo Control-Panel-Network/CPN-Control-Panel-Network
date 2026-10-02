@@ -54,6 +54,7 @@ pub async fn wordpress_list_route(
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
             &wp_cli,
+            query.get("q").map(String::as_str),
         ),
     ))
 }
@@ -76,6 +77,7 @@ pub async fn wordpress_subsites_list_route(
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
             &wp_cli,
+            query.get("q").map(String::as_str),
         ),
     ))
 }
@@ -335,7 +337,13 @@ pub async fn wordpress_ensure_wpcli_post(
         return login_redirect(&http);
     };
     match ensure_wp_cli() {
-        Ok(status) => wp_redirect("/wordpress", Some(&status.detail), None),
+        Ok(status) => {
+            let notice = match status.version.as_deref() {
+                Some(v) if !v.trim().is_empty() => format!("WP-CLI ensured: {v}"),
+                _ => status.detail,
+            };
+            wp_redirect("/wordpress", Some(&notice), None)
+        }
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
     }
 }

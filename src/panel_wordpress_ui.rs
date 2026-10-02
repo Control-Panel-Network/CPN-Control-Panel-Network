@@ -1,9 +1,12 @@
 //! WordPress panel HTML (list, install, manage tabs).
 
 use crate::backups::is_subdomain_site;
+use crate::panel_list_search::{
+    domain_matches_q, list_filter_summary, list_search_form, normalize_list_q,
+};
 use crate::wordpress::{WordpressSite, list_wordpress_sites};
 use crate::wordpress_manage::{PluginRow, ThemeRow, WordpressSiteSnapshot};
-use crate::wordpress_wpcli::WpCliStatus;
+use crate::wordpress_wpcli::{WpCliStatus, format_wp_cli_binary};
 
 fn html_escape(value: &str) -> String {
     value
@@ -87,7 +90,14 @@ fn wp_cli_status_card(status: &WpCliStatus) -> String {
         cls = state.0,
         state_label = state.1,
         detail = html_escape(&status.detail),
-        binary = dash_or(status.binary.as_deref().unwrap_or("-")),
+        binary = dash_or(
+            status
+                .binary
+                .as_deref()
+                .map(format_wp_cli_binary)
+                .as_deref()
+                .unwrap_or("-"),
+        ),
         version = dash_or(status.version.as_deref().unwrap_or("-")),
     )
 }
@@ -149,19 +159,46 @@ fn site_table_rows(sites: &[WordpressSite]) -> String {
     rows
 }
 
-fn filtered_wordpress_sites(subsites: bool) -> Vec<WordpressSite> {
-    list_wordpress_sites()
+fn filtered_wordpress_sites(subsites: bool, q: &str) -> (usize, Vec<WordpressSite>) {
+    let all: Vec<_> = list_wordpress_sites()
         .into_iter()
         .filter(|site| is_subdomain_site(&site.domain) == subsites)
-        .collect()
+        .collect();
+    let total = all.len();
+    let sites = all
+        .into_iter()
+        .filter(|site| {
+            let parent = if subsites {
+                crate::sites::resolve_parent_domain(&site.domain)
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
+            domain_matches_q(&site.domain, parent.as_deref(), q)
+        })
+        .collect();
+    (total, sites)
 }
 
 pub fn wordpress_list_page(
     notice: Option<&str>,
     error: Option<&str>,
     wp_cli: &WpCliStatus,
+    q_raw: Option<&str>,
 ) -> String {
-    let sites = filtered_wordpress_sites(false);
+    let q = normalize_list_q(q_raw);
+    let (total, sites) = filtered_wordpress_sites(false, &q);
+    let rows = if total == 0 {
+        site_table_rows(&sites)
+    } else if sites.is_empty() {
+        format!(
+            r#"<p class="empty-state">No WordPress sites match <strong>{}</strong>. <a href="/wordpress">Clear search</a>.</p>"#,
+            html_escape(q_raw.unwrap_or("").trim())
+        )
+    } else {
+        site_table_rows(&sites)
+    };
     format!(
         r#"{heading}
       {ok}
@@ -183,6 +220,8 @@ pub fn wordpress_list_page(
       <article class="section-card" style="margin-top:18px;">
         <h2>WordPress sites ({count})</h2>
         <p class="muted">Main domains only. Nested WordPress installs are under <a href="/wordpress/subsites">WordPress Sub-sites</a>.</p>
+        {search}
+        {filter_summary}
         {rows}
       </article>"#,
         heading = section_heading(
@@ -193,7 +232,9 @@ pub fn wordpress_list_page(
         err = notice_block("error", error),
         wp_cli_card = wp_cli_status_card(wp_cli),
         count = sites.len(),
-        rows = site_table_rows(&sites),
+        search = list_search_form("/wordpress", q_raw.unwrap_or("").trim(), "Search by domain"),
+        filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
+        rows = rows,
     )
 }
 
@@ -201,8 +242,20 @@ pub fn wordpress_subsites_list_page(
     notice: Option<&str>,
     error: Option<&str>,
     wp_cli: &WpCliStatus,
+    q_raw: Option<&str>,
 ) -> String {
-    let sites = filtered_wordpress_sites(true);
+    let q = normalize_list_q(q_raw);
+    let (total, sites) = filtered_wordpress_sites(true, &q);
+    let rows = if total == 0 {
+        site_table_rows(&sites)
+    } else if sites.is_empty() {
+        format!(
+            r#"<p class="empty-state">No WordPress sub-sites match <strong>{}</strong>. <a href="/wordpress/subsites">Clear search</a>.</p>"#,
+            html_escape(q_raw.unwrap_or("").trim())
+        )
+    } else {
+        site_table_rows(&sites)
+    };
     format!(
         r#"{heading}
       {ok}
@@ -224,6 +277,8 @@ pub fn wordpress_subsites_list_page(
       <article class="section-card" style="margin-top:18px;">
         <h2>WordPress sub-sites ({count})</h2>
         <p class="muted">Sub-domains only. Main WordPress installs are under <a href="/wordpress">WordPress Sites</a>.</p>
+        {search}
+        {filter_summary}
         {rows}
       </article>"#,
         heading = section_heading(
@@ -234,7 +289,13 @@ pub fn wordpress_subsites_list_page(
         err = notice_block("error", error),
         wp_cli_card = wp_cli_status_card(wp_cli),
         count = sites.len(),
-        rows = site_table_rows(&sites),
+        search = list_search_form(
+            "/wordpress/subsites",
+            q_raw.unwrap_or("").trim(),
+            "Search by domain or parent",
+        ),
+        filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
+        rows = rows,
     )
 }
 
