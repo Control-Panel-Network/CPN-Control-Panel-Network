@@ -144,16 +144,35 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     if (value) value.textContent = show ? String(text) : "-";
   }}
-  function paintDetailRows(info, liveRetry, hasTip) {{
-    setDetailRow("cpn-version-row-repo", "cpn-version-repo", info && info.repo);
-    setDetailRow("cpn-version-row-source", "cpn-version-pkg-source", info && info.source);
-    setDetailRow("cpn-version-row-latest-tag", "cpn-version-latest-tag", info && info.latest_tag);
-    var commitText = "";
-    if (info && info.running_sha) {{
-      commitText = String(info.running_sha).substring(0, 12)
-        + (info.running_sha_source ? (" (" + info.running_sha_source + ")") : "");
+  var CACHE_KEY = "cpnVersionCache";
+  function saveVersionCache(info) {{
+    try {{
+      if (!info || typeof sessionStorage === "undefined") return;
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({{ saved_at: Date.now(), info: info }}));
+    }} catch (e) {{}}
+  }}
+  function loadVersionCache() {{
+    try {{
+      if (typeof sessionStorage === "undefined") return null;
+      var raw = sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.info) return null;
+      return parsed.info;
+    }} catch (e) {{
+      return null;
     }}
-    setDetailRow("cpn-version-row-commit", "cpn-version-commit", commitText);
+  }}
+  function setRowVisible(rowId, show) {{
+    var row = document.getElementById(rowId);
+    if (!row) return;
+    if (show) row.removeAttribute("hidden");
+    else row.setAttribute("hidden", "hidden");
+  }}
+  function paintDetailRows(info, liveRetry, hasTip) {{
+    var showRepo = !!(info && info.repo && info.using_fork);
+    setDetailRow("cpn-version-row-repo", "cpn-version-repo", showRepo ? info.repo : "");
+    setDetailRow("cpn-version-row-source", "cpn-version-pkg-source", info && info.source);
     var notes = [];
     if (info && info.using_fork) notes.push("Using fork source for upgrades");
     if (info && info.token_configured) notes.push("GitHub token configured");
@@ -177,26 +196,61 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     return null;
   }}
+  function shortSha(sha, source) {{
+    if (!sha) return "";
+    return "Commit " + String(sha).substring(0, 7)
+      + (source ? (" (" + source + ")") : "");
+  }}
+  function paintIdentityRows(info) {{
+    var runVer = (info && info.running_version) || (runningEl && runningEl.textContent) || "";
+    var instVer = (info && info.installed_version) || (installedEl && installedEl.textContent) || "";
+    var match = !!runVer && !!instVer && norm(runVer) === norm(instVer);
+    var currentEl = document.getElementById("cpn-version-current");
+    var divergeEl = document.getElementById("cpn-version-diverge");
+    setRowVisible("cpn-version-row-current", match);
+    setRowVisible("cpn-version-row-running", !match);
+    setRowVisible("cpn-version-row-installed", !match);
+    if (match) {{
+      if (currentEl) currentEl.textContent = runVer;
+      setRowVisible("cpn-version-row-diverge", false);
+      if (divergeEl) divergeEl.textContent = "";
+    }} else {{
+      if (runningEl && runVer) runningEl.textContent = runVer;
+      if (installedEl && instVer) installedEl.textContent = instVer;
+      var note = "";
+      if (runVer && instVer && cmp(runVer, instVer) > 0) {{
+        note = "Binary tip ahead of packaged RPM/DEB. Upgrade the package to match the running binary.";
+      }} else if (runVer && instVer) {{
+        note = "Packaged install differs from the running binary.";
+      }}
+      if (divergeEl) divergeEl.textContent = note;
+      setRowVisible("cpn-version-row-diverge", !!note);
+    }}
+  }}
   function paintReleaseDates(info) {{
     var runningDateEl = document.getElementById("cpn-version-running-date");
     var installedDateEl = document.getElementById("cpn-version-installed-date");
     var installedAtEl = document.getElementById("cpn-version-installed-at");
+    var currentDateEl = document.getElementById("cpn-version-current-date");
+    var currentAtEl = document.getElementById("cpn-version-current-installed-at");
+    var currentShaEl = document.getElementById("cpn-version-current-sha");
+    var runningShaEl = document.getElementById("cpn-version-running-sha");
     var runningRow = releaseRowForVersion(info && info.running_version);
     var installedRow = releaseRowForVersion(info && info.installed_version);
-    if (runningDateEl) {{
-      runningDateEl.textContent = runningRow && runningRow.published_at
-        ? ("Released " + formatPublishedAt(runningRow.published_at))
-        : "";
-    }}
-    if (installedDateEl) {{
-      installedDateEl.textContent = installedRow && installedRow.published_at
-        ? ("Released " + formatPublishedAt(installedRow.published_at))
-        : "";
-    }}
-    if (installedAtEl) {{
-      var when = formatInstalledAt(info && info.installed_at_unix);
-      installedAtEl.textContent = when ? ("Installed " + when) : "";
-    }}
+    var runDate = runningRow && runningRow.published_at
+      ? ("Released " + formatPublishedAt(runningRow.published_at)) : "";
+    var instDate = installedRow && installedRow.published_at
+      ? ("Released " + formatPublishedAt(installedRow.published_at)) : "";
+    var when = formatInstalledAt(info && info.installed_at_unix);
+    var installedAtText = when ? ("Installed " + when) : "";
+    var shaText = shortSha(info && info.running_sha, info && info.running_sha_source);
+    if (runningDateEl) runningDateEl.textContent = runDate;
+    if (installedDateEl) installedDateEl.textContent = instDate;
+    if (installedAtEl) installedAtEl.textContent = installedAtText;
+    if (runningShaEl) runningShaEl.textContent = shaText;
+    if (currentDateEl) currentDateEl.textContent = runDate || instDate;
+    if (currentAtEl) currentAtEl.textContent = installedAtText;
+    if (currentShaEl) currentShaEl.textContent = shaText;
   }}
   function supportedReleaseTags() {{
     if (!releaseCache.length) return {{}};
@@ -393,53 +447,72 @@ pub fn version_page_script(can_manage: bool) -> String {
     infoCache = info;
     if (!info) {{
       stopRetryCountdown();
-      statusEl.textContent = "Could not load version information.";
+      if (statusEl) statusEl.textContent = "Could not load version information.";
       return;
     }}
+    saveVersionCache(info);
+    paintIdentityRows(info);
     if (runningEl && info.running_version) runningEl.textContent = info.running_version;
     if (installedEl && info.installed_version) installedEl.textContent = info.installed_version;
     var hasReleaseOrTip = !!(info.latest_version || info.latest_tag || info.stable_tip_sha
       || (info.releases && info.releases.length));
     if (hasReleaseOrTip || info.installed_package_color) {{
       paintInstalledVersionColor(resolveInstalledColor(info));
+      var currentStrong = document.getElementById("cpn-version-current");
+      if (currentStrong) {{
+        var colorState = resolveInstalledColor(info);
+        if (colorState === "stale_behind" || colorState === "stale") {{
+          currentStrong.style.color = "#f87171";
+          currentStrong.setAttribute("data-update-state", "stale");
+        }} else if (colorState === "update_available" || colorState === "behind") {{
+          currentStrong.style.color = "#fb923c";
+          currentStrong.setAttribute("data-update-state", "behind");
+        }} else if (colorState === "current") {{
+          currentStrong.style.color = "#4ade80";
+          currentStrong.setAttribute("data-update-state", "current");
+        }} else {{
+          currentStrong.style.color = "";
+          currentStrong.removeAttribute("data-update-state");
+        }}
+      }}
     }} else {{
       paintInstalledVersionColor(null);
     }}
-    if (latestEl) latestEl.textContent = info.latest_version || info.latest_tag || "-";
+    var latestLabel = info.latest_version || norm(info.latest_tag) || "-";
+    var latestTag = info.latest_tag ? String(info.latest_tag) : "";
+    if (latestEl) {{
+      if (latestTag && norm(latestTag) !== norm(latestLabel) && latestLabel !== "-") {{
+        latestEl.textContent = latestLabel + " (" + latestTag + ")";
+      }} else {{
+        latestEl.textContent = latestLabel !== "-" ? latestLabel : (latestTag || "-");
+      }}
+    }}
+    var tipShort = info.stable_tip_short || (info.stable_tip_sha
+      ? String(info.stable_tip_sha).substring(0, 7) : "");
+    var tipLine = "";
+    if (info.stable_update_available || (tipShort && info.running_sha
+      && String(info.running_sha).substring(0, 7) !== tipShort)) {{
+      tipLine = "Stable tip: " + (info.stable_branch || "stable")
+        + (tipShort ? (" @ " + tipShort) : "");
+    }}
     var stableTipEl = document.getElementById("cpn-version-stable-tip");
-    if (stableTipEl) {{
-      stableTipEl.textContent = info.stable_tip_label
-        || (info.stable_branch && info.stable_tip_short
-          ? (info.stable_branch + " @ " + info.stable_tip_short)
-          : "-");
-    }}
-    var runningShaEl = document.getElementById("cpn-version-running-sha");
-    if (runningShaEl) {{
-      if (info.running_sha) {{
-        var shortRun = String(info.running_sha).substring(0, 7);
-        runningShaEl.textContent = "Commit " + shortRun
-          + (info.running_sha_source ? (" (" + info.running_sha_source + ")") : "");
-      }} else {{
-        runningShaEl.textContent = "";
-      }}
-    }}
-    var sourceTip = info.latest_version || info.latest_tag || "-";
-    if (info.stable_tip_label) {{
-      sourceTip = info.stable_tip_label + (info.latest_tag ? (" / Release " + info.latest_tag) : "");
-    }}
+    if (stableTipEl) stableTipEl.textContent = tipLine;
     if (sourceTipEl) {{
-      if (info.using_fork) {{
-        sourceTipEl.textContent = "fork " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
-      }} else {{
-        sourceTipEl.textContent = "official " + sourceTip + (info.repo ? (" (" + info.repo + ")") : "");
-      }}
+      var srcBits = [];
+      if (info.using_fork) srcBits.push("fork");
+      else srcBits.push("official");
+      if (info.repo) srcBits.push(info.repo);
+      sourceTipEl.textContent = srcBits.join(" · ") || "-";
     }}
     if (upstreamTipEl) {{
       if (info.using_fork) {{
-        var up = info.upstream_latest_version || info.upstream_latest_tag || "-";
-        upstreamTipEl.textContent = up + (info.upstream_repo ? (" (" + info.upstream_repo + ")") : "");
+        var up = info.upstream_latest_version || norm(info.upstream_latest_tag) || "";
+        upstreamTipEl.textContent = up
+          ? ("Upstream official: " + up
+            + (info.upstream_repo ? (" (" + info.upstream_repo + ")") : ""))
+          : (info.upstream_repo ? ("Upstream: " + info.upstream_repo) : "");
       }} else {{
-        upstreamTipEl.textContent = sourceTip + (info.upstream_repo ? (" (" + info.upstream_repo + ")") : "");
+        upstreamTipEl.textContent = "";
       }}
     }}
     var hasTip = !!(info.latest_version || info.latest_tag || (info.releases && info.releases.length));
@@ -449,31 +522,26 @@ pub fn version_page_script(can_manage: bool) -> String {
       startRetryCountdown(wait);
     }} else {{
       stopRetryCountdown();
-      if (info.check_error && !hasTip) {{
+      if (!statusEl) {{
+        // no status node
+      }} else if (info.check_error && !hasTip) {{
         statusEl.textContent = "Update check failed: " + info.check_error;
       }} else if (info.rate_limited && info.cache_note) {{
         statusEl.textContent = info.cache_note;
       }} else if (info.update_available) {{
         if (info.stable_update_available && !info.release_update_available) {{
-          statusEl.textContent = "Update available: " + (info.stable_tip_label || "stable tip")
-            + " (commit ahead of running build; no new release tag)";
+          statusEl.textContent = "Update available: stable tip is ahead of this build.";
         }} else if (info.stable_update_available && info.release_update_available) {{
-          statusEl.textContent = "Update available: Release "
-            + (info.latest_version || info.latest_tag || "newer")
-            + " and " + (info.stable_tip_label || "stable tip");
+          statusEl.textContent = "Update available: newer release and stable tip.";
         }} else {{
-          statusEl.textContent = "Update available: Release "
-            + (info.latest_version || info.latest_tag || "newer release");
+          statusEl.textContent = "Update available: newer release listed above.";
         }}
       }} else if (info.cache_note) {{
         statusEl.textContent = info.cache_note;
       }} else if (info.check_error && hasTip) {{
-        statusEl.textContent = "Showing available release info. Note: " + info.check_error;
+        statusEl.textContent = "Showing release info. Note: " + info.check_error;
       }} else {{
-        statusEl.textContent = "You are on the latest known release"
-          + (info.latest_version ? (" (" + info.latest_version + ")") : "")
-          + (info.stable_tip_label ? (" and " + info.stable_tip_label) : "")
-          + ".";
+        statusEl.textContent = "Up to date with the latest known release.";
       }}
     }}
     paintDetailRows(info, liveRetry, hasTip);
@@ -482,18 +550,38 @@ pub fn version_page_script(can_manage: bool) -> String {
   }}
   function check(forceRefresh) {{
     if (forceRefresh && retryLeft > 0) return;
-    statusEl.textContent = forceRefresh ? "Refreshing release list..." : "Checking for updates...";
+    if (statusEl) {{
+      statusEl.textContent = forceRefresh
+        ? "Refreshing (keeping current values)..."
+        : (infoCache ? "Updating status..." : "Checking for updates...");
+    }}
+    if (btn) {{
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+    }}
     var url = "/api/version-check" + (forceRefresh ? "?refresh=1" : "");
     fetch(url, {{
       credentials: "same-origin",
-      headers: {{ "Accept": "application/json" }}
+      headers: {{ "Accept": "application/json" }},
+      cache: "no-store"
     }}).then(function (res) {{
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
-    }}).then(render).catch(function (err) {{
+    }}).then(function (info) {{
+      render(info);
+      if (btn) btn.removeAttribute("aria-busy");
+      syncRefreshButton();
+    }}).catch(function (err) {{
       stopRetryCountdown();
-      statusEl.textContent = friendlyFetchError(err, "Update check");
-      if (latestEl && !latestEl.textContent) latestEl.textContent = "-";
+      if (statusEl) statusEl.textContent = friendlyFetchError(err, "Update check");
+      if (latestEl && (!latestEl.textContent || latestEl.textContent === "Loading...")) {{
+        latestEl.textContent = "-";
+      }}
+      if (sourceTipEl && (!sourceTipEl.textContent || sourceTipEl.textContent === "Loading...")) {{
+        sourceTipEl.textContent = "-";
+      }}
+      if (btn) btn.removeAttribute("aria-busy");
+      syncRefreshButton();
     }});
   }}
   window.cpnVersionRecheck = check;
@@ -740,6 +828,13 @@ pub fn version_page_script(can_manage: bool) -> String {
     }});
     if (confirmCancel) confirmCancel.addEventListener("click", clearConfirm);
   }}
+  var cached = loadVersionCache();
+  if (cached) {{
+    render(cached);
+    if (statusEl && (!statusEl.textContent || statusEl.textContent.indexOf("Checking") === 0)) {{
+      statusEl.textContent = "Updating status...";
+    }}
+  }}
   check(false);
 }})();
 </script>"##,
@@ -771,6 +866,10 @@ mod tests {
         assert!(js.contains("stale_behind"));
         assert!(js.contains("resolveInstalledColor"));
         assert!(js.contains("isPrereleaseLabel"));
+        assert!(js.contains("cpnVersionCache"));
+        assert!(js.contains("paintIdentityRows"));
+        assert!(js.contains("Binary tip ahead of packaged"));
+        assert!(js.contains("Refreshing (keeping current values)"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }
