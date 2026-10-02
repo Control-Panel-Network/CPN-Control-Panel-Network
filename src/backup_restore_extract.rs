@@ -255,6 +255,7 @@ fn collect_member_lines(stdout: &[u8]) -> Result<Vec<String>, String> {
     Ok(members)
 }
 
+#[cfg(test)]
 fn collect_plan_member_lines(stdout: &[u8]) -> Result<Vec<String>, String> {
     let mut members = Vec::new();
     let mut seen_website = false;
