@@ -81,6 +81,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/databases/all", "database", IconTone::Blue),
         ("/databases/create", "plus", IconTone::Green),
         ("/databases/delete", "trash-2", IconTone::Rose),
+        ("/databases/password", "key", IconTone::Amber),
         ("/databases/phpmyadmin", "table", IconTone::Violet),
         ("/databases/manager", "database", IconTone::Cyan),
         ("/databases", "database", IconTone::Blue),

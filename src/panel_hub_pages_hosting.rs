@@ -5,7 +5,7 @@ use crate::panel_hub_defs::{databases_hub_sections, email_hub_sections};
 use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
-use crate::panel_ops_db::{create_database, drop_database, list_databases};
+use crate::panel_ops_db::{create_database, drop_database};
 use crate::panel_ops_mail_extra::{
     CatchAll, MailForward, dkim_status, load_catchall, load_forwards, mail_stack_note,
     save_catchall, save_forwards,
@@ -360,40 +360,7 @@ pub fn scaffold_feature(
 }
 
 pub fn databases_all_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let status = list_databases();
-    let list = if status.databases.is_empty() {
-        format!(
-            "<p class=\"empty-state\">{}</p>",
-            html_escape(&status.detail)
-        )
-    } else {
-        let mut ul = String::from("<ul>");
-        for db in &status.databases {
-            ul.push_str(&format!("<li><code>{}</code></li>", html_escape(db)));
-        }
-        ul.push_str("</ul>");
-        format!(
-            "<p class=\"muted\">{}</p>{ul}",
-            html_escape(&status.detail),
-            ul = ul
-        )
-    };
-    let kv = status_kv(&[
-        ("Engine", &status.engine_label),
-        ("TCP 3306", if status.listening { "Open" } else { "Closed" }),
-    ]);
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Databases & FTP", Some("/databases")),
-            ("All Databases", None),
-        ],
-        "All Databases",
-        "View databases (MariaDB first).",
-        &format!("{kv}{list}"),
-        notice,
-        error,
-    )
+    crate::panel_hub_pages_db_manage::databases_all_page_for("", notice, error)
 }
 
 pub fn databases_create_page(notice: Option<&str>, error: Option<&str>) -> String {
@@ -418,24 +385,7 @@ pub fn databases_create_page(notice: Option<&str>, error: Option<&str>) -> Strin
 }
 
 pub fn databases_delete_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let form = r#"<form method="post" action="/databases/delete" class="stack-form" style="max-width:420px;" onsubmit="return confirm('Drop this database permanently?');">
-      <label for="name">Database name</label>
-      <input id="name" name="name" type="text" required pattern="[A-Za-z0-9_]+" maxlength="64">
-      <button type="submit" class="btn-danger">Delete database</button>
-    </form>
-    <p class="muted">Refuses system schemas (mysql, sys, information_schema, performance_schema).</p>"#;
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Databases & FTP", Some("/databases")),
-            ("Delete Database", None),
-        ],
-        "Delete Database",
-        "Remove a database.",
-        form,
-        notice,
-        error,
-    )
+    crate::panel_hub_pages_db_manage::databases_delete_page_for("", None, notice, error)
 }
 
 pub fn run_create_database(name: &str) -> Result<String, String> {

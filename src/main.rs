@@ -41,9 +41,10 @@ use cpn_installer::panel_hub_routes::{
     cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
     dashboard_ssh_security_review_show, dashboard_ssh_security_review_snooze, databases_all_route,
     databases_create_get, databases_create_post, databases_delete_get, databases_delete_post,
-    databases_manager_route, databases_phpmyadmin_open, databases_phpmyadmin_route,
-    docker_container_action, docker_create_container, docker_create_route, docker_export_route,
-    docker_home, docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
+    databases_manager_route, databases_password_get, databases_password_post,
+    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
+    docker_create_container, docker_create_route, docker_export_route, docker_home,
+    docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
     docker_logs_route, docker_stack_create, docker_stack_refresh, docker_stacks_route,
     docker_view_exec, docker_view_route, email_accounts_route, email_bimi_push_cf,
     email_bimi_route, email_bimi_save, email_catchall_route, email_catchall_save,
@@ -1465,6 +1466,8 @@ async fn main() -> std::io::Result<()> {
             .service(databases_create_post)
             .service(databases_delete_get)
             .service(databases_delete_post)
+            .service(databases_password_get)
+            .service(databases_password_post)
             .service(databases_manager_route)
             .service(databases_phpmyadmin_route)
             .service(databases_phpmyadmin_open)
