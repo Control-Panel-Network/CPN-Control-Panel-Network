@@ -362,6 +362,7 @@ pub mod releases;
 pub mod releases_cache;
 pub mod releases_direct;
 pub mod releases_fetch;
+pub mod releases_installed_color;
 pub mod releases_source;
 pub mod releases_stable_tip;
 pub mod releases_version_check;

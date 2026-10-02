@@ -15,11 +15,36 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn norm_ver(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .to_string()
+}
+
 /// `can_manage`: panel admin only; non-admins get read-only version info.
 pub fn version_management_page(can_manage: bool) -> String {
     let existing = detect_existing_install(RUNNING_VERSION);
     let installed = html_escape(&existing.package_version);
     let running = html_escape(RUNNING_VERSION);
+    let versions_match = norm_ver(&existing.package_version) == norm_ver(RUNNING_VERSION);
+    let current_row_hidden = if versions_match { "" } else { " hidden" };
+    let split_row_hidden = if versions_match { " hidden" } else { "" };
+    let diverge_note = if versions_match {
+        String::new()
+    } else if cmp_ver_ahead(RUNNING_VERSION, &existing.package_version) {
+        "Binary tip ahead of packaged RPM/DEB. Upgrade the package to match the running binary."
+            .to_string()
+    } else {
+        "Packaged install differs from the running binary.".to_string()
+    };
+    let diverge_hidden = if diverge_note.is_empty() {
+        " hidden"
+    } else {
+        ""
+    };
+    let diverge_note_esc = html_escape(&diverge_note);
     let source_block = if can_manage {
         r#"<div id="cpn-version-source" class="stack-form" style="margin-top:18px;max-width:640px;">
   <h3 style="margin:0 0 10px;">Update source</h3>
@@ -86,20 +111,118 @@ pub fn version_management_page(can_manage: bool) -> String {
         script.push_str(&version_source_script());
     }
     let body = format!(
-        r#"<ul class="kv-list">
-  <li><span>Running</span><span><strong id="cpn-version-running">{running}</strong><br><span class="muted" id="cpn-version-running-date"></span><br><span class="muted" id="cpn-version-running-sha"></span></span></li>
-  <li><span>Installed package</span><span><strong id="cpn-version-installed">{installed}</strong><br><span class="muted" id="cpn-version-installed-date"></span></span></li>
-  <li><span>Your source</span><strong id="cpn-version-source-tip">-</strong></li>
-  <li><span>Upstream official</span><strong id="cpn-version-upstream-tip">-</strong></li>
-  <li><span>Latest release</span><strong id="cpn-version-latest">-</strong></li>
-  <li><span>Stable tip</span><strong id="cpn-version-stable-tip">-</strong></li>
-  <li><span>Manifest</span><strong>{manifest}</strong></li>
-</ul>
-<p id="cpn-version-status" class="muted" role="status">Checking for updates...</p>
-<div id="cpn-version-details" class="muted"></div>
-<div class="stack-form" style="margin-top:16px;max-width:560px;">
-  <button type="button" class="btn-primary" id="cpn-version-refresh">Check for updates</button>
+        r#"<style>
+.version-card-toolbar {{
+  display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+  gap:12px; margin:0 0 8px;
+}}
+.version-card-toolbar .version-card-lede {{
+  margin:0; flex:1 1 220px; max-width:520px; line-height:1.45;
+}}
+.version-card-toolbar #cpn-version-refresh {{
+  flex:0 0 auto; margin-left:auto;
+}}
+.version-kv {{ list-style:none; padding:0; margin:0; }}
+.version-kv > li {{
+  display:grid; grid-template-columns:minmax(140px,180px) minmax(0,1fr);
+  gap:12px 20px; align-items:start; padding:12px 0;
+  border-top:1px solid var(--hairline,#2a2f3a); font-size:14px;
+}}
+/* display:grid must not override the HTML hidden attribute */
+.version-kv > li[hidden] {{ display:none !important; }}
+.version-kv > li:not([hidden]) {{ border-top:1px solid var(--hairline,#2a2f3a); }}
+.version-kv > li:not([hidden]):first-child,
+.version-kv > li[hidden] + li:not([hidden]) {{ border-top:0; }}
+.version-kv .kv-label {{ color:var(--muted,#98a2b3); font-weight:500; padding-top:2px; }}
+.version-kv .kv-value {{
+  min-width:0; text-align:right; justify-self:stretch;
+  overflow-wrap:anywhere; word-break:break-word; line-height:1.45;
+}}
+.version-kv .kv-value strong {{ font-weight:700; }}
+.version-kv .kv-meta {{ display:block; margin-top:4px; color:var(--muted,#98a2b3); font-weight:400; font-size:13px; }}
+.version-kv .kv-value[data-update-state="behind"],
+.version-kv strong[data-update-state="behind"] {{ color:#fb923c; }}
+.version-kv .kv-value[data-update-state="stale"],
+.version-kv strong[data-update-state="stale"] {{ color:#f87171; }}
+.version-kv .kv-value[data-update-state="current"],
+.version-kv strong[data-update-state="current"] {{ color:#4ade80; }}
+.version-kv .kv-hint {{ color:var(--muted,#98a2b3); font-size:13px; line-height:1.45; }}
+@media (max-width:640px) {{
+  .version-kv > li {{ grid-template-columns:1fr; gap:4px; }}
+  .version-kv .kv-value {{ text-align:left; }}
+  .version-card-toolbar #cpn-version-refresh {{ margin-left:0; }}
+}}
+</style>
+<div class="version-card-toolbar">
+  <p class="muted version-card-lede">
+    <strong>Running</strong> is the executing panel binary.
+    <strong>Installed package</strong> is the RPM/DEB/manifest on disk (can lag after a hot-deploy).
+    When they match, CPN shows one <strong>Current</strong> row.
+  </p>
+  <button type="button" class="btn-primary" id="cpn-version-refresh">Refresh</button>
 </div>
+<ul class="kv-list version-kv" id="cpn-version-summary">
+  <li id="cpn-version-row-current"{current_row_hidden}>
+    <span class="kv-label">Current</span>
+    <span class="kv-value">
+      <strong id="cpn-version-current">{running}</strong>
+      <span class="kv-meta" id="cpn-version-current-sha"></span>
+      <span class="kv-meta" id="cpn-version-current-date"></span>
+      <span class="kv-meta" id="cpn-version-current-installed-at"></span>
+    </span>
+  </li>
+  <li id="cpn-version-row-running"{split_row_hidden}>
+    <span class="kv-label">Running</span>
+    <span class="kv-value">
+      <strong id="cpn-version-running">{running}</strong>
+      <span class="kv-meta" id="cpn-version-running-date"></span>
+      <span class="kv-meta" id="cpn-version-running-sha"></span>
+    </span>
+  </li>
+  <li id="cpn-version-row-installed"{split_row_hidden}>
+    <span class="kv-label">Installed package</span>
+    <span class="kv-value">
+      <strong id="cpn-version-installed">{installed}</strong>
+      <span class="kv-meta" id="cpn-version-installed-date"></span>
+      <span class="kv-meta" id="cpn-version-installed-at"></span>
+    </span>
+  </li>
+  <li id="cpn-version-row-diverge"{diverge_hidden}>
+    <span class="kv-label">Note</span>
+    <span class="kv-value kv-hint" id="cpn-version-diverge">{diverge_note_esc}</span>
+  </li>
+  <li>
+    <span class="kv-label">Latest available</span>
+    <span class="kv-value">
+      <strong id="cpn-version-latest">Loading...</strong>
+      <span class="kv-meta" id="cpn-version-status" role="status">Checking for updates...</span>
+    </span>
+  </li>
+  <li>
+    <span class="kv-label">Update source</span>
+    <span class="kv-value">
+      <strong id="cpn-version-source-tip">Loading...</strong>
+      <span class="kv-meta" id="cpn-version-upstream-tip"></span>
+      <span class="kv-meta" id="cpn-version-stable-tip"></span>
+    </span>
+  </li>
+  <li>
+    <span class="kv-label">Manifest</span>
+    <span class="kv-value"><strong>{manifest}</strong></span>
+  </li>
+  <li id="cpn-version-row-repo" hidden>
+    <span class="kv-label">Configured repo</span>
+    <span class="kv-value" id="cpn-version-repo">-</span>
+  </li>
+  <li id="cpn-version-row-source" hidden>
+    <span class="kv-label">Package source</span>
+    <span class="kv-value" id="cpn-version-pkg-source">-</span>
+  </li>
+  <li id="cpn-version-row-note" hidden>
+    <span class="kv-label">Details</span>
+    <span class="kv-value muted" id="cpn-version-note">-</span>
+  </li>
+</ul>
 {source_block}
 {manage_block}
 <p class="muted" style="margin-top:14px;max-width:640px;">
@@ -115,6 +238,10 @@ pub fn version_management_page(can_manage: bool) -> String {
 {script}"#,
         running = running,
         installed = installed,
+        current_row_hidden = current_row_hidden,
+        split_row_hidden = split_row_hidden,
+        diverge_hidden = diverge_hidden,
+        diverge_note_esc = diverge_note_esc,
         manifest = if existing.has_manifest {
             "present"
         } else {
@@ -138,6 +265,12 @@ pub fn version_management_page(can_manage: bool) -> String {
     )
 }
 
+fn cmp_ver_ahead(a: &str, b: &str) -> bool {
+    use crate::releases::compare_versions;
+    use std::cmp::Ordering;
+    compare_versions(a, b) == Ordering::Greater
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,8 +288,22 @@ mod tests {
         assert!(html.contains("cpn-version-stable-tip"));
         assert!(html.contains("latest two published releases"));
         assert!(html.contains("cpn-version-running-date"));
+        assert!(html.contains("cpn-version-installed-at"));
+        assert!(html.contains("version-kv"));
+        assert!(html.contains("cpn-version-row-repo"));
+        assert!(html.contains("cpn-version-row-current"));
+        assert!(html.contains("cpn-version-row-diverge"));
+        assert!(html.contains("Latest available"));
+        assert!(html.contains(">Refresh<"));
+        assert!(html.contains("version-card-toolbar"));
+        assert!(html.contains("can lag after a hot-deploy"));
+        assert!(html.contains("li[hidden]"));
+        assert!(html.contains("data-update-state=\"stale\""));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
+        assert!(html.contains("cpnVersionCache"));
+        assert!(!html.contains("cpn-version-row-latest-tag"));
+        assert!(!html.contains("cpn-version-row-commit"));
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));
         assert!(!html.to_lowercase().contains("cyberpanel"));
