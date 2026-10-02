@@ -2,8 +2,8 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    flash_messages, html_ok, html_ok_pop_flash, login_redirect, redirect_flash, redirect_notice,
-    require_panel_user,
+    flash_messages, html_blocking, html_ok, html_ok_pop_flash, login_redirect, redirect_flash,
+    redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_email_auth::{
     email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
@@ -291,24 +291,27 @@ pub async fn email_mta_sts_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if !crate::panel_feature_gate::mta_sts_unlocked() {
-        return html_ok(panel_shell(
+    // Unlock checks and panel_shell host probes must not pin an Actix worker (408 under load).
+    let domain = query.get("domain").cloned().unwrap_or_default();
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    html_blocking(move || {
+        if !crate::panel_feature_gate::mta_sts_unlocked() {
+            return panel_shell(
+                &user,
+                "email",
+                "MTA-STS",
+                &crate::panel_feature_gate::email_auth_plugin_required_page("MTA-STS", "mtaSts"),
+            );
+        }
+        panel_shell(
             &user,
             "email",
             "MTA-STS",
-            &crate::panel_feature_gate::email_auth_plugin_required_page("MTA-STS", "mtaSts"),
-        ));
-    }
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "MTA-STS",
-        &email_mta_sts_page(
-            query.get("domain").map(String::as_str).unwrap_or(""),
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+            &email_mta_sts_page(&domain, notice.as_deref(), error.as_deref()),
+        )
+    })
+    .await
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -396,24 +399,26 @@ pub async fn email_bimi_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if !crate::panel_feature_gate::bimi_unlocked() {
-        return html_ok(panel_shell(
+    let domain = query.get("domain").cloned().unwrap_or_default();
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    html_blocking(move || {
+        if !crate::panel_feature_gate::bimi_unlocked() {
+            return panel_shell(
+                &user,
+                "email",
+                "BIMI",
+                &crate::panel_feature_gate::email_auth_plugin_required_page("BIMI", "bimi"),
+            );
+        }
+        panel_shell(
             &user,
             "email",
             "BIMI",
-            &crate::panel_feature_gate::email_auth_plugin_required_page("BIMI", "bimi"),
-        ));
-    }
-    html_ok(panel_shell(
-        &user,
-        "email",
-        "BIMI",
-        &email_bimi_page(
-            query.get("domain").map(String::as_str).unwrap_or(""),
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
-    ))
+            &email_bimi_page(&domain, notice.as_deref(), error.as_deref()),
+        )
+    })
+    .await
 }
 
 #[derive(Debug, serde::Deserialize)]

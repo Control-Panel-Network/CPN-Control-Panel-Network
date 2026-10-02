@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Email MTA-STS / BIMI white page or 408**: `/email/mta-sts` and `/email/bimi` now render via `html_blocking` (20s hub budget) so unlock checks and `panel_shell` host probes do not pin an Actix worker under disk load. Unlock prefers the O(1) host flag / host-plugin path before scanning site plugin trees. Each page reads the sites registry once for the default domain and dropdown.
+- **Email MTA-STS / BIMI Recommended DNS overflow**: Recommended DNS no longer uses a crushed `data-table` (Name/Value letter-wrap). Records render as full-width padded cards (Websites-list style) with sensible wrapping; policy and push actions stay usable on narrow viewports.
 - **Large classic restore plan timeout**: `/backups/restore/plan` no longer fails after 15s when inventorying multi-GB source control-panel archives. Listing uses a 2h budget, filters deep website noise, caches members under `/var/lib/cpn/backup-inventory/`, and large restores prefer selective path extract to reduce staging disk use.
 
 - **System Repair hang / Busy stub**: `/server/system-repair` no longer runs the full probe suite inside the hub HTML render (which hit the 20s `gathering host status` 503). The page shell returns immediately and loads check cards from `/server/system-repair/api` with a 16s budget, 20s result cache, and 6s fail-fast per collector group. Cloudflare live verify is skipped on this path (use DNS Test connection). Login/getenforce probes use short timeouts.
