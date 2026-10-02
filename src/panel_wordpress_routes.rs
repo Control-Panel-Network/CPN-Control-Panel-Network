@@ -1,4 +1,4 @@
-﻿//! Authenticated `/wordpress` panel routes.
+//! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
@@ -9,9 +9,9 @@ use crate::panel_wordpress_ui::{
 use crate::wordpress_install::{WordpressInstallRequest, install_wordpress, parse_plugin_sources};
 use crate::wordpress_manage::{
     activate_theme, all_sites_snapshot, delete_wordpress, install_plugin, refresh_wordpress_site,
-    scan_wordpress_sites, set_debugging, set_maintenance, set_password_protection,
-    set_search_indexing,
+    set_debugging, set_maintenance, set_password_protection, set_search_indexing,
 };
+use crate::wordpress_scan::scan_wordpress_sites;
 use crate::wordpress_wpcli::{detect_wp_cli, ensure_wp_cli};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -178,6 +178,31 @@ pub struct WordpressDomainForm {
     domain: String,
 }
 
+fn wordpress_scan_notice(results: &[crate::wordpress_manage::WordpressRefreshResult]) -> String {
+    let sub_names: Vec<&str> = results
+        .iter()
+        .filter(|r| crate::backups::is_subdomain_site(&r.site.domain))
+        .map(|r| r.site.domain.as_str())
+        .collect();
+    let main_count = results.len().saturating_sub(sub_names.len());
+    if sub_names.is_empty() {
+        format!("Scan complete. Refreshed {} site(s).", results.len())
+    } else if main_count == 0 {
+        format!(
+            "Scan complete. Found {} WordPress sub-site(s): {}.",
+            sub_names.len(),
+            sub_names.join(", ")
+        )
+    } else {
+        format!(
+            "Scan complete. Refreshed {} main and {} sub-site(s). Sub-sites: {}.",
+            main_count,
+            sub_names.len(),
+            sub_names.join(", ")
+        )
+    }
+}
+
 #[post("/wordpress/scan")]
 pub async fn wordpress_scan_post(
     http: HttpRequest,
@@ -187,14 +212,10 @@ pub async fn wordpress_scan_post(
         return login_redirect(&http);
     };
     match scan_wordpress_sites() {
-        Ok(results) => wp_redirect(
-            "/wordpress",
-            Some(&format!(
-                "Scan complete. Refreshed {} site(s).",
-                results.len()
-            )),
-            None,
-        ),
+        Ok(results) => {
+            let notice = wordpress_scan_notice(&results);
+            wp_redirect("/wordpress", Some(&notice), None)
+        }
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
     }
 }
