@@ -101,8 +101,16 @@ pub fn start_email_stack() -> Result<String, String> {
     let smtp465 = port_open("127.0.0.1:465", 250);
     Ok(format!(
         "Started Email stack (Postfix + Dovecot). IMAP :143 ready; submission :587 {}; SMTPS :465 {}.",
-        if smtp587 { "listening" } else { "not listening yet" },
-        if smtp465 { "listening" } else { "not listening yet" },
+        if smtp587 {
+            "listening"
+        } else {
+            "not listening yet"
+        },
+        if smtp465 {
+            "listening"
+        } else {
+            "not listening yet"
+        },
     ))
 }
 

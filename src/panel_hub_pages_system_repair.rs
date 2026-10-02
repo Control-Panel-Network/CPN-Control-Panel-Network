@@ -1,4 +1,4 @@
-﻿//! Owner-only System Repair hub UI (progressive check cards via JSON API).
+//! Owner-only System Repair hub UI (progressive check cards via JSON API).
 
 use crate::panel_hubs::feature_shell;
 use crate::system_repair::PRODUCT_NAME;
@@ -208,16 +208,22 @@ pub fn system_repair_json_report_page(json_body: &str, notice: Option<&str>) -> 
     let escaped = html_escape_json(json_body);
     // Color status string values after escaping so we never inject HTML from data.
     let colored = escaped
-        .replace("&quot;pass&quot;", "<span class=\"sr-j-pass\">&quot;pass&quot;</span>")
-        .replace("&quot;warn&quot;", "<span class=\"sr-j-warn\">&quot;warn&quot;</span>")
-        .replace("&quot;fail&quot;", "<span class=\"sr-j-fail\">&quot;fail&quot;</span>");
+        .replace(
+            "&quot;pass&quot;",
+            "<span class=\"sr-j-pass\">&quot;pass&quot;</span>",
+        )
+        .replace(
+            "&quot;warn&quot;",
+            "<span class=\"sr-j-warn\">&quot;warn&quot;</span>",
+        )
+        .replace(
+            "&quot;fail&quot;",
+            "<span class=\"sr-j-fail\">&quot;fail&quot;</span>",
+        );
     let mut body = String::new();
     body.push_str(styles());
     if let Some(n) = notice.filter(|s| !s.trim().is_empty()) {
-        body.push_str(&format!(
-            "<p class=\"muted\">{}</p>",
-            html_escape_json(n)
-        ));
+        body.push_str(&format!("<p class=\"muted\">{}</p>", html_escape_json(n)));
     }
     body.push_str(
         r#"<div class="sr-json-wrap">

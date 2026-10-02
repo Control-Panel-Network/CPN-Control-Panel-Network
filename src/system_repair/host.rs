@@ -258,14 +258,7 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             )
         };
         push(
-            checks,
-            "host.ssl",
-            "ssl",
-            "Site SSL",
-            status,
-            detail,
-            false,
-            None,
+            checks, "host.ssl", "ssl", "Site SSL", status, detail, false, None,
         );
     }
 

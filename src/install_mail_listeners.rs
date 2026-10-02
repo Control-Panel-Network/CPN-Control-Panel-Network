@@ -75,10 +75,7 @@ pub fn ensure_postfix_tls_material() {
     }
     if cert.is_file() && key.is_file() {
         let _ = StdCommand::new("postconf")
-            .args([
-                "-e",
-                &format!("smtpd_tls_cert_file={}", cert.display()),
-            ])
+            .args(["-e", &format!("smtpd_tls_cert_file={}", cert.display())])
             .status();
         let _ = StdCommand::new("postconf")
             .args(["-e", &format!("smtpd_tls_key_file={}", key.display())])
