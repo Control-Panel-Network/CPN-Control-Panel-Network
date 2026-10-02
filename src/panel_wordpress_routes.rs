@@ -1,7 +1,9 @@
 //! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     wordpress_install_page, wordpress_list_page, wordpress_manage_page,
@@ -139,7 +141,11 @@ pub async fn wordpress_manage_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let domain = query.get("domain").map(String::as_str).unwrap_or("").to_string();
+    let domain = query
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     if domain.trim().is_empty() {
         return wp_redirect("/wordpress", None, Some("Domain is required"));
     }
@@ -186,12 +192,7 @@ pub async fn wordpress_manage_route(
         &user,
         "wordpress",
         "Manage WordPress",
-        &wordpress_manage_page(
-            &snapshot,
-            &tab,
-            notice.as_deref(),
-            error.as_deref(),
-        ),
+        &wordpress_manage_page(&snapshot, &tab, notice.as_deref(), error.as_deref()),
     ))
 }
 

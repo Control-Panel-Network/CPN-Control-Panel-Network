@@ -1,7 +1,9 @@
 //! HTTP routes for Site File Manager (jailed to site home).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_blocking, login_redirect, require_panel_user, urlencoding_simple};
+use crate::panel_hub_http::{
+    html_blocking, login_redirect, require_panel_user, urlencoding_simple,
+};
 use crate::panel_hub_pages_files::site_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, run_op, same_origin_ok, site_redirect};
 use crate::panel_ops_files::{
@@ -24,7 +26,11 @@ async fn render_site_files_page(
     let Some(user) = require_panel_user(state, http) else {
         return login_redirect(http);
     };
-    let domain = query.get("domain").map(String::as_str).unwrap_or("").to_string();
+    let domain = query
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     let site = match require_manage_site(&user, &domain, SitePerm::Enable) {
         Ok(s) => s,
         Err(err) => {
