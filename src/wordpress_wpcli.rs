@@ -497,17 +497,16 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
     let _ = php;
 
     // Prefer an existing system `wp` when it already reports a real version.
-    if let Some(bin) = which_wp() {
-        if !bin_is_private_phar(&bin)
-            && let Some(version) = probe_wp_cli_version(&bin)
-        {
-            return Ok(WpCliStatus {
-                available: true,
-                binary: Some(bin),
-                version: Some(version),
-                detail: "WP-CLI is available.".into(),
-            });
-        }
+    if let Some(bin) = which_wp()
+        && !bin_is_private_phar(&bin)
+        && let Some(version) = probe_wp_cli_version(&bin)
+    {
+        return Ok(WpCliStatus {
+            available: true,
+            binary: Some(bin),
+            version: Some(version),
+            detail: "WP-CLI is available.".into(),
+        });
     }
 
     let bin_dir = paths::join_data("bin");
