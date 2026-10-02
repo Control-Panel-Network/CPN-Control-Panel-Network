@@ -203,8 +203,7 @@ pub fn format_bytes_eu(n: u64) -> String {
     let int_part = rounded.trunc() as u64;
     let mut out = format_grouped_u64(int_part);
     if decimals > 0 {
-        let frac = ((rounded.fract() * factor).round() as u64)
-            .min(factor as u64 - 1);
+        let frac = ((rounded.fract() * factor).round() as u64).min(factor as u64 - 1);
         out.push(',');
         out.push_str(&format!("{:0width$}", frac, width = decimals as usize));
     }

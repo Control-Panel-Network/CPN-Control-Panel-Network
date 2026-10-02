@@ -266,13 +266,7 @@ pub fn list_restore_archives_with_fallback(
     );
     let legacy = legacy_panel_backups_dir();
     if legacy != panel {
-        push_dir_hits(
-            &legacy,
-            "Legacy panel archives",
-            false,
-            &mut out,
-            &mut seen,
-        );
+        push_dir_hits(&legacy, "Legacy panel archives", false, &mut out, &mut seen);
     }
 
     // Registered site backups (even when another domain was selected).
