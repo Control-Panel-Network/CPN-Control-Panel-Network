@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Websites and WordPress list split (one sidebar group each)**: Main domains at `/websites` (create at `/websites/create`). Nested sites at `/subdomains` (create at `/subdomains/create`). Manage Domains tab still shows parent/child cards. WordPress uses `/wordpress` vs `/wordpress/subsites` (matching install paths). Sidebar has one **Websites** group (List/Create Website plus List/Create Sub-domain) and one **WordPress** group (sites, install, sub-sites, sub-site install). Hiding Websites or WordPress in ACL also gates the nested list routes.
+- **List search (`q=`)**: `/websites`, `/subdomains`, `/wordpress`, and `/wordpress/subsites` filter by domain (and parent on sub lists), case-insensitive, with a mobile-friendly search row matching other CPN lists.
+- **Delete on split lists**: `/subdomains` cards keep Manage plus POST `/websites/delete` (same as `/websites` and Manage Overview). `/wordpress` and `/wordpress/subsites` site cards include Delete WordPress (POST `/wordpress/delete`). Successful site delete returns to `/websites` or `/subdomains`; WordPress delete returns to `/wordpress` or `/wordpress/subsites`.
+
 ### Fixed
 
 - **System Repair hang / Busy stub**: `/server/system-repair` no longer runs the full probe suite inside the hub HTML render (which hit the 20s `gathering host status` 503). The page shell returns immediately and loads check cards from `/server/system-repair/api` with a 16s budget, 20s result cache, and 6s fail-fast per collector group. Cloudflare live verify is skipped on this path (use DNS Test connection). Login/getenforce probes use short timeouts.
-
-### Added
 
 ## [1.1.0] - 02/10/2026
 

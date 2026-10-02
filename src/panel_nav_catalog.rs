@@ -33,6 +33,14 @@ const WEBSITES_CHILDREN: &[NavChild] = &[
         label: "Create Website",
         href: "/websites/create",
     },
+    NavChild {
+        label: "List Sub-domains",
+        href: "/subdomains",
+    },
+    NavChild {
+        label: "Create Sub-domain",
+        href: "/subdomains/create",
+    },
 ];
 
 const WORDPRESS_CHILDREN: &[NavChild] = &[
@@ -43,6 +51,14 @@ const WORDPRESS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Install WordPress",
         href: "/wordpress/install",
+    },
+    NavChild {
+        label: "WordPress Sub-sites",
+        href: "/wordpress/subsites",
+    },
+    NavChild {
+        label: "Install WordPress Sub-site",
+        href: "/wordpress/subsites/install",
     },
 ];
 

@@ -73,6 +73,15 @@ pub fn bundled_phar_path() -> PathBuf {
     paths::join_data("bin").join("wp-cli.phar")
 }
 
+/// Operator-facing binary label (`php /path` instead of internal `php:/path`).
+pub fn format_wp_cli_binary(bin_spec: &str) -> String {
+    if let Some(phar) = bin_spec.strip_prefix("php:") {
+        format!("php {phar}")
+    } else {
+        bin_spec.to_string()
+    }
+}
+
 fn php_bin() -> Option<String> {
     for candidate in [
         "php", "php82", "php83", "php84", "php8.2", "php8.3", "php8.4", "php85", "php8.5",
