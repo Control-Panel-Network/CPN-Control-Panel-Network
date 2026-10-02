@@ -1,5 +1,6 @@
 //! WordPress panel HTML (list, install, manage tabs).
 
+use crate::backups::is_subdomain_site;
 use crate::wordpress::{WordpressSite, list_wordpress_sites};
 use crate::wordpress_manage::{PluginRow, ThemeRow, WordpressSiteSnapshot};
 use crate::wordpress_wpcli::WpCliStatus;
@@ -93,19 +94,32 @@ fn wp_cli_status_card(status: &WpCliStatus) -> String {
 
 fn site_table_rows(sites: &[WordpressSite]) -> String {
     if sites.is_empty() {
-        return r#"<p class="empty-state">No WordPress sites registered yet. Install WordPress on an existing site or run Scan.</p>"#.into();
+        return r#"<p class="empty-state">No WordPress sites in this list yet.</p>"#.into();
     }
     let mut rows = String::from(
         r#"<div class="table-wrap"><table class="data-table">
       <thead><tr>
-        <th>Domain</th><th>Title</th><th>WP version</th><th>Theme</th><th>Plugins</th><th>Owner</th><th>Actions</th>
+        <th>Domain</th><th>Parent</th><th>Title</th><th>WP version</th><th>Theme</th><th>Plugins</th><th>Owner</th><th>Actions</th>
       </tr></thead><tbody>"#,
     );
     for site in sites {
         let domain_q = html_escape(&site.domain);
+        let parent = crate::sites::resolve_parent_domain(&site.domain)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        let parent_cell = if parent.is_empty() {
+            "-".to_string()
+        } else {
+            format!(
+                r#"<a href="/websites/manage?domain={p}">{p}</a>"#,
+                p = html_escape(&parent)
+            )
+        };
         rows.push_str(&format!(
             r#"<tr>
           <td><strong>{domain}</strong><div class="muted">{url}</div></td>
+          <td>{parent}</td>
           <td>{title}</td>
           <td>{wp_version}</td>
           <td>{theme}</td>
@@ -116,6 +130,7 @@ fn site_table_rows(sites: &[WordpressSite]) -> String {
           </td>
         </tr>"#,
             domain = html_escape(&site.domain),
+            parent = parent_cell,
             url = dash_or(&site.site_url),
             title = dash_or(&site.title),
             wp_version = dash_or(&site.wp_version),
@@ -129,12 +144,19 @@ fn site_table_rows(sites: &[WordpressSite]) -> String {
     rows
 }
 
+fn filtered_wordpress_sites(subsites: bool) -> Vec<WordpressSite> {
+    list_wordpress_sites()
+        .into_iter()
+        .filter(|site| is_subdomain_site(&site.domain) == subsites)
+        .collect()
+}
+
 pub fn wordpress_list_page(
     notice: Option<&str>,
     error: Option<&str>,
     wp_cli: &WpCliStatus,
 ) -> String {
-    let sites = list_wordpress_sites();
+    let sites = filtered_wordpress_sites(false);
     format!(
         r#"{heading}
       {ok}
@@ -143,9 +165,10 @@ pub fn wordpress_list_page(
         {wp_cli_card}
         <article class="section-card">
           <h2>Quick actions</h2>
-          <p class="muted">Install WordPress on a CPN site docroot, scan for existing installs, or manage registered sites.</p>
+          <p class="muted">Install WordPress on a main CPN website, scan for existing installs, or open WordPress Sub-sites for nested domains.</p>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
             <a class="btn-primary" href="/wordpress/install">Install WordPress</a>
+            <a class="btn-secondary" href="/wordpress/subsites">WordPress Sub-sites</a>
             <form method="post" action="/wordpress/scan" class="inline-form">
               <button type="submit" class="btn-secondary">Scan sites</button>
             </form>
@@ -153,18 +176,81 @@ pub fn wordpress_list_page(
         </article>
       </div>
       <article class="section-card" style="margin-top:18px;">
-        <h2>Registered sites ({count})</h2>
+        <h2>WordPress sites ({count})</h2>
+        <p class="muted">Main domains only. Nested WordPress installs are under <a href="/wordpress/subsites">WordPress Sub-sites</a>.</p>
         {rows}
       </article>"#,
         heading = section_heading(
             "WordPress",
-            "Install and manage WordPress on CPN website document roots. Passwords are never stored in the registry.",
+            "Install and manage WordPress on main website document roots. Passwords are never stored in the registry.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         wp_cli_card = wp_cli_status_card(wp_cli),
         count = sites.len(),
         rows = site_table_rows(&sites),
+    )
+}
+
+pub fn wordpress_subsites_list_page(
+    notice: Option<&str>,
+    error: Option<&str>,
+    wp_cli: &WpCliStatus,
+) -> String {
+    let sites = filtered_wordpress_sites(true);
+    format!(
+        r#"{heading}
+      {ok}
+      {err}
+      <div class="resource-grid">
+        {wp_cli_card}
+        <article class="section-card">
+          <h2>Quick actions</h2>
+          <p class="muted">Install WordPress on a CPN sub-domain, or open main WordPress Sites.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
+            <a class="btn-primary" href="/wordpress/subsites/install">Install WordPress Sub-site</a>
+            <a class="btn-secondary" href="/wordpress">WordPress Sites</a>
+            <form method="post" action="/wordpress/subsites/scan" class="inline-form">
+              <button type="submit" class="btn-secondary">Scan sites</button>
+            </form>
+          </div>
+        </article>
+      </div>
+      <article class="section-card" style="margin-top:18px;">
+        <h2>WordPress sub-sites ({count})</h2>
+        <p class="muted">Sub-domains only. Main WordPress installs are under <a href="/wordpress">WordPress Sites</a>.</p>
+        {rows}
+      </article>"#,
+        heading = section_heading(
+            "WordPress Sub-sites",
+            "WordPress installs on nested domains under a parent website.",
+        ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
+        wp_cli_card = wp_cli_status_card(wp_cli),
+        count = sites.len(),
+        rows = site_table_rows(&sites),
+    )
+}
+
+fn wordpress_install_form(action: &str, domain_hint: &str, create_label: &str) -> String {
+    format!(
+        r#"<form method="post" action="{action}" class="stack-form" style="max-width:560px;">
+          <label>Domain<input type="text" name="domain" required placeholder="{hint}" autocomplete="off"></label>
+          <label>Site title<input type="text" name="title" required placeholder="My blog"></label>
+          <label>Site URL<input type="url" name="site_url" placeholder="https://{hint}"></label>
+          <label>Admin username<input type="text" name="admin_user" required placeholder="admin" autocomplete="username"></label>
+          <label>Admin password<input type="password" name="admin_password" required minlength="8" autocomplete="new-password"></label>
+          <label>Admin email<input type="email" name="admin_email" required placeholder="you@example.com" autocomplete="email"></label>
+          <label>Pre-install plugins<textarea name="plugin_sources" rows="3" placeholder="akismet, hello-dolly, https://example.com/plugin.zip"></textarea></label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
+            <input type="checkbox" name="create_site_if_missing" value="1"> {create_label}
+          </label>
+          <button type="submit" class="btn-primary">Install WordPress</button>
+        </form>"#,
+        action = html_escape(action),
+        hint = html_escape(domain_hint),
+        create_label = html_escape(create_label),
     )
 }
 
@@ -175,27 +261,44 @@ pub fn wordpress_install_page(notice: Option<&str>, error: Option<&str>) -> Stri
       {err}
       <article class="section-card">
         <h2>Install WordPress</h2>
-        <p class="muted">Creates MariaDB database and user, downloads WordPress core, runs wp core install, and optionally pre-installs plugins. The CPN site must exist or enable create site below.</p>
-        <form method="post" action="/wordpress/install" class="stack-form" style="max-width:560px;">
-          <label>Domain<input type="text" name="domain" required placeholder="blog.example.com" autocomplete="off"></label>
-          <label>Site title<input type="text" name="title" required placeholder="My blog"></label>
-          <label>Site URL<input type="url" name="site_url" placeholder="https://blog.example.com"></label>
-          <label>Admin username<input type="text" name="admin_user" required placeholder="admin" autocomplete="username"></label>
-          <label>Admin password<input type="password" name="admin_password" required minlength="8" autocomplete="new-password"></label>
-          <label>Admin email<input type="email" name="admin_email" required placeholder="you@example.com" autocomplete="email"></label>
-          <label>Pre-install plugins<textarea name="plugin_sources" rows="3" placeholder="akismet, hello-dolly, https://example.com/plugin.zip"></textarea></label>
-          <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
-            <input type="checkbox" name="create_site_if_missing" value="1"> Create CPN site if missing
-          </label>
-          <button type="submit" class="btn-primary">Install WordPress</button>
-        </form>
+        <p class="muted">Installs on a <strong>main</strong> website docroot. For nested domains use <a href="/wordpress/subsites/install">Install WordPress Sub-site</a>.</p>
+        {form}
       </article>"#,
         heading = section_heading(
             "Install WordPress",
-            "One-click WordPress setup on a domain home docroot.",
+            "One-click WordPress setup on a main domain home docroot.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
+        form = wordpress_install_form(
+            "/wordpress/install",
+            "example.com",
+            "Create CPN main site if missing",
+        ),
+    )
+}
+
+pub fn wordpress_subsites_install_page(notice: Option<&str>, error: Option<&str>) -> String {
+    format!(
+        r#"{heading}
+      {ok}
+      {err}
+      <article class="section-card">
+        <h2>Install WordPress Sub-site</h2>
+        <p class="muted">Installs on a <strong>sub-domain</strong> docroot. Parent website must exist first. Main domains use <a href="/wordpress/install">Install WordPress</a>.</p>
+        {form}
+      </article>"#,
+        heading = section_heading(
+            "Install WordPress Sub-site",
+            "One-click WordPress setup on a nested domain home docroot.",
+        ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
+        form = wordpress_install_form(
+            "/wordpress/subsites/install",
+            "blog.example.com",
+            "Create CPN sub-domain if missing (parent must exist)",
+        ),
     )
 }
 

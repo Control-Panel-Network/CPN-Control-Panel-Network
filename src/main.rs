@@ -130,10 +130,11 @@ use cpn_installer::panel_routes::{
     plugins_deactivate_host, plugins_disable, plugins_enable, plugins_install,
     plugins_install_host, plugins_page, plugins_settings_page, plugins_settings_save,
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
-    site_preview_image, site_preview_refresh, websites_create, websites_create_page,
-    websites_delete, websites_manage, websites_page, websites_prefs, websites_pretty_manage,
-    websites_preview_prefs, websites_preview_redirect, websites_reset_placeholder, websites_resume,
-    websites_suspend, websites_suspend_message, websites_suspend_message_restore,
+    site_preview_image, site_preview_refresh, subdomains_create, subdomains_create_page,
+    subdomains_page, websites_create, websites_create_page, websites_delete, websites_manage,
+    websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
+    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
+    websites_suspend_message, websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
@@ -156,8 +157,10 @@ use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,
     wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
-    wordpress_theme_activate_post, wordpress_toggle_debug_post, wordpress_toggle_maintenance_post,
-    wordpress_toggle_password_post, wordpress_toggle_search_post,
+    wordpress_subsites_install_get, wordpress_subsites_install_post, wordpress_subsites_list_route,
+    wordpress_subsites_scan_post, wordpress_theme_activate_post, wordpress_toggle_debug_post,
+    wordpress_toggle_maintenance_post, wordpress_toggle_password_post,
+    wordpress_toggle_search_post,
 };
 use cpn_installer::status_pages::status_html_page;
 use futures_util::StreamExt;
@@ -1125,6 +1128,9 @@ async fn main() -> std::io::Result<()> {
             .service(websites_page)
             // Static /websites/create before /websites/{domain} catch-all.
             .service(websites_create_page)
+            .service(subdomains_page)
+            .service(subdomains_create_page)
+            .service(subdomains_create)
             .service(websites_manage)
             .service(websites_alias_add)
             .service(websites_alias_remove)
@@ -1152,10 +1158,14 @@ async fn main() -> std::io::Result<()> {
             .service(websites_prefs)
             .service(websites_preview_prefs)
             .service(wordpress_list_route)
+            .service(wordpress_subsites_list_route)
             .service(wordpress_install_get)
+            .service(wordpress_subsites_install_get)
             .service(wordpress_install_post)
+            .service(wordpress_subsites_install_post)
             .service(wordpress_manage_route)
             .service(wordpress_scan_post)
+            .service(wordpress_subsites_scan_post)
             .service(wordpress_ensure_wpcli_post)
             .service(wordpress_refresh_post)
             .service(wordpress_delete_post)

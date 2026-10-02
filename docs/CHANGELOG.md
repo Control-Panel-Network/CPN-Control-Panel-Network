@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Websites vs Sub-domains sidebar split**: Main domains list at `/websites` (Create at `/websites/create`). Nested sites list at `/subdomains` (Create at `/subdomains/create` with parent + label). Manage Domains tab still shows parent/child relationships and management cards. WordPress mirrors this with `/wordpress` vs `/wordpress/subsites` (and matching install paths). Hiding Websites or WordPress in sidebar ACL also gates the paired Sub-domains / WordPress Sub-sites section.
+
 ### Fixed
 
 - **System Repair hang / Busy stub**: `/server/system-repair` no longer runs the full probe suite inside the hub HTML render (which hit the 20s `gathering host status` 503). The page shell returns immediately and loads check cards from `/server/system-repair/api` with a 16s budget, 20s result cache, and 6s fail-fast per collector group. Cloudflare live verify is skipped on this path (use DNS Test connection). Login/getenforce probes use short timeouts.
-
-### Added
 
 ## [1.1.0] - 02/10/2026
 

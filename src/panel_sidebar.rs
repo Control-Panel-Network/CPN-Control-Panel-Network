@@ -16,12 +16,29 @@ fn html_escape(value: &str) -> String {
 pub fn search_catalog_json() -> String {
     let mut entries: Vec<(&str, &str, &str)> = vec![
         ("Dashboard", "/dashboard", "overview home"),
-        ("Websites", "/websites", "sites domains"),
+        ("Websites", "/websites", "sites domains main"),
+        ("Create Website", "/websites/create", "create main domain"),
+        ("Sub-domains", "/subdomains", "subdomain nested sites"),
+        (
+            "Create Sub-domain",
+            "/subdomains/create",
+            "create nested subdomain",
+        ),
         ("WordPress", "/wordpress", "wordpress wp-cli plugins themes"),
         (
             "Install WordPress",
             "/wordpress/install",
             "wordpress install plugins",
+        ),
+        (
+            "WordPress Sub-sites",
+            "/wordpress/subsites",
+            "wordpress subdomain nested",
+        ),
+        (
+            "Install WordPress Sub-site",
+            "/wordpress/subsites/install",
+            "wordpress install subdomain",
         ),
         ("Email", "/email", "mail postfix"),
         ("Databases", "/databases", "mariadb"),
@@ -61,6 +78,7 @@ pub fn search_catalog_json() -> String {
             "cloudflare dns management",
         ),
         ("Manage Websites", "/websites", "manage preview"),
+        ("Manage Sub-domains", "/subdomains", "manage nested preview"),
     ];
     if crate::panel_feature_gate::docker_installed() {
         entries.push((

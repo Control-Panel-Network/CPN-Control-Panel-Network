@@ -5,6 +5,7 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     wordpress_install_page, wordpress_list_page, wordpress_manage_page,
+    wordpress_subsites_install_page, wordpress_subsites_list_page,
 };
 use crate::wordpress_install::{WordpressInstallRequest, install_wordpress, parse_plugin_sources};
 use crate::wordpress_manage::{
@@ -49,6 +50,28 @@ pub async fn wordpress_list_route(
     ))
 }
 
+#[get("/wordpress/subsites")]
+pub async fn wordpress_subsites_list_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let wp_cli = detect_wp_cli();
+    html_ok(panel_shell(
+        &user,
+        "wordpress-subsites",
+        "WordPress Sub-sites",
+        &wordpress_subsites_list_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+            &wp_cli,
+        ),
+    ))
+}
+
 #[get("/wordpress/install")]
 pub async fn wordpress_install_get(
     http: HttpRequest,
@@ -63,6 +86,26 @@ pub async fn wordpress_install_get(
         "wordpress",
         "Install WordPress",
         &wordpress_install_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[get("/wordpress/subsites/install")]
+pub async fn wordpress_subsites_install_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "wordpress-subsites",
+        "Install WordPress Sub-site",
+        &wordpress_subsites_install_page(
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
         ),
@@ -95,9 +138,64 @@ pub async fn wordpress_install_post(
     state: web::Data<Arc<AppState>>,
     form: web::Form<WordpressInstallForm>,
 ) -> HttpResponse {
+    wordpress_install_for_kind(http, state, form, false).await
+}
+
+#[post("/wordpress/subsites/install")]
+pub async fn wordpress_subsites_install_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<WordpressInstallForm>,
+) -> HttpResponse {
+    wordpress_install_for_kind(http, state, form, true).await
+}
+
+async fn wordpress_install_for_kind(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<WordpressInstallForm>,
+    expect_subdomain: bool,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    let install_path = if expect_subdomain {
+        "/wordpress/subsites/install"
+    } else {
+        "/wordpress/install"
+    };
+    let domain = form.domain.trim().to_ascii_lowercase();
+    let looks_sub = crate::backups::is_subdomain_site(&domain)
+        || crate::sites::resolve_parent_domain(&domain)
+            .ok()
+            .flatten()
+            .is_some();
+    if expect_subdomain && !looks_sub {
+        // Creating a new nested FQDN: parent must exist even if site not registered yet.
+        let parent_ok = crate::sites::resolve_parent_domain(&domain)
+            .ok()
+            .flatten()
+            .is_some()
+            || crate::sites::parent_domain_candidates(&domain)
+                .iter()
+                .any(|c| crate::sites::load_site(c).is_ok());
+        if !parent_ok {
+            return wp_redirect(
+                install_path,
+                None,
+                Some(
+                    "WordPress Sub-site installs require a nested domain under an existing parent website.",
+                ),
+            );
+        }
+    }
+    if !expect_subdomain && looks_sub {
+        return wp_redirect(
+            install_path,
+            None,
+            Some("Use Install WordPress Sub-site for nested domains."),
+        );
+    }
     let req = WordpressInstallRequest {
         domain: form.domain.clone(),
         owner: user.clone(),
@@ -125,7 +223,7 @@ pub async fn wordpress_install_post(
                 None,
             )
         }
-        Err(error) => wp_redirect("/wordpress/install", None, Some(&error)),
+        Err(error) => wp_redirect(install_path, None, Some(&error)),
     }
 }
 
@@ -196,6 +294,27 @@ pub async fn wordpress_scan_post(
             None,
         ),
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
+    }
+}
+
+#[post("/wordpress/subsites/scan")]
+pub async fn wordpress_subsites_scan_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match scan_wordpress_sites() {
+        Ok(results) => wp_redirect(
+            "/wordpress/subsites",
+            Some(&format!(
+                "Scan complete. Refreshed {} site(s).",
+                results.len()
+            )),
+            None,
+        ),
+        Err(error) => wp_redirect("/wordpress/subsites", None, Some(&error)),
     }
 }
 

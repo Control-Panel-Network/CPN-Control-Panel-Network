@@ -35,6 +35,17 @@ const WEBSITES_CHILDREN: &[NavChild] = &[
     },
 ];
 
+const SUBDOMAINS_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "List Sub-domains",
+        href: "/subdomains",
+    },
+    NavChild {
+        label: "Create Sub-domain",
+        href: "/subdomains/create",
+    },
+];
+
 const WORDPRESS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "WordPress Sites",
@@ -43,6 +54,17 @@ const WORDPRESS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Install WordPress",
         href: "/wordpress/install",
+    },
+];
+
+const WORDPRESS_SUBSITES_CHILDREN: &[NavChild] = &[
+    NavChild {
+        label: "WordPress Sub-sites",
+        href: "/wordpress/subsites",
+    },
+    NavChild {
+        label: "Install WordPress Sub-site",
+        href: "/wordpress/subsites/install",
     },
 ];
 
@@ -406,10 +428,22 @@ pub(crate) const MAIN: &[NavEntry] = &[
         children: WEBSITES_CHILDREN,
     },
     NavEntry::Group {
+        id: "subdomains",
+        href: "/subdomains",
+        label: "Sub-domains",
+        children: SUBDOMAINS_CHILDREN,
+    },
+    NavEntry::Group {
         id: "wordpress",
         href: "/wordpress",
         label: "WordPress",
         children: WORDPRESS_CHILDREN,
+    },
+    NavEntry::Group {
+        id: "wordpress-subsites",
+        href: "/wordpress/subsites",
+        label: "WordPress Sub-sites",
+        children: WORDPRESS_SUBSITES_CHILDREN,
     },
     NavEntry::Link {
         id: "packages",

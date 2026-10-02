@@ -12,11 +12,13 @@ use crate::panel_plugin_settings::{
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
-    run_mariadb_install, set_websites_docroot_pref, set_websites_remote_preview_pref, websites_main,
+    run_mariadb_install, set_websites_docroot_pref, set_websites_remote_preview_pref,
+    subdomains_main, websites_main,
 };
 use crate::panel_website_manage::website_manage_main;
 use crate::panel_websites_create_ui::{
-    require_domain_in_cloudflare_zones, resolve_create_domain, websites_create_main,
+    require_domain_in_cloudflare_zones, resolve_create_domain, subdomains_create_main,
+    websites_create_main,
 };
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
@@ -104,6 +106,54 @@ pub async fn websites_create_page(
     ))
 }
 
+#[get("/subdomains")]
+pub async fn subdomains_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if query
+        .get("view")
+        .map(|v| v.trim().eq_ignore_ascii_case("create"))
+        .unwrap_or(false)
+    {
+        return HttpResponse::SeeOther()
+            .append_header(("Location", "/subdomains/create"))
+            .finish();
+    }
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "subdomains",
+        "Sub-domains",
+        &subdomains_main(&user, notice, error),
+    ))
+}
+
+#[get("/subdomains/create")]
+pub async fn subdomains_create_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").map(String::as_str);
+    let error = query.get("error").map(String::as_str);
+    let parent = query.get("parent").map(String::as_str);
+    html_ok(panel_shell(
+        &user,
+        "subdomains",
+        "Create Sub-domain",
+        &subdomains_create_main(&user, parent, notice, error),
+    ))
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct SiteCreateForm {
     #[serde(default)]
@@ -156,6 +206,18 @@ pub async fn websites_create(
         Ok(d) => d,
         Err(error) => return create_redirect("/websites/create", "error", &error),
     };
+    if crate::backups::is_subdomain_site(&domain)
+        || crate::sites::resolve_parent_domain(&domain)
+            .ok()
+            .flatten()
+            .is_some()
+    {
+        return create_redirect(
+            "/websites/create",
+            "error",
+            "Use Create Sub-domain for nested sites. List Websites is for main domains only.",
+        );
+    }
     if let Err(error) = require_domain_in_cloudflare_zones(&domain) {
         return create_redirect("/websites/create", "error", &error);
     }
@@ -194,6 +256,127 @@ pub async fn websites_create(
 }
 
 #[derive(Debug, serde::Deserialize)]
+pub struct SubdomainCreateForm {
+    #[serde(default)]
+    parent: String,
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    owner: String,
+    #[serde(default)]
+    docroot: String,
+}
+
+#[post("/subdomains/create")]
+pub async fn subdomains_create(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SubdomainCreateForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let admin = crate::packages::is_panel_admin(&user);
+    let owner = if form.owner.trim().is_empty() {
+        user.clone()
+    } else if admin {
+        form.owner.trim().to_string()
+    } else {
+        user.clone()
+    };
+    let parent = match crate::sites::normalize_domain(&form.parent) {
+        Ok(d) => d,
+        Err(error) => return create_redirect("/subdomains/create", "error", &error),
+    };
+    if crate::backups::is_subdomain_site(&parent) {
+        return create_redirect(
+            "/subdomains/create",
+            "error",
+            "Parent must be a main website, not another sub-domain.",
+        );
+    }
+    if crate::sites::load_site(&parent).is_err() {
+        return create_redirect(
+            "/subdomains/create",
+            "error",
+            &format!("Parent website `{parent}` was not found. Create it under Websites first."),
+        );
+    }
+    let label = form.label.trim().trim_matches('.').to_ascii_lowercase();
+    if label.is_empty() {
+        return create_redirect(
+            "/subdomains/create",
+            "error",
+            "Sub-domain label is required (for example blog).",
+        );
+    }
+    if label.contains('.') {
+        return create_redirect(
+            "/subdomains/create",
+            "error",
+            "Enter a single label only (blog), not a full FQDN.",
+        );
+    }
+    let domain = format!("{label}.{parent}");
+    let domain = match crate::sites::normalize_domain(&domain) {
+        Ok(d) => d,
+        Err(error) => return create_redirect("/subdomains/create", "error", &error),
+    };
+    match crate::sites::resolve_parent_domain(&domain) {
+        Ok(Some(resolved)) if resolved.eq_ignore_ascii_case(&parent) => {}
+        Ok(Some(other)) => {
+            return create_redirect(
+                "/subdomains/create",
+                "error",
+                &format!("Resolved parent `{other}` does not match selected parent `{parent}`."),
+            );
+        }
+        Ok(None) => {
+            return create_redirect(
+                "/subdomains/create",
+                "error",
+                "Could not resolve parent for this sub-domain.",
+            );
+        }
+        Err(error) => return create_redirect("/subdomains/create", "error", &error),
+    }
+    if let Err(error) = require_domain_in_cloudflare_zones(&domain) {
+        return create_redirect("/subdomains/create", "error", &error);
+    }
+    let docroot = if admin { form.docroot.trim() } else { "" };
+    if let Err(error) = require_site_create_allowed(&owner, &domain) {
+        return create_redirect("/subdomains/create", "error", &error);
+    }
+    let result = create_site_with_ssl(
+        &domain,
+        &owner,
+        if docroot.is_empty() {
+            None
+        } else {
+            Some(docroot)
+        },
+        None,
+        None,
+        None,
+    );
+    match result {
+        Ok((site, report)) => {
+            let mut notice = format!("Created sub-domain {} at {}.", site.domain, site.docroot);
+            if !report.steps.is_empty() {
+                notice.push(' ');
+                notice.push_str(&report.steps.join(" | "));
+            }
+            if !report.warnings.is_empty() {
+                notice.push_str(" Warnings: ");
+                notice.push_str(&report.warnings.join(" | "));
+            }
+            create_redirect("/subdomains", "notice", &notice)
+        }
+        Err(error) => create_redirect("/subdomains/create", "error", &error),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
 pub struct SiteDeleteForm {
     #[serde(default)]
     domain: String,
@@ -208,20 +391,26 @@ pub async fn websites_delete(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match delete_site_with_dns_report(&form.domain) {
+    let domain = form.domain.trim();
+    let list_path = if crate::backups::is_subdomain_site(domain) {
+        "/subdomains"
+    } else {
+        "/websites"
+    };
+    match delete_site_with_dns_report(domain) {
         Ok(dns_note) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 format!(
-                    "/websites?notice={}",
-                    urlencoding_simple(&format!("Deleted {}. {}", form.domain.trim(), dns_note))
+                    "{list_path}?notice={}",
+                    urlencoding_simple(&format!("Deleted {}. {}", domain, dns_note))
                 ),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("{list_path}?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }

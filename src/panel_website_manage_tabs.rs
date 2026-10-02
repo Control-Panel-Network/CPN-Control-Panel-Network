@@ -29,17 +29,34 @@ fn child_sites(parent: &str) -> Vec<SiteRecord> {
 
 pub fn tab_domains(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
+    let parent = resolve_parent_domain(&site.domain)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
-    tiles.push_str(&tile(
-        "/websites",
-        "Add Domains",
-        "Create a site or subdomain from Websites",
-    ));
-    tiles.push_str(&tile(
-        "/websites",
-        "List Domains",
-        "Open the Websites registry",
-    ));
+    if parent.is_empty() {
+        tiles.push_str(&tile(
+            &format!("/subdomains/create?parent={domain_q}"),
+            "Add Sub-domain",
+            "Create a nested site under this domain",
+        ));
+        tiles.push_str(&tile(
+            "/subdomains",
+            "List Sub-domains",
+            "Open the Sub-domains registry",
+        ));
+    } else {
+        tiles.push_str(&tile(
+            "/websites",
+            "List Websites",
+            "Open the main Websites registry",
+        ));
+        tiles.push_str(&tile(
+            "/subdomains",
+            "List Sub-domains",
+            "Open the Sub-domains registry",
+        ));
+    }
     tiles.push_str(&tile(
         &format!("/websites/manage?domain={domain_q}&tab=alias"),
         "Domain Alias",
@@ -52,10 +69,6 @@ pub fn tab_domains(site: &SiteRecord) -> String {
     ));
     tiles.push_str("</div>");
 
-    let parent = resolve_parent_domain(&site.domain)
-        .ok()
-        .flatten()
-        .unwrap_or_default();
     let mut list = String::new();
     if parent.is_empty() {
         let children = child_sites(&site.domain);
