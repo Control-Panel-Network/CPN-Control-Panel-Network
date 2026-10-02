@@ -3,9 +3,9 @@
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_email_auth::{
-    BimiSettings, DnsRecordPlan, MtaStsSettings, bimi_dns_records, load_bimi, load_mta_sts,
-    mta_sts_dns_records, policy_file_path_display, push_dns_plans_to_cloudflare,
-    render_mta_sts_policy, save_bimi, save_mta_sts,
+    bimi_dns_records, load_bimi, load_mta_sts, mta_sts_dns_records, policy_file_path_display,
+    push_dns_plans_to_cloudflare, render_mta_sts_policy, save_bimi, save_mta_sts, BimiSettings,
+    DnsRecordPlan, MtaStsSettings,
 };
 use crate::sites::list_sites;
 
@@ -57,28 +57,91 @@ fn domain_options_from(sites: &[crate::sites::SiteRecord], selected: &str) -> St
     out
 }
 
-fn dns_table(records: &[DnsRecordPlan]) -> String {
-    let mut rows = String::new();
+fn dns_records_styles() -> &'static str {
+    r#"
+.email-auth-layout { display:grid; gap:16px; width:100%; max-width:100%; min-width:0; }
+.email-auth-layout .stack-form { max-width:560px; width:100%; }
+.email-auth-layout .email-auth-actions { margin-top:4px; }
+.email-auth-layout .email-auth-actions .btn-primary,
+.email-auth-layout .email-auth-actions .btn-secondary {
+  min-height:40px; padding:0 16px; border-radius:999px; font-weight:700;
+}
+.email-auth-policy {
+  margin:0; padding:14px 16px; border-radius:12px;
+  border:1px solid var(--hairline, #2a2f3a); background:rgba(0,0,0,.22);
+  white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;
+  max-width:100%; overflow-x:auto; font-size:13px; line-height:1.45;
+}
+.dns-cards { display:grid; gap:14px; width:100%; max-width:100%; margin-top:12px; }
+.dns-card {
+  display:grid; gap:12px; padding:14px 16px; min-width:0; width:100%; box-sizing:border-box;
+  border:1px solid var(--hairline, #2a2f3a); border-radius:14px;
+  background:var(--panel, #1a1d26);
+}
+.dns-card-head {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+}
+.dns-card-type {
+  display:inline-flex; align-items:center; min-height:28px; padding:0 12px; border-radius:999px;
+  background:rgba(14,165,233,.16); color:#7dd3fc; font-size:12px; font-weight:800;
+  letter-spacing:.04em; text-transform:uppercase;
+}
+.dns-card-meta {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; min-width:0;
+}
+.dns-card-meta > div {
+  border:1px solid var(--hairline, #2a2f3a); border-radius:10px; padding:8px 10px; min-width:0;
+}
+.dns-card-meta span { display:block; font-size:11px; color:#98a2b3; font-weight:600; }
+.dns-card-meta strong, .dns-card-meta code {
+  display:block; margin-top:4px; font-size:13px; font-weight:600; color:inherit;
+  overflow-wrap:anywhere; word-break:break-word; white-space:normal; max-width:100%;
+}
+.dns-card-meta .dns-card-value { grid-column:1 / -1; }
+@media (max-width:720px) {
+  .email-auth-layout .stack-form { max-width:100%; }
+  .email-auth-layout .email-auth-actions button,
+  .email-auth-layout .email-auth-actions .btn-primary,
+  .email-auth-layout .email-auth-actions .btn-secondary {
+    width:100%; justify-content:center;
+  }
+  .dns-card-meta { grid-template-columns:1fr; }
+  .dns-card-meta .dns-card-value { grid-column:auto; }
+}
+"#
+}
+
+/// Recommended DNS as padded cards (Websites-list style). Avoids crushed table columns.
+fn dns_records_cards(records: &[DnsRecordPlan]) -> String {
+    if records.is_empty() {
+        return r#"<p class="empty-state" style="margin-top:12px;">No DNS records for this plan yet.</p>"#
+            .to_string();
+    }
+    let mut cards = String::new();
     for r in records {
-        rows.push_str(&format!(
-            r#"<tr>
-          <td><code>{ty}</code></td>
-          <td><code>{name}</code></td>
-          <td><code>{content}</code></td>
-          <td class="muted">{note}</td>
-        </tr>"#,
+        let note = if r.note.trim().is_empty() {
+            "-".to_string()
+        } else {
+            html_escape(&r.note)
+        };
+        cards.push_str(&format!(
+            r#"<article class="dns-card">
+  <div class="dns-card-head">
+    <span class="dns-card-type">{ty}</span>
+  </div>
+  <div class="dns-card-meta">
+    <div><span>Name</span><code>{name}</code></div>
+    <div class="dns-card-value"><span>Value</span><code>{content}</code></div>
+    <div><span>Notes</span><strong class="muted">{note}</strong></div>
+  </div>
+</article>"#,
             ty = html_escape(&r.record_type),
             name = html_escape(&r.name),
             content = html_escape(&r.content),
-            note = html_escape(&r.note),
+            note = note,
         ));
     }
-    format!(
-        r#"<table class="data-table" style="width:100%;margin-top:12px;">
-      <thead><tr><th>Type</th><th>Name</th><th>Value</th><th>Notes</th></tr></thead>
-      <tbody>{rows}</tbody>
-    </table>"#
-    )
+    format!(r#"<div class="dns-cards">{cards}</div>"#)
 }
 
 pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
@@ -107,13 +170,15 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
         })
         .collect::<String>();
     let body = format!(
-        r#"{notice}{error}
+        r#"<style>{dns_css}</style>
+      <div class="email-auth-layout">
+      {notice}{error}
       <p class="muted">MTA-STS tells receiving MTAs how to expect TLS for your domain. Cloudflare supports this mainly as DNS (TXT + policy host). Client webmail (SnappyMail/Roundcube) does not enforce MTA-STS; receivers do.</p>
-      <form method="get" action="/email/mta-sts" class="stack-form" style="max-width:520px;">
+      <form method="get" action="/email/mta-sts" class="stack-form">
         <label for="domain">Domain</label>
         <select id="domain" name="domain" onchange="this.form.submit()">{domains}</select>
       </form>
-      <form method="post" action="/email/mta-sts/save" class="stack-form" style="max-width:520px;margin-top:12px;">
+      <form method="post" action="/email/mta-sts/save" class="stack-form">
         <input type="hidden" name="domain" value="{domain}">
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
           <input type="checkbox" name="enabled" value="1"{enabled}> Enable MTA-STS plan for this domain
@@ -124,18 +189,26 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
         <input id="max_age" name="max_age" type="number" min="60" max="31536000" value="{max_age}">
         <label for="mx">MX hostnames (one per line)</label>
         <textarea id="mx" name="mx" rows="4">{mx}</textarea>
-        <button type="submit" class="btn-primary">Save policy</button>
+        <div class="email-auth-actions">
+          <button type="submit" class="btn-primary">Save policy</button>
+        </div>
       </form>
-      <h3 style="margin-top:20px;">Policy file</h3>
+      <div>
+      <h3 style="margin:0 0 8px;">Policy file</h3>
       <p class="muted">Stored at <code>{policy_path}</code>. Serve it at <code>https://mta-sts.{domain}/.well-known/mta-sts.txt</code> (create an <code>mta-sts.</code> site or CNAME to a host that serves this file).</p>
-      <pre style="white-space:pre-wrap;background:rgba(0,0,0,.25);padding:12px;border-radius:8px;">{policy}</pre>
-      <h3>Recommended DNS</h3>
+      <pre class="email-auth-policy">{policy}</pre>
+      </div>
+      <div>
+      <h3 style="margin:0 0 8px;">Recommended DNS</h3>
       <p class="muted">{cf_note}</p>
-      {dns_table}
-      <form method="post" action="/email/mta-sts/push-cloudflare" style="margin-top:12px;">
+      {dns_cards}
+      <form method="post" action="/email/mta-sts/push-cloudflare" class="email-auth-actions" style="margin-top:14px;">
         <input type="hidden" name="domain" value="{domain}">
         <button type="submit" class="btn-secondary">Push records to Cloudflare</button>
-      </form>"#,
+      </form>
+      </div>
+      </div>"#,
+        dns_css = dns_records_styles(),
         notice = flash("ok", notice),
         error = flash("error", error),
         domains = domain_options_from(&sites, &settings.domain),
@@ -147,7 +220,7 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
         policy_path = html_escape(&policy_file_path_display(&settings.domain)),
         policy = html_escape(&policy),
         cf_note = html_escape(cf_note),
-        dns_table = dns_table(&dns),
+        dns_cards = dns_records_cards(&dns),
     );
     feature_shell(
         &[
@@ -179,13 +252,15 @@ pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) 
         "Cloudflare token not configured. Copy the TXT below, or add a token under Cloudflare DNS."
     };
     let body = format!(
-        r#"{notice}{error}
+        r#"<style>{dns_css}</style>
+      <div class="email-auth-layout">
+      {notice}{error}
       <p class="muted">BIMI publishes a brand logo for supporting receivers (often Gmail with a VMC). Cloudflare helps as DNS. SnappyMail and Roundcube generally do not display BIMI logos the same way; CPN still prepares DNS so outbound mail is ready.</p>
-      <form method="get" action="/email/bimi" class="stack-form" style="max-width:520px;">
+      <form method="get" action="/email/bimi" class="stack-form">
         <label for="domain">Domain</label>
         <select id="domain" name="domain" onchange="this.form.submit()">{domains}</select>
       </form>
-      <form method="post" action="/email/bimi/save" class="stack-form" style="max-width:520px;margin-top:12px;">
+      <form method="post" action="/email/bimi/save" class="stack-form">
         <input type="hidden" name="domain" value="{domain}">
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
           <input type="checkbox" name="enabled" value="1"{enabled}> Enable BIMI plan for this domain
@@ -194,15 +269,21 @@ pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) 
         <input id="logo_svg_url" name="logo_svg_url" type="url" value="{logo}" placeholder="https://example.com/brand.svg">
         <label for="authority_url">Authority / VMC URL (optional)</label>
         <input id="authority_url" name="authority_url" type="url" value="{auth}" placeholder="https://... or leave blank">
-        <button type="submit" class="btn-primary">Save BIMI</button>
+        <div class="email-auth-actions">
+          <button type="submit" class="btn-primary">Save BIMI</button>
+        </div>
       </form>
-      <h3 style="margin-top:20px;">Recommended DNS</h3>
+      <div>
+      <h3 style="margin:0 0 8px;">Recommended DNS</h3>
       <p class="muted">{cf_note}</p>
-      {dns_table}
-      <form method="post" action="/email/bimi/push-cloudflare" style="margin-top:12px;">
+      {dns_cards}
+      <form method="post" action="/email/bimi/push-cloudflare" class="email-auth-actions" style="margin-top:14px;">
         <input type="hidden" name="domain" value="{domain}">
         <button type="submit" class="btn-secondary">Push records to Cloudflare</button>
-      </form>"#,
+      </form>
+      </div>
+      </div>"#,
+        dns_css = dns_records_styles(),
         notice = flash("ok", notice),
         error = flash("error", error),
         domains = domain_options_from(&sites, &settings.domain),
@@ -211,7 +292,7 @@ pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) 
         logo = html_escape(&settings.logo_svg_url),
         auth = html_escape(&settings.authority_url),
         cf_note = html_escape(cf_note),
-        dns_table = dns_table(&dns),
+        dns_cards = dns_records_cards(&dns),
     );
     feature_shell(
         &[
@@ -278,4 +359,39 @@ pub fn push_bimi_cloudflare(domain: &str) -> Result<String, String> {
     let settings = load_bimi(domain);
     let plans = bimi_dns_records(&settings);
     push_dns_plans_to_cloudflare(&settings.domain, &plans)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dns_records_cards_use_padded_cards_not_crushed_table() {
+        let plans = vec![DnsRecordPlan {
+            record_type: "TXT".into(),
+            name: "_mta-sts.newstargeted.com".into(),
+            content: "v=STSv1; id=1790976446".into(),
+            ttl: 3600,
+            note: "Policy id TXT".into(),
+        }];
+        let html = dns_records_cards(&plans);
+        assert!(html.contains("dns-cards"));
+        assert!(html.contains("dns-card"));
+        assert!(html.contains("_mta-sts.newstargeted.com"));
+        assert!(html.contains("v=STSv1; id=1790976446"));
+        assert!(!html.contains("data-table"));
+        assert!(!html.contains("<table"));
+        let css = dns_records_styles();
+        assert!(css.contains("overflow-wrap:anywhere"));
+        assert!(css.contains("word-break:break-word"));
+        assert!(css.contains("@media (max-width:720px)"));
+    }
+
+    #[test]
+    fn dns_records_styles_keep_full_width_cards() {
+        let css = dns_records_styles();
+        assert!(css.contains(".dns-card"));
+        assert!(css.contains("min-width:0"));
+        assert!(css.contains("width:100%"));
+    }
 }
