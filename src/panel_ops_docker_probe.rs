@@ -49,17 +49,20 @@ fn kill_tree(child: &mut std::process::Child) {
     let _ = child.wait();
 }
 
-/// Run `bin args...` and collect its output, failing with `TimedOut` after `timeout`.
-pub fn output_with_timeout(bin: &str, args: &[&str], timeout: Duration) -> std::io::Result<Output> {
-    let mut cmd = Command::new(bin);
-    cmd.args(args)
-        .stdin(Stdio::null())
+/// Run a pre-built `Command` and collect its output, failing with `TimedOut` after `timeout`.
+pub fn command_output_with_timeout(
+    mut cmd: Command,
+    timeout: Duration,
+    label: &str,
+) -> std::io::Result<Output> {
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
+        // Own process group so hung helpers can be killed with the tree.
+        let _ = cmd.process_group(0);
     }
     let mut child = cmd.spawn()?;
     let out_rx = child.stdout.take().map(spawn_reader);
@@ -73,11 +76,7 @@ pub fn output_with_timeout(bin: &str, args: &[&str], timeout: Duration) -> std::
                     kill_tree(&mut child);
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::TimedOut,
-                        format!(
-                            "`{bin} {}` timed out after {}s",
-                            args.join(" "),
-                            timeout.as_secs()
-                        ),
+                        format!("`{label}` timed out after {}s", timeout.as_secs()),
                     ));
                 }
                 std::thread::sleep(POLL_INTERVAL);
@@ -93,6 +92,13 @@ pub fn output_with_timeout(bin: &str, args: &[&str], timeout: Duration) -> std::
         stdout: collect(out_rx),
         stderr: collect(err_rx),
     })
+}
+
+/// Run `bin args...` and collect its output, failing with `TimedOut` after `timeout`.
+pub fn output_with_timeout(bin: &str, args: &[&str], timeout: Duration) -> std::io::Result<Output> {
+    let mut cmd = Command::new(bin);
+    cmd.args(args);
+    command_output_with_timeout(cmd, timeout, &format!("{bin} {}", args.join(" ")))
 }
 
 /// True when the command exits 0 within `timeout`.

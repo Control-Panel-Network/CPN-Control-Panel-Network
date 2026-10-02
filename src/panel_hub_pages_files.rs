@@ -5,7 +5,7 @@ use crate::panel_hub_http::urlencoding_simple;
 use crate::panel_hub_pages_files_assets::{fm_script, fm_styles};
 use crate::panel_hubs::{feature_shell, notice_block};
 use crate::panel_ops_files::files_csrf_token;
-use crate::panel_ops_path::{list_dir, resolve_under_jail};
+use crate::panel_ops_path::{MAX_LIST_ENTRIES, list_dir_detailed, resolve_under_jail};
 use std::path::Path;
 
 fn html_escape(value: &str) -> String {
@@ -63,8 +63,8 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
     let home = opts.jail_root.display().to_string();
     let resolved = resolve_under_jail(opts.path_q, opts.jail_root);
     let body = match resolved {
-        Ok(path) => match list_dir(&path) {
-            Ok(entries) => {
+        Ok(path) => match list_dir_detailed(&path) {
+            Ok(listing) => {
                 let path_s = path.display().to_string();
                 let parent_href = path
                     .parent()
@@ -74,7 +74,7 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
                     .map(|p| page_href(opts, &p.display().to_string()))
                     .unwrap_or_else(|| page_href(opts, &home));
                 let mut rows = String::new();
-                for ent in &entries {
+                for ent in &listing.entries {
                     let child = path.join(&ent.basename);
                     let child_s = child.display().to_string();
                     let name_cell = if ent.is_dir {
@@ -106,12 +106,20 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
                         mode = html_escape(&ent.mode_label),
                     ));
                 }
+                let trunc_notice = if listing.truncated {
+                    Some(format!(
+                        "Showing the first {MAX_LIST_ENTRIES} entries. Narrow the path or use Search on the host for full restore-sized directories."
+                    ))
+                } else {
+                    None
+                };
                 let tree = build_tree_html(opts, &home, &path_s);
                 let editor = edit_modal(opts, &csrf, &path_s);
                 let notices = format!(
-                    "{}{}",
+                    "{}{}{}",
                     notice_block("ok", opts.notice),
-                    notice_block("error", opts.error)
+                    notice_block("error", opts.error),
+                    notice_block("ok", trunc_notice.as_deref()),
                 );
                 let risk = format!(r#"<p class="muted">{}</p>"#, html_escape(opts.risk_note));
                 format!(
@@ -328,8 +336,8 @@ fn edit_modal(opts: &FilesPageOpts<'_>, csrf: &str, cwd: &str) -> String {
 }
 
 fn build_tree_html(opts: &FilesPageOpts<'_>, jail_home: &str, current: &str) -> String {
-    let roots = match list_dir(opts.jail_root) {
-        Ok(v) => v,
+    let roots = match list_dir_detailed(opts.jail_root) {
+        Ok(v) => v.entries,
         Err(_) => return String::new(),
     };
     let mut out = format!(
@@ -337,7 +345,7 @@ fn build_tree_html(opts: &FilesPageOpts<'_>, jail_home: &str, current: &str) -> 
         home = page_href(opts, jail_home),
         label = html_escape(jail_home),
     );
-    for ent in roots.into_iter().filter(|e| e.is_dir) {
+    for ent in roots.into_iter().filter(|e| e.is_dir).take(80) {
         let p = opts
             .jail_root
             .join(&ent.basename)
@@ -346,10 +354,10 @@ fn build_tree_html(opts: &FilesPageOpts<'_>, jail_home: &str, current: &str) -> 
             .replace('\\', "/");
         let open = current == p || current.starts_with(&(p.clone() + "/"));
         let kids = if open {
-            match list_dir(Path::new(&p)) {
-                Ok(entries) => {
+            match list_dir_detailed(Path::new(&p)) {
+                Ok(listing) => {
                     let mut inner = String::from("<ul>");
-                    for child in entries.into_iter().filter(|e| e.is_dir).take(40) {
+                    for child in listing.entries.into_iter().filter(|e| e.is_dir).take(40) {
                         let cp = format!("{}/{}", p.trim_end_matches('/'), child.basename);
                         inner.push_str(&format!(
                             r#"<li><a href="{href}">{name}</a></li>"#,
