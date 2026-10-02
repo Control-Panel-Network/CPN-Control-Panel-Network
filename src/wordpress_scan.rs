@@ -3,8 +3,8 @@
 
 use crate::account::now_unix;
 use crate::sites::{
-    create_site, list_sites, load_site, normalize_domain, resolve_parent_domain,
-    site_home_from_record, SiteRecord,
+    SiteRecord, create_site, list_sites, load_site, normalize_domain, resolve_parent_domain,
+    site_home_from_record,
 };
 use crate::wordpress::{
     WordpressSite, get_wordpress_site, list_wordpress_sites, new_site_id, upsert_wordpress_site,
@@ -84,15 +84,9 @@ fn candidates_from_registered(sites: &[SiteRecord]) -> BTreeMap<String, WpCandid
 }
 
 /// Walk primary site homes for nested `*.domain` folders with WordPress.
-fn discover_nested_under_primaries(
-    sites: &[SiteRecord],
-    map: &mut BTreeMap<String, WpCandidate>,
-) {
+fn discover_nested_under_primaries(sites: &[SiteRecord], map: &mut BTreeMap<String, WpCandidate>) {
     for site in sites {
-        let is_primary = resolve_parent_domain(&site.domain)
-            .ok()
-            .flatten()
-            .is_none();
+        let is_primary = resolve_parent_domain(&site.domain).ok().flatten().is_none();
         if !is_primary {
             continue;
         }
@@ -117,10 +111,7 @@ fn discover_nested_under_primaries(
             let Ok(domain) = normalize_domain(&name) else {
                 continue;
             };
-            let parent_ok = resolve_parent_domain(&domain)
-                .ok()
-                .flatten()
-                .as_deref()
+            let parent_ok = resolve_parent_domain(&domain).ok().flatten().as_deref()
                 == Some(site.domain.as_str());
             if !parent_ok {
                 continue;
@@ -252,9 +243,7 @@ mod tests {
 
             let results = scan_wordpress_sites().expect("scan");
             assert!(
-                results
-                    .iter()
-                    .any(|r| r.site.domain == "blog.example.com"),
+                results.iter().any(|r| r.site.domain == "blog.example.com"),
                 "expected blog.example.com in scan results: {:?}",
                 results
                     .iter()
@@ -278,9 +267,11 @@ mod tests {
             touch_wp(&nested_home);
 
             let results = scan_wordpress_sites().expect("scan");
-            assert!(results
-                .iter()
-                .any(|r| r.site.domain == "wp-test.example.com"));
+            assert!(
+                results
+                    .iter()
+                    .any(|r| r.site.domain == "wp-test.example.com")
+            );
             let site = get_wordpress_site("wp-test.example.com").unwrap();
             assert!(site.docroot.ends_with("wp-test.example.com"));
         });
