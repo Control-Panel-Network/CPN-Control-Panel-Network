@@ -261,7 +261,9 @@ fn rpm_install_time_unix() -> Option<u64> {
 }
 
 /// Prefer install-manifest, then lab-deploy-meta, then RPM INSTALLTIME.
-pub fn resolve_installed_at_unix(manifest: Option<&InstallManifest>) -> (Option<u64>, Option<String>) {
+pub fn resolve_installed_at_unix(
+    manifest: Option<&InstallManifest>,
+) -> (Option<u64>, Option<String>) {
     if let Some(ts) = manifest
         .map(|item| item.installed_at_unix)
         .filter(|value| *value > 0)
@@ -516,8 +518,7 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
         })
         .unwrap_or(if binary { "rpm_or_binary" } else { "unknown" })
         .to_string();
-    let (installed_at_unix, installed_at_source) =
-        resolve_installed_at_unix(manifest.as_ref());
+    let (installed_at_unix, installed_at_source) = resolve_installed_at_unix(manifest.as_ref());
 
     ExistingInstall {
         detected,
