@@ -85,10 +85,7 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
     // One sites registry read for default domain + dropdown (avoid double list under disk load).
     let sites = list_sites().unwrap_or_default();
     let settings = if domain.trim().is_empty() {
-        let first = sites
-            .first()
-            .map(|s| s.domain.clone())
-            .unwrap_or_default();
+        let first = sites.first().map(|s| s.domain.clone()).unwrap_or_default();
         load_mta_sts(&first)
     } else {
         load_mta_sts(domain)
@@ -169,10 +166,7 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
 pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let sites = list_sites().unwrap_or_default();
     let settings = if domain.trim().is_empty() {
-        let first = sites
-            .first()
-            .map(|s| s.domain.clone())
-            .unwrap_or_default();
+        let first = sites.first().map(|s| s.domain.clone()).unwrap_or_default();
         load_bimi(&first)
     } else {
         load_bimi(domain)

@@ -292,10 +292,7 @@ pub async fn email_mta_sts_route(
         return login_redirect(&http);
     };
     // Unlock checks and panel_shell host probes must not pin an Actix worker (408 under load).
-    let domain = query
-        .get("domain")
-        .cloned()
-        .unwrap_or_default();
+    let domain = query.get("domain").cloned().unwrap_or_default();
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
     html_blocking(move || {
@@ -311,11 +308,7 @@ pub async fn email_mta_sts_route(
             &user,
             "email",
             "MTA-STS",
-            &email_mta_sts_page(
-                &domain,
-                notice.as_deref(),
-                error.as_deref(),
-            ),
+            &email_mta_sts_page(&domain, notice.as_deref(), error.as_deref()),
         )
     })
     .await
@@ -406,10 +399,7 @@ pub async fn email_bimi_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let domain = query
-        .get("domain")
-        .cloned()
-        .unwrap_or_default();
+    let domain = query.get("domain").cloned().unwrap_or_default();
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
     html_blocking(move || {
