@@ -49,7 +49,7 @@ fn http_login_ok(port: u16) -> bool {
             "--silent",
             "--show-error",
             "--max-time",
-            "8",
+            "3",
             "--output",
             "/dev/null",
             &url,
@@ -60,12 +60,14 @@ fn http_login_ok(port: u16) -> bool {
 }
 
 fn which_cpn() -> Option<String> {
-    Command::new("bash")
-        .args(["-lc", "command -v cpn 2>/dev/null || true"])
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
+    crate::panel_ops_docker_probe::output_with_timeout(
+        "bash",
+        &["-lc", "command -v cpn 2>/dev/null || true"],
+        std::time::Duration::from_secs(2),
+    )
+    .ok()
+    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    .filter(|s| !s.is_empty())
 }
 
 pub fn collect(checks: &mut Vec<super::RepairCheck>) {

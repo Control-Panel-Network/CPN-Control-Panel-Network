@@ -184,41 +184,18 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         );
     } else {
-        match crate::panel_ops_cloudflare_verify::verify_cloudflare_connection() {
-            Ok(res) if res.ok => push(
-                checks,
-                "host.cloudflare",
-                "dns",
-                "Cloudflare",
-                CheckStatus::Pass,
-                format!(
-                    "connected; {} zone(s); {}",
-                    res.zone_count, res.token_status
-                ),
-                false,
-                None,
-            ),
-            Ok(res) => push(
-                checks,
-                "host.cloudflare",
-                "dns",
-                "Cloudflare",
-                CheckStatus::Warn,
-                res.message,
-                false,
-                None,
-            ),
-            Err(err) => push(
-                checks,
-                "host.cloudflare",
-                "dns",
-                "Cloudflare",
-                CheckStatus::Warn,
-                err,
-                false,
-                None,
-            ),
-        }
+        // Do not call live Cloudflare verify here (curl --max-time 60). That alone can
+        // exceed the System Repair page/API budget. Operators use DNS > Cloudflare Test.
+        push(
+            checks,
+            "host.cloudflare",
+            "dns",
+            "Cloudflare",
+            CheckStatus::Pass,
+            "API token configured (live verify on DNS > Cloudflare Test connection)",
+            false,
+            None,
+        );
     }
 
     let sites_dir = paths::default_data_dir().join("sites");

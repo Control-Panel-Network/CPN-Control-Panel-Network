@@ -280,7 +280,6 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
         );
     }
 
-    host_apps::collect(checks);
 }
 
 pub fn heal_firewall() -> HealResult {

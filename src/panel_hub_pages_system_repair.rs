@@ -1,24 +1,7 @@
-//! Owner-only System Repair hub UI (stacked cards, pass/warn/fail + Heal).
+//! Owner-only System Repair hub UI (progressive check cards via JSON API).
 
 use crate::panel_hubs::feature_shell;
-use crate::system_repair::{CheckStatus, PRODUCT_NAME, RepairCheck, RepairReport, run_suite};
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-fn status_badge(status: CheckStatus) -> String {
-    let (class, label) = match status {
-        CheckStatus::Pass => ("sr-badge sr-badge-pass", "Pass"),
-        CheckStatus::Warn => ("sr-badge sr-badge-warn", "Warn"),
-        CheckStatus::Fail => ("sr-badge sr-badge-fail", "Fail"),
-    };
-    format!(r#"<span class="{class}">{label}</span>"#)
-}
+use crate::system_repair::PRODUCT_NAME;
 
 fn styles() -> &'static str {
     r#"<style>
@@ -49,6 +32,8 @@ fn styles() -> &'static str {
 [data-color-mode="dark"] .sr-badge-warn{background:rgba(234,88,12,.28);color:#fed7aa;}
 [data-color-mode="dark"] .sr-badge-fail{background:rgba(220,38,38,.28);color:#fecaca;}
 .sr-heal{margin-top:10px;}
+.sr-loading{padding:18px 4px;color:#64748b;}
+[data-color-mode="dark"] .sr-loading{color:#94a3b8;}
 @media (max-width:720px){
   .sr-card-head{align-items:flex-start;}
   .sr-actions .btn-primary,.sr-actions .btn-secondary,.sr-heal .btn-secondary{width:100%;justify-content:center;}
@@ -56,88 +41,132 @@ fn styles() -> &'static str {
 </style>"#
 }
 
-fn card(check: &RepairCheck) -> String {
-    let heal_btn = match &check.heal_id {
-        Some(hid) if check.status != CheckStatus::Pass => format!(
-            r#"<form method="post" action="/server/system-repair/heal" class="sr-heal">
-  <input type="hidden" name="id" value="{hid}">
-  <button type="submit" class="btn-secondary">Heal</button>
-</form>"#,
-            hid = html_escape(hid),
-        ),
-        _ => String::new(),
-    };
-    format!(
-        r#"<article class="sr-card" data-status="{status}">
-  <div class="sr-card-head">
-    <h3 class="sr-card-title">{title}</h3>
-    {badge}
-  </div>
-  <p class="sr-meta"><code>{id}</code> · {category}</p>
-  <p class="sr-detail">{detail}</p>
-  {heal}
-</article>"#,
-        status = check.status.as_str(),
-        title = html_escape(&check.title),
-        badge = status_badge(check.status),
-        id = html_escape(&check.id),
-        category = html_escape(&check.category),
-        detail = html_escape(&check.detail),
-        heal = heal_btn,
-    )
+fn client_script() -> &'static str {
+    r#"<script>
+(function () {
+  var root = document.getElementById("sr-root");
+  if (!root) return;
+  var passEl = document.getElementById("sr-pass");
+  var warnEl = document.getElementById("sr-warn");
+  var failEl = document.getElementById("sr-fail");
+  var grid = document.getElementById("sr-grid");
+  var statusLine = document.getElementById("sr-status");
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function badge(status) {
+    var cls = "sr-badge sr-badge-warn";
+    var label = "Warn";
+    if (status === "pass") { cls = "sr-badge sr-badge-pass"; label = "Pass"; }
+    else if (status === "fail") { cls = "sr-badge sr-badge-fail"; label = "Fail"; }
+    return '<span class="' + cls + '">' + label + "</span>";
+  }
+
+  function card(check) {
+    var heal = "";
+    if (check.heal_id && check.status !== "pass") {
+      heal =
+        '<form method="post" action="/server/system-repair/heal" class="sr-heal">' +
+        '<input type="hidden" name="id" value="' + esc(check.heal_id) + '">' +
+        '<button type="submit" class="btn-secondary">Heal</button></form>';
+    }
+    return (
+      '<article class="sr-card" data-status="' + esc(check.status) + '">' +
+      '<div class="sr-card-head"><h3 class="sr-card-title">' + esc(check.title) + "</h3>" +
+      badge(check.status) + "</div>" +
+      '<p class="sr-meta"><code>' + esc(check.id) + "</code> · " + esc(check.category) + "</p>" +
+      '<p class="sr-detail">' + esc(check.detail) + "</p>" + heal + "</article>"
+    );
+  }
+
+  function render(report) {
+    if (passEl) passEl.textContent = "Pass " + (report.pass || 0);
+    if (warnEl) warnEl.textContent = "Warn " + (report.warn || 0);
+    if (failEl) failEl.textContent = "Fail " + (report.fail || 0);
+    var html = "";
+    (report.checks || []).forEach(function (c) { html += card(c); });
+    if (!html) {
+      html = '<p class="sr-loading">No checks returned. Reload to try again.</p>';
+    }
+    grid.innerHTML = html;
+    if (statusLine) {
+      statusLine.textContent = report.cached
+        ? "Showing cached results (refreshed in the background)."
+        : "Checks finished.";
+    }
+  }
+
+  function fail(msg) {
+    if (statusLine) statusLine.textContent = msg;
+    grid.innerHTML =
+      '<article class="sr-card"><div class="sr-card-head"><h3 class="sr-card-title">Checks unavailable</h3>' +
+      badge("warn") + '</div><p class="sr-detail">' + esc(msg) +
+      '</p><p class="sr-detail"><a class="btn-secondary" href="/server/system-repair?refresh=1">Retry</a></p></article>';
+  }
+
+  var refresh = /(?:\?|&)refresh=1(?:&|$)/.test(location.search) ? "?refresh=1" : "";
+  if (statusLine) statusLine.textContent = "Running host checks…";
+  var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 18000);
+  fetch("/server/system-repair/api" + refresh, {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+    signal: ctrl ? ctrl.signal : undefined
+  })
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      clearTimeout(timer);
+      if (!data || data.ok === false) {
+        fail((data && data.error) || "System Repair API failed.");
+        return;
+      }
+      render(data);
+    })
+    .catch(function (err) {
+      clearTimeout(timer);
+      fail(
+        err && err.name === "AbortError"
+          ? "Checks timed out. Reload to retry; slow probes are skipped per group."
+          : "Could not load checks (" + (err && err.message ? err.message : "network") + ")."
+      );
+    });
+})();
+</script>"#
 }
 
-fn heals_block(report: &RepairReport) -> String {
-    if report.heals.is_empty() {
-        return String::new();
-    }
-    let mut out = String::from(r#"<div class="sr-grid" style="margin-bottom:16px;">"#);
-    for h in &report.heals {
-        let badge = if h.ok {
-            status_badge(CheckStatus::Pass)
-        } else {
-            status_badge(CheckStatus::Fail)
-        };
-        out.push_str(&format!(
-            r#"<article class="sr-card"><div class="sr-card-head"><h3 class="sr-card-title">Heal: {id}</h3>{badge}</div><p class="sr-detail">{msg}</p></article>"#,
-            id = html_escape(&h.heal_id),
-            badge = badge,
-            msg = html_escape(&h.message),
-        ));
-    }
-    out.push_str("</div>");
-    out
-}
-
-/// Full System Repair page body (owner-only gate is in the route).
+/// Fast System Repair shell. Check cards load from `/server/system-repair/api`.
 pub fn system_repair_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let report = run_suite(false, None, None);
     let mut body = String::new();
     body.push_str(styles());
-    body.push_str(&format!(
-        r#"<div class="sr-summary">
-  <span class="sr-pill sr-pill-pass">Pass {pass}</span>
-  <span class="sr-pill sr-pill-warn">Warn {warn}</span>
-  <span class="sr-pill sr-pill-fail">Fail {fail}</span>
+    body.push_str(
+        r#"<div id="sr-root">
+<div class="sr-summary">
+  <span class="sr-pill sr-pill-pass" id="sr-pass">Pass …</span>
+  <span class="sr-pill sr-pill-warn" id="sr-warn">Warn …</span>
+  <span class="sr-pill sr-pill-fail" id="sr-fail">Fail …</span>
 </div>
 <p class="muted">Owner diagnostics for install, upgrade, update, and downgrade recovery. Safe heals never wipe MFA. CLI: <code>cpn doctor</code>, <code>cpn troubleshoot</code>, or <code>cpn repair</code>.</p>
+<p class="muted" id="sr-status">Loading checks…</p>
 <div class="sr-actions">
-  <a class="btn-secondary" href="/server/system-repair">Refresh checks</a>
+  <a class="btn-secondary" href="/server/system-repair?refresh=1">Refresh checks</a>
   <form method="post" action="/server/system-repair/heal">
     <button type="submit" class="btn-primary">Heal all safe issues</button>
   </form>
-  <a class="btn-secondary" href="/server/system-repair/api">JSON report</a>
+  <a class="btn-secondary" href="/server/system-repair/api?refresh=1">JSON report</a>
+</div>
+<div class="sr-grid" id="sr-grid"><p class="sr-loading">Gathering host checks (progressive). The page shell stays available while probes run with timeouts.</p></div>
 </div>"#,
-        pass = report.pass,
-        warn = report.warn,
-        fail = report.fail,
-    ));
-    body.push_str(&heals_block(&report));
-    body.push_str(r#"<div class="sr-grid">"#);
-    for check in &report.checks {
-        body.push_str(&card(check));
-    }
-    body.push_str("</div>");
+    );
+    body.push_str(client_script());
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
