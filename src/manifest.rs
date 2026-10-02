@@ -70,6 +70,25 @@ pub struct ExistingInstall {
     pub binary_present: bool,
     pub selected_server: Option<ServerEngine>,
     pub selected_mail: Option<MailSystem>,
+    /// When the package was last installed/upgraded (unix seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_at_unix: Option<u64>,
+    /// Provenance for `installed_at_unix`: manifest, lab-deploy-meta, or rpm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_at_source: Option<String>,
+}
+
+/// Lab/hot-deploy sidecar so install time survives binary replace without a full RPM cycle.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LabDeployMeta {
+    #[serde(default)]
+    pub package_version: String,
+    #[serde(default)]
+    pub source_commit: String,
+    #[serde(default)]
+    pub installed_at_unix: u64,
+    #[serde(default)]
+    pub updated_at_unix: u64,
 }
 
 fn now_unix() -> u64 {
@@ -87,10 +106,20 @@ pub fn manifest_path() -> PathBuf {
     data_dir().join("install-manifest.json")
 }
 
+pub fn lab_deploy_meta_path() -> PathBuf {
+    data_dir().join("lab-deploy-meta.json")
+}
+
 pub fn default_preserve_paths() -> Vec<String> {
     let root = data_dir();
     vec![
         root.join("panel-bootstrap.json")
+            .to_string_lossy()
+            .into_owned(),
+        root.join("install-manifest.json")
+            .to_string_lossy()
+            .into_owned(),
+        root.join("lab-deploy-meta.json")
             .to_string_lossy()
             .into_owned(),
         root.join("accounts").to_string_lossy().into_owned(),
@@ -184,6 +213,73 @@ pub fn save_manifest(manifest: &InstallManifest) -> Result<(), String> {
     Ok(())
 }
 
+pub fn load_lab_deploy_meta() -> Option<LabDeployMeta> {
+    let raw = fs::read_to_string(lab_deploy_meta_path()).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+pub fn save_lab_deploy_meta(meta: &LabDeployMeta) -> Result<(), String> {
+    let dir = data_dir();
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Could not create {}: {error}", dir.display()))?;
+    let path = lab_deploy_meta_path();
+    let body = serde_json::to_string_pretty(meta)
+        .map_err(|error| format!("Could not serialize lab-deploy-meta: {error}"))?;
+    fs::write(&path, format!("{body}\n"))
+        .map_err(|error| format!("Could not write {}: {error}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o644));
+    }
+    Ok(())
+}
+
+fn sync_lab_deploy_meta(manifest: &InstallManifest) {
+    let meta = LabDeployMeta {
+        package_version: manifest.package_version.clone(),
+        source_commit: manifest.source_commit.clone(),
+        installed_at_unix: manifest.installed_at_unix,
+        updated_at_unix: now_unix(),
+    };
+    let _ = save_lab_deploy_meta(&meta);
+}
+
+fn rpm_install_time_unix() -> Option<u64> {
+    let output = std::process::Command::new("rpm")
+        .args(["-q", "--qf", "%{INSTALLTIME}", "cpn-installer"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() || text.contains("not installed") {
+        return None;
+    }
+    text.parse::<u64>().ok().filter(|value| *value > 0)
+}
+
+/// Prefer install-manifest, then lab-deploy-meta, then RPM INSTALLTIME.
+pub fn resolve_installed_at_unix(manifest: Option<&InstallManifest>) -> (Option<u64>, Option<String>) {
+    if let Some(ts) = manifest
+        .map(|item| item.installed_at_unix)
+        .filter(|value| *value > 0)
+    {
+        return (Some(ts), Some("manifest".into()));
+    }
+    if let Some(ts) = load_lab_deploy_meta()
+        .map(|meta| meta.installed_at_unix)
+        .filter(|value| *value > 0)
+    {
+        return (Some(ts), Some("lab-deploy-meta".into()));
+    }
+    if let Some(ts) = rpm_install_time_unix() {
+        return (Some(ts), Some("rpm".into()));
+    }
+    (None, None)
+}
+
 pub fn record_install(
     package_version: &str,
     release_tag: &str,
@@ -252,6 +348,7 @@ pub fn record_install_with_commit(
             .or_else(|| previous.as_ref().and_then(|item| item.selected_mail)),
     };
     save_manifest(&manifest)?;
+    sync_lab_deploy_meta(&manifest);
     Ok(manifest)
 }
 
@@ -419,6 +516,8 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
         })
         .unwrap_or(if binary { "rpm_or_binary" } else { "unknown" })
         .to_string();
+    let (installed_at_unix, installed_at_source) =
+        resolve_installed_at_unix(manifest.as_ref());
 
     ExistingInstall {
         detected,
@@ -430,6 +529,8 @@ pub fn detect_existing_install(running_version: &str) -> ExistingInstall {
         binary_present: binary,
         selected_server: manifest.as_ref().and_then(|item| item.selected_server),
         selected_mail: manifest.as_ref().and_then(|item| item.selected_mail),
+        installed_at_unix,
+        installed_at_source,
     }
 }
 
@@ -473,6 +574,35 @@ mod tests {
                 .iter()
                 .any(|path| path.contains("panel-bootstrap"))
         );
+        assert!(
+            default_preserve_paths()
+                .iter()
+                .any(|path| path.contains("lab-deploy-meta.json"))
+        );
+        assert!(
+            default_preserve_paths()
+                .iter()
+                .any(|path| path.contains("install-manifest.json"))
+        );
+    }
+
+    #[test]
+    fn resolve_installed_at_prefers_manifest() {
+        let manifest = InstallManifest {
+            schema_version: 1,
+            package_version: "1.1.0".into(),
+            release_tag: "v1.1.0".into(),
+            source_commit: String::new(),
+            installed_at_unix: 1_700_000_000,
+            source: ManifestSource::Rpm,
+            core_files: Vec::new(),
+            preserve_paths: Vec::new(),
+            selected_server: None,
+            selected_mail: None,
+        };
+        let (ts, source) = resolve_installed_at_unix(Some(&manifest));
+        assert_eq!(ts, Some(1_700_000_000));
+        assert_eq!(source.as_deref(), Some("manifest"));
     }
 
     #[test]

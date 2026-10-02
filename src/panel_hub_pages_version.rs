@@ -86,17 +86,92 @@ pub fn version_management_page(can_manage: bool) -> String {
         script.push_str(&version_source_script());
     }
     let body = format!(
-        r#"<ul class="kv-list">
-  <li><span>Running</span><span><strong id="cpn-version-running">{running}</strong><br><span class="muted" id="cpn-version-running-date"></span><br><span class="muted" id="cpn-version-running-sha"></span></span></li>
-  <li><span>Installed package</span><span><strong id="cpn-version-installed">{installed}</strong><br><span class="muted" id="cpn-version-installed-date"></span></span></li>
-  <li><span>Your source</span><strong id="cpn-version-source-tip">-</strong></li>
-  <li><span>Upstream official</span><strong id="cpn-version-upstream-tip">-</strong></li>
-  <li><span>Latest release</span><strong id="cpn-version-latest">-</strong></li>
-  <li><span>Stable tip</span><strong id="cpn-version-stable-tip">-</strong></li>
-  <li><span>Manifest</span><strong>{manifest}</strong></li>
+        r#"<style>
+.version-kv {{ list-style:none; padding:0; margin:0; }}
+.version-kv > li {{
+  display:grid; grid-template-columns:minmax(140px,180px) minmax(0,1fr);
+  gap:12px 20px; align-items:start; padding:12px 0;
+  border-top:1px solid var(--hairline,#2a2f3a); font-size:14px;
+}}
+.version-kv > li:first-child {{ border-top:0; }}
+.version-kv .kv-label {{ color:var(--muted,#98a2b3); font-weight:500; padding-top:2px; }}
+.version-kv .kv-value {{
+  min-width:0; text-align:right; justify-self:stretch;
+  overflow-wrap:anywhere; word-break:break-word; line-height:1.45;
+}}
+.version-kv .kv-value strong {{ font-weight:700; }}
+.version-kv .kv-meta {{ display:block; margin-top:4px; color:var(--muted,#98a2b3); font-weight:400; font-size:13px; }}
+.version-kv .kv-value[data-update-state="behind"],
+.version-kv strong[data-update-state="behind"] {{ color:#fb923c; }}
+.version-kv .kv-value[data-update-state="current"],
+.version-kv strong[data-update-state="current"] {{ color:#4ade80; }}
+@media (max-width:640px) {{
+  .version-kv > li {{ grid-template-columns:1fr; gap:4px; }}
+  .version-kv .kv-value {{ text-align:left; }}
+}}
+</style>
+<ul class="kv-list version-kv" id="cpn-version-summary">
+  <li>
+    <span class="kv-label">Running</span>
+    <span class="kv-value">
+      <strong id="cpn-version-running">{running}</strong>
+      <span class="kv-meta" id="cpn-version-running-date"></span>
+      <span class="kv-meta" id="cpn-version-running-sha"></span>
+    </span>
+  </li>
+  <li>
+    <span class="kv-label">Installed package</span>
+    <span class="kv-value">
+      <strong id="cpn-version-installed">{installed}</strong>
+      <span class="kv-meta" id="cpn-version-installed-date"></span>
+      <span class="kv-meta" id="cpn-version-installed-at"></span>
+    </span>
+  </li>
+  <li>
+    <span class="kv-label">Your source</span>
+    <span class="kv-value"><strong id="cpn-version-source-tip">-</strong></span>
+  </li>
+  <li>
+    <span class="kv-label">Upstream official</span>
+    <span class="kv-value"><strong id="cpn-version-upstream-tip">-</strong></span>
+  </li>
+  <li>
+    <span class="kv-label">Latest release</span>
+    <span class="kv-value"><strong id="cpn-version-latest">-</strong></span>
+  </li>
+  <li>
+    <span class="kv-label">Stable tip</span>
+    <span class="kv-value"><strong id="cpn-version-stable-tip">-</strong></span>
+  </li>
+  <li>
+    <span class="kv-label">Manifest</span>
+    <span class="kv-value"><strong>{manifest}</strong></span>
+  </li>
+  <li>
+    <span class="kv-label">Status</span>
+    <span class="kv-value" id="cpn-version-status" role="status">Checking for updates...</span>
+  </li>
+  <li id="cpn-version-row-repo" hidden>
+    <span class="kv-label">Configured repo</span>
+    <span class="kv-value" id="cpn-version-repo">-</span>
+  </li>
+  <li id="cpn-version-row-source" hidden>
+    <span class="kv-label">Package source</span>
+    <span class="kv-value" id="cpn-version-pkg-source">-</span>
+  </li>
+  <li id="cpn-version-row-latest-tag" hidden>
+    <span class="kv-label">Latest release tag</span>
+    <span class="kv-value" id="cpn-version-latest-tag">-</span>
+  </li>
+  <li id="cpn-version-row-commit" hidden>
+    <span class="kv-label">Running commit</span>
+    <span class="kv-value" id="cpn-version-commit">-</span>
+  </li>
+  <li id="cpn-version-row-note" hidden>
+    <span class="kv-label">Note</span>
+    <span class="kv-value muted" id="cpn-version-note">-</span>
+  </li>
 </ul>
-<p id="cpn-version-status" class="muted" role="status">Checking for updates...</p>
-<div id="cpn-version-details" class="muted"></div>
 <div class="stack-form" style="margin-top:16px;max-width:560px;">
   <button type="button" class="btn-primary" id="cpn-version-refresh">Check for updates</button>
 </div>
@@ -155,6 +230,9 @@ mod tests {
         assert!(html.contains("cpn-version-stable-tip"));
         assert!(html.contains("latest two published releases"));
         assert!(html.contains("cpn-version-running-date"));
+        assert!(html.contains("cpn-version-installed-at"));
+        assert!(html.contains("version-kv"));
+        assert!(html.contains("cpn-version-row-repo"));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
         assert!(!html.contains('\u{2014}'));
