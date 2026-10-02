@@ -369,8 +369,8 @@ pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String>
             v.clone()
         }
         Some(v) if compare_versions(&manifest.package_version, v) == Ordering::Less => v.clone(),
-        None if compare_versions(&manifest.package_version, running_version) == Ordering::Less => {
-            // Binary-only lab/hot-deploy: manifest 1.0.0 while running cpn is 1.1.0.
+        // Binary hot-deploy ahead of RPM/manifest (lab: RPM+manifest 1.0.0, running 1.1.0).
+        _ if compare_versions(&manifest.package_version, running_version) == Ordering::Less => {
             running_version.to_string()
         }
         _ => return None,

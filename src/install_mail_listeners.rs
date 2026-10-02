@@ -43,10 +43,11 @@ pub fn master_cf_has_smtps(raw: &str) -> bool {
 }
 
 pub fn ensure_postfix_tls_material() {
-    let cert = Path::new("/var/lib/cpn/ssl/postfix/cert.pem");
-    let key = Path::new("/var/lib/cpn/ssl/postfix/key.pem");
+    let cert = Path::new("/etc/pki/tls/certs/cpn-postfix.pem");
+    let key = Path::new("/etc/pki/tls/private/cpn-postfix.key");
     if !cert.is_file() || !key.is_file() {
-        let _ = std::fs::create_dir_all("/var/lib/cpn/ssl/postfix");
+        let _ = std::fs::create_dir_all("/etc/pki/tls/certs");
+        let _ = std::fs::create_dir_all("/etc/pki/tls/private");
         let _ = StdCommand::new("openssl")
             .args([
                 "req",
@@ -59,9 +60,9 @@ pub fn ensure_postfix_tls_material() {
                 "-subj",
                 "/CN=cpn-postfix-local",
                 "-keyout",
-                key.to_str().unwrap_or("/var/lib/cpn/ssl/postfix/key.pem"),
+                key.to_str().unwrap_or("/etc/pki/tls/private/cpn-postfix.key"),
                 "-out",
-                cert.to_str().unwrap_or("/var/lib/cpn/ssl/postfix/cert.pem"),
+                cert.to_str().unwrap_or("/etc/pki/tls/certs/cpn-postfix.pem"),
             ])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -70,7 +71,11 @@ pub fn ensure_postfix_tls_material() {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(key, std::fs::Permissions::from_mode(0o600));
+            let _ = std::fs::set_permissions(cert, std::fs::Permissions::from_mode(0o644));
+            let _ = std::fs::set_permissions(key, std::fs::Permissions::from_mode(0o640));
+            let _ = StdCommand::new("chgrp")
+                .args(["postfix", key.to_str().unwrap_or("")])
+                .status();
         }
     }
     if cert.is_file() && key.is_file() {
@@ -83,33 +88,47 @@ pub fn ensure_postfix_tls_material() {
     }
 }
 
+/// Drop a previously appended CPN listener block so it can be rewritten correctly.
+///
+/// Rust `\ ` string continuations historically stripped leading spaces on `-o`
+/// lines, which Postfix rejects as `bad field count`. Re-heal must replace that.
+pub fn strip_cpn_mail_listener_block(raw: &str) -> String {
+    const MARKER: &str = "# CPN local mail listeners";
+    if let Some(idx) = raw.find(MARKER) {
+        return format!("{}\n", raw[..idx].trim_end());
+    }
+    const LEGACY: &str = "# CPN local submission";
+    if let Some(idx) = raw.find(LEGACY) {
+        return format!("{}\n", raw[..idx].trim_end());
+    }
+    raw.to_string()
+}
+
 /// Append CPN loopback submission (587) and SMTPS (465) when vendor comments left them off.
 pub fn append_cpn_mail_listeners(raw: &str) -> Option<String> {
-    let need_587 = !master_cf_has_submission(raw);
-    let need_465 = !master_cf_has_smtps(raw);
-    if !need_587 && !need_465 {
+    let base = strip_cpn_mail_listener_block(raw);
+    let need_587 = !master_cf_has_submission(&base);
+    let need_465 = !master_cf_has_smtps(&base);
+    if !need_587 && !need_465 && base == raw {
         return None;
+    }
+    if !need_587 && !need_465 {
+        // Stripped a broken block that already had working listeners elsewhere.
+        return if base == raw { None } else { Some(base) };
     }
     let mut extra = String::from("\n# CPN local mail listeners (System Repair / Email heal)\n");
     if need_587 {
+        // Continuation lines must keep leading spaces (do not split with `\`).
         extra.push_str(
-            "127.0.0.1:587 inet n - n - - smtpd\n\
-  -o syslog_name=postfix/submission\n\
-  -o smtpd_tls_security_level=may\n\
-  -o smtpd_sasl_auth_enable=yes\n\
-  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n",
+            "127.0.0.1:587 inet n - n - - smtpd\n  -o syslog_name=postfix/submission\n  -o smtpd_tls_security_level=may\n  -o smtpd_sasl_auth_enable=yes\n  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n",
         );
     }
     if need_465 {
         extra.push_str(
-            "127.0.0.1:465 inet n - n - - smtpd\n\
-  -o syslog_name=postfix/smtps\n\
-  -o smtpd_tls_wrappermode=yes\n\
-  -o smtpd_sasl_auth_enable=yes\n\
-  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n",
+            "127.0.0.1:465 inet n - n - - smtpd\n  -o syslog_name=postfix/smtps\n  -o smtpd_tls_wrappermode=yes\n  -o smtpd_sasl_auth_enable=yes\n  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n",
         );
     }
-    Some(format!("{raw}{extra}"))
+    Some(format!("{base}{extra}"))
 }
 
 #[cfg(test)]
@@ -135,11 +154,13 @@ mod tests {
     }
 
     #[test]
-    fn active_submission_skips_duplicate() {
-        let raw = "127.0.0.1:587 inet n - n - - smtpd\n  -o syslog_name=postfix/submission\n";
-        assert!(master_cf_has_submission(raw));
-        let with_both = append_cpn_mail_listeners(raw).expect("still need 465");
-        assert!(with_both.contains("127.0.0.1:465"));
-        assert!(append_cpn_mail_listeners(&with_both).is_none());
+    fn appended_listeners_keep_master_cf_continuation_indent() {
+        let raw = "#submission inet n - n - - smtpd\n";
+        let updated = append_cpn_mail_listeners(raw).expect("append");
+        assert!(
+            updated.contains("\n  -o syslog_name=postfix/submission\n"),
+            "continuation lines must start with spaces; got:\n{updated}"
+        );
+        assert!(updated.contains("\n  -o syslog_name=postfix/smtps\n"));
     }
 }
