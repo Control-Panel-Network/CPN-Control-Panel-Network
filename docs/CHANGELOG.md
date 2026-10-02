@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Large classic restore plan timeout**: `/backups/restore/plan` no longer fails after 15s when inventorying multi-GB source control-panel archives. Listing uses a 2h budget, filters deep website noise, caches members under `/var/lib/cpn/backup-inventory/`, and large restores prefer selective path extract to reduce staging disk use.
+
 - **System Repair hang / Busy stub**: `/server/system-repair` no longer runs the full probe suite inside the hub HTML render (which hit the 20s `gathering host status` 503). The page shell returns immediately and loads check cards from `/server/system-repair/api` with a 16s budget, 20s result cache, and 6s fail-fast per collector group. Cloudflare live verify is skipped on this path (use DNS Test connection). Login/getenforce probes use short timeouts.
 
 ### Added

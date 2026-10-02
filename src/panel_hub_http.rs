@@ -78,7 +78,15 @@ pub async fn html_blocking<F>(render: F) -> HttpResponse
 where
     F: FnOnce() -> String + Send + 'static,
 {
-    match tokio::time::timeout(HUB_RENDER_BUDGET, tokio::task::spawn_blocking(render)).await {
+    html_blocking_budget(HUB_RENDER_BUDGET, render).await
+}
+
+/// Same as [`html_blocking`] with an explicit budget (used by restore plan for large archives).
+pub async fn html_blocking_budget<F>(budget: std::time::Duration, render: F) -> HttpResponse
+where
+    F: FnOnce() -> String + Send + 'static,
+{
+    match tokio::time::timeout(budget, tokio::task::spawn_blocking(render)).await {
         Ok(Ok(body)) => html_ok(body),
         Ok(Err(_)) => HttpResponse::InternalServerError()
             .content_type("text/html; charset=utf-8")

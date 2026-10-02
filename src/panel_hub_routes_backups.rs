@@ -3,8 +3,10 @@
 use crate::backup_restore::{RestoreRequest, restore_backup};
 use crate::installer::AppState;
 use crate::panel_backups::BackupsPageQuery;
+use crate::backup_restore_extract::RESTORE_PLAN_RENDER_BUDGET;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+    html_blocking, html_blocking_budget, html_ok, login_redirect, redirect_notice,
+    require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
@@ -110,9 +112,9 @@ pub async fn backups_restore_plan_route(
         .to_string();
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
-    // Inventory runs on the blocking pool with a hard budget so a slow/hung tar
-    // list cannot reset the browser connection or starve Actix workers.
-    html_blocking(move || {
+    // Inventory runs on the blocking pool. Large classic source control-panel
+    // archives use a long budget (and disk cache) so plan listing is not cut at 15-20s.
+    html_blocking_budget(RESTORE_PLAN_RENDER_BUDGET, move || {
         panel_shell(
             &user,
             "backups",
