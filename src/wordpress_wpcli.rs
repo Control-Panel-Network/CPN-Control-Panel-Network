@@ -219,7 +219,8 @@ fn running_as_root() -> bool {
 }
 
 fn system_user_exists(name: &str) -> bool {
-    if name.is_empty() || name.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+    if name.is_empty()
+        || name.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
     {
         return false;
     }
@@ -281,7 +282,8 @@ pub fn sanitize_wp_cli_error(raw: &str) -> String {
         return "WordPress could not connect to MariaDB. Check database credentials and that MariaDB is running.".into();
     }
     if lower.contains("permission denied") || lower.contains("read-only file system") {
-        return "WordPress could not write to the document root. Check ownership and permissions.".into();
+        return "WordPress could not write to the document root. Check ownership and permissions."
+            .into();
     }
     // Pass through CPN validation / orchestration messages unchanged.
     if !lower.contains("wp-cli")
@@ -311,7 +313,11 @@ pub fn sanitize_wp_cli_error(raw: &str) -> String {
     }
 }
 
-fn build_wp_argv(bin_spec: &str, args: &[&str], path: Option<&Path>) -> Result<Vec<String>, String> {
+fn build_wp_argv(
+    bin_spec: &str,
+    args: &[&str],
+    path: Option<&Path>,
+) -> Result<Vec<String>, String> {
     let mut argv = Vec::new();
     if let Some(phar) = bin_spec.strip_prefix("php:") {
         let php = php_bin().ok_or_else(|| "PHP CLI not found".to_string())?;
@@ -429,7 +435,8 @@ fn run_wp_raw(bin_spec: &str, args: &[&str], path: Option<&Path>) -> Result<Stri
         .map_err(|e| format!("Failed to run WP-CLI: {e}"))?;
     if out.status.success() {
         // Private phar runs as root with --allow-root; restore web ownership on docroots.
-        if as_root && bin_is_private_phar(bin_spec)
+        if as_root
+            && bin_is_private_phar(bin_spec)
             && let Some(docroot) = path
         {
             let _ = chown_docroot_to_web_user(docroot);
@@ -627,8 +634,12 @@ mod tests {
 
     #[test]
     fn build_wp_argv_for_system_wp() {
-        let argv = build_wp_argv("/usr/local/bin/wp", &["core", "download"], Some(Path::new("/home/a/public_html")))
-            .expect("argv");
+        let argv = build_wp_argv(
+            "/usr/local/bin/wp",
+            &["core", "download"],
+            Some(Path::new("/home/a/public_html")),
+        )
+        .expect("argv");
         assert_eq!(argv[0], "/usr/local/bin/wp");
         assert!(argv.iter().any(|a| a.starts_with("--path=")));
         assert_eq!(argv[argv.len() - 2], "core");
@@ -638,10 +649,7 @@ mod tests {
     #[test]
     fn parse_version_ignores_yikes() {
         let raw = "Error: YIKES! It looks like you're running this as root.\nWP-CLI 2.12.0\n";
-        assert_eq!(
-            parse_wp_cli_version(raw).as_deref(),
-            Some("WP-CLI 2.12.0")
-        );
+        assert_eq!(parse_wp_cli_version(raw).as_deref(), Some("WP-CLI 2.12.0"));
     }
 
     #[test]
@@ -650,7 +658,10 @@ mod tests {
             format_wp_cli_binary("php:/var/lib/cpn/bin/wp-cli.phar"),
             "php /var/lib/cpn/bin/wp-cli.phar"
         );
-        assert_eq!(format_wp_cli_binary("/usr/local/bin/wp"), "/usr/local/bin/wp");
+        assert_eq!(
+            format_wp_cli_binary("/usr/local/bin/wp"),
+            "/usr/local/bin/wp"
+        );
     }
 
     #[test]
