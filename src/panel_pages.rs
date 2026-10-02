@@ -28,8 +28,8 @@ button { font:inherit; cursor:pointer; }
   display:flex; background:var(--surface); position:relative; overflow:hidden;
 }
 .sidebar-backdrop {
-  display:none; position:fixed; inset:0; z-index:40; border:0; padding:0;
-  background:rgba(29,29,31,.42); cursor:pointer;
+  display:none; position:fixed; inset:0; z-index:90; border:0; padding:0;
+  background:rgba(29,29,31,.42); cursor:pointer; pointer-events:auto;
 }
 .sidebar {
   position:relative; align-self:stretch; width:var(--sidebar-width);
@@ -37,7 +37,7 @@ button { font:inherit; cursor:pointer; }
   flex:0 0 var(--sidebar-width); min-height:0;
   display:flex; flex-direction:column; justify-content:flex-start;
   overflow:hidden; padding:28px 17px 20px; background:rgba(250,250,252,.96);
-  border-right:1px solid var(--hairline); z-index:50;
+  border-right:1px solid var(--hairline); z-index:100; pointer-events:auto;
 }
 .sidebar-header { flex:0 0 auto; }
 .panel-brand { display:flex; align-items:center; gap:11px; min-height:44px; padding:0 10px; font-size:17px; font-weight:600; }
@@ -338,13 +338,14 @@ code { font-size:.9em; word-break:break-word; }
 @media (max-width:1023.98px) {
   body.nav-open { overflow:hidden; }
   .sidebar-backdrop { display:none; }
-  body.nav-open .sidebar-backdrop { display:block; }
+  body.nav-open .sidebar-backdrop { display:block; z-index:90; }
   .sidebar {
     position:fixed; left:0; top:0; height:100%; height:100dvh;
     max-height:100%; max-height:100dvh; transform:translateX(-105%);
     transition:transform 180ms ease; box-shadow:none; flex:none;
+    z-index:100; pointer-events:auto;
   }
-  body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); }
+  body.nav-open .sidebar { transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); z-index:100; }
   .panel-main { padding:0 16px 64px; width:100%; height:100%; overflow-y:auto; }
   .mobile-header {
     display:flex; height:58px; margin:0 -16px 28px; padding:0 12px 0 8px; align-items:center;
@@ -432,8 +433,8 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
   {boot}
 </head>
 <body data-color-mode="{mode}">
-  <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
   <div class="panel-layout" data-page="{active}">
+    <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
     <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
       {header}
       <nav aria-label="Primary navigation">
@@ -513,6 +514,34 @@ mod tests {
         assert!(
             css.contains(".docker-card-list"),
             "docker container/image/stack lists use stacked cards at all widths"
+        );
+        assert!(
+            css.contains("z-index:100")
+                && css.contains("z-index:90")
+                && css.contains("pointer-events:auto"),
+            "drawer must stack above the nav backdrop and stay clickable"
+        );
+    }
+
+    #[test]
+    fn panel_shell_keeps_backdrop_inside_layout() {
+        let html = super::panel_shell("tester", "dashboard", "Dashboard", "<p>ok</p>");
+        let layout = html
+            .find("class=\"panel-layout\"")
+            .expect("panel-layout missing");
+        let backdrop = html
+            .find("id=\"nav-backdrop\"")
+            .expect("nav-backdrop missing");
+        let sidebar = html
+            .find("id=\"panel-sidebar\"")
+            .expect("panel-sidebar missing");
+        assert!(
+            layout < backdrop && backdrop < sidebar,
+            "backdrop must sit inside panel-layout and before the sidebar so z-index stacks correctly"
+        );
+        assert!(
+            !html.contains("</button>\n  <div class=\"panel-layout\""),
+            "backdrop must not be a body-level sibling above the layout shell"
         );
     }
 }

@@ -18,14 +18,15 @@ pub fn sidebar_collapse_styles() -> &'static str {
 /* User-collapsed: same overlay drawer as narrow screens, on any viewport */
 body.sidebar-collapsed.nav-open { overflow:hidden; }
 body.sidebar-collapsed .sidebar-backdrop { display:none; }
-body.sidebar-collapsed.nav-open .sidebar-backdrop { display:block; }
+body.sidebar-collapsed.nav-open .sidebar-backdrop { display:block; z-index:90; }
 body.sidebar-collapsed .sidebar {
   position:fixed; left:0; top:0; height:100%; height:100dvh;
   max-height:100%; max-height:100dvh; transform:translateX(-105%);
   transition:transform 180ms ease; box-shadow:none; flex:none;
+  z-index:100; pointer-events:auto;
 }
 body.sidebar-collapsed.nav-open .sidebar {
-  transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12);
+  transform:translateX(0); box-shadow:12px 0 32px rgba(0,0,0,.12); z-index:100;
 }
 body.sidebar-collapsed .panel-main { padding:0 20px 64px; width:100%; }
 body.sidebar-collapsed .mobile-header {
@@ -187,6 +188,10 @@ mod tests {
         );
         assert!(css.contains("mobile-header"));
         assert!(css.contains("sidebar-collapse-btn"));
+        assert!(
+            css.contains("z-index:100") && css.contains("z-index:90"),
+            "collapsed drawer must stay above the backdrop"
+        );
     }
 
     #[test]
