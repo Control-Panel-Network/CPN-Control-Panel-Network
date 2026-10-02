@@ -5,7 +5,7 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
     html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
 };
-use crate::panel_hub_pages_system_repair::system_repair_page;
+use crate::panel_hub_pages_system_repair::{system_repair_json_report_page, system_repair_page};
 use crate::panel_pages::panel_shell;
 use crate::system_repair::{PRODUCT_NAME, run_suite_ex};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -24,6 +24,30 @@ fn wants_refresh(query: &HashMap<String, String>) -> bool {
             t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
         })
         .unwrap_or(false)
+}
+
+fn wants_raw_json(query: &HashMap<String, String>, http: &HttpRequest) -> bool {
+    if query
+        .get("raw")
+        .map(|v| {
+            let t = v.trim();
+            t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
+        })
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    let accept = http
+        .headers()
+        .get(actix_web::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    // Explicit JSON (fetch / curl -H Accept: application/json) stays machine JSON.
+    if accept.to_ascii_lowercase().contains("application/json") {
+        return true;
+    }
+    // Browser navigation typically prefers text/html first: redirect to dark report.
+    false
 }
 
 #[get("/server/system-repair")]
@@ -50,6 +74,29 @@ pub async fn system_repair_route(
     ))
 }
 
+async fn load_suite_json(
+    refresh: bool,
+) -> Result<crate::system_repair::RepairReport, HttpResponse> {
+    match tokio::time::timeout(
+        API_SUITE_BUDGET,
+        web::block(move || run_suite_ex(false, None, None, refresh)),
+    )
+    .await
+    {
+        Ok(Ok(report)) => Ok(report),
+        Ok(Err(_)) => Err(HttpResponse::InternalServerError().json(serde_json::json!({
+            "ok": false,
+            "error": "System Repair worker failed"
+        }))),
+        Err(_) => Err(HttpResponse::ServiceUnavailable()
+            .insert_header(("Retry-After", "3"))
+            .json(serde_json::json!({
+                "ok": false,
+                "error": "System Repair checks timed out. Retry; slow probe groups are skipped."
+            }))),
+    }
+}
+
 #[get("/server/system-repair/api")]
 pub async fn system_repair_api_route(
     http: HttpRequest,
@@ -66,27 +113,22 @@ pub async fn system_repair_api_route(
         }));
     }
     let refresh = wants_refresh(&query);
-    let report = match tokio::time::timeout(
-        API_SUITE_BUDGET,
-        web::block(move || run_suite_ex(false, None, None, refresh)),
-    )
-    .await
-    {
-        Ok(Ok(report)) => report,
-        Ok(Err(_)) => {
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "ok": false,
-                "error": "System Repair worker failed"
-            }));
-        }
-        Err(_) => {
-            return HttpResponse::ServiceUnavailable()
-                .insert_header(("Retry-After", "3"))
-                .json(serde_json::json!({
-                    "ok": false,
-                    "error": "System Repair checks timed out. Retry; slow probe groups are skipped."
-                }));
-        }
+    // Browser GETs (no application/json Accept) get the dark report page, not a white dump.
+    if !wants_raw_json(&query, &http) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                if refresh {
+                    "/server/system-repair/report?refresh=1"
+                } else {
+                    "/server/system-repair/report"
+                },
+            ))
+            .finish();
+    }
+    let report = match load_suite_json(refresh).await {
+        Ok(r) => r,
+        Err(resp) => return resp,
     };
     match report.to_json() {
         Ok(body) => HttpResponse::Ok()
@@ -97,6 +139,48 @@ pub async fn system_repair_api_route(
             "error": err
         })),
     }
+}
+
+#[get("/server/system-repair/report")]
+pub async fn system_repair_report_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return owner_only_html(&user, "server", PRODUCT_NAME);
+    }
+    let refresh = wants_refresh(&query);
+    let report = match load_suite_json(refresh).await {
+        Ok(r) => r,
+        Err(resp) => return resp,
+    };
+    let json = match report.to_json() {
+        Ok(body) => body,
+        Err(err) => {
+            return html_ok(panel_shell(
+                &user,
+                "server",
+                "System Repair JSON",
+                &system_repair_json_report_page(
+                    &format!(
+                        "{{\n  \"ok\": false,\n  \"error\": \"{}\"\n}}",
+                        err.replace('"', "'")
+                    ),
+                    Some("Could not encode report JSON."),
+                ),
+            ));
+        }
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "System Repair JSON",
+        &system_repair_json_report_page(&json, None),
+    ))
 }
 
 #[post("/server/system-repair/heal")]

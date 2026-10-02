@@ -1,6 +1,7 @@
 //! Local MTA + IMAP provisioning and health checks (issue #9).
 
 use crate::install_journal::{self, JournalAction};
+use crate::install_mail_listeners::{append_cpn_mail_listeners, ensure_postfix_tls_material};
 use crate::install_recipes::{DnfProgress, command, pkg_install};
 use crate::installer::{AppState, run_command};
 use crate::os_support::require_installable_guest;
@@ -15,9 +16,7 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
     let master_cf = "/etc/postfix/master.cf";
     if Path::new(master_cf).exists() {
         let raw = std::fs::read_to_string(master_cf).unwrap_or_default();
-        if !raw.contains("127.0.0.1:587") && !raw.contains("submission inet") {
-            let extra = "\n# CPN local submission (issue #9)\n127.0.0.1:587 inet n - n - - smtpd\n  -o syslog_name=postfix/submission\n  -o smtpd_tls_security_level=may\n  -o smtpd_sasl_auth_enable=yes\n  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n";
-            let updated = format!("{raw}{extra}");
+        if let Some(updated) = append_cpn_mail_listeners(&raw) {
             install_journal::write_file_tracked(STAGE, Path::new(master_cf), &updated)?;
         }
     }
@@ -37,7 +36,7 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
     let _ = StdCommand::new("postconf")
         .args(["-e", "home_mailbox=Maildir/"])
         .status();
-
+    ensure_postfix_tls_material();
     let dovecot_conf = "/etc/dovecot/dovecot.conf";
     if Path::new(dovecot_conf).exists() {
         let mut raw = std::fs::read_to_string(dovecot_conf).unwrap_or_default();

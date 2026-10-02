@@ -1,4 +1,4 @@
-//! Owner-only System Repair hub UI (progressive check cards via JSON API).
+﻿//! Owner-only System Repair hub UI (progressive check cards via JSON API).
 
 use crate::panel_hubs::feature_shell;
 use crate::system_repair::PRODUCT_NAME;
@@ -34,6 +34,22 @@ fn styles() -> &'static str {
 .sr-heal{margin-top:10px;}
 .sr-loading{padding:18px 4px;color:#64748b;}
 [data-color-mode="dark"] .sr-loading{color:#94a3b8;}
+.sr-json-wrap{margin:0 0 18px;}
+.sr-json-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;}
+.sr-json-pre{
+  margin:0;padding:16px 18px;border-radius:12px;border:1px solid #e2e8f0;
+  background:#0f172a;color:#e2e8f0;overflow:auto;max-height:70vh;
+  font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;
+}
+[data-color-mode="dark"] .sr-json-pre{border-color:#334155;background:#020617;}
+.sr-j-key{color:#93c5fd;}
+.sr-j-str{color:#86efac;}
+.sr-j-num{color:#fde68a;}
+.sr-j-bool{color:#c4b5fd;}
+.sr-j-null{color:#94a3b8;}
+.sr-j-pass{color:#4ade80;font-weight:700;}
+.sr-j-warn{color:#fb923c;font-weight:700;}
+.sr-j-fail{color:#f87171;font-weight:700;}
 @media (max-width:720px){
   .sr-card-head{align-items:flex-start;}
   .sr-actions .btn-primary,.sr-actions .btn-secondary,.sr-heal .btn-secondary{width:100%;justify-content:center;}
@@ -161,7 +177,7 @@ pub fn system_repair_page(notice: Option<&str>, error: Option<&str>) -> String {
   <form method="post" action="/server/system-repair/heal">
     <button type="submit" class="btn-primary">Heal all safe issues</button>
   </form>
-  <a class="btn-secondary" href="/server/system-repair/api?refresh=1">JSON report</a>
+  <a class="btn-secondary" href="/server/system-repair/report?refresh=1">JSON report</a>
 </div>
 <div class="sr-grid" id="sr-grid"><p class="sr-loading">Gathering host checks (progressive). The page shell stays available while probes run with timeouts.</p></div>
 </div>"#,
@@ -178,5 +194,72 @@ pub fn system_repair_page(notice: Option<&str>, error: Option<&str>) -> String {
         &body,
         notice,
         error,
+    )
+}
+
+fn html_escape_json(raw: &str) -> String {
+    raw.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// Dark-theme JSON report for operators (never a blank white browser dump).
+pub fn system_repair_json_report_page(json_body: &str, notice: Option<&str>) -> String {
+    let escaped = html_escape_json(json_body);
+    // Color status string values after escaping so we never inject HTML from data.
+    let colored = escaped
+        .replace("&quot;pass&quot;", "<span class=\"sr-j-pass\">&quot;pass&quot;</span>")
+        .replace("&quot;warn&quot;", "<span class=\"sr-j-warn\">&quot;warn&quot;</span>")
+        .replace("&quot;fail&quot;", "<span class=\"sr-j-fail\">&quot;fail&quot;</span>");
+    let mut body = String::new();
+    body.push_str(styles());
+    if let Some(n) = notice.filter(|s| !s.trim().is_empty()) {
+        body.push_str(&format!(
+            "<p class=\"muted\">{}</p>",
+            html_escape_json(n)
+        ));
+    }
+    body.push_str(
+        r#"<div class="sr-json-wrap">
+<div class="sr-json-toolbar">
+  <a class="btn-secondary" href="/server/system-repair?refresh=1">Back to System Repair</a>
+  <a class="btn-secondary" href="/server/system-repair/api?refresh=1&amp;raw=1">Download raw JSON</a>
+  <a class="btn-secondary" href="/server/system-repair/report?refresh=1">Refresh report</a>
+</div>
+<p class="muted">Owner JSON report with dark highlighting. Pass / warn / fail values are colored for scanning.</p>
+<pre class="sr-json-pre" id="sr-json">"#,
+    );
+    body.push_str(&colored);
+    body.push_str("</pre></div>");
+    body.push_str(
+        r#"<script>
+(function () {
+  var pre = document.getElementById("sr-json");
+  if (!pre) return;
+  var html = pre.innerHTML;
+  html = html.replace(/&quot;([^&]+?)&quot;(?=\s*:)/g, '<span class="sr-j-key">&quot;$1&quot;</span>');
+  html = html.replace(/:\s*&quot;((?:[^&]|&(?!quot;))*?)&quot;/g, function (_, s) {
+    if (s === "pass" || s === "warn" || s === "fail") return ": &quot;" + s + "&quot;";
+    return ': <span class="sr-j-str">&quot;' + s + '&quot;</span>';
+  });
+  html = html.replace(/:\s*(-?\d+(?:\.\d+)?)\b/g, ': <span class="sr-j-num">$1</span>');
+  html = html.replace(/:\s*(true|false)\b/g, ': <span class="sr-j-bool">$1</span>');
+  html = html.replace(/:\s*(null)\b/g, ': <span class="sr-j-null">$1</span>');
+  pre.innerHTML = html;
+})();
+</script>"#,
+    );
+    feature_shell(
+        &[
+            ("Dashboard", Some("/dashboard")),
+            ("Server", Some("/server")),
+            (PRODUCT_NAME, Some("/server/system-repair")),
+            ("JSON report", None),
+        ],
+        "System Repair JSON",
+        "Dark-themed diagnostic JSON for owners and support.",
+        &body,
+        None,
+        None,
     )
 }

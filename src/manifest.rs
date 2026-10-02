@@ -320,6 +320,12 @@ fn resolve_package_version(
             // Stale alpha/0.2.x (or older) manifest while RPM is already on 1.0.0+: trust RPM.
             rpm_ver
         }
+        (Some(manifest_ver), None)
+            if compare_versions(&manifest_ver, running_version) == Ordering::Less =>
+        {
+            // Binary-only upgrade (lab hot-deploy): trust running panel over leftover manifest.
+            running_version.to_string()
+        }
         (Some(manifest_ver), _) => manifest_ver,
         (None, Some(rpm_ver)) => rpm_ver,
         (None, None) => running_version.to_string(),
@@ -328,8 +334,9 @@ fn resolve_package_version(
 
 /// Rewrite install-manifest when it lags the live RPM/running identity.
 ///
-/// Covers: retired `1.0.0`/`1.0.1` while live is `0.2.x`, and stale `0.2.x-alpha.*`
-/// while the live RPM is already on `1.0.0+`.
+/// Covers: retired `1.0.0`/`1.0.1` while live is `0.2.x`, stale `0.2.x-alpha.*`
+/// while the live RPM is already on `1.0.0+`, and binary-only upgrades where the
+/// running panel is newer than a leftover `1.0.0` manifest (e.g. `1.1.0`).
 pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String> {
     use crate::releases::{compare_versions, is_active_0_2_line, is_retired_cpn_1_0_identity};
     use std::cmp::Ordering;
@@ -360,6 +367,11 @@ pub fn reconcile_stale_package_identity(running_version: &str) -> Option<String>
         {
             // e.g. manifest 0.2.6-alpha.49 while RPM is 1.0.0
             v.clone()
+        }
+        Some(v) if compare_versions(&manifest.package_version, v) == Ordering::Less => v.clone(),
+        None if compare_versions(&manifest.package_version, running_version) == Ordering::Less => {
+            // Binary-only lab/hot-deploy: manifest 1.0.0 while running cpn is 1.1.0.
+            running_version.to_string()
         }
         _ => return None,
     };

@@ -63,6 +63,7 @@ pub mod http_origin_allowlist;
 pub mod install_http_ports;
 pub mod install_journal;
 pub mod install_mail_backend;
+pub mod install_mail_listeners;
 pub mod install_mail_sieve;
 pub mod install_recipes;
 pub mod install_selinux_mail;

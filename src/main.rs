@@ -103,7 +103,8 @@ use cpn_installer::panel_hub_routes::{
     settings_system_repair_redirect, settings_version_page, sidebar_acl_delete_post,
     sidebar_acl_get, sidebar_acl_post, site_filemanager_alias, site_files_op,
     site_files_page_route, site_files_upload, system_repair_api_route, system_repair_heal_route,
-    system_repair_route, users_create_get, users_create_post, users_delete_post, users_list_route,
+    system_repair_report_route, system_repair_route, users_create_get, users_create_post,
+    users_delete_post, users_list_route,
     users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
     users_profile_password_post, users_profile_route, users_profile_totp_begin,
     users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
@@ -1240,6 +1241,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_services_control)
             .service(system_repair_route)
             .service(system_repair_api_route)
+            .service(system_repair_report_route)
             .service(system_repair_heal_route)
             .service(settings_system_repair_redirect)
             .service(server_openlitespeed_page)

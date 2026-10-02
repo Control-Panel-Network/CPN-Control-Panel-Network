@@ -1,8 +1,9 @@
 //! Core panel / CLI path checks and heals (extends legacy `cpn doctor`).
 
 use super::{CheckStatus, HealResult, push};
+use crate::http_helpers::VERSION;
 use crate::listen_port;
-use crate::manifest::{self, load_manifest};
+use crate::manifest::{self, load_manifest, reconcile_stale_package_identity};
 use crate::panel_service::UNIT_NAME;
 use crate::paths;
 use crate::service_detect;
@@ -11,7 +12,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-pub const CORE_HEAL_IDS: &[&str] = &["cli.local_override", "panel.service"];
+pub const CORE_HEAL_IDS: &[&str] = &["cli.local_override", "panel.service", "manifest"];
 
 fn executable(path: &str) -> bool {
     let p = Path::new(path);
@@ -230,20 +231,36 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         ),
         Some(m) => {
+            let running = crate::releases::normalize_version(VERSION);
+            let packaged = crate::releases::normalize_version(&m.package_version);
+            let stale = packaged != running
+                && crate::releases::compare_versions(&m.package_version, VERSION)
+                    == std::cmp::Ordering::Less;
             push(
                 checks,
                 "manifest",
                 "panel",
                 "Install manifest",
-                CheckStatus::Pass,
-                format!(
-                    "package_version={} release_tag={} core_files={}",
-                    m.package_version,
-                    m.release_tag,
-                    m.core_files.len()
-                ),
+                if stale {
+                    CheckStatus::Warn
+                } else {
+                    CheckStatus::Pass
+                },
+                if stale {
+                    format!(
+                        "package_version={} release_tag={} lags running panel {running}; heal reconciles the install-manifest (Version UI)",
+                        m.package_version, m.release_tag
+                    )
+                } else {
+                    format!(
+                        "package_version={} release_tag={} core_files={}",
+                        m.package_version,
+                        m.release_tag,
+                        m.core_files.len()
+                    )
+                },
                 false,
-                None,
+                if stale { Some("manifest") } else { None },
             );
             let mut missing = Vec::new();
             let mut present = 0usize;
@@ -338,6 +355,33 @@ pub fn heal_panel_service() -> HealResult {
             format!("started {UNIT_NAME}")
         } else {
             format!("could not start {UNIT_NAME}")
+        },
+    }
+}
+
+pub fn heal_manifest() -> HealResult {
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return HealResult {
+                heal_id: "manifest".into(),
+                ok: false,
+                message: "requires root (sudo cpn doctor heal --id manifest)".into(),
+            };
+        }
+    }
+    match reconcile_stale_package_identity(VERSION) {
+        Some(msg) => HealResult {
+            heal_id: "manifest".into(),
+            ok: true,
+            message: msg,
+        },
+        None => HealResult {
+            heal_id: "manifest".into(),
+            ok: true,
+            message: format!(
+                "install-manifest already matches running panel {VERSION} (or no write needed)"
+            ),
         },
     }
 }

@@ -260,6 +260,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         let result = match *id {
             "cli.local_override" => panel_core::heal_local_override(),
             "panel.service" => panel_core::heal_panel_service(),
+            "manifest" => panel_core::heal_manifest(),
             "email.stack" => email::heal_email_stack(),
             "email.firewall" => email::heal_email_firewall(),
             "firewall" => host::heal_firewall(),
