@@ -60,9 +60,11 @@ pub fn ensure_postfix_tls_material() {
                 "-subj",
                 "/CN=cpn-postfix-local",
                 "-keyout",
-                key.to_str().unwrap_or("/etc/pki/tls/private/cpn-postfix.key"),
+                key.to_str()
+                    .unwrap_or("/etc/pki/tls/private/cpn-postfix.key"),
                 "-out",
-                cert.to_str().unwrap_or("/etc/pki/tls/certs/cpn-postfix.pem"),
+                cert.to_str()
+                    .unwrap_or("/etc/pki/tls/certs/cpn-postfix.pem"),
             ])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
