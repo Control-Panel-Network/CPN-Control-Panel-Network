@@ -223,9 +223,7 @@ fn nav_id_hidden(username: &str, nav_id: &str) -> bool {
     {
         return true;
     }
-    package_hidden_ids(username)
-        .iter()
-        .any(|id| id == nav_id)
+    package_hidden_ids(username).iter().any(|id| id == nav_id)
 }
 
 /// Whether this user may see the given top-level nav entry id in the sidebar.

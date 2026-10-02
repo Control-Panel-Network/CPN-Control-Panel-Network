@@ -285,10 +285,7 @@ pub fn subdomains_create_main(
         .filter(|site| !is_subdomain_site(&site.domain))
         .collect();
     let mut options = String::from(r#"<option value="">Select parent website…</option>"#);
-    let want = preselect_parent
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
+    let want = preselect_parent.unwrap_or("").trim().to_ascii_lowercase();
     for site in &parents {
         let selected = if site.domain.eq_ignore_ascii_case(&want) {
             " selected"
