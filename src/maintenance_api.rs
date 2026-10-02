@@ -7,6 +7,7 @@ use crate::manifest::{detect_existing_install, reconcile_stale_package_identity}
 use crate::model::{MaintenanceAction, MaintenanceInfo, MaintenanceRequest, TokenQuery};
 use crate::panel_admin::is_panel_admin;
 use crate::releases;
+use crate::releases_installed_color::{InstalledPackageColor, installed_package_color};
 use crate::releases_source::{
     self, UpdateSourceConfig, github_token_configured, load_update_source, save_github_token,
     save_update_source_repo,
@@ -66,6 +67,22 @@ pub async fn load_maintenance_info_with_options(force_network: bool) -> Maintena
     let check =
         releases::version_check_with_options(VERSION, &existing.package_version, force_network)
             .await;
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0);
+    let color = installed_package_color(
+        &existing.package_version,
+        existing.installed_at_unix,
+        now_unix,
+        &check.releases,
+        check.stable_update_available,
+    );
+    let color_label = match color {
+        InstalledPackageColor::Current => "current",
+        InstalledPackageColor::UpdateAvailable => "update_available",
+        InstalledPackageColor::StaleBehind => "stale_behind",
+    };
     let plan = Some(build_plan(
         MaintenanceAction::Repair,
         Some(&existing.package_version),
@@ -89,6 +106,7 @@ pub async fn load_maintenance_info_with_options(force_network: bool) -> Maintena
         check_error: check.error,
         installed_at_unix: existing.installed_at_unix,
         installed_at_source: existing.installed_at_source,
+        installed_package_color: Some(color_label.into()),
         from_cache: check.from_cache,
         cache_age_secs: check.cache_age_secs,
         rate_limited: check.rate_limited,
@@ -301,6 +319,7 @@ pub async fn start_maintenance(
             check_error: None,
             installed_at_unix: existing.installed_at_unix,
             installed_at_source: existing.installed_at_source,
+            installed_package_color: None,
             from_cache: false,
             cache_age_secs: None,
             rate_limited: false,

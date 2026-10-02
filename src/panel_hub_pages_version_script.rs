@@ -80,18 +80,59 @@ pub fn version_page_script(can_manage: bool) -> String {
     return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear()
       + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
   }}
-  function paintInstalledVersionColor(updateAvailable) {{
+  function paintInstalledVersionColor(state) {{
     if (!installedEl) return;
-    if (updateAvailable === true) {{
+    if (state === "stale_behind" || state === "stale") {{
+      installedEl.style.color = "#f87171";
+      installedEl.setAttribute("data-update-state", "stale");
+    }} else if (state === "update_available" || state === "behind") {{
       installedEl.style.color = "#fb923c";
       installedEl.setAttribute("data-update-state", "behind");
-    }} else if (updateAvailable === false) {{
+    }} else if (state === "current") {{
       installedEl.style.color = "#4ade80";
       installedEl.setAttribute("data-update-state", "current");
     }} else {{
       installedEl.style.color = "";
       installedEl.removeAttribute("data-update-state");
     }}
+  }}
+  function isPrereleaseLabel(ver) {{
+    var s = String(ver || "").toLowerCase();
+    return /(alpha|beta|rc|dev|pre|preview|snapshot|nightly)/.test(s);
+  }}
+  function releaseIsPrerelease(r) {{
+    if (!r) return false;
+    if (r.prerelease === true) return true;
+    return isPrereleaseLabel(r.version) || isPrereleaseLabel(r.tag_name);
+  }}
+  function resolveInstalledColor(info) {{
+    if (info && info.installed_package_color) return String(info.installed_package_color);
+    if (!info) return null;
+    var installed = info.installed_version || "";
+    var releases = info.releases || [];
+    var onPre = isPrereleaseLabel(installed);
+    var row = releaseRowForVersion(installed);
+    if (row && releaseIsPrerelease(row)) onPre = true;
+    var newerStable = false;
+    var newerChannel = false;
+    for (var i = 0; i < releases.length; i++) {{
+      var r = releases[i];
+      var ver = r.version || r.tag_name || "";
+      if (!ver || cmp(installed, ver) >= 0) continue;
+      var isPre = releaseIsPrerelease(r);
+      if (!isPre) newerStable = true;
+      if (onPre || !isPre) newerChannel = true;
+    }}
+    if (!!info.stable_update_available) newerChannel = true;
+    var ts = Number(info.installed_at_unix || 0);
+    var stale = false;
+    if (ts > 0) {{
+      var age = (Date.now() / 1000) - ts;
+      stale = age > (183 * 24 * 60 * 60);
+    }}
+    if (stale && newerStable) return "stale_behind";
+    if (newerChannel) return "update_available";
+    return "current";
   }}
   function setDetailRow(rowId, valueId, text) {{
     var row = document.getElementById(rowId);
@@ -359,10 +400,8 @@ pub fn version_page_script(can_manage: bool) -> String {
     if (installedEl && info.installed_version) installedEl.textContent = info.installed_version;
     var hasReleaseOrTip = !!(info.latest_version || info.latest_tag || info.stable_tip_sha
       || (info.releases && info.releases.length));
-    if (info.update_available) {{
-      paintInstalledVersionColor(true);
-    }} else if (hasReleaseOrTip) {{
-      paintInstalledVersionColor(false);
+    if (hasReleaseOrTip || info.installed_package_color) {{
+      paintInstalledVersionColor(resolveInstalledColor(info));
     }} else {{
       paintInstalledVersionColor(null);
     }}
@@ -729,6 +768,9 @@ mod tests {
         assert!(js.contains("stable_update_available"));
         assert!(js.contains("cpn-version-upgrade-stable"));
         assert!(js.contains("stable@"));
+        assert!(js.contains("stale_behind"));
+        assert!(js.contains("resolveInstalledColor"));
+        assert!(js.contains("isPrereleaseLabel"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

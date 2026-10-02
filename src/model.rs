@@ -214,6 +214,9 @@ pub struct MaintenanceInfo {
     /// Provenance for `installed_at_unix`: `manifest`, `lab-deploy-meta`, or `rpm`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub installed_at_source: Option<String>,
+    /// Installed package UI color: `current` (green), `update_available` (orange), `stale_behind` (red).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_package_color: Option<String>,
     #[serde(default)]
     pub from_cache: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]

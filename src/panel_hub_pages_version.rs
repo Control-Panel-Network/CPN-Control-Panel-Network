@@ -103,6 +103,8 @@ pub fn version_management_page(can_manage: bool) -> String {
 .version-kv .kv-meta {{ display:block; margin-top:4px; color:var(--muted,#98a2b3); font-weight:400; font-size:13px; }}
 .version-kv .kv-value[data-update-state="behind"],
 .version-kv strong[data-update-state="behind"] {{ color:#fb923c; }}
+.version-kv .kv-value[data-update-state="stale"],
+.version-kv strong[data-update-state="stale"] {{ color:#f87171; }}
 .version-kv .kv-value[data-update-state="current"],
 .version-kv strong[data-update-state="current"] {{ color:#4ade80; }}
 @media (max-width:640px) {{
@@ -233,6 +235,7 @@ mod tests {
         assert!(html.contains("cpn-version-installed-at"));
         assert!(html.contains("version-kv"));
         assert!(html.contains("cpn-version-row-repo"));
+        assert!(html.contains("data-update-state=\"stale\""));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
         assert!(!html.contains('\u{2014}'));
