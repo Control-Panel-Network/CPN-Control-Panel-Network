@@ -128,7 +128,11 @@ pub fn version_management_page(can_manage: bool) -> String {
   gap:12px 20px; align-items:start; padding:12px 0;
   border-top:1px solid var(--hairline,#2a2f3a); font-size:14px;
 }}
-.version-kv > li:first-child {{ border-top:0; }}
+/* display:grid must not override the HTML hidden attribute */
+.version-kv > li[hidden] {{ display:none !important; }}
+.version-kv > li:not([hidden]) {{ border-top:1px solid var(--hairline,#2a2f3a); }}
+.version-kv > li:not([hidden]):first-child,
+.version-kv > li[hidden] + li:not([hidden]) {{ border-top:0; }}
 .version-kv .kv-label {{ color:var(--muted,#98a2b3); font-weight:500; padding-top:2px; }}
 .version-kv .kv-value {{
   min-width:0; text-align:right; justify-self:stretch;
@@ -293,6 +297,7 @@ mod tests {
         assert!(html.contains(">Refresh<"));
         assert!(html.contains("version-card-toolbar"));
         assert!(html.contains("can lag after a hot-deploy"));
+        assert!(html.contains("li[hidden]"));
         assert!(html.contains("data-update-state=\"stale\""));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
