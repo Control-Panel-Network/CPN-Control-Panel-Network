@@ -189,6 +189,16 @@ pub fn keep_member_for_plan(raw: &str) -> bool {
     {
         return true;
     }
+    // Drop deep website noise even when path depth is still "shallow".
+    if lower.contains("/.cache/")
+        || lower.contains("/node_modules/")
+        || lower.contains("/.git/")
+        || lower.contains("/vendor/")
+        || lower.contains("/wp-content/uploads/")
+        || lower.contains("/wp-content/cache/")
+    {
+        return false;
+    }
     let depth = n.split('/').filter(|p| !p.is_empty() && *p != ".").count();
     if depth <= 3 {
         return true;
