@@ -4,6 +4,9 @@
 //! and accepts aliases `troubleshoot`, `repair`, and `system-repair`.
 
 use serde::Serialize;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 mod email;
 mod host;
@@ -19,6 +22,13 @@ pub const PRODUCT_NAME: &str = "System Repair";
 
 /// CLI primary command (also documented as doctor).
 pub const CLI_COMMAND: &str = "doctor";
+
+/// Soft TTL for read-only check results (panel API and repeated CLI).
+const CHECK_CACHE_TTL: Duration = Duration::from_secs(20);
+/// Hard wall clock per collector group so one wedged probe cannot block the suite.
+const GROUP_BUDGET: Duration = Duration::from_secs(6);
+
+static CHECK_CACHE: Mutex<Option<(Instant, Vec<RepairCheck>)>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -67,10 +77,21 @@ pub struct RepairReport {
     pub warn: usize,
     pub fail: usize,
     pub required_failures: usize,
+    /// True when checks were served from the short-lived in-process cache.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cached: bool,
 }
 
 impl RepairReport {
     pub fn from_checks(checks: Vec<RepairCheck>, heals: Vec<HealResult>) -> Self {
+        Self::from_checks_cached(checks, heals, false)
+    }
+
+    pub fn from_checks_cached(
+        checks: Vec<RepairCheck>,
+        heals: Vec<HealResult>,
+        cached: bool,
+    ) -> Self {
         let mut pass = 0usize;
         let mut warn = 0usize;
         let mut fail = 0usize;
@@ -95,6 +116,7 @@ impl RepairReport {
             warn,
             fail,
             required_failures,
+            cached,
         }
     }
 
@@ -130,16 +152,95 @@ fn push(
     });
 }
 
-/// Run every System Repair check (read-only).
-pub fn run_checks(filter_id: Option<&str>) -> Vec<RepairCheck> {
-    let mut checks = Vec::new();
-    panel_core::collect(&mut checks);
-    email::collect(&mut checks);
-    host::collect(&mut checks);
-    if let Some(id) = filter_id.map(str::trim).filter(|s| !s.is_empty()) {
-        checks.retain(|c| c.id == id || c.heal_id.as_deref() == Some(id) || c.category == id);
+fn timeout_stub(group: &str) -> RepairCheck {
+    RepairCheck {
+        id: format!("{group}.timeout"),
+        category: group.into(),
+        title: format!("{group} checks timed out"),
+        status: CheckStatus::Warn,
+        detail: format!(
+            "Probe group `{group}` exceeded {}s and was skipped so System Repair stays responsive",
+            GROUP_BUDGET.as_secs()
+        ),
+        required: false,
+        heal_id: None,
     }
-    checks
+}
+
+fn collect_group(group: &str, collector: fn(&mut Vec<RepairCheck>)) -> Vec<RepairCheck> {
+    let (tx, rx) = mpsc::channel();
+    let spawn = std::thread::Builder::new()
+        .name(format!("cpn-sr-{group}"))
+        .spawn(move || {
+            let mut local = Vec::new();
+            collector(&mut local);
+            let _ = tx.send(local);
+        });
+    if spawn.is_err() {
+        let mut local = Vec::new();
+        collector(&mut local);
+        return local;
+    }
+    match rx.recv_timeout(GROUP_BUDGET) {
+        Ok(v) => v,
+        Err(_) => vec![timeout_stub(group)],
+    }
+}
+
+/// Drop cached checks (after heal or explicit refresh).
+pub fn invalidate_check_cache() {
+    if let Ok(mut guard) = CHECK_CACHE.lock() {
+        *guard = None;
+    }
+}
+
+fn store_check_cache(checks: &[RepairCheck]) {
+    if let Ok(mut guard) = CHECK_CACHE.lock() {
+        *guard = Some((Instant::now(), checks.to_vec()));
+    }
+}
+
+fn load_check_cache() -> Option<Vec<RepairCheck>> {
+    let Ok(guard) = CHECK_CACHE.lock() else {
+        return None;
+    };
+    let (at, checks) = guard.as_ref()?;
+    if at.elapsed() > CHECK_CACHE_TTL {
+        return None;
+    }
+    Some(checks.clone())
+}
+
+/// Run every System Repair check (read-only).
+///
+/// Groups run with a hard budget so a wedged `systemctl` / network probe cannot
+/// block the whole suite past a few seconds. Results are cached briefly.
+pub fn run_checks(filter_id: Option<&str>) -> Vec<RepairCheck> {
+    run_checks_cached(filter_id, false).0
+}
+
+/// Like [`run_checks`], plus whether the result came from cache.
+pub fn run_checks_cached(filter_id: Option<&str>, force_refresh: bool) -> (Vec<RepairCheck>, bool) {
+    let filter = filter_id.map(str::trim).filter(|s| !s.is_empty());
+    if !force_refresh
+        && filter.is_none()
+        && let Some(cached) = load_check_cache()
+    {
+        return (cached, true);
+    }
+
+    let mut checks = Vec::new();
+    checks.extend(collect_group("panel", panel_core::collect));
+    checks.extend(collect_group("email", email::collect));
+    checks.extend(collect_group("host", host::collect));
+    checks.extend(collect_group("apps", host_apps::collect));
+
+    if let Some(id) = filter {
+        checks.retain(|c| c.id == id || c.heal_id.as_deref() == Some(id) || c.category == id);
+    } else {
+        store_check_cache(&checks);
+    }
+    (checks, false)
 }
 
 /// Safe heals. Never clears MFA. When `heal_id` is None, runs all known heals that apply.
@@ -159,6 +260,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         let result = match *id {
             "cli.local_override" => panel_core::heal_local_override(),
             "panel.service" => panel_core::heal_panel_service(),
+            "manifest" => panel_core::heal_manifest(),
             "email.stack" => email::heal_email_stack(),
             "email.firewall" => email::heal_email_firewall(),
             "firewall" => host::heal_firewall(),
@@ -186,9 +288,26 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
 
 /// Heal (optional), then re-check. Used by CLI and panel.
 pub fn run_suite(heal: bool, heal_id: Option<&str>, filter_id: Option<&str>) -> RepairReport {
-    let heals = if heal { run_heals(heal_id) } else { Vec::new() };
-    let checks = run_checks(filter_id);
-    RepairReport::from_checks(checks, heals)
+    run_suite_ex(heal, heal_id, filter_id, heal)
+}
+
+/// Extended suite with optional cache bypass (`force_refresh`).
+pub fn run_suite_ex(
+    heal: bool,
+    heal_id: Option<&str>,
+    filter_id: Option<&str>,
+    force_refresh: bool,
+) -> RepairReport {
+    let heals = if heal {
+        invalidate_check_cache();
+        let out = run_heals(heal_id);
+        invalidate_check_cache();
+        out
+    } else {
+        Vec::new()
+    };
+    let (checks, cached) = run_checks_cached(filter_id, force_refresh || heal);
+    RepairReport::from_checks_cached(checks, heals, cached && !heal)
 }
 
 /// Human-readable CLI report. Returns process exit code.
@@ -278,8 +397,29 @@ mod tests {
         assert_eq!(report.fail, 1);
         assert_eq!(report.required_failures, 1);
         assert_eq!(report.exit_code(), 1);
+        assert!(!report.cached);
         let json = report.to_json().unwrap();
         assert!(json.contains("System Repair"));
         assert!(json.contains("\"fail\""));
+    }
+
+    #[test]
+    fn check_cache_round_trip() {
+        invalidate_check_cache();
+        let sample = vec![RepairCheck {
+            id: "cache.demo".into(),
+            category: "test".into(),
+            title: "Cache".into(),
+            status: CheckStatus::Pass,
+            detail: "ok".into(),
+            required: false,
+            heal_id: None,
+        }];
+        store_check_cache(&sample);
+        let loaded = load_check_cache().expect("cache warm");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "cache.demo");
+        invalidate_check_cache();
+        assert!(load_check_cache().is_none());
     }
 }

@@ -19,7 +19,12 @@ const MAIL_PORTS: &[(u16, &str, &str)] = &[
 ];
 
 fn selinux_note() -> Option<String> {
-    let out = std::process::Command::new("getenforce").output().ok()?;
+    let out = crate::panel_ops_docker_probe::output_with_timeout(
+        "getenforce",
+        &[],
+        std::time::Duration::from_secs(2),
+    )
+    .ok()?;
     let mode = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if mode.eq_ignore_ascii_case("Enforcing") {
         Some(

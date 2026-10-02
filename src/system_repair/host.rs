@@ -225,21 +225,40 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         );
     } else {
-        let valid = ssl_rows.iter().filter(|r| r.has_cert).count();
         let total = ssl_rows.len();
+        let with_cert = ssl_rows.iter().filter(|r| r.has_cert).count();
+        let provider_none = ssl_rows
+            .iter()
+            .filter(|r| r.provider.eq_ignore_ascii_case("none"))
+            .count();
+        let needing = ssl_rows
+            .iter()
+            .filter(|r| r.auto_issue && !r.has_cert)
+            .count();
+        let private_hint = "Public ACME (Let's Encrypt) needs a reachable hostname; private/NAT labs can keep provider None or upload a self-signed/custom cert under Site SSL.";
+        let (status, detail) = if needing == 0 {
+            (
+                CheckStatus::Pass,
+                if provider_none == total && with_cert == 0 {
+                    format!(
+                        "{total}/{total} sites use SSL provider None (no cert expected). {private_hint}"
+                    )
+                } else {
+                    format!(
+                        "{with_cert}/{total} sites have cert material on disk; no auto-issue gaps"
+                    )
+                },
+            )
+        } else {
+            (
+                CheckStatus::Warn,
+                format!(
+                    "{with_cert}/{total} sites have cert on disk; {needing} auto-provider site(s) still need issue. {private_hint}"
+                ),
+            )
+        };
         push(
-            checks,
-            "host.ssl",
-            "ssl",
-            "Site SSL",
-            if valid == total {
-                CheckStatus::Pass
-            } else {
-                CheckStatus::Warn
-            },
-            format!("{valid}/{total} sites have a certificate on disk"),
-            false,
-            None,
+            checks, "host.ssl", "ssl", "Site SSL", status, detail, false, None,
         );
     }
 
@@ -279,8 +298,6 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         );
     }
-
-    host_apps::collect(checks);
 }
 
 pub fn heal_firewall() -> HealResult {
