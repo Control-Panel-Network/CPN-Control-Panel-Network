@@ -177,6 +177,39 @@ pub fn format_bytes(n: u64) -> String {
     }
 }
 
+/// Archive / backup list sizes: KB/MB/GB/TB with European decimal comma and
+/// narrow-space thousands grouping (same style as [`format_grouped_u64`]).
+///
+/// Examples: `512 B`, `1\u{202F}700 KB`, `1,7 MB`, `12,34 GB`.
+pub fn format_bytes_eu(n: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    const TB: f64 = GB * 1024.0;
+    let v = n as f64;
+    let (scaled, unit, decimals) = if v >= TB {
+        (v / TB, "TB", 2_u32)
+    } else if v >= GB {
+        (v / GB, "GB", 2)
+    } else if v >= MB {
+        (v / MB, "MB", 1)
+    } else if v >= KB {
+        (v / KB, "KB", 0)
+    } else {
+        return format!("{} B", format_grouped_u64(n));
+    };
+    let factor = 10f64.powi(decimals as i32);
+    let rounded = (scaled * factor).round() / factor;
+    let int_part = rounded.trunc() as u64;
+    let mut out = format_grouped_u64(int_part);
+    if decimals > 0 {
+        let frac = ((rounded.fract() * factor).round() as u64).min(factor as u64 - 1);
+        out.push(',');
+        out.push_str(&format!("{:0width$}", frac, width = decimals as usize));
+    }
+    format!("{out} {unit}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,6 +219,17 @@ mod tests {
         assert_eq!(format_bytes(500), "500 B");
         assert!(format_bytes(2048).contains("KiB"));
         assert!(format_bytes(5 * 1024 * 1024).contains("MiB"));
+    }
+
+    #[test]
+    fn format_bytes_eu_uses_human_units_and_eu_grouping() {
+        assert_eq!(format_bytes_eu(500), "500 B");
+        assert_eq!(format_bytes_eu(2048), "2 KB");
+        assert_eq!(format_bytes_eu(1_770_583), "1,7 MB");
+        // Just under 1 MB keeps KB with narrow-space thousands grouping.
+        assert_eq!(format_bytes_eu(1_000 * 1024), "1\u{202F}000 KB");
+        assert!(format_bytes_eu(5 * 1024 * 1024 * 1024).contains("GB"));
+        assert!(format_bytes_eu(2 * 1024u64.pow(4)).contains("TB"));
     }
 
     #[test]
