@@ -113,8 +113,14 @@ fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections:
         }
         // Prefer backups/ folders; only shallow-list the home for loose archives.
         let backups = path.join("backups");
-        push_dir_hits(&backups, &format!("/home/{name}/backups"), false, out, seen);
-        scan_shallow(&path, &format!("/home/{name}"), out, seen);
+        push_dir_hits(
+            &backups,
+            &format!("Operator backups ({name})"),
+            false,
+            out,
+            seen,
+        );
+        scan_shallow(&path, &format!("Operator home ({name})"), out, seen);
         // Operator lab homes (e.g. /home/cpn) have many build trees; only site homes
         // use the subdomain /home/<parent>/<sub.fqdn>/backups layout.
         if name == "cpn" || name == "root" {
@@ -142,7 +148,7 @@ fn scan_home_tree(out: &mut Vec<RestoreArchiveHit>, seen: &mut std::collections:
             let sub_backups = child_path.join("backups");
             push_dir_hits(
                 &sub_backups,
-                &format!("/home/{name}/{child_name}/backups"),
+                &format!("Subdomain backups ({child_name})"),
                 false,
                 out,
                 seen,
@@ -175,24 +181,20 @@ fn hit_from_file(path: &Path, provenance: &str, preferred: bool) -> Option<Resto
 fn candidate_archive_dirs(scope: &str, domain: &str) -> Vec<(PathBuf, String, bool)> {
     let mut dirs = Vec::new();
     if let Ok(parsed) = BackupScope::parse(scope)
-        && let Ok((dir, display)) = resolve_archive_dir(parsed, domain)
+        && let Ok((dir, _display)) = resolve_archive_dir(parsed, domain)
     {
-        dirs.push((dir, display, true));
+        dirs.push((dir, "Preferred".into(), true));
     }
     let panel = panel_backups_dir();
-    dirs.push((panel.clone(), format!("Panel ({})", panel.display()), false));
+    dirs.push((panel.clone(), "Panel archives".into(), false));
     let legacy = legacy_panel_backups_dir();
     if legacy != panel {
-        dirs.push((
-            legacy.clone(),
-            format!("Legacy panel ({})", legacy.display()),
-            false,
-        ));
+        dirs.push((legacy.clone(), "Legacy panel archives".into(), false));
     }
     if !cfg!(windows) {
         dirs.push((
             PathBuf::from("/home/cpn/backups"),
-            "/home/cpn/backups".into(),
+            "Operator backups (cpn)".into(),
             false,
         ));
     }
@@ -202,11 +204,7 @@ fn candidate_archive_dirs(scope: &str, domain: &str) -> Vec<(PathBuf, String, bo
         for site in sites {
             if site.domain.eq_ignore_ascii_case(domain.trim()) {
                 let dir = site_backups_dir(&site);
-                dirs.push((
-                    dir.clone(),
-                    format!("Site {} ({})", site.domain, dir.display()),
-                    false,
-                ));
+                dirs.push((dir, format!("Site {}", site.domain), false));
                 break;
             }
         }
@@ -247,7 +245,7 @@ pub fn list_restore_archives_with_fallback(
     match resolve_archive_dir(parsed, domain) {
         Ok((dir, display)) => {
             preferred_display = Some(display.clone());
-            push_dir_hits(&dir, &display, true, &mut out, &mut seen);
+            push_dir_hits(&dir, "Preferred", true, &mut out, &mut seen);
         }
         Err(_) => {
             // Domain missing is OK for panel-wide / recreate flows; still scan fallbacks.
@@ -258,7 +256,7 @@ pub fn list_restore_archives_with_fallback(
     let panel = panel_backups_dir();
     push_dir_hits(
         &panel,
-        &format!("Panel ({})", panel.display()),
+        "Panel archives",
         preferred_display
             .as_ref()
             .map(|p| p == &panel.display().to_string())
@@ -270,7 +268,7 @@ pub fn list_restore_archives_with_fallback(
     if legacy != panel {
         push_dir_hits(
             &legacy,
-            &format!("Legacy panel ({})", legacy.display()),
+            "Legacy panel archives",
             false,
             &mut out,
             &mut seen,
@@ -283,7 +281,7 @@ pub fn list_restore_archives_with_fallback(
             let dir = site_backups_dir(&site);
             push_dir_hits(
                 &dir,
-                &format!("Site {} ({})", site.domain, dir.display()),
+                &format!("Site {}", site.domain),
                 false,
                 &mut out,
                 &mut seen,
@@ -295,12 +293,12 @@ pub fn list_restore_archives_with_fallback(
     if !cfg!(windows) {
         scan_shallow(
             Path::new("/home/cpn/backups"),
-            "/home/cpn/backups",
+            "Operator backups (cpn)",
             &mut out,
             &mut seen,
         );
-        scan_shallow(Path::new("/root"), "/root", &mut out, &mut seen);
-        scan_shallow(Path::new("/"), "/", &mut out, &mut seen);
+        scan_shallow(Path::new("/root"), "Root drop", &mut out, &mut seen);
+        scan_shallow(Path::new("/"), "Filesystem root", &mut out, &mut seen);
         scan_home_tree(&mut out, &mut seen);
     }
 

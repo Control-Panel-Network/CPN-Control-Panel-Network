@@ -8,6 +8,7 @@ use crate::panel_backups::{BackupsPageQuery, backups_create_main};
 use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
+use crate::panel_ops_activity_host::format_bytes_eu;
 use crate::panel_ops_backup_extra::{
     BackupDestinations, BackupSchedule, load_destinations, load_schedule, save_destinations,
     save_schedule,
@@ -44,6 +45,40 @@ fn restore_list_styles() -> &'static str {
 }
 </style>
 "#
+}
+
+/// Location cell: short provenance label + path once (never repeat the same path).
+fn restore_location_cell(provenance: &str, dir: &str) -> String {
+    let dir_norm = dir.trim_end_matches('/');
+    let prov = provenance.trim();
+    let path_html = format!(
+        r#"<code style="font-size:11px;">{}</code>"#,
+        html_escape(dir)
+    );
+    if prov.is_empty() || prov == dir || prov == dir_norm {
+        return path_html;
+    }
+    // Labels like "Panel (/var/lib/cpn/backups)" already embed the path.
+    if prov.contains(dir_norm) || (dir_norm != dir && prov.contains(dir)) {
+        let label = prov
+            .split_once(" (")
+            .map(|(head, _)| head.trim())
+            .filter(|h| !h.is_empty() && *h != dir_norm)
+            .unwrap_or("");
+        if label.is_empty() {
+            return path_html;
+        }
+        return format!(
+            r#"<span class="muted">{}</span><br>{}"#,
+            html_escape(label),
+            path_html
+        );
+    }
+    format!(
+        r#"<span class="muted">{}</span><br>{}"#,
+        html_escape(prov),
+        path_html
+    )
 }
 
 fn html_escape(value: &str) -> String {
@@ -205,11 +240,12 @@ pub fn backups_restore_page(
                     };
                     // Safe DOM id fragment: archive names are filesystem basenames.
                     let id_frag = html_escape(&hit.name).replace([' ', '.', '/', '\\', ':'], "-");
+                    let dir_disp = hit.dir.display().to_string();
                     table.push_str(&format!(
                         r#"<tr>
                           <td data-label="File"><code>{name}</code></td>
-                          <td data-label="Size">{size} bytes</td>
-                          <td data-label="Location"><span class="muted">{prov}</span><br><code style="font-size:11px;">{dir}</code></td>
+                          <td data-label="Size">{size}</td>
+                          <td data-label="Location">{location}</td>
                           <td data-label="Restore">
                             <form method="get" action="/backups/restore/plan" class="stack-form">
                               <input type="hidden" name="scope" value="{scope}">
@@ -223,9 +259,8 @@ pub fn backups_restore_page(
                           </td>
                         </tr>"#,
                         name = html_escape(&hit.name),
-                        size = hit.size,
-                        prov = html_escape(&hit.provenance),
-                        dir = html_escape(&hit.dir.display().to_string()),
+                        size = html_escape(&format_bytes_eu(hit.size)),
+                        location = restore_location_cell(&hit.provenance, &dir_disp),
                         scope = html_escape(scope),
                         domain = html_escape(&target_domain),
                         formats = format_options("auto"),
@@ -387,6 +422,28 @@ mod tests {
         let html = format_options("classic");
         assert!(html.contains("value=\"classic\" selected"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn restore_location_cell_dedupes_identical_path() {
+        let html = restore_location_cell("/home/cpn", "/home/cpn");
+        assert_eq!(html.matches("/home/cpn").count(), 1);
+        assert!(!html.contains("muted"));
+    }
+
+    #[test]
+    fn restore_location_cell_keeps_short_label_and_path() {
+        let html = restore_location_cell("Operator home (cpn)", "/home/cpn");
+        assert!(html.contains("Operator home (cpn)"));
+        assert_eq!(html.matches("/home/cpn").count(), 1);
+    }
+
+    #[test]
+    fn restore_location_cell_strips_embedded_path_label() {
+        let html = restore_location_cell("Panel (/var/lib/cpn/backups)", "/var/lib/cpn/backups");
+        assert!(html.contains("Panel"));
+        assert!(!html.contains("Panel (/var/lib/cpn/backups)"));
+        assert_eq!(html.matches("/var/lib/cpn/backups").count(), 1);
     }
 
     #[test]
