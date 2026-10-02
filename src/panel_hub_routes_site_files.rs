@@ -1,7 +1,7 @@
 //! HTTP routes for Site File Manager (jailed to site home).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, require_panel_user, urlencoding_simple};
+use crate::panel_hub_http::{html_blocking, login_redirect, require_panel_user, urlencoding_simple};
 use crate::panel_hub_pages_files::site_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, run_op, same_origin_ok, site_redirect};
 use crate::panel_ops_files::{
@@ -24,8 +24,8 @@ async fn render_site_files_page(
     let Some(user) = require_panel_user(state, http) else {
         return login_redirect(http);
     };
-    let domain = query.get("domain").map(String::as_str).unwrap_or("");
-    let site = match require_manage_site(&user, domain, SitePerm::Enable) {
+    let domain = query.get("domain").map(String::as_str).unwrap_or("").to_string();
+    let site = match require_manage_site(&user, &domain, SitePerm::Enable) {
         Ok(s) => s,
         Err(err) => {
             return HttpResponse::SeeOther()
@@ -40,36 +40,41 @@ async fn render_site_files_page(
     let home = jail.display().to_string();
     let path = query
         .get("path")
-        .map(String::as_str)
+        .cloned()
         .filter(|p| !p.trim().is_empty())
-        .unwrap_or(home.as_str());
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let edit = query.get("edit").map(String::as_str);
-    let (edit_path, edit_content, err2) = if let Some(ep) = edit {
-        match read_text(ep, &jail) {
-            Ok(body) => (Some(ep.to_string()), Some(body), None),
-            Err(e) => (None, None, Some(e)),
-        }
-    } else {
-        (None, None, None)
-    };
-    let err = error.or(err2.as_deref());
-    html_ok(panel_shell(
-        &user,
-        "websites",
-        &format!("File Manager: {}", site.domain),
-        &site_files_page(
-            &user,
-            &site.domain,
-            &jail,
-            path,
-            notice,
-            err,
-            edit_path.as_deref(),
-            edit_content.as_deref(),
-        ),
-    ))
+        .unwrap_or_else(|| home.clone());
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let edit = query.get("edit").cloned();
+    let domain_title = site.domain.clone();
+    let user_c = user.clone();
+    html_blocking(move || {
+        let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
+            match read_text(ep, &jail) {
+                Ok(body) => (Some(ep.clone()), Some(body), None),
+                Err(e) => (None, None, Some(e)),
+            }
+        } else {
+            (None, None, None)
+        };
+        let err = error.as_deref().or(err2.as_deref());
+        panel_shell(
+            &user_c,
+            "websites",
+            &format!("File Manager: {domain_title}"),
+            &site_files_page(
+                &user_c,
+                &domain_title,
+                &jail,
+                &path,
+                notice.as_deref(),
+                err,
+                edit_path.as_deref(),
+                edit_content.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[get("/websites/files")]

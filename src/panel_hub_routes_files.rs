@@ -2,7 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{html_blocking, html_ok, login_redirect, require_panel_user};
 use crate::panel_hub_pages_files::root_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, root_redirect, run_op, same_origin_ok};
 use crate::panel_ops_files::{
@@ -39,33 +39,40 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Bo
 }
 
 async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpResponse {
-    let path = query.get("path").map(String::as_str).unwrap_or("/");
-    let notice = query.get("notice").map(String::as_str);
-    let error = query.get("error").map(String::as_str);
-    let edit = query.get("edit").map(String::as_str);
-    let jail = Path::new("/");
-    let (edit_path, edit_content, err2) = if let Some(ep) = edit {
-        match read_text(ep, jail) {
-            Ok(body) => (Some(ep.to_string()), Some(body), None),
-            Err(e) => (None, None, Some(e)),
-        }
-    } else {
-        (None, None, None)
-    };
-    let err = error.or(err2.as_deref());
-    html_ok(panel_shell(
-        user,
-        "root-files",
-        "Root File Manager",
-        &root_files_page(
-            user,
-            path,
-            notice,
-            err,
-            edit_path.as_deref(),
-            edit_content.as_deref(),
-        ),
-    ))
+    let path = query
+        .get("path")
+        .cloned()
+        .unwrap_or_else(|| "/".to_string());
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let edit = query.get("edit").cloned();
+    let user = user.to_string();
+    html_blocking(move || {
+        let jail = Path::new("/");
+        let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
+            match read_text(ep, jail) {
+                Ok(body) => (Some(ep.clone()), Some(body), None),
+                Err(e) => (None, None, Some(e)),
+            }
+        } else {
+            (None, None, None)
+        };
+        let err = error.as_deref().or(err2.as_deref());
+        panel_shell(
+            &user,
+            "root-files",
+            "Root File Manager",
+            &root_files_page(
+                &user,
+                &path,
+                notice.as_deref(),
+                err,
+                edit_path.as_deref(),
+                edit_content.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[get("/server/files")]
