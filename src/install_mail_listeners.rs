@@ -198,7 +198,11 @@ mod tests {
         assert!(master_cf_has_smtps(raw));
         let updated = append_cpn_mail_listeners(raw).expect("rewrite broken indent");
         assert!(updated.contains("\n  -o syslog_name=postfix/submission\n"));
-        assert!(!updated.lines().any(|l| l == "-o syslog_name=postfix/submission"));
+        assert!(
+            !updated
+                .lines()
+                .any(|l| l == "-o syslog_name=postfix/submission")
+        );
         assert!(append_cpn_mail_listeners(&updated).is_none());
     }
 }
