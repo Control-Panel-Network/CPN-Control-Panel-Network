@@ -32,10 +32,6 @@ fn flash(kind: &str, message: Option<&str>) -> String {
     )
 }
 
-fn domain_options(selected: &str) -> String {
-    domain_options_from(&list_sites().unwrap_or_default(), selected)
-}
-
 fn domain_options_from(sites: &[crate::sites::SiteRecord], selected: &str) -> String {
     let mut out = String::new();
     if sites.is_empty() {
