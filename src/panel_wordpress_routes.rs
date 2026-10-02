@@ -157,7 +157,7 @@ pub async fn wordpress_manage_route(
     let error = query.get("error").cloned();
     let snap = match tokio::time::timeout(
         crate::panel_hub_http::HUB_RENDER_BUDGET,
-        tokio::task::spawn_blocking(move || all_sites_snapshot()),
+        tokio::task::spawn_blocking(all_sites_snapshot),
     )
     .await
     {
