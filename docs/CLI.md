@@ -116,7 +116,7 @@ Quick heal:
 
 ```bash
 hash -r
-sudo cpn doctor --heal          # removes /usr/local/bin/cpn* overrides
+sudo cpn doctor --heal          # removes /usr/local/bin/cpn* overrides; clears stuck panel maintenance flag
 type -a cpn                     # should show /usr/bin/cpn (and/or /bin/cpn)
 cpn --help
 ```

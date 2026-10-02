@@ -151,10 +151,12 @@ impl AppState {
             let mut status = self.status.write().unwrap_or_else(|e| e.into_inner());
             status.phase = phase;
             status.progress = progress;
-            status.message = message;
+            status.message = message.clone();
             status.error = None;
             status.clone()
         };
+        // Keep the public maintenance flag in sync for visitor-facing status.
+        let _ = crate::panel_maintenance_mode::update(phase, progress, &message);
         append_installation_log(
             "progress",
             &format!(

@@ -140,6 +140,19 @@ pub async fn run_maintenance(
     state: Arc<AppState>,
     request: MaintenanceRequest,
 ) -> Result<(), String> {
+    match run_maintenance_inner(state, request).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = crate::panel_maintenance_mode::clear_with_reason("failed");
+            Err(error)
+        }
+    }
+}
+
+async fn run_maintenance_inner(
+    state: Arc<AppState>,
+    request: MaintenanceRequest,
+) -> Result<(), String> {
     require_root()?;
     let existing = detect_existing_install(env!("CARGO_PKG_VERSION"));
     let installed = existing.package_version.clone();
@@ -371,6 +384,36 @@ pub async fn run_maintenance(
         ),
         "info",
     );
+
+    let source_label = if crate::panel_service::running_under_systemd() {
+        "ui"
+    } else {
+        "cli"
+    };
+    let title = match request.action {
+        MaintenanceAction::Upgrade => "Updating CPN Panel",
+        MaintenanceAction::Downgrade => "Downgrading CPN Panel",
+        MaintenanceAction::Repair => "Repairing CPN Panel",
+        MaintenanceAction::ConfigOnly => "CPN Panel",
+    };
+    let begin_msg = match request.action {
+        MaintenanceAction::Upgrade => format!("Installing {}", release.tag_name),
+        MaintenanceAction::Downgrade => format!("Installing {}", release.tag_name),
+        MaintenanceAction::Repair => format!("Repairing with {}", release.tag_name),
+        MaintenanceAction::ConfigOnly => "Configuration only".into(),
+    };
+    if let Err(error) = crate::panel_maintenance_mode::begin(
+        source_label,
+        title,
+        &begin_msg,
+        Some(release.tag_name.as_str()),
+    ) {
+        state.log(
+            format!("Warning: could not set panel maintenance flag: {error}"),
+            "error",
+        );
+    }
+
     state
         .progress("downloading", 5, format!("Preparing {}", release.tag_name))
         .await;
@@ -530,16 +573,25 @@ pub async fn run_maintenance(
         MaintenanceAction::Upgrade | MaintenanceAction::Repair
     ) && crate::panel_service::running_under_systemd()
     {
+        let _ = crate::panel_maintenance_mode::mark_restarting(
+            "Restarting the panel process after package apply",
+        );
         match crate::panel_service::schedule_detached_panel_restart("post-upgrade") {
             Ok(()) => state.log(
                 "Scheduled detached cpn-installer.service reload after package apply".to_string(),
                 "info",
             ),
-            Err(error) => state.log(
-                format!("Warning: could not schedule detached panel reload: {error}"),
-                "error",
-            ),
+            Err(error) => {
+                state.log(
+                    format!("Warning: could not schedule detached panel reload: {error}"),
+                    "error",
+                );
+                let _ = crate::panel_maintenance_mode::clear_with_reason("restart-schedule-failed");
+            }
         }
+    } else {
+        // CLI / non-systemd: package apply finished in-process; drop the flag now.
+        let _ = crate::panel_maintenance_mode::clear_with_reason("completed");
     }
 
     Ok(())
@@ -549,6 +601,7 @@ pub async fn spawn_maintenance(state: Arc<AppState>, request: MaintenanceRequest
     let label = format!("{:?}", request.action);
     let result = run_maintenance(state.clone(), request).await;
     if let Err(error) = result {
+        let _ = crate::panel_maintenance_mode::clear_with_reason("failed");
         let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
         status.phase = "failed";
         status.error = Some(error.clone());
