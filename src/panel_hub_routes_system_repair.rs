@@ -15,6 +15,8 @@ use std::time::Duration;
 
 /// Bound the JSON suite so a wedged probe group cannot hang the API forever.
 const API_SUITE_BUDGET: Duration = Duration::from_secs(16);
+/// Human report page may wait longer; still avoid an unbounded hang.
+const REPORT_SUITE_BUDGET: Duration = Duration::from_secs(45);
 
 fn wants_refresh(query: &HashMap<String, String>) -> bool {
     query
@@ -76,24 +78,19 @@ pub async fn system_repair_route(
 
 async fn load_suite_json(
     refresh: bool,
-) -> Result<crate::system_repair::RepairReport, HttpResponse> {
+    budget: Duration,
+) -> Result<crate::system_repair::RepairReport, String> {
     match tokio::time::timeout(
-        API_SUITE_BUDGET,
+        budget,
         web::block(move || run_suite_ex(false, None, None, refresh)),
     )
     .await
     {
         Ok(Ok(report)) => Ok(report),
-        Ok(Err(_)) => Err(HttpResponse::InternalServerError().json(serde_json::json!({
-            "ok": false,
-            "error": "System Repair worker failed"
-        }))),
-        Err(_) => Err(HttpResponse::ServiceUnavailable()
-            .insert_header(("Retry-After", "3"))
-            .json(serde_json::json!({
-                "ok": false,
-                "error": "System Repair checks timed out. Retry; slow probe groups are skipped."
-            }))),
+        Ok(Err(_)) => Err("System Repair worker failed".to_string()),
+        Err(_) => Err(
+            "System Repair checks timed out. Retry; slow probe groups are skipped.".to_string(),
+        ),
     }
 }
 
@@ -126,9 +123,16 @@ pub async fn system_repair_api_route(
             ))
             .finish();
     }
-    let report = match load_suite_json(refresh).await {
+    let report = match load_suite_json(refresh, API_SUITE_BUDGET).await {
         Ok(r) => r,
-        Err(resp) => return resp,
+        Err(err) => {
+            return HttpResponse::ServiceUnavailable()
+                .insert_header(("Retry-After", "3"))
+                .json(serde_json::json!({
+                    "ok": false,
+                    "error": err
+                }));
+        }
     };
     match report.to_json() {
         Ok(body) => HttpResponse::Ok()
@@ -154,32 +158,31 @@ pub async fn system_repair_report_route(
         return owner_only_html(&user, "server", PRODUCT_NAME);
     }
     let refresh = wants_refresh(&query);
-    let report = match load_suite_json(refresh).await {
-        Ok(r) => r,
-        Err(resp) => return resp,
-    };
-    let json = match report.to_json() {
-        Ok(body) => body,
-        Err(err) => {
-            return html_ok(panel_shell(
-                &user,
-                "server",
-                "System Repair JSON",
-                &system_repair_json_report_page(
-                    &format!(
-                        "{{\n  \"ok\": false,\n  \"error\": \"{}\"\n}}",
-                        err.replace('"', "'")
-                    ),
-                    Some("Could not encode report JSON."),
+    // Always HTML for operators: never fall back to a white application/json dump.
+    let (json, notice) = match load_suite_json(refresh, REPORT_SUITE_BUDGET).await {
+        Ok(report) => match report.to_json() {
+            Ok(body) => (body, None),
+            Err(err) => (
+                format!(
+                    "{{\n  \"ok\": false,\n  \"error\": \"{}\"\n}}",
+                    err.replace('"', "'")
                 ),
-            ));
-        }
+                Some("Could not encode report JSON.".to_string()),
+            ),
+        },
+        Err(err) => (
+            format!(
+                "{{\n  \"ok\": false,\n  \"error\": \"{}\"\n}}",
+                err.replace('"', "'")
+            ),
+            Some(err),
+        ),
     };
     html_ok(panel_shell(
         &user,
         "server",
         "System Repair JSON",
-        &system_repair_json_report_page(&json, None),
+        &system_repair_json_report_page(&json, notice.as_deref()),
     ))
 }
 
