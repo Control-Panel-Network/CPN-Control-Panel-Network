@@ -279,7 +279,6 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             None,
         );
     }
-
 }
 
 pub fn heal_firewall() -> HealResult {

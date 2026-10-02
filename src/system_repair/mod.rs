@@ -87,7 +87,11 @@ impl RepairReport {
         Self::from_checks_cached(checks, heals, false)
     }
 
-    pub fn from_checks_cached(checks: Vec<RepairCheck>, heals: Vec<HealResult>, cached: bool) -> Self {
+    pub fn from_checks_cached(
+        checks: Vec<RepairCheck>,
+        heals: Vec<HealResult>,
+        cached: bool,
+    ) -> Self {
         let mut pass = 0usize;
         let mut warn = 0usize;
         let mut fail = 0usize;
