@@ -88,9 +88,9 @@ async fn load_suite_json(
     {
         Ok(Ok(report)) => Ok(report),
         Ok(Err(_)) => Err("System Repair worker failed".to_string()),
-        Err(_) => Err(
-            "System Repair checks timed out. Retry; slow probe groups are skipped.".to_string(),
-        ),
+        Err(_) => {
+            Err("System Repair checks timed out. Retry; slow probe groups are skipped.".to_string())
+        }
     }
 }
 
