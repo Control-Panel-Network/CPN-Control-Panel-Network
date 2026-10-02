@@ -33,8 +33,9 @@ pub fn ensure_snappymail_repo_fallback(docroot: &str) -> Result<(), String> {
     if is_snappy {
         let version = detect_app_version(docroot, "snappymail").unwrap_or_else(|| "2.38.2".into());
         let core = Path::new(LOCAL_REPO_DIR).join("core.json");
-        let core_body =
-            format!("{{\n  \"version\": \"{version}\",\n  \"file\": \"\",\n  \"warnings\": []\n}}\n");
+        let core_body = format!(
+            "{{\n  \"version\": \"{version}\",\n  \"file\": \"\",\n  \"warnings\": []\n}}\n"
+        );
         fs::write(&core, core_body).map_err(|e| format!("core.json: {e}"))?;
     }
 
@@ -115,7 +116,12 @@ fn find_repository_php(docroot: &str) -> Vec<PathBuf> {
     // SnappyMail: snappymail/v/{ver}/app/libraries/snappymail/repository.php
     push_repo_candidates(docroot, "snappymail", &["snappymail"], &mut out);
     // Tachyon: tachyon/v/{ver}/app/libraries/tachyon_util/repository.php
-    push_repo_candidates(docroot, "tachyon", &["tachyon_util", "snappymail"], &mut out);
+    push_repo_candidates(
+        docroot,
+        "tachyon",
+        &["tachyon_util", "snappymail"],
+        &mut out,
+    );
     out
 }
 
