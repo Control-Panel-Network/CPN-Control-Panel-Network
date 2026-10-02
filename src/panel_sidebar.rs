@@ -23,7 +23,15 @@ pub fn search_catalog_json() -> String {
             "/wordpress/install",
             "wordpress install plugins",
         ),
-        ("Email", "/email", "mail postfix"),
+        (
+            "Email Accounts",
+            "/email/accounts",
+            "email accounts mailboxes mail postfix",
+        ),
+        ("Create Email", "/email/create", "email mailbox create"),
+        ("Change Password", "/email/password", "email mailbox password"),
+        ("DKIM Manager", "/email/dkim", "email dkim dns"),
+        ("Email", "/email", "mail postfix email hub overview"),
         ("Databases", "/databases", "mariadb"),
         ("FTP", "/ftp/accounts", "sftp jail"),
         ("MariaDB Manager", "/databases/manager", "database"),
@@ -310,6 +318,22 @@ pub fn sidebar_search_and_ip_script() -> &'static str {
   if (!input || !list || !dataNode) return;
   var catalog = [];
   try { catalog = JSON.parse(dataNode.textContent || '[]'); } catch (e) { catalog = []; }
+  // Prefer live sidebar hrefs so Email Accounts and siblings never drift to hub-only entries.
+  var seenHref = {};
+  catalog.forEach(function (item) {
+    if (item && item.href) seenHref[String(item.href)] = true;
+  });
+  function pushNav(label, href) {
+    if (!href || href.charAt(0) !== '/' || seenHref[href]) return;
+    seenHref[href] = true;
+    catalog.push({ label: label, href: href, keywords: label + ' ' + href });
+  }
+  document.querySelectorAll('a.nav-child-btn[href], a.nav-tile[href]').forEach(function (a) {
+    var href = a.getAttribute('href') || '';
+    var labelEl = a.querySelector('span:not(.nav-icon):not(.nav-chevron)');
+    var label = (labelEl ? labelEl.textContent : a.textContent) || '';
+    pushNav(String(label).replace(/\s+/g, ' ').trim(), href);
+  });
   var hostCard = document.querySelector('[data-cpn-host-status]');
   if (hostCard) {
     var hostIp = (hostCard.querySelector('[data-ip]') || {}).getAttribute
@@ -429,6 +453,8 @@ mod tests {
     #[test]
     fn catalog_includes_email_and_dns() {
         let json = search_catalog_json();
+        assert!(json.contains(r#""href":"/email/accounts""#) || json.contains("/email/accounts"));
+        assert!(json.contains("Email Accounts"));
         assert!(json.contains("/email"));
         assert!(json.contains("Cloudflare DNS") || json.contains("/server/dns/zones"));
     }
