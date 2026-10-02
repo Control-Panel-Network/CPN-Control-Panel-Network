@@ -222,7 +222,8 @@ pub fn run_checks(filter_id: Option<&str>) -> Vec<RepairCheck> {
 /// Like [`run_checks`], plus whether the result came from cache.
 pub fn run_checks_cached(filter_id: Option<&str>, force_refresh: bool) -> (Vec<RepairCheck>, bool) {
     let filter = filter_id.map(str::trim).filter(|s| !s.is_empty());
-    if !force_refresh && filter.is_none()
+    if !force_refresh
+        && filter.is_none()
         && let Some(cached) = load_check_cache()
     {
         return (cached, true);
