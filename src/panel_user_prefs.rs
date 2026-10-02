@@ -25,6 +25,12 @@ pub struct UserUiPrefs {
     /// Cleared or past values mean the card is shown again.
     #[serde(default)]
     pub ssh_security_review_snooze_until: Option<i64>,
+    /// Dashboard overview widget order (`sites`, `gauges`, `tools`, `health`, `activity`).
+    #[serde(default)]
+    pub dashboard_widgets: Vec<String>,
+    /// Activity Board expanded. Default false (collapsed).
+    #[serde(default)]
+    pub activity_board_open: bool,
 }
 
 fn user_prefs_path(username: &str) -> PathBuf {
@@ -99,6 +105,10 @@ pub fn save_user_minimalist_mode(username: &str, enabled: bool) -> Result<bool, 
     prefs.minimalist_mode = enabled;
     write_json(&user_prefs_path(username), &prefs)?;
     Ok(enabled)
+}
+
+pub fn save_user_ui_prefs(username: &str, prefs: &UserUiPrefs) -> Result<(), String> {
+    write_json(&user_prefs_path(username), prefs)
 }
 
 /// Active snooze expiry (unix seconds) when the review should stay hidden, else `None`.

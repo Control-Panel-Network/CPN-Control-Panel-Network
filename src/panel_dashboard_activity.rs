@@ -1,16 +1,14 @@
 //! Dashboard Activity Board markup (tabs for SSH, processes, traffic, disk, CPU).
 
 use crate::packages::is_panel_admin;
-use crate::panel_dashboard_activity_list::{
-    activity_list_script, activity_list_styles, wrap_activity_table,
+use crate::panel_dashboard_activity_list::{activity_list_script, activity_list_styles};
+use crate::panel_dashboard_activity_panels::{
+    cpu_panel, disk_io_panel, panel_actions_panel, ssh_logins_panel, top_process_panel,
+    traffic_panel,
 };
 use crate::panel_dashboard_activity_ssh::ssh_logs_panel;
-use crate::panel_hub_pages_server_logs::panel_actions_table;
-use crate::panel_ops_activity::{ActivityLogRow, recent_ssh_logins, ssh_security_analysis};
-use crate::panel_ops_activity_host::{
-    cpu_activity, disk_io_snapshot, format_bytes, network_traffic,
-};
-use crate::panel_ops_process::snapshot_top_processes;
+use crate::panel_ops_activity::ssh_security_analysis;
+use crate::panel_user_prefs::load_user_ui_prefs;
 
 fn html_escape(value: &str) -> String {
     value
@@ -24,12 +22,18 @@ pub fn activity_board_styles() -> String {
     let mut css = String::from(
         r#"
 .activity-board {
-  max-width:1200px; margin:22px auto 0; padding:22px 24px 24px;
+  max-width:1200px; margin:0; padding:22px 24px 24px;
   border-radius:8px; background:var(--canvas); border:1px solid var(--hairline);
   min-width:0;
 }
 .activity-board .eyebrow { margin:0 0 4px; font-size:11px; letter-spacing:.08em; font-weight:700; color:var(--muted); }
-.activity-board > h2 { margin:0 0 14px; font-size:22px; letter-spacing:-.02em; }
+.activity-board-head { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; margin:0 0 14px; }
+.activity-board-head h2 { margin:0; font-size:22px; letter-spacing:-.02em; }
+.activity-board-toggle {
+  min-height:36px; padding:0 14px; border-radius:999px; border:1px solid var(--hairline);
+  background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:700; cursor:pointer;
+}
+.activity-board.is-collapsed .activity-board-body { display:none; }
 .activity-tabs {
   display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px;
   overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px;
@@ -98,10 +102,30 @@ pub fn activity_board_styles() -> String {
 }
 .activity-kpi strong { display:block; font-size:22px; margin-top:4px; }
 .activity-kpi span { color:var(--muted); font-size:12px; }
+.activity-clip { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.activity-proc-row td { padding-top:8px; padding-bottom:8px; vertical-align:top; }
+.activity-more { margin:0; }
+.activity-more > summary {
+  list-style:none; cursor:pointer; display:inline-flex; align-items:center;
+  min-height:30px; padding:0 10px; border-radius:999px; border:1px solid var(--hairline);
+  font-size:12px; font-weight:700;
+}
+.activity-more > summary::-webkit-details-marker { display:none; }
+.activity-more-body { margin:8px 0 0; padding:10px; border-radius:10px; border:1px solid var(--hairline); background:var(--surface-soft,#f8fafc); font-size:13px; overflow-wrap:anywhere; }
+.activity-more-body pre { margin:8px 0 0; white-space:pre-wrap; word-break:break-word; font-size:12px; }
+.activity-chart { margin:0 0 14px; padding:12px; border-radius:10px; border:1px solid var(--hairline); background:var(--surface-soft,#f8fafc); }
+.activity-chart figcaption { margin:0 0 10px; font-weight:700; font-size:14px; }
+.activity-chart-row { display:grid; gap:6px; margin:0 0 12px; }
+.activity-chart-pair { display:grid; grid-template-columns:64px minmax(0,1fr) auto; gap:8px; align-items:center; font-size:12px; }
+.activity-chart-n { font-variant-numeric:tabular-nums; font-weight:700; }
+.activity-bar { height:10px; border-radius:999px; background:rgba(148,163,184,.28); overflow:hidden; }
+.activity-bar i { display:block; height:100%; border-radius:999px; background:#2563eb; }
+.activity-bar-b i { background:#12b76a; }
 @media (max-width:719.98px) {
   .activity-board { padding:16px; }
   .activity-sec-meta, .activity-kpi { grid-template-columns:1fr; }
   .activity-tabs { flex-wrap:nowrap; }
+  .activity-chart-pair { grid-template-columns:1fr; }
 }
 [data-color-mode="dark"] .activity-sec-box {
   background:#3b2a12; border-color:#93370d; color:#fecd89;
@@ -110,29 +134,13 @@ pub fn activity_board_styles() -> String {
   background:#1a1d26; border-color:#93370d; color:var(--ink);
 }
 [data-color-mode="dark"] .activity-tip { background:#2a2f3a; }
-[data-color-mode="dark"] .activity-kpi article { background:#161922; }
+[data-color-mode="dark"] .activity-kpi article,
+[data-color-mode="dark"] .activity-chart,
+[data-color-mode="dark"] .activity-more-body { background:#161922; }
 "#,
     );
     css.push_str(activity_list_styles());
     css
-}
-
-fn log_table(rows: &[ActivityLogRow], empty: &str) -> String {
-    if rows.is_empty() {
-        return format!(r#"<p class="empty-state">{e}</p>"#, e = html_escape(empty));
-    }
-    let mut t = String::from(
-        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Timestamp</th><th>Message</th></tr></thead><tbody>"#,
-    );
-    for row in rows {
-        t.push_str(&format!(
-            r#"<tr><td><time>{ts}</time></td><td><code>{msg}</code></td></tr>"#,
-            ts = html_escape(&row.timestamp),
-            msg = html_escape(&row.message),
-        ));
-    }
-    t.push_str("</tbody></table></div>");
-    t
 }
 
 fn tab_btn(id: &str, label: &str, selected: bool, badge: Option<usize>) -> String {
@@ -163,141 +171,6 @@ fn panel(id: &str, hidden: bool, body: &str) -> String {
     )
 }
 
-fn ssh_logins_panel() -> String {
-    let rows = recent_ssh_logins(200);
-    let table = wrap_activity_table(
-        "ssh-logins",
-        "Filter timestamp or message",
-        &log_table(
-            &rows,
-            "No recent SSH logins found (log files may be empty or unreadable).",
-        ),
-    );
-    format!(
-        r#"<div class="activity-panel-head"><h3>Recent SSH Logins</h3>
-        <p class="muted" style="margin:0;">Accepted sessions from auth logs / journal.</p></div>
-        {table}"#,
-        table = table,
-    )
-}
-
-fn top_process_panel() -> String {
-    let body = match snapshot_top_processes(50) {
-        Ok(rows) if rows.is_empty() => "<p class=\"empty-state\">No processes returned.</p>".into(),
-        Ok(rows) => {
-            let mut t = String::from(
-                r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>User</th><th>PID</th><th>CPU%</th><th>MEM%</th><th>Command</th></tr></thead><tbody>"#,
-            );
-            for r in rows {
-                t.push_str(&format!(
-                    r#"<tr><td>{user}</td><td>{pid}</td><td>{cpu}</td><td>{mem}</td><td><code>{cmd}</code></td></tr>"#,
-                    user = html_escape(&r.user),
-                    pid = html_escape(&r.pid),
-                    cpu = html_escape(&r.cpu),
-                    mem = html_escape(&r.mem),
-                    cmd = html_escape(&r.command),
-                ));
-            }
-            t.push_str("</tbody></table></div>");
-            wrap_activity_table("top-process", "Filter user, PID, or command", &t)
-        }
-        Err(err) => format!(
-            r#"<p class="panel-notice error">{e}</p>"#,
-            e = html_escape(&err)
-        ),
-    };
-    format!(
-        r#"<div class="activity-panel-head">
-          <h3>Top Process</h3>
-          <a href="/server/processes" style="font-size:13px;font-weight:700;">Open full process list</a>
-        </div>
-        <p class="muted" style="margin:0 0 10px;">Live snapshot from ps (CPU sorted). Full page: Server → Top Processes.</p>
-        {body}"#,
-        body = body,
-    )
-}
-
-fn traffic_panel() -> String {
-    let rows = network_traffic();
-    let table = if rows.is_empty() {
-        r#"<p class="empty-state">Network counters unavailable (Linux /proc/net/dev required).</p>"#
-            .to_string()
-    } else {
-        let mut t = String::from(
-            r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Interface</th><th>RX</th><th>TX</th><th>RX pkts</th><th>TX pkts</th></tr></thead><tbody>"#,
-        );
-        for r in rows {
-            t.push_str(&format!(
-                r#"<tr><td><code>{name}</code></td><td>{rx}</td><td>{tx}</td><td>{rp}</td><td>{tp}</td></tr>"#,
-                name = html_escape(&r.name),
-                rx = html_escape(&format_bytes(r.rx_bytes)),
-                tx = html_escape(&format_bytes(r.tx_bytes)),
-                rp = r.rx_packets,
-                tp = r.tx_packets,
-            ));
-        }
-        t.push_str("</tbody></table></div>");
-        wrap_activity_table("traffic", "Filter interface name", &t)
-    };
-    format!(
-        r#"<div class="activity-panel-head"><h3>Traffic</h3>
-        <p class="muted" style="margin:0;">Cumulative counters since boot (not live bandwidth).</p></div>
-        {table}"#,
-        table = table,
-    )
-}
-
-fn disk_io_panel() -> String {
-    let rows = disk_io_snapshot();
-    let table = if rows.is_empty() {
-        r#"<p class="empty-state">Disk IO stats unavailable (Linux /proc/diskstats required).</p>"#
-            .to_string()
-    } else {
-        let mut t = String::from(
-            r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Device</th><th>Reads</th><th>Writes</th><th>Read sectors</th><th>Write sectors</th></tr></thead><tbody>"#,
-        );
-        for r in rows {
-            t.push_str(&format!(
-                r#"<tr><td><code>{dev}</code></td><td>{reads}</td><td>{writes}</td><td>{rs}</td><td>{ws}</td></tr>"#,
-                dev = html_escape(&r.device),
-                reads = r.reads,
-                writes = r.writes,
-                rs = r.read_sectors,
-                ws = r.write_sectors,
-            ));
-        }
-        t.push_str("</tbody></table></div>");
-        wrap_activity_table("disk-io", "Filter device name", &t)
-    };
-    format!(
-        r#"<div class="activity-panel-head"><h3>Disk IO</h3>
-        <p class="muted" style="margin:0;">Kernel counters since boot from /proc/diskstats.</p></div>
-        {table}"#,
-        table = table,
-    )
-}
-
-fn cpu_panel() -> String {
-    let cpu = cpu_activity();
-    let pct = cpu
-        .percent
-        .map(|n| format!("{n}%"))
-        .unwrap_or_else(|| "n/a".into());
-    format!(
-        r#"<div class="activity-panel-head"><h3>CPU Usage</h3>
-        <p class="muted" style="margin:0;">Same host sample as the dashboard gauges (since-boot average from /proc/stat).</p></div>
-        <div class="activity-kpi">
-          <article><span>CPU sample</span><strong>{pct}</strong></article>
-          <article><span>Detail</span><strong style="font-size:16px;">{detail}</strong></article>
-          <article><span>Load average</span><strong style="font-size:16px;">{load}</strong></article>
-        </div>
-        <p class="muted">Gauges above the Activity Board update on each page load.</p>"#,
-        pct = html_escape(&pct),
-        detail = html_escape(&cpu.detail),
-        load = html_escape(&cpu.loadavg),
-    )
-}
-
 fn activity_script() -> String {
     let mut js = String::from(
         r#"
@@ -306,6 +179,14 @@ fn activity_script() -> String {
   if(!root) return;
   var tabs=[].slice.call(root.querySelectorAll('[data-activity-tab]'));
   var panels=[].slice.call(root.querySelectorAll('.activity-panel'));
+  var toggle=root.querySelector('[data-activity-toggle]');
+  function setOpen(on){
+    root.classList.toggle('is-collapsed', !on);
+    if(toggle){
+      toggle.setAttribute('aria-expanded', on?'true':'false');
+      toggle.textContent=on?'Collapse':'Expand';
+    }
+  }
   function activate(id){
     tabs.forEach(function(btn){
       var on=btn.getAttribute('data-activity-tab')===id;
@@ -329,6 +210,18 @@ fn activity_script() -> String {
     if(qAct) want=qAct;
   }catch(e){}
   if(want && root.querySelector('[data-activity-tab="'+want+'"]')) activate(want);
+  setOpen(root.getAttribute('data-open')==='1');
+  if(toggle){
+    toggle.addEventListener('click', function(){
+      var next=root.classList.contains('is-collapsed');
+      setOpen(next);
+      fetch('/api/panel/dashboard-layout',{
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({ activity_board_open: next })
+      }).catch(function(){});
+    });
+  }
 })();
 "#,
     );
@@ -338,14 +231,34 @@ fn activity_script() -> String {
 
 /// Full Activity Board for panel admins; non-admins get a short placeholder.
 pub fn activity_board_html(username: &str) -> String {
+    let open = load_user_ui_prefs(username).activity_board_open;
+    let collapsed = if open { "" } else { " is-collapsed" };
+    let open_attr = if open { "1" } else { "0" };
+    let toggle_label = if open { "Collapse" } else { "Expand" };
+    let expanded = if open { "true" } else { "false" };
+
     if !is_panel_admin(username) {
-        return r#"
-        <article class="activity-card" id="activity-board">
-          <p class="eyebrow">RECENT ACTIVITY</p>
-          <h2>Activity Board</h2>
-          <p class="empty-state">SSH logs and host counters are available to the panel admin only.</p>
-        </article>"#
-            .into();
+        return format!(
+            r#"
+        <article class="activity-board{collapsed}" id="activity-board" data-open="{open_attr}">
+          <div class="activity-board-head">
+            <div>
+              <p class="eyebrow">RECENT ACTIVITY</p>
+              <h2>Activity Board</h2>
+            </div>
+            <button type="button" class="activity-board-toggle" data-activity-toggle aria-expanded="{expanded}">{toggle}</button>
+          </div>
+          <div class="activity-board-body">
+            <p class="empty-state">SSH logs and host counters are available to the panel admin only.</p>
+          </div>
+        </article>
+        <script>{script}</script>"#,
+            collapsed = collapsed,
+            open_attr = open_attr,
+            expanded = expanded,
+            toggle = toggle_label,
+            script = activity_script(),
+        );
     }
 
     let analysis = ssh_security_analysis();
@@ -358,6 +271,7 @@ pub fn activity_board_html(username: &str) -> String {
     } else {
         None
     };
+    let minimalist = crate::panel_user_prefs::load_user_minimalist_mode(username);
 
     let tabs = [
         tab_btn("ssh-logins", "Recent SSH Logins", true, None),
@@ -373,25 +287,36 @@ pub fn activity_board_html(username: &str) -> String {
     let panels = [
         panel("ssh-logins", false, &ssh_logins_panel()),
         panel("ssh-logs", true, &ssh_logs_panel(username, &analysis)),
-        panel("panel-actions", true, &panel_actions_table(username)),
+        panel("panel-actions", true, &panel_actions_panel(username)),
         panel("top-process", true, &top_process_panel()),
-        panel("traffic", true, &traffic_panel()),
-        panel("disk-io", true, &disk_io_panel()),
+        panel("traffic", true, &traffic_panel(minimalist)),
+        panel("disk-io", true, &disk_io_panel(minimalist)),
         panel("cpu", true, &cpu_panel()),
     ]
     .join("\n");
 
     format!(
         r#"
-      <section class="activity-board" id="activity-board" aria-label="Activity Board">
-        <p class="eyebrow">RECENT ACTIVITY</p>
-        <h2>Activity Board</h2>
+      <section class="activity-board{collapsed}" id="activity-board" aria-label="Activity Board" data-open="{open_attr}">
+        <div class="activity-board-head">
+          <div>
+            <p class="eyebrow">RECENT ACTIVITY</p>
+            <h2>Activity Board</h2>
+          </div>
+          <button type="button" class="activity-board-toggle" data-activity-toggle aria-expanded="{expanded}">{toggle}</button>
+        </div>
+        <div class="activity-board-body">
         <div class="activity-tabs" role="tablist" aria-label="Activity Board tabs">
           {tabs}
         </div>
         {panels}
+        </div>
       </section>
       <script>{script}</script>"#,
+        collapsed = collapsed,
+        open_attr = open_attr,
+        expanded = expanded,
+        toggle = toggle_label,
         tabs = tabs,
         panels = panels,
         script = activity_script(),
@@ -408,6 +333,8 @@ mod tests {
         assert!(html.contains("Activity Board"));
         assert!(html.contains("panel admin only"));
         assert!(!html.contains("data-activity-tab=\"ssh-logins\""));
+        assert!(html.contains("is-collapsed"));
+        assert!(html.contains("data-activity-toggle"));
     }
 
     #[test]
@@ -417,6 +344,6 @@ mod tests {
         let html = wrap_activity_table("demo", "Filter", table);
         assert!(html.contains("Go to page"));
         assert!(html.contains("activity-list-search"));
-        assert!(html.contains("data-page-size=\"10\""));
+        assert!(html.contains("data-page-size=\"5\""));
     }
 }

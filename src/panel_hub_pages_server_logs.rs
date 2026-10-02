@@ -32,7 +32,7 @@ fn utc_stamp(ts: u64) -> String {
 
 fn rows_table(rows: &[ActionRecord]) -> String {
     let mut table = String::from(
-        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Scope</th><th>Result</th><th>Details</th></tr></thead><tbody>"#,
+        r#"<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Scope</th><th>Result</th><th>Details</th><th>More</th></tr></thead><tbody>"#,
     );
     for row in rows {
         let scope = if row.target.is_empty() {
@@ -45,8 +45,15 @@ fn rows_table(rows: &[ActionRecord]) -> String {
         } else {
             r#"<span class="plugin-badge paid">Failed</span>"#
         };
+        let more = format!(
+            r#"<details class="activity-more"><summary>More</summary><div class="activity-more-body"><p><strong>{label}</strong> by {actor}</p><p>Scope: {scope}</p><pre>{msg}</pre></div></details>"#,
+            label = html_escape(action_label(&row.action)),
+            actor = html_escape(&row.actor),
+            scope = scope,
+            msg = html_escape(&row.message),
+        );
         table.push_str(&format!(
-            r#"<tr><td data-label="Time"><time data-ts="{ts}" title="UTC">{stamp} UTC</time></td><td data-label="User">{actor}</td><td data-label="Action">{label}</td><td data-label="Scope">{scope}</td><td data-label="Result">{result}</td><td data-label="Details">{msg}</td></tr>"#,
+            r#"<tr><td data-label="Time"><time data-ts="{ts}" title="UTC">{stamp} UTC</time></td><td data-label="User">{actor}</td><td data-label="Action">{label}</td><td data-label="Scope">{scope}</td><td data-label="Result">{result}</td><td data-label="Details">{msg}</td><td data-label="More">{more}</td></tr>"#,
             ts = row.ts,
             stamp = utc_stamp(row.ts),
             actor = html_escape(&row.actor),
@@ -54,6 +61,7 @@ fn rows_table(rows: &[ActionRecord]) -> String {
             scope = scope,
             result = result,
             msg = html_escape(&row.message),
+            more = more,
         ));
     }
     table.push_str("</tbody></table></div>");
