@@ -111,8 +111,16 @@ mod tests {
 
     #[test]
     fn match_domain_and_parent() {
-        assert!(domain_matches_q("blog.example.com", Some("example.com"), "blog"));
-        assert!(domain_matches_q("blog.example.com", Some("example.com"), "EXAMPLE"));
+        assert!(domain_matches_q(
+            "blog.example.com",
+            Some("example.com"),
+            "blog"
+        ));
+        assert!(domain_matches_q(
+            "blog.example.com",
+            Some("example.com"),
+            "EXAMPLE"
+        ));
         assert!(domain_matches_q(
             "shop.example.com",
             Some("example.com"),
