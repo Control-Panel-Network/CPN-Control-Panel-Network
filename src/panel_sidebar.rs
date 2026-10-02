@@ -29,7 +29,11 @@ pub fn search_catalog_json() -> String {
             "email accounts mailboxes mail postfix",
         ),
         ("Create Email", "/email/create", "email mailbox create"),
-        ("Change Password", "/email/password", "email mailbox password"),
+        (
+            "Change Password",
+            "/email/password",
+            "email mailbox password",
+        ),
         ("DKIM Manager", "/email/dkim", "email dkim dns"),
         ("Email", "/email", "mail postfix email hub overview"),
         ("Databases", "/databases", "mariadb"),
