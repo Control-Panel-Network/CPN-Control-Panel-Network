@@ -127,6 +127,11 @@ fn site_table_rows(sites: &[WordpressSite]) -> String {
           <td>{owner}</td>
           <td>
             <a class="btn-primary" style="min-height:34px;padding:0 12px;font-size:13px;" href="/wordpress/manage?domain={domain_q}">Manage</a>
+            <form method="post" action="/wordpress/delete" class="inline-form" onsubmit="return confirm('Remove WordPress registry entry for {domain}? Optionally delete core files.');">
+              <input type="hidden" name="domain" value="{domain_q}">
+              <label><input type="checkbox" name="remove_files" value="1"> Also delete files</label>
+              <button type="submit" class="btn-danger">Delete WordPress</button>
+            </form>
           </td>
         </tr>"#,
             domain = html_escape(&site.domain),

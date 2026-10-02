@@ -28,6 +28,14 @@ fn parse_bool_flag(raw: &str) -> bool {
     )
 }
 
+fn wordpress_list_path(domain: &str) -> &'static str {
+    if crate::backups::is_subdomain_site(domain) {
+        "/wordpress/subsites"
+    } else {
+        "/wordpress"
+    }
+}
+
 #[get("/wordpress")]
 pub async fn wordpress_list_route(
     http: HttpRequest,
@@ -62,7 +70,7 @@ pub async fn wordpress_subsites_list_route(
     let wp_cli = detect_wp_cli();
     html_ok(panel_shell(
         &user,
-        "wordpress-subsites",
+        "wordpress",
         "WordPress Sub-sites",
         &wordpress_subsites_list_page(
             query.get("notice").map(String::as_str),
@@ -103,7 +111,7 @@ pub async fn wordpress_subsites_install_get(
     };
     html_ok(panel_shell(
         &user,
-        "wordpress-subsites",
+        "wordpress",
         "Install WordPress Sub-site",
         &wordpress_subsites_install_page(
             query.get("notice").map(String::as_str),
@@ -375,7 +383,7 @@ pub async fn wordpress_delete_post(
     };
     let remove_files = parse_bool_flag(&form.remove_files);
     match delete_wordpress(&form.domain, remove_files) {
-        Ok(msg) => wp_redirect("/wordpress", Some(&msg), None),
+        Ok(msg) => wp_redirect(wordpress_list_path(form.domain.trim()), Some(&msg), None),
         Err(error) => wp_redirect(
             &format!(
                 "/wordpress/manage?domain={}",

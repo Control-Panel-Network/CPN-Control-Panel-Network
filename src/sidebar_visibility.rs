@@ -281,14 +281,8 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
         }
     }
     // Common aliases outside exact catalog children.
-    if path.starts_with("/subdomains") {
-        return Some("subdomains");
-    }
-    if path.starts_with("/websites") {
+    if path.starts_with("/subdomains") || path.starts_with("/websites") {
         return Some("websites");
-    }
-    if path.starts_with("/wordpress/subsites") {
-        return Some("wordpress-subsites");
     }
     if path.starts_with("/wordpress") {
         return Some("wordpress");
@@ -438,11 +432,8 @@ mod tests {
             assert!(path_allowed("ops", "/dashboard"));
             assert!(!path_allowed("ops", "/backups/create"));
             assert_eq!(nav_id_for_path("/backups/create"), Some("backups"));
-            assert_eq!(nav_id_for_path("/subdomains/create"), Some("subdomains"));
-            assert_eq!(
-                nav_id_for_path("/wordpress/subsites"),
-                Some("wordpress-subsites")
-            );
+            assert_eq!(nav_id_for_path("/subdomains/create"), Some("websites"));
+            assert_eq!(nav_id_for_path("/wordpress/subsites"), Some("wordpress"));
             set_grant_for_member("ops", vec!["backups".into(), "websites".into()], false).unwrap();
             assert!(!can_see_nav_id("ops", "websites"));
             assert!(!can_see_nav_id("ops", "subdomains"));

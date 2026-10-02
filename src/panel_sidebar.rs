@@ -17,8 +17,13 @@ pub fn search_catalog_json() -> String {
     let mut entries: Vec<(&str, &str, &str)> = vec![
         ("Dashboard", "/dashboard", "overview home"),
         ("Websites", "/websites", "sites domains main"),
+        ("List Websites", "/websites", "list main domains"),
         ("Create Website", "/websites/create", "create main domain"),
-        ("Sub-domains", "/subdomains", "subdomain nested sites"),
+        (
+            "List Sub-domains",
+            "/subdomains",
+            "subdomain nested sites list",
+        ),
         (
             "Create Sub-domain",
             "/subdomains/create",
@@ -78,7 +83,6 @@ pub fn search_catalog_json() -> String {
             "cloudflare dns management",
         ),
         ("Manage Websites", "/websites", "manage preview"),
-        ("Manage Sub-domains", "/subdomains", "manage nested preview"),
     ];
     if crate::panel_feature_gate::docker_installed() {
         entries.push((

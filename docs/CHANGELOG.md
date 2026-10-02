@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Websites vs Sub-domains sidebar split**: Main domains list at `/websites` (Create at `/websites/create`). Nested sites list at `/subdomains` (Create at `/subdomains/create` with parent + label). Manage Domains tab still shows parent/child relationships and management cards. WordPress mirrors this with `/wordpress` vs `/wordpress/subsites` (and matching install paths). Hiding Websites or WordPress in sidebar ACL also gates the paired Sub-domains / WordPress Sub-sites section.
+- **Websites and WordPress list split (one sidebar group each)**: Main domains at `/websites` (create at `/websites/create`). Nested sites at `/subdomains` (create at `/subdomains/create`). Manage Domains tab still shows parent/child cards. WordPress uses `/wordpress` vs `/wordpress/subsites` (matching install paths). Sidebar has one **Websites** group (List/Create Website plus List/Create Sub-domain) and one **WordPress** group (sites, install, sub-sites, sub-site install). Hiding Websites or WordPress in ACL also gates the nested list routes.
+- **Delete on split lists**: `/subdomains` cards keep Manage plus POST `/websites/delete` (same as `/websites` and Manage Overview). `/wordpress` and `/wordpress/subsites` site cards include Delete WordPress (POST `/wordpress/delete`). Successful site delete returns to `/websites` or `/subdomains`; WordPress delete returns to `/wordpress` or `/wordpress/subsites`.
 
 ### Fixed
 

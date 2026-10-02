@@ -128,7 +128,7 @@ pub async fn subdomains_page(
     let error = query.get("error").map(String::as_str);
     html_ok(panel_shell(
         &user,
-        "subdomains",
+        "websites",
         "Sub-domains",
         &subdomains_main(&user, notice, error),
     ))
@@ -148,7 +148,7 @@ pub async fn subdomains_create_page(
     let parent = query.get("parent").map(String::as_str);
     html_ok(panel_shell(
         &user,
-        "subdomains",
+        "websites",
         "Create Sub-domain",
         &subdomains_create_main(&user, parent, notice, error),
     ))
