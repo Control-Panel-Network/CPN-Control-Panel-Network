@@ -16,7 +16,11 @@ fn html_escape(value: &str) -> String {
 }
 
 fn norm_ver(value: &str) -> String {
-    value.trim().trim_start_matches('v').trim_start_matches('V').to_string()
+    value
+        .trim()
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .to_string()
 }
 
 /// `can_manage`: panel admin only; non-admins get read-only version info.
