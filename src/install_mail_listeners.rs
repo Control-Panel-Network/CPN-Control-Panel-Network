@@ -106,16 +106,35 @@ pub fn strip_cpn_mail_listener_block(raw: &str) -> String {
     raw.to_string()
 }
 
+/// True when a prior CPN listener block used unindented `-o` lines (Postfix bad field count).
+fn cpn_block_has_bad_indent(raw: &str) -> bool {
+    let idx = raw
+        .find("# CPN local mail listeners")
+        .or_else(|| raw.find("# CPN local submission"));
+    let Some(idx) = idx else {
+        return false;
+    };
+    raw[idx..].lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("-o ") && line == trimmed
+    })
+}
+
 /// Append CPN loopback submission (587) and SMTPS (465) when vendor comments left them off.
 pub fn append_cpn_mail_listeners(raw: &str) -> Option<String> {
+    let has_587 = master_cf_has_submission(raw);
+    let has_465 = master_cf_has_smtps(raw);
+    let broken = cpn_block_has_bad_indent(raw);
+    // Idempotent: both listeners present and CPN block (if any) is well-formed.
+    if has_587 && has_465 && !broken {
+        return None;
+    }
+
     let base = strip_cpn_mail_listener_block(raw);
     let need_587 = !master_cf_has_submission(&base);
     let need_465 = !master_cf_has_smtps(&base);
-    if !need_587 && !need_465 && base == raw {
-        return None;
-    }
     if !need_587 && !need_465 {
-        // Stripped a broken block that already had working listeners elsewhere.
+        // Stripped a broken/duplicate CPN block; vendor (or other) listeners remain.
         return if base == raw { None } else { Some(base) };
     }
     let mut extra = String::from("\n# CPN local mail listeners (System Repair / Email heal)\n");
@@ -164,5 +183,22 @@ mod tests {
             "continuation lines must start with spaces; got:\n{updated}"
         );
         assert!(updated.contains("\n  -o syslog_name=postfix/smtps\n"));
+    }
+
+    #[test]
+    fn broken_unindented_o_lines_are_rewritten() {
+        let raw = "\
+# CPN local mail listeners (System Repair / Email heal)
+127.0.0.1:587 inet n - n - - smtpd
+-o syslog_name=postfix/submission
+127.0.0.1:465 inet n - n - - smtpd
+-o syslog_name=postfix/smtps
+";
+        assert!(master_cf_has_submission(raw));
+        assert!(master_cf_has_smtps(raw));
+        let updated = append_cpn_mail_listeners(raw).expect("rewrite broken indent");
+        assert!(updated.contains("\n  -o syslog_name=postfix/submission\n"));
+        assert!(!updated.lines().any(|l| l == "-o syslog_name=postfix/submission"));
+        assert!(append_cpn_mail_listeners(&updated).is_none());
     }
 }
