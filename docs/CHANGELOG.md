@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **System Repair hang / Busy stub**: `/server/system-repair` no longer runs the full probe suite inside the hub HTML render (which hit the 20s `gathering host status` 503). The page shell returns immediately and loads check cards from `/server/system-repair/api` with a 16s budget, 20s result cache, and 6s fail-fast per collector group. Cloudflare live verify is skipped on this path (use DNS Test connection). Login/getenforce probes use short timeouts.
 
+- **Tachyon Admin About Json reset / empty PHP table**: Tachyon `DoAdminInfo()` calls GitHub Releases before returning system load and PHP extensions. Slow or failed outbound HTTPS stalled admin Json (browser `ERR_CONNECTION_RESET` / empty PHP table / load averages `0` / "Cannot access the repository"). The same local stub directory now includes `core-github.json`, and Tachyon `Repository::httpGet()` is patched to read it (and `packages.json`) first. Webmail PHP-FPM `open_basedir` also includes `/proc` for loadavg.
+
+- **Webmail panel proxy heal stall**: first `/tachyon/` (or `/snappymail/`) request after panel start ran `heal_webmail_loopback_config()` inside `Once` on the request thread (SELinux `restorecon` / sieve sync). That blocked proxy workers until heal finished, so the browser saw timeouts / connection resets. Heal now runs on a background thread.
+
 ### Added
 
 ## [1.1.0] - 02/10/2026
