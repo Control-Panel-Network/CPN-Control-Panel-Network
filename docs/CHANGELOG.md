@@ -7,14 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
 - **Version Management stable tip updates**: `/settings/version` compares the running panel commit (build embed, install-manifest `source_commit`, or installed release tag SHA) to the configured repo `stable` branch HEAD. Shows **Update available** when the tip SHA differs even if the semver string is still `1.0.0`. Operators can **Upgrade to stable tip** (commit/source build labeled `stable @ abc1234`) beside the existing release picker. No new GitHub Release tag is required for incremental `stable` merges.
 - **Install-manifest vs RPM identity**: stale `0.2.x-alpha.*` `install-manifest.json` no longer wins over a live `1.0.0` RPM; version resolve and reconcile prefer the newer package identity.
 - **System Repair** (owner diagnostics): Panel hub at `/server/system-repair` (Settings tile redirects from `/settings/system-repair`) with pass/warn/fail cards and safe **Heal** actions for CLI shadows, panel service, email stack/ports/firewall, phpMyAdmin, firewalld, and Docker/Podman. Extends `cpn doctor` with aliases `troubleshoot` / `repair` / `system-repair`, subcommands `check` / `heal`, `--json`, and `--id`. MFA storage is checked only (never wiped).
 - **Panel upgrade maintenance page**: While an owner upgrades or repairs from **Settings > Version** or `cpn-installer --upgrade` / `--repair` / `--downgrade`, CPN writes `/var/lib/cpn/maintenance.json` and shows every visitor a dark branded maintenance card (progress, auto-retry, optional admin/bypass). Flag clears on success, failure, TTL (45m), startup heal after restart, or `cpn doctor --heal`. See `docs/PANEL-UPGRADE-MAINTENANCE.md`.
 - **Dashboard overview layout**: Signed-in users can Edit overview, drag widgets (Sites, gauges, Tools, health, Activity Board) on a wide screen, Save the order, or Restore default (with confirmation). Order is stored in per-user prefs under `/var/lib/cpn/user-prefs/`. JSON APIs: `GET`/`POST /api/panel/dashboard-layout` and `POST /api/panel/dashboard-layout/restore`.
 - **Dashboard Activity Board polish**: Default page size is 5 on every tab. Traffic and Disk IO show grouped numbers and static share charts (Minimalist mode stays snapshot-until-refresh). Top Process truncates long commands and offers Manage for the full line plus Server → Top Processes. Each row has More/Manage details. The board is collapsed by default and remembers expand via the same layout prefs.
+- **Open phpMyAdmin auto-login latency**: `/databases/phpmyadmin/open` and the `/phpmyadmin/` proxy no longer re-run configuration-storage SQL (`create_tables.sql`), recursive TempDir `chown`, package queries, or OpenLiteSpeed/php-fpm rewrites when the sign-on bridge, storage marker, FPM socket, and `:8081` listener are already healthy. Optional Docker/Podman probes stay off this path. The dedicated FPM pool keeps a spare worker (`pm = dynamic`) so the first PHP request is not an ondemand cold start. Heal still runs when the sock, listener, or runtime stamp is missing (no restart thrash).
 
 ## [1.0.0] - 01/10/2026
 
