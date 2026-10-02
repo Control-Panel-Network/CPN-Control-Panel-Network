@@ -76,13 +76,7 @@ fn inventory_cache_path(archive: &Path) -> Option<PathBuf> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    Some(
-        inventory_cache_dir().join(format!(
-            "{name}.{}.{}.members.txt",
-            meta.len(),
-            mtime
-        )),
-    )
+    Some(inventory_cache_dir().join(format!("{name}.{}.{}.members.txt", meta.len(), mtime)))
 }
 
 fn read_inventory_cache(archive: &Path) -> Option<Vec<String>> {
@@ -727,7 +721,9 @@ mod tests {
         assert!(keep_member_for_plan("./meta.xml"));
         assert!(keep_member_for_plan("./public_html/"));
         assert!(keep_member_for_plan("./public_html/index.php"));
-        assert!(keep_member_for_plan("ai.newstargeted.com/public_html/index.php"));
+        assert!(keep_member_for_plan(
+            "ai.newstargeted.com/public_html/index.php"
+        ));
         assert!(keep_member_for_plan("./news_disco.sql"));
         assert!(!keep_member_for_plan(
             "./public_html/.cache/composer/files/composer/ca-bundle/abc.zip"
@@ -736,7 +732,8 @@ mod tests {
 
     #[test]
     fn collect_plan_lines_filters_noise() {
-        let blob = b"./meta.xml\n./public_html/index.php\n./public_html/.cache/deep/file.bin\n./db.sql\n";
+        let blob =
+            b"./meta.xml\n./public_html/index.php\n./public_html/.cache/deep/file.bin\n./db.sql\n";
         let members = collect_plan_member_lines(blob).unwrap();
         assert!(members.iter().any(|m| m.contains("meta.xml")));
         assert!(members.iter().any(|m| m.contains("index.php")));

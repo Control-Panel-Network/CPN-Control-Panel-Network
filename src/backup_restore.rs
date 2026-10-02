@@ -394,8 +394,7 @@ pub fn restore_backup(req: &RestoreRequest) -> Result<RestoreResult, String> {
         if archive_is_large(&archive_path)
             && matches!(format, BackupFormat::CyberPanel | BackupFormat::Cpn)
         {
-            let prefixes =
-                classic_extract_prefixes(&members, &selected_domains, wants_sql);
+            let prefixes = classic_extract_prefixes(&members, &selected_domains, wants_sql);
             extract_archive_prefixes(&archive_path, &staging, &prefixes)?;
         } else {
             extract_archive_safe(&archive_path, &staging)?;
