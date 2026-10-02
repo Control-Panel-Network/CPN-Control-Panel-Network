@@ -97,6 +97,8 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/backups/remote", "network", IconTone::Slate),
         ("/backups", "hard-drive", IconTone::Blue),
         ("/server/services", "activity", IconTone::Green),
+        ("/server/system-repair", "refresh-cw", IconTone::Amber),
+        ("/settings/system-repair", "refresh-cw", IconTone::Amber),
         ("/server/openlitespeed", "external-link", IconTone::Cyan),
         (
             "/server/litespeed-enterprise",
@@ -169,7 +171,7 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
         "ssl" => ("lock", IconTone::Green),
         "apps" | "docker" => ("boxes", IconTone::Cyan),
         "users" | "packages" => ("users", IconTone::Blue),
-        "server" | "services" | "processes" | "logs" | "package-manager" => {
+        "server" | "services" | "processes" | "logs" | "package-manager" | "system-repair" => {
             ("server", IconTone::Slate)
         }
         "root-files" => ("folder", IconTone::Amber),

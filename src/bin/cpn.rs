@@ -113,11 +113,20 @@ enum Commands {
         #[command(subcommand)]
         command: PackageCommands,
     },
-    /// Health checks: CLI paths, panel unit, /login, core manifest, host summary
+    /// System Repair diagnostics (aliases: troubleshoot, repair, system-repair)
+    #[command(visible_aliases = ["troubleshoot", "repair"], alias = "system-repair")]
     Doctor {
-        /// Remove stale `/usr/local/bin/cpn*` hot-deploy overrides (requires root)
-        #[arg(long)]
+        #[command(subcommand)]
+        command: Option<DoctorCommands>,
+        /// Run safe heals before checks (legacy flag; prefer `cpn doctor heal`)
+        #[arg(long, global = true)]
         heal: bool,
+        /// Emit JSON instead of human text
+        #[arg(long, global = true)]
+        json: bool,
+        /// Limit check or heal to one id (for example email.stack)
+        #[arg(long, global = true)]
+        id: Option<String>,
     },
     /// Uninstall CPN from this host (same as `cpn-installer --uninstall`)
     Uninstall {
@@ -139,6 +148,22 @@ enum Commands {
         /// Print steps without changing the host
         #[arg(long)]
         dry_run: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum DoctorCommands {
+    /// Run System Repair checks (default when no subcommand)
+    Check {
+        /// Limit to one check id or category
+        #[arg(long)]
+        id: Option<String>,
+    },
+    /// Run safe heals, then re-check
+    Heal {
+        /// Limit to one heal id (for example cli.local_override, email.stack, phpmyadmin)
+        #[arg(long)]
+        id: Option<String>,
     },
 }
 
@@ -332,13 +357,31 @@ fn run() -> Result<(), String> {
                 "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, ...)"
             );
             println!("package  Manage hosting packages and account assignments");
-            println!("doctor   Health checks (CLI paths, panel unit, /login, core files)");
+            println!(
+                "doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)"
+            );
             println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
         }
-        Commands::Doctor { heal } => cli_doctor::run(heal),
+        Commands::Doctor {
+            command,
+            heal,
+            json,
+            id,
+        } => match command {
+            None if heal => cli_doctor::run(true, json, id.as_deref()),
+            None => cli_doctor::run(false, json, id.as_deref()),
+            Some(DoctorCommands::Check { id: sub_id }) => {
+                let chosen = sub_id.or(id);
+                cli_doctor::run_check(json, chosen.as_deref())
+            }
+            Some(DoctorCommands::Heal { id: sub_id }) => {
+                let chosen = sub_id.or(id);
+                cli_doctor::run_heal(json, chosen.as_deref())
+            }
+        },
         Commands::Uninstall {
             yes,
             keep_data,
