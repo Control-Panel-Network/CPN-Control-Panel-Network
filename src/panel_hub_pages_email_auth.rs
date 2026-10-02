@@ -33,7 +33,10 @@ fn flash(kind: &str, message: Option<&str>) -> String {
 }
 
 fn domain_options(selected: &str) -> String {
-    let sites = list_sites().unwrap_or_default();
+    domain_options_from(&list_sites().unwrap_or_default(), selected)
+}
+
+fn domain_options_from(sites: &[crate::sites::SiteRecord], selected: &str) -> String {
     let mut out = String::new();
     if sites.is_empty() {
         out.push_str(r#"<option value="">No websites yet</option>"#);
@@ -79,12 +82,12 @@ fn dns_table(records: &[DnsRecordPlan]) -> String {
 }
 
 pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    // One sites registry read for default domain + dropdown (avoid double list under disk load).
+    let sites = list_sites().unwrap_or_default();
     let settings = if domain.trim().is_empty() {
-        let first = list_sites()
-            .unwrap_or_default()
-            .into_iter()
-            .next()
-            .map(|s| s.domain)
+        let first = sites
+            .first()
+            .map(|s| s.domain.clone())
             .unwrap_or_default();
         load_mta_sts(&first)
     } else {
@@ -138,7 +141,7 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
       </form>"#,
         notice = flash("ok", notice),
         error = flash("error", error),
-        domains = domain_options(&settings.domain),
+        domains = domain_options_from(&sites, &settings.domain),
         domain = html_escape(&settings.domain),
         enabled = enabled,
         mode_opts = mode_opts,
@@ -164,12 +167,11 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
 }
 
 pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    let sites = list_sites().unwrap_or_default();
     let settings = if domain.trim().is_empty() {
-        let first = list_sites()
-            .unwrap_or_default()
-            .into_iter()
-            .next()
-            .map(|s| s.domain)
+        let first = sites
+            .first()
+            .map(|s| s.domain.clone())
             .unwrap_or_default();
         load_bimi(&first)
     } else {
@@ -209,7 +211,7 @@ pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) 
       </form>"#,
         notice = flash("ok", notice),
         error = flash("error", error),
-        domains = domain_options(&settings.domain),
+        domains = domain_options_from(&sites, &settings.domain),
         domain = html_escape(&settings.domain),
         enabled = enabled,
         logo = html_escape(&settings.logo_svg_url),
