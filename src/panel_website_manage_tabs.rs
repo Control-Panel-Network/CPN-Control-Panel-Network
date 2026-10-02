@@ -323,7 +323,8 @@ mod tests {
     #[test]
     fn domains_has_tiles() {
         let html = tab_domains(&site());
-        assert!(html.contains("Add Domains"));
+        assert!(html.contains("Add Sub-domain"));
+        assert!(html.contains("List Sub-domains"));
         assert!(html.contains("Cron Jobs"));
         assert!(html.contains("tab=alias"));
         assert!(html.contains("tab=cron"));
