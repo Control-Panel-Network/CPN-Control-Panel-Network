@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Hosting package names**: New packages (Create and Duplicate) are stored as `{username}_{customname}` using the package owner username (Create form owner selector; defaults to the signed-in admin). Typing an existing `{owner}_` prefix is not doubled. The reserved **Default** package (`pkg-default`) stays named exactly `Default`. Edit keeps the owner prefix and only changes the custom part. CLI `cpn package create` requires `--owner`.
+- **Website and Sub-domain SSL badges**: List cards on `/websites` and `/subdomains` show **Secure** when the hostname has a valid certificate (including expiring soon) and **Insecure** when there is no cert, or the cert is expired, invalid, or a hostname mismatch. The tooltip includes expiry as `dd/mm/yyyy` when the SSL helper already parsed it.
 
 ### Added
 
