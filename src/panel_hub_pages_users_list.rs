@@ -269,9 +269,9 @@ pub fn users_list_page(
     if total == 0 {
         body.push_str(r#"<p class="empty-state">No panel accounts found.</p>"#);
     } else if page_rows.is_empty() {
-        body.push_str(&format!(
-            r#"<p class="empty-state">No users match this filter. <a href="/account/users/list">Clear search</a>.</p>"#
-        ));
+        body.push_str(
+            r#"<p class="empty-state">No users match this filter. <a href="/account/users/list">Clear search</a>.</p>"#,
+        );
     } else {
         body.push_str(&pager_html(&opts, page, total_pages, filtered));
         body.push_str(
