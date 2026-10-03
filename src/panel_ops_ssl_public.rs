@@ -1,14 +1,14 @@
 //! Public SSL badge: origin cert files vs Cloudflare edge TLS.
 //!
-//! The websites list badge is origin material (and live origin HTTPS), not
-//! Cloudflare orange-cloud TLS by itself. CF SSL is shown only when the
-//! hostname is orange-cloud proxied.
+//! Valid is origin material on this host (real expiry). CF SSL is Cloudflare CA
+//! as the site provider, or an orange-cloud DNS record for the FQDN, when origin
+//! files are missing. NONE is neither.
 
 use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_cloudflare_api::{CfDnsRecord, list_dns_records};
 use crate::panel_ops_ssl_inspect::{SslCertInsight, SslValidityKind, inspect_domain_ssl};
 use crate::panel_ops_ssl_provider::SslProvider;
-use crate::sites::SiteRecord;
+use crate::sites::{SiteRecord, load_site};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -90,6 +90,22 @@ fn names_equal(a: &str, b: &str) -> bool {
         .eq_ignore_ascii_case(b.trim_end_matches('.'))
 }
 
+fn record_covers_hostname(record_name: &str, hostname: &str) -> bool {
+    if names_equal(record_name, hostname) {
+        return true;
+    }
+    let rec = record_name
+        .trim()
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    let host = hostname.trim().trim_end_matches('.').to_ascii_lowercase();
+    if rec.starts_with("*.") {
+        let suffix = &rec[1..];
+        return host.ends_with(suffix) && host.len() > suffix.len();
+    }
+    false
+}
+
 fn cached_dns_records(domain: &str) -> Result<Vec<CfDnsRecord>, String> {
     let key = domain.trim().to_ascii_lowercase();
     if let Ok(guard) = dns_cache().lock()
@@ -120,7 +136,7 @@ pub fn cloudflare_hostname_tls(domain: &str) -> (bool, bool) {
     match cached_dns_records(domain) {
         Ok(recs) => {
             let proxied = recs.iter().any(|r| {
-                names_equal(&r.name, domain)
+                record_covers_hostname(&r.name, domain)
                     && r.proxied
                     && matches!(
                         r.record_type.to_ascii_uppercase().as_str(),
@@ -137,6 +153,7 @@ pub fn select_public_kind(
     origin: SslValidityKind,
     _zone_linked: bool,
     proxied: bool,
+    provider_is_cloudflare_ca: bool,
 ) -> PublicSslKind {
     match origin {
         SslValidityKind::Valid => PublicSslKind::OriginValid,
@@ -145,7 +162,7 @@ pub fn select_public_kind(
         SslValidityKind::Mismatch => PublicSslKind::OriginMismatch,
         SslValidityKind::Invalid => PublicSslKind::OriginInvalid,
         SslValidityKind::None => {
-            if proxied {
+            if proxied || provider_is_cloudflare_ca {
                 PublicSslKind::CloudflareEdge
             } else {
                 PublicSslKind::None
@@ -159,44 +176,44 @@ fn title_and_detail(
     origin: &SslCertInsight,
     zone_linked: bool,
     proxied: bool,
+    provider_is_cloudflare_ca: bool,
 ) -> (String, String) {
     match kind {
         PublicSslKind::OriginValid | PublicSslKind::OriginExpiring => {
             let exp = origin.expires_display.as_deref().unwrap_or("unknown");
             (
-                format!(
-                    "Origin certificate files (Let's Encrypt or custom) on this server. Expires {exp}."
-                ),
+                format!("Origin certificate on this host. Expires {exp}."),
                 origin.detail.clone(),
             )
         }
         PublicSslKind::OriginExpired
         | PublicSslKind::OriginMismatch
-        | PublicSslKind::OriginInvalid => (
-            origin.detail.clone(),
-            format!(
-                "{} This badge is origin TLS on the site vhost, not Cloudflare edge TLS.",
-                origin.detail
-            ),
-        ),
-        PublicSslKind::CloudflareEdge => (
-            "Cloudflare SSL: orange-cloud proxy is on for this hostname. Visitors get HTTPS at Cloudflare. Origin has no local certificate files.".into(),
-            "Public HTTPS is Cloudflare edge TLS. Origin vhost has no Let's Encrypt or custom cert files. Issue origin Let's Encrypt as backup so HTTPS still works if Cloudflare proxy stops.".into(),
-        ),
-        PublicSslKind::None => {
-            let extra = if zone_linked && !proxied {
-                " A Cloudflare zone is linked, but proxy is DNS-only (grey cloud), so Cloudflare is not providing public TLS for this hostname."
+        | PublicSslKind::OriginInvalid => (origin.detail.clone(), origin.detail.clone()),
+        PublicSslKind::CloudflareEdge => {
+            let why = if proxied {
+                "Cloudflare orange-cloud proxy is on for this hostname."
+            } else if provider_is_cloudflare_ca {
+                "SSL provider is Cloudflare CA (issuance setting, not a Valid origin cert)."
             } else {
-                " Cloudflare orange-cloud proxy was not detected for this hostname."
+                "Cloudflare SSL applies for this hostname."
             };
             (
                 format!(
-                    "No SSL: no origin certificate files on this server, and Cloudflare edge TLS does not apply.{extra}"
+                    "{why} Origin files are missing (expiry n/a). Visitors may still get HTTPS at Cloudflare."
                 ),
-                format!(
-                    "Badge is origin cert files (and live HTTPS on the site vhost), not Cloudflare orange-cloud TLS.{} Issue Let's Encrypt on the origin for local HTTPS.",
-                    extra
-                ),
+                "Issue origin backup (Let's Encrypt) so HTTPS still works if Cloudflare stops."
+                    .into(),
+            )
+        }
+        PublicSslKind::None => {
+            let extra = if zone_linked && !proxied {
+                " Cloudflare zone is linked, but DNS is grey-cloud (not public TLS)."
+            } else {
+                " Cloudflare proxy was not detected."
+            };
+            (
+                format!("No origin certificate files, and Cloudflare TLS does not apply.{extra}"),
+                "Issue origin backup (Let's Encrypt) for HTTPS on this host.".into(),
             )
         }
     }
@@ -205,8 +222,17 @@ fn title_and_detail(
 pub fn inspect_public_ssl(domain: &str) -> PublicSslView {
     let origin = inspect_domain_ssl(domain);
     let (zone_linked, proxied) = cloudflare_hostname_tls(domain);
-    let kind = select_public_kind(origin.kind, zone_linked, proxied);
-    let (title, detail) = title_and_detail(kind, &origin, zone_linked, proxied);
+    let provider_is_cloudflare_ca = load_site(domain)
+        .map(|s| s.ssl.provider == SslProvider::CloudflareCa)
+        .unwrap_or(false);
+    let kind = select_public_kind(origin.kind, zone_linked, proxied, provider_is_cloudflare_ca);
+    let (title, detail) = title_and_detail(
+        kind,
+        &origin,
+        zone_linked,
+        proxied,
+        provider_is_cloudflare_ca,
+    );
     PublicSslView {
         kind,
         origin,
@@ -300,11 +326,11 @@ mod tests {
     #[test]
     fn proxied_without_origin_is_cf_ssl_not_valid() {
         assert_eq!(
-            select_public_kind(SslValidityKind::None, true, true),
+            select_public_kind(SslValidityKind::None, true, true, false),
             PublicSslKind::CloudflareEdge
         );
         assert_ne!(
-            select_public_kind(SslValidityKind::None, true, true),
+            select_public_kind(SslValidityKind::None, true, true, false),
             PublicSslKind::OriginValid
         );
     }
@@ -312,17 +338,41 @@ mod tests {
     #[test]
     fn zone_linked_dns_only_is_none_not_cf() {
         assert_eq!(
-            select_public_kind(SslValidityKind::None, true, false),
+            select_public_kind(SslValidityKind::None, true, false, false),
             PublicSslKind::None
+        );
+    }
+
+    #[test]
+    fn cloudflare_ca_provider_without_origin_is_cf_ssl() {
+        assert_eq!(
+            select_public_kind(SslValidityKind::None, false, false, true),
+            PublicSslKind::CloudflareEdge
         );
     }
 
     #[test]
     fn origin_cert_wins_over_cloudflare() {
         assert_eq!(
-            select_public_kind(SslValidityKind::Valid, true, true),
+            select_public_kind(SslValidityKind::Valid, true, true, true),
             PublicSslKind::OriginValid
         );
+    }
+
+    #[test]
+    fn wildcard_record_covers_subdomain() {
+        assert!(record_covers_hostname(
+            "*.newstargeted.com",
+            "www.newstargeted.com"
+        ));
+        assert!(record_covers_hostname(
+            "newstargeted.com",
+            "newstargeted.com"
+        ));
+        assert!(!record_covers_hostname(
+            "*.newstargeted.com",
+            "newstargeted.com"
+        ));
     }
 
     #[test]
