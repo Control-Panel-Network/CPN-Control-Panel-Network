@@ -1,7 +1,7 @@
 # CPN · Control Panel Network
 
 > [!WARNING]
-> **v1.1.0** is the current stable release (first stable was **v1.0.0**) of CPN Control Panel Network, following the 0.2.x alpha line (last alpha tip v0.2.6-alpha.50). Keep backups, test upgrades on a staging host first, and read [Platform Support](docs/SUPPORT.md) before important hosts.
+> **v1.1.1** is the current stable release (first stable was **v1.0.0**) of CPN Control Panel Network, following the 0.2.x alpha line (last alpha tip v0.2.6-alpha.50). Keep backups, test upgrades on a staging host first, and read [Platform Support](docs/SUPPORT.md) before important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -53,7 +53,7 @@ curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 Pin tip (example):
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.1.0
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.1.1
 ```
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).

@@ -226,6 +226,7 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 /// `CPN_LOGIN_SERVICE_GATE=0` always bypasses the cache so parallel tests (and
 /// operator recovery) cannot see a stale not-ready result from another thread.
 pub fn evaluate_login_services() -> LoginServiceStatus {
+    // Env disable must win over a hot cache (parallel tests / recovery).
     if gate_disabled_by_env() {
         return ready_status_unrestricted("");
     }
