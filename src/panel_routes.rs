@@ -5,6 +5,7 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_admin::is_panel_admin;
+use crate::panel_hub_pages_category_overviews::websites_hub_main;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
 use crate::panel_pages::panel_shell;
@@ -20,7 +21,6 @@ use crate::panel_websites_create_ui::{
     require_domain_in_cloudflare_zones, resolve_create_domain, subdomains_create_main,
     websites_create_main,
 };
-use crate::panel_hub_pages_category_overviews::websites_hub_main;
 use crate::panel_websites_list_ui::{subdomains_main, websites_main};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,

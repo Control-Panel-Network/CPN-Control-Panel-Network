@@ -734,7 +734,11 @@ pub async fn docker_export_route(
     }
     let name = query.get("name").map(String::as_str).unwrap_or("");
     if name.is_empty() {
-        return redirect_notice("/docker/list", None, Some("Missing container name for export."));
+        return redirect_notice(
+            "/docker/list",
+            None,
+            Some("Missing container name for export."),
+        );
     }
     if *http.method() == actix_web::http::Method::HEAD {
         let filename = format!("{name}.tar");

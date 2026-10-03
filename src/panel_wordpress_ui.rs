@@ -252,7 +252,11 @@ pub fn wordpress_list_page(
         err = notice_block("error", error),
         wp_cli_card = wp_cli_status_card(wp_cli),
         count = sites.len(),
-        search = list_search_form("/wordpress/list", q_raw.unwrap_or("").trim(), "Search by domain"),
+        search = list_search_form(
+            "/wordpress/list",
+            q_raw.unwrap_or("").trim(),
+            "Search by domain"
+        ),
         filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
         rows = rows,
     )

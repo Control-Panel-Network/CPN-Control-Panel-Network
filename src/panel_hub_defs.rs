@@ -940,4 +940,3 @@ pub fn litespeed_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
         ],
     )]
 }
-
