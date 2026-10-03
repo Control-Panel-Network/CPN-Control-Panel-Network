@@ -3,7 +3,7 @@
 //! Package quotas stay stored as MB integers (`-1` unlimited). Display converts those
 //! MB values to bytes (1024-based) so Auto never prints `500000 MB`.
 
-use crate::packages::{UNLIMITED, is_unlimited};
+use crate::packages::is_unlimited;
 use crate::panel_user_prefs::{StorageUnitPref, load_user_storage_unit};
 
 const KB: f64 = 1024.0;
@@ -202,6 +202,7 @@ pub fn storage_unit_options_html(selected: StorageUnitPref) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::packages::UNLIMITED;
 
     #[test]
     fn auto_scales_quota_mb_to_gb() {
