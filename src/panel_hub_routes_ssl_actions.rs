@@ -41,7 +41,7 @@ fn ssl_back(form_return: Option<&str>) -> String {
         {
             r.to_string()
         }
-        _ => "/security/ssl".into(),
+        _ => "/security/ssl/manage".into(),
     }
 }
 
@@ -91,12 +91,12 @@ pub async fn security_ssl_issue_all(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Some(resp) = admin_gate(&user, "/security/ssl") {
+    if let Some(resp) = admin_gate(&user, "/security/ssl/manage") {
         return resp;
     }
     match issue_le_for_all_without_custom() {
-        Ok(msg) => redirect_notice("/security/ssl", Some(&msg), None),
-        Err(err) => redirect_notice("/security/ssl", None, Some(&err)),
+        Ok(msg) => redirect_notice("/security/ssl/manage", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssl/manage", None, Some(&err)),
     }
 }
 
@@ -108,12 +108,12 @@ pub async fn security_ssl_renew(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Some(resp) = admin_gate(&user, "/security/ssl") {
+    if let Some(resp) = admin_gate(&user, "/security/ssl/manage") {
         return resp;
     }
     match renew_lets_encrypt_all() {
-        Ok(msg) => redirect_notice("/security/ssl", Some(&msg), None),
-        Err(err) => redirect_notice("/security/ssl", None, Some(&err)),
+        Ok(msg) => redirect_notice("/security/ssl/manage", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssl/manage", None, Some(&err)),
     }
 }
 
@@ -224,7 +224,7 @@ pub async fn security_ssl_defaults(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if let Some(resp) = admin_gate(&user, "/security/ssl") {
+    if let Some(resp) = admin_gate(&user, "/security/ssl/manage") {
         return resp;
     }
     match SslProvider::parse(&form.provider).and_then(|p| {
@@ -234,8 +234,8 @@ pub async fn security_ssl_defaults(
             p.label()
         ))
     }) {
-        Ok(msg) => redirect_notice("/security/ssl", Some(&msg), None),
-        Err(err) => redirect_notice("/security/ssl", None, Some(&err)),
+        Ok(msg) => redirect_notice("/security/ssl/manage", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssl/manage", None, Some(&err)),
     }
 }
 

@@ -47,6 +47,7 @@ use cpn_installer::panel_hub_routes::{
     databases_manager_route, databases_password_get, databases_password_post,
     databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
     docker_create_container, docker_create_route, docker_export_route, docker_home,
+    docker_list_route,
     docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
     docker_logs_route, docker_stack_create, docker_stack_refresh, docker_stacks_route,
     docker_view_exec, docker_view_route, email_accounts_route, email_bimi_push_cf,
@@ -61,6 +62,7 @@ use cpn_installer::panel_hub_routes::{
     email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
     email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
     email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
+    ftp_overview_route,
     ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
     ftp_reset_post, login_mfa_session, passkey_delete_post, passkey_login_finish,
     passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
@@ -73,7 +75,7 @@ use cpn_installer::panel_hub_routes::{
     security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
     security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    security_ssl_mail, security_ssl_manage, security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
     security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
     server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
     server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
@@ -82,6 +84,7 @@ use cpn_installer::panel_hub_routes::{
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
     server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
+    server_litespeed_plans_page,
     server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
     server_litespeed_webadmin_url, server_log_view_route, server_logs_route,
     server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
@@ -89,6 +92,7 @@ use cpn_installer::panel_hub_routes::{
     server_page, server_php_configs, server_php_configs_post, server_php_configs_restart,
     server_php_configs_save_advanced, server_php_configs_save_basic,
     server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
+    server_php_overview,
     server_php_extensions_install, server_php_extensions_set_default,
     server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
     server_processes_page, server_services_control, server_services_page, settings_connect_page,
@@ -133,7 +137,7 @@ use cpn_installer::panel_routes::{
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
     site_preview_image, site_preview_refresh, subdomains_create, subdomains_create_page,
     subdomains_page, websites_create, websites_create_page, websites_delete, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
+    websites_list_page, websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
     websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
     websites_suspend_message, websites_suspend_message_restore,
 };
@@ -157,6 +161,7 @@ use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
     wordpress_install_post, wordpress_list_route, wordpress_manage_route,
+    wordpress_overview_route,
     wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
     wordpress_subsites_install_get, wordpress_subsites_install_post, wordpress_subsites_list_route,
     wordpress_subsites_scan_post, wordpress_theme_activate_post, wordpress_toggle_debug_post,
@@ -1127,6 +1132,7 @@ async fn main() -> std::io::Result<()> {
             .service(dashboard_ssh_security_review_snooze)
             .service(dashboard_ssh_security_review_show)
             .service(websites_page)
+            .service(websites_list_page)
             // Static /websites/create before /websites/{domain} catch-all.
             .service(websites_create_page)
             .service(subdomains_page)
@@ -1158,6 +1164,7 @@ async fn main() -> std::io::Result<()> {
             .service(websites_reset_placeholder)
             .service(websites_prefs)
             .service(websites_preview_prefs)
+            .service(wordpress_overview_route)
             .service(wordpress_list_route)
             .service(wordpress_subsites_list_route)
             .service(wordpress_install_get)
@@ -1261,12 +1268,14 @@ async fn main() -> std::io::Result<()> {
             .service(server_openlitespeed_guest_remove)
             .service(server_litespeed_enterprise_page)
             .service(server_litespeed_page)
+            .service(server_litespeed_plans_page)
             .service(server_litespeed_tier)
             .service(server_litespeed_serial)
             .service(server_litespeed_webadmin_url)
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)
             .service(server_processes_page)
+            .service(server_php_overview)
             .service(server_php_extensions)
             .service(server_php_extensions_install)
             .service(server_php_extensions_uninstall)
@@ -1296,6 +1305,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_containers)
             .service(server_docker_images)
             .service(docker_home)
+            .service(docker_list_route)
             .service(docker_images_route)
             .service(docker_logs_route)
             .service(docker_view_route)
@@ -1391,6 +1401,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_rule_packs)
             .service(security_malware)
             .service(security_ssl)
+            .service(security_ssl_manage)
             .service(security_ssl_hostname)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
@@ -1495,6 +1506,7 @@ async fn main() -> std::io::Result<()> {
             .service(databases_manager_route)
             .service(databases_phpmyadmin_route)
             .service(databases_phpmyadmin_open)
+            .service(ftp_overview_route)
             .service(ftp_accounts_route)
             .service(ftp_create)
             .service(ftp_create_post)

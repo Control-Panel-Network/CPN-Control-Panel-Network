@@ -209,6 +209,37 @@ pub async fn server_litespeed_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if query.contains_key("notice") || query.contains_key("error") {
+        let mut loc = String::from("/server/litespeed/plans");
+        let mut first = true;
+        for (key, value) in query.iter() {
+            loc.push(if first { '?' } else { '&' });
+            first = false;
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&urlencoding_simple(value));
+        }
+        return HttpResponse::SeeOther()
+            .append_header(("Location", loc))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "LiteSpeed",
+        &crate::panel_hub_pages_category_overviews::litespeed_hub_main(),
+    ))
+}
+
+#[get("/server/litespeed/plans")]
+pub async fn server_litespeed_plans_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
     html_ok(panel_shell(
         &user,
         "server",
@@ -249,8 +280,8 @@ pub async fn server_litespeed_tier(
     }
     let tier = form.get("tier").map(String::as_str).unwrap_or("");
     match run_set_tier(tier) {
-        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
-        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
 }
 
@@ -265,8 +296,8 @@ pub async fn server_litespeed_serial(
     }
     let serial = form.get("serial").map(String::as_str).unwrap_or("");
     match run_apply_serial(serial) {
-        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
-        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
 }
 
@@ -281,8 +312,8 @@ pub async fn server_litespeed_webadmin_url(
     }
     let url = form.get("webadmin_url").map(String::as_str).unwrap_or("");
     match run_set_webadmin_url(url) {
-        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
-        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
 }
 
@@ -295,8 +326,8 @@ pub async fn server_litespeed_upgrade(
         return resp;
     }
     match run_upgrade() {
-        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
-        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
 }
 
@@ -311,8 +342,8 @@ pub async fn server_litespeed_downgrade(
     }
     let version = form.get("version").map(String::as_str).unwrap_or("");
     match run_downgrade(version) {
-        Ok(msg) => redirect_notice("/server/litespeed", Some(&msg), None),
-        Err(err) => redirect_notice("/server/litespeed", None, Some(&err)),
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }
 }
 
@@ -449,12 +480,48 @@ pub async fn docker_home(
         let base = format!("/docker/create?image={}", urlencoding_simple(img.as_str()));
         return redirect_notice(&base, notice, error);
     }
+    if query.contains_key("notice") || query.contains_key("error") {
+        let mut loc = String::from("/docker/list");
+        let mut first = true;
+        for (key, value) in query.iter() {
+            loc.push(if first { '?' } else { '&' });
+            first = false;
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&urlencoding_simple(value));
+        }
+        return HttpResponse::SeeOther()
+            .append_header(("Location", loc))
+            .finish();
+    }
     html_ok(panel_shell(
         &user,
         "server",
         "Docker",
-        &docker_manage_page(notice, error),
+        &crate::panel_hub_pages_category_overviews::docker_hub_main(),
     ))
+}
+
+#[actix_web::route("/docker/list", method = "GET", method = "HEAD")]
+pub async fn docker_list_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    html_blocking(move || {
+        panel_shell(
+            &user,
+            "server",
+            "Active Containers",
+            &docker_manage_page(notice.as_deref(), error.as_deref()),
+        )
+    })
+    .await
 }
 
 #[actix_web::route("/docker/create", method = "GET", method = "HEAD")]
@@ -530,7 +597,7 @@ pub async fn docker_logs_route(
     };
     let name = query.get("name").map(String::as_str).unwrap_or("");
     if name.is_empty() {
-        return redirect_notice("/docker", None, Some("Missing container name."));
+        return redirect_notice("/docker/list", None, Some("Missing container name."));
     }
     html_ok(panel_shell(
         &user,
@@ -557,7 +624,7 @@ fn docker_action_redirect_base(return_to: &str) -> String {
     {
         rt.to_string()
     } else {
-        "/docker".into()
+        "/docker/list".into()
     }
 }
 
@@ -667,7 +734,7 @@ pub async fn docker_export_route(
     }
     let name = query.get("name").map(String::as_str).unwrap_or("");
     if name.is_empty() {
-        return redirect_notice("/docker", None, Some("Missing container name for export."));
+        return redirect_notice("/docker/list", None, Some("Missing container name for export."));
     }
     if *http.method() == actix_web::http::Method::HEAD {
         let filename = format!("{name}.tar");
@@ -855,7 +922,7 @@ pub async fn docker_create_container(
     .await
     .unwrap_or_else(|e| Err(format!("Create task failed: {e}")));
     match result {
-        Ok(msg) => redirect_notice("/docker", Some(&msg), None),
+        Ok(msg) => redirect_notice("/docker/list", Some(&msg), None),
         Err(err) => redirect_notice("/docker/create", None, Some(&err)),
     }
 }

@@ -4,6 +4,7 @@ use crate::installer::AppState;
 use crate::panel_hub_http::{
     html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
+use crate::panel_hub_pages_category_overviews::wordpress_hub_main;
 use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     WordpressInstallDraft, wordpress_install_page, wordpress_list_page, wordpress_manage_page,
@@ -135,6 +136,37 @@ fn html_ok_install(http: &HttpRequest, body: String) -> HttpResponse {
 }
 
 #[get("/wordpress")]
+pub async fn wordpress_overview_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if query.contains_key("q") || query.contains_key("notice") || query.contains_key("error") {
+        let mut loc = String::from("/wordpress/list");
+        let mut first = true;
+        for (key, value) in query.iter() {
+            loc.push(if first { '?' } else { '&' });
+            first = false;
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&urlencoding_simple(value));
+        }
+        return HttpResponse::SeeOther()
+            .append_header(("Location", loc))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "wordpress",
+        "WordPress",
+        &wordpress_hub_main(),
+    ))
+}
+
+#[get("/wordpress/list")]
 pub async fn wordpress_list_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -151,7 +183,7 @@ pub async fn wordpress_list_route(
         panel_shell(
             &user,
             "wordpress",
-            "WordPress",
+            "WordPress Sites",
             &wordpress_list_page(notice.as_deref(), error.as_deref(), &wp_cli, q.as_deref()),
         )
     })
@@ -436,7 +468,7 @@ pub async fn wordpress_manage_route(
         .unwrap_or("")
         .to_string();
     if domain.trim().is_empty() {
-        return wp_redirect("/wordpress", None, Some("Domain is required"));
+        return wp_redirect("/wordpress/list", None, Some("Domain is required"));
     }
     let tab = query
         .get("tab")
@@ -451,7 +483,7 @@ pub async fn wordpress_manage_route(
     .await
     {
         Ok(Ok(Ok(list))) => list,
-        Ok(Ok(Err(err))) => return wp_redirect("/wordpress", None, Some(&err)),
+        Ok(Ok(Err(err))) => return wp_redirect("/wordpress/list", None, Some(&err)),
         Ok(Err(_)) => {
             return wp_redirect(
                 "/wordpress",
@@ -527,9 +559,9 @@ pub async fn wordpress_scan_post(
     match scan_wordpress_sites() {
         Ok(results) => {
             let notice = wordpress_scan_notice(&results);
-            wp_redirect("/wordpress", Some(&notice), None)
+            wp_redirect("/wordpress/list", Some(&notice), None)
         }
-        Err(error) => wp_redirect("/wordpress", None, Some(&error)),
+        Err(error) => wp_redirect("/wordpress/list", None, Some(&error)),
     }
 }
 
@@ -559,8 +591,8 @@ pub async fn wordpress_ensure_wpcli_post(
         return login_redirect(&http);
     };
     match ensure_wp_cli() {
-        Ok(status) => wp_redirect("/wordpress", Some(&status.detail), None),
-        Err(error) => wp_redirect("/wordpress", None, Some(&error)),
+        Ok(status) => wp_redirect("/wordpress/list", Some(&status.detail), None),
+        Err(error) => wp_redirect("/wordpress/list", None, Some(&error)),
     }
 }
 
@@ -607,7 +639,7 @@ pub async fn wordpress_delete_post(
     };
     let remove_files = parse_bool_flag(&form.remove_files);
     match delete_wordpress(&form.domain, remove_files) {
-        Ok(msg) => wp_redirect("/wordpress", Some(&msg), None),
+        Ok(msg) => wp_redirect("/wordpress/list", Some(&msg), None),
         Err(error) => wp_redirect(
             &format!(
                 "/wordpress/manage?domain={}",

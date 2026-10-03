@@ -117,7 +117,7 @@ pub fn website_manage_main(
     format!(
         r##"<style>{styles}</style>
       <div class="site-manage">
-        <p class="manage-muted"><a href="/websites">Back to Websites</a></p>
+        <p class="manage-muted"><a href="/websites/list">Back to Websites</a></p>
         {ok}
         {err}
         {banner}

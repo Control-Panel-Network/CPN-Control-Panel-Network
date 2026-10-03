@@ -20,6 +20,7 @@ use crate::panel_websites_create_ui::{
     require_domain_in_cloudflare_zones, resolve_create_domain, subdomains_create_main,
     websites_create_main,
 };
+use crate::panel_hub_pages_category_overviews::websites_hub_main;
 use crate::panel_websites_list_ui::{subdomains_main, websites_main};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
@@ -68,7 +69,6 @@ pub async fn websites_page(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    // Deep-link alias: keep list URL clean; send create to its own path.
     if query
         .get("view")
         .map(|v| v.trim().eq_ignore_ascii_case("create"))
@@ -78,6 +78,47 @@ pub async fn websites_page(
             .append_header(("Location", "/websites/create"))
             .finish();
     }
+    if query.contains_key("q")
+        || query.contains_key("notice")
+        || query.contains_key("error")
+        || query
+            .get("view")
+            .map(|v| v.trim().eq_ignore_ascii_case("list"))
+            .unwrap_or(false)
+    {
+        let mut loc = String::from("/websites/list");
+        let mut first = true;
+        for (key, value) in query.iter() {
+            if key == "view" {
+                continue;
+            }
+            loc.push(if first { '?' } else { '&' });
+            first = false;
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&urlencoding_simple(value));
+        }
+        return HttpResponse::SeeOther()
+            .append_header(("Location", loc))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "websites",
+        "Websites",
+        &websites_hub_main(),
+    ))
+}
+
+#[get("/websites/list")]
+pub async fn websites_list_page(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(String::as_str);
@@ -85,7 +126,7 @@ pub async fn websites_page(
     html_ok(panel_shell(
         &user,
         "websites",
-        "Websites",
+        "List Websites",
         &websites_main(&user, notice, error, q),
     ))
 }
@@ -254,7 +295,7 @@ pub async fn websites_create(
                 notice.push_str(" Warnings: ");
                 notice.push_str(&report.warnings.join(" | "));
             }
-            create_redirect("/websites", "notice", &notice)
+            create_redirect("/websites/list", "notice", &notice)
         }
         Err(error) => create_redirect("/websites/create", "error", &error),
     }
@@ -400,7 +441,7 @@ pub async fn websites_delete(
     let list_path = if crate::backups::is_subdomain_site(domain) {
         "/subdomains"
     } else {
-        "/websites"
+        "/websites/list"
     };
     match delete_site_with_dns_report(domain) {
         Ok(dns_note) => HttpResponse::SeeOther()
@@ -442,7 +483,7 @@ pub async fn websites_prefs(
             .append_header((
                 "Location",
                 format!(
-                    "/websites?notice={}",
+                    "/websites/list?notice={}",
                     urlencoding_simple(if show {
                         "Document roots visible"
                     } else {
@@ -454,7 +495,7 @@ pub async fn websites_prefs(
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }
@@ -485,7 +526,7 @@ pub async fn websites_preview_prefs(
             .append_header((
                 "Location",
                 format!(
-                    "/websites?notice={}",
+                    "/websites/list?notice={}",
                     urlencoding_simple(if enabled {
                         "Screenshot service thumbnails enabled"
                     } else {
@@ -497,7 +538,7 @@ pub async fn websites_preview_prefs(
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }
@@ -526,7 +567,7 @@ pub async fn websites_manage(
         Err(err) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&err)),
+                format!("/websites/list?error={}", urlencoding_simple(&err)),
             ))
             .finish(),
     }
@@ -545,7 +586,7 @@ pub async fn websites_suspend(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish();
     }
@@ -574,7 +615,7 @@ pub async fn websites_suspend(
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }
@@ -593,7 +634,7 @@ pub async fn websites_resume(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish();
     }
@@ -618,7 +659,7 @@ pub async fn websites_resume(
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish(),
     }
@@ -644,7 +685,7 @@ pub async fn websites_suspend_message(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish();
     }
@@ -691,7 +732,7 @@ pub async fn websites_suspend_message_restore(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&error)),
+                format!("/websites/list?error={}", urlencoding_simple(&error)),
             ))
             .finish();
     }
@@ -740,7 +781,7 @@ pub async fn websites_reset_placeholder(
             return HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    format!("/websites?error={}", urlencoding_simple(&error)),
+                    format!("/websites/list?error={}", urlencoding_simple(&error)),
                 ))
                 .finish();
         }
@@ -961,11 +1002,35 @@ pub async fn plugins_page(
             .append_header(("Location", loc))
             .finish();
     }
+    if query.get("view").is_none()
+        && !query.contains_key("view-store")
+        && !query.contains_key("notice")
+        && !query.contains_key("error")
+        && !query.contains_key("q")
+        && !query.contains_key("category")
+        && !query.contains_key("status")
+        && !query.contains_key("domain")
+        && !query.contains_key("partial")
+    {
+        return html_ok(panel_shell(
+            &user,
+            "plugins",
+            "Plugins",
+            &crate::panel_hub_pages_category_overviews::plugins_hub_main(),
+        ));
+    }
     let view = if query.contains_key("view-store")
         || query.get("view").map(String::as_str) == Some("store")
         || query.get("view").map(String::as_str) == Some("view-store")
     {
         "store".to_string()
+    } else if query.get("view").map(String::as_str) == Some("overview") {
+        return html_ok(panel_shell(
+            &user,
+            "plugins",
+            "Plugins",
+            &crate::panel_hub_pages_category_overviews::plugins_hub_main(),
+        ));
     } else {
         query
             .get("view")

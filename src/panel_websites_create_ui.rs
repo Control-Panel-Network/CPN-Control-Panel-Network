@@ -248,7 +248,7 @@ pub fn websites_create_main(username: &str, notice: Option<&str>, error: Option<
       <article class="section-card">
         <h2>Create Website</h2>
         <p>Creates a main domain home and document root. Nested sites belong under <a href="/subdomains/create">Create Sub-domain</a>.</p>
-        <p class="muted"><a href="/websites">Back to website list</a> · <a href="/subdomains">Sub-domains</a></p>
+        <p class="muted"><a href="/websites/list">Back to website list</a> · <a href="/subdomains">Sub-domains</a></p>
         <form method="post" action="/websites/create" class="stack-form" style="max-width:560px;">
           {domain_html}
           {owner_html}
@@ -310,7 +310,7 @@ pub fn subdomains_create_main(
       <article class="section-card">
         <h2>Create Sub-domain</h2>
         <p>Creates a nested site under an existing parent (for example <code>ai.newstargeted.com</code> under <code>newstargeted.com</code>).</p>
-        <p class="muted"><a href="/subdomains">Back to sub-domain list</a> · <a href="/websites">Websites</a></p>
+        <p class="muted"><a href="/subdomains">Back to sub-domain list</a> · <a href="/websites/list">Websites</a></p>
         {empty}
         <form method="post" action="/subdomains/create" class="stack-form" style="max-width:560px;">
           <label for="parent">Parent website</label>
