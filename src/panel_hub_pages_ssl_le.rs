@@ -40,7 +40,8 @@ fn policy_blurb() -> String {
   <li><span>Challenge</span><strong>{dns01}</strong></li>
 </ul>
 <p class="muted">Each domain and subdomain has its own SSL provider. None skips issue/renew.
-Custom is upload-only (no auto-renew). Coverage: <strong>Wildcard</strong> (default) issues apex + <code>*.domain</code> via DNS-01 when Cloudflare is configured; <strong>SAN</strong> lists matching panel subdomains on one multi-name cert.</p>"#,
+Custom is upload-only (no auto-renew). Coverage: <strong>Wildcard</strong> (default) issues apex + <code>*.domain</code> via DNS-01 when Cloudflare is configured; <strong>SAN</strong> lists matching panel subdomains on one multi-name cert.
+Origin Let's Encrypt backup installs cert files on this server even when Cloudflare is public TLS, so origin HTTPS still works if Cloudflare proxy stops.</p>"#,
         def = html_escape(defaults.default_provider.label()),
         certbot = html_escape(certbot),
         cf = html_escape(cf),
@@ -101,6 +102,20 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
         } else {
             String::new()
         };
+        let backup_btn = if r.validity == crate::panel_ops_ssl_inspect::SslValidityKind::None
+            && r.provider != "custom"
+        {
+            format!(
+                r#"<form method="post" action="/security/ssl/origin-backup" style="display:inline;margin-left:4px;">
+      <input type="hidden" name="domain" value="{d}">
+      <input type="hidden" name="return" value="/security/ssl">
+      <button type="submit" title="Let's Encrypt on the origin even when Cloudflare is public TLS">Origin backup</button>
+    </form>"#,
+                d = html_escape(&r.domain)
+            )
+        } else {
+            String::new()
+        };
         body.push_str(&format!(
             r#"<tr>
   <td><code>{domain}</code> {badge}</td>
@@ -112,7 +127,7 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
       <select name="provider">{opts}</select>
       <button type="submit">Set</button>
     </form>
-    {issue}
+    {issue_btn}{backup_btn}
     {err}
   </td>
 </tr>"#,
@@ -121,7 +136,6 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
             status = html_escape(&status),
             shared = html_escape(&shared),
             opts = provider_options(&r.provider),
-            issue = issue_btn,
             err = err,
         ));
     }

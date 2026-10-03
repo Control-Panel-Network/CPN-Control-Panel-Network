@@ -26,6 +26,38 @@ pub fn issue_or_renew(domain: &str) -> Result<String, String> {
     }
 }
 
+/// Let's Encrypt on the origin as backup when Cloudflare is public TLS.
+/// Does not treat Cloudflare edge TLS as a local origin certificate.
+pub fn issue_origin_backup(domain: &str) -> Result<String, String> {
+    let domain = normalize_domain(domain)?;
+    let mut site = load_site(&domain)?;
+    if site.ssl.provider == SslProvider::Custom {
+        let has_custom = site
+            .ssl
+            .custom_cert_path
+            .as_ref()
+            .map(|p| Path::new(p).is_file())
+            .unwrap_or(false);
+        if has_custom {
+            return Err(format!(
+                "`{domain}` already has Custom SSL on the origin. Keep that cert, or switch provider before issuing Let's Encrypt."
+            ));
+        }
+        site.ssl.provider = SslProvider::LetsEncrypt;
+    }
+    if site.ssl.provider == SslProvider::None {
+        site.ssl.provider = SslProvider::LetsEncrypt;
+    }
+    site.ssl.install_origin_cert = true;
+    site.ssl.last_error.clear();
+    persist_ssl_ok(&domain, site.ssl.clone())?;
+    let site = load_site(&domain)?;
+    let msg = issue_acme(&site, "letsencrypt")?;
+    Ok(format!(
+        "Origin Let's Encrypt backup for `{domain}`. {msg} If Cloudflare proxy stops, origin HTTPS still uses this certificate."
+    ))
+}
+
 pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String, String> {
     let domain = site.domain.clone();
     let coverage = effective_coverage(&site.ssl);

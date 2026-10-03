@@ -73,11 +73,11 @@ use cpn_installer::panel_hub_routes::{
     security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
     security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
-    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
-    server_dns_defaults_save, server_dns_nameservers, server_dns_nameservers_add,
-    server_dns_nameservers_delete, server_dns_nameservers_save, server_dns_record_add,
-    server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    security_ssl_mail, security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
+    server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
+    server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
+    server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
     server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
     server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
@@ -1394,6 +1394,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_hostname)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
+            .service(security_ssl_origin_backup)
             .service(security_ssl_issue_all)
             .service(security_ssl_renew)
             .service(security_ssl_restore_le)

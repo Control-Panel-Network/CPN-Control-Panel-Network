@@ -1,6 +1,6 @@
 //! Manage dashboard styles and chrome (banner, quick actions, tabs).
 
-use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl, ssl_status_badge_html};
+use crate::panel_ops_ssl_public::{inspect_public_ssl, origin_backup_form, ssl_public_badge_html};
 use crate::sites::SiteRecord;
 use crate::website_preview::{preview_mode_url, public_site_url};
 
@@ -38,6 +38,8 @@ pub fn manage_styles() -> &'static str {
 .site-manage .manage-badge.ssl-invalid,
 .site-manage .manage-badge.ssl-mismatch { background:rgba(240,68,56,.2); color:#fda29b; }
 .site-manage .manage-badge.ssl-none { background:rgba(152,162,179,.16); color:#98a2b3; }
+.site-manage .manage-badge.ssl-cf { background:rgba(59,130,246,.2); color:#93c5fd; }
+.site-manage .manage-ssl.ssl-cf { border-color:rgba(59,130,246,.4); }
 .site-manage .ssl-lock { flex-shrink:0; }
 .site-manage .manage-ssl.ssl-valid { border-color:rgba(18,183,106,.35); }
 .site-manage .manage-ssl.ssl-expiring { border-color:rgba(247,144,9,.4); }
@@ -226,7 +228,7 @@ pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
             )
         })
         .unwrap_or_default();
-    let ssl_badge = ssl_status_badge_html(&inspect_domain_ssl(&site.domain));
+    let ssl_badge = ssl_public_badge_html(&inspect_public_ssl(&site.domain));
     format!(
         r#"<div class="manage-banner">
   <h1>{domain}<span class="manage-badge {badge}">{status}</span>{php}{ssl}</h1>
@@ -311,16 +313,17 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
 }
 
 pub fn ssl_status_card(site: &SiteRecord) -> String {
-    let insight = inspect_domain_ssl(&site.domain);
+    let view = inspect_public_ssl(&site.domain);
+    let insight = &view.origin;
     let live = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let domain_q = html_escape(&site.domain);
     let provider = html_escape(site.ssl.provider.label());
-    let badge = ssl_status_badge_html(&insight);
+    let badge = ssl_public_badge_html(&view);
     let expires = insight
         .expires_display
         .as_deref()
-        .map(|d| format!("Expires: <strong>{}</strong>", html_escape(d)))
-        .unwrap_or_else(|| "Expires: <strong>n/a</strong>".into());
+        .map(|d| format!("Origin expires: <strong>{}</strong>", html_escape(d)))
+        .unwrap_or_else(|| "Origin expires: <strong>n/a</strong>".into());
     let issuer = if insight.issuer.is_empty() {
         String::new()
     } else {
@@ -345,31 +348,26 @@ pub fn ssl_status_card(site: &SiteRecord) -> String {
             )
         )
     };
-    let headline = match insight.kind {
-        SslValidityKind::None => format!(
-            "No SSL certificate detected for {}.",
-            html_escape(&site.domain)
-        ),
-        other => format!(
-            "{} for {}.",
-            html_escape(other.label()),
-            html_escape(&site.domain)
-        ),
-    };
-    let actions = if insight.kind == SslValidityKind::None {
-        format!(
-            r#"<a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Manage SSL</a>"#
-        )
-    } else {
-        format!(
-            r#"<div class="manage-actions-row">
-    <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Renew / Manage SSL</a>
-    <a class="manage-btn" href="{live}" target="_blank" rel="noopener noreferrer">Visit live site</a>
-  </div>"#,
-            domain_q = domain_q,
-            live = html_escape(&live),
-        )
-    };
+    let headline = format!(
+        "{} for {}.",
+        html_escape(view.kind.label()),
+        html_escape(&site.domain)
+    );
+    let mut actions = format!(
+        r#"<div class="manage-actions-row">
+    <a class="manage-btn primary" href="/websites/manage?domain={domain_q}&amp;tab=ssl">Manage SSL</a>
+    <a class="manage-btn" href="{live}" target="_blank" rel="noopener noreferrer">Visit live site</a>"#,
+        domain_q = domain_q,
+        live = html_escape(&live),
+    );
+    if crate::panel_ops_ssl_public::offers_origin_backup(site, &view) {
+        actions.push_str(&origin_backup_form(
+            &site.domain,
+            &format!("/websites/manage?domain={domain_q}&tab=overview"),
+            "Issue origin backup",
+        ));
+    }
+    actions.push_str("</div>");
     format!(
         r#"<div class="manage-ssl ssl-{kind}">
   <div>
@@ -380,14 +378,14 @@ pub fn ssl_status_card(site: &SiteRecord) -> String {
   </div>
   {actions}
 </div>"#,
-        kind = insight.kind.as_str(),
+        kind = view.kind.as_str(),
         badge = badge,
         headline = headline,
         provider = provider,
         expires = expires,
         issuer = issuer,
         sans = sans,
-        detail = html_escape(&insight.detail),
+        detail = html_escape(&view.detail),
         actions = actions,
     )
 }

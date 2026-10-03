@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Website SSL badges**: List and Manage badges are **origin** certificate files (and live origin HTTPS), not Cloudflare orange-cloud edge TLS. **Valid** (with expiry `dd/mm/yyyy`) is local Let's Encrypt or custom certs. **CF SSL** is shown only when Cloudflare proxy is on for that FQDN and origin files are missing. **NONE** / **No SSL** is neither origin cert nor Cloudflare proxy TLS. Tooltips spell this out. The old **INSECURE** label is gone.
+
 - **Hosting package names**: New packages (Create and Duplicate) are stored as `{username}_{customname}` using the package owner username (Create form owner selector; defaults to the signed-in admin). Typing an existing `{owner}_` prefix is not doubled. The reserved **Default** package (`pkg-default`) stays named exactly `Default`. Edit keeps the owner prefix and only changes the custom part. CLI `cpn package create` requires `--owner`.
 
 ### Added
 
+- **Origin Let's Encrypt backup**: SSL tab, websites list, and Manage SSL offer **Issue origin backup** so origin HTTPS still works if Cloudflare proxy stops. POST `/security/ssl/origin-backup`. Does not treat Cloudflare edge TLS as a local Valid origin cert.
 - **Websites and WordPress list split (one sidebar group each)**: Main domains at `/websites` (create at `/websites/create`). Nested sites at `/subdomains` (create at `/subdomains/create`). Manage Domains tab still shows parent/child cards. WordPress uses `/wordpress` vs `/wordpress/subsites` (matching install paths). Sidebar has one **Websites** group (List/Create Website plus List/Create Sub-domain) and one **WordPress** group (sites, install, sub-sites, sub-site install). Hiding Websites or WordPress in ACL also gates the nested list routes.
 - **List search (`q=`)**: `/websites`, `/subdomains`, `/wordpress`, and `/wordpress/subsites` filter by domain (and parent on sub lists), case-insensitive, with a mobile-friendly search row matching other CPN lists.
 - **Delete on split lists**: `/subdomains` cards keep Manage plus POST `/websites/delete` (same as `/websites` and Manage Overview). `/wordpress` and `/wordpress/subsites` site cards include Delete WordPress (POST `/wordpress/delete`). Successful site delete returns to `/websites` or `/subdomains`; WordPress delete returns to `/wordpress` or `/wordpress/subsites`.
