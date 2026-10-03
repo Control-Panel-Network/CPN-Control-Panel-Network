@@ -5,7 +5,7 @@ use crate::installer::AppState;
 use crate::panel_website_bandwidth::bandwidth_for_site;
 use crate::panel_website_metrics_chart::metrics_chart_svg;
 use crate::panel_website_metrics_ring::{WINDOW_SECS, record_host_sample, stats_for};
-use crate::panel_website_resources::format_bytes;
+use crate::panel_storage_fmt::format_bytes_for_user;
 use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use serde::Deserialize;
@@ -62,7 +62,7 @@ pub async fn websites_manage_metrics(
     let mem_vals: Vec<f32> = samples.iter().map(|s| s.mem).collect();
     let (cpu_cur, cpu_avg, cpu_peak) = stats_for(&cpu_vals);
     let (mem_cur, mem_avg, mem_peak) = stats_for(&mem_vals);
-    let bw = bandwidth_for_site(&site);
+    let bw = bandwidth_for_site(&site, &user);
     let cpu_stroke = crate::panel_dashboard::gauge_stroke_for_usage(
         cpu_cur.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
     );
@@ -92,7 +92,7 @@ pub async fn websites_manage_metrics(
             "label": bw.label,
             "hint": bw.hint,
             "bytes": bw.bytes,
-            "bytes_label": bw.bytes.map(format_bytes),
+            "bytes_label": bw.bytes.map(|b| format_bytes_for_user(&user, b)),
             "period": bw.period,
             "source": bw.source,
             "quota_mb": bw.quota_mb,

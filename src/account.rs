@@ -203,10 +203,10 @@ pub fn validate_recovery_email(raw: &str) -> Result<String, String> {
         return Err("Email cannot include control characters".into());
     }
     let Some((local, domain)) = email.split_once('@') else {
-        return Err("Recovery email is not valid".into());
+        return Err("Email is not valid".into());
     };
     if local.is_empty() || domain.is_empty() || !domain.contains('.') {
-        return Err("Recovery email is not valid".into());
+        return Err("Email is not valid".into());
     }
     Ok(email.to_string())
 }

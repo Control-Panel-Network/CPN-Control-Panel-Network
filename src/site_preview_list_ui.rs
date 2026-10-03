@@ -198,7 +198,7 @@ fn ssl_badge_html(domain: &str) -> String {
     )
 }
 
-fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> String {
+fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer: &str) -> String {
     let domain = html_escape(&site.domain);
     let status = if site.enabled { "Active" } else { "Suspended" };
     let wired = if site.vhost_wired {
@@ -207,6 +207,15 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
         "files ready"
     };
     let ssl = ssl_badge_html(&site.domain);
+    let disk_bytes = crate::panel_website_resources::approx_dir_bytes(
+        std::path::Path::new(&site.docroot),
+        4_000,
+    );
+    let disk_label = disk_bytes
+        .map(|b| crate::panel_storage_fmt::format_bytes_for_user(viewer, b))
+        .unwrap_or_else(|| "n/a".into());
+    let bw = crate::panel_website_bandwidth::bandwidth_for_site(site, viewer);
+    let bw_label = html_escape(&bw.label);
     let doc_meta = if show_docroots {
         format!(
             r#"<div><span>Document root</span><strong><details><summary>Show path</summary><code>{doc}</code></details></strong></div>"#,
@@ -237,6 +246,8 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
     <div class="site-meta-grid">
       <div><span>State</span><strong>{status}</strong></div>
       <div><span>Owner</span><strong>{owner}</strong></div>
+      <div><span>Disk</span><strong>{disk}</strong></div>
+      <div><span>Bandwidth</span><strong>{bw}</strong></div>
       {parent_meta}
       {doc_meta}
     </div>
@@ -245,6 +256,8 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
 </article>"#,
         preview = preview_slot(site, auto_capture),
         owner = html_escape(&site.owner),
+        disk = html_escape(&disk_label),
+        bw = bw_label,
         parent_meta = parent_meta,
         doc_meta = doc_meta,
         actions = site_action_buttons(site),
@@ -262,7 +275,7 @@ pub fn site_preview_cards(sites: &[SiteRecord], show_docroots: bool, username: &
     let auto_capture = !minimalist;
     let mut out = String::from(r#"<div class="site-cards">"#);
     for site in sites {
-        out.push_str(&site_card(site, show_docroots, auto_capture));
+        out.push_str(&site_card(site, show_docroots, auto_capture, username));
     }
     out.push_str("</div>");
     if minimalist {

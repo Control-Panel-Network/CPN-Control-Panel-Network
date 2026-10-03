@@ -104,7 +104,8 @@ use cpn_installer::panel_hub_routes::{
     sidebar_acl_get, sidebar_acl_post, site_filemanager_alias, site_files_op,
     site_files_page_route, site_files_upload, system_repair_api_route, system_repair_heal_route,
     system_repair_report_route, system_repair_route, users_create_get, users_create_post,
-    users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
+    users_delete_post, users_list_route, users_manage_fragment_route, users_admin_details_post,
+    users_modify_get, users_password_post, users_plans_page,
     users_profile_details_post, users_profile_password_post, users_profile_route,
     users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
     users_rename_post, users_reseller_route, users_status_post,
@@ -1418,6 +1419,8 @@ async fn main() -> std::io::Result<()> {
             .service(passkey_delete_post)
             .service(passkey_rename_post)
             .service(users_list_route)
+            .service(users_manage_fragment_route)
+            .service(users_admin_details_post)
             .service(users_create_get)
             .service(users_create_post)
             .service(users_modify_get)
