@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Site preview for sub-domains**: `/preview/{domain}/` no longer serves the CPN **Site ready** placeholder when the local docroot is still the default stub. Preview fetches the live public URL (`https://` for internet hostnames) with an 8s timeout, injects a `<base href>` so CSS/images load from origin, and keeps Preview Mode chrome. Thumbnails on `/subdomains` Refresh from that live origin with a local headless browser (no loopback rewrite). Cache is dropped on refresh. Remote screenshot quota / PRO-plan copy is not shown; Microlink runs only when no browser binary exists. System Repair can install `chromium-headless` / Chromium. Discover AlmaLinux `headless_shell` paths and cache under `/var/lib/cpn/site-previews/`.
+
 ## [1.1.1] - 03/10/2026
 
 Patch release after v1.1.0. Hardens Email MTA-STS/BIMI under load, Tachyon Admin About and webmail proxy heal, large restore plan timeouts, System Repair responsiveness, Email Accounts sidebar order, Version Management clarity, and login-service-gate test races.

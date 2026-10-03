@@ -34,7 +34,9 @@ pub fn ssl_material_present(domain: &str) -> bool {
 /// Prefer HTTPS when SSL material is known; otherwise HTTP for labs without certs.
 pub fn public_site_url(domain_raw: &str) -> Result<String, String> {
     let domain = normalize_domain(domain_raw)?;
-    let scheme = if ssl_material_present(&domain) {
+    let scheme = if ssl_material_present(&domain)
+        || crate::website_preview_stub::is_public_internet_host(&domain)
+    {
         "https"
     } else {
         "http"
@@ -380,6 +382,12 @@ mod tests {
     fn public_url_defaults_to_http_without_certs() {
         let url = public_site_url("cpn-lab-test.example").unwrap();
         assert_eq!(url, "http://cpn-lab-test.example");
+    }
+
+    #[test]
+    fn public_url_uses_https_for_internet_hosts() {
+        let url = public_site_url("cmstest.newstargeted.com").unwrap();
+        assert_eq!(url, "https://cmstest.newstargeted.com");
     }
 
     #[test]

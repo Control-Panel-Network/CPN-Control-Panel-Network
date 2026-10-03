@@ -156,6 +156,10 @@ fn sanitize_next(raw: &str, domain: &str) -> String {
         };
         return format!("{trimmed}{joiner}");
     }
+    if trimmed == "/subdomains" || trimmed.starts_with("/subdomains?") {
+        let joiner = if trimmed.contains('?') { "&" } else { "?" };
+        return format!("{trimmed}{joiner}");
+    }
     if trimmed == "/websites" || trimmed.starts_with("/websites?") {
         let joiner = if trimmed.contains('?') { "&" } else { "?" };
         return format!("/websites{joiner}");
@@ -217,9 +221,9 @@ mod tests {
     }
 
     #[test]
-    fn next_allows_manage_for_domain() {
-        let n = sanitize_next("/websites/manage?domain=x.com&tab=overview", "x.com");
-        assert!(n.contains("x.com"));
-        assert!(n.ends_with('&') || n.contains("notice=") || n.ends_with('&'));
+    fn next_allows_subdomains_list() {
+        let n = sanitize_next("/subdomains", "cmstest.newstargeted.com");
+        assert!(n.starts_with("/subdomains"));
+        assert!(n.contains('?'));
     }
 }

@@ -158,6 +158,49 @@ pub async fn preview_content(
             .append_header(("Cache-Control", "private, no-store"))
             .body(page);
     }
+    if crate::website_preview_stub::docroot_is_placeholder(docroot) {
+        let mut relative = tail;
+        let query = http.query_string();
+        if !query.is_empty() {
+            if relative.contains('?') {
+                relative.push('&');
+            } else {
+                relative.push('?');
+            }
+            relative.push_str(query);
+        }
+        let domain = site.domain.clone();
+        let live = crate::website_preview_live::live_public_origin(&domain)
+            .unwrap_or_else(|_| format!("https://{}", domain));
+        let fetched =
+            web::block(move || crate::website_preview_live::fetch_live_origin(&domain, &relative))
+                .await;
+        return match fetched {
+            Ok(Ok(item)) => HttpResponse::Ok()
+                .content_type(item.content_type)
+                .append_header(("X-Content-Type-Options", "nosniff"))
+                .append_header(("Cache-Control", "private, no-store"))
+                .append_header(("X-CPN-Preview-Origin", "live"))
+                .body(item.bytes),
+            Ok(Err(err)) => HttpResponse::Ok()
+                .content_type("text/html; charset=utf-8")
+                .append_header(("Cache-Control", "private, no-store"))
+                .append_header(("X-CPN-Preview-Origin", "live-error"))
+                .body(crate::website_preview_live::live_fetch_error_html(
+                    &site.domain,
+                    &live,
+                    &err,
+                )),
+            Err(_) => HttpResponse::Ok()
+                .content_type("text/html; charset=utf-8")
+                .append_header(("Cache-Control", "private, no-store"))
+                .body(crate::website_preview_live::live_fetch_error_html(
+                    &site.domain,
+                    &live,
+                    "Live preview timed out",
+                )),
+        };
+    }
     let resolved = match resolve_under_docroot(docroot, &tail) {
         Ok(path) => path,
         Err(err) => return HttpResponse::BadRequest().body(err),

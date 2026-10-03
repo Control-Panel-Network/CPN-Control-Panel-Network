@@ -192,6 +192,13 @@ pub fn write_cached_image_typed(
     Ok(())
 }
 
+/// Drop a cached screenshot so Refresh preview always recaptures.
+pub fn invalidate_cached_image(domain_raw: &str) {
+    if let Ok(path) = image_path(domain_raw) {
+        let _ = fs::remove_file(path);
+    }
+}
+
 pub fn record_capture_failure(domain_raw: &str, error: &str, backend: &str) -> Result<(), String> {
     // Keep prior image if any; mark meta so UI can show the error.
     save_meta(
