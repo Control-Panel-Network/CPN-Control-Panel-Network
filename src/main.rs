@@ -81,36 +81,36 @@ use cpn_installer::panel_hub_routes::{
     server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete, server_dns_zones,
     server_dns_zones_create_get, server_dns_zones_create_post, server_dns_zones_delete,
     server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
-    server_docker_images, server_filemanager_alias, server_files_op, server_files_page,
-    server_files_upload, server_litespeed_downgrade, server_litespeed_enterprise_page,
-    server_litespeed_page, server_litespeed_plans_page, server_litespeed_serial,
-    server_litespeed_tier, server_litespeed_upgrade, server_litespeed_webadmin_url,
-    server_log_view_route, server_logs_route, server_openlitespeed_guest,
-    server_openlitespeed_guest_remove, server_openlitespeed_page, server_openlitespeed_password,
-    server_openlitespeed_reset_cpn, server_packages_page, server_page, server_php_configs,
-    server_php_configs_post, server_php_configs_restart, server_php_configs_save_advanced,
-    server_php_configs_save_basic, server_php_configs_set_default,
-    server_php_configs_set_default_get, server_php_extensions, server_php_extensions_install,
-    server_php_extensions_set_default, server_php_extensions_set_default_get,
-    server_php_extensions_uninstall, server_php_overview, server_php_tuning, server_processes_page,
-    server_services_control, server_services_page, settings_connect_page, settings_design_page,
-    settings_error_messages_page, settings_error_messages_preview,
-    settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
-    settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
-    settings_error_messages_save, settings_logs_page, settings_logs_save,
-    settings_markdown_preview, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_preview_site_ready,
-    settings_site_messages_reset, settings_site_messages_restore_site_ready,
-    settings_site_messages_restore_suspend, settings_site_messages_save,
-    settings_system_repair_redirect, settings_version_page, sidebar_acl_delete_post,
-    sidebar_acl_get, sidebar_acl_post, site_filemanager_alias, site_files_op,
-    site_files_page_route, site_files_upload, system_repair_api_route, system_repair_heal_route,
-    system_repair_report_route, system_repair_route, users_admin_details_post, users_create_get,
-    users_create_post, users_delete_post, users_list_route, users_manage_fragment_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
-    users_profile_password_post, users_profile_route, users_profile_totp_begin,
-    users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
-    users_reseller_route, users_status_post,
+    server_docker_images, server_filemanager_alias, server_files_asset_css, server_files_asset_js,
+    server_files_list, server_files_op, server_files_page, server_files_post, server_files_upload,
+    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
+    server_litespeed_plans_page, server_litespeed_serial, server_litespeed_tier,
+    server_litespeed_upgrade, server_litespeed_webadmin_url, server_log_view_route,
+    server_logs_route, server_openlitespeed_guest, server_openlitespeed_guest_remove,
+    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
+    server_packages_page, server_page, server_php_configs, server_php_configs_post,
+    server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
+    server_php_extensions_install, server_php_extensions_set_default,
+    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_overview,
+    server_php_tuning, server_processes_page, server_services_control, server_services_page,
+    settings_connect_page, settings_design_page, settings_error_messages_page,
+    settings_error_messages_preview, settings_error_messages_restore_all,
+    settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
+    settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
+    settings_logs_save, settings_markdown_preview, settings_page, settings_port_page,
+    settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_site_messages_preview_site_ready, settings_site_messages_reset,
+    settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
+    settings_site_messages_save, settings_system_repair_redirect, settings_version_page,
+    sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
+    site_files_list, site_files_op, site_files_page_route, site_files_upload,
+    system_repair_api_route, system_repair_heal_route, system_repair_report_route,
+    system_repair_route, users_admin_details_post, users_create_get, users_create_post,
+    users_delete_post, users_list_route, users_manage_fragment_route, users_modify_get,
+    users_password_post, users_plans_page, users_profile_details_post, users_profile_password_post,
+    users_profile_route, users_profile_totp_begin, users_profile_totp_confirm,
+    users_profile_totp_disable, users_rename_post, users_reseller_route, users_status_post,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -1142,6 +1142,7 @@ async fn main() -> std::io::Result<()> {
             .service(websites_cron_add)
             .service(websites_cron_update)
             .service(websites_cron_delete)
+            .service(site_files_list)
             .service(site_files_page_route)
             .service(site_filemanager_alias)
             .service(site_files_op)
@@ -1320,7 +1321,11 @@ async fn main() -> std::io::Result<()> {
             .service(docker_stacks_route)
             .service(docker_stack_create)
             .service(docker_stack_refresh)
+            .service(server_files_asset_css)
+            .service(server_files_asset_js)
+            .service(server_files_list)
             .service(server_files_page)
+            .service(server_files_post)
             .service(filemanager_alias)
             .service(server_filemanager_alias)
             .service(server_files_op)

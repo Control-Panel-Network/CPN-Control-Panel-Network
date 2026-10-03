@@ -2,7 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    html_blocking, login_redirect, require_panel_user, urlencoding_simple,
+    html_blocking_budget, login_redirect, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_files::site_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, run_op, same_origin_ok, site_redirect};
@@ -17,6 +17,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+const SITE_FILES_PAGE_BUDGET: Duration = Duration::from_secs(15);
 
 async fn render_site_files_page(
     http: &HttpRequest,
@@ -54,7 +57,7 @@ async fn render_site_files_page(
     let edit = query.get("edit").cloned();
     let domain_title = site.domain.clone();
     let user_c = user.clone();
-    html_blocking(move || {
+    html_blocking_budget(SITE_FILES_PAGE_BUDGET, move || {
         let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
             match read_text(ep, &jail) {
                 Ok(body) => (Some(ep.clone()), Some(body), None),

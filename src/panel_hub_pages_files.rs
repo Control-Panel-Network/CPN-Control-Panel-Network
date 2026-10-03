@@ -2,10 +2,11 @@
 
 use crate::panel_brand::brand_mark_svg;
 use crate::panel_hub_http::urlencoding_simple;
-use crate::panel_hub_pages_files_assets::{fm_script, fm_styles};
+use crate::panel_hub_pages_files_assets::{fm_asset_tags, fm_inline_boot};
+use crate::panel_hub_pages_files_tree::build_tree_html;
 use crate::panel_hubs::{feature_shell, notice_block};
 use crate::panel_ops_files::files_csrf_token;
-use crate::panel_ops_path::{MAX_LIST_ENTRIES, list_dir_detailed, resolve_under_jail};
+use crate::panel_ops_path::resolve_under_jail;
 use std::path::Path;
 
 fn html_escape(value: &str) -> String {
@@ -24,6 +25,7 @@ pub struct FilesPageOpts<'a> {
     pub base_url: &'a str,
     pub op_url: &'a str,
     pub upload_url: &'a str,
+    pub list_url: &'a str,
     /// Extra query prefix ending with `&` when non-empty (e.g. `domain=x&`).
     pub query_extra: &'a str,
     pub title: &'a str,
@@ -58,75 +60,32 @@ fn domain_hidden(domain: Option<&str>) -> String {
     }
 }
 
+/// Fast HTML shell: no directory walk. Rows load from the JSON list endpoint.
 pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
     let csrf = files_csrf_token(opts.username);
     let home = opts.jail_root.display().to_string();
     let resolved = resolve_under_jail(opts.path_q, opts.jail_root);
     let body = match resolved {
-        Ok(path) => match list_dir_detailed(&path) {
-            Ok(listing) => {
-                let path_s = path.display().to_string();
-                let parent_href = path
-                    .parent()
-                    .filter(|p| {
-                        resolve_under_jail(&p.display().to_string(), opts.jail_root).is_ok()
-                    })
-                    .map(|p| page_href(opts, &p.display().to_string()))
-                    .unwrap_or_else(|| page_href(opts, &home));
-                let mut rows = String::new();
-                for ent in &listing.entries {
-                    let child = path.join(&ent.basename);
-                    let child_s = child.display().to_string();
-                    let name_cell = if ent.is_dir {
-                        format!(
-                            r#"<a href="{href}">{label}</a>"#,
-                            href = page_href(opts, &child_s),
-                            label = html_escape(&ent.label),
-                        )
-                    } else {
-                        html_escape(&ent.label)
-                    };
-                    let size_kb = if ent.is_dir {
-                        "-".into()
-                    } else {
-                        format!("{:.1}", ent.size as f64 / 1024.0)
-                    };
-                    rows.push_str(&format!(
-                        r#"<tr>
-                      <td><input type="checkbox" class="fm-check" value="{base}"></td>
-                      <td class="fm-name">{name}</td>
-                      <td>{size}</td>
-                      <td>{mtime}</td>
-                      <td><code>{mode}</code></td>
-                    </tr>"#,
-                        base = html_escape(&ent.basename),
-                        name = name_cell,
-                        size = size_kb,
-                        mtime = html_escape(&ent.mtime_label),
-                        mode = html_escape(&ent.mode_label),
-                    ));
-                }
-                let trunc_notice = if listing.truncated {
-                    Some(format!(
-                        "Showing the first {MAX_LIST_ENTRIES} entries. Narrow the path or use Search on the host for full restore-sized directories."
-                    ))
-                } else {
-                    None
-                };
-                let tree = build_tree_html(opts, &home, &path_s);
-                let editor = edit_modal(opts, &csrf, &path_s);
-                let notices = format!(
-                    "{}{}{}",
-                    notice_block("ok", opts.notice),
-                    notice_block("error", opts.error),
-                    notice_block("ok", trunc_notice.as_deref()),
-                );
-                let risk = format!(r#"<p class="muted">{}</p>"#, html_escape(opts.risk_note));
-                format!(
-                    r#"{styles}
+        Ok(path) => {
+            let path_s = path.display().to_string();
+            let parent_href = path
+                .parent()
+                .filter(|p| resolve_under_jail(&p.display().to_string(), opts.jail_root).is_ok())
+                .map(|p| page_href(opts, &p.display().to_string()))
+                .unwrap_or_else(|| page_href(opts, &home));
+            let tree = build_tree_html(opts.base_url, opts.query_extra, &home, &path_s);
+            let editor = edit_modal(opts, &csrf, &path_s);
+            let notices = format!(
+                "{}{}",
+                notice_block("ok", opts.notice),
+                notice_block("error", opts.error),
+            );
+            let risk = format!(r#"<p class="muted">{}</p>"#, html_escape(opts.risk_note));
+            format!(
+                r#"{styles}
 {risk}
 {notices}
-<div class="fm-root" id="fm-root" data-path="{path_esc}" data-csrf="{csrf}" data-base="{base}" data-op="{op}" data-upload="{upload}" data-qs="{qs}">
+<div class="fm-root" id="fm-root" data-path="{path_esc}" data-csrf="{csrf}" data-base="{base}" data-op="{op}" data-upload="{upload}" data-list="{list}" data-qs="{qs}">
   <div class="fm-brandbar">
     <span class="fm-logo">{logo}</span>
     <strong>CPN Panel</strong>
@@ -175,45 +134,41 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
         <input type="hidden" name="archive_name" id="fm-archive-name" value="">
         <input type="hidden" name="names_csv" id="fm-names-csv" value="">
       </form>
+      <p id="fm-list-status" class="muted" hidden></p>
       <div class="table-wrap fm-table-wrap">
         <table class="data-table fm-table">
           <thead><tr><th></th><th>File Name</th><th>Size (KB)</th><th>Last Modified</th><th>Permissions</th></tr></thead>
-          <tbody>{rows}</tbody>
+          <tbody id="fm-rows"><tr><td colspan="5">Loading directory…</td></tr></tbody>
         </table>
       </div>
+      <noscript><p class="panel-notice error">Enable JavaScript to list this directory. File operations stay on {op}.</p></noscript>
     </div>
   </div>
 </div>
 {editor}
-{script}"#,
-                    styles = fm_styles(),
-                    risk = risk,
-                    notices = notices,
-                    path_esc = html_escape(&path_s),
-                    csrf = html_escape(&csrf),
-                    logo = brand_mark_svg(),
-                    brand = html_escape(opts.brand_sub),
-                    base = html_escape(opts.base_url),
-                    op = html_escape(opts.op_url),
-                    upload = html_escape(opts.upload_url),
-                    qs = html_escape(opts.query_extra),
-                    home_href = page_href(opts, &home),
-                    back = parent_href,
-                    refresh = page_href(opts, &path_s),
-                    domain_get = domain_hidden(opts.domain),
-                    domain_post = domain_hidden(opts.domain),
-                    tree = tree,
-                    rows = rows,
-                    editor = editor,
-                    script = fm_script(),
-                )
-            }
-            Err(err) => format!(
-                "{}{}",
-                notice_block("error", Some(&err)),
-                notice_block("ok", opts.notice)
-            ),
-        },
+{boot}"#,
+                styles = fm_asset_tags(),
+                risk = risk,
+                notices = notices,
+                path_esc = html_escape(&path_s),
+                csrf = html_escape(&csrf),
+                logo = brand_mark_svg(),
+                brand = html_escape(opts.brand_sub),
+                base = html_escape(opts.base_url),
+                op = html_escape(opts.op_url),
+                upload = html_escape(opts.upload_url),
+                list = html_escape(opts.list_url),
+                qs = html_escape(opts.query_extra),
+                home_href = page_href(opts, &home),
+                back = parent_href,
+                refresh = page_href(opts, &path_s),
+                domain_get = domain_hidden(opts.domain),
+                domain_post = domain_hidden(opts.domain),
+                tree = tree,
+                editor = editor,
+                boot = fm_inline_boot(),
+            )
+        }
         Err(err) => format!(
             "{}{}",
             notice_block("error", Some(&err)),
@@ -244,6 +199,7 @@ pub fn root_files_page(
         base_url: "/server/files",
         op_url: "/server/files/op",
         upload_url: "/server/files/upload",
+        list_url: "/server/files/list",
         query_extra: "",
         title: "Root File Manager",
         subtitle: "Browse and manage the server filesystem from CPN Panel.",
@@ -290,6 +246,7 @@ pub fn site_files_page(
         base_url: "/websites/files",
         op_url: "/websites/files/op",
         upload_url: "/websites/files/upload",
+        list_url: "/websites/files/list",
         query_extra: &q,
         title: &title,
         subtitle: &subtitle,
@@ -333,53 +290,4 @@ fn edit_modal(opts: &FilesPageOpts<'_>, csrf: &str, cwd: &str) -> String {
         path = html_escape(path),
         body = html_escape(opts.edit_content.unwrap_or("")),
     )
-}
-
-fn build_tree_html(opts: &FilesPageOpts<'_>, jail_home: &str, current: &str) -> String {
-    let roots = match list_dir_detailed(opts.jail_root) {
-        Ok(v) => v.entries,
-        Err(_) => return String::new(),
-    };
-    let mut out = format!(
-        r#"<ul class="fm-tree-list"><li><a href="{home}">{label}</a><ul>"#,
-        home = page_href(opts, jail_home),
-        label = html_escape(jail_home),
-    );
-    for ent in roots.into_iter().filter(|e| e.is_dir).take(80) {
-        let p = opts
-            .jail_root
-            .join(&ent.basename)
-            .display()
-            .to_string()
-            .replace('\\', "/");
-        let open = current == p || current.starts_with(&(p.clone() + "/"));
-        let kids = if open {
-            match list_dir_detailed(Path::new(&p)) {
-                Ok(listing) => {
-                    let mut inner = String::from("<ul>");
-                    for child in listing.entries.into_iter().filter(|e| e.is_dir).take(40) {
-                        let cp = format!("{}/{}", p.trim_end_matches('/'), child.basename);
-                        inner.push_str(&format!(
-                            r#"<li><a href="{href}">{name}</a></li>"#,
-                            href = page_href(opts, &cp),
-                            name = html_escape(&child.basename),
-                        ));
-                    }
-                    inner.push_str("</ul>");
-                    inner
-                }
-                Err(_) => String::new(),
-            }
-        } else {
-            String::new()
-        };
-        out.push_str(&format!(
-            r#"<li><a href="{href}">{name}</a>{kids}</li>"#,
-            href = page_href(opts, &p),
-            name = html_escape(&ent.basename),
-            kids = kids,
-        ));
-    }
-    out.push_str("</ul></li></ul>");
-    out
 }
