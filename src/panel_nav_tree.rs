@@ -339,6 +339,29 @@ mod tests {
     }
 
     #[test]
+    fn websites_group_nests_subdomains_wordpress_nests_subsites() {
+        let html = nav_links_html("websites", "admin");
+        assert!(html.contains("data-nav-group=\"websites\""));
+        assert!(!html.contains("data-nav-group=\"subdomains\""));
+        assert!(!html.contains("data-nav-group=\"wordpress-subsites\""));
+        assert!(html.contains("List Websites"));
+        assert!(html.contains("Create Website"));
+        assert!(html.contains("List Sub-domains"));
+        assert!(html.contains("Create Sub-domain"));
+        assert!(html.contains("href=\"/subdomains\""));
+        assert!(html.contains("href=\"/subdomains/create\""));
+        let wp = nav_links_html("wordpress", "admin");
+        assert!(wp.contains("data-nav-group=\"wordpress\""));
+        assert!(!wp.contains("data-nav-group=\"wordpress-subsites\""));
+        assert!(wp.contains("WordPress Sites"));
+        assert!(wp.contains("Install WordPress"));
+        assert!(wp.contains("WordPress Sub-sites"));
+        assert!(wp.contains("Install WordPress Sub-site"));
+        assert!(wp.contains("href=\"/wordpress/subsites\""));
+        assert!(!wp.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
     fn admin_sees_create_user_and_acl_links() {
         use crate::account::{
             PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,

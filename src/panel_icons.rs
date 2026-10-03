@@ -133,8 +133,12 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/packages", "package", IconTone::Blue),
         ("/plugins", "puzzle", IconTone::Violet),
         ("/apps", "boxes", IconTone::Cyan),
+        ("/wordpress/subsites/install", "rocket", IconTone::Green),
+        ("/wordpress/subsites", "package", IconTone::Violet),
         ("/wordpress/install", "rocket", IconTone::Green),
         ("/wordpress", "package", IconTone::Violet),
+        ("/subdomains/create", "plus", IconTone::Green),
+        ("/subdomains", "globe", IconTone::Cyan),
         ("/websites", "globe", IconTone::Blue),
         ("/dashboard", "layout-dashboard", IconTone::Blue),
     ];
@@ -163,7 +167,9 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
     match id {
         "dashboard" => ("layout-dashboard", IconTone::Blue),
         "websites" => ("globe", IconTone::Blue),
+        "subdomains" => ("globe", IconTone::Cyan),
         "wordpress" => ("package", IconTone::Violet),
+        "wordpress-subsites" => ("package", IconTone::Violet),
         "email" => ("mail", IconTone::Cyan),
         "databases" | "mariadb" => ("database", IconTone::Violet),
         "ftp" => ("folder", IconTone::Amber),

@@ -1,8 +1,8 @@
 //! CLI helpers for `cpn package …`.
 
 use crate::packages::{
-    PackageInput, assign_package, create_package, delete_package, ensure_default_package,
-    format_limit_display, get_package, list_packages, package_for_account, update_package,
+    PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
+    format_limit_display, get_package, list_packages, package_for_account, update_package_for,
 };
 use clap::Subcommand;
 
@@ -14,6 +14,9 @@ pub enum PackageCommands {
     Create {
         #[arg(long)]
         name: String,
+        /// Account username used as the `{username}_` package name prefix
+        #[arg(long)]
+        owner: String,
         #[arg(long, default_value_t = 1000)]
         disk_mb: i64,
         #[arg(long, default_value_t = 1000)]
@@ -110,6 +113,7 @@ pub fn run(
         }
         PackageCommands::Create {
             name,
+            owner,
             disk_mb,
             bandwidth_mb,
             domains,
@@ -120,18 +124,21 @@ pub fn run(
             notes,
         } => {
             require_root()?;
-            let pkg = create_package(PackageInput {
-                name,
-                disk_mb,
-                bandwidth_mb,
-                domains,
-                emails,
-                databases,
-                ftp_accounts,
-                fqdn_enabled,
-                notes,
-                sidebar_hidden_nav_ids: Vec::new(),
-            })?;
+            let pkg = create_package_for(
+                &owner,
+                PackageInput {
+                    name,
+                    disk_mb,
+                    bandwidth_mb,
+                    domains,
+                    emails,
+                    databases,
+                    ftp_accounts,
+                    fqdn_enabled,
+                    notes,
+                    sidebar_hidden_nav_ids: Vec::new(),
+                },
+            )?;
             println!("created package {} id={}", pkg.name, pkg.id);
             Ok(())
         }
@@ -149,8 +156,11 @@ pub fn run(
         } => {
             require_root()?;
             let existing = get_package(&id)?;
-            let pkg = update_package(
+            let owner_fallback = crate::packages::package_owner_from_name(&existing.name)
+                .unwrap_or_else(|| "root".into());
+            let pkg = update_package_for(
                 &id,
+                &owner_fallback,
                 PackageInput {
                     name,
                     disk_mb,

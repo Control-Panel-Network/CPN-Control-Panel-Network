@@ -117,6 +117,12 @@ fn has_control_chars(value: &str) -> bool {
     value.chars().any(|ch| ch.is_control())
 }
 
+pub use crate::package_naming::{
+    normalize_owned_package_name, package_custom_name_for_edit, package_owner_from_name,
+    sanitize_package_custom_name,
+};
+pub use crate::package_owned::{create_package_for, update_package_for};
+
 fn write_json(path: &Path, raw: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Could not create data dir: {e}"))?;
@@ -342,6 +348,9 @@ fn allocate_package_id(file: &PackagesFile) -> String {
 
 pub fn create_package(input: PackageInput) -> Result<Package, String> {
     let name = validate_input(&input)?;
+    if names_equal(&name, "Default") {
+        return Err("Package name `Default` is reserved".into());
+    }
     let mut file = load_packages_file();
     if file.packages.iter().any(|p| names_equal(&p.name, &name)) {
         return Err(format!("Package `{name}` already exists"));
@@ -381,7 +390,17 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     let Some(pkg) = file.packages.iter_mut().find(|p| p.id == id) else {
         return Err(format!("Package `{id}` not found"));
     };
-    pkg.name = name;
+    // Default package identity is fixed; never allow renaming away from Default.
+    if pkg.id == DEFAULT_PACKAGE_ID {
+        if !names_equal(&name, "Default") {
+            return Err("The Default package name cannot be changed".into());
+        }
+        pkg.name = "Default".into();
+    } else if names_equal(&name, "Default") {
+        return Err("Package name `Default` is reserved".into());
+    } else {
+        pkg.name = name;
+    }
     pkg.disk_mb = input.disk_mb;
     pkg.bandwidth_mb = input.bandwidth_mb;
     pkg.domains = input.domains;
@@ -477,54 +496,8 @@ pub fn format_limit_display(limit: i64, unit: &str) -> String {
         format!("{limit} {unit}")
     }
 }
-
 pub use crate::package_quota::{require_quota, require_site_create_allowed, usage_for_account};
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::account::with_test_data_dir;
-    use crate::account_mgmt::create_account;
-    use crate::model::PasswordPolicy;
-
-    fn policy() -> PasswordPolicy {
-        PasswordPolicy {
-            min_length: 8,
-            require_special: false,
-            require_uppercase: true,
-            require_number: true,
-        }
-    }
-
-    #[test]
-    fn delete_blocked_when_assigned() {
-        with_test_data_dir(|| {
-            create_account(
-                "ops",
-                Some("OpsPass1!"),
-                false,
-                "ops@example.com",
-                policy(),
-                "en",
-            )
-            .unwrap();
-            let pkg = create_package(PackageInput {
-                name: "Reseller".into(),
-                disk_mb: 500,
-                bandwidth_mb: 500,
-                domains: 2,
-                emails: 10,
-                databases: 2,
-                ftp_accounts: 2,
-                fqdn_enabled: true,
-                notes: String::new(),
-                sidebar_hidden_nav_ids: Vec::new(),
-            })
-            .unwrap();
-            assign_package("ops", &pkg.id).unwrap();
-            assert!(delete_package(&pkg.id).is_err());
-            assign_package("ops", DEFAULT_PACKAGE_ID).unwrap();
-            delete_package(&pkg.id).unwrap();
-        });
-    }
-}
+#[path = "packages_tests.rs"]
+mod tests;
