@@ -127,7 +127,11 @@ pub async fn server_files_list(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return json_list_fail(403, "Only the panel admin can use Root File Manager.", false);
+        return json_list_fail(
+            403,
+            "Only the panel admin can use Root File Manager.",
+            false,
+        );
     }
     let path = query
         .get("path")
