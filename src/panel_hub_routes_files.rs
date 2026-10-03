@@ -2,19 +2,25 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_blocking, html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    html_blocking_budget, html_ok, login_redirect, require_panel_user,
+};
 use crate::panel_hub_pages_files::root_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, root_redirect, run_op, same_origin_ok};
 use crate::panel_ops_files::{
     MAX_UPLOAD_BYTES, check_rate_limit, read_text, upload_bytes, verify_files_csrf,
 };
 use crate::panel_pages::panel_shell;
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, get, post, route, web};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Files page is a shell only; keep well below Actix `client_request_timeout` (30s).
+const FILES_PAGE_BUDGET: Duration = Duration::from_secs(15);
 
 fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Box<HttpResponse>> {
     let Some(user) = require_panel_user(state, http) else {
@@ -47,7 +53,7 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
     let error = query.get("error").cloned();
     let edit = query.get("edit").cloned();
     let user = user.to_string();
-    html_blocking(move || {
+    html_blocking_budget(FILES_PAGE_BUDGET, move || {
         let jail = Path::new("/");
         let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
             match read_text(ep, jail) {
@@ -75,7 +81,7 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
     .await
 }
 
-#[get("/server/files")]
+#[route("/server/files", method = "GET", method = "HEAD")]
 pub async fn server_files_page(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
@@ -101,6 +107,18 @@ pub async fn filemanager_alias(
 
 #[get("/server/filemanager")]
 pub async fn server_filemanager_alias(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<HashMap<String, String>>,
+) -> HttpResponse {
+    match require_admin_user(&state, &http) {
+        Ok(user) => render_root_files(&user, &query).await,
+        Err(resp) => *resp,
+    }
+}
+
+#[post("/server/files")]
+pub async fn server_files_post(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
     query: web::Query<HashMap<String, String>>,

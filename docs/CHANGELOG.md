@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Root File Manager (`/server/files`)**: The GET page no longer walks `/home` (or other restore-sized trees) on first load. Listing is a bounded JSON call (`/server/files/list`) with a time and entry cap. Slow listings return **503** JSON/UI instead of a hung connection that the browser reports as **408**. File Manager CSS/JS are versioned (`?v=panel-version-fm1`) so upgrades cache-bust without hashed asset filenames that 404. POST `/server/files/op` and `/server/files/upload` stay compatible for open tabs after update.
+
 ## [1.1.2] - 03/10/2026
 
 Patch release after v1.1.1. Ships Website/WordPress list splits, origin vs Cloudflare SSL badges, live Site preview for stub sub-domains, storage unit scaling, sidebar hub overviews first, WordPress install/WP-CLI fixes, and origin Let's Encrypt backup with auto retry.
