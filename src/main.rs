@@ -137,6 +137,7 @@ use cpn_installer::panel_routes::{
     websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
     websites_suspend_message, websites_suspend_message_restore,
 };
+use cpn_installer::panel_site_apps_routes::{websites_apps_get, websites_apps_post};
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
 };
@@ -1190,6 +1191,8 @@ async fn main() -> std::io::Result<()> {
             .service(websites_manage_logs)
             .service(websites_git_post)
             .service(websites_clone_post)
+            .service(websites_apps_get)
+            .service(websites_apps_post)
             .service(websites_tools_csrf_get)
             .route(
                 "/api/websites/terminal/ws",

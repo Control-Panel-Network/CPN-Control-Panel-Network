@@ -517,12 +517,35 @@ pub async fn websites_manage(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     match require_manage_site(&user, domain, SitePerm::Enable) {
-        Ok(site) => html_ok(panel_shell(
-            &user,
-            "websites",
-            &format!("Manage {}", site.domain),
-            &website_manage_main(&site, &user, tab, notice, error),
-        )),
+        Ok(site) => {
+            let tab_l = tab.unwrap_or("").trim().to_ascii_lowercase();
+            if tab_l == "apps" || tab_l == "applications" {
+                let user_owned = user.clone();
+                let notice_owned = notice.map(str::to_string);
+                let error_owned = error.map(str::to_string);
+                return crate::panel_hub_http::html_blocking(move || {
+                    panel_shell(
+                        &user_owned,
+                        "websites",
+                        &format!("Manage {}", site.domain),
+                        &website_manage_main(
+                            &site,
+                            &user_owned,
+                            Some("apps"),
+                            notice_owned.as_deref(),
+                            error_owned.as_deref(),
+                        ),
+                    )
+                })
+                .await;
+            }
+            html_ok(panel_shell(
+                &user,
+                "websites",
+                &format!("Manage {}", site.domain),
+                &website_manage_main(&site, &user, tab, notice, error),
+            ))
+        }
         Err(err) => HttpResponse::SeeOther()
             .append_header((
                 "Location",

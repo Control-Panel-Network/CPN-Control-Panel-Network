@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
+
 ## [1.1.2] - 03/10/2026
 
 Patch release after v1.1.1. Ships Website/WordPress list splits, origin vs Cloudflare SSL badges, live Site preview for stub sub-domains, storage unit scaling, sidebar hub overviews first, WordPress install/WP-CLI fixes, and origin Let's Encrypt backup with auto retry.
