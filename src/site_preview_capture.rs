@@ -4,16 +4,20 @@
 //! (and optional LAN IPs) with Chromium `--host-resolver-rules` so local vhosts
 //! still render when the panel can reach them.
 //!
-//! Local capture stays primary. When no browser binary exists, or every local
-//! URL fails, public domains fall back to the Microlink screenshot API (see
-//! `site_preview_microlink`) so the Websites list still shows a real thumbnail.
+//! Local capture stays primary. Refresh always recaptures. Microlink is used
+//! only when no browser binary exists. Rate-limit / upsell copy is never shown.
 
-use crate::site_preview_microlink::{capture_via_microlink, remote_preview_ready};
-use crate::site_preview_thumb::{
-    PREVIEW_MAX_BYTES, image_path, record_capture_failure, write_cached_image,
+use crate::site_preview_microlink::{
+    capture_via_microlink, operator_remote_error, remote_preview_ready,
 };
-use crate::sites::normalize_domain;
-use crate::website_preview::{public_site_url, ssl_material_present};
+use crate::site_preview_thumb::{
+    PREVIEW_MAX_BYTES, image_path, invalidate_cached_image, record_capture_failure,
+    write_cached_image,
+};
+use crate::sites::{load_site, normalize_domain};
+use crate::website_preview::ssl_material_present;
+use crate::website_preview_live::live_public_origin;
+use crate::website_preview_stub::docroot_is_placeholder;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -24,18 +28,19 @@ const CAPTURE_TIMEOUT: Duration = Duration::from_secs(25);
 /// Run a capture for a registry domain. Overwrites cache on success.
 pub fn capture_site_preview(domain_raw: &str) -> Result<PathBuf, String> {
     let domain = normalize_domain(domain_raw)?;
+    invalidate_cached_image(&domain);
+    let live_origin = uses_live_origin(&domain);
     let backends = discover_backends();
     if backends.is_empty() {
-        let local_err =
-            "No headless browser found (install chromium or google-chrome for Site preview)";
-        return finish_with_remote(&domain, local_err, "none");
+        let local_err = "No headless browser found. Install Chromium (System Repair: Site preview browser) and try Refresh preview again.";
+        return finish_without_browser(&domain, local_err);
     }
 
-    let urls = candidate_urls(&domain);
+    let urls = candidate_urls(&domain, live_origin);
     let mut last_err = String::from("Capture failed");
     for backend in &backends {
         for url in &urls {
-            match run_capture(backend, &domain, url) {
+            match run_capture(backend, &domain, url, live_origin) {
                 Ok(path) => return Ok(path),
                 Err(err) => {
                     last_err = format!("{} via {}: {err}", backend.label, url);
@@ -43,27 +48,31 @@ pub fn capture_site_preview(domain_raw: &str) -> Result<PathBuf, String> {
             }
         }
     }
-    finish_with_remote(&domain, &last_err, "failed")
+    let _ = record_capture_failure(&domain, &last_err, "failed");
+    Err(last_err)
 }
 
-/// Try the remote screenshot service, then record the combined failure if it
-/// is unavailable for this domain.
-fn finish_with_remote(
-    domain: &str,
-    local_err: &str,
-    backend_label: &str,
-) -> Result<PathBuf, String> {
+fn uses_live_origin(domain: &str) -> bool {
+    match load_site(domain) {
+        Ok(site) => docroot_is_placeholder(std::path::Path::new(&site.docroot)),
+        Err(_) => crate::website_preview_stub::is_public_internet_host(domain),
+    }
+}
+
+/// When no local browser exists, try remote once. Never surface vendor upsell copy.
+fn finish_without_browser(domain: &str, local_err: &str) -> Result<PathBuf, String> {
     if remote_preview_ready(domain) {
         match capture_via_microlink(domain, true) {
             Ok(path) => return Ok(path),
             Err(remote_err) => {
-                let combined = format!("{local_err}; remote screenshot: {remote_err}");
-                let _ = record_capture_failure(domain, &combined, backend_label);
+                let remote = operator_remote_error(&remote_err);
+                let combined = format!("{local_err} {remote}");
+                let _ = record_capture_failure(domain, &combined, "none");
                 return Err(combined);
             }
         }
     }
-    let _ = record_capture_failure(domain, local_err, backend_label);
+    let _ = record_capture_failure(domain, local_err, "none");
     Err(local_err.to_string())
 }
 
@@ -129,7 +138,22 @@ fn almalinux_headless_paths() -> &'static [&'static str] {
         "/usr/lib64/chromium-browser/headless_shell",
         "/usr/lib/chromium-browser/headless_shell",
         "/usr/lib64/chromium-browser/chromium-headless-shell",
+        "/usr/lib64/chromium-headless/headless_shell",
+        "/usr/lib/chromium-headless/headless_shell",
+        "/usr/lib64/chromium-headless-shell/headless_shell",
+        "/opt/google/chrome/chrome",
+        "/opt/google/chrome/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium-headless-shell",
     ]
+}
+
+/// First discovered browser binary, if any.
+pub fn discovered_browser_path() -> Option<PathBuf> {
+    discover_backends()
+        .into_iter()
+        .find(|b| matches!(b.kind, BackendKind::Chromium))
+        .map(|b| b.bin)
 }
 
 fn find_bin(name: &str) -> Option<PathBuf> {
@@ -169,19 +193,29 @@ fn which_cmd(name: &str) -> Option<PathBuf> {
     if p.is_file() { Some(p) } else { None }
 }
 
-fn candidate_urls(domain: &str) -> Vec<String> {
+fn candidate_urls(domain: &str, live_origin: bool) -> Vec<String> {
     let mut urls = Vec::new();
-    if let Ok(public) = public_site_url(domain) {
-        urls.push(format!("{}/", public.trim_end_matches('/')));
+    if live_origin {
+        if let Ok(origin) = live_public_origin(domain) {
+            urls.push(format!("{}/", origin.trim_end_matches('/')));
+        }
+        urls.push(format!("https://{domain}/"));
+        urls.push(format!("http://{domain}/"));
+        urls.sort();
+        urls.dedup();
+        urls.sort_by(|a, b| {
+            let a_https = a.starts_with("https://") as i8;
+            let b_https = b.starts_with("https://") as i8;
+            b_https.cmp(&a_https)
+        });
+        return urls;
     }
-    // Prefer mapped local HTTP for labs without public DNS / TLS.
     urls.push(format!("http://{domain}/"));
     if ssl_material_present(domain) {
         urls.push(format!("https://{domain}/"));
     }
     urls.sort();
     urls.dedup();
-    // Put http local first when no certs (common in VBox labs).
     if !ssl_material_present(domain) {
         urls.sort_by(|a, b| {
             let a_http = a.starts_with("http://") as i8;
@@ -228,13 +262,18 @@ fn local_listen_hints() -> Vec<String> {
         .collect()
 }
 
-fn run_capture(backend: &CaptureBackend, domain: &str, url: &str) -> Result<PathBuf, String> {
+fn run_capture(
+    backend: &CaptureBackend,
+    domain: &str,
+    url: &str,
+    live_origin: bool,
+) -> Result<PathBuf, String> {
     let dir = crate::site_preview_thumb::ensure_preview_dir()?;
     let out = dir.join(format!("{domain}.capture.png"));
     let _ = fs::remove_file(&out);
 
     match backend.kind {
-        BackendKind::Chromium => run_chromium(&backend.bin, domain, url, &out)?,
+        BackendKind::Chromium => run_chromium(&backend.bin, domain, url, &out, live_origin)?,
         BackendKind::WkHtml => run_wkhtml(&backend.bin, url, &out)?,
     }
 
@@ -251,32 +290,48 @@ fn run_capture(backend: &CaptureBackend, domain: &str, url: &str) -> Result<Path
     image_path(domain)
 }
 
-fn run_chromium(bin: &Path, domain: &str, url: &str, out: &Path) -> Result<(), String> {
-    let rules = host_resolver_rules(domain);
-    let mut cmd = Command::new(bin);
-    cmd.args([
-        "--headless=new",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-dev-shm-usage",
-        "--hide-scrollbars",
-        "--window-size=1280,800",
-        "--virtual-time-budget=10000",
-        "--ignore-certificate-errors",
-        "--allow-insecure-localhost",
-    ]);
-    // Root / service accounts often need this on AlmaLinux.
-    cmd.arg("--no-sandbox");
-    cmd.arg(format!("--host-resolver-rules={rules}"));
-    cmd.arg(format!("--screenshot={}", out.display()));
-    cmd.arg(url);
-    cmd.stdout(Stdio::null()).stderr(Stdio::piped());
-    run_with_timeout(&mut cmd, CAPTURE_TIMEOUT)?;
-    if !out.is_file() {
-        return Err("Chromium did not write a screenshot".into());
+fn run_chromium(
+    bin: &Path,
+    domain: &str,
+    url: &str,
+    out: &Path,
+    live_origin: bool,
+) -> Result<(), String> {
+    let mut last = String::from("Chromium capture failed");
+    for headless in ["--headless=new", "--headless"] {
+        let _ = fs::remove_file(out);
+        let mut cmd = Command::new(bin);
+        cmd.args([
+            headless,
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-dev-shm-usage",
+            "--hide-scrollbars",
+            "--window-size=1280,800",
+            "--virtual-time-budget=10000",
+            "--ignore-certificate-errors",
+            "--allow-insecure-localhost",
+            "--no-sandbox",
+            "--disable-notifications",
+            "--deny-permission-prompts",
+        ]);
+        if !live_origin {
+            cmd.arg(format!(
+                "--host-resolver-rules={}",
+                host_resolver_rules(domain)
+            ));
+        }
+        cmd.arg(format!("--screenshot={}", out.display()));
+        cmd.arg(url);
+        cmd.stdout(Stdio::null()).stderr(Stdio::piped());
+        match run_with_timeout(&mut cmd, CAPTURE_TIMEOUT) {
+            Ok(()) if out.is_file() => return Ok(()),
+            Ok(()) => last = "Chromium did not write a screenshot".into(),
+            Err(err) => last = err,
+        }
     }
-    Ok(())
+    Err(last)
 }
 
 fn run_wkhtml(bin: &Path, url: &str, out: &Path) -> Result<(), String> {
@@ -339,11 +394,21 @@ mod tests {
 
     #[test]
     fn candidate_urls_include_http() {
-        let urls = candidate_urls("lab-preview.example");
+        let urls = candidate_urls("lab-preview.example", false);
         assert!(
             urls.iter()
                 .any(|u| u.starts_with("http://lab-preview.example"))
         );
+    }
+
+    #[test]
+    fn live_origin_prefers_https() {
+        let urls = candidate_urls("cmstest.newstargeted.com", true);
+        assert!(
+            urls.iter()
+                .any(|u| u.starts_with("https://cmstest.newstargeted.com"))
+        );
+        assert_eq!(urls[0], "https://cmstest.newstargeted.com/");
     }
 
     #[test]

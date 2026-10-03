@@ -12,10 +12,12 @@ mod email;
 mod host;
 mod host_apps;
 mod panel_core;
+mod site_preview;
 
 pub use email::EMAIL_HEAL_IDS;
 pub use host::HOST_HEAL_IDS;
 pub use panel_core::CORE_HEAL_IDS;
+pub use site_preview::SITE_PREVIEW_HEAL_IDS;
 
 /// Business-facing product name (panel UI, report headers).
 pub const PRODUCT_NAME: &str = "System Repair";
@@ -234,6 +236,7 @@ pub fn run_checks_cached(filter_id: Option<&str>, force_refresh: bool) -> (Vec<R
     checks.extend(collect_group("email", email::collect));
     checks.extend(collect_group("host", host::collect));
     checks.extend(collect_group("apps", host_apps::collect));
+    checks.extend(collect_group("preview", site_preview::collect));
 
     if let Some(id) = filter {
         checks.retain(|c| c.id == id || c.heal_id.as_deref() == Some(id) || c.category == id);
@@ -251,6 +254,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
         .iter()
         .chain(EMAIL_HEAL_IDS.iter())
         .chain(HOST_HEAL_IDS.iter())
+        .chain(SITE_PREVIEW_HEAL_IDS.iter())
     {
         if let Some(w) = want
             && w != *id
@@ -266,6 +270,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
             "firewall" => host::heal_firewall(),
             "phpmyadmin" => host::heal_phpmyadmin(),
             "docker.engine" => host::heal_docker_engine(),
+            "site.preview.chromium" => site_preview::heal_chromium(),
             other => HealResult {
                 heal_id: other.into(),
                 ok: false,
