@@ -69,6 +69,8 @@ pub struct ProfileDetailsForm {
     recovery_email: String,
     #[serde(default)]
     language: String,
+    #[serde(default)]
+    storage_unit: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -183,6 +185,10 @@ pub async fn users_profile_details_post(
     } else {
         user.clone()
     };
+    let unit = crate::panel_user_prefs::StorageUnitPref::parse(&form.storage_unit);
+    if let Err(error) = crate::panel_user_prefs::save_user_storage_unit(&session_user, unit) {
+        return redirect_notice(MODIFY_ACCOUNT, None, Some(&error));
+    }
     let secret = session_secret(Some(&state.token));
     let token = create_session_token(&session_user, &secret);
     let secure = request_secure(&http);

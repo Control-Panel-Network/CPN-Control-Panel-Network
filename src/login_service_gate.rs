@@ -25,6 +25,17 @@ const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(3);
 
 static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::new(None);
 
+/// Serializes tests that mutate `CPN_LOGIN_SERVICE_GATE` (process-wide env).
+#[cfg(test)]
+pub(crate) static LOGIN_SERVICE_GATE_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn lock_login_service_gate_env() -> std::sync::MutexGuard<'static, ()> {
+    LOGIN_SERVICE_GATE_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct LoginServiceStatus {
     /// When false, password and passkey sign-in must be rejected server-side.
@@ -308,6 +319,7 @@ mod tests {
 
     #[test]
     fn env_can_disable_gate() {
+        let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
         unsafe {
             std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
@@ -323,6 +335,7 @@ mod tests {
 
     #[test]
     fn env_disable_bypasses_stale_not_ready_cache() {
+        let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
         if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
             *guard = Some((
@@ -365,6 +378,7 @@ mod tests {
 
     #[test]
     fn cache_reuses_recent_evaluation() {
+        let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
         unsafe {
             std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");

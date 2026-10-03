@@ -7,25 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 03/10/2026
+
+Patch release after v1.1.1. Ships Website/WordPress list splits, origin vs Cloudflare SSL badges, live Site preview for stub sub-domains, storage unit scaling, sidebar hub overviews first, WordPress install/WP-CLI fixes, and origin Let's Encrypt backup with auto retry.
+
 ### Changed
 
+- **Sidebar hub overview first**: Every expandable category (Settings, Email, Websites, WordPress, Users, Security, Databases, FTP, Plugins, Docker, Logs, LiteSpeed, and the rest) now lists `{Category} overview` as the first child under the parent, linking to the hub URL. Feature children stay after that (Email Accounts, List Websites, Version Management, and so on). This reverses Email overview-after-children.
+
+- **Website SSL badges**: **Valid** remains origin certificate files on this host with a real expiry (`dd/mm/yyyy`). **CF SSL** is shown when origin files are missing and either Cloudflare orange-cloud proxy is on for the FQDN or the site SSL provider is Cloudflare CA (issuance setting, not a Valid origin cert). **NONE** is neither origin files nor those Cloudflare signals. Lab NAT grey-cloud records stay honest: n/a expiry still means no origin files. List and SSL tab copy is shorter. The old **INSECURE** label is gone.
+
 - **Hosting package names**: New packages (Create and Duplicate) are stored as `{username}_{customname}` using the package owner username (Create form owner selector; defaults to the signed-in admin). Typing an existing `{owner}_` prefix is not doubled. The reserved **Default** package (`pkg-default`) stays named exactly `Default`. Edit keeps the owner prefix and only changes the custom part. CLI `cpn package create` requires `--owner`.
-- **Website and Sub-domain SSL badges**: List cards on `/websites` and `/subdomains` show **Secure** when the hostname has a valid certificate (including expiring soon) and **Insecure** when there is no cert, or the cert is expired, invalid, or a hostname mismatch. The tooltip includes expiry as `dd/mm/yyyy` when the SSL helper already parsed it.
 
 ### Added
 
+- **Origin Let's Encrypt backup**: SSL tab, websites list, and Manage SSL offer **Issue origin backup** so origin HTTPS still works if Cloudflare proxy stops. POST `/security/ssl/origin-backup`. Does not treat Cloudflare edge TLS as a local Valid origin cert. Auto retry (bounded background pass on `/websites` and `/subdomains` load, plus a 15 minute loop) issues origin Let's Encrypt when origin files are missing or Cloudflare/chosen SSL is not working: heals certbot if missing, prefers HTTP-01 for apex/SAN, uses DNS-01 only for wildcard when a Cloudflare token is present, persists the last error, and backs off so ACME is not spammed.
+
+- **Website list cards**: Disk is this site's home/docroot used storage of the package disk allowance (`Used 19.3 GB of 488.3 GB`). Package bandwidth uses the same wording (never a bare `Quota` without used). Units never print `B` (KB floor). Cards also show Package, PHP, and IP when already stored.
 - **WordPress install plugin ZIP upload**: `/wordpress/install` accepts plugin ZIP files (base64 staging under `/var/tmp/cpn-wp-plugin-uploads`) in addition to slug/URL sources. Full site ZIP restore stays under Backups / Restore.
 - **WP-CLI public phar for site-user installs**: Ensure WP-CLI publishes a world-readable copy at `/usr/local/lib/cpn/wp-cli.phar` so site-user WP-CLI runs can open the phar when `/var/lib/cpn` is mode 700.
-
-
 - **Websites and WordPress list split (one sidebar group each)**: Main domains at `/websites` (create at `/websites/create`). Nested sites at `/subdomains` (create at `/subdomains/create`). Manage Domains tab still shows parent/child cards. WordPress uses `/wordpress` vs `/wordpress/subsites` (matching install paths). Sidebar has one **Websites** group (List/Create Website plus List/Create Sub-domain) and one **WordPress** group (sites, install, sub-sites, sub-site install). Hiding Websites or WordPress in ACL also gates the nested list routes.
 - **List search (`q=`)**: `/websites`, `/subdomains`, `/wordpress`, and `/wordpress/subsites` filter by domain (and parent on sub lists), case-insensitive, with a mobile-friendly search row matching other CPN lists.
 - **Delete on split lists**: `/subdomains` cards keep Manage plus POST `/websites/delete` (same as `/websites` and Manage Overview). `/wordpress` and `/wordpress/subsites` site cards include Delete WordPress (POST `/wordpress/delete`). Successful site delete returns to `/websites` or `/subdomains`; WordPress delete returns to `/wordpress` or `/wordpress/subsites`.
 
 ### Fixed
 
-- **WordPress one-click install**: Admin username defaults to the signed-in CPN account, failed installs retain form values, and WP-CLI root warnings are sanitized (no YIKES text to operators). Core download prefers curl/tar with longer WP-CLI timeouts.
-
+- **Site preview for sub-domains**: `/preview/{domain}/` no longer serves the CPN **Site ready** placeholder when the local docroot is still the default stub. Preview fetches the live public URL (`https://` for internet hostnames) with an 8s timeout, injects a `<base href>` so CSS/images load from origin, and keeps Preview Mode chrome. Thumbnails on `/subdomains` Refresh from that live origin with a local headless browser (no loopback rewrite). Cache is dropped on refresh. Remote screenshot quota / PRO-plan copy is not shown; Microlink runs only when no browser binary exists. System Repair can install `chromium-headless` / Chromium. Discover AlmaLinux `headless_shell` paths and cache under `/var/lib/cpn/site-previews/`.
+- **WordPress install / WP-CLI**: Plugin ZIP upload on install/create, public WP-CLI phar fetch, and Ensure showing the real WP-CLI version (not a blank or stale string).
+- **WordPress one-click install**: Admin username defaults to the signed-in CPN account, failed installs retain form values, and WP-CLI root warnings are sanitized. Core download prefers curl/tar with longer WP-CLI timeouts.
 
 ## [1.1.1] - 03/10/2026
 

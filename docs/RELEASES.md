@@ -14,7 +14,7 @@ curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 
 # Pin Release / tracking ref; optional Docker bypass
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.1.1
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.1.2
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --bypass
 ```
 

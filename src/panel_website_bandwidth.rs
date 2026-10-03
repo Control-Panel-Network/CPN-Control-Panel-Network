@@ -1,8 +1,10 @@
 //! Per-vhost bandwidth hints from access logs and package quotas.
 
-use crate::packages::{UNLIMITED, format_limit_display, package_for_account};
+use crate::packages::{UNLIMITED, package_for_account};
+use crate::panel_storage_fmt::{
+    format_bytes_for_user, format_mb_limit_for_user, format_used_limit_for_user,
+};
 use crate::panel_website_logs::{candidate_log_paths, first_existing_log, read_log_tail};
-use crate::panel_website_resources::format_bytes;
 use crate::sites::SiteRecord;
 use std::process::Command;
 
@@ -108,8 +110,35 @@ fn package_quota_mb(owner: &str) -> Option<i64> {
     package_for_account(owner).ok().map(|p| p.bandwidth_mb)
 }
 
+fn used_of_package_bandwidth(
+    viewer: &str,
+    used_bytes: u64,
+    quota_mb: Option<i64>,
+) -> (String, String) {
+    match quota_mb {
+        Some(q) => {
+            let label = format_used_limit_for_user(viewer, used_bytes, q);
+            let hint = if q == UNLIMITED {
+                "This site's transfer (calendar month when logs exist). Package bandwidth is unlimited."
+                    .into()
+            } else {
+                format!(
+                    "This site's transfer (calendar month when logs exist) of the package bandwidth limit ({}).",
+                    format_mb_limit_for_user(viewer, q)
+                )
+            };
+            (label, hint)
+        }
+        None => (
+            format_bytes_for_user(viewer, used_bytes),
+            "This site's transfer. No package bandwidth limit was found.".into(),
+        ),
+    }
+}
+
 /// Resolve bandwidth card text: access-log bytes when possible, else package quota, else Not metered.
-pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
+/// `viewer` selects the signed-in user's storage unit preference.
+pub fn bandwidth_for_site(site: &SiteRecord, viewer: &str) -> BandwidthInfo {
     let quota_mb = package_quota_mb(&site.owner);
     let (access, _) = candidate_log_paths(site);
     let day = local_day_token();
@@ -119,21 +148,7 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
     if first_existing_log(site, &access).is_some() {
         let period = crate::package_bandwidth::current_period();
         let bytes = crate::package_bandwidth::site_month_bytes(site, &period);
-        let mut label = format!("{} (this month)", format_bytes(bytes));
-        let mut hint = String::from(
-            "Metered from this site's access log (calendar month). Package limits apply to the total of all sites you own.",
-        );
-        if let Some(q) = quota_mb {
-            if q != UNLIMITED && q > 0 {
-                label = format!(
-                    "{} / {} (this month)",
-                    format_bytes(bytes),
-                    format_limit_display(q, "MB")
-                );
-            } else {
-                hint.push_str(" Package bandwidth is unlimited.");
-            }
-        }
+        let (label, hint) = used_of_package_bandwidth(viewer, bytes, quota_mb);
         return BandwidthInfo {
             label,
             hint,
@@ -155,24 +170,11 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
             } else {
                 (month_total, "this month")
             };
-            let mut label = format!("{} ({period})", format_bytes(bytes));
-            let mut hint = format!(
-                "From access log sample ({path}). Host transfer estimate, not package enforcement.",
+            let (label, mut hint) = used_of_package_bandwidth(viewer, bytes, quota_mb);
+            hint.push_str(&format!(
+                " Sampled from access log ({path}).",
                 path = path.display()
-            );
-            if let Some(q) = quota_mb {
-                hint.push_str(&format!(
-                    " Package quota: {}.",
-                    format_limit_display(q, "MB")
-                ));
-                if q != UNLIMITED && q > 0 {
-                    label = format!(
-                        "{} / {}",
-                        format_bytes(bytes),
-                        format_limit_display(q, "MB")
-                    );
-                }
-            }
+            ));
             return BandwidthInfo {
                 label,
                 hint,
@@ -185,22 +187,11 @@ pub fn bandwidth_for_site(site: &SiteRecord) -> BandwidthInfo {
     }
 
     if let Some(q) = quota_mb {
-        if q == UNLIMITED {
-            return BandwidthInfo {
-                label: "Unlimited quota".into(),
-                hint: "Package bandwidth is unlimited; no access log was found to meter this site yet."
-                    .into(),
-                bytes: None,
-                period: None,
-                source: "package_quota",
-                quota_mb: Some(q),
-            };
-        }
+        let (label, hint) = used_of_package_bandwidth(viewer, 0, Some(q));
         return BandwidthInfo {
-            label: format!("Quota {}", format_limit_display(q, "MB")),
-            hint: "Package bandwidth limit is configured; usage from access logs was not available for this site."
-                .into(),
-            bytes: None,
+            label,
+            hint,
+            bytes: Some(0),
             period: None,
             source: "package_quota",
             quota_mb: Some(q),

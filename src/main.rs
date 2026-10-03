@@ -73,11 +73,11 @@ use cpn_installer::panel_hub_routes::{
     security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
     security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
-    security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
-    server_dns_defaults_save, server_dns_nameservers, server_dns_nameservers_add,
-    server_dns_nameservers_delete, server_dns_nameservers_save, server_dns_record_add,
-    server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    security_ssl_mail, security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
+    server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
+    server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
+    server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
     server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
     server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
@@ -103,11 +103,12 @@ use cpn_installer::panel_hub_routes::{
     settings_system_repair_redirect, settings_version_page, sidebar_acl_delete_post,
     sidebar_acl_get, sidebar_acl_post, site_filemanager_alias, site_files_op,
     site_files_page_route, site_files_upload, system_repair_api_route, system_repair_heal_route,
-    system_repair_report_route, system_repair_route, users_create_get, users_create_post,
-    users_delete_post, users_list_route, users_modify_get, users_password_post, users_plans_page,
-    users_profile_details_post, users_profile_password_post, users_profile_route,
-    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
-    users_rename_post, users_reseller_route, users_status_post,
+    system_repair_report_route, system_repair_route, users_admin_details_post, users_create_get,
+    users_create_post, users_delete_post, users_list_route, users_manage_fragment_route,
+    users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
+    users_profile_password_post, users_profile_route, users_profile_totp_begin,
+    users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
+    users_reseller_route, users_status_post,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -1393,6 +1394,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_hostname)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
+            .service(security_ssl_origin_backup)
             .service(security_ssl_issue_all)
             .service(security_ssl_renew)
             .service(security_ssl_restore_le)
@@ -1418,6 +1420,8 @@ async fn main() -> std::io::Result<()> {
             .service(passkey_delete_post)
             .service(passkey_rename_post)
             .service(users_list_route)
+            .service(users_manage_fragment_route)
+            .service(users_admin_details_post)
             .service(users_create_get)
             .service(users_create_post)
             .service(users_modify_get)

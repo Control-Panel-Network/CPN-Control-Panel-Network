@@ -71,9 +71,22 @@ fn group_block(
         }
     }
     let mut child_rows = Vec::with_capacity(visible.len() + 1 + extra_children.len());
-    let has_hub_child = visible.iter().any(|c| c.href == href);
     let mut seen = std::collections::HashSet::new();
+    let overview_label = format!("{label} overview");
+    // Hub overview is always the first child under the category parent.
+    if feats.allows_href(href) {
+        let hub_key = format!("{href}|{overview_label}");
+        if seen.insert(hub_key) {
+            child_rows.push(child_button(&overview_label, href));
+        }
+    }
     for child in visible {
+        let duplicate_overview = child.href == href
+            && (child.label.eq_ignore_ascii_case("Overview")
+                || child.label.eq_ignore_ascii_case(&overview_label));
+        if duplicate_overview {
+            continue;
+        }
         let key = format!("{}|{}", child.href, child.label);
         if !seen.insert(key) {
             continue;
@@ -86,14 +99,6 @@ fn group_block(
             continue;
         }
         child_rows.push(child_button(extra_label, extra_href));
-    }
-    // Hub overview after feature children so primary entries (e.g. Email Accounts)
-    // stay first and are not confused with the group hub URL.
-    if !has_hub_child && feats.allows_href(href) {
-        let hub_key = format!("{href}|{label} overview");
-        if seen.insert(hub_key) {
-            child_rows.push(child_button(&format!("{label} overview"), href));
-        }
     }
     if child_rows.is_empty() {
         return String::new();
@@ -265,18 +270,76 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
 mod tests {
     use super::{nav_links_html, nav_tree_styles};
 
-    #[test]
-    fn email_accounts_is_first_email_child_not_hub() {
-        let html = nav_links_html("email", "admin");
+    fn group_children_html(html: &str, group_id: &str) -> String {
+        let marker = format!("data-nav-group=\"{group_id}\"");
         let group = html
-            .split("data-nav-group=\"email\"")
+            .split(&marker)
             .nth(1)
-            .expect("email group");
-        let children = group
+            .unwrap_or_else(|| panic!("{group_id} group"));
+        group
             .split("<div class=\"nav-children\">")
             .nth(1)
             .and_then(|s| s.split("</div>").next())
-            .expect("email children");
+            .unwrap_or_else(|| panic!("{group_id} children"))
+            .to_string()
+    }
+
+    fn first_child_href_and_label(children: &str) -> (String, String) {
+        let href = children
+            .split("href=\"")
+            .nth(1)
+            .and_then(|s| s.split('"').next())
+            .expect("first href")
+            .to_string();
+        let label = children
+            .split("<span>")
+            .nth(1)
+            .and_then(|s| s.split("</span>").next())
+            .expect("first label")
+            .to_string();
+        (href, label)
+    }
+
+    #[test]
+    fn hub_overview_is_first_child_under_every_group() {
+        let html = nav_links_html("settings", "admin");
+        let mut cases = vec![
+            ("settings", "/settings", "Settings overview"),
+            ("email", "/email", "Email overview"),
+            ("websites", "/websites", "Websites overview"),
+            ("wordpress", "/wordpress", "WordPress overview"),
+            ("users", "/account/users", "Users overview"),
+            ("security", "/security", "Security overview"),
+            ("databases", "/databases", "Databases overview"),
+            ("ftp", "/ftp/accounts", "FTP overview"),
+            ("plugins", "/plugins", "Plugins overview"),
+            ("backups", "/backups", "Backups overview"),
+            ("ssl", "/security/ssl", "SSL overview"),
+            ("dns", "/server/dns/zones", "DNS overview"),
+            ("php", "/server/php/extensions", "PHP overview"),
+            ("logs", "/server/logs", "Logs overview"),
+        ];
+        if crate::panel_feature_gate::docker_installed() {
+            cases.push(("docker", "/docker", "Docker overview"));
+        }
+        if html.contains("data-nav-group=\"litespeed\"") {
+            cases.push(("litespeed", "/server/litespeed", "LiteSpeed overview"));
+        }
+        for (group, hub, overview) in cases {
+            let children = group_children_html(&html, group);
+            let (href, label) = first_child_href_and_label(&children);
+            assert_eq!(
+                (href.as_str(), label.as_str()),
+                (hub, overview),
+                "{group} first child must be hub overview"
+            );
+        }
+    }
+
+    #[test]
+    fn email_overview_is_first_then_accounts() {
+        let html = nav_links_html("email", "admin");
+        let children = group_children_html(&html, "email");
         assert!(
             children.contains(r#"href="/email/accounts""#),
             "Email Accounts must target /email/accounts"
@@ -285,16 +348,16 @@ mod tests {
             children.contains("<span>Email Accounts</span>"),
             "Email Accounts label must render"
         );
-        // Hub overview may exist, but must not precede Email Accounts.
+        let overview_at = children
+            .find(r#"href="/email""#)
+            .expect("email overview href");
         let accounts_at = children
             .find(r#"href="/email/accounts""#)
             .expect("accounts href");
-        if let Some(overview_at) = children.find(r#"href="/email""#) {
-            assert!(
-                accounts_at < overview_at,
-                "Email Accounts must sort before Email overview hub link"
-            );
-        }
+        assert!(
+            overview_at < accounts_at,
+            "Email overview must sort before Email Accounts"
+        );
         for (label, href) in [
             ("Create Email", "/email/create"),
             ("Change Password", "/email/password"),
@@ -324,7 +387,7 @@ mod tests {
         assert!(html.contains("nav-tile"));
         assert!(html.contains("View Profile"));
         assert!(html.contains("List Users"));
-        assert!(html.contains("Modify User"));
+        assert!(!html.contains(">Modify User<"));
         // No bootstrap admin here, so admin-only links must not be offered.
         assert!(!html.contains("Create New User"));
         assert!(!html.contains("/account/acl/modify"));
@@ -562,7 +625,7 @@ mod tests {
             );
             assert!(group.starts_with("data-nav-group=\"logs\" open"));
             for (label, href) in [
-                ("Overview", "/server/logs"),
+                ("Logs overview", "/server/logs"),
                 ("Main Log", "/server/logs/panel"),
                 ("Access Logs", "/server/logs/access"),
                 ("Error Logs", "/server/logs/error"),

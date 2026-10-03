@@ -50,13 +50,13 @@ pub fn users_profile_page(
         </div>
         <ul class="kv-list">
           <li><span>Username</span><strong>{username}</strong></li>
-          <li><span>Recovery email</span><strong>{email}</strong></li>
+          <li><span>Email</span><strong>{email}</strong></li>
           <li><span>Language</span><strong>{lang}</strong></li>
           <li><span>Hosting package</span><strong>{pkg}</strong></li>
           <li><span>TOTP 2FA</span><strong>{totp}</strong></li>
           <li><span>Passkeys</span><strong>{passkeys}</strong></li>
         </ul>
-        <p class="muted" style="margin-top:16px;">Use Edit to change password, recovery email, username, TOTP, or passkeys.</p>"#,
+        <p class="muted" style="margin-top:16px;">Use Edit to change password, email, username, TOTP, or passkeys.</p>"#,
                 username = html_escape(&boot.username),
                 email = html_escape(&boot.recovery_email),
                 lang = html_escape(&boot.language),
@@ -81,7 +81,12 @@ pub fn users_profile_page(
     )
 }
 
-fn account_tab_html(boot_username: &str, recovery_email: &str, lang: &str) -> String {
+fn account_tab_html(
+    boot_username: &str,
+    recovery_email: &str,
+    lang: &str,
+    storage_unit: crate::panel_user_prefs::StorageUnitPref,
+) -> String {
     let en_sel = if lang == "en" { " selected" } else { "" };
     let es_sel = if lang == "es" { " selected" } else { "" };
     let nb_sel = if lang == "nb" { " selected" } else { "" };
@@ -93,7 +98,7 @@ fn account_tab_html(boot_username: &str, recovery_email: &str, lang: &str) -> St
         <label>Username
           <input name="username" type="text" required autocomplete="username" maxlength="128" value="{username}">
         </label>
-        <label>Recovery email
+        <label>Email
           <input name="recovery_email" type="email" required autocomplete="email" maxlength="254" value="{email}">
         </label>
         <label>Language
@@ -103,6 +108,10 @@ fn account_tab_html(boot_username: &str, recovery_email: &str, lang: &str) -> St
             <option value="nb"{nb_sel}>Norsk</option>
           </select>
         </label>
+        <label>Storage display unit
+          <select name="storage_unit">{unit_opts}</select>
+        </label>
+        <p class="muted" style="margin:0;">Auto picks KB, MB, GB, or TB from the real size. Forced units keep that unit for disk and bandwidth.</p>
         <button type="submit" class="btn-primary">Save details</button>
       </form>"#,
         username = html_escape(boot_username),
@@ -110,6 +119,7 @@ fn account_tab_html(boot_username: &str, recovery_email: &str, lang: &str) -> St
         en_sel = en_sel,
         es_sel = es_sel,
         nb_sel = nb_sel,
+        unit_opts = crate::panel_storage_fmt::storage_unit_options_html(storage_unit),
     )
 }
 
@@ -294,7 +304,12 @@ pub fn users_self_edit_body_with_tab(
     if enroll_secret.is_some() || backup_codes.is_some() || generated_password.is_some() {
         initial = "security";
     }
-    let account = account_tab_html(&boot.username, &boot.recovery_email, &boot.language);
+    let account = account_tab_html(
+        &boot.username,
+        &boot.recovery_email,
+        &boot.language,
+        crate::panel_user_prefs::load_user_storage_unit(username),
+    );
     let security = security_tab_html(
         username,
         enroll_secret,

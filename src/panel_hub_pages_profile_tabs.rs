@@ -75,6 +75,7 @@ pub fn modify_tabs_script() -> &'static str {
   }
   function syncUrl(id){
     try{
+      if(root.closest && root.closest('dialog')) return;
       var u=new URL(location.href);
       u.searchParams.set('tab', id);
       // Canonical deep-link is ?tab= only. Clear any leftover hash fragment.

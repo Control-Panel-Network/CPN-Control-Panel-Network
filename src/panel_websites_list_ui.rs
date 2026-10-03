@@ -103,7 +103,8 @@ pub fn websites_main(
       {err}
       <article class="section-card">
         <h2>Websites ({count})</h2>
-        <p class="muted">Main domains only. Sub-domains are listed under <a href="/subdomains">Sub-domains</a>. Each site shows a Site preview thumbnail, Manage, Visit, SSL status, and File manager.</p>
+        <p class="muted">Main domains only. Sub-domains are listed under <a href="/subdomains">Sub-domains</a>. Each site shows a Site preview thumbnail, Manage, Visit, SSL status, package, PHP, disk, and package bandwidth.</p>
+        <p class="muted">SSL: <strong>Valid</strong> is an origin cert on this host (expiry dd/mm/yyyy). <strong>CF SSL</strong> is Cloudflare CA or orange-cloud proxy with no origin files. <strong>NONE</strong> is neither. Issue origin backup for Let's Encrypt on this server.</p>
         <p style="margin:12px 0;"><a class="btn-primary" href="/websites/create">Create Website</a>
           <a class="btn-secondary" style="margin-left:8px;min-height:40px;padding:0 14px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;text-decoration:none;" href="/subdomains">List Sub-domains</a></p>
         {search}

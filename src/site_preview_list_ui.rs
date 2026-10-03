@@ -1,8 +1,9 @@
 //! Websites list Site preview cards (thumbnail + actions).
 
-use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl};
+use crate::panel_ops_ssl_public::{
+    inspect_public_ssl, offers_origin_backup, origin_backup_form, ssl_list_badge_html,
+};
 use crate::panel_user_prefs::load_user_minimalist_mode;
-use crate::site_preview_microlink::enabled_image_url;
 use crate::site_preview_thumb::{PreviewFreshness, freshness, image_path, load_meta};
 use crate::site_preview_thumb_routes::spawn_background_capture;
 use crate::sites::SiteRecord;
@@ -51,11 +52,10 @@ pub fn site_preview_list_styles() -> &'static str {
   font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
   background:rgba(18,183,106,.16); color:#6ce9a6;
 }
-.site-ssl-badge.off,
-.site-ssl-badge.insecure { background:rgba(240,68,56,.18); color:#f97066; }
-.site-ssl-badge.expiring { background:rgba(247,144,9,.2); color:#fdb022; }
+.site-ssl-badge.off { background:rgba(152,162,179,.14); color:#98a2b3; }
+.site-ssl-badge.cf { background:rgba(59,130,246,.2); color:#93c5fd; }
 .site-meta-grid {
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px;
 }
 .site-meta-grid div {
   border:1px solid var(--hairline, #2a2f3a); border-radius:10px; padding:8px 10px;
@@ -66,7 +66,7 @@ pub fn site_preview_list_styles() -> &'static str {
 "#
 }
 
-fn site_action_buttons(site: &SiteRecord) -> String {
+fn site_action_buttons(site: &SiteRecord, show_origin_backup: bool) -> String {
     let domain = html_escape(&site.domain);
     let suspend = if site.enabled {
         format!(
@@ -83,11 +83,22 @@ fn site_action_buttons(site: &SiteRecord) -> String {
             </form>"#
         )
     };
+    let backup = if show_origin_backup {
+        let next = if crate::backups::is_subdomain_site(&site.domain) {
+            "/subdomains"
+        } else {
+            "/websites"
+        };
+        origin_backup_form(&site.domain, next, "Issue origin backup")
+    } else {
+        String::new()
+    };
     format!(
         r#"<div class="site-card-actions">
             <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
             <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/">Open preview</a>
             <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}&amp;tab=files">File manager</a>
+            {backup}
             {suspend}
             <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
               <input type="hidden" name="domain" value="{domain}">
@@ -105,12 +116,8 @@ fn cached_shot_present(domain: &str) -> bool {
             .unwrap_or(false)
 }
 
-/// Thumbnail `<img>` markup.
-///
-/// Cached local captures are served from the authenticated panel route. Without
-/// a cached shot, public domains load the Microlink screenshot URL directly and
-/// fall back to the panel placeholder when that request fails (labs without
-/// public DNS, offline browser, or remote previews switched off).
+/// Thumbnail `<img>` markup uses the authenticated panel cache only.
+/// Refresh preview captures locally so list pages do not spend remote quota.
 fn preview_image_tag(domain_raw: &str, bust: u64, extra_style: &str) -> String {
     let domain = html_escape(domain_raw);
     let panel_src = format!("/websites/site-preview/image?domain={domain}&amp;v={bust}");
@@ -119,14 +126,6 @@ fn preview_image_tag(domain_raw: &str, bust: u64, extra_style: &str) -> String {
     } else {
         format!(r#" style="{}""#, html_escape(extra_style))
     };
-    if !cached_shot_present(domain_raw)
-        && let Some(remote) = enabled_image_url(domain_raw, bust)
-    {
-        return format!(
-            r#"<img src="{remote}" alt="Site preview for {domain}" loading="lazy" width="640" height="400"{style} data-preview-fallback="{panel_src}" onerror="if(this.dataset.previewFallback){{this.src=this.dataset.previewFallback;this.removeAttribute('data-preview-fallback');}}">"#,
-            remote = html_escape(&remote),
-        );
-    }
     format!(
         r#"<img src="{panel_src}" alt="Site preview for {domain}" loading="lazy" width="640" height="400"{style}>"#
     )
@@ -146,14 +145,17 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
         "Cached thumbnail"
     } else if has_cached {
         "Cached thumbnail, refresh for a newer shot"
-    } else if enabled_image_url(&site.domain, 0).is_some() {
-        "Screenshot service thumbnail until a local capture is cached"
     } else if !meta.error.is_empty() {
         "Preview unavailable"
     } else {
         "Placeholder until capture finishes"
     };
     let bust = meta.captured_at;
+    let next = if crate::backups::is_subdomain_site(&site.domain) {
+        "/subdomains"
+    } else {
+        "/websites"
+    };
     format!(
         r#"<div class="site-preview-slot">
   <div class="site-preview-frame">
@@ -163,7 +165,7 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     <a class="visit-link" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
     <form method="post" action="/websites/site-preview/refresh" class="inline-form">
       <input type="hidden" name="domain" value="{domain}">
-      <input type="hidden" name="next" value="/websites">
+      <input type="hidden" name="next" value="{next}">
       <button type="submit" title="{hint}">Refresh preview</button>
     </form>
   </div>
@@ -174,42 +176,7 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     )
 }
 
-fn ssl_badge_html(domain: &str) -> String {
-    let insight = inspect_domain_ssl(domain);
-    let short = insight.kind.short_label();
-    let tip = match (insight.kind, insight.expires_display.as_deref()) {
-        (SslValidityKind::Valid | SslValidityKind::ExpiringSoon, Some(d)) => {
-            format!("Secure. Expires {d}")
-        }
-        (SslValidityKind::Expired, Some(d)) => format!("Insecure. Expired {d}"),
-        (_, Some(d)) => format!("Insecure. Certificate date {d}. {}", insight.detail),
-        _ => {
-            if insight.detail.is_empty() {
-                format!("{short} TLS for this hostname.")
-            } else {
-                format!("{short}. {}", insight.detail)
-            }
-        }
-    };
-    let (bg, fg, class) = match insight.kind {
-        SslValidityKind::Valid => ("rgba(18,183,106,.18)", "#6ce9a6", ""),
-        SslValidityKind::ExpiringSoon => ("rgba(247,144,9,.2)", "#fdb022", " expiring"),
-        SslValidityKind::Expired
-        | SslValidityKind::Invalid
-        | SslValidityKind::Mismatch
-        | SslValidityKind::None => ("rgba(240,68,56,.18)", "#f97066", " insecure"),
-    };
-    format!(
-        r#"<span class="site-ssl-badge{class}" title="{tip}" style="background:{bg};color:{fg};">{short}</span>"#,
-        tip = html_escape(&tip),
-        short = html_escape(short),
-        class = class,
-        bg = bg,
-        fg = fg,
-    )
-}
-
-fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> String {
+fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer: &str) -> String {
     let domain = html_escape(&site.domain);
     let status = if site.enabled { "Active" } else { "Suspended" };
     let wired = if site.vhost_wired {
@@ -217,7 +184,48 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
     } else {
         "files ready"
     };
-    let ssl = ssl_badge_html(&site.domain);
+    let ssl_view = inspect_public_ssl(&site.domain);
+    let ssl = ssl_list_badge_html(&ssl_view);
+    let disk_bytes = crate::panel_website_resources::site_used_bytes(site, 6_000);
+    let pkg = crate::packages::package_for_account(&site.owner).ok();
+    let disk_limit = pkg
+        .as_ref()
+        .map(|p| p.disk_mb)
+        .unwrap_or(crate::packages::UNLIMITED);
+    let disk_used = disk_bytes.unwrap_or(0);
+    let disk_label =
+        crate::panel_storage_fmt::format_used_limit_for_user(viewer, disk_used, disk_limit);
+    let pkg_allow = crate::panel_storage_fmt::format_mb_limit_for_user(viewer, disk_limit);
+    let disk_tip = format!(
+        "Used storage for this site home and document root (not the whole account). Package disk allowance: {pkg_allow}."
+    );
+    let bw = crate::panel_website_bandwidth::bandwidth_for_site(site, viewer);
+    let bw_label = html_escape(&bw.label);
+    let bw_tip = html_escape(&bw.hint);
+    let php = site
+        .php_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(crate::php_defaults::default_php_branch_for_sites);
+    let package_name = pkg
+        .as_ref()
+        .map(|p| p.name.clone())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Default".into());
+    let ip_meta = site
+        .internal_ip
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|ip| {
+            format!(
+                r#"<div><span>IP</span><strong>{}</strong></div>"#,
+                html_escape(ip)
+            )
+        })
+        .unwrap_or_default();
     let doc_meta = if show_docroots {
         format!(
             r#"<div><span>Document root</span><strong><details><summary>Show path</summary><code>{doc}</code></details></strong></div>"#,
@@ -248,6 +256,11 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
     <div class="site-meta-grid">
       <div><span>State</span><strong>{status}</strong></div>
       <div><span>Owner</span><strong>{owner}</strong></div>
+      <div><span>Package</span><strong>{package}</strong></div>
+      <div><span>PHP</span><strong>{php}</strong></div>
+      {ip_meta}
+      <div title="{disk_tip}"><span>Disk</span><strong>{disk}</strong></div>
+      <div title="{bw_tip}"><span>Package bandwidth</span><strong>{bw}</strong></div>
       {parent_meta}
       {doc_meta}
     </div>
@@ -256,9 +269,16 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
 </article>"#,
         preview = preview_slot(site, auto_capture),
         owner = html_escape(&site.owner),
+        package = html_escape(&package_name),
+        php = html_escape(&php),
+        ip_meta = ip_meta,
+        disk_tip = html_escape(&disk_tip),
+        disk = html_escape(&disk_label),
+        bw_tip = bw_tip,
+        bw = bw_label,
         parent_meta = parent_meta,
         doc_meta = doc_meta,
-        actions = site_action_buttons(site),
+        actions = site_action_buttons(site, offers_origin_backup(site, &ssl_view)),
     )
 }
 
@@ -273,7 +293,7 @@ pub fn site_preview_cards(sites: &[SiteRecord], show_docroots: bool, username: &
     let auto_capture = !minimalist;
     let mut out = String::from(r#"<div class="site-cards">"#);
     for site in sites {
-        out.push_str(&site_card(site, show_docroots, auto_capture));
+        out.push_str(&site_card(site, show_docroots, auto_capture, username));
     }
     out.push_str("</div>");
     if minimalist {
@@ -296,7 +316,7 @@ pub fn manage_overview_preview(site: &SiteRecord) -> String {
   </div>
   <div>
     <strong style="display:block;font-size:14px;">Site preview</strong>
-    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Public domains fall back to the Microlink screenshot service until a local capture is cached; labs without public DNS may need Refresh with local vhost mapping.</p>
+    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Refresh preview captures with a local headless browser. Public sites whose document root is still the CPN placeholder are captured from the live URL.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <a class="manage-btn" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
       <form method="post" action="/websites/site-preview/refresh" class="inline-form">
@@ -324,25 +344,13 @@ mod tests {
     fn styles_mention_site_preview_slot() {
         assert!(site_preview_list_styles().contains("site-preview-slot"));
         assert!(site_preview_list_styles().contains("site-preview-frame"));
-        assert!(site_preview_list_styles().contains("site-ssl-badge.insecure"));
     }
 
     #[test]
-    fn list_ssl_badge_is_insecure_without_cert_files() {
-        crate::account::with_test_data_dir(|| {
-            let html = ssl_badge_html("example.com");
-            assert!(html.contains(">Insecure<"), "{html}");
-            assert!(!html.to_ascii_lowercase().contains(">none<"), "{html}");
-            assert!(html.contains("title="), "{html}");
-        });
-    }
-
-    #[test]
-    fn public_domain_without_cache_uses_screenshot_service() {
+    fn public_domain_without_cache_uses_panel_route() {
         crate::account::with_test_data_dir(|| {
             let html = preview_image_tag("example.com", 0, "");
-            assert!(html.contains("api.microlink.io"));
-            assert!(html.contains("data-preview-fallback"));
+            assert!(!html.contains("api.microlink.io"));
             assert!(html.contains("/websites/site-preview/image?domain=example.com"));
         });
     }
@@ -368,6 +376,40 @@ mod tests {
             let html = preview_image_tag("example.com", 42, "");
             assert!(!html.contains("microlink"));
             assert!(html.contains("v=42"));
+        });
+    }
+
+    #[test]
+    fn list_cards_show_package_php_and_used_of() {
+        crate::account::with_test_data_dir(|| {
+            let site = SiteRecord {
+                schema_version: 5,
+                domain: "card.example".into(),
+                owner: "Admin".into(),
+                docroot: "/tmp/cpn-card-missing/public_html".into(),
+                enabled: true,
+                engine: None,
+                notes: String::new(),
+                created_at_unix: 0,
+                updated_at_unix: 0,
+                vhost_wired: false,
+                ssl: Default::default(),
+                internal_ip: Some("10.0.2.15".into()),
+                owner_suspend_message: String::new(),
+                suspended_by: None,
+                php_version: Some("8.5".into()),
+                aliases: Vec::new(),
+                staging_of: None,
+            };
+            let html = site_preview_cards(&[site], false, "Admin");
+            assert!(html.contains("<span>Package</span>"), "{html}");
+            assert!(html.contains("<span>PHP</span>"), "{html}");
+            assert!(html.contains("8.5"), "{html}");
+            assert!(html.contains("Package bandwidth"), "{html}");
+            assert!(html.contains("Used "), "{html}");
+            assert!(html.contains("<span>IP</span>"), "{html}");
+            assert!(!html.contains(" B<"), "{html}");
+            assert!(!html.contains(" B</"), "{html}");
         });
     }
 }

@@ -1,7 +1,5 @@
 //! Users & Plans hub HTML: accounts, ACL grants, and honest scaffolds.
 
-use crate::account_lifecycle::status_label;
-use crate::account_mgmt::list_accounts;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
 use crate::panel_hub_pages_hosting::scaffold_feature;
@@ -56,58 +54,19 @@ pub fn users_plans_hub_main_for(viewer: &str, notice: Option<&str>, error: Optio
     body
 }
 
-pub fn users_list_page(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {
-    let admin = is_panel_admin(viewer);
-    let accounts = list_accounts().unwrap_or_default();
-    let mut body = String::new();
-    if !admin {
-        body.push_str(
-            r#"<p class="muted">Showing your account only. Panel admin can list every user.</p>"#,
-        );
-    }
-    if accounts.is_empty() {
-        body.push_str(r#"<p class="empty-state">No panel accounts found.</p>"#);
-    } else {
-        body.push_str(
-            r#"<div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Username</th><th>Recovery email</th><th>Role</th><th>Status</th></tr></thead><tbody>"#,
-        );
-        for acct in &accounts {
-            if !admin && !acct.username.eq_ignore_ascii_case(viewer) {
-                continue;
-            }
-            let role = if is_panel_admin(&acct.username) {
-                "Admin"
-            } else {
-                "User"
-            };
-            body.push_str(&format!(
-                r#"<tr><td><strong>{}</strong></td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
-                html_escape(&acct.username),
-                html_escape(&acct.recovery_email),
-                role,
-                status_label(acct.disabled),
-            ));
-        }
-        body.push_str("</tbody></table></div>");
-    }
-    if admin {
-        body.push_str(
-            r#"<p style="margin-top:16px;"><a class="btn-primary" href="/account/users/create">Create user</a>
-            <a class="btn-secondary" href="/account/users/modify" style="margin-left:8px;">Modify user</a></p>"#,
-        );
-    }
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Users & Plans", Some("/account/users")),
-            ("List Users", None),
-        ],
-        "List Users",
-        "Panel accounts on this host.",
-        &body,
-        notice,
-        error,
+#[allow(clippy::too_many_arguments)]
+pub fn users_list_page(
+    viewer: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    q: Option<&str>,
+    sort: Option<&str>,
+    order: Option<&str>,
+    page: Option<&str>,
+    per_page: Option<&str>,
+) -> String {
+    crate::panel_hub_pages_users_list::users_list_page(
+        viewer, notice, error, q, sort, order, page, per_page,
     )
 }
 
@@ -120,7 +79,7 @@ pub fn users_create_page(notice: Option<&str>, error: Option<&str>) -> String {
         <label>Username
           <input name="username" type="text" required autocomplete="username" maxlength="128">
         </label>
-        <label>Recovery email
+        <label>Email
           <input name="recovery_email" type="email" required autocomplete="email" maxlength="254">
         </label>
         {pw_gen}

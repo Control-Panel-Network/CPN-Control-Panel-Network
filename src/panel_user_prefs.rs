@@ -1,5 +1,5 @@
-//! Per-user UI preferences (color mode, minimalist mode, SSH review snooze)
-//! under `/var/lib/cpn/user-prefs/`.
+//! Per-user UI preferences (color mode, minimalist mode, SSH review snooze,
+//! storage display unit) under `/var/lib/cpn/user-prefs/`.
 
 use crate::account::data_dir;
 use crate::panel_theme::ColorMode;
@@ -14,6 +14,40 @@ pub const SSH_SECURITY_REVIEW_SNOOZE_MAX_DAYS: u32 = 30;
 /// Default snooze when the operator picks "Hide for 1 month".
 pub const SSH_SECURITY_REVIEW_SNOOZE_DEFAULT_DAYS: u32 = 30;
 
+/// Preferred unit for disk and bandwidth labels in the panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageUnitPref {
+    #[default]
+    Auto,
+    Kb,
+    Mb,
+    Gb,
+    Tb,
+}
+
+impl StorageUnitPref {
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "kb" | "kib" => Self::Kb,
+            "mb" | "mib" => Self::Mb,
+            "gb" | "gib" => Self::Gb,
+            "tb" | "tib" => Self::Tb,
+            _ => Self::Auto,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Kb => "kb",
+            Self::Mb => "mb",
+            Self::Gb => "gb",
+            Self::Tb => "tb",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserUiPrefs {
     #[serde(default)]
@@ -21,6 +55,9 @@ pub struct UserUiPrefs {
     /// When true, prefer static UI: no live metrics polling; refresh to update.
     #[serde(default)]
     pub minimalist_mode: bool,
+    /// Disk / bandwidth display unit. Default Auto picks KB/MB/GB/TB from bytes.
+    #[serde(default)]
+    pub storage_unit: StorageUnitPref,
     /// Unix epoch seconds until which the SSH security review card stays hidden.
     /// Cleared or past values mean the card is shown again.
     #[serde(default)]
@@ -105,6 +142,20 @@ pub fn save_user_minimalist_mode(username: &str, enabled: bool) -> Result<bool, 
     prefs.minimalist_mode = enabled;
     write_json(&user_prefs_path(username), &prefs)?;
     Ok(enabled)
+}
+
+pub fn load_user_storage_unit(username: &str) -> StorageUnitPref {
+    load_user_ui_prefs(username).storage_unit
+}
+
+pub fn save_user_storage_unit(
+    username: &str,
+    unit: StorageUnitPref,
+) -> Result<StorageUnitPref, String> {
+    let mut prefs = load_user_ui_prefs(username);
+    prefs.storage_unit = unit;
+    write_json(&user_prefs_path(username), &prefs)?;
+    Ok(unit)
 }
 
 pub fn save_user_ui_prefs(username: &str, prefs: &UserUiPrefs) -> Result<(), String> {
@@ -208,6 +259,19 @@ mod tests {
             save_user_color_mode("Admin", ColorMode::Light).unwrap();
             assert!(load_user_minimalist_mode("Admin"));
             assert_eq!(load_user_color_mode("Admin"), ColorMode::Light);
+        });
+    }
+
+    #[test]
+    fn user_storage_unit_persists_without_wiping_other_prefs() {
+        with_test_data_dir(|| {
+            assert_eq!(load_user_storage_unit("Admin"), StorageUnitPref::Auto);
+            save_user_color_mode("Admin", ColorMode::Dark).unwrap();
+            save_user_storage_unit("Admin", StorageUnitPref::Gb).unwrap();
+            assert_eq!(load_user_storage_unit("Admin"), StorageUnitPref::Gb);
+            assert_eq!(load_user_color_mode("Admin"), ColorMode::Dark);
+            save_user_storage_unit("Admin", StorageUnitPref::parse("mb")).unwrap();
+            assert_eq!(load_user_storage_unit("Admin"), StorageUnitPref::Mb);
         });
     }
 

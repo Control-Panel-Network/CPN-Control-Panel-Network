@@ -1,7 +1,11 @@
 //! Manage Overview tab: disk/bandwidth cards plus host CPU/memory charts.
 
+use crate::packages::{UNLIMITED, package_for_account};
 use crate::panel_ops_db::list_databases;
 use crate::panel_ops_ftp::detect_ftp;
+use crate::panel_storage_fmt::{
+    format_bytes_for_user, format_mb_limit_for_user, format_used_limit_for_user,
+};
 use crate::panel_user_prefs::load_user_minimalist_mode;
 use crate::panel_website_bandwidth::{BandwidthInfo, bandwidth_for_site};
 use crate::panel_website_manage_overview_script::overview_metrics_script;
@@ -10,25 +14,36 @@ use crate::panel_website_metrics_chart::metrics_chart_svg;
 use crate::panel_website_metrics_ring::{
     MetricSample, WINDOW_SECS, load_samples, record_host_sample, stats_for,
 };
-use crate::panel_website_resources::{approx_dir_bytes, format_bytes};
+use crate::panel_website_resources::site_used_bytes;
 use crate::service_detect::detect_web_server_label;
 use crate::site_preview_list_ui::manage_overview_preview;
 use crate::sites::{SiteRecord, is_legacy_docroot, site_home_from_record};
-use std::path::Path;
 
 pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let minimalist = load_user_minimalist_mode(username);
     let preview = manage_overview_preview(site);
-    let disk_bytes = approx_dir_bytes(Path::new(&site.docroot), 8_000);
-    let disk = disk_bytes
-        .map(format_bytes)
-        .unwrap_or_else(|| "Unavailable".into());
-    let disk_pct = disk_bytes
-        .map(|b| {
-            let pct = ((b as f64 / (10.0 * 1024.0 * 1024.0 * 1024.0)) * 100.0) as u8;
-            pct.min(100)
-        })
-        .unwrap_or(0);
+    let disk_bytes = site_used_bytes(site, 8_000);
+    let pkg = package_for_account(&site.owner).ok();
+    let disk_limit = pkg.as_ref().map(|p| p.disk_mb).unwrap_or(UNLIMITED);
+    let disk_used = disk_bytes.unwrap_or(0);
+    let disk = if disk_bytes.is_none() && !std::path::Path::new(&site.docroot).exists() {
+        "Unavailable".into()
+    } else {
+        format_used_limit_for_user(username, disk_used, disk_limit)
+    };
+    let disk_hint = format!(
+        "Used storage for this site home and document root (not the whole account). Package disk allowance: {}.",
+        format_mb_limit_for_user(username, disk_limit)
+    );
+    let disk_pct = match (
+        disk_bytes,
+        crate::panel_storage_fmt::mb_limit_to_bytes(disk_limit),
+    ) {
+        (Some(used), Some(limit)) if limit > 0 => {
+            (((used as f64 / limit as f64) * 100.0) as u8).min(100)
+        }
+        _ => 0,
+    };
 
     let db = list_databases();
     let db_count = if db.databases.is_empty() && !db.detail.contains("Listed via") {
@@ -64,7 +79,7 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let mem_label = mem_cur
         .map(|v| format!("{v:.0}%"))
         .unwrap_or_else(|| "n/a".into());
-    let bw = bandwidth_for_site(site);
+    let bw = bandwidth_for_site(site, username);
     let cpu_stroke = crate::panel_dashboard::gauge_stroke_for_usage(
         cpu_cur.unwrap_or(0.0).clamp(0.0, 100.0) as u8,
     );
@@ -73,9 +88,14 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     );
 
     let mut cards = String::from(r#"<div class="manage-card-grid">"#);
-    cards.push_str(&resource_card("Disk Usage", &disk, Some(disk_pct)));
     cards.push_str(&resource_card_with_hint(
-        "Bandwidth",
+        "Disk Usage",
+        &disk,
+        &disk_hint,
+        Some(disk_pct),
+    ));
+    cards.push_str(&resource_card_with_hint(
+        "Package bandwidth",
         &bw.label,
         &bw.hint,
         None,
@@ -92,6 +112,7 @@ pub fn tab_overview(site: &SiteRecord, username: &str) -> String {
     let mem_svg = metrics_chart_svg(&samples, "mem", mem_stroke);
     let snapshot = metrics_snapshot_script(SnapshotInput {
         site,
+        viewer: username,
         samples: &samples,
         cpu_cur,
         cpu_avg,
@@ -246,6 +267,7 @@ fn pct_json(v: Option<f32>) -> serde_json::Value {
 
 struct SnapshotInput<'a> {
     site: &'a SiteRecord,
+    viewer: &'a str,
     samples: &'a [MetricSample],
     cpu_cur: Option<f32>,
     cpu_avg: Option<f32>,
@@ -288,7 +310,7 @@ fn metrics_snapshot_script(input: SnapshotInput<'_>) -> String {
             "label": input.bw.label,
             "hint": input.bw.hint,
             "bytes": input.bw.bytes,
-            "bytes_label": input.bw.bytes.map(format_bytes),
+            "bytes_label": input.bw.bytes.map(|b| format_bytes_for_user(input.viewer, b)),
             "period": input.bw.period,
             "source": input.bw.source,
             "quota_mb": input.bw.quota_mb,
@@ -359,7 +381,8 @@ mod tests {
         with_test_data_dir(|| {
             let html = tab_overview(&site(), "Admin");
             assert!(html.contains("Disk Usage"));
-            assert!(html.contains("Bandwidth"));
+            assert!(html.contains("Package bandwidth"));
+            assert!(html.contains("Used "));
             assert!(html.contains("CPU Usage (host)"));
             assert!(html.contains("Memory Usage (host)"));
             assert!(html.contains("/api/websites/manage/metrics"));

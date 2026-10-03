@@ -26,10 +26,79 @@ pub fn issue_or_renew(domain: &str) -> Result<String, String> {
     }
 }
 
+/// Let's Encrypt on the origin as backup when Cloudflare is public TLS.
+/// Does not treat Cloudflare edge TLS as a local origin certificate.
+pub fn issue_origin_backup(domain: &str) -> Result<String, String> {
+    let domain = normalize_domain(domain)?;
+    match crate::panel_ops_certbot_install::ensure_certbot_on_path() {
+        Ok(_) => {}
+        Err(e) => {
+            let _ = persist_ssl_error(&domain, &e);
+            return Err(e);
+        }
+    }
+    let mut site = load_site(&domain)?;
+    if site.ssl.provider == SslProvider::Custom {
+        let has_custom = site
+            .ssl
+            .custom_cert_path
+            .as_ref()
+            .map(|p| Path::new(p).is_file())
+            .unwrap_or(false);
+        if has_custom {
+            return Err(format!(
+                "`{domain}` already has Custom SSL on the origin. Keep that cert, or switch provider before issuing Let's Encrypt."
+            ));
+        }
+        site.ssl.provider = SslProvider::LetsEncrypt;
+    }
+    if site.ssl.provider == SslProvider::None {
+        site.ssl.provider = SslProvider::LetsEncrypt;
+    }
+    site.ssl.install_origin_cert = true;
+    site.ssl.last_error.clear();
+    persist_ssl_ok(&domain, site.ssl.clone())?;
+    let site = load_site(&domain)?;
+    let dns_ready = cloudflare_configured() && cloudflare_dns_plugin_available();
+    let coverage = effective_coverage(&site.ssl);
+    let needs_wildcard = matches!(coverage, SslCoverageMode::Wildcard);
+    // Apex/SAN prefer HTTP-01. Wildcard uses DNS-01 only when Cloudflare DNS-01 is ready.
+    let force_http01 = !(needs_wildcard && dns_ready);
+    let msg = issue_acme_inner(&site, "letsencrypt", force_http01)?;
+    Ok(format!(
+        "Origin Let's Encrypt backup for `{domain}`. {msg} If Cloudflare proxy stops, origin HTTPS still uses this certificate."
+    ))
+}
+
 pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String, String> {
+    let coverage = effective_coverage(&site.ssl);
+    let needs_wildcard = matches!(coverage, SslCoverageMode::Wildcard);
+    let dns_ready = cloudflare_configured() && cloudflare_dns_plugin_available();
+    let force_http01 = !(needs_wildcard && dns_ready);
+    issue_acme_inner(site, server_kind, force_http01)
+}
+
+pub(crate) fn http01_names(site: &SiteRecord) -> Vec<String> {
+    let mut names = names_for_issue(site);
+    names.retain(|n| !n.starts_with("*."));
+    if names.is_empty() {
+        names.push(site.domain.clone());
+    }
+    names
+}
+
+pub(crate) fn issue_acme_inner(
+    site: &SiteRecord,
+    server_kind: &str,
+    force_http01: bool,
+) -> Result<String, String> {
     let domain = site.domain.clone();
     let coverage = effective_coverage(&site.ssl);
-    let names = names_for_issue(site);
+    let names = if force_http01 {
+        http01_names(site)
+    } else {
+        names_for_issue(site)
+    };
     let mut args: Vec<String> = vec![
         "certonly".into(),
         "--non-interactive".into(),
@@ -53,9 +122,9 @@ pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String,
         args.push("--eab-hmac-key".into());
         args.push(eab.hmac_key.trim().to_string());
     }
-    let needs_dns =
-        matches!(coverage, SslCoverageMode::Wildcard) || names.iter().any(|n| n.starts_with("*."));
-    let dns_ready = cloudflare_configured() && cloudflare_dns_plugin_available();
+    let needs_dns = !force_http01
+        && (matches!(coverage, SslCoverageMode::Wildcard)
+            || names.iter().any(|n| n.starts_with("*.")));
     let use_dns = if needs_dns {
         if !cloudflare_configured() {
             return Err(
@@ -71,7 +140,7 @@ pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String,
         }
         true
     } else {
-        dns_ready
+        false
     };
     if use_dns {
         let ini = write_cloudflare_ini()?;
@@ -106,6 +175,7 @@ pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String,
                 }
                 if let Ok(mut s) = load_site(n) {
                     s.ssl.last_issue_unix = now;
+                    s.ssl.last_origin_retry_unix = now;
                     s.ssl.last_error.clear();
                     if n != &domain {
                         s.ssl.shared_cert_owner = Some(domain.clone());
@@ -117,11 +187,16 @@ pub(crate) fn issue_acme(site: &SiteRecord, server_kind: &str) -> Result<String,
             }
             if let Ok(mut owner) = load_site(&domain) {
                 owner.ssl.last_issue_unix = now;
+                owner.ssl.last_origin_retry_unix = now;
                 owner.ssl.last_error.clear();
                 let _ = persist_ssl_ok(&domain, owner.ssl);
             }
-            let method = if use_dns { "DNS-01" } else { "webroot" };
-            let coverage_label = coverage.label();
+            let method = if use_dns { "DNS-01" } else { "HTTP-01" };
+            let coverage_label = if force_http01 {
+                "SAN"
+            } else {
+                coverage.label()
+            };
             let origin = if cloudflare_configured() && site.ssl.install_origin_cert {
                 " Origin cert kept for Cloudflare proxy when enabled."
             } else {
@@ -150,21 +225,63 @@ fn issue_cloudflare_ca(site: &SiteRecord) -> Result<String, String> {
     if !cloudflare_configured() {
         return Err("Cloudflare CA requires an API token under Cloudflare DNS API Settings".into());
     }
-    // Origin CA via API is a follow-on; for now require certbot DNS-01 against LE is NOT used.
-    // Honest path: attempt Cloudflare Origin CA CSR flow is not fully wired; report clearly.
     let settings = crate::panel_ops_cloudflare::load_cloudflare();
     if settings.api_token.trim().is_empty() {
         return Err("Cloudflare API token is empty".into());
     }
-    // Prefer DNS-01 ACME when plugin present (Cloudflare can still terminate edge TLS;
-    // origin material from ACME serves as installable origin cert).
     if cloudflare_dns_plugin_available() {
-        let msg = issue_acme(site, "letsencrypt")?;
+        let msg = issue_acme_inner(site, "letsencrypt", false)?;
         return Ok(format!(
-            "Cloudflare CA path: installed origin-compatible cert via DNS-01. {msg} Note: dedicated Cloudflare Origin CA API issuance can be added when CSR upload is wired."
+            "Cloudflare CA path: installed origin-compatible cert via ACME. {msg} Note: dedicated Origin CA API issuance can be added when CSR upload is wired."
         ));
     }
-    let err = "Cloudflare CA: install certbot-dns-cloudflare or upload a Cloudflare Origin CA cert as Custom SSL. Token is present but Origin CA auto-issue is not fully wired yet.".to_string();
-    let _ = persist_ssl_error(&domain, &err);
-    Err(err)
+    match issue_acme_inner(site, "letsencrypt", true) {
+        Ok(msg) => Ok(format!(
+            "Cloudflare CA path: installed origin-compatible cert via HTTP-01. {msg}"
+        )),
+        Err(e) => {
+            let err = format!(
+                "Cloudflare CA: HTTP-01 origin issue failed ({e}). Install certbot-dns-cloudflare for DNS-01, or upload an Origin CA cert as Custom SSL."
+            );
+            let _ = persist_ssl_error(&domain, &err);
+            Err(err)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::http01_names;
+    use crate::sites::SiteRecord;
+
+    fn site(domain: &str) -> SiteRecord {
+        SiteRecord {
+            schema_version: 5,
+            domain: domain.into(),
+            owner: "Admin".into(),
+            docroot: "/tmp/public_html".into(),
+            enabled: true,
+            engine: None,
+            notes: String::new(),
+            created_at_unix: 0,
+            updated_at_unix: 0,
+            vhost_wired: false,
+            ssl: Default::default(),
+            internal_ip: None,
+            owner_suspend_message: String::new(),
+            suspended_by: None,
+            php_version: None,
+            aliases: Vec::new(),
+            staging_of: None,
+        }
+    }
+
+    #[test]
+    fn http01_strips_wildcard_names() {
+        crate::account::with_test_data_dir(|| {
+            let names = http01_names(&site("example.com"));
+            assert!(names.iter().all(|n| !n.starts_with("*.")), "{names:?}");
+            assert!(names.iter().any(|n| n == "example.com"), "{names:?}");
+        });
+    }
 }

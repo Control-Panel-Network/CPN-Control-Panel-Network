@@ -1,23 +1,14 @@
 //! Remote Site preview screenshots via the Microlink screenshot API.
 //!
 //! Local headless Chromium capture stays primary (see `site_preview_capture`).
-//! This module is the fallback for two cases:
+//! Microlink is a last-resort fallback only when no browser binary exists.
 //!
-//! 1. The panel host has no browser binary, or every local candidate URL fails.
-//!    `capture_via_microlink` then fetches the shot server-side and stores it in
-//!    the same authenticated cache under `$CPN_DATA_DIR/site-previews/`.
-//! 2. No cached shot exists yet. The Websites list points the thumbnail at the
-//!    public image URL so the operator browser renders a real screenshot while
-//!    the local capture is still missing.
-//!
-//! Only publicly resolvable domains are sent. Lab-only hosts (loopback, private
-//! IPs, reserved suffixes such as `.local` or `.test`) never leave the host, and
-//! operators can switch the whole remote path off in Websites preferences.
+//! Only publicly resolvable domains are sent. Lab-only hosts never leave the
+//! host. Operators can switch the remote path off in Websites preferences.
 
 use crate::panel_prefs::load_panel_ui_prefs;
 use crate::site_preview_thumb::{PREVIEW_MAX_BYTES, image_path, write_cached_image_typed};
 use crate::sites::normalize_domain;
-use crate::website_preview::is_blocked_preview_host;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -31,24 +22,6 @@ pub const MICROLINK_TTL_MS: u64 = 86_400_000;
 pub const MICROLINK_BACKEND: &str = "microlink";
 
 const FETCH_TIMEOUT_SECS: u64 = 30;
-
-/// Suffixes that never resolve on the public internet.
-const PRIVATE_SUFFIXES: &[&str] = &[
-    ".local",
-    ".localhost",
-    ".localdomain",
-    ".test",
-    ".example",
-    ".invalid",
-    ".internal",
-    ".intranet",
-    ".lan",
-    ".home",
-    ".home.arpa",
-    ".corp",
-    ".private",
-    ".vbox",
-];
 
 fn percent_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len() * 2);
@@ -68,19 +41,7 @@ pub fn microlink_supported(domain_raw: &str) -> bool {
     let Ok(domain) = normalize_domain(domain_raw) else {
         return false;
     };
-    if is_blocked_preview_host(&domain) {
-        return false;
-    }
-    if PRIVATE_SUFFIXES
-        .iter()
-        .any(|suffix| domain.ends_with(suffix))
-    {
-        return false;
-    }
-    let Some(tld) = domain.rsplit('.').next() else {
-        return false;
-    };
-    tld.len() >= 2 && tld.chars().all(|ch| ch.is_ascii_alphabetic())
+    crate::website_preview_stub::is_public_internet_host(&domain)
 }
 
 /// True when remote previews are enabled for the panel and allowed for this domain.
@@ -187,6 +148,30 @@ pub fn fetch_microlink_screenshot(
     Ok((bytes, ctype.to_string()))
 }
 
+/// Operator-facing remote screenshot errors (no vendor upsell / PRO-plan copy).
+pub fn operator_remote_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("rate limit")
+        || lower.contains("pro plan")
+        || lower.contains("quota")
+        || lower.contains("upgrade to")
+    {
+        return "Remote screenshot quota is exhausted. Install a local headless browser and use Refresh preview.".into();
+    }
+    let clipped: String = raw
+        .replace("Upgrade to a PRO plan.", "")
+        .replace("Upgrade to a PRO plan", "")
+        .chars()
+        .take(180)
+        .collect();
+    let clipped = clipped.trim();
+    if clipped.is_empty() {
+        "Remote screenshot is unavailable.".into()
+    } else {
+        clipped.to_string()
+    }
+}
+
 fn clip(value: &str, max: usize) -> String {
     value.trim().chars().take(max).collect()
 }
@@ -200,7 +185,7 @@ fn remote_screenshot_error(bytes: &[u8]) -> String {
             .and_then(|field| field.as_str())
             .or_else(|| value.get("message").and_then(|field| field.as_str()));
         if let Some(reason) = reason {
-            return format!("screenshot service declined ({})", clip(reason, 200));
+            return operator_remote_error(&format!("screenshot declined: {reason}"));
         }
     }
     format!(
@@ -264,8 +249,17 @@ mod tests {
     fn json_error_body_becomes_readable_reason() {
         let body = br#"{"status":"fail","data":{"url":"The URL `https://lab.example/` is being resolved into an IP address whose range is not allowed."},"code":"EFORBIDDENURL"}"#;
         let message = remote_screenshot_error(body);
-        assert!(message.contains("declined"));
+        assert!(message.contains("declined") || message.contains("range is not allowed"));
         assert!(message.contains("range is not allowed"));
+        assert!(!message.to_lowercase().contains("pro plan"));
+    }
+
+    #[test]
+    fn rate_limit_upsell_is_rewritten() {
+        let body = br#"{"status":"fail","message":"Your daily rate limit has been reached. Upgrade to a PRO plan."}"#;
+        let message = remote_screenshot_error(body);
+        assert!(!message.to_lowercase().contains("pro plan"));
+        assert!(message.to_lowercase().contains("quota") || message.contains("headless"));
     }
 
     #[test]
