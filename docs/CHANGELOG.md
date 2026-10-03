@@ -146,7 +146,7 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 - **phpMyAdmin domain jail**: `/databases/phpmyadmin/open?domain=` mints an ephemeral MariaDB user granted only databases registered for that domain. Host open without `domain=` remains admin-only with full grants.
 - **Active webmail switching**: Host packages and `cpn app activate --name <client>` switch the active panel webmail among Tachyon, SnappyMail, Roundcube, and NextSnapMail (when installed). Preference is stored in `/var/lib/cpn/active-webmail.json`; panel-proxied clients also update `/opt/cpn-webmail/current`, `webmail-panel.json` public path, and PHP-FPM/proxy. Postfix/Dovecot mailboxes are unchanged.
 - **Nextcloud host package + NextSnapMail dependency chain**: `cpn app install --name nextcloud` (or Install Nextcloud first / Install Nextcloud + NextSnapMail on the NextSnapMail card) downloads Nextcloud under `/opt/nextcloud`, then installs the NextSnapMail app into `apps/nextsnapmail`. OCC/web setup remains an operator step for production.
-- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube` · `cpn app activate --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (no CyberPanel paths).
+- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube` · `cpn app activate --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (CPN host paths only).
 - **Uninstall confirmation with impact list**: Installed plugins and Host packages (`/plugins?view=host`) require a Confirm / Cancel dialog that lists services and features that will stop or become unavailable. POST `/plugins/uninstall` and `/apps/uninstall` reject requests without `confirm=1`. Host impacts live in `host_packages_catalog` (`uninstall_impacts`); plugins may declare them in catalog `meta.xml` (`<uninstall_impact>`) or `cpn-plugin.json`, with built-in maps for known ids (fail2ban, mtaSts, bimi, and similar) and a generic fallback otherwise.
 
 ### Changed
@@ -175,7 +175,7 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 - **SnappyMail defaults** for all accounts: **Convert HTML to Markdown** and **Allow styles** (`AllowStyles` / `<style>` CSS) default On (user-overridable). Existing accounts migrate once; later toggles are preserved.
 - **SnappyMail admin password** (`/?admin`) stays in sync with the password set via **Email > Change Password** (`/email/password`), and also when the CPN panel account password changes (forced change, profile change, reset, or first-account setup). Same operator password for panel mail ops and SnappyMail admin.
 - **SnappyMail Login**: **Try to determine user domain** defaults On (short login + multi-domain). Language selection / determine-language stay On.
-- **SnappyMail Branding**: page title **CPN Webmail**, loading text **CPN Panel**, favicon `/favicon.ico` (panel logo). Applied on install and heal/upgrade (never CyberPanel strings).
+- **SnappyMail Branding**: page title **CPN Webmail**, loading text **CPN Panel**, favicon `/favicon.ico` (panel logo). Applied on install and heal/upgrade (CPN branding only).
 - **SnappyMail Contacts**: enabled by default; prefer dedicated MariaDB AddressBook databases per lineage client (see Unreleased). Older releases used SQLite `AddressBook.sqlite` under webmail data.
 
 ### Added
@@ -407,7 +407,7 @@ Auto SSL and SPF/DKIM/DMARC on domain create, DKIM store auto-create, mail clien
 - Coordinates with Email MTA-STS/BIMI plugins for additional DNS records.
 - Lab Let's Encrypt FAIL without public DNS is expected and does not block create/readiness.
 - Open auto-login and OLS listener setup both call the phpMyAdmin storage ensure path.
-- No CyberPanel branding; control credentials are never logged or shown in URLs.
+- CPN branding only; control credentials are never logged or shown in URLs.
 
 
 ## [0.2.6-alpha.37] - 13/09/2026
@@ -431,7 +431,7 @@ WordPress installer plus phpMyAdmin Open auto-login via panel reverse-proxy (Car
 ### Notes
 
 - Host `:8081` NAT forward is optional; panel port alone is enough.
-- No CyberPanel branding; secrets are never shown in the Open URL.
+- CPN branding only; secrets are never shown in the Open URL.
 
 ### Changed
 
@@ -716,7 +716,7 @@ Cool live SSH MOTD and `cpn panel url` (Cargo `0.2.6-alpha.19`). Includes prior 
 
 ### Added
 
-- Cool CPN-branded interactive SSH MOTD (`/etc/profile.d/cpn-motd.sh`): ASCII banner, "This server has installed CPN", live login URL(s), start hints, load/CPU/RAM/disk/uptime. English only; no CyberPanel branding or passwords.
+- Cool CPN-branded interactive SSH MOTD (`/etc/profile.d/cpn-motd.sh`): ASCII banner, "This server has installed CPN", live login URL(s), start hints, load/CPU/RAM/disk/uptime. English only; CPN branding only; no passwords.
 - Operator commands: `cpn panel url`, `cpn panel status`, `cpn info` (status alias), and `cpn panel install-motd` (root). `--raw` for scripts; `--motd` for indented MOTD embedding.
 - MOTD resolves login URL(s) **live** on every interactive SSH login by calling `cpn panel url --motd` (fallback: `/etc/cpn` world-readable mirror, then `/var/lib/cpn`). Changing the panel port in the UI updates the next SSH banner without reinstall.
 - Non-secret login facts (`listen_port`, `panel_public_url`, `panel_hostname`) are mirrored to `/etc/cpn/` (mode 644) whenever the panel writes them, so non-root SSH users see the same live URL while `$CPN_DATA_DIR` stays mode 700 for secrets.
@@ -760,7 +760,7 @@ Renamed from former **`v1.0.1`** (tag and release removed). Same signed artifact
 - After a successful web or CLI install, CPN **enables and starts** `cpn-installer.service` so `/login` stays up after SSH disconnect and across reboot (package `%post` only reloads systemd; it did not enable the unit).
 - Optional remote bind persistence: when install/start used `--allow-remote` / `CPN_ALLOW_REMOTE=1`, CPN writes `/var/lib/cpn/allow_remote` and a systemd drop-in (`Environment=CPN_ALLOW_REMOTE=1`). Default remains localhost bind.
 - End-of-install / MOTD English hints: login URL, `systemctl` manage lines, and VirtualBox NAT host-forward tip (`2089` -> guest port => `http://127.0.0.1:2089/login` on the host).
-- CPN-branded SSH login MOTD (`/etc/profile.d/cpn-motd.sh`): panel version, login URL(s), start hints, and host resource stats (load, CPU load-based, RAM, disk `/`, uptime). Installed after a successful web or CLI install, and self-healed when starting `cpn-installer --web` as root. English only; no CyberPanel branding or passwords.
+- CPN-branded SSH login MOTD (`/etc/profile.d/cpn-motd.sh`): panel version, login URL(s), start hints, and host resource stats (load, CPU load-based, RAM, disk `/`, uptime). Installed after a successful web or CLI install, and self-healed when starting `cpn-installer --web` as root. English only; CPN branding only; no passwords.
 - Short English "panel ready" summary when starting the panel via `--web` / systemd (URL, port, version; password file path only when applicable elsewhere).
 - Interactive SSH/CLI installer path: `sudo cpn-installer --cli` (alias `--ssh`). Prompts for web engine, database, phpMyAdmin, panel port, optional hostname, optional mail, and first account without opening a browser.
 - Mode choice on interactive TTY when no front-end flag is passed: Web UI or SSH/CLI. Flags: `--web` / `--ui`, `--cli` / `--ssh`. Non-TTY and systemd default to the web UI (`ExecStart=... --web`).
