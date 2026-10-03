@@ -56,12 +56,7 @@ pub async fn wordpress_list_route(
             &user,
             "wordpress",
             "WordPress",
-            &wordpress_list_page(
-                notice.as_deref(),
-                error.as_deref(),
-                &wp_cli,
-                q.as_deref(),
-            ),
+            &wordpress_list_page(notice.as_deref(), error.as_deref(), &wp_cli, q.as_deref()),
         )
     })
     .await
