@@ -206,23 +206,37 @@ pub fn webmail_installed() -> bool {
 }
 
 pub fn mta_sts_unlocked() -> bool {
-    host_feature_enabled("mta-sts") || plugin_id_enabled_anywhere("mtaSts")
+    // Prefer O(1) host flag / host-plugin path. Scanning every site plugin tree
+    // (list_installed_all) can stall under heavy disk I/O and used to pin workers.
+    if host_feature_enabled("mta-sts") {
+        return true;
+    }
+    if crate::plugin_activation::host_plugin_installed("mtaSts") {
+        return true;
+    }
+    plugin_id_enabled_anywhere("mtaSts")
 }
 
 pub fn bimi_unlocked() -> bool {
-    host_feature_enabled("bimi") || plugin_id_enabled_anywhere("bimi")
+    if host_feature_enabled("bimi") {
+        return true;
+    }
+    if crate::plugin_activation::host_plugin_installed("bimi") {
+        return true;
+    }
+    plugin_id_enabled_anywhere("bimi")
 }
 
 /// Soft-gate body when MTA-STS / BIMI plugins are not installed.
 pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> String {
     let body = format!(
         r#"<p><strong>{label} is available as a free Plugin Store package.</strong></p>
-        <p>Install <code>{id}</code> for a website from the Plugin Store. After install, this page and the Email sidebar entry unlock automatically.</p>
+        <p>Install <code>{id}</code> from the Plugin Store (Host scope). After install, this page and the Email sidebar entry unlock automatically.</p>
         <p style="margin-top:16px;">
-          <a class="btn primary" href="/plugins?view=store">Open Plugin Store</a>
+          <a class="btn primary" href="/plugins?view=store&amp;category=Host">Open Plugin Store</a>
           <a class="btn" href="/plugins?view=store&amp;q={id_q}" style="margin-left:8px;">Search for {id}</a>
         </p>
-        <p class="muted" style="margin-top:12px;">CLI: <code>sudo cpn plugin install --domain example.com --id {id}</code></p>"#,
+        <p class="muted" style="margin-top:12px;">CLI: <code>sudo cpn plugin install --host --id {id}</code></p>"#,
         label = html_escape(feature_label),
         id = html_escape(plugin_id),
         id_q = urlencoding_attr(plugin_id),

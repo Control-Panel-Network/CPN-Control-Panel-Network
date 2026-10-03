@@ -347,10 +347,12 @@ fn reset_current_link(target: &Path) -> Result<(), String> {
 }
 
 fn write_php_fpm_pool(docroot: &str) -> Result<(), String> {
+    // Include /proc so sys_getloadavg()/Admin About system load can read loadavg
+    // when PHP enforces open_basedir on /proc (varies by PHP build).
     let open_basedir = if is_snappy_lineage_docroot(docroot) {
-        "/opt/cpn-webmail:/var/lib/cpn-webmail:/tmp"
+        "/opt/cpn-webmail:/var/lib/cpn-webmail:/tmp:/proc"
     } else {
-        "/opt/cpn-webmail:/tmp"
+        "/opt/cpn-webmail:/tmp:/proc"
     };
     let pool = format!(
         "[cpn-webmail]\n\
@@ -469,7 +471,10 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
     if is_snappy_lineage_docroot(docroot) {
         if Path::new(FPM_POOL).is_file() {
             let raw = std::fs::read_to_string(FPM_POOL).unwrap_or_default();
-            if !raw.contains("/var/lib/cpn-webmail") || !raw.contains("default_socket_timeout") {
+            if !raw.contains("/var/lib/cpn-webmail")
+                || !raw.contains("default_socket_timeout")
+                || !raw.contains(":/proc")
+            {
                 write_php_fpm_pool(docroot)?;
                 let _ = std::process::Command::new("systemctl")
                     .args(["restart", "php-fpm"])

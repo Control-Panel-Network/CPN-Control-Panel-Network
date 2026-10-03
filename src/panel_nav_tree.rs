@@ -72,9 +72,6 @@ fn group_block(
     }
     let mut child_rows = Vec::with_capacity(visible.len() + 1 + extra_children.len());
     let has_hub_child = visible.iter().any(|c| c.href == href);
-    if !has_hub_child && feats.allows_href(href) {
-        child_rows.push(child_button(&format!("{label} overview"), href));
-    }
     let mut seen = std::collections::HashSet::new();
     for child in visible {
         let key = format!("{}|{}", child.href, child.label);
@@ -89,6 +86,14 @@ fn group_block(
             continue;
         }
         child_rows.push(child_button(extra_label, extra_href));
+    }
+    // Hub overview after feature children so primary entries (e.g. Email Accounts)
+    // stay first and are not confused with the group hub URL.
+    if !has_hub_child && feats.allows_href(href) {
+        let hub_key = format!("{href}|{label} overview");
+        if seen.insert(hub_key) {
+            child_rows.push(child_button(&format!("{label} overview"), href));
+        }
     }
     if child_rows.is_empty() {
         return String::new();
@@ -259,6 +264,57 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{nav_links_html, nav_tree_styles};
+
+    #[test]
+    fn email_accounts_is_first_email_child_not_hub() {
+        let html = nav_links_html("email", "admin");
+        let group = html
+            .split("data-nav-group=\"email\"")
+            .nth(1)
+            .expect("email group");
+        let children = group
+            .split("<div class=\"nav-children\">")
+            .nth(1)
+            .and_then(|s| s.split("</div>").next())
+            .expect("email children");
+        assert!(
+            children.contains(r#"href="/email/accounts""#),
+            "Email Accounts must target /email/accounts"
+        );
+        assert!(
+            children.contains("<span>Email Accounts</span>"),
+            "Email Accounts label must render"
+        );
+        // Hub overview may exist, but must not precede Email Accounts.
+        let accounts_at = children
+            .find(r#"href="/email/accounts""#)
+            .expect("accounts href");
+        if let Some(overview_at) = children.find(r#"href="/email""#) {
+            assert!(
+                accounts_at < overview_at,
+                "Email Accounts must sort before Email overview hub link"
+            );
+        }
+        for (label, href) in [
+            ("Create Email", "/email/create"),
+            ("Change Password", "/email/password"),
+            ("DKIM Manager", "/email/dkim"),
+            ("Catch-All", "/email/catchall"),
+        ] {
+            assert!(
+                children.contains(&format!(r#"href="{href}""#)),
+                "{label} must keep clean href {href}"
+            );
+            assert!(
+                children.contains(&format!("<span>{label}</span>")),
+                "{label} label must render"
+            );
+        }
+        assert!(
+            !children.contains(r#"href="/email"><span>Email Accounts</span>"#),
+            "Email Accounts must never point at hub /email"
+        );
+    }
 
     #[test]
     fn nested_users_group_renders_child_buttons() {

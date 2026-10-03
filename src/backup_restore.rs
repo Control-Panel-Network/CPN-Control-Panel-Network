@@ -9,7 +9,8 @@ use crate::backup_restore_entities::{
     EntitySelection, EntityStatus, RestoreEntity, discover_entities,
 };
 use crate::backup_restore_extract::{
-    ArchiveKind, archive_kind, extract_archive_safe, list_archive_members,
+    ArchiveKind, LARGE_ARCHIVE_BYTES, archive_kind, extract_archive_prefixes, extract_archive_safe,
+    list_archive_members,
 };
 use crate::backup_restore_scan::find_restore_archive;
 use crate::sites::{SiteRecord, create_site, ensure_site_directories, load_site};
@@ -165,6 +166,48 @@ fn domain_tree_public_html(staging: &Path, domain: &str) -> Option<std::path::Pa
         return Some(candidate);
     }
     None
+}
+
+/// Prefixes for selective extract of large classic archives (websites + optional SQL/meta).
+fn classic_extract_prefixes(
+    members: &[String],
+    selected_domains: &[String],
+    include_sql: bool,
+) -> Vec<String> {
+    let mut prefixes = vec![
+        "public_html".into(),
+        "meta.xml".into(),
+        "homedir/public_html".into(),
+    ];
+    for d in selected_domains {
+        prefixes.push(format!("{d}/public_html"));
+        prefixes.push(d.clone());
+    }
+    for m in members {
+        let n = m.trim().trim_start_matches("./").replace('\\', "/");
+        let lower = n.to_ascii_lowercase();
+        if include_sql
+            && (lower.ends_with(".sql") || lower.ends_with(".sql.gz") || lower.ends_with("-db.gz"))
+        {
+            prefixes.push(n.clone());
+        }
+        if let Some((first, rest)) = n.split_once('/')
+            && first.contains('.')
+            && !first.starts_with('.')
+            && rest.starts_with("public_html")
+        {
+            prefixes.push(format!("{first}/public_html"));
+        }
+    }
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+fn archive_is_large(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .map(|m| m.len() >= LARGE_ARCHIVE_BYTES)
+        .unwrap_or(false)
 }
 
 fn build_entity_statuses(
@@ -348,9 +391,22 @@ pub fn restore_backup(req: &RestoreRequest) -> Result<RestoreResult, String> {
     fs::create_dir_all(&staging).map_err(|e| format!("Cannot create staging: {e}"))?;
 
     let outcome = (|| {
-        extract_archive_safe(&archive_path, &staging)?;
+        if archive_is_large(&archive_path)
+            && matches!(format, BackupFormat::CyberPanel | BackupFormat::Cpn)
+        {
+            let prefixes = classic_extract_prefixes(&members, &selected_domains, wants_sql);
+            extract_archive_prefixes(&archive_path, &staging, &prefixes)?;
+        } else {
+            extract_archive_safe(&archive_path, &staging)?;
+        }
         ensure_site_directories(&primary.docroot)?;
         let mut warnings = detected.notes.clone();
+        if archive_is_large(&archive_path) {
+            warnings.push(
+                "Large archive: used selective path extract for website trees (and SQL when selected) to reduce staging disk use."
+                    .into(),
+            );
+        }
         warnings.push(format!(
             "Archive source: {} ({})",
             hit.provenance,

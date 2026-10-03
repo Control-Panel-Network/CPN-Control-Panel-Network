@@ -300,7 +300,7 @@ pub fn email_accounts_main(
         {create}
       </article>"#,
         heading = section_heading(
-            "Email",
+            "Email Accounts",
             "Mail stack, Postfix default MTA, and per-mailbox SMTP validity.",
         ),
         ok = notice_block("ok", notice),

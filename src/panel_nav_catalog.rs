@@ -76,6 +76,10 @@ const EMAIL_CHILDREN: &[NavChild] = &[
         href: "/email/forwarding",
     },
     NavChild {
+        label: "Catch-All",
+        href: "/email/catchall",
+    },
+    NavChild {
         label: "Pattern Forwarding",
         href: "/email/pattern-forwarding",
     },

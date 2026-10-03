@@ -16,9 +16,14 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
             .body("Webmail is not installed on this host.");
     }
     // Best-effort: keep loopback docroot + PATH_INFO in sync with the preferred client.
+    // Run off the request path: SELinux/sieve heal can block for tens of seconds and
+    // would otherwise stall every /tachyon|/snappymail proxy hit (and panel workers)
+    // behind Once::call_once, which shows up as browser ERR_CONNECTION_RESET / timeout.
     static HEAL_ONCE: std::sync::Once = std::sync::Once::new();
     HEAL_ONCE.call_once(|| {
-        let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
+        std::thread::spawn(|| {
+            let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
+        });
     });
     let path = req.path();
     let Some(backend_path) = backend_path_for_webmail_proxy(path) else {
