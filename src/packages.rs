@@ -1,7 +1,7 @@
 //! Hosting packages and per-account quota ACL.
 //!
 //! Registry: `$CPN_DATA_DIR/packages.json` and `$CPN_DATA_DIR/package-assignments.json`.
-//! Unlimited limits use the sentinel `-1`.
+//! Unlimited limits use the sentinel `-1`. Submitted `0` is stored as `-1`.
 
 use crate::account::{data_dir, load_bootstrap, now_unix};
 use crate::account_mgmt::list_accounts;
@@ -9,9 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub use crate::package_limits::{
+    UNLIMITED, format_limit_display, is_unlimited, normalize_limit,
+};
+
 const SCHEMA_VERSION: u32 = 1;
-/// Sentinel for unlimited resource limits.
-pub const UNLIMITED: i64 = -1;
 pub const DEFAULT_PACKAGE_ID: &str = "pkg-default";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +30,7 @@ pub enum QuotaResource {
 pub struct Package {
     pub id: String,
     pub name: String,
-    /// Disk quota in MB (`-1` = unlimited).
+    /// Disk quota in MB (`-1` = unlimited; `0` is accepted and stored as `-1`).
     pub disk_mb: i64,
     /// Monthly bandwidth quota in MB (`-1` = unlimited), metered from site access logs.
     pub bandwidth_mb: i64,
@@ -193,7 +195,7 @@ fn save_assignments_file(file: &AssignmentsFile) -> Result<(), String> {
 fn validate_limit(name: &str, value: i64) -> Result<(), String> {
     if value < UNLIMITED {
         return Err(format!(
-            "{name} must be -1 (unlimited) or a non-negative number"
+            "{name} must be 0 or -1 (unlimited) or a positive number"
         ));
     }
     Ok(())
@@ -359,12 +361,12 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
     let pkg = Package {
         id: allocate_package_id(&file),
         name,
-        disk_mb: input.disk_mb,
-        bandwidth_mb: input.bandwidth_mb,
-        domains: input.domains,
-        emails: input.emails,
-        databases: input.databases,
-        ftp_accounts: input.ftp_accounts,
+        disk_mb: normalize_limit(input.disk_mb),
+        bandwidth_mb: normalize_limit(input.bandwidth_mb),
+        domains: normalize_limit(input.domains),
+        emails: normalize_limit(input.emails),
+        databases: normalize_limit(input.databases),
+        ftp_accounts: normalize_limit(input.ftp_accounts),
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
         sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
@@ -401,12 +403,12 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     } else {
         pkg.name = name;
     }
-    pkg.disk_mb = input.disk_mb;
-    pkg.bandwidth_mb = input.bandwidth_mb;
-    pkg.domains = input.domains;
-    pkg.emails = input.emails;
-    pkg.databases = input.databases;
-    pkg.ftp_accounts = input.ftp_accounts;
+    pkg.disk_mb = normalize_limit(input.disk_mb);
+    pkg.bandwidth_mb = normalize_limit(input.bandwidth_mb);
+    pkg.domains = normalize_limit(input.domains);
+    pkg.emails = normalize_limit(input.emails);
+    pkg.databases = normalize_limit(input.databases);
+    pkg.ftp_accounts = normalize_limit(input.ftp_accounts);
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
     pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;
@@ -487,15 +489,6 @@ pub fn package_for_account(username: &str) -> Result<Package, String> {
     get_package(DEFAULT_PACKAGE_ID)
 }
 
-pub fn format_limit_display(limit: i64, unit: &str) -> String {
-    if limit == UNLIMITED {
-        "Unlimited".into()
-    } else if unit.is_empty() {
-        limit.to_string()
-    } else {
-        format!("{limit} {unit}")
-    }
-}
 pub use crate::package_quota::{require_quota, require_site_create_allowed, usage_for_account};
 
 #[cfg(test)]

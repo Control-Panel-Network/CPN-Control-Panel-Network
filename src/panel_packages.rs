@@ -2,7 +2,7 @@
 
 use crate::account_mgmt::list_accounts;
 use crate::packages::{
-    Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin,
+    Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin, is_unlimited,
     list_packages, package_custom_name_for_edit, package_for_account, usage_for_account,
 };
 use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
@@ -47,8 +47,8 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
 }
 
 fn limit_cell(viewer: &str, limit: i64, unit: &str) -> String {
-    if limit == crate::packages::UNLIMITED {
-        r#"<span class="badge-ok">Unlimited</span>"#.into()
+    if is_unlimited(limit) {
+        crate::panel_storage_fmt::unlimited_html().into()
     } else if unit == "MB" {
         html_escape(&crate::panel_storage_fmt::format_mb_limit_for_user(
             viewer, limit,
@@ -159,13 +159,13 @@ fn bulk_toolbar() -> String {
         <button type="button" class="btn-secondary" id="pkg-toggle-bulk-edit" aria-expanded="false" aria-controls="pkg-bulk-edit">Bulk edit fields</button>
       </div>
       <div id="pkg-bulk-edit" hidden style="display:none;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:8px;padding:12px;border:1px solid var(--border, #d0d5dd);border-radius:8px;">
-        <p class="muted" style="grid-column:1/-1;margin:0;">Leave a field blank to keep each package value. Names are not changed.</p>
-        <label>Disk MB<input name="disk_mb" type="number" placeholder="unchanged"></label>
-        <label>Bandwidth MB<input name="bandwidth_mb" type="number" placeholder="unchanged"></label>
-        <label>Domains<input name="domains" type="number" placeholder="unchanged"></label>
-        <label>Emails<input name="emails" type="number" placeholder="unchanged"></label>
-        <label>Databases<input name="databases" type="number" placeholder="unchanged"></label>
-        <label>FTP accounts<input name="ftp_accounts" type="number" placeholder="unchanged"></label>
+        <p class="muted" style="grid-column:1/-1;margin:0;">Leave a field blank to keep each package value. Names are not changed. 0 or -1 = unlimited.</p>
+        <label>Disk MB<input name="disk_mb" type="number" min="-1" placeholder="unchanged"></label>
+        <label>Bandwidth MB<input name="bandwidth_mb" type="number" min="-1" placeholder="unchanged"></label>
+        <label>Domains<input name="domains" type="number" min="-1" placeholder="unchanged"></label>
+        <label>Emails<input name="emails" type="number" min="-1" placeholder="unchanged"></label>
+        <label>Databases<input name="databases" type="number" min="-1" placeholder="unchanged"></label>
+        <label>FTP accounts<input name="ftp_accounts" type="number" min="-1" placeholder="unchanged"></label>
         <label>FQDN
           <select name="fqdn_enabled">
             <option value="">Unchanged</option>
@@ -241,10 +241,10 @@ fn bulk_toolbar() -> String {
 /// Percent used plus an over-limit badge for the monthly bandwidth line.
 fn bandwidth_note(usage: &PackageUsage) -> String {
     let limit = usage.bandwidth_mb_limit;
-    if limit == crate::packages::UNLIMITED {
+    if is_unlimited(limit) {
         return String::new();
     }
-    if limit <= 0 {
+    if limit < 0 {
         return r#" <span class="badge-warn">Over limit</span>"#.into();
     }
     let pct = (usage.bandwidth_mb_used.saturating_mul(100)) / (limit as u64);
@@ -263,24 +263,32 @@ fn usage_card(viewer: &str, usage: &PackageUsage) -> String {
       <h2 style="margin:0 0 8px;font-size:18px;">Your package: {name}</h2>
       <p class="muted" style="margin:0 0 12px;">Limits apply to websites, mailboxes, databases, and FTP accounts you own.</p>
       <ul style="margin:0;padding-left:18px;line-height:1.7;">
-        <li>Domains: {d_used} / {d_limit}</li>
-        <li>Emails: {e_used} / {e_limit}</li>
-        <li>Databases: {db_used} / {db_limit}</li>
-        <li>FTP accounts: {f_used} / {f_limit}</li>
+        <li>Domains: {d}</li>
+        <li>Emails: {e}</li>
+        <li>Databases: {db}</li>
+        <li>FTP accounts: {f}</li>
         <li>Disk: {disk}</li>
         <li>Bandwidth (this month): {bw}{bw_note}</li>
         <li>FQDN / subdomains: {fqdn}</li>
       </ul>
     </div>"#,
         name = html_escape(&usage.package_name),
-        d_used = usage.domains_used,
-        d_limit = html_escape(&format_limit_display(usage.domains_limit, "")),
-        e_used = usage.emails_used,
-        e_limit = html_escape(&format_limit_display(usage.emails_limit, "")),
-        db_used = usage.databases_used,
-        db_limit = html_escape(&format_limit_display(usage.databases_limit, "")),
-        f_used = usage.ftp_used,
-        f_limit = html_escape(&format_limit_display(usage.ftp_limit, "")),
+        d = html_escape(&crate::panel_storage_fmt::format_used_count(
+            usage.domains_used,
+            usage.domains_limit,
+        )),
+        e = html_escape(&crate::panel_storage_fmt::format_used_count(
+            usage.emails_used,
+            usage.emails_limit,
+        )),
+        db = html_escape(&crate::panel_storage_fmt::format_used_count(
+            usage.databases_used,
+            usage.databases_limit,
+        )),
+        f = html_escape(&crate::panel_storage_fmt::format_used_count(
+            usage.ftp_used,
+            usage.ftp_limit,
+        )),
         disk = html_escape(&crate::panel_storage_fmt::format_used_mb_limit_for_user(
             viewer,
             usage.disk_mb_used,

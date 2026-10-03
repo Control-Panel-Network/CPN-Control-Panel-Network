@@ -115,3 +115,31 @@ fn edit_keeps_owner_prefix() {
         assert_eq!(package_custom_name_for_edit(&updated), "admin");
     });
 }
+
+#[test]
+fn zero_limit_saves_as_unlimited() {
+    with_test_data_dir(|| {
+        let pkg = create_package_for(
+            "ops",
+            PackageInput {
+                name: "Open".into(),
+                disk_mb: 0,
+                bandwidth_mb: 0,
+                domains: 0,
+                emails: 0,
+                databases: 0,
+                ftp_accounts: 0,
+                fqdn_enabled: true,
+                notes: String::new(),
+                sidebar_hidden_nav_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(pkg.disk_mb, UNLIMITED);
+        assert_eq!(pkg.bandwidth_mb, UNLIMITED);
+        assert_eq!(pkg.domains, UNLIMITED);
+        assert!(is_unlimited(pkg.emails));
+        assert_eq!(format_limit_display(pkg.disk_mb, "MB"), "∞");
+        assert_eq!(format_limit_display(0, ""), "∞");
+    });
+}

@@ -62,7 +62,7 @@ pub struct UserUiPrefs {
     /// Cleared or past values mean the card is shown again.
     #[serde(default)]
     pub ssh_security_review_snooze_until: Option<i64>,
-    /// Dashboard overview widget order (`sites`, `gauges`, `tools`, `health`, `activity`).
+    /// Dashboard overview widget order (`sites`, `stats`, `gauges`, `tools`, `health`, `activity`).
     #[serde(default)]
     pub dashboard_widgets: Vec<String>,
     /// Activity Board expanded. Default false (collapsed).

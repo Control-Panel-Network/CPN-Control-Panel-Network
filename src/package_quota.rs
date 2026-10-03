@@ -1,9 +1,7 @@
 //! Package quota usage and create-time enforcement.
 
 use crate::mail_accounts;
-use crate::packages::{
-    PackageUsage, QuotaResource, UNLIMITED, format_limit_display, package_for_account,
-};
+use crate::packages::{PackageUsage, QuotaResource, format_limit_display, package_for_account};
 use crate::resource_accounts::{list_databases, list_ftp_accounts};
 use crate::sites::{list_sites, parent_domain_candidates, site_home_from_record};
 use std::fs;
@@ -116,7 +114,7 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 }
 
 fn limit_reached(used: u64, limit: i64) -> bool {
-    if limit == UNLIMITED {
+    if crate::packages::is_unlimited(limit) {
         return false;
     }
     if limit < 0 {
