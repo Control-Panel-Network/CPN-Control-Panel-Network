@@ -25,7 +25,10 @@ pub fn detect_redis() -> AppStatus {
             "Redis packages are present but the service is not running.".into(),
         )
     } else {
-        (AppStateKind::NotInstalled, "Redis is not installed on this host.".into())
+        (
+            AppStateKind::NotInstalled,
+            "Redis is not installed on this host.".into(),
+        )
     };
     AppStatus {
         id: AppId::Redis,

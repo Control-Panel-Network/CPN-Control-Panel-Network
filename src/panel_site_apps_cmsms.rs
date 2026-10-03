@@ -72,7 +72,9 @@ pub fn detect_cmsms(site: &SiteRecord) -> CmsmsStatus {
             format!("CMS Made Simple {version} detected in this site document root.")
         }
     } else if installer_present {
-        format!("Installer {CMSMS_INSTALLER} is in the document root. Finish setup in the browser, then remove the installer.")
+        format!(
+            "Installer {CMSMS_INSTALLER} is in the document root. Finish setup in the browser, then remove the installer."
+        )
     } else {
         format!("CMS Made Simple is not installed. Target {CMSMS_TARGET}.")
     };

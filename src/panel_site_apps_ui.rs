@@ -41,7 +41,8 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     let domain = html_escape(&site.domain);
     let csrf = html_escape(&site_tools_csrf_token(username, &site.domain));
     let admin = is_panel_admin(username);
-    let site_url = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
+    let site_url =
+        public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let site_url_q = html_escape(&site_url);
     let installer_open = format!(
         "{}/{}",
@@ -94,9 +95,8 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     match snap.redis_host {
         AppStateKind::Running | AppStateKind::Installed => {
             if snap.redis_attached {
-                redis_actions.push_str(
-                    r#"<span class="manage-badge active">Attached to site</span>"#,
-                );
+                redis_actions
+                    .push_str(r#"<span class="manage-badge active">Attached to site</span>"#);
                 redis_actions.push_str(&format!(
                     r#"<form method="post" action="/websites/apps" class="inline-form" onsubmit="return confirm('Detach Redis from this site? The host Redis install is not removed.');">
   <input type="hidden" name="domain" value="{domain}">

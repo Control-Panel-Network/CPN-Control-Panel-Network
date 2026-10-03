@@ -226,14 +226,20 @@ pub fn save_runtime(
 ) -> Result<String, String> {
     let home = site_home_from_record(site);
     let _ = jail_rel_under_home(&home, app_rel)?;
-    if entry.trim().is_empty() || entry.contains("..") || entry.contains('/') || entry.contains('\\')
+    if entry.trim().is_empty()
+        || entry.contains("..")
+        || entry.contains('/')
+        || entry.contains('\\')
     {
         return Err("Entry file must be a single name under the app path".into());
     }
     let versions = discover_versions(kind);
     let bin = version_bin.trim();
     if !bin.is_empty() && !versions.iter().any(|(p, _)| p == bin) {
-        return Err(format!("{} binary is not available on this host", kind.label()));
+        return Err(format!(
+            "{} binary is not available on this host",
+            kind.label()
+        ));
     }
     let mut file = load_file(&site.domain);
     let cfg = RuntimeConfig {
@@ -266,7 +272,11 @@ fn resolve_bin(kind: RuntimeKind, preferred: &str) -> Result<String, String> {
     Ok(versions[0].0.clone())
 }
 
-fn ensure_app_dir(site: &SiteRecord, kind: RuntimeKind, cfg: &RuntimeConfig) -> Result<PathBuf, String> {
+fn ensure_app_dir(
+    site: &SiteRecord,
+    kind: RuntimeKind,
+    cfg: &RuntimeConfig,
+) -> Result<PathBuf, String> {
     let home = site_home_from_record(site);
     let dir = jail_rel_under_home(&home, &cfg.app_rel)?;
     fs::create_dir_all(&dir).map_err(|e| format!("Could not create app path: {e}"))?;
@@ -276,9 +286,7 @@ fn ensure_app_dir(site: &SiteRecord, kind: RuntimeKind, cfg: &RuntimeConfig) -> 
             RuntimeKind::Node => {
                 "const http = require('http');\nconst port = process.env.PORT || 3000;\nhttp.createServer((_, res) => { res.writeHead(200, {'Content-Type':'text/plain'}); res.end('CPN Node app');\n}).listen(port);\n"
             }
-            RuntimeKind::Python => {
-                "print('CPN Python app ready')\n"
-            }
+            RuntimeKind::Python => "print('CPN Python app ready')\n",
         };
         fs::write(&entry, stub).map_err(|e| format!("Could not write default entry: {e}"))?;
     }
@@ -351,7 +359,10 @@ pub fn stop_runtime(site: &SiteRecord, kind: RuntimeKind) -> Result<String, Stri
         .status()
         .map_err(|e| format!("Could not stop {}: {e}", kind.label()))?;
     if !status.success() {
-        return Err(format!("Could not stop {} (unit may already be inactive).", kind.label()));
+        return Err(format!(
+            "Could not stop {} (unit may already be inactive).",
+            kind.label()
+        ));
     }
     Ok(format!("Stopped {} app for this site.", kind.label()))
 }

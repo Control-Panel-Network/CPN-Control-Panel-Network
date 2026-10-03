@@ -34,7 +34,10 @@ pub fn snapshot_site_apps(site: &SiteRecord) -> SiteAppsSnapshot {
     }
 }
 
-pub fn jail_rel_under_home(home: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+pub fn jail_rel_under_home(
+    home: &std::path::Path,
+    rel: &str,
+) -> Result<std::path::PathBuf, String> {
     let trimmed = rel.trim().trim_start_matches('/').trim_start_matches('\\');
     if trimmed.is_empty() {
         return Err("App path is required".into());
