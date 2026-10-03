@@ -6,6 +6,7 @@ use crate::login_next::login_redirect;
 use crate::packages::require_site_create_allowed;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
+use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
     plugin_dashboard_main, plugin_settings_main, settings_from_form,
@@ -80,6 +81,7 @@ pub async fn websites_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(String::as_str);
+    spawn_origin_backup_pass();
     html_ok(panel_shell(
         &user,
         "websites",
@@ -128,6 +130,7 @@ pub async fn subdomains_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(String::as_str);
+    spawn_origin_backup_pass();
     html_ok(panel_shell(
         &user,
         "websites",

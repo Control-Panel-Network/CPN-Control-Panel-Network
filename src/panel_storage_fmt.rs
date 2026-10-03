@@ -60,9 +60,9 @@ pub fn format_mb_limit(pref: StorageUnitPref, limit_mb: i64) -> String {
 pub fn format_used_limit(pref: StorageUnitPref, used_bytes: u64, limit_mb: i64) -> String {
     let used = format_bytes_with(pref, used_bytes);
     if limit_mb == UNLIMITED {
-        format!("{used} / Unlimited")
+        format!("Used {used} of Unlimited")
     } else {
-        format!("{used} / {}", format_mb_limit(pref, limit_mb))
+        format!("Used {used} of {}", format_mb_limit(pref, limit_mb))
     }
 }
 
@@ -79,7 +79,6 @@ pub fn format_bytes_with(pref: StorageUnitPref, bytes: u64) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Unit {
-    B,
     Kb,
     Mb,
     Gb,
@@ -94,20 +93,27 @@ fn auto_unit(bytes: u64) -> Unit {
         Unit::Gb
     } else if v >= MB {
         Unit::Mb
-    } else if v >= KB {
-        Unit::Kb
     } else {
-        Unit::B
+        // Floor is KB: never print a bare byte unit.
+        Unit::Kb
     }
 }
 
 fn format_unit(bytes: u64, unit: Unit, auto: bool) -> String {
-    if unit == Unit::B {
-        return format!("{} B", group_u64(bytes));
+    if bytes == 0 && unit == Unit::Kb {
+        return "0 KB".into();
     }
     let (div, label, default_decimals) = match unit {
-        Unit::B => unreachable!(),
-        Unit::Kb => (KB, "KB", if auto { 0 } else { 1 }),
+        Unit::Kb => {
+            let decimals = if auto && (bytes as f64) < KB {
+                2
+            } else if auto {
+                0
+            } else {
+                1
+            };
+            (KB, "KB", decimals)
+        }
         Unit::Mb => (MB, "MB", 1),
         Unit::Gb => (GB, "GB", 1),
         Unit::Tb => (TB, "TB", 2),
@@ -199,15 +205,20 @@ mod tests {
     #[test]
     fn auto_keeps_small_values_in_kb() {
         assert_eq!(format_bytes_with(StorageUnitPref::Auto, 5 * 1024), "5 KB");
-        assert_eq!(format_bytes_with(StorageUnitPref::Auto, 512), "512 B");
+        assert_eq!(format_bytes_with(StorageUnitPref::Auto, 987), "0.96 KB");
+        assert_eq!(format_bytes_with(StorageUnitPref::Auto, 0), "0 KB");
+        let tiny = format_bytes_with(StorageUnitPref::Auto, 512);
+        assert!(tiny.ends_with(" KB"), "{tiny}");
+        assert!(!tiny.contains(" B"), "{tiny}");
     }
 
     #[test]
     fn used_over_limit_pairs_units() {
         let s = format_used_limit(StorageUnitPref::Auto, 5 * 1024, 500_000);
-        assert!(s.starts_with("5 KB / "), "{s}");
+        assert!(s.starts_with("Used 5 KB of "), "{s}");
         assert!(s.contains("GB"), "{s}");
         assert!(!s.contains("500000"), "{s}");
+        assert!(!s.contains(" / "), "{s}");
     }
 
     #[test]
@@ -232,7 +243,7 @@ mod tests {
         );
         assert_eq!(
             format_used_limit(StorageUnitPref::Auto, 1024, UNLIMITED),
-            "1 KB / Unlimited"
+            "Used 1 KB of Unlimited"
         );
     }
 }
