@@ -1,7 +1,9 @@
-﻿//! Authenticated `/wordpress` panel routes.
+//! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     wordpress_install_page, wordpress_list_page, wordpress_manage_page,
@@ -10,9 +12,9 @@ use crate::panel_wordpress_ui::{
 use crate::wordpress_install::{WordpressInstallRequest, install_wordpress, parse_plugin_sources};
 use crate::wordpress_manage::{
     activate_theme, all_sites_snapshot, delete_wordpress, install_plugin, refresh_wordpress_site,
-    scan_wordpress_sites, set_debugging, set_maintenance, set_password_protection,
-    set_search_indexing,
+    set_debugging, set_maintenance, set_password_protection, set_search_indexing,
 };
+use crate::wordpress_scan::scan_wordpress_sites;
 use crate::wordpress_wpcli::{detect_wp_cli, ensure_wp_cli};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -45,18 +47,24 @@ pub async fn wordpress_list_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let wp_cli = detect_wp_cli();
-    html_ok(panel_shell(
-        &user,
-        "wordpress",
-        "WordPress",
-        &wordpress_list_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            &wp_cli,
-            query.get("q").map(String::as_str),
-        ),
-    ))
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let q = query.get("q").cloned();
+    html_blocking(move || {
+        let wp_cli = detect_wp_cli();
+        panel_shell(
+            &user,
+            "wordpress",
+            "WordPress",
+            &wordpress_list_page(
+                notice.as_deref(),
+                error.as_deref(),
+                &wp_cli,
+                q.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[get("/wordpress/subsites")]
@@ -68,18 +76,24 @@ pub async fn wordpress_subsites_list_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let wp_cli = detect_wp_cli();
-    html_ok(panel_shell(
-        &user,
-        "wordpress",
-        "WordPress Sub-sites",
-        &wordpress_subsites_list_page(
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            &wp_cli,
-            query.get("q").map(String::as_str),
-        ),
-    ))
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let q = query.get("q").cloned();
+    html_blocking(move || {
+        let wp_cli = detect_wp_cli();
+        panel_shell(
+            &user,
+            "wordpress",
+            "WordPress Sub-sites",
+            &wordpress_subsites_list_page(
+                notice.as_deref(),
+                error.as_deref(),
+                &wp_cli,
+                q.as_deref(),
+            ),
+        )
+    })
+    .await
 }
 
 #[get("/wordpress/install")]
@@ -246,20 +260,46 @@ pub async fn wordpress_manage_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let domain = query.get("domain").map(String::as_str).unwrap_or("");
+    let domain = query
+        .get("domain")
+        .map(String::as_str)
+        .unwrap_or("")
+        .to_string();
     if domain.trim().is_empty() {
         return wp_redirect("/wordpress", None, Some("Domain is required"));
     }
-    let tab = query.get("tab").map(String::as_str).unwrap_or("general");
-    let snapshots = match all_sites_snapshot() {
-        Ok(list) => list,
-        Err(error) => {
-            return wp_redirect("/wordpress", None, Some(&error));
+    let tab = query
+        .get("tab")
+        .cloned()
+        .unwrap_or_else(|| "general".to_string());
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let snap = match tokio::time::timeout(
+        crate::panel_hub_http::HUB_RENDER_BUDGET,
+        tokio::task::spawn_blocking(all_sites_snapshot),
+    )
+    .await
+    {
+        Ok(Ok(Ok(list))) => list,
+        Ok(Ok(Err(err))) => return wp_redirect("/wordpress", None, Some(&err)),
+        Ok(Err(_)) => {
+            return wp_redirect(
+                "/wordpress",
+                None,
+                Some("Could not load WordPress sites (worker failed)"),
+            );
+        }
+        Err(_) => {
+            return wp_redirect(
+                "/wordpress",
+                None,
+                Some("Timed out loading WordPress sites. Try again."),
+            );
         }
     };
-    let Some(snapshot) = snapshots
+    let Some(snapshot) = snap
         .into_iter()
-        .find(|s| s.site.domain.eq_ignore_ascii_case(domain))
+        .find(|s| s.site.domain.eq_ignore_ascii_case(&domain))
     else {
         return wp_redirect(
             "/wordpress",
@@ -271,12 +311,7 @@ pub async fn wordpress_manage_route(
         &user,
         "wordpress",
         "Manage WordPress",
-        &wordpress_manage_page(
-            &snapshot,
-            tab,
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-        ),
+        &wordpress_manage_page(&snapshot, &tab, notice.as_deref(), error.as_deref()),
     ))
 }
 
@@ -284,6 +319,31 @@ pub async fn wordpress_manage_route(
 pub struct WordpressDomainForm {
     #[serde(default)]
     domain: String,
+}
+
+fn wordpress_scan_notice(results: &[crate::wordpress_manage::WordpressRefreshResult]) -> String {
+    let sub_names: Vec<&str> = results
+        .iter()
+        .filter(|r| crate::backups::is_subdomain_site(&r.site.domain))
+        .map(|r| r.site.domain.as_str())
+        .collect();
+    let main_count = results.len().saturating_sub(sub_names.len());
+    if sub_names.is_empty() {
+        format!("Scan complete. Refreshed {} site(s).", results.len())
+    } else if main_count == 0 {
+        format!(
+            "Scan complete. Found {} WordPress sub-site(s): {}.",
+            sub_names.len(),
+            sub_names.join(", ")
+        )
+    } else {
+        format!(
+            "Scan complete. Refreshed {} main and {} sub-site(s). Sub-sites: {}.",
+            main_count,
+            sub_names.len(),
+            sub_names.join(", ")
+        )
+    }
 }
 
 #[post("/wordpress/scan")]
@@ -295,14 +355,10 @@ pub async fn wordpress_scan_post(
         return login_redirect(&http);
     };
     match scan_wordpress_sites() {
-        Ok(results) => wp_redirect(
-            "/wordpress",
-            Some(&format!(
-                "Scan complete. Refreshed {} site(s).",
-                results.len()
-            )),
-            None,
-        ),
+        Ok(results) => {
+            let notice = wordpress_scan_notice(&results);
+            wp_redirect("/wordpress", Some(&notice), None)
+        }
         Err(error) => wp_redirect("/wordpress", None, Some(&error)),
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::account::now_unix;
 use crate::panel_ops_php::detect_php;
-use crate::sites::{list_sites, normalize_domain};
+use crate::sites::normalize_domain;
 use crate::wordpress::{
     WordpressSite, delete_wordpress_site, get_wordpress_site, list_wordpress_sites,
     upsert_wordpress_site,
@@ -161,60 +161,6 @@ pub fn refresh_wordpress_site(domain_raw: &str) -> Result<WordpressRefreshResult
 
     let saved = upsert_wordpress_site(site)?;
     Ok(WordpressRefreshResult { site: saved, notes })
-}
-
-pub fn scan_wordpress_sites() -> Result<Vec<WordpressRefreshResult>, String> {
-    let mut results = Vec::new();
-    let registered: Vec<String> = list_wordpress_sites()
-        .into_iter()
-        .map(|s| s.domain)
-        .collect();
-
-    for site in list_sites().unwrap_or_default() {
-        let docroot = PathBuf::from(&site.docroot);
-        if !is_wordpress_docroot(&docroot) {
-            continue;
-        }
-        let domain = site.domain.clone();
-        if get_wordpress_site(&domain).is_none() {
-            let now = now_unix();
-            let stub = WordpressSite {
-                id: crate::wordpress::new_site_id(),
-                domain: domain.clone(),
-                title: domain.clone(),
-                docroot: site.docroot.clone(),
-                site_url: format!("https://{domain}"),
-                admin_user: "-".into(),
-                db_name: "-".into(),
-                db_user: "-".into(),
-                owner: site.owner.clone(),
-                wp_version: String::new(),
-                php_version: String::new(),
-                theme: String::new(),
-                plugin_count: 0,
-                search_indexing: true,
-                debugging: false,
-                maintenance: false,
-                password_protection: false,
-                created_at_unix: now,
-                updated_at_unix: now,
-            };
-            upsert_wordpress_site(stub)?;
-        }
-        if let Ok(refreshed) = refresh_wordpress_site(&domain) {
-            results.push(refreshed);
-        }
-    }
-
-    for domain in registered {
-        if results.iter().any(|r| r.site.domain == domain) {
-            continue;
-        }
-        if let Ok(refreshed) = refresh_wordpress_site(&domain) {
-            results.push(refreshed);
-        }
-    }
-    Ok(results)
 }
 
 pub fn install_plugin(domain_raw: &str, source: &str) -> Result<String, String> {
