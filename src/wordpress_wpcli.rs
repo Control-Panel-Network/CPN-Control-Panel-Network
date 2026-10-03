@@ -337,7 +337,7 @@ pub fn sanitize_wp_cli_error(raw: &str) -> String {
         .join(" ");
     if compact.len() > 280 {
         compact.truncate(277);
-        compact.push('...');
+        compact.push_str("...");
     }
     if compact.is_empty() {
         "WordPress tooling failed. Check logs and try again.".into()
