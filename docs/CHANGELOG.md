@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 03/10/2026
+
+Patch release after v1.1.1. Ships Website/WordPress list splits, origin vs Cloudflare SSL badges, live Site preview for stub sub-domains, storage unit scaling, sidebar hub overviews first, WordPress install/WP-CLI fixes, and origin Let's Encrypt backup with auto retry.
+
 ### Changed
 
 - **Sidebar hub overview first**: Every expandable category (Settings, Email, Websites, WordPress, Users, Security, Databases, FTP, Plugins, Docker, Logs, LiteSpeed, and the rest) now lists `{Category} overview` as the first child under the parent, linking to the hub URL. Feature children stay after that (Email Accounts, List Websites, Version Management, and so on). This reverses Email overview-after-children.
@@ -27,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Site preview for sub-domains**: `/preview/{domain}/` no longer serves the CPN **Site ready** placeholder when the local docroot is still the default stub. Preview fetches the live public URL (`https://` for internet hostnames) with an 8s timeout, injects a `<base href>` so CSS/images load from origin, and keeps Preview Mode chrome. Thumbnails on `/subdomains` Refresh from that live origin with a local headless browser (no loopback rewrite). Cache is dropped on refresh. Remote screenshot quota / PRO-plan copy is not shown; Microlink runs only when no browser binary exists. System Repair can install `chromium-headless` / Chromium. Discover AlmaLinux `headless_shell` paths and cache under `/var/lib/cpn/site-previews/`.
+- **WordPress install / WP-CLI**: Plugin ZIP upload on install/create, public WP-CLI phar fetch, and Ensure showing the real WP-CLI version (not a blank or stale string).
 
 ## [1.1.1] - 03/10/2026
 
