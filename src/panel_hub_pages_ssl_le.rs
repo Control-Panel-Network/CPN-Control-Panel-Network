@@ -102,8 +102,7 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
         } else {
             String::new()
         };
-        let backup_btn = if r.validity
-            == crate::panel_ops_ssl_inspect::SslValidityKind::None
+        let backup_btn = if r.validity == crate::panel_ops_ssl_inspect::SslValidityKind::None
             && r.provider != "custom"
         {
             format!(

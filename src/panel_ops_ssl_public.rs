@@ -265,9 +265,9 @@ pub fn ssl_list_badge_html(view: &PublicSslView) -> String {
     let (bg, fg, class) = match view.kind {
         PublicSslKind::OriginValid => ("rgba(18,183,106,.18)", "#6ce9a6", ""),
         PublicSslKind::OriginExpiring => ("rgba(247,144,9,.2)", "#fdb022", ""),
-        PublicSslKind::OriginExpired | PublicSslKind::OriginInvalid | PublicSslKind::OriginMismatch => {
-            ("rgba(240,68,56,.18)", "#f97066", "")
-        }
+        PublicSslKind::OriginExpired
+        | PublicSslKind::OriginInvalid
+        | PublicSslKind::OriginMismatch => ("rgba(240,68,56,.18)", "#f97066", ""),
         PublicSslKind::CloudflareEdge => ("rgba(59,130,246,.2)", "#93c5fd", " cf"),
         PublicSslKind::None => ("rgba(152,162,179,.16)", "#98a2b3", " off"),
     };
