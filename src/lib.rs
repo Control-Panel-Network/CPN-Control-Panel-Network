@@ -398,4 +398,5 @@ pub mod website_preview_routes;
 pub mod wordpress;
 pub mod wordpress_install;
 pub mod wordpress_manage;
+pub mod wordpress_scan;
 pub mod wordpress_wpcli;
