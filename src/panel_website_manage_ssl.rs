@@ -31,11 +31,13 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
             html_escape(&insight.sans.join(", "))
         };
         let cf = if view.proxied {
-            "Cloudflare orange-cloud proxy is on for this hostname."
+            "Orange-cloud proxy is on."
+        } else if site.ssl.provider == SslProvider::CloudflareCa {
+            "Provider is Cloudflare CA (not the same as a Valid origin cert)."
         } else if view.zone_linked {
-            "Cloudflare zone is linked; proxy is DNS-only (not public edge TLS)."
+            "Zone linked; DNS is grey-cloud."
         } else {
-            "Cloudflare proxy was not detected for this hostname."
+            "Cloudflare proxy was not detected."
         };
         format!(
             r#"<div class="manage-ssl ssl-{kind}" style="margin-bottom:16px;">
@@ -43,8 +45,7 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
     {badge}
     <p class="ssl-meta" style="margin-top:10px;">Origin expires: <strong>{expires}</strong> · Issuer: <strong>{issuer}</strong></p>
     <p class="ssl-meta">SANs: <strong>{sans}</strong></p>
-    <p>{detail}</p>
-    <p class="manage-muted">This badge is origin certificate files on this server (and live HTTPS on the site vhost). It is not Cloudflare orange-cloud edge TLS. Visitors can still get HTTPS via Cloudflare while origin has no local cert. {cf}</p>
+    <p class="manage-muted">{detail} {cf} Valid requires origin files with a real expiry (dd/mm/yyyy).</p>
   </div>
 </div>"#,
             kind = view.kind.as_str(),
