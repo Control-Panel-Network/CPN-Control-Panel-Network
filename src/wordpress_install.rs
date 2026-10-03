@@ -6,11 +6,17 @@ use crate::panel_ops_php::detect_php;
 use crate::resource_accounts;
 use crate::sites::{create_site, load_site, normalize_domain};
 use crate::wordpress::{WordpressSite, get_wordpress_site, new_site_id, upsert_wordpress_site};
+use crate::wordpress_core_fetch::extract_wordpress_core_via_curl;
 use crate::wordpress_manage::refresh_wordpress_site;
-use crate::wordpress_wpcli::{ensure_wp_cli, is_wordpress_docroot, wp_run};
+use crate::wordpress_wpcli::{
+    chown_docroot_to_web_user, ensure_wp_cli, is_wordpress_docroot, wp_run,
+};
 use rand::{Rng, distr::Alphanumeric};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+const MAX_PLUGIN_ZIP_BYTES: usize = 40 * 1024 * 1024;
+const MAX_PLUGIN_ZIP_COUNT: usize = 8;
 
 #[derive(Debug, Clone)]
 pub struct WordpressInstallRequest {
@@ -22,6 +28,8 @@ pub struct WordpressInstallRequest {
     pub admin_email: String,
     pub site_url: String,
     pub plugin_sources: Vec<String>,
+    /// Absolute paths to uploaded plugin ZIP files (installed after core).
+    pub plugin_zip_paths: Vec<PathBuf>,
     pub create_site_if_missing: bool,
 }
 
@@ -29,6 +37,115 @@ pub struct WordpressInstallRequest {
 pub struct WordpressInstallResult {
     pub site: WordpressSite,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadedPluginZip {
+    pub filename: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Persist uploaded plugin ZIPs under the CPN data tmp tree; returns absolute paths.
+pub fn store_uploaded_plugin_zips(
+    owner: &str,
+    uploads: &[UploadedPluginZip],
+) -> Result<Vec<PathBuf>, String> {
+    if uploads.is_empty() {
+        return Ok(Vec::new());
+    }
+    if uploads.len() > MAX_PLUGIN_ZIP_COUNT {
+        return Err(format!(
+            "Too many plugin ZIP uploads (max {MAX_PLUGIN_ZIP_COUNT})"
+        ));
+    }
+    let owner_safe: String = owner
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    // Stage outside private /var/lib/cpn so site-user WP-CLI can read the ZIP.
+    let dir = PathBuf::from("/var/tmp/cpn-wp-plugin-uploads")
+        .join(format!("{owner_safe}-{}", now_unix()));
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create upload directory: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o755));
+    }
+    let mut out = Vec::new();
+    for upload in uploads {
+        let name = sanitize_zip_filename(&upload.filename)?;
+        if upload.bytes.is_empty() {
+            return Err(format!("Plugin ZIP `{name}` is empty"));
+        }
+        if upload.bytes.len() > MAX_PLUGIN_ZIP_BYTES {
+            return Err(format!(
+                "Plugin ZIP `{name}` exceeds {} MB limit",
+                MAX_PLUGIN_ZIP_BYTES / (1024 * 1024)
+            ));
+        }
+        if !looks_like_zip(&upload.bytes) {
+            return Err(format!("`{name}` is not a valid ZIP archive"));
+        }
+        let path = dir.join(&name);
+        fs::write(&path, &upload.bytes)
+            .map_err(|e| format!("Could not save plugin ZIP `{name}`: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o644));
+        }
+        out.push(path);
+    }
+    if let Some(user) = crate::wordpress_wpcli::preferred_site_run_user() {
+        let dir_s = dir.to_string_lossy().to_string();
+        let spec = format!("{user}:{user}");
+        let _ = std::process::Command::new("chown")
+            .args(["-R", &spec, &dir_s])
+            .status();
+    }
+    Ok(out)
+}
+
+fn sanitize_zip_filename(raw: &str) -> Result<String, String> {
+    let base = Path::new(raw)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .trim();
+    if base.is_empty() {
+        return Err("Plugin ZIP filename is required".into());
+    }
+    let lower = base.to_ascii_lowercase();
+    if !lower.ends_with(".zip") {
+        return Err(format!("Plugin upload `{base}` must be a .zip file"));
+    }
+    if base.contains("..") || base.contains('/') || base.contains('\\') {
+        return Err("Plugin ZIP filename is invalid".into());
+    }
+    let safe: String = base
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if safe.len() < 5 {
+        return Err("Plugin ZIP filename is too short".into());
+    }
+    Ok(safe)
+}
+
+fn looks_like_zip(bytes: &[u8]) -> bool {
+    bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B
 }
 
 /// Split raw plugin input on comma, newline, semicolon, or whitespace.
@@ -100,9 +217,16 @@ fn remove_placeholder_index(docroot: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Prefer curl+tar for core files (often seconds). Fall back to WP-CLI download.
 fn wp_core_download(docroot: &Path) -> Result<(), String> {
-    wp_run(docroot, &["core", "download", "--force"])?;
-    Ok(())
+    match extract_wordpress_core_via_curl(docroot) {
+        Ok(()) => Ok(()),
+        Err(curl_err) => wp_run(docroot, &["core", "download", "--force"])
+            .map(|_| ())
+            .map_err(|wp_err| {
+                format!("WordPress core download failed (curl: {curl_err}; wp-cli: {wp_err})")
+            }),
+    }
 }
 
 fn wp_config_create(
@@ -234,6 +358,13 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
         notes.push("Removed placeholder index.html.".into());
     }
 
+    match chown_docroot_to_web_user(&docroot) {
+        Ok(user) => notes.push(format!(
+            "Set document root ownership to `{user}` before WordPress install."
+        )),
+        Err(error) => notes.push(format!("Ownership note: {error}")),
+    }
+
     let db_name = db_ident_from_domain(&domain);
     let db_user = db_name.clone();
     let db_password = random_db_password();
@@ -243,11 +374,25 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
         "Created MariaDB database `{db_name}` with dedicated user."
     ));
 
-    resource_accounts::create_database(owner, &db_name, &domain)?;
-    notes.push("Registered database in CPN resource registry.".into());
+    // Partial retries often leave a registry row after MariaDB IF NOT EXISTS succeeds.
+    match resource_accounts::create_database(owner, &db_name, &domain) {
+        Ok(_) => notes.push("Registered database in CPN resource registry.".into()),
+        Err(error) if error.to_ascii_lowercase().contains("already exists") => {
+            notes.push(format!(
+                "Reusing existing CPN database registry entry `{db_name}`."
+            ));
+        }
+        Err(error) => return Err(error),
+    }
 
     wp_core_download(&docroot)?;
     notes.push("Downloaded WordPress core.".into());
+
+    if let Ok(user) = chown_docroot_to_web_user(&docroot) {
+        notes.push(format!(
+            "Confirmed document root ownership as `{user}` after download."
+        ));
+    }
 
     wp_config_create(&docroot, &db_name, &db_user, &db_password)?;
     notes.push("Created wp-config.php.".into());
@@ -267,6 +412,24 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
             Ok(()) => notes.push(format!("Installed plugin `{source}`.")),
             Err(error) => notes.push(format!("Plugin `{source}` failed: {error}")),
         }
+    }
+
+    for zip_path in &req.plugin_zip_paths {
+        let label = zip_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("plugin.zip");
+        let path_s = zip_path.display().to_string();
+        match wp_plugin_install_activate(&docroot, &path_s) {
+            Ok(()) => notes.push(format!("Installed uploaded plugin ZIP `{label}`.")),
+            Err(error) => notes.push(format!("Uploaded plugin ZIP `{label}` failed: {error}")),
+        }
+    }
+    if let Some(first) = req.plugin_zip_paths.first()
+        && let Some(parent) = first.parent()
+        && parent.to_string_lossy().contains("cpn-wp-plugin-uploads")
+    {
+        let _ = fs::remove_dir_all(parent);
     }
 
     let php_version = detect_php().version.unwrap_or_else(|| "-".into());
@@ -333,5 +496,13 @@ mod tests {
     #[test]
     fn db_ident_from_domain_sanitizes() {
         assert!(db_ident_from_domain("blog.example.com").starts_with("wp_"));
+    }
+
+    #[test]
+    fn sanitize_zip_filename_accepts_plugin_zip() {
+        let name = sanitize_zip_filename("oceanwatcher-maintenance-mode-0.5.0-beta.6.zip")
+            .expect("zip name");
+        assert!(name.ends_with(".zip"));
+        assert!(looks_like_zip(&[0x50, 0x4B, 0x03, 0x04]));
     }
 }
