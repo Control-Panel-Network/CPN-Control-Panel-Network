@@ -25,8 +25,6 @@ pub fn live_public_url(domain: &str, relative: &str) -> Result<String, String> {
     let origin = origin.trim_end_matches('/');
     let url = if rel.is_empty() {
         format!("{origin}/")
-    } else if rel.starts_with('?') || rel.starts_with('#') {
-        format!("{origin}/{rel}")
     } else {
         format!("{origin}/{rel}")
     };
@@ -90,12 +88,12 @@ pub fn fetch_live_origin(domain: &str, relative: &str) -> Result<LiveFetch, Stri
         }
     });
     let mut bytes = body;
-    if ctype.to_ascii_lowercase().contains("text/html") {
-        if let Ok(text) = std::str::from_utf8(&bytes) {
-            let origin = live_public_origin(domain)?;
-            bytes = inject_live_base(text, &origin).into_bytes();
-            ctype = "text/html; charset=utf-8".into();
-        }
+    if ctype.to_ascii_lowercase().contains("text/html")
+        && let Ok(text) = std::str::from_utf8(&bytes)
+    {
+        let origin = live_public_origin(domain)?;
+        bytes = inject_live_base(text, &origin).into_bytes();
+        ctype = "text/html; charset=utf-8".into();
     }
     Ok(LiveFetch {
         bytes,
@@ -138,15 +136,15 @@ fn inject_live_base(html: &str, origin: &str) -> String {
     if html.to_ascii_lowercase().contains("<base ") {
         return html.to_string();
     }
-    if let Some(idx) = html.to_ascii_lowercase().find("<head") {
-        if let Some(end) = html[idx..].find('>') {
-            let at = idx + end + 1;
-            let mut out = String::with_capacity(html.len() + tag.len() + 1);
-            out.push_str(&html[..at]);
-            out.push_str(&tag);
-            out.push_str(&html[at..]);
-            return out;
-        }
+    if let Some(idx) = html.to_ascii_lowercase().find("<head")
+        && let Some(end) = html[idx..].find('>')
+    {
+        let at = idx + end + 1;
+        let mut out = String::with_capacity(html.len() + tag.len() + 1);
+        out.push_str(&html[..at]);
+        out.push_str(&tag);
+        out.push_str(&html[at..]);
+        return out;
     }
     format!("{tag}{html}")
 }
