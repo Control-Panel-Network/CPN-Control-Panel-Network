@@ -290,7 +290,6 @@ fn usage_card(usage: &PackageUsage) -> String {
     )
 }
 
-
 fn assign_form(packages: &[Package]) -> String {
     let accounts = list_accounts().unwrap_or_default();
     if accounts.is_empty() {

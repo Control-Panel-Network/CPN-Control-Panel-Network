@@ -1,8 +1,6 @@
 //! Create/update helpers that enforce `{owner}_{custom}` package names.
 
-use crate::package_naming::{
-    normalize_owned_package_name, package_owner_from_name,
-};
+use crate::package_naming::{normalize_owned_package_name, package_owner_from_name};
 use crate::packages::{
     DEFAULT_PACKAGE_ID, Package, PackageInput, create_package, get_package, update_package,
 };

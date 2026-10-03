@@ -54,11 +54,7 @@ impl BulkOutcome {
 }
 
 /// Copy plan limits/features into a new package owned by `owner`.
-pub fn duplicate_package(
-    source_id: &str,
-    new_name: &str,
-    owner: &str,
-) -> Result<Package, String> {
+pub fn duplicate_package(source_id: &str, new_name: &str, owner: &str) -> Result<Package, String> {
     let src = get_package(source_id)?;
     let name = new_name.trim();
     if name.is_empty() {

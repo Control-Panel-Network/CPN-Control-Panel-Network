@@ -212,7 +212,8 @@ pub(crate) fn apply_package_hint(
                 .into_iter()
                 .find(|p| {
                     p.name.eq_ignore_ascii_case(&pkg_name)
-                        || p.name.eq_ignore_ascii_case(&format!("{username}_{pkg_name}"))
+                        || p.name
+                            .eq_ignore_ascii_case(&format!("{username}_{pkg_name}"))
                 })
                 .ok_or(e)?;
             warnings.push(format!(

@@ -29,8 +29,7 @@ pub fn sanitize_package_custom_name(raw: &str) -> Result<String, String> {
             }
             _ => {
                 return Err(
-                    "Package name may only contain letters, numbers, underscore, and hyphen"
-                        .into(),
+                    "Package name may only contain letters, numbers, underscore, and hyphen".into(),
                 );
             }
         }
