@@ -34,10 +34,7 @@ pub fn is_public_internet_host(host_raw: &str) -> bool {
     if host.is_empty() || crate::website_preview::is_blocked_preview_host(&host) {
         return false;
     }
-    if PRIVATE_SUFFIXES
-        .iter()
-        .any(|suffix| host.ends_with(suffix))
-    {
+    if PRIVATE_SUFFIXES.iter().any(|suffix| host.ends_with(suffix)) {
         return false;
     }
     let Some(tld) = host.rsplit('.').next() else {

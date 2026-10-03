@@ -159,7 +159,10 @@ fn split_curl_headers(raw: &[u8]) -> Result<(String, Vec<u8>), String> {
     let mut i = 0usize;
     while i + 4 < bytes.len() {
         if bytes[i] == b'H'
-            && bytes.get(i..i + 5).map(|s| s.eq_ignore_ascii_case(b"HTTP/")) == Some(true)
+            && bytes
+                .get(i..i + 5)
+                .map(|s| s.eq_ignore_ascii_case(b"HTTP/"))
+                == Some(true)
         {
             last_header_start = Some(i);
         }
@@ -234,7 +237,9 @@ mod tests {
             "https://cmstest.newstargeted.com/",
             "timeout",
         );
-        assert!(!crate::website_preview_stub::html_looks_like_placeholder(&html));
+        assert!(!crate::website_preview_stub::html_looks_like_placeholder(
+            &html
+        ));
         assert!(html.contains("Live preview unavailable"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
     }

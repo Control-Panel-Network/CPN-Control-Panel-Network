@@ -172,10 +172,9 @@ pub async fn preview_content(
         let domain = site.domain.clone();
         let live = crate::website_preview_live::live_public_origin(&domain)
             .unwrap_or_else(|_| format!("https://{}", domain));
-        let fetched = web::block(move || {
-            crate::website_preview_live::fetch_live_origin(&domain, &relative)
-        })
-        .await;
+        let fetched =
+            web::block(move || crate::website_preview_live::fetch_live_origin(&domain, &relative))
+                .await;
         return match fetched {
             Ok(Ok(item)) => HttpResponse::Ok()
                 .content_type(item.content_type)
@@ -188,7 +187,9 @@ pub async fn preview_content(
                 .append_header(("Cache-Control", "private, no-store"))
                 .append_header(("X-CPN-Preview-Origin", "live-error"))
                 .body(crate::website_preview_live::live_fetch_error_html(
-                    &site.domain, &live, &err,
+                    &site.domain,
+                    &live,
+                    &err,
                 )),
             Err(_) => HttpResponse::Ok()
                 .content_type("text/html; charset=utf-8")
