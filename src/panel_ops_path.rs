@@ -13,6 +13,16 @@ pub fn root_jail() -> PathBuf {
     PathBuf::from("/")
 }
 
+/// Cap File Manager directory listings so restore-sized trees cannot OOM the panel.
+pub const MAX_LIST_ENTRIES: usize = 2_000;
+
+#[derive(Debug, Clone)]
+pub struct DirListResult {
+    pub entries: Vec<DirEntryInfo>,
+    /// True when more entries exist than `MAX_LIST_ENTRIES`.
+    pub truncated: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct DirEntryInfo {
     /// Filesystem basename (used for operations).
@@ -138,23 +148,43 @@ pub fn is_protected_path(path: &Path) -> bool {
 }
 
 /// List directory entries with size, mtime, and permission labels.
+///
+/// Never follows symlinks for metadata (avoids hangs on bad mounts). Caps at
+/// [`MAX_LIST_ENTRIES`] so huge restore trees cannot exhaust panel memory.
 pub fn list_dir(path: &Path) -> Result<Vec<DirEntryInfo>, String> {
-    let meta =
-        std::fs::metadata(path).map_err(|e| format!("Cannot stat {}: {e}", path.display()))?;
+    Ok(list_dir_detailed(path)?.entries)
+}
+
+/// Same as [`list_dir`] but reports whether the listing was truncated.
+pub fn list_dir_detailed(path: &Path) -> Result<DirListResult, String> {
+    let meta = std::fs::symlink_metadata(path)
+        .map_err(|e| format!("Cannot stat {}: {e}", path.display()))?;
     if !meta.is_dir() {
         return Err("Not a directory".into());
     }
     let mut entries = Vec::new();
+    let mut truncated = false;
     let rd = std::fs::read_dir(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
     for ent in rd.flatten() {
+        if entries.len() >= MAX_LIST_ENTRIES {
+            truncated = true;
+            break;
+        }
         let basename = ent.file_name().to_string_lossy().to_string();
         if basename == "." || basename == ".." {
             continue;
         }
-        let is_symlink = ent.file_type().map(|t| t.is_symlink()).unwrap_or(false);
-        let meta = ent.metadata().ok();
-        let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-        let size = if is_dir {
+        let file_type = ent.file_type().ok();
+        let is_symlink = file_type.as_ref().map(|t| t.is_symlink()).unwrap_or(false);
+        // Never follow symlinks when stating entries (restore trees / bad mounts).
+        let meta = std::fs::symlink_metadata(ent.path()).ok();
+        let is_dir = if is_symlink {
+            false
+        } else {
+            meta.as_ref().map(|m| m.is_dir()).unwrap_or(false)
+                || file_type.as_ref().map(|t| t.is_dir()).unwrap_or(false)
+        };
+        let size = if is_dir || is_symlink {
             0
         } else {
             meta.as_ref().map(|m| m.len()).unwrap_or(0)
@@ -191,7 +221,7 @@ pub fn list_dir(path: &Path) -> Result<Vec<DirEntryInfo>, String> {
         (false, true) => std::cmp::Ordering::Greater,
         _ => a.basename.to_lowercase().cmp(&b.basename.to_lowercase()),
     });
-    Ok(entries)
+    Ok(DirListResult { entries, truncated })
 }
 
 fn format_mtime(t: SystemTime) -> String {
@@ -317,5 +347,25 @@ mod tests {
         assert!(is_protected_path(Path::new("/")));
         assert!(is_protected_path(Path::new("/etc")));
         assert!(!is_protected_path(Path::new("/home/site")));
+    }
+
+    #[test]
+    fn list_dir_caps_entries() {
+        let dir = std::env::temp_dir().join(format!(
+            "cpn-fm-list-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for i in 0..(MAX_LIST_ENTRIES + 25) {
+            std::fs::write(dir.join(format!("f{i}.txt")), b"x").unwrap();
+        }
+        let listing = list_dir_detailed(&dir).unwrap();
+        assert_eq!(listing.entries.len(), MAX_LIST_ENTRIES);
+        assert!(listing.truncated);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
