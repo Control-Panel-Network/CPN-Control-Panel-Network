@@ -225,8 +225,8 @@ pub(crate) fn apply_package_hint(
         Err(e) => return Err(e),
     };
     assign_package(username, &pkg.id)?;
-    let limit_label = if pkg.domains == UNLIMITED {
-        "unlimited".to_string()
+    let limit_label = if crate::packages::is_unlimited(pkg.domains) {
+        "∞".to_string()
     } else {
         pkg.domains.to_string()
     };

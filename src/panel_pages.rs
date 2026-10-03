@@ -398,7 +398,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
@@ -407,6 +407,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_dashboard_tools::dashboard_tools_styles(),
         crate::panel_dashboard_layout::dashboard_layout_styles(),
+        crate::panel_dashboard_stats::dashboard_stats_styles(),
         crate::panel_dashboard_activity::activity_board_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),

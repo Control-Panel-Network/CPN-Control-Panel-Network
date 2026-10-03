@@ -3,7 +3,7 @@
 //! Package quotas stay stored as MB integers (`-1` unlimited). Display converts those
 //! MB values to bytes (1024-based) so Auto never prints `500000 MB`.
 
-use crate::packages::UNLIMITED;
+use crate::packages::is_unlimited;
 use crate::panel_user_prefs::{StorageUnitPref, load_user_storage_unit};
 
 const KB: f64 = 1024.0;
@@ -11,9 +11,17 @@ const MB: f64 = KB * 1024.0;
 const GB: f64 = MB * 1024.0;
 const TB: f64 = GB * 1024.0;
 
+/// Infinity glyph used when a quota is unlimited.
+pub const INFINITY_MARK: &str = "∞";
+
+/// Accessible infinity mark for HTML tables and meters.
+pub fn unlimited_html() -> &'static str {
+    r#"<span class="cpn-unlimited" title="Unlimited" aria-label="Unlimited">∞</span>"#
+}
+
 /// Bytes in one stored package megabyte (binary MiB).
 pub fn mb_limit_to_bytes(mb: i64) -> Option<u64> {
-    if mb == UNLIMITED || mb < 0 {
+    if is_unlimited(mb) || mb < 0 {
         return None;
     }
     u64::try_from(mb).ok()?.checked_mul(1024 * 1024)
@@ -48,8 +56,8 @@ pub fn format_used_mb_limit_for_user(username: &str, used_mb: u64, limit_mb: i64
 }
 
 pub fn format_mb_limit(pref: StorageUnitPref, limit_mb: i64) -> String {
-    if limit_mb == UNLIMITED {
-        return "Unlimited".into();
+    if is_unlimited(limit_mb) {
+        return INFINITY_MARK.into();
     }
     match mb_limit_to_bytes(limit_mb) {
         Some(bytes) => format_bytes_with(pref, bytes),
@@ -59,10 +67,15 @@ pub fn format_mb_limit(pref: StorageUnitPref, limit_mb: i64) -> String {
 
 pub fn format_used_limit(pref: StorageUnitPref, used_bytes: u64, limit_mb: i64) -> String {
     let used = format_bytes_with(pref, used_bytes);
-    if limit_mb == UNLIMITED {
-        format!("Used {used} of Unlimited")
+    format!("Used {used} of {}", format_mb_limit(pref, limit_mb))
+}
+
+/// Count meters (`Used 3 of ∞`) for domains, mailboxes, and similar quotas.
+pub fn format_used_count(used: u64, limit: i64) -> String {
+    if is_unlimited(limit) {
+        format!("Used {used} of {INFINITY_MARK}")
     } else {
-        format!("Used {used} of {}", format_mb_limit(pref, limit_mb))
+        format!("Used {used} of {limit}")
     }
 }
 
@@ -238,13 +251,13 @@ mod tests {
 
     #[test]
     fn unlimited_stays_unlimited() {
-        assert_eq!(
-            format_mb_limit(StorageUnitPref::Auto, UNLIMITED),
-            "Unlimited"
-        );
+        assert_eq!(format_mb_limit(StorageUnitPref::Auto, UNLIMITED), "∞");
+        assert_eq!(format_mb_limit(StorageUnitPref::Auto, 0), "∞");
         assert_eq!(
             format_used_limit(StorageUnitPref::Auto, 1024, UNLIMITED),
-            "Used 1 KB of Unlimited"
+            "Used 1 KB of ∞"
         );
+        assert_eq!(format_used_count(3, 0), "Used 3 of ∞");
+        assert_eq!(format_used_count(3, 10), "Used 3 of 10");
     }
 }

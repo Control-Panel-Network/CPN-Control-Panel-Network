@@ -2,7 +2,8 @@
 
 use crate::panel_user_prefs::{UserUiPrefs, load_user_ui_prefs, save_user_ui_prefs};
 
-pub const DEFAULT_DASH_WIDGETS: [&str; 5] = ["sites", "gauges", "tools", "health", "activity"];
+pub const DEFAULT_DASH_WIDGETS: [&str; 6] =
+    ["sites", "stats", "gauges", "tools", "health", "activity"];
 
 pub fn is_known_widget(id: &str) -> bool {
     DEFAULT_DASH_WIDGETS.contains(&id)
@@ -246,6 +247,7 @@ mod tests {
                 "activity".to_string(),
                 "gauges".into(),
                 "sites".into(),
+                "stats".into(),
                 "tools".into(),
                 "health".into()
             ]

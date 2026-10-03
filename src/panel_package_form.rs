@@ -2,8 +2,10 @@
 
 use crate::account_mgmt::list_accounts;
 use crate::packages::{
-    DEFAULT_PACKAGE_ID, Package, package_custom_name_for_edit, package_owner_from_name,
+    DEFAULT_PACKAGE_ID, Package, is_unlimited, package_custom_name_for_edit,
+    package_owner_from_name,
 };
+use crate::panel_storage_fmt::unlimited_html;
 
 fn html_escape(value: &str) -> String {
     value
@@ -11,6 +13,24 @@ fn html_escape(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+fn limit_field(name: &str, label: &str, value: &str) -> String {
+    let mark = if value.parse::<i64>().ok().is_some_and(is_unlimited) {
+        format!(" {}", unlimited_html())
+    } else {
+        String::new()
+    };
+    format!(
+        r#"<label>{label}{mark}
+        <input name="{name}" type="number" min="-1" required value="{value}">
+        <span class="muted" style="font-weight:500;">0 or -1 = unlimited</span>
+      </label>"#,
+        label = html_escape(label),
+        mark = mark,
+        name = html_escape(name),
+        value = html_escape(value),
+    )
 }
 
 pub(crate) fn package_form(
@@ -123,24 +143,12 @@ pub(crate) fn package_form(
       <label>{name_label}
         <input name="name"{name_attrs} value="{name}">
       </label>
-      <label>Disk space (MB, -1 = unlimited)
-        <input name="disk_mb" type="number" required value="{disk}">
-      </label>
-      <label>Bandwidth (MB, -1 = unlimited)
-        <input name="bandwidth_mb" type="number" required value="{bw}">
-      </label>
-      <label>Domains (-1 = unlimited)
-        <input name="domains" type="number" required value="{domains}">
-      </label>
-      <label>Emails (-1 = unlimited)
-        <input name="emails" type="number" required value="{emails}">
-      </label>
-      <label>Databases (-1 = unlimited)
-        <input name="databases" type="number" required value="{dbs}">
-      </label>
-      <label>FTP accounts (-1 = unlimited)
-        <input name="ftp_accounts" type="number" required value="{ftp}">
-      </label>
+      {disk_field}
+      {bw_field}
+      {domains_field}
+      {emails_field}
+      {dbs_field}
+      {ftp_field}
       <label style="display:flex;align-items:center;gap:8px;">
         <input type="checkbox" name="fqdn_enabled" value="1"{fqdn_checked}>
         Allow FQDN / subdomain creation
@@ -158,12 +166,12 @@ pub(crate) fn package_form(
         name_label = html_escape(name_label),
         name_attrs = name_attrs,
         name = html_escape(&name_value),
-        disk = html_escape(&disk),
-        bw = html_escape(&bw),
-        domains = html_escape(&domains),
-        emails = html_escape(&emails),
-        dbs = html_escape(&dbs),
-        ftp = html_escape(&ftp),
+        disk_field = limit_field("disk_mb", "Disk space (MB)", &disk),
+        bw_field = limit_field("bandwidth_mb", "Bandwidth (MB)", &bw),
+        domains_field = limit_field("domains", "Domains", &domains),
+        emails_field = limit_field("emails", "Emails", &emails),
+        dbs_field = limit_field("databases", "Databases", &dbs),
+        ftp_field = limit_field("ftp_accounts", "FTP accounts", &ftp),
         fqdn_checked = fqdn_checked,
         notes = html_escape(notes),
         sidebar = package_sidebar_fields(pkg),
