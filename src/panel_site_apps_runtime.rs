@@ -6,7 +6,7 @@ use crate::panel_site_apps::jail_rel_under_home;
 use crate::sites::{SiteRecord, site_home_from_record};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -264,10 +264,8 @@ fn resolve_bin(kind: RuntimeKind, preferred: &str) -> Result<String, String> {
             kind.label()
         ));
     }
-    if !preferred.is_empty() {
-        if versions.iter().any(|(p, _)| p == preferred) {
-            return Ok(preferred.to_string());
-        }
+    if !preferred.is_empty() && versions.iter().any(|(p, _)| p == preferred) {
+        return Ok(preferred.to_string());
     }
     Ok(versions[0].0.clone())
 }
