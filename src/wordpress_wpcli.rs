@@ -76,6 +76,11 @@ fn which_wp() -> Option<String> {
             return Some(candidate.to_string());
         }
     }
+    // Prefer the world-readable copy so site-user WP-CLI can open the phar.
+    let public = public_phar_path();
+    if phar_looks_valid(&public) {
+        return Some(phar_bin_spec(&public));
+    }
     let phar = bundled_phar_path();
     if phar.is_file() {
         return Some(phar_bin_spec(&phar));
@@ -85,6 +90,36 @@ fn which_wp() -> Option<String> {
 
 pub fn bundled_phar_path() -> PathBuf {
     paths::join_data("bin").join("wp-cli.phar")
+}
+
+/// World-readable WP-CLI phar outside the private CPN data tree (often mode 700).
+pub fn public_phar_path() -> PathBuf {
+    PathBuf::from("/usr/local/lib/cpn/wp-cli.phar")
+}
+
+fn sync_public_phar(private: &Path) -> Result<PathBuf, String> {
+    let public = public_phar_path();
+    if let Some(parent) = public.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
+        }
+    }
+    fs::copy(private, &public).map_err(|e| {
+        format!(
+            "Could not publish WP-CLI phar to {}: {e}",
+            public.display()
+        )
+    })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&public, fs::Permissions::from_mode(0o755));
+    }
+    Ok(public)
 }
 
 fn bundled_version_cache_path() -> PathBuf {
@@ -302,7 +337,7 @@ pub fn sanitize_wp_cli_error(raw: &str) -> String {
         .join(" ");
     if compact.len() > 280 {
         compact.truncate(277);
-        compact.push('…');
+        compact.push('...');
     }
     if compact.is_empty() {
         "WordPress tooling failed. Check logs and try again.".into()
@@ -519,13 +554,14 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
         downloaded = true;
     }
 
-    let bin = phar_bin_spec(&phar);
-    let mut version = probe_wp_cli_version(&bin);
+    // Probe via private path first (root can read /var/lib/cpn), then publish.
+    let private_bin = phar_bin_spec(&phar);
+    let mut version = probe_wp_cli_version(&private_bin);
     if version.is_none() {
         // Corrupt or incomplete phar: re-download once and probe again.
         download_phar(&phar)?;
         downloaded = true;
-        version = probe_wp_cli_version(&bin);
+        version = probe_wp_cli_version(&private_bin);
     }
     let version = version.ok_or_else(|| {
         "WP-CLI was installed, but version could not be read. Check PHP CLI and try Ensure WP-CLI again."
@@ -533,15 +569,19 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
     })?;
     write_version_cache(&version);
 
+    let public = sync_public_phar(&phar)?;
+    let bin = phar_bin_spec(&public);
+
     // Always refresh version above (never leave the UI Version as `-` when phar exists).
     let detail = if downloaded {
         format!(
             "WP-CLI ensured: {version} at {} (memory_limit={WP_CLI_PHP_MEMORY_LIMIT}).",
-            phar.display()
+            public.display()
         )
     } else {
         format!("WP-CLI ensured: {version}")
     };
+
     Ok(WpCliStatus {
         available: true,
         binary: Some(bin),
@@ -662,6 +702,11 @@ mod tests {
             format_wp_cli_binary("/usr/local/bin/wp"),
             "/usr/local/bin/wp"
         );
+        assert_eq!(
+            public_phar_path(),
+            PathBuf::from("/usr/local/lib/cpn/wp-cli.phar")
+        );
+        assert!(!bin_is_private_phar(&phar_bin_spec(&public_phar_path())));
     }
 
     #[test]
