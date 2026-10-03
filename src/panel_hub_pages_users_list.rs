@@ -148,11 +148,7 @@ fn sort_ind(opts: &UsersListOpts, col: &str) -> &'static str {
     if users_sort_from_query(&opts.sort) != col {
         return "";
     }
-    if opts.order == "desc" {
-        " ▼"
-    } else {
-        " ▲"
-    }
+    if opts.order == "desc" { " ▼" } else { " ▲" }
 }
 
 fn pager_html(opts: &UsersListOpts, page: usize, total_pages: usize, filtered: usize) -> String {
@@ -350,7 +346,13 @@ mod tests {
         assert_eq!(users_per_page_from_query("10"), 10);
         assert_eq!(users_sort_from_query("email"), "email");
         assert_eq!(users_order_from_query("DESC"), "desc");
-        let opts = users_list_opts(Some("Adm"), Some("role"), Some("desc"), Some("2"), Some("5"));
+        let opts = users_list_opts(
+            Some("Adm"),
+            Some("role"),
+            Some("desc"),
+            Some("2"),
+            Some("5"),
+        );
         assert_eq!(opts.q, "adm");
         assert_eq!(opts.sort, "role");
         assert_eq!(opts.order, "desc");

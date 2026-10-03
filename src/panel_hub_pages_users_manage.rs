@@ -3,7 +3,9 @@
 use crate::account_mgmt::find_account;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_pages_profile::users_self_edit_body_with_tab;
-use crate::panel_password_gen::{password_field_and_gen_html, password_gen_script, password_gen_styles};
+use crate::panel_password_gen::{
+    password_field_and_gen_html, password_gen_script, password_gen_styles,
+};
 
 fn html_escape(value: &str) -> String {
     value

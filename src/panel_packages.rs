@@ -355,9 +355,12 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
     );
     if !is_panel_admin(username) {
         let usage = usage_for_account(username).ok();
-        let card = usage.as_ref().map(|u| usage_card(username, u)).unwrap_or_else(|| {
-            r#"<p class="panel-notice error">Could not load your package limits.</p>"#.into()
-        });
+        let card = usage
+            .as_ref()
+            .map(|u| usage_card(username, u))
+            .unwrap_or_else(|| {
+                r#"<p class="panel-notice error">Could not load your package limits.</p>"#.into()
+            });
         return format!(
             "{heading}{notices}<div class=\"panel-card\"><h2 style=\"margin:0 0 12px;font-size:18px;\">| Your limits</h2>{card}</div>"
         );

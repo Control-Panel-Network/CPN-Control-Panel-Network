@@ -2,10 +2,10 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::panel_storage_fmt::format_bytes_for_user;
 use crate::panel_website_bandwidth::bandwidth_for_site;
 use crate::panel_website_metrics_chart::metrics_chart_svg;
 use crate::panel_website_metrics_ring::{WINDOW_SECS, record_host_sample, stats_for};
-use crate::panel_storage_fmt::format_bytes_for_user;
 use crate::site_acl::{SitePerm, require_manage_site};
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use serde::Deserialize;

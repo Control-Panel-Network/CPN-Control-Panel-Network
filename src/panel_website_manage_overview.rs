@@ -2,6 +2,7 @@
 
 use crate::panel_ops_db::list_databases;
 use crate::panel_ops_ftp::detect_ftp;
+use crate::panel_storage_fmt::format_bytes_for_user;
 use crate::panel_user_prefs::load_user_minimalist_mode;
 use crate::panel_website_bandwidth::{BandwidthInfo, bandwidth_for_site};
 use crate::panel_website_manage_overview_script::overview_metrics_script;
@@ -10,7 +11,6 @@ use crate::panel_website_metrics_chart::metrics_chart_svg;
 use crate::panel_website_metrics_ring::{
     MetricSample, WINDOW_SECS, load_samples, record_host_sample, stats_for,
 };
-use crate::panel_storage_fmt::format_bytes_for_user;
 use crate::panel_website_resources::approx_dir_bytes;
 use crate::service_detect::detect_web_server_label;
 use crate::site_preview_list_ui::manage_overview_preview;

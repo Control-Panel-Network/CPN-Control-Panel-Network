@@ -226,7 +226,10 @@ mod tests {
 
     #[test]
     fn unlimited_stays_unlimited() {
-        assert_eq!(format_mb_limit(StorageUnitPref::Auto, UNLIMITED), "Unlimited");
+        assert_eq!(
+            format_mb_limit(StorageUnitPref::Auto, UNLIMITED),
+            "Unlimited"
+        );
         assert_eq!(
             format_used_limit(StorageUnitPref::Auto, 1024, UNLIMITED),
             "1 KB / Unlimited"
