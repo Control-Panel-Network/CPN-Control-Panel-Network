@@ -401,6 +401,7 @@ pub mod upgrade_verify;
 pub mod website_preview;
 pub mod website_preview_routes;
 pub mod wordpress;
+pub mod wordpress_core_fetch;
 pub mod wordpress_install;
 pub mod wordpress_manage;
 pub mod wordpress_scan;
