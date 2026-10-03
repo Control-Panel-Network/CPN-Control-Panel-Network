@@ -1,9 +1,6 @@
 //! Host app lifecycle: detect, install, start, stop, reinstall, uninstall via dnf/apt.
-//!
-//! Supported apps: MariaDB, PostgreSQL, phpMyAdmin, Email (Postfix+Dovecot), RabbitMQ,
-//! Docker (engine), webmail.
-//! CPN installs MariaDB only as the MySQL-compatible host database (not Oracle MySQL).
-//! PostgreSQL is opt-in and may coexist with MariaDB.
+//! MariaDB is the MySQL-compatible host database. PostgreSQL is opt-in. Redis is a host engine
+//! that sites may attach. Docker and webmail are host packages.
 
 use crate::apps_email::{detect_mail_stack_public, email_packages_installed};
 use crate::apps_pkg::{
@@ -20,6 +17,7 @@ pub enum AppId {
     Phpmyadmin,
     Email,
     Rabbitmq,
+    Redis,
     Docker,
     Snappymail,
     Tachyon,
@@ -41,6 +39,7 @@ impl AppId {
             "phpmyadmin" | "php-myadmin" => Ok(Self::Phpmyadmin),
             "email" | "mail" => Ok(Self::Email),
             "rabbitmq" => Ok(Self::Rabbitmq),
+            "redis" | "redis-server" => Ok(Self::Redis),
             "docker" | "podman" | "container" | "containers" => Ok(Self::Docker),
             "snappymail" | "snappy" => Ok(Self::Snappymail),
             "tachyon" => Ok(Self::Tachyon),
@@ -49,7 +48,7 @@ impl AppId {
             "nextsnapmail" | "next-snapmail" | "nextcloud-snappymail" => Ok(Self::Nextsnapmail),
             "sogo" => Ok(Self::Sogo),
             other => Err(format!(
-                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, tachyon, roundcube, nextcloud, nextsnapmail, sogo"
+                "Unknown app `{other}`. Use: mariadb, postgresql, phpmyadmin, email, rabbitmq, redis, docker, snappymail, tachyon, roundcube, nextcloud, nextsnapmail, sogo"
             )),
         }
     }
@@ -61,6 +60,7 @@ impl AppId {
             Self::Phpmyadmin => "phpmyadmin",
             Self::Email => "email",
             Self::Rabbitmq => "rabbitmq",
+            Self::Redis => "redis",
             Self::Docker => "docker",
             Self::Snappymail => "snappymail",
             Self::Tachyon => "tachyon",
@@ -78,6 +78,7 @@ impl AppId {
             Self::Phpmyadmin => "phpMyAdmin",
             Self::Email => "Email (Postfix + Dovecot)",
             Self::Rabbitmq => "RabbitMQ",
+            Self::Redis => "Redis",
             Self::Docker => "Docker",
             Self::Snappymail => "SnappyMail",
             Self::Tachyon => "Tachyon",
@@ -92,7 +93,12 @@ impl AppId {
     pub fn supports_service_control(self) -> bool {
         matches!(
             self,
-            Self::Mariadb | Self::Postgresql | Self::Email | Self::Rabbitmq | Self::Docker
+            Self::Mariadb
+                | Self::Postgresql
+                | Self::Email
+                | Self::Rabbitmq
+                | Self::Redis
+                | Self::Docker
         )
     }
 
@@ -103,6 +109,7 @@ impl AppId {
             Self::Phpmyadmin,
             Self::Email,
             Self::Rabbitmq,
+            Self::Redis,
             Self::Docker,
             Self::Snappymail,
             Self::Tachyon,
@@ -154,7 +161,6 @@ fn mariadb_present() -> bool {
 }
 
 fn mysql_present() -> bool {
-    // Prefer package names. MariaDB on EL often aliases mysql/mysqld units to mariadb.service.
     if rpm_or_dpkg_installed(&["mysql-server", "mysql-community-server"]) {
         return true;
     }
@@ -301,6 +307,7 @@ pub fn detect_app(id: AppId) -> AppStatus {
                 warning: None,
             }
         }
+        AppId::Redis => crate::apps_redis::detect_redis(),
         AppId::Docker => {
             let st = crate::panel_ops_docker::docker_status();
             let (state, detail) = if st.running {
@@ -377,6 +384,7 @@ fn install_app_on_inner(id: AppId, domain: Option<&str>) -> Result<String, Strin
                 enable_now(&["rabbitmq-server"])?;
                 "Installed and started RabbitMQ.".to_string()
             }
+            AppId::Redis => crate::apps_redis::install_redis()?,
             AppId::Docker => crate::panel_ops_docker::install_docker_engine()?,
             AppId::Snappymail
             | AppId::Tachyon
@@ -456,6 +464,7 @@ fn uninstall_app_on_inner(id: AppId, domain: Option<&str>) -> Result<String, Str
             remove_packages_dnf_or_apt(&["rabbitmq-server"], &["rabbitmq-server"])?;
             "Uninstalled RabbitMQ.".to_string()
         }
+        AppId::Redis => crate::apps_redis::uninstall_redis()?,
         AppId::Docker => crate::panel_ops_docker::uninstall_docker_engine()?,
         AppId::Snappymail
         | AppId::Tachyon
@@ -477,6 +486,7 @@ mod tests {
         assert_eq!(AppId::parse("MariaDB").unwrap(), AppId::Mariadb);
         assert_eq!(AppId::parse("php-myadmin").unwrap(), AppId::Phpmyadmin);
         assert_eq!(AppId::parse("postgres").unwrap(), AppId::Postgresql);
+        assert_eq!(AppId::parse("redis").unwrap(), AppId::Redis);
         assert_eq!(AppId::parse("PostgreSQL").unwrap(), AppId::Postgresql);
         assert!(AppId::parse("mysql").is_err());
         assert!(AppId::parse("nginx").is_err());

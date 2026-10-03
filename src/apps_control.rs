@@ -32,6 +32,7 @@ pub fn start_app(id: AppId) -> Result<String, String> {
             enable_now(&["rabbitmq-server"])?;
             Ok("Started RabbitMQ.".into())
         }
+        AppId::Redis => crate::apps_redis::start_redis(),
         AppId::Docker => {
             let msg = crate::panel_ops_docker::install_docker_engine()?;
             Ok(format!("Started Docker engine. {msg}"))
@@ -74,6 +75,7 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
             stop_units(&["rabbitmq-server"])?;
             Ok("Stopped RabbitMQ.".into())
         }
+        AppId::Redis => crate::apps_redis::stop_redis(),
         AppId::Docker => {
             stop_units(&["docker", "podman"])?;
             Ok("Stopped Docker/Podman engine units when present.".into())

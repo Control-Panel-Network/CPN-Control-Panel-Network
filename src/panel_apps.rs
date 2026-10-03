@@ -109,7 +109,7 @@ pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
         crate::apps::AppId::Postgresql => {
             r#"<a class="btn-secondary" href="/databases">Manage</a>"#.into()
         }
-        crate::apps::AppId::Rabbitmq => String::new(),
+        crate::apps::AppId::Rabbitmq | crate::apps::AppId::Redis => String::new(),
         crate::apps::AppId::Docker => {
             r#"<a class="btn-primary" href="/docker">Manage</a>"#.into()
         }

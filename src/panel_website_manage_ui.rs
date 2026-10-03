@@ -284,6 +284,7 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
         ("ssl", "SSL"),
         ("files", "Files"),
         ("plugins", "Plugins"),
+        ("apps", "Apps"),
         ("terminal", "Terminal"),
         ("git", "Git"),
         ("clone", "Clone"),
@@ -291,7 +292,8 @@ pub fn tab_bar(domain: &str, active: &str) -> String {
     let domain_q = html_escape(domain);
     let mut out = String::from(r#"<nav class="manage-tabs" aria-label="Website sections">"#);
     let active_norm = match active {
-        "apps" | "applications" | "plugin" => "plugins",
+        "applications" => "apps",
+        "plugin" => "plugins",
         "aliases" | "domain-alias" => "alias",
         "crons" | "cronjobs" => "cron",
         "term" | "shell" => "terminal",

@@ -3,7 +3,7 @@
 use crate::panel_site_terminal::tab_terminal;
 use crate::panel_website_manage_alias_cron::{tab_alias, tab_cron};
 use crate::panel_website_manage_tabs::{
-    tab_apps, tab_config, tab_domains, tab_files, tab_logs, tab_overview, tab_ssl,
+    tab_config, tab_domains, tab_files, tab_logs, tab_overview, tab_plugins, tab_ssl,
 };
 use crate::panel_website_manage_tools::{tab_clone, tab_git};
 use crate::panel_website_manage_ui::{
@@ -23,6 +23,7 @@ pub enum ManageTab {
     Config,
     Ssl,
     Files,
+    Plugins,
     Apps,
     Terminal,
     Git,
@@ -39,7 +40,8 @@ impl ManageTab {
             "config" | "configurations" => Self::Config,
             "ssl" => Self::Ssl,
             "files" | "file" | "docroot" => Self::Files,
-            "apps" | "applications" | "plugins" | "plugin" => Self::Apps,
+            "plugins" | "plugin" => Self::Plugins,
+            "apps" | "applications" => Self::Apps,
             "terminal" | "term" | "shell" => Self::Terminal,
             "git" => Self::Git,
             "clone" | "staging" => Self::Clone,
@@ -57,7 +59,8 @@ impl ManageTab {
             Self::Config => "config",
             Self::Ssl => "ssl",
             Self::Files => "files",
-            Self::Apps => "plugins",
+            Self::Plugins => "plugins",
+            Self::Apps => "apps",
             Self::Terminal => "terminal",
             Self::Git => "git",
             Self::Clone => "clone",
@@ -75,7 +78,8 @@ fn tab_body(site: &SiteRecord, tab: ManageTab, username: &str) -> String {
         ManageTab::Config => tab_config(site),
         ManageTab::Ssl => tab_ssl(site),
         ManageTab::Files => tab_files(site),
-        ManageTab::Apps => tab_apps(site),
+        ManageTab::Plugins => tab_plugins(site),
+        ManageTab::Apps => crate::panel_site_apps_ui::tab_apps(site, username),
         ManageTab::Terminal => tab_terminal(site, username),
         ManageTab::Git => tab_git(site, username),
         ManageTab::Clone => tab_clone(site, username),
@@ -194,13 +198,14 @@ mod tests {
         assert_eq!(ManageTab::parse(Some("SSL")), ManageTab::Ssl);
         assert_eq!(ManageTab::parse(Some("files")), ManageTab::Files);
         assert_eq!(ManageTab::parse(Some("apps")), ManageTab::Apps);
-        assert_eq!(ManageTab::parse(Some("plugins")), ManageTab::Apps);
+        assert_eq!(ManageTab::parse(Some("plugins")), ManageTab::Plugins);
         assert_eq!(ManageTab::parse(Some("alias")), ManageTab::Alias);
         assert_eq!(ManageTab::parse(Some("cron")), ManageTab::Cron);
         assert_eq!(ManageTab::parse(Some("git")), ManageTab::Git);
         assert_eq!(ManageTab::parse(Some("terminal")), ManageTab::Terminal);
         assert_eq!(ManageTab::parse(Some("staging")), ManageTab::Clone);
-        assert_eq!(ManageTab::Apps.as_str(), "plugins");
+        assert_eq!(ManageTab::Apps.as_str(), "apps");
+        assert_eq!(ManageTab::Plugins.as_str(), "plugins");
     }
 
     #[test]
@@ -212,5 +217,17 @@ mod tests {
         assert!(!html.contains("Web terminal ships later"));
         assert!(!html.contains("Git manager ships later"));
         assert!(!html.contains("Clone/staging ships later"));
+    }
+
+    #[test]
+    fn apps_tab_is_separate_from_plugins() {
+        let html = website_manage_main(&sample(), "Admin", Some("apps"), None, None);
+        assert!(html.contains("tab=apps"));
+        assert!(html.contains("CMS Made Simple"));
+        assert!(html.contains("id=\"redis\""));
+        assert!(!html.to_lowercase().contains("cyberpanel"));
+        let plugins = website_manage_main(&sample(), "Admin", Some("plugins"), None, None);
+        assert!(plugins.contains("/plugins?domain="));
+        assert!(!plugins.contains("CMS Made Simple"));
     }
 }
