@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sidebar hub overview first**: Every expandable category (Settings, Email, Websites, WordPress, Users, Security, Databases, FTP, Plugins, Docker, Logs, LiteSpeed, and the rest) now lists `{Category} overview` as the first child under the parent, linking to the hub URL. Feature children stay after that (Email Accounts, List Websites, Version Management, and so on). This reverses Email overview-after-children.
+
 - **Website SSL badges**: **Valid** remains origin certificate files on this host with a real expiry (`dd/mm/yyyy`). **CF SSL** is shown when origin files are missing and either Cloudflare orange-cloud proxy is on for the FQDN or the site SSL provider is Cloudflare CA (issuance setting, not a Valid origin cert). **NONE** is neither origin files nor those Cloudflare signals. Lab NAT grey-cloud records stay honest: n/a expiry still means no origin files. List and SSL tab copy is shorter. The old **INSECURE** label is gone.
 
 - **Hosting package names**: New packages (Create and Duplicate) are stored as `{username}_{customname}` using the package owner username (Create form owner selector; defaults to the signed-in admin). Typing an existing `{owner}_` prefix is not doubled. The reserved **Default** package (`pkg-default`) stays named exactly `Default`. Edit keeps the owner prefix and only changes the custom part. CLI `cpn package create` requires `--owner`.
