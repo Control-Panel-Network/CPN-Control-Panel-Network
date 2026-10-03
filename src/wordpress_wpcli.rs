@@ -533,13 +533,14 @@ pub fn ensure_wp_cli() -> Result<WpCliStatus, String> {
     })?;
     write_version_cache(&version);
 
+    // Always refresh version above (never leave the UI Version as `-` when phar exists).
     let detail = if downloaded {
         format!(
-            "WP-CLI ensured ({version}) at {} (memory_limit={WP_CLI_PHP_MEMORY_LIMIT}).",
+            "WP-CLI ensured: {version} at {} (memory_limit={WP_CLI_PHP_MEMORY_LIMIT}).",
             phar.display()
         )
     } else {
-        format!("WP-CLI ensured ({version}).")
+        format!("WP-CLI ensured: {version}")
     };
     Ok(WpCliStatus {
         available: true,

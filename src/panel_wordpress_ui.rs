@@ -2,7 +2,7 @@
 
 use crate::wordpress::{WordpressSite, list_wordpress_sites};
 use crate::wordpress_manage::{PluginRow, ThemeRow, WordpressSiteSnapshot};
-use crate::wordpress_wpcli::WpCliStatus;
+use crate::wordpress_wpcli::{WpCliStatus, format_wp_cli_binary};
 
 fn html_escape(value: &str) -> String {
     value
@@ -86,7 +86,14 @@ fn wp_cli_status_card(status: &WpCliStatus) -> String {
         cls = state.0,
         state_label = state.1,
         detail = html_escape(&status.detail),
-        binary = dash_or(status.binary.as_deref().unwrap_or("-")),
+        binary = dash_or(
+            status
+                .binary
+                .as_deref()
+                .map(format_wp_cli_binary)
+                .as_deref()
+                .unwrap_or("-"),
+        ),
         version = dash_or(status.version.as_deref().unwrap_or("-")),
     )
 }
