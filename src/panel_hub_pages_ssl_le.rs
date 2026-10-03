@@ -127,7 +127,7 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
       <select name="provider">{opts}</select>
       <button type="submit">Set</button>
     </form>
-    {issue}
+    {issue_btn}{backup_btn}
     {err}
   </td>
 </tr>"#,
@@ -136,7 +136,6 @@ fn rows_table(rows: &[SslStatusRow]) -> String {
             status = html_escape(&status),
             shared = html_escape(&shared),
             opts = provider_options(&r.provider),
-            issue = format!("{issue_btn}{backup_btn}"),
             err = err,
         ));
     }

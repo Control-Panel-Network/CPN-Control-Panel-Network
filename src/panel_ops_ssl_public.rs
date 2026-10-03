@@ -218,16 +218,15 @@ pub fn inspect_public_ssl(domain: &str) -> PublicSslView {
 }
 
 pub fn offers_origin_backup(site: &SiteRecord, view: &PublicSslView) -> bool {
-    if site.ssl.provider == SslProvider::Custom {
-        if site
+    if site.ssl.provider == SslProvider::Custom
+        && site
             .ssl
             .custom_cert_path
             .as_ref()
             .map(|p| std::path::Path::new(p).is_file())
             .unwrap_or(false)
-        {
-            return false;
-        }
+    {
+        return false;
     }
     !matches!(
         view.kind,
