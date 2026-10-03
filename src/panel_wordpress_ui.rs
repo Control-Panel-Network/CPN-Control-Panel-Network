@@ -4,9 +4,9 @@ use crate::backups::is_subdomain_site;
 use crate::panel_list_search::{
     domain_matches_q, list_filter_summary, list_search_form, normalize_list_q,
 };
-use crate::wordpress::{list_wordpress_sites, WordpressSite};
+use crate::wordpress::{WordpressSite, list_wordpress_sites};
 use crate::wordpress_manage::{PluginRow, ThemeRow, WordpressSiteSnapshot};
-use crate::wordpress_wpcli::{format_wp_cli_binary, WpCliStatus};
+use crate::wordpress_wpcli::{WpCliStatus, format_wp_cli_binary};
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct WordpressInstallDraft {

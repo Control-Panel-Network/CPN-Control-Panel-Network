@@ -6,8 +6,8 @@ use crate::panel_ops_php::detect_php;
 use crate::resource_accounts;
 use crate::sites::{create_site, load_site, normalize_domain};
 use crate::wordpress::{WordpressSite, get_wordpress_site, new_site_id, upsert_wordpress_site};
-use crate::wordpress_manage::refresh_wordpress_site;
 use crate::wordpress_core_fetch::extract_wordpress_core_via_curl;
+use crate::wordpress_manage::refresh_wordpress_site;
 use crate::wordpress_wpcli::{
     chown_docroot_to_web_user, ensure_wp_cli, is_wordpress_docroot, wp_run,
 };
