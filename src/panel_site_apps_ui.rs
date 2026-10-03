@@ -7,6 +7,7 @@ use crate::panel_site_apps_cmsms::CMSMS_INSTALLER;
 use crate::panel_site_apps_runtime::RuntimeKind;
 use crate::panel_site_tools_security::site_tools_csrf_token;
 use crate::panel_website_manage_ui::{html_escape, section};
+use crate::site_app_lifecycle::{SiteAppId, has_update, installed, status, version_cmp};
 use crate::sites::SiteRecord;
 use crate::website_preview::public_site_url;
 
@@ -36,11 +37,117 @@ fn option_list(versions: &[(String, String)], selected: &str) -> String {
     out
 }
 
+fn lifecycle_controls(
+    site: &SiteRecord,
+    app: SiteAppId,
+    domain: &str,
+    csrf: &str,
+    admin: bool,
+) -> String {
+    let state = status(site, app);
+    let is_installed = installed(site, app);
+    let host_mutation = matches!(app, SiteAppId::Redis | SiteAppId::Node | SiteAppId::Python);
+    let can_mutate = !host_mutation || admin;
+    let mut versions = String::new();
+    for version in &state.available_versions {
+        versions.push_str(&format!(
+            r#"<option value="{value}">{label}</option>"#,
+            value = html_escape(version),
+            label = html_escape(version),
+        ));
+    }
+    if versions.is_empty() {
+        versions.push_str(r#"<option value="">No source versions available</option>"#);
+    }
+    let mut backups = String::from(r#"<option value="latest">Latest backup</option>"#);
+    for backup in &state.backups {
+        backups.push_str(&format!(
+            r#"<option value="{id}">{id} ({bytes} bytes)</option>"#,
+            id = html_escape(&backup.id),
+            bytes = backup.bytes,
+        ));
+    }
+    let mut actions = format!(
+        r#"<div class="manage-muted" style="margin-top:10px;">
+<div>Installed version: <strong>{installed}</strong></div>
+<div>Available/latest version: <strong>{latest}</strong></div>
+<div>Source: {source}</div>
+</div>"#,
+        installed = html_escape(if state.installed_version.is_empty() {
+            "Not installed"
+        } else {
+            &state.installed_version
+        }),
+        latest = html_escape(if state.latest_version.is_empty() {
+            "Unavailable"
+        } else {
+            &state.latest_version
+        }),
+        source = html_escape(&state.source),
+    );
+    let has_older = !state.installed_version.is_empty()
+        && state
+            .available_versions
+            .iter()
+            .any(|version| version_cmp(version, &state.installed_version).is_lt());
+    let lifecycle_install = !is_installed && matches!(app, SiteAppId::Node | SiteAppId::Python);
+    if can_mutate
+        && (lifecycle_install || has_update(&state) || has_older)
+        && (!is_installed || !state.available_versions.is_empty())
+    {
+        let action = if is_installed {
+            "app_update"
+        } else {
+            "app_install"
+        };
+        let label = if is_installed { "Update" } else { "Install" };
+        actions.push_str(&format!(
+            r#"<form method="post" action="/websites/apps" style="margin-top:8px;">
+  <input type="hidden" name="domain" value="{domain}">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="app" value="{app}">
+  <label class="manage-muted">Source version</label>
+  <select name="version" style="width:100%;margin:4px 0 8px;">{versions}</select>
+  <button type="submit" name="action" value="{action}" class="btn-primary">{label}</button>
+  {downgrade}
+</form>"#,
+            app = app.as_str(),
+            downgrade = if has_older {
+                r#"<button type="submit" name="action" value="app_downgrade" class="btn-secondary" onclick="return confirm('Downgrade this app? CPN creates a backup first.');">Downgrade</button>"#
+            } else {
+                ""
+            },
+        ));
+    }
+    if !state.backups.is_empty() {
+        actions.push_str(&format!(
+            r#"<form method="post" action="/websites/apps" style="margin-top:8px;" onsubmit="return confirm('Restore this app backup? Current app files will be replaced.');">
+  <input type="hidden" name="domain" value="{domain}">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="action" value="app_restore">
+  <input type="hidden" name="app" value="{app}">
+  <label class="manage-muted">Restore point</label>
+  <select name="backup" style="width:100%;margin:4px 0 8px;">{backups}</select>
+  <button type="submit" class="btn-warn">Restore</button>
+</form>"#,
+            app = app.as_str(),
+        ));
+    }
+    if host_mutation && !admin {
+        actions.push_str(
+            r#"<p class="manage-muted">Host runtime changes require the panel owner. Existing site start, stop, and configuration controls remain available.</p>"#,
+        );
+    }
+    actions
+}
+
 pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     let snap = snapshot_site_apps(site);
     let domain = html_escape(&site.domain);
     let csrf = html_escape(&site_tools_csrf_token(username, &site.domain));
     let admin = is_panel_admin(username);
+    let cmsms_lifecycle = lifecycle_controls(site, SiteAppId::Cmsms, &domain, &csrf, admin);
+    let redis_lifecycle = lifecycle_controls(site, SiteAppId::Redis, &domain, &csrf, admin);
     let site_url =
         public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let site_url_q = html_escape(&site_url);
@@ -139,7 +246,7 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
   <span>CMS Made Simple</span>
   <strong>{status}</strong>
   <p class="manage-muted">{detail}</p>
-  <div class="manage-actions-row">{actions}</div>
+  <div class="manage-actions-row">{actions}</div>{lifecycle}
 </article>"#,
         status = html_escape(if snap.cmsms.installed {
             "Installed"
@@ -150,6 +257,7 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
         }),
         detail = html_escape(&snap.cmsms.detail),
         actions = cmsms_actions,
+        lifecycle = cmsms_lifecycle,
     );
 
     let redis_card = format!(
@@ -157,15 +265,16 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
   <span>Redis</span>
   <strong>{host}</strong>
   <p class="manage-muted">{detail}</p>
-  <div class="manage-actions-row">{actions}</div>
+  <div class="manage-actions-row">{actions}</div>{lifecycle}
 </article>"#,
         host = html_escape(host_label(snap.redis_host)),
         detail = html_escape(&snap.redis_detail),
         actions = redis_actions,
+        lifecycle = redis_lifecycle,
     );
 
-    let node_card = runtime_card(site, &domain, &csrf, &snap.node);
-    let python_card = runtime_card(site, &domain, &csrf, &snap.python);
+    let node_card = runtime_card(site, &domain, &csrf, &snap.node, admin);
+    let python_card = runtime_card(site, &domain, &csrf, &snap.python, admin);
 
     let grid = format!(
         r#"<div class="manage-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">{cmsms}{redis}{node}{python}</div>
@@ -183,6 +292,7 @@ fn runtime_card(
     domain: &str,
     csrf: &str,
     st: &crate::panel_site_apps_runtime::RuntimeStatus,
+    admin: bool,
 ) -> String {
     let kind = st.kind.as_str();
     let label = st.kind.label();
@@ -217,6 +327,12 @@ fn runtime_card(
     } else {
         String::new()
     };
+    let app_id = if st.kind == RuntimeKind::Python {
+        SiteAppId::Python
+    } else {
+        SiteAppId::Node
+    };
+    let lifecycle = lifecycle_controls(_site, app_id, domain, csrf, admin);
     format!(
         r#"<article class="manage-stat" id="{kind}">
   <span>{label}</span>
@@ -234,7 +350,7 @@ fn runtime_card(
     <input id="{kind}-entry" name="entry" value="{entry}" maxlength="80" style="width:100%;margin:4px 0 8px;">
     <button type="submit" class="btn-secondary">Save</button>
   </form>
-  <div class="manage-actions-row">{start}{venv}</div>
+  <div class="manage-actions-row">{start}{venv}</div>{lifecycle}
 </article>"#,
         state = if st.running { "Running" } else { "Stopped" },
         detail = html_escape(&st.detail),
@@ -243,6 +359,7 @@ fn runtime_card(
         entry = html_escape(&st.config.entry),
         start = start_or_stop,
         venv = venv,
+        lifecycle = lifecycle,
     )
 }
 

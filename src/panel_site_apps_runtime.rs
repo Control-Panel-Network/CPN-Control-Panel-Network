@@ -291,6 +291,12 @@ fn ensure_app_dir(
     Ok(dir)
 }
 
+pub fn runtime_app_dir(site: &SiteRecord, kind: RuntimeKind) -> Result<PathBuf, String> {
+    let status = load_runtime(site, kind);
+    let home = site_home_from_record(site);
+    jail_rel_under_home(&home, &status.config.app_rel)
+}
+
 pub fn start_runtime(site: &SiteRecord, kind: RuntimeKind) -> Result<String, String> {
     let st = load_runtime(site, kind);
     if st.running {

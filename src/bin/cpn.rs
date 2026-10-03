@@ -104,6 +104,7 @@ enum Commands {
         command: PluginCommands,
     },
     /// Host applications (MariaDB, PostgreSQL, phpMyAdmin, Email, RabbitMQ, webmail)
+    #[command(visible_alias = "apps")]
     App {
         #[command(subcommand)]
         command: cli_apps::AppCommands,

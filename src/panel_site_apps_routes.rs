@@ -82,6 +82,12 @@ pub struct SiteAppsForm {
     app_rel: String,
     #[serde(default)]
     entry: String,
+    #[serde(default)]
+    app: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    backup: String,
 }
 
 #[post("/websites/apps")]
@@ -119,6 +125,9 @@ pub async fn websites_apps_post(
     let version_bin = form.version_bin.clone();
     let app_rel = form.app_rel.clone();
     let entry = form.entry.clone();
+    let app = form.app.clone();
+    let version = form.version.clone();
+    let backup = form.backup.clone();
 
     let result = tokio::task::spawn_blocking(move || match action.as_str() {
         "cmsms_install" => install_cmsms(&site),
@@ -149,6 +158,43 @@ pub async fn websites_apps_post(
         "python_start" => start_runtime(&site, RuntimeKind::Python),
         "python_stop" => stop_runtime(&site, RuntimeKind::Python),
         "python_venv" => ensure_python_venv(&site),
+        "app_install" => {
+            let app = crate::site_app_lifecycle::SiteAppId::parse(&app)?;
+            if matches!(
+                app,
+                crate::site_app_lifecycle::SiteAppId::Redis
+                    | crate::site_app_lifecycle::SiteAppId::Node
+                    | crate::site_app_lifecycle::SiteAppId::Python
+            ) && !admin
+            {
+                return Err("Only the panel owner can install host runtimes.".into());
+            }
+            crate::site_app_lifecycle::install(&site, app, Some(&version))
+        }
+        "app_update" | "app_downgrade" => {
+            let app = crate::site_app_lifecycle::SiteAppId::parse(&app)?;
+            if matches!(
+                app,
+                crate::site_app_lifecycle::SiteAppId::Redis
+                    | crate::site_app_lifecycle::SiteAppId::Node
+                    | crate::site_app_lifecycle::SiteAppId::Python
+            ) && !admin
+            {
+                return Err("Only the panel owner can change host runtime versions.".into());
+            }
+            if action == "app_downgrade" {
+                crate::site_app_lifecycle::downgrade(&site, app, &version)
+            } else {
+                crate::site_app_lifecycle::update(&site, app, Some(&version))
+            }
+        }
+        "app_restore" => {
+            let app = crate::site_app_lifecycle::SiteAppId::parse(&app)?;
+            if matches!(app, crate::site_app_lifecycle::SiteAppId::Redis) && !admin {
+                return Err("Only the panel owner can restore a host runtime.".into());
+            }
+            crate::site_app_lifecycle::restore(&site, app, Some(&backup))
+        }
         _ => Err("Unknown Apps action".into()),
     })
     .await;

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
+- **Apps backup-first lifecycle**: Apps cards and `cpn apps` now show installed and source-available versions, support install/update/upgrade/downgrade, and list/restore backups. CMS Made Simple uses its official installer source; Redis, Node, and Python use configured OS repositories. Mutating version changes create a restore point before package or site files change.
 
 ## [1.1.2] - 03/10/2026
 
