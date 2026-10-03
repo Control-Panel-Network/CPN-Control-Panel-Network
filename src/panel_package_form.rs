@@ -2,7 +2,8 @@
 
 use crate::account_mgmt::list_accounts;
 use crate::packages::{
-    DEFAULT_PACKAGE_ID, Package, is_unlimited, package_custom_name_for_edit, package_owner_from_name,
+    DEFAULT_PACKAGE_ID, Package, is_unlimited, package_custom_name_for_edit,
+    package_owner_from_name,
 };
 use crate::panel_storage_fmt::unlimited_html;
 

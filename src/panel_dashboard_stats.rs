@@ -118,16 +118,13 @@ pub fn dashboard_stats_html(username: &str) -> String {
     let not_metered = count_html(0, UNLIMITED);
     let rows = format!(
         "{}{}{}{}{}{}{}{}{}{}{}",
-        row("Alias domains", &count_html(aliases_used(&sites), UNLIMITED)),
+        row(
+            "Alias domains",
+            &count_html(aliases_used(&sites), UNLIMITED)
+        ),
         row("Disk usage", &bytes_html(username, disk_used, disk_limit)),
-        row(
-            "Database disk usage",
-            &count_html(db_used, db_limit),
-        ),
-        row(
-            "Bandwidth",
-            &bytes_html(username, bw_bytes, bw_limit),
-        ),
+        row("Database disk usage", &count_html(db_used, db_limit),),
+        row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit),),
         row(
             "Sub-domains",
             &count_html(subdomains_used(&sites), domains_limit),

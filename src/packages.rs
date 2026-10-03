@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub use crate::package_limits::{
-    UNLIMITED, format_limit_display, is_unlimited, normalize_limit,
-};
+pub use crate::package_limits::{UNLIMITED, format_limit_display, is_unlimited, normalize_limit};
 
 const SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_PACKAGE_ID: &str = "pkg-default";
