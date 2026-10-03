@@ -8,6 +8,26 @@ use crate::wordpress::{WordpressSite, list_wordpress_sites};
 use crate::wordpress_manage::{PluginRow, ThemeRow, WordpressSiteSnapshot};
 use crate::wordpress_wpcli::{WpCliStatus, format_wp_cli_binary};
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct WordpressInstallDraft {
+    #[serde(default)]
+    pub domain: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub site_url: String,
+    #[serde(default)]
+    pub admin_user: String,
+    #[serde(default)]
+    pub admin_password: String,
+    #[serde(default)]
+    pub admin_email: String,
+    #[serde(default)]
+    pub plugin_sources: String,
+    #[serde(default)]
+    pub create_site_if_missing: bool,
+}
+
 fn html_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -299,28 +319,115 @@ pub fn wordpress_subsites_list_page(
     )
 }
 
-fn wordpress_install_form(action: &str, domain_hint: &str, create_label: &str) -> String {
+fn wordpress_install_form(
+    action: &str,
+    domain_hint: &str,
+    create_label: &str,
+    default_admin_user: &str,
+    draft: Option<&WordpressInstallDraft>,
+) -> String {
+    let d = draft.cloned().unwrap_or_default();
+    let admin_user = if d.admin_user.trim().is_empty() {
+        default_admin_user.trim()
+    } else {
+        d.admin_user.trim()
+    };
+    let admin_placeholder = if default_admin_user.trim().is_empty() {
+        "cpnowner"
+    } else {
+        default_admin_user.trim()
+    };
+    let create_checked = if d.create_site_if_missing {
+        " checked"
+    } else {
+        ""
+    };
     format!(
-        r#"<form method="post" action="{action}" class="stack-form" style="max-width:560px;">
-          <label>Domain<input type="text" name="domain" required placeholder="{hint}" autocomplete="off"></label>
-          <label>Site title<input type="text" name="title" required placeholder="My blog"></label>
-          <label>Site URL<input type="url" name="site_url" placeholder="https://{hint}"></label>
-          <label>Admin username<input type="text" name="admin_user" required placeholder="admin" autocomplete="username"></label>
-          <label>Admin password<input type="password" name="admin_password" required minlength="8" autocomplete="new-password"></label>
-          <label>Admin email<input type="email" name="admin_email" required placeholder="you@example.com" autocomplete="email"></label>
-          <label>Pre-install plugins<textarea name="plugin_sources" rows="3" placeholder="akismet, hello-dolly, https://example.com/plugin.zip"></textarea></label>
+        r#"<form method="post" action="{action}" class="stack-form cpn-wp-install-form" style="max-width:560px;">
+          <label>Domain<input type="text" name="domain" required placeholder="{hint}" autocomplete="off" value="{domain}"></label>
+          <label>Site title<input type="text" name="title" required placeholder="My blog" value="{title}"></label>
+          <label>Site URL<input type="url" name="site_url" placeholder="https://{hint}" value="{site_url}"></label>
+          <label>Admin username<input type="text" name="admin_user" required placeholder="{admin_ph}" autocomplete="username" value="{admin_user}"></label>
+          <label>Admin password<input type="password" name="admin_password" required minlength="8" autocomplete="new-password" value="{admin_password}"></label>
+          <label>Admin email<input type="email" name="admin_email" required placeholder="you@example.com" autocomplete="email" value="{admin_email}"></label>
+          <label>Pre-install plugins (slug or URL)<textarea name="plugin_sources" rows="3" placeholder="akismet, hello-dolly, https://example.com/plugin.zip">{plugin_sources}</textarea></label>
+          <label>Plugin ZIP uploads<input type="file" class="cpn-wp-plugin-zips" accept=".zip,application/zip" multiple></label>
+          <input type="hidden" name="plugin_zips_json" class="cpn-wp-plugin-zips-json" value="">
+          <p class="muted" style="margin-top:-6px;">Optional. Select one or more plugin <code>.zip</code> files (max 40&nbsp;MB each). Installed with WP-CLI after core setup, alongside slug/URL plugins above.</p>
           <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
-            <input type="checkbox" name="create_site_if_missing" value="1"> {create_label}
+            <input type="checkbox" name="create_site_if_missing" value="1"{create_checked}> {create_label}
           </label>
           <button type="submit" class="btn-primary">Install WordPress</button>
-        </form>"#,
+        </form>
+        <script>
+        (function(){{
+          function bind(form){{
+            if (!form || form.getAttribute('data-cpn-wp-zip') === '1') return;
+            form.setAttribute('data-cpn-wp-zip', '1');
+            var input = form.querySelector('.cpn-wp-plugin-zips');
+            var hidden = form.querySelector('.cpn-wp-plugin-zips-json');
+            if (!input || !hidden) return;
+            form.addEventListener('submit', function(ev){{
+              var files = Array.prototype.slice.call(input.files || []);
+              if (!files.length) return;
+              ev.preventDefault();
+              var btn = form.querySelector('button[type=submit]');
+              if (btn) {{ btn.disabled = true; btn.textContent = 'Preparing ZIP uploads...'; }}
+              var out = [];
+              var i = 0;
+              function next(){{
+                if (i >= files.length) {{
+                  hidden.value = JSON.stringify(out);
+                  form.submit();
+                  return;
+                }}
+                var f = files[i++];
+                if (!/\.zip$/i.test(f.name)) {{ next(); return; }}
+                if (f.size > 40*1024*1024) {{
+                  alert('Plugin ZIP exceeds 40 MB: ' + f.name);
+                  if (btn) {{ btn.disabled = false; btn.textContent = 'Install WordPress'; }}
+                  return;
+                }}
+                var reader = new FileReader();
+                reader.onload = function(){{
+                  var dataUrl = String(reader.result || '');
+                  var b64 = dataUrl.indexOf(',') >= 0 ? dataUrl.split(',')[1] : dataUrl;
+                  out.push({{ name: f.name, data: b64 }});
+                  next();
+                }};
+                reader.onerror = function(){{
+                  alert('Could not read ' + f.name);
+                  if (btn) {{ btn.disabled = false; btn.textContent = 'Install WordPress'; }}
+                }};
+                reader.readAsDataURL(f);
+              }}
+              next();
+            }});
+          }}
+          document.querySelectorAll('form.cpn-wp-install-form').forEach(bind);
+        }})();
+        </script>"#,
         action = html_escape(action),
         hint = html_escape(domain_hint),
         create_label = html_escape(create_label),
+        domain = html_escape(&d.domain),
+        title = html_escape(&d.title),
+        site_url = html_escape(&d.site_url),
+        admin_ph = html_escape(admin_placeholder),
+        admin_user = html_escape(admin_user),
+        admin_password = html_escape(&d.admin_password),
+        admin_email = html_escape(&d.admin_email),
+        plugin_sources = html_escape(&d.plugin_sources),
+        create_checked = create_checked,
     )
 }
 
-pub fn wordpress_install_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn wordpress_install_page(
+    notice: Option<&str>,
+    error: Option<&str>,
+    default_admin_user: &str,
+    draft: Option<&WordpressInstallDraft>,
+) -> String {
     format!(
         r#"{heading}
       {ok}
@@ -328,6 +435,7 @@ pub fn wordpress_install_page(notice: Option<&str>, error: Option<&str>) -> Stri
       <article class="section-card">
         <h2>Install WordPress</h2>
         <p class="muted">Installs on a <strong>main</strong> website docroot. For nested domains use <a href="/wordpress/subsites/install">Install WordPress Sub-site</a>.</p>
+        <p class="muted">This page creates a <strong>new</strong> WordPress site and can pre-install plugins (slug, URL, or ZIP upload). Full site ZIP restore (existing content + database) belongs under <a href="/backups/restore">Backups / Restore</a>.</p>
         {form}
       </article>"#,
         heading = section_heading(
@@ -340,11 +448,18 @@ pub fn wordpress_install_page(notice: Option<&str>, error: Option<&str>) -> Stri
             "/wordpress/install",
             "example.com",
             "Create CPN main site if missing",
+            default_admin_user,
+            draft,
         ),
     )
 }
 
-pub fn wordpress_subsites_install_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn wordpress_subsites_install_page(
+    notice: Option<&str>,
+    error: Option<&str>,
+    default_admin_user: &str,
+    draft: Option<&WordpressInstallDraft>,
+) -> String {
     format!(
         r#"{heading}
       {ok}
@@ -352,6 +467,7 @@ pub fn wordpress_subsites_install_page(notice: Option<&str>, error: Option<&str>
       <article class="section-card">
         <h2>Install WordPress Sub-site</h2>
         <p class="muted">Installs on a <strong>sub-domain</strong> docroot. Parent website must exist first. Main domains use <a href="/wordpress/install">Install WordPress</a>.</p>
+        <p class="muted">New WordPress + plugins only. Full site ZIP restore uses <a href="/backups/restore">Backups / Restore</a>.</p>
         {form}
       </article>"#,
         heading = section_heading(
@@ -364,6 +480,8 @@ pub fn wordpress_subsites_install_page(notice: Option<&str>, error: Option<&str>
             "/wordpress/subsites/install",
             "blog.example.com",
             "Create CPN sub-domain if missing (parent must exist)",
+            default_admin_user,
+            draft,
         ),
     )
 }
