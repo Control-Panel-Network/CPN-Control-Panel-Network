@@ -2,9 +2,9 @@
 
 AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer smoke tests and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
 
-## Status: stable (v1.1.1)
+## Status: stable (v1.1.2)
 
-CPN **v1.1.1** is the current stable release (first stable was **v1.0.0**). Keep backups and test upgrades on a staging host before production use.
+CPN **v1.1.2** is the current stable release (first stable was **v1.0.0**). Keep backups and test upgrades on a staging host before production use.
 
 ## Pull
 
