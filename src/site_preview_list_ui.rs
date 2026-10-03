@@ -56,7 +56,7 @@ pub fn site_preview_list_styles() -> &'static str {
 .site-ssl-badge.off { background:rgba(152,162,179,.14); color:#98a2b3; }
 .site-ssl-badge.cf { background:rgba(59,130,246,.2); color:#93c5fd; }
 .site-meta-grid {
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px;
 }
 .site-meta-grid div {
   border:1px solid var(--hairline, #2a2f3a); border-radius:10px; padding:8px 10px;
@@ -196,15 +196,46 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer:
     };
     let ssl_view = inspect_public_ssl(&site.domain);
     let ssl = ssl_list_badge_html(&ssl_view);
-    let disk_bytes = crate::panel_website_resources::approx_dir_bytes(
-        std::path::Path::new(&site.docroot),
-        4_000,
+    let disk_bytes = crate::panel_website_resources::site_used_bytes(site, 6_000);
+    let pkg = crate::packages::package_for_account(&site.owner).ok();
+    let disk_limit = pkg
+        .as_ref()
+        .map(|p| p.disk_mb)
+        .unwrap_or(crate::packages::UNLIMITED);
+    let disk_used = disk_bytes.unwrap_or(0);
+    let disk_label =
+        crate::panel_storage_fmt::format_used_limit_for_user(viewer, disk_used, disk_limit);
+    let pkg_allow = crate::panel_storage_fmt::format_mb_limit_for_user(viewer, disk_limit);
+    let disk_tip = format!(
+        "Used storage for this site home and document root (not the whole account). Package disk allowance: {pkg_allow}."
     );
-    let disk_label = disk_bytes
-        .map(|b| crate::panel_storage_fmt::format_bytes_for_user(viewer, b))
-        .unwrap_or_else(|| "n/a".into());
     let bw = crate::panel_website_bandwidth::bandwidth_for_site(site, viewer);
     let bw_label = html_escape(&bw.label);
+    let bw_tip = html_escape(&bw.hint);
+    let php = site
+        .php_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(crate::php_defaults::default_php_branch_for_sites);
+    let package_name = pkg
+        .as_ref()
+        .map(|p| p.name.clone())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Default".into());
+    let ip_meta = site
+        .internal_ip
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|ip| {
+            format!(
+                r#"<div><span>IP</span><strong>{}</strong></div>"#,
+                html_escape(ip)
+            )
+        })
+        .unwrap_or_default();
     let doc_meta = if show_docroots {
         format!(
             r#"<div><span>Document root</span><strong><details><summary>Show path</summary><code>{doc}</code></details></strong></div>"#,
@@ -235,8 +266,11 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer:
     <div class="site-meta-grid">
       <div><span>State</span><strong>{status}</strong></div>
       <div><span>Owner</span><strong>{owner}</strong></div>
-      <div><span>Disk</span><strong>{disk}</strong></div>
-      <div><span>Bandwidth</span><strong>{bw}</strong></div>
+      <div><span>Package</span><strong>{package}</strong></div>
+      <div><span>PHP</span><strong>{php}</strong></div>
+      {ip_meta}
+      <div title="{disk_tip}"><span>Disk</span><strong>{disk}</strong></div>
+      <div title="{bw_tip}"><span>Package bandwidth</span><strong>{bw}</strong></div>
       {parent_meta}
       {doc_meta}
     </div>
@@ -245,7 +279,12 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer:
 </article>"#,
         preview = preview_slot(site, auto_capture),
         owner = html_escape(&site.owner),
+        package = html_escape(&package_name),
+        php = html_escape(&php),
+        ip_meta = ip_meta,
+        disk_tip = html_escape(&disk_tip),
         disk = html_escape(&disk_label),
+        bw_tip = bw_tip,
         bw = bw_label,
         parent_meta = parent_meta,
         doc_meta = doc_meta,
@@ -348,6 +387,40 @@ mod tests {
             let html = preview_image_tag("example.com", 42, "");
             assert!(!html.contains("microlink"));
             assert!(html.contains("v=42"));
+        });
+    }
+
+    #[test]
+    fn list_cards_show_package_php_and_used_of() {
+        crate::account::with_test_data_dir(|| {
+            let site = SiteRecord {
+                schema_version: 5,
+                domain: "card.example".into(),
+                owner: "Admin".into(),
+                docroot: "/tmp/cpn-card-missing/public_html".into(),
+                enabled: true,
+                engine: None,
+                notes: String::new(),
+                created_at_unix: 0,
+                updated_at_unix: 0,
+                vhost_wired: false,
+                ssl: Default::default(),
+                internal_ip: Some("10.0.2.15".into()),
+                owner_suspend_message: String::new(),
+                suspended_by: None,
+                php_version: Some("8.5".into()),
+                aliases: Vec::new(),
+                staging_of: None,
+            };
+            let html = site_preview_cards(&[site], false, "Admin");
+            assert!(html.contains("<span>Package</span>"), "{html}");
+            assert!(html.contains("<span>PHP</span>"), "{html}");
+            assert!(html.contains("8.5"), "{html}");
+            assert!(html.contains("Package bandwidth"), "{html}");
+            assert!(html.contains("Used "), "{html}");
+            assert!(html.contains("<span>IP</span>"), "{html}");
+            assert!(!html.contains(" B<"), "{html}");
+            assert!(!html.contains(" B</"), "{html}");
         });
     }
 }

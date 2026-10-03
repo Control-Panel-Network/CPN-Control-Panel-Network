@@ -134,6 +134,9 @@ pub struct SiteSslSettings {
     pub shared_cert_owner: Option<String>,
     #[serde(default)]
     pub last_issue_unix: u64,
+    /// Last origin Let's Encrypt backup attempt (success or fail). Used for retry backoff.
+    #[serde(default)]
+    pub last_origin_retry_unix: u64,
     #[serde(default)]
     pub last_error: String,
     /// Relative or absolute path to uploaded fullchain (Custom only).
@@ -155,6 +158,7 @@ impl Default for SiteSslSettings {
             include_subdomains_on_cert: false,
             shared_cert_owner: None,
             last_issue_unix: 0,
+            last_origin_retry_unix: 0,
             last_error: String::new(),
             custom_cert_path: None,
             custom_key_path: None,

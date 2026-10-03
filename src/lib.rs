@@ -283,6 +283,7 @@ pub mod panel_ops_site_dns;
 pub mod panel_ops_ssl_inspect;
 pub mod panel_ops_ssl_issue;
 pub mod panel_ops_ssl_le;
+pub mod panel_ops_ssl_origin_retry;
 pub mod panel_ops_ssl_provider;
 pub mod panel_ops_ssl_public;
 pub mod panel_package_bulk_routes;

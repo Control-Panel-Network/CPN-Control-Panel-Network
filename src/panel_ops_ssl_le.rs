@@ -134,6 +134,7 @@ pub(crate) fn persist_ssl_error(domain: &str, err: &str) -> Result<(), String> {
     let site = load_site(domain)?;
     let mut ssl = site.ssl;
     ssl.last_error = err.to_string();
+    ssl.last_origin_retry_unix = crate::panel_website_resources::unix_now();
     modify_site(
         domain,
         SiteModify {

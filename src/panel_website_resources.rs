@@ -1,10 +1,20 @@
 //! Resource snapshots for Manage Overview (host-level when site metrics missing).
 
-use std::path::Path;
+use crate::sites::{SiteRecord, list_sites, site_home_from_record};
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cheap approximate disk usage (bytes) with a file walk cap.
 pub fn approx_dir_bytes(root: &Path, max_files: usize) -> Option<u64> {
+    approx_dir_bytes_skip(root, &[], max_files)
+}
+
+fn path_is_skipped(path: &Path, skip: &[PathBuf]) -> bool {
+    skip.iter().any(|other| path == other)
+}
+
+/// Walk `root`, skipping nested directories listed in `skip` (other site homes).
+pub fn approx_dir_bytes_skip(root: &Path, skip: &[PathBuf], max_files: usize) -> Option<u64> {
     if !root.exists() {
         return None;
     }
@@ -18,6 +28,9 @@ pub fn approx_dir_bytes(root: &Path, max_files: usize) -> Option<u64> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
+                if path_is_skipped(&path, skip) {
+                    continue;
+                }
                 stack.push(path);
                 continue;
             }
@@ -34,19 +47,25 @@ pub fn approx_dir_bytes(root: &Path, max_files: usize) -> Option<u64> {
 }
 
 pub fn format_bytes(bytes: u64) -> String {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-    let b = bytes as f64;
-    if b >= GB {
-        format!("{:.1} GB", b / GB)
-    } else if b >= MB {
-        format!("{:.1} MB", b / MB)
-    } else if b >= KB {
-        format!("{:.0} KB", b / KB)
+    crate::panel_storage_fmt::format_bytes_auto(bytes)
+}
+
+/// Used bytes for this site home, excluding nested other-site homes.
+pub fn site_used_bytes(site: &SiteRecord, max_files: usize) -> Option<u64> {
+    let home = site_home_from_record(site);
+    let skip: Vec<PathBuf> = list_sites()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|other| !other.domain.eq_ignore_ascii_case(&site.domain))
+        .map(|other| site_home_from_record(&other))
+        .filter(|path| path.starts_with(&home) && path != &home)
+        .collect();
+    let root = if home.exists() {
+        home
     } else {
-        format!("{bytes} B")
-    }
+        PathBuf::from(&site.docroot)
+    };
+    approx_dir_bytes_skip(&root, &skip, max_files)
 }
 
 pub fn unix_now() -> u64 {
@@ -163,7 +182,8 @@ mod tests {
 
     #[test]
     fn formats_bytes() {
-        assert_eq!(format_bytes(512), "512 B");
+        assert!(format_bytes(512).ends_with(" KB"));
+        assert!(!format_bytes(512).ends_with(" B"));
         assert!(format_bytes(2048).contains("KB"));
         assert!(format_bytes(5_000_000).contains("MB"));
     }
