@@ -250,10 +250,6 @@ const USERS_CHILDREN: &[NavChild] = &[
         href: "/account/users/list",
     },
     NavChild {
-        label: "Modify User",
-        href: "/account/users/modify",
-    },
-    NavChild {
         label: "Create ACL",
         href: "/account/acl/create",
     },

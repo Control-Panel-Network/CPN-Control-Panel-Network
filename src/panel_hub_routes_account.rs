@@ -115,6 +115,11 @@ pub async fn users_list_route(
             &user,
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
+            query.get("q").map(String::as_str),
+            query.get("sort").map(String::as_str),
+            query.get("order").map(String::as_str),
+            query.get("page").map(String::as_str),
+            query.get("per_page").map(String::as_str),
         ),
     ))
 }
@@ -390,6 +395,61 @@ pub async fn api_access_revoke_post(
     match revoke_token(&form.token_id, &user, admin) {
         Ok(()) => redirect_notice("/account/api-access", Some("Token revoked"), None),
         Err(error) => redirect_notice("/account/api-access", None, Some(&error)),
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct UserAdminDetailsForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    recovery_email: String,
+    #[serde(default)]
+    language: String,
+}
+
+#[get("/account/users/manage-fragment")]
+pub async fn users_manage_fragment_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let target = query.get("username").map(String::as_str).unwrap_or("");
+    match crate::panel_hub_pages_users_manage::users_manage_fragment(&user, target) {
+        Ok(html) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(html),
+        Err(error) => HttpResponse::Forbidden()
+            .content_type("text/html; charset=utf-8")
+            .body(format!(
+                r#"<p class="panel-notice error">{}</p>"#,
+                error.replace('&', "&amp;").replace('<', "&lt;")
+            )),
+    }
+}
+
+#[post("/account/users/admin-details")]
+pub async fn users_admin_details_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<UserAdminDetailsForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_admin(&user) {
+        return redirect_notice("/account/users/list", None, Some(&error));
+    }
+    match crate::account_mgmt::update_own_profile(
+        &form.username,
+        Some(form.recovery_email.as_str()),
+        Some(form.language.as_str()),
+    ) {
+        Ok(_) => redirect_notice("/account/users/list", Some("Account updated"), None),
+        Err(error) => redirect_notice("/account/users/list", None, Some(&error)),
     }
 }
 

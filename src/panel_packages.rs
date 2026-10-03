@@ -46,9 +46,13 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
-fn limit_cell(limit: i64, unit: &str) -> String {
+fn limit_cell(viewer: &str, limit: i64, unit: &str) -> String {
     if limit == crate::packages::UNLIMITED {
         r#"<span class="badge-ok">Unlimited</span>"#.into()
+    } else if unit == "MB" {
+        html_escape(&crate::panel_storage_fmt::format_mb_limit_for_user(
+            viewer, limit,
+        ))
     } else {
         html_escape(&format_limit_display(limit, unit))
     }
@@ -125,12 +129,12 @@ fn package_rows(packages: &[Package], owner_username: &str) -> String {
             id = html_escape(&pkg.id),
             owner = html_escape(owner_username),
             dup_default = html_escape(&dup_default),
-            disk = limit_cell(pkg.disk_mb, "MB"),
-            bw = limit_cell(pkg.bandwidth_mb, "MB"),
-            domains = limit_cell(pkg.domains, ""),
-            emails = limit_cell(pkg.emails, ""),
-            dbs = limit_cell(pkg.databases, ""),
-            ftp = limit_cell(pkg.ftp_accounts, ""),
+            disk = limit_cell(owner_username, pkg.disk_mb, "MB"),
+            bw = limit_cell(owner_username, pkg.bandwidth_mb, "MB"),
+            domains = limit_cell(owner_username, pkg.domains, ""),
+            emails = limit_cell(owner_username, pkg.emails, ""),
+            dbs = limit_cell(owner_username, pkg.databases, ""),
+            ftp = limit_cell(owner_username, pkg.ftp_accounts, ""),
             fqdn = fqdn_cell(pkg.fqdn_enabled),
             dup_btn = action_button("Duplicate", "color:inherit;"),
             del_btn = action_button("Delete", "color:#d92d20;"),
@@ -253,7 +257,7 @@ fn bandwidth_note(usage: &PackageUsage) -> String {
     }
 }
 
-fn usage_card(usage: &PackageUsage) -> String {
+fn usage_card(viewer: &str, usage: &PackageUsage) -> String {
     format!(
         r#"<div class="panel-card" style="margin-bottom:18px;">
       <h2 style="margin:0 0 8px;font-size:18px;">Your package: {name}</h2>
@@ -263,8 +267,8 @@ fn usage_card(usage: &PackageUsage) -> String {
         <li>Emails: {e_used} / {e_limit}</li>
         <li>Databases: {db_used} / {db_limit}</li>
         <li>FTP accounts: {f_used} / {f_limit}</li>
-        <li>Disk: {disk_used} MB / {disk_limit}</li>
-        <li>Bandwidth (this month): {bw_used} MB / {bw}{bw_note}</li>
+        <li>Disk: {disk}</li>
+        <li>Bandwidth (this month): {bw}{bw_note}</li>
         <li>FQDN / subdomains: {fqdn}</li>
       </ul>
     </div>"#,
@@ -277,10 +281,16 @@ fn usage_card(usage: &PackageUsage) -> String {
         db_limit = html_escape(&format_limit_display(usage.databases_limit, "")),
         f_used = usage.ftp_used,
         f_limit = html_escape(&format_limit_display(usage.ftp_limit, "")),
-        disk_used = usage.disk_mb_used,
-        disk_limit = html_escape(&format_limit_display(usage.disk_mb_limit, "MB")),
-        bw_used = usage.bandwidth_mb_used,
-        bw = html_escape(&format_limit_display(usage.bandwidth_mb_limit, "MB")),
+        disk = html_escape(&crate::panel_storage_fmt::format_used_mb_limit_for_user(
+            viewer,
+            usage.disk_mb_used,
+            usage.disk_mb_limit,
+        )),
+        bw = html_escape(&crate::panel_storage_fmt::format_used_mb_limit_for_user(
+            viewer,
+            usage.bandwidth_mb_used,
+            usage.bandwidth_mb_limit,
+        )),
         bw_note = bandwidth_note(usage),
         fqdn = if usage.fqdn_enabled {
             "Enabled"
@@ -345,9 +355,12 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
     );
     if !is_panel_admin(username) {
         let usage = usage_for_account(username).ok();
-        let card = usage.as_ref().map(usage_card).unwrap_or_else(|| {
-            r#"<p class="panel-notice error">Could not load your package limits.</p>"#.into()
-        });
+        let card = usage
+            .as_ref()
+            .map(|u| usage_card(username, u))
+            .unwrap_or_else(|| {
+                r#"<p class="panel-notice error">Could not load your package limits.</p>"#.into()
+            });
         return format!(
             "{heading}{notices}<div class=\"panel-card\"><h2 style=\"margin:0 0 12px;font-size:18px;\">| Your limits</h2>{card}</div>"
         );

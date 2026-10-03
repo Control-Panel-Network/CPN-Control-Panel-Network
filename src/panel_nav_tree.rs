@@ -324,7 +324,7 @@ mod tests {
         assert!(html.contains("nav-tile"));
         assert!(html.contains("View Profile"));
         assert!(html.contains("List Users"));
-        assert!(html.contains("Modify User"));
+        assert!(!html.contains(">Modify User<"));
         // No bootstrap admin here, so admin-only links must not be offered.
         assert!(!html.contains("Create New User"));
         assert!(!html.contains("/account/acl/modify"));

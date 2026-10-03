@@ -171,7 +171,7 @@ pub fn create_account(
     }
     let recovery_email = validate_recovery_email(recovery_email_raw).map_err(|err| {
         if err.contains("correo") || err.contains("Correo") || err.contains("Indica") {
-            "Recovery email is required and must look like user@example.com".into()
+            "Email is required and must look like user@example.com".into()
         } else {
             err
         }
@@ -281,7 +281,7 @@ pub fn update_own_profile(
     if let Some(email_raw) = recovery_email_raw {
         boot.recovery_email = validate_recovery_email(email_raw).map_err(|err| {
             if err.contains("correo") || err.contains("Correo") || err.contains("Indica") {
-                "Recovery email is required and must look like user@example.com".into()
+                "Email is required and must look like user@example.com".into()
             } else {
                 err
             }
