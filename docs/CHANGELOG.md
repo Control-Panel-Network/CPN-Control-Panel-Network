@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Website SSL badges**: List and Manage badges are **origin** certificate files (and live origin HTTPS), not Cloudflare orange-cloud edge TLS. **Valid** (with expiry `dd/mm/yyyy`) is local Let's Encrypt or custom certs. **CF SSL** is shown only when Cloudflare proxy is on for that FQDN and origin files are missing. **NONE** / **No SSL** is neither origin cert nor Cloudflare proxy TLS. Tooltips spell this out. The old **INSECURE** label is gone.
+- **Website SSL badges**: **Valid** remains origin certificate files on this host with a real expiry (`dd/mm/yyyy`). **CF SSL** is shown when origin files are missing and either Cloudflare orange-cloud proxy is on for the FQDN or the site SSL provider is Cloudflare CA (issuance setting, not a Valid origin cert). **NONE** is neither origin files nor those Cloudflare signals. Lab NAT grey-cloud records stay honest: n/a expiry still means no origin files. List and SSL tab copy is shorter. The old **INSECURE** label is gone.
 
 - **Hosting package names**: New packages (Create and Duplicate) are stored as `{username}_{customname}` using the package owner username (Create form owner selector; defaults to the signed-in admin). Typing an existing `{owner}_` prefix is not doubled. The reserved **Default** package (`pkg-default`) stays named exactly `Default`. Edit keeps the owner prefix and only changes the custom part. CLI `cpn package create` requires `--owner`.
 
