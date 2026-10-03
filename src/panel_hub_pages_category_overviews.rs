@@ -89,10 +89,21 @@ mod tests {
 
     #[test]
     fn docker_hub_links_list_route() {
-        let html = docker_hub_main();
-        assert!(html.contains("/docker/list"));
-        assert!(html.contains("/docker/create"));
-        assert!(html.contains("/docker/images"));
+        // Section defs always include list/create/images. Rendered HTML is
+        // feature-gated and empty when Docker/Podman is not installed on the host.
+        let hrefs: Vec<&str> = crate::panel_hub_defs::docker_hub_sections()
+            .into_iter()
+            .flat_map(|(_, tiles)| tiles.into_iter().map(|t| t.href))
+            .collect();
+        assert!(hrefs.contains(&"/docker/list"));
+        assert!(hrefs.contains(&"/docker/create"));
+        assert!(hrefs.contains(&"/docker/images"));
+        if crate::panel_feature_gate::docker_installed() {
+            let html = docker_hub_main();
+            assert!(html.contains("/docker/list"));
+            assert!(html.contains("/docker/create"));
+            assert!(html.contains("/docker/images"));
+        }
     }
 
     #[test]
