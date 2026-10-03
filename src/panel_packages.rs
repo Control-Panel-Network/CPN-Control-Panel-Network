@@ -3,9 +3,10 @@
 use crate::account_mgmt::list_accounts;
 use crate::packages::{
     Package, PackageUsage, accounts_assigned_to, format_limit_display, is_panel_admin,
-    list_packages, package_for_account, usage_for_account,
+    list_packages, package_custom_name_for_edit, package_for_account, usage_for_account,
 };
 use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_table_sized};
+use crate::panel_package_form::package_form;
 
 fn html_escape(value: &str) -> String {
     value
@@ -69,7 +70,7 @@ fn action_button(label: &str, style: &str) -> String {
     )
 }
 
-fn package_rows(packages: &[Package]) -> String {
+fn package_rows(packages: &[Package], owner_username: &str) -> String {
     if packages.is_empty() {
         return r#"<p class="empty-state">No packages yet.</p>"#.into();
     }
@@ -91,7 +92,8 @@ fn package_rows(packages: &[Package]) -> String {
                 html_escape(&assigned.join(", "))
             )
         };
-        let dup_default = format!("{} Copy", pkg.name);
+        let custom = package_custom_name_for_edit(pkg);
+        let dup_default = format!("{custom}-Copy");
         rows.push_str(&format!(
             r#"<tr>
           <td data-label="Select">
@@ -105,7 +107,7 @@ fn package_rows(packages: &[Package]) -> String {
           <td data-label="Actions">
             <a href="/packages/edit?id={id}">Edit</a>
             &nbsp;|&nbsp;
-            <form method="post" action="/packages/duplicate" class="inline-form" style="display:inline;" onsubmit="return cpnPkgDuplicate(this);">
+            <form method="post" action="/packages/duplicate" class="inline-form" style="display:inline;" data-owner="{owner}" onsubmit="return cpnPkgDuplicate(this);">
               <input type="hidden" name="id" value="{id}">
               <input type="hidden" name="new_name" value="">
               <input type="hidden" data-default-name="{dup_default}">
@@ -121,6 +123,7 @@ fn package_rows(packages: &[Package]) -> String {
             name = html_escape(&pkg.name),
             assigned_note = assigned_note,
             id = html_escape(&pkg.id),
+            owner = html_escape(owner_username),
             dup_default = html_escape(&dup_default),
             disk = limit_cell(pkg.disk_mb, "MB"),
             bw = limit_cell(pkg.bandwidth_mb, "MB"),
@@ -202,9 +205,13 @@ fn bulk_toolbar() -> String {
       }
       refresh();
       window.cpnPkgDuplicate=function(form){
+        var owner=form.getAttribute('data-owner')||'';
         var hint=form.querySelector('[data-default-name]');
         var suggested=hint?hint.getAttribute('data-default-name'):'';
-        var name=window.prompt('New package name', suggested||'');
+        var msg=owner
+          ?('New package custom name (saved as '+owner+'_customname)')
+          :'New package custom name';
+        var name=window.prompt(msg, suggested||'');
         if(!name||!String(name).trim()) return false;
         form.querySelector('input[name="new_name"]').value=String(name).trim();
         return true;
@@ -283,123 +290,6 @@ fn usage_card(usage: &PackageUsage) -> String {
     )
 }
 
-fn package_form(action: &str, pkg: Option<&Package>, submit: &str) -> String {
-    let (id, name, disk, bw, domains, emails, dbs, ftp, fqdn, notes) = match pkg {
-        Some(p) => (
-            p.id.as_str(),
-            p.name.as_str(),
-            p.disk_mb.to_string(),
-            p.bandwidth_mb.to_string(),
-            p.domains.to_string(),
-            p.emails.to_string(),
-            p.databases.to_string(),
-            p.ftp_accounts.to_string(),
-            p.fqdn_enabled,
-            p.notes.as_str(),
-        ),
-        None => (
-            "",
-            "",
-            "1000".into(),
-            "1000".into(),
-            "20".into(),
-            "1000".into(),
-            "1000".into(),
-            "1000".into(),
-            true,
-            "",
-        ),
-    };
-    let fqdn_checked = if fqdn { " checked" } else { "" };
-    let id_field = if id.is_empty() {
-        String::new()
-    } else {
-        format!(
-            r#"<input type="hidden" name="id" value="{}">"#,
-            html_escape(id)
-        )
-    };
-    format!(
-        r#"<form method="post" action="{action}" class="stack-form" style="margin-top:12px;display:grid;gap:12px;max-width:520px;">
-      {id_field}
-      <label>Package name
-        <input name="name" required maxlength="128" value="{name}">
-      </label>
-      <label>Disk space (MB, -1 = unlimited)
-        <input name="disk_mb" type="number" required value="{disk}">
-      </label>
-      <label>Bandwidth (MB, -1 = unlimited)
-        <input name="bandwidth_mb" type="number" required value="{bw}">
-      </label>
-      <label>Domains (-1 = unlimited)
-        <input name="domains" type="number" required value="{domains}">
-      </label>
-      <label>Emails (-1 = unlimited)
-        <input name="emails" type="number" required value="{emails}">
-      </label>
-      <label>Databases (-1 = unlimited)
-        <input name="databases" type="number" required value="{dbs}">
-      </label>
-      <label>FTP accounts (-1 = unlimited)
-        <input name="ftp_accounts" type="number" required value="{ftp}">
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" name="fqdn_enabled" value="1"{fqdn_checked}>
-        Allow FQDN / subdomain creation
-      </label>
-      <label>Notes
-        <textarea name="notes" rows="3">{notes}</textarea>
-      </label>
-      {sidebar}
-      <button type="submit" class="btn-primary">{submit}</button>
-      <p class="muted"><a href="/packages">Back to packages</a></p>
-    </form>"#,
-        action = html_escape(action),
-        id_field = id_field,
-        name = html_escape(name),
-        disk = html_escape(&disk),
-        bw = html_escape(&bw),
-        domains = html_escape(&domains),
-        emails = html_escape(&emails),
-        dbs = html_escape(&dbs),
-        ftp = html_escape(&ftp),
-        fqdn_checked = fqdn_checked,
-        notes = html_escape(notes),
-        sidebar = package_sidebar_fields(pkg),
-        submit = html_escape(submit),
-    )
-}
-
-fn package_sidebar_fields(pkg: Option<&Package>) -> String {
-    let selected = pkg
-        .map(|p| p.sidebar_hidden_nav_ids.clone())
-        .unwrap_or_default();
-    let mut checks = String::new();
-    for item in crate::sidebar_visibility::controllable_nav_items() {
-        let checked = if selected.iter().any(|id| id == item.id) {
-            " checked"
-        } else {
-            ""
-        };
-        checks.push_str(&format!(
-            r#"<label class="cpn-check-item">
-          <input type="checkbox" name="sidebar_hidden_nav_ids" value="{id}"{checked}>
-          <span>Hide {label}</span>
-        </label>"#,
-            id = html_escape(item.id),
-            checked = checked,
-            label = html_escape(item.label),
-        ));
-    }
-    format!(
-        r#"<fieldset class="cpn-check-fieldset">
-      <legend>Sidebar visibility (plan)</legend>
-      <p class="muted" style="margin:0 0 10px;">Accounts on this package cannot see or open checked sections (403 on direct URL). Dashboard stays available. Owner/admin keeps full access unless separately restricted in ACL.</p>
-      <div class="cpn-check-grid">{checks}</div>
-    </fieldset>"#,
-        checks = checks,
-    )
-}
 
 fn assign_form(packages: &[Package]) -> String {
     let accounts = list_accounts().unwrap_or_default();
@@ -478,12 +368,12 @@ pub fn packages_main(username: &str, notice: Option<&str>, error: Option<&str>) 
         heading = heading,
         notices = notices,
         toolbar = bulk_toolbar(),
-        rows = package_rows(&packages),
+        rows = package_rows(&packages, username),
         assign = assign_form(&packages),
     )
 }
 
-pub fn packages_new_main(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn packages_new_main(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     format!(
         "{}{}{}{}",
         section_heading(
@@ -492,11 +382,16 @@ pub fn packages_new_main(notice: Option<&str>, error: Option<&str>) -> String {
         ),
         notice_block("ok", notice),
         notice_block("error", error),
-        package_form("/packages/create", None, "Create package"),
+        package_form("/packages/create", None, "Create package", username),
     )
 }
 
-pub fn packages_edit_main(pkg: &Package, notice: Option<&str>, error: Option<&str>) -> String {
+pub fn packages_edit_main(
+    pkg: &Package,
+    actor_username: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
     format!(
         "{}{}{}{}",
         section_heading(
@@ -505,6 +400,11 @@ pub fn packages_edit_main(pkg: &Package, notice: Option<&str>, error: Option<&st
         ),
         notice_block("ok", notice),
         notice_block("error", error),
-        package_form("/packages/update", Some(pkg), "Save changes"),
+        package_form(
+            "/packages/update",
+            Some(pkg),
+            "Save changes",
+            actor_username,
+        ),
     )
 }

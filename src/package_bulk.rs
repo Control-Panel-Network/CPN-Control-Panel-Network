@@ -1,7 +1,7 @@
 //! Duplicate and bulk update/delete helpers for hosting packages.
 
 use crate::packages::{
-    Package, PackageInput, create_package, delete_package, get_package, update_package,
+    Package, PackageInput, create_package_for, delete_package, get_package, update_package,
 };
 
 /// Optional field patch applied to every selected package id.
@@ -53,25 +53,32 @@ impl BulkOutcome {
     }
 }
 
-/// Copy plan limits/features into a new package with the given name.
-pub fn duplicate_package(source_id: &str, new_name: &str) -> Result<Package, String> {
+/// Copy plan limits/features into a new package owned by `owner`.
+pub fn duplicate_package(
+    source_id: &str,
+    new_name: &str,
+    owner: &str,
+) -> Result<Package, String> {
     let src = get_package(source_id)?;
     let name = new_name.trim();
     if name.is_empty() {
         return Err("New package name is required".into());
     }
-    create_package(PackageInput {
-        name: name.to_string(),
-        disk_mb: src.disk_mb,
-        bandwidth_mb: src.bandwidth_mb,
-        domains: src.domains,
-        emails: src.emails,
-        databases: src.databases,
-        ftp_accounts: src.ftp_accounts,
-        fqdn_enabled: src.fqdn_enabled,
-        notes: src.notes,
-        sidebar_hidden_nav_ids: src.sidebar_hidden_nav_ids,
-    })
+    create_package_for(
+        owner,
+        PackageInput {
+            name: name.to_string(),
+            disk_mb: src.disk_mb,
+            bandwidth_mb: src.bandwidth_mb,
+            domains: src.domains,
+            emails: src.emails,
+            databases: src.databases,
+            ftp_accounts: src.ftp_accounts,
+            fqdn_enabled: src.fqdn_enabled,
+            notes: src.notes,
+            sidebar_hidden_nav_ids: src.sidebar_hidden_nav_ids,
+        },
+    )
 }
 
 fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
@@ -143,7 +150,7 @@ pub fn bulk_delete_packages(ids: &[String]) -> BulkOutcome {
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
-    use crate::packages::{DEFAULT_PACKAGE_ID, ensure_default_package};
+    use crate::packages::{DEFAULT_PACKAGE_ID, create_package_for, ensure_default_package};
 
     fn sample_input(name: &str) -> PackageInput {
         PackageInput {
@@ -164,9 +171,9 @@ mod tests {
     fn duplicate_copies_limits_with_new_name() {
         with_test_data_dir(|| {
             ensure_default_package().unwrap();
-            let src = create_package(sample_input("Starter")).unwrap();
-            let copy = duplicate_package(&src.id, "Starter Copy").unwrap();
-            assert_eq!(copy.name, "Starter Copy");
+            let src = create_package_for("ops", sample_input("Starter")).unwrap();
+            let copy = duplicate_package(&src.id, "Starter-Copy", "ops").unwrap();
+            assert_eq!(copy.name, "ops_Starter-Copy");
             assert_ne!(copy.id, src.id);
             assert_eq!(copy.disk_mb, src.disk_mb);
             assert_eq!(copy.domains, src.domains);
@@ -179,8 +186,8 @@ mod tests {
     fn bulk_update_sets_fqdn_and_disk() {
         with_test_data_dir(|| {
             ensure_default_package().unwrap();
-            let a = create_package(sample_input("A")).unwrap();
-            let b = create_package(sample_input("B")).unwrap();
+            let a = create_package_for("ops", sample_input("A")).unwrap();
+            let b = create_package_for("ops", sample_input("B")).unwrap();
             let out = bulk_update_packages(
                 &[a.id.clone(), b.id.clone()],
                 &PackageBulkPatch {
@@ -197,7 +204,7 @@ mod tests {
             assert!(!a2.fqdn_enabled);
             assert_eq!(b2.disk_mb, 2048);
             assert!(!b2.fqdn_enabled);
-            assert_eq!(a2.name, "A");
+            assert_eq!(a2.name, "ops_A");
         });
     }
 
@@ -205,7 +212,7 @@ mod tests {
     fn bulk_delete_skips_default() {
         with_test_data_dir(|| {
             ensure_default_package().unwrap();
-            let a = create_package(sample_input("Temp")).unwrap();
+            let a = create_package_for("ops", sample_input("Temp")).unwrap();
             let out = bulk_delete_packages(&[DEFAULT_PACKAGE_ID.into(), a.id.clone()]);
             assert_eq!(out.ok, 1);
             assert_eq!(out.errors.len(), 1);

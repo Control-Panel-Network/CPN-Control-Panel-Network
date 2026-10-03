@@ -4,8 +4,8 @@ use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::{
-    PackageInput, assign_package, create_package, delete_package, ensure_default_package,
-    get_package, is_panel_admin, update_package,
+    PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
+    get_package, is_panel_admin, update_package_for,
 };
 use crate::panel_packages::{packages_edit_main, packages_main, packages_new_main};
 use crate::panel_pages::panel_shell;
@@ -104,6 +104,16 @@ fn collect_form_values(pairs: &[(String, String)], key: &str) -> Vec<String> {
         .collect()
 }
 
+fn package_owner_from_pairs(pairs: &[(String, String)], fallback: &str) -> String {
+    let owner = collect_form_value(pairs, "owner");
+    let owner = owner.trim();
+    if owner.is_empty() {
+        fallback.trim().to_string()
+    } else {
+        owner.to_string()
+    }
+}
+
 fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, PackageInput), String> {
     let form = PackageForm {
         id: collect_form_value(pairs, "id"),
@@ -200,7 +210,7 @@ pub async fn packages_new_page(
         &user,
         "packages",
         "Create package",
-        &packages_new_main(notice, error),
+        &packages_new_main(&user, notice, error),
     ))
 }
 
@@ -227,7 +237,7 @@ pub async fn packages_edit_page(
                 &user,
                 "packages",
                 "Edit package",
-                &packages_edit_main(&pkg, notice, error),
+                &packages_edit_main(&pkg, &user, notice, error),
             ))
         }
         Err(error) => HttpResponse::SeeOther()
@@ -250,7 +260,10 @@ pub async fn packages_create(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    match package_input_from_pairs(&form).and_then(|(_, input)| create_package(input)) {
+    match package_input_from_pairs(&form).and_then(|(_, input)| {
+        let owner = package_owner_from_pairs(&form, &user);
+        create_package_for(&owner, input)
+    }) {
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -280,7 +293,9 @@ pub async fn packages_update(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    match package_input_from_pairs(&form).and_then(|(id, input)| update_package(&id, input)) {
+    match package_input_from_pairs(&form)
+        .and_then(|(id, input)| update_package_for(&id, &user, input))
+    {
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
