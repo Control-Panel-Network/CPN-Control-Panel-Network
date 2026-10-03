@@ -111,7 +111,7 @@ pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
         }
         crate::apps::AppId::Rabbitmq | crate::apps::AppId::Redis => String::new(),
         crate::apps::AppId::Docker => {
-            r#"<a class="btn-primary" href="/docker">Manage</a>"#.into()
+            r#"<a class="btn-primary" href="/docker/list">Manage</a>"#.into()
         }
         crate::apps::AppId::Nextcloud => String::new(),
         crate::apps::AppId::Sogo => {

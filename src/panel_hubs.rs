@@ -66,6 +66,25 @@ pub fn breadcrumb(parts: &[(&str, Option<&str>)]) -> String {
     out
 }
 
+/// Render a category overview: heading plus one collapsible tile section per entry.
+/// Applies optional-feature gating so Docker / LiteSpeed / webmail tiles hide when absent.
+pub fn category_hub_main(
+    title: &str,
+    blurb: &str,
+    sections: Vec<(&'static str, Vec<HubTile<'static>>)>,
+) -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
+    let mut body = section_heading(title, blurb);
+    for (section_title, tiles) in sections {
+        let filtered = crate::panel_feature_gate::filter_hub_tiles(tiles, feats);
+        if filtered.is_empty() {
+            continue;
+        }
+        body.push_str(&hub_tiles_grid(section_title, &filtered));
+    }
+    body
+}
+
 pub fn hub_tiles_grid(section_title: &str, tiles: &[HubTile<'_>]) -> String {
     let mut out = format!(
         r#"<details class="hub-tool-group" open>

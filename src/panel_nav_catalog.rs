@@ -27,7 +27,7 @@ pub(crate) enum NavEntry {
 const WEBSITES_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "List Websites",
-        href: "/websites",
+        href: "/websites/list",
     },
     NavChild {
         label: "Create Website",
@@ -46,7 +46,7 @@ const WEBSITES_CHILDREN: &[NavChild] = &[
 const WORDPRESS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "WordPress Sites",
-        href: "/wordpress",
+        href: "/wordpress/list",
     },
     NavChild {
         label: "Install WordPress",
@@ -224,7 +224,7 @@ const BACKUPS_CHILDREN: &[NavChild] = &[
 const SSL_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Manage SSL",
-        href: "/security/ssl",
+        href: "/security/ssl/manage",
     },
     NavChild {
         label: "Hostname SSL",
@@ -318,7 +318,7 @@ const LITESPEED_CHILDREN: &[NavChild] = &[
     },
     NavChild {
         label: "LiteSpeed plans",
-        href: "/server/litespeed",
+        href: "/server/litespeed/plans",
     },
 ];
 
@@ -383,7 +383,7 @@ const SETTINGS_CHILDREN: &[NavChild] = &[
 const PLUGINS_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Installed",
-        href: "/plugins",
+        href: "/plugins?view=installed",
     },
     NavChild {
         label: "Store",
@@ -393,8 +393,12 @@ const PLUGINS_CHILDREN: &[NavChild] = &[
 
 const DOCKER_CHILDREN: &[NavChild] = &[
     NavChild {
-        label: "Containers",
-        href: "/docker",
+        label: "Active Containers",
+        href: "/docker/list",
+    },
+    NavChild {
+        label: "Create Container",
+        href: "/docker/create",
     },
     NavChild {
         label: "Images",
@@ -446,7 +450,7 @@ pub(crate) const MAIN: &[NavEntry] = &[
     },
     NavEntry::Group {
         id: "ftp",
-        href: "/ftp/accounts",
+        href: "/ftp",
         label: "FTP",
         children: FTP_CHILDREN,
     },
@@ -501,7 +505,7 @@ pub(crate) const SERVER: &[NavEntry] = &[
     },
     NavEntry::Group {
         id: "php",
-        href: "/server/php/extensions",
+        href: "/server/php",
         label: "PHP",
         children: PHP_CHILDREN,
     },

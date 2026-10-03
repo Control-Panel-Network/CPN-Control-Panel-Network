@@ -189,7 +189,7 @@ fn tab_class(active: &str, id: &str) -> &'static str {
 pub(crate) fn toolbar(active: &str) -> String {
     format!(
         r#"<p class="stack-actions docker-tabs" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
-      <a class="{c}" href="/docker">Active Containers</a>
+      <a class="{c}" href="/docker/list">Active Containers</a>
       <a class="{s}" href="/docker/stacks">Compose Stacks</a>
       <a class="{i}" href="/docker/images">Manage Images</a>
       <a class="{h}" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>

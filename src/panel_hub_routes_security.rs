@@ -171,6 +171,37 @@ pub async fn security_ssl(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if query.contains_key("notice") || query.contains_key("error") {
+        let mut loc = String::from("/security/ssl/manage");
+        let mut first = true;
+        for (key, value) in query.iter() {
+            loc.push(if first { '?' } else { '&' });
+            first = false;
+            loc.push_str(key);
+            loc.push('=');
+            loc.push_str(&crate::panel_hub_http::urlencoding_simple(value));
+        }
+        return HttpResponse::SeeOther()
+            .append_header(("Location", loc))
+            .finish();
+    }
+    html_ok(panel_shell(
+        &user,
+        "security",
+        "SSL",
+        &crate::panel_hub_pages_category_overviews::ssl_hub_main(),
+    ))
+}
+
+#[get("/security/ssl/manage")]
+pub async fn security_ssl_manage(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
     html_ok(panel_shell(
         &user,
         "security",

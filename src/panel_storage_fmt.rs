@@ -189,6 +189,7 @@ pub fn storage_unit_options_html(selected: StorageUnitPref) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::packages::UNLIMITED;
 
     #[test]
     fn auto_scales_quota_mb_to_gb() {
