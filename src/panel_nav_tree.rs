@@ -2,7 +2,7 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
-use crate::panel_nav_catalog::{NavChild, NavEntry, MAIN, SECURITY, SERVER, SETTINGS};
+use crate::panel_nav_catalog::{MAIN, NavChild, NavEntry, SECURITY, SERVER, SETTINGS};
 
 pub use crate::panel_nav_tree_chrome::{nav_tree_script, nav_tree_styles};
 
@@ -427,8 +427,8 @@ mod tests {
     #[test]
     fn admin_sees_create_user_and_acl_links() {
         use crate::account::{
-            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
-            PanelBootstrap,
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
         };
         with_test_data_dir(|| {
             let boot = PanelBootstrap {
@@ -460,8 +460,8 @@ mod tests {
     #[test]
     fn root_file_manager_is_admin_leaf_link() {
         use crate::account::{
-            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
-            PanelBootstrap,
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
         };
         with_test_data_dir(|| {
             let salt = new_password_salt();
@@ -597,8 +597,8 @@ mod tests {
     #[test]
     fn logs_is_a_collapsible_group_with_a_child_per_viewer() {
         use crate::account::{
-            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
-            PanelBootstrap,
+            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
+            write_account_file,
         };
         with_test_data_dir(|| {
             let boot = PanelBootstrap {
