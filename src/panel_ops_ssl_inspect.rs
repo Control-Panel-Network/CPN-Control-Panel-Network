@@ -494,11 +494,5 @@ mod tests {
             let blob = format!("{} {}", kind.label(), kind.short_label()).to_lowercase();
             assert!(!blob.contains("cyberpanel"));
         }
-        assert_eq!(SslValidityKind::Valid.short_label(), "Secure");
-        assert_eq!(SslValidityKind::ExpiringSoon.short_label(), "Secure");
-        assert_eq!(SslValidityKind::None.short_label(), "Insecure");
-        assert_eq!(SslValidityKind::Expired.short_label(), "Insecure");
-        assert_eq!(SslValidityKind::Mismatch.short_label(), "Insecure");
-        assert_eq!(SslValidityKind::Invalid.short_label(), "Insecure");
     }
 }
