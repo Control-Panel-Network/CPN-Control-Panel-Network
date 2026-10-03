@@ -9,7 +9,7 @@ use crate::panel_ops_path::{
 };
 use crate::site_acl::{SitePerm, require_manage_site};
 use crate::sites::site_home_from_record;
-use actix_web::{HttpRequest, HttpResponse, get, route, web};
+use actix_web::{HttpRequest, HttpResponse, route, web};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -175,9 +175,9 @@ fn asset_response(body: &'static str, ctype: &str) -> HttpResponse {
         .body(body)
 }
 
-fn require_panel_or_login(state: &AppState, http: &HttpRequest) -> Result<(), HttpResponse> {
+fn require_panel_or_login(state: &AppState, http: &HttpRequest) -> Result<(), Box<HttpResponse>> {
     if require_panel_user(state, http).is_none() {
-        return Err(login_redirect(http));
+        return Err(Box::new(login_redirect(http)));
     }
     Ok(())
 }
@@ -188,7 +188,7 @@ pub async fn server_files_asset_css(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     if let Err(resp) = require_panel_or_login(&state, &http) {
-        return resp;
+        return *resp;
     }
     asset_response(fm_css_body(), "text/css; charset=utf-8")
 }
@@ -199,7 +199,7 @@ pub async fn server_files_asset_js(
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
     if let Err(resp) = require_panel_or_login(&state, &http) {
-        return resp;
+        return *resp;
     }
     asset_response(fm_js_body(), "application/javascript; charset=utf-8")
 }
