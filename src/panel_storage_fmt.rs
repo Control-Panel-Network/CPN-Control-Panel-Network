@@ -67,15 +67,15 @@ pub fn format_mb_limit(pref: StorageUnitPref, limit_mb: i64) -> String {
 
 pub fn format_used_limit(pref: StorageUnitPref, used_bytes: u64, limit_mb: i64) -> String {
     let used = format_bytes_with(pref, used_bytes);
-    format!("{used} / {}", format_mb_limit(pref, limit_mb))
+    format!("Used {used} of {}", format_mb_limit(pref, limit_mb))
 }
 
-/// Count meters (`3 / ∞`) for domains, mailboxes, and similar quotas.
+/// Count meters (`Used 3 of ∞`) for domains, mailboxes, and similar quotas.
 pub fn format_used_count(used: u64, limit: i64) -> String {
     if is_unlimited(limit) {
-        format!("{used} / {INFINITY_MARK}")
+        format!("Used {used} of {INFINITY_MARK}")
     } else {
-        format!("{used} / {limit}")
+        format!("Used {used} of {limit}")
     }
 }
 
@@ -228,9 +228,10 @@ mod tests {
     #[test]
     fn used_over_limit_pairs_units() {
         let s = format_used_limit(StorageUnitPref::Auto, 5 * 1024, 500_000);
-        assert!(s.starts_with("5 KB / "), "{s}");
+        assert!(s.starts_with("Used 5 KB of "), "{s}");
         assert!(s.contains("GB"), "{s}");
         assert!(!s.contains("500000"), "{s}");
+        assert!(!s.contains(" / "), "{s}");
     }
 
     #[test]
@@ -253,9 +254,9 @@ mod tests {
         assert_eq!(format_mb_limit(StorageUnitPref::Auto, 0), "∞");
         assert_eq!(
             format_used_limit(StorageUnitPref::Auto, 1024, UNLIMITED),
-            "1 KB / ∞"
+            "Used 1 KB of ∞"
         );
-        assert_eq!(format_used_count(3, 0), "3 / ∞");
-        assert_eq!(format_used_count(3, 10), "3 / 10");
+        assert_eq!(format_used_count(3, 0), "Used 3 of ∞");
+        assert_eq!(format_used_count(3, 10), "Used 3 of 10");
     }
 }

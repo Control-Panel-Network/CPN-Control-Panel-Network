@@ -44,7 +44,7 @@ fn count_html(used: u64, limit: i64) -> String {
     let text = format_used_count(used, limit);
     if crate::packages::is_unlimited(limit) {
         format!(
-            r#"{} / {}"#,
+            r#"Used {} of {}"#,
             html_escape(&used.to_string()),
             unlimited_html()
         )
@@ -57,7 +57,7 @@ fn bytes_html(username: &str, used_bytes: u64, limit_mb: i64) -> String {
     let text = format_used_limit_for_user(username, used_bytes, limit_mb);
     if crate::packages::is_unlimited(limit_mb) {
         let used = crate::panel_storage_fmt::format_bytes_for_user(username, used_bytes);
-        format!("{} / {}", html_escape(&used), unlimited_html())
+        format!("Used {} of {}", html_escape(&used), unlimited_html())
     } else {
         html_escape(&text)
     }
@@ -91,6 +91,11 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.databases_limit)
         .or_else(|| pkg.as_ref().map(|p| p.databases))
         .unwrap_or(UNLIMITED);
+    let ftp_limit = usage
+        .as_ref()
+        .map(|u| u.ftp_limit)
+        .or_else(|| pkg.as_ref().map(|p| p.ftp_accounts))
+        .unwrap_or(UNLIMITED);
     let disk_limit = usage
         .as_ref()
         .map(|u| u.disk_mb_limit)
@@ -101,14 +106,19 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.bandwidth_mb_limit)
         .or_else(|| pkg.as_ref().map(|p| p.bandwidth_mb))
         .unwrap_or(UNLIMITED);
+    let domains_used = usage
+        .as_ref()
+        .map(|u| u.domains_used)
+        .unwrap_or_else(|| sites.len() as u64);
     let emails_used = usage.as_ref().map(|u| u.emails_used).unwrap_or(0);
     let db_used = usage.as_ref().map(|u| u.databases_used).unwrap_or(0);
+    let ftp_used = usage.as_ref().map(|u| u.ftp_used).unwrap_or(0);
     let bw_bytes = crate::package_bandwidth::account_month_bytes(username);
     let disk_used = disk_bytes_used(&sites);
     let blurb = if is_panel_admin(username) {
-        "Totals for sites you own, against your assigned package. ∞ means unlimited (0 or -1 on the package)."
+        "Totals for sites you own, against your assigned package. ∞ means unlimited (package limit 0 or negative one)."
     } else {
-        "Used versus your package quotas. ∞ means unlimited (0 or -1 on the package)."
+        "Used versus your package quotas. ∞ means unlimited (package limit 0 or negative one)."
     };
     let pkg_name = usage
         .as_ref()
@@ -117,24 +127,25 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .unwrap_or("Default");
     let not_metered = count_html(0, UNLIMITED);
     let rows = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}",
+        row("Websites", &count_html(domains_used, domains_limit)),
+        row("Mailboxes", &count_html(emails_used, emails_limit)),
+        row("Databases", &count_html(db_used, db_limit)),
+        row("FTP accounts", &count_html(ftp_used, ftp_limit)),
+        row("Storage", &bytes_html(username, disk_used, disk_limit)),
+        row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit)),
         row(
             "Alias domains",
             &count_html(aliases_used(&sites), UNLIMITED)
         ),
-        row("Disk usage", &bytes_html(username, disk_used, disk_limit)),
-        row("Database disk usage", &count_html(db_used, db_limit),),
-        row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit),),
         row(
             "Sub-domains",
             &count_html(subdomains_used(&sites), domains_limit),
         ),
-        row("Email accounts", &count_html(emails_used, emails_limit)),
         row("Mailing lists", &not_metered),
         row("Autoresponders", &not_metered),
         row("Forwarders", &not_metered),
         row("Email filters", &not_metered),
-        row("Databases", &count_html(db_used, db_limit)),
     );
     format!(
         r#"<article class="status-card cpn-stats-card">
@@ -146,7 +157,7 @@ pub fn dashboard_stats_html(username: &str) -> String {
     </div>
   </div>
   <ul class="cpn-stats-list">{rows}</ul>
-  <p class="muted" style="margin-top:12px;">Mailing lists, autoresponders, forwarders, and email filters are not provisioned yet, so those rows stay 0 / ∞. Database disk is not metered; the row shows database count versus the package limit.</p>
+  <p class="muted" style="margin-top:12px;">Mailing lists, autoresponders, forwarders, and email filters are not provisioned yet, so those rows stay Used 0 of ∞. Database disk space is not metered separately; Databases shows account count versus the package limit.</p>
 </article>"#,
         blurb = html_escape(blurb),
         pkg = html_escape(pkg_name),
@@ -185,16 +196,24 @@ mod tests {
             let _ = ensure_default_package();
             let html = dashboard_stats_html("nobody-yet");
             assert!(html.contains("Statistics"), "{html}");
+            assert!(html.contains("Websites"), "{html}");
+            assert!(html.contains("Mailboxes"), "{html}");
+            assert!(html.contains("FTP accounts"), "{html}");
+            assert!(html.contains("Storage"), "{html}");
+            assert!(html.contains("Bandwidth"), "{html}");
             assert!(html.contains("Alias domains"), "{html}");
             assert!(html.contains("Sub-domains"), "{html}");
-            assert!(html.contains("Email accounts"), "{html}");
             assert!(html.contains("Mailing lists"), "{html}");
             assert!(html.contains("Autoresponders"), "{html}");
             assert!(html.contains("Forwarders"), "{html}");
             assert!(html.contains("Email filters"), "{html}");
             assert!(html.contains("Databases"), "{html}");
             assert!(html.contains("∞"), "{html}");
-            assert!(!html.contains("-1"), "{html}");
+            assert!(html.contains("Used "), "{html}");
+            // Raw sentinel must not appear as a meter value (hint copy may mention zero/negative one).
+            assert!(!html.contains("> -1<"), "{html}");
+            assert!(!html.contains("/ -1"), "{html}");
+            assert!(!html.contains("of -1"), "{html}");
             assert!(!html.to_ascii_lowercase().contains("cpanel"));
             assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
         });
