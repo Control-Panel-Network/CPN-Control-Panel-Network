@@ -85,6 +85,7 @@ fn unique_wrong_password(valid: &str) -> String {
 #[test]
 fn login_valid_sets_session_and_redirects() {
     with_test_data_dir(|| {
+        let _gate = crate::login_service_gate::lock_login_service_gate_env();
         let password = generate_password(&default_password_policy());
         let session_secret = ephemeral_session_secret();
         unsafe {
@@ -136,6 +137,7 @@ fn login_valid_sets_session_and_redirects() {
 #[test]
 fn login_invalid_returns_401_without_session_cookie() {
     with_test_data_dir(|| {
+        let _gate = crate::login_service_gate::lock_login_service_gate_env();
         let password = generate_password(&default_password_policy());
         let wrong = unique_wrong_password(&password);
         let session_secret = ephemeral_session_secret();
@@ -204,6 +206,7 @@ fn dashboard_without_session_redirects_to_login() {
 #[test]
 fn login_honors_safe_next_and_rejects_external() {
     with_test_data_dir(|| {
+        let _gate = crate::login_service_gate::lock_login_service_gate_env();
         let password = generate_password(&default_password_policy());
         let session_secret = ephemeral_session_secret();
         unsafe {
