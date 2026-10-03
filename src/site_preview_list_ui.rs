@@ -51,7 +51,9 @@ pub fn site_preview_list_styles() -> &'static str {
   font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
   background:rgba(18,183,106,.16); color:#6ce9a6;
 }
-.site-ssl-badge.off { background:rgba(152,162,179,.14); color:#98a2b3; }
+.site-ssl-badge.off,
+.site-ssl-badge.insecure { background:rgba(240,68,56,.18); color:#f97066; }
+.site-ssl-badge.expiring { background:rgba(247,144,9,.2); color:#fdb022; }
 .site-meta-grid {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;
 }
@@ -175,18 +177,27 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
 fn ssl_badge_html(domain: &str) -> String {
     let insight = inspect_domain_ssl(domain);
     let short = insight.kind.short_label();
-    let tip = insight
-        .expires_display
-        .as_deref()
-        .map(|d| format!("Expires {d}"))
-        .unwrap_or_else(|| insight.detail.clone());
+    let tip = match (insight.kind, insight.expires_display.as_deref()) {
+        (SslValidityKind::Valid | SslValidityKind::ExpiringSoon, Some(d)) => {
+            format!("Secure. Expires {d}")
+        }
+        (SslValidityKind::Expired, Some(d)) => format!("Insecure. Expired {d}"),
+        (_, Some(d)) => format!("Insecure. Certificate date {d}. {}", insight.detail),
+        _ => {
+            if insight.detail.is_empty() {
+                format!("{short} TLS for this hostname.")
+            } else {
+                format!("{short}. {}", insight.detail)
+            }
+        }
+    };
     let (bg, fg, class) = match insight.kind {
         SslValidityKind::Valid => ("rgba(18,183,106,.18)", "#6ce9a6", ""),
-        SslValidityKind::ExpiringSoon => ("rgba(247,144,9,.2)", "#fdb022", ""),
-        SslValidityKind::Expired | SslValidityKind::Invalid | SslValidityKind::Mismatch => {
-            ("rgba(240,68,56,.18)", "#f97066", "")
-        }
-        SslValidityKind::None => ("rgba(152,162,179,.16)", "#98a2b3", " off"),
+        SslValidityKind::ExpiringSoon => ("rgba(247,144,9,.2)", "#fdb022", " expiring"),
+        SslValidityKind::Expired
+        | SslValidityKind::Invalid
+        | SslValidityKind::Mismatch
+        | SslValidityKind::None => ("rgba(240,68,56,.18)", "#f97066", " insecure"),
     };
     format!(
         r#"<span class="site-ssl-badge{class}" title="{tip}" style="background:{bg};color:{fg};">{short}</span>"#,
@@ -313,6 +324,17 @@ mod tests {
     fn styles_mention_site_preview_slot() {
         assert!(site_preview_list_styles().contains("site-preview-slot"));
         assert!(site_preview_list_styles().contains("site-preview-frame"));
+        assert!(site_preview_list_styles().contains("site-ssl-badge.insecure"));
+    }
+
+    #[test]
+    fn list_ssl_badge_is_insecure_without_cert_files() {
+        crate::account::with_test_data_dir(|| {
+            let html = ssl_badge_html("example.com");
+            assert!(html.contains(">Insecure<"), "{html}");
+            assert!(!html.to_ascii_lowercase().contains(">none<"), "{html}");
+            assert!(html.contains("title="), "{html}");
+        });
     }
 
     #[test]
