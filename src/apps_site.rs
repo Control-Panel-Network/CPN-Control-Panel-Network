@@ -145,7 +145,12 @@ pub fn is_site_scoped(app: AppId) -> bool {
 pub fn is_associable(app: AppId) -> bool {
     matches!(
         app,
-        AppId::Mariadb | AppId::Postgresql | AppId::Rabbitmq | AppId::Phpmyadmin | AppId::Email
+        AppId::Mariadb
+            | AppId::Postgresql
+            | AppId::Rabbitmq
+            | AppId::Redis
+            | AppId::Phpmyadmin
+            | AppId::Email
     )
 }
 
@@ -198,7 +203,7 @@ pub fn apply_site_scope(app: AppId, domain: &str) -> Result<String, String> {
                 dest.display()
             ))
         }
-        AppId::Mariadb | AppId::Postgresql | AppId::Rabbitmq => {
+        AppId::Mariadb | AppId::Postgresql | AppId::Rabbitmq | AppId::Redis => {
             upsert_binding(app, &site.domain, "")?;
             Ok(format!(
                 "Attached `{}` to `{}` (site access only). The engine is installed once on the host and nothing was installed again",

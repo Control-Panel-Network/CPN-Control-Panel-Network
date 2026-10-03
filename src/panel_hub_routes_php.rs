@@ -2,7 +2,9 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_php_cfg::php_configurations_page;
 use crate::panel_hub_pages_php_ext::php_extensions_page;
 use crate::panel_ops_php_ext::{install_extension, uninstall_extension, verify_php_ext_csrf};
@@ -85,6 +87,22 @@ fn require_admin_csrf(
     None
 }
 
+#[get("/server/php")]
+pub async fn server_php_overview(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "server",
+        "PHP",
+        &crate::panel_hub_pages_category_overviews::php_hub_main(),
+    ))
+}
+
 #[get("/server/php/extensions")]
 pub async fn server_php_extensions(
     http: HttpRequest,
@@ -94,26 +112,32 @@ pub async fn server_php_extensions(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let php = query.get("php").map(String::as_str);
-    let search = query.get("q").map(String::as_str);
+    let php = query.get("php").cloned();
+    let search = query.get("q").cloned();
     let loaded = query
         .get("load")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
-    html_ok(panel_shell(
-        &user,
-        "server",
-        "PHP Extensions",
-        &php_extensions_page(
+    let notice = query.get("notice").cloned();
+    let error = query.get("error").cloned();
+    let admin = is_panel_admin(&user);
+    html_blocking(move || {
+        panel_shell(
             &user,
-            php,
-            search,
-            loaded,
-            query.get("notice").map(String::as_str),
-            query.get("error").map(String::as_str),
-            is_panel_admin(&user),
-        ),
-    ))
+            "server",
+            "PHP Extensions",
+            &php_extensions_page(
+                &user,
+                php.as_deref(),
+                search.as_deref(),
+                loaded,
+                notice.as_deref(),
+                error.as_deref(),
+                admin,
+            ),
+        )
+    })
+    .await
 }
 
 #[post("/server/php/extensions/install")]

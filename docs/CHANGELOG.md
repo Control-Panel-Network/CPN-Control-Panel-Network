@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
+
 ### Fixed
 
 - **Root File Manager (`/server/files`)**: The GET page no longer walks `/home` (or other restore-sized trees) on first load. Listing is a bounded JSON call (`/server/files/list`) with a time and entry cap. Slow listings return **503** JSON/UI instead of a hung connection that the browser reports as **408**. File Manager CSS/JS are versioned (`?v=panel-version-fm1`) so upgrades cache-bust without hashed asset filenames that 404. POST `/server/files/op` and `/server/files/upload` stay compatible for open tabs after update.

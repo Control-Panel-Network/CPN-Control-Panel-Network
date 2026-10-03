@@ -55,9 +55,15 @@ pub fn security_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
             "SSL certificates",
             vec![
                 HubTile {
+                    title: "SSL overview",
+                    subtitle: "Certificates hub",
+                    href: "/security/ssl",
+                    live: true,
+                },
+                HubTile {
                     title: "Manage SSL",
                     subtitle: "Site certificates",
-                    href: "/security/ssl",
+                    href: "/security/ssl/manage",
                     live: true,
                 },
                 HubTile {
@@ -199,9 +205,15 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "LiteSpeed overview",
+                    subtitle: "OLS, OLSE, and plans",
+                    href: "/server/litespeed",
+                    live: true,
+                },
+                HubTile {
                     title: "LiteSpeed plans",
                     subtitle: "Tiers, serial, upgrade/downgrade",
-                    href: "/server/litespeed",
+                    href: "/server/litespeed/plans",
                     live: true,
                 },
             ],
@@ -209,6 +221,12 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
         (
             "PHP & performance",
             vec![
+                HubTile {
+                    title: "PHP overview",
+                    subtitle: "Extensions, configs, tuning",
+                    href: "/server/php",
+                    live: true,
+                },
                 HubTile {
                     title: "PHP Extensions",
                     subtitle: "Install and manage PHP packages",
@@ -251,15 +269,15 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
             "Containers",
             vec![
                 HubTile {
-                    title: "Docker Apps",
-                    subtitle: "Containerized apps overview",
+                    title: "Docker overview",
+                    subtitle: "Containers and images hub",
                     href: "/docker",
                     live: true,
                 },
                 HubTile {
-                    title: "Containers",
-                    subtitle: "List containers",
-                    href: "/docker",
+                    title: "Active Containers",
+                    subtitle: "List running containers",
+                    href: "/docker/list",
                     live: true,
                 },
                 HubTile {
@@ -359,7 +377,7 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                 HubTile {
                     title: "Website Logs",
                     subtitle: "Access and error logs per site",
-                    href: "/websites",
+                    href: "/websites/list",
                     live: true,
                 },
                 HubTile {
@@ -689,4 +707,236 @@ pub fn email_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
             ],
         ),
     ]
+}
+
+pub fn websites_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "Websites",
+        vec![
+            HubTile {
+                title: "List Websites",
+                subtitle: "Main domains under /home",
+                href: "/websites/list",
+                live: true,
+            },
+            HubTile {
+                title: "Create Website",
+                subtitle: "Add a main domain",
+                href: "/websites/create",
+                live: true,
+            },
+            HubTile {
+                title: "List Sub-domains",
+                subtitle: "Nested sites under parents",
+                href: "/subdomains",
+                live: true,
+            },
+            HubTile {
+                title: "Create Sub-domain",
+                subtitle: "Add a nested domain",
+                href: "/subdomains/create",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn wordpress_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "WordPress",
+        vec![
+            HubTile {
+                title: "WordPress Sites",
+                subtitle: "Main-domain installs",
+                href: "/wordpress/list",
+                live: true,
+            },
+            HubTile {
+                title: "Install WordPress",
+                subtitle: "Install on a main website",
+                href: "/wordpress/install",
+                live: true,
+            },
+            HubTile {
+                title: "WordPress Sub-sites",
+                subtitle: "Sub-domain installs",
+                href: "/wordpress/subsites",
+                live: true,
+            },
+            HubTile {
+                title: "Install Sub-site",
+                subtitle: "Install on a sub-domain",
+                href: "/wordpress/subsites/install",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn ftp_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "FTP",
+        vec![
+            HubTile {
+                title: "FTP Accounts",
+                subtitle: "Jailed OpenSSH SFTP users",
+                href: "/ftp/accounts",
+                live: true,
+            },
+            HubTile {
+                title: "Create SFTP Account",
+                subtitle: "Jailed per website or sub-domain",
+                href: "/ftp/create",
+                live: true,
+            },
+            HubTile {
+                title: "Delete SFTP Account",
+                subtitle: "Remove a jailed user",
+                href: "/ftp/delete",
+                live: true,
+            },
+            HubTile {
+                title: "Reset SFTP",
+                subtitle: "Install jail Match and group",
+                href: "/ftp/reset",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn ssl_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "SSL",
+        vec![
+            HubTile {
+                title: "Manage SSL",
+                subtitle: "Site certificates and providers",
+                href: "/security/ssl/manage",
+                live: true,
+            },
+            HubTile {
+                title: "Hostname SSL",
+                subtitle: "Panel hostname certificate",
+                href: "/security/ssl/hostname",
+                live: true,
+            },
+            HubTile {
+                title: "Mail SSL",
+                subtitle: "Mail server certificate",
+                href: "/security/ssl/mail",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn plugins_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "Plugins",
+        vec![
+            HubTile {
+                title: "Installed",
+                subtitle: "Host and site plugins in use",
+                href: "/plugins?view=installed",
+                live: true,
+            },
+            HubTile {
+                title: "Store",
+                subtitle: "Browse and install plugins",
+                href: "/plugins?view=store",
+                live: true,
+            },
+            HubTile {
+                title: "Host packages",
+                subtitle: "Server engines (Docker, MariaDB, and more)",
+                href: "/plugins?view=store&category=Host&target=host",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn docker_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "Docker",
+        vec![
+            HubTile {
+                title: "Active Containers",
+                subtitle: "List and manage containers",
+                href: "/docker/list",
+                live: true,
+            },
+            HubTile {
+                title: "Create Container",
+                subtitle: "Run an image on this host",
+                href: "/docker/create",
+                live: true,
+            },
+            HubTile {
+                title: "Images",
+                subtitle: "Search, pull, and prune",
+                href: "/docker/images",
+                live: true,
+            },
+            HubTile {
+                title: "Compose Stacks",
+                subtitle: "Managed compose projects",
+                href: "/docker/stacks",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn php_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "PHP",
+        vec![
+            HubTile {
+                title: "PHP Extensions",
+                subtitle: "Install and manage packages",
+                href: "/server/php/extensions",
+                live: true,
+            },
+            HubTile {
+                title: "PHP Configurations",
+                subtitle: "php.ini and host default",
+                href: "/server/php/configs",
+                live: true,
+            },
+            HubTile {
+                title: "PHP Tuning",
+                subtitle: "Safe read-only overview",
+                href: "/server/php/tuning",
+                live: true,
+            },
+        ],
+    )]
+}
+
+pub fn litespeed_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
+    vec![(
+        "LiteSpeed",
+        vec![
+            HubTile {
+                title: "Open OLS",
+                subtitle: "OpenLiteSpeed WebAdmin",
+                href: "/server/openlitespeed",
+                live: true,
+            },
+            HubTile {
+                title: "Open OLSE",
+                subtitle: "LiteSpeed Enterprise WebAdmin",
+                href: "/server/litespeed-enterprise",
+                live: true,
+            },
+            HubTile {
+                title: "LiteSpeed plans",
+                subtitle: "Tiers, serial, upgrade/downgrade",
+                href: "/server/litespeed/plans",
+                live: true,
+            },
+        ],
+    )]
 }

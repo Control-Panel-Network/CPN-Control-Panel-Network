@@ -90,7 +90,7 @@ pub fn websites_main(
             .to_string()
     } else if sites.is_empty() {
         format!(
-            r#"<p class="empty-state">No websites match <strong>{}</strong>. <a href="/websites">Clear search</a>.</p>"#,
+            r#"<p class="empty-state">No websites match <strong>{}</strong>. <a href="/websites/list">Clear search</a>.</p>"#,
             html_escape(q_raw.unwrap_or("").trim())
         )
     } else {
@@ -165,7 +165,7 @@ pub fn subdomains_main(
     let prefs = load_panel_ui_prefs();
     let show = prefs.show_document_roots;
     let rows = if total == 0 {
-        r#"<p class="empty-state">No sub-domains yet. Create one under an existing website, or open <a href="/websites">List Websites</a>.</p>
+        r#"<p class="empty-state">No sub-domains yet. Create one under an existing website, or open <a href="/websites/list">List Websites</a>.</p>
         <p class="muted">Sub-domains nest under the parent home (for example <code>/home/example.com/blog.example.com</code>).</p>"#
             .to_string()
     } else if sites.is_empty() {
@@ -183,9 +183,9 @@ pub fn subdomains_main(
       {err}
       <article class="section-card">
         <h2>Sub-domains ({count})</h2>
-        <p class="muted">Nested sites only. Main domains are listed under <a href="/websites">Websites</a>. Parent links appear on each card when a parent site exists.</p>
+        <p class="muted">Nested sites only. Main domains are listed under <a href="/websites/list">Websites</a>. Parent links appear on each card when a parent site exists.</p>
         <p style="margin:12px 0;"><a class="btn-primary" href="/subdomains/create">Create Sub-domain</a>
-          <a class="btn-secondary" style="margin-left:8px;min-height:40px;padding:0 14px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;text-decoration:none;" href="/websites">List Websites</a></p>
+          <a class="btn-secondary" style="margin-left:8px;min-height:40px;padding:0 14px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;text-decoration:none;" href="/websites/list">List Websites</a></p>
         {search}
         {filter_summary}
         {rows}

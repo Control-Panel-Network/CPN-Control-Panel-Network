@@ -9,7 +9,6 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
-use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type HmacSha256 = Hmac<Sha256>;
@@ -120,12 +119,15 @@ fn dnf_available() -> bool {
     Path::new("/usr/bin/dnf").exists() || Path::new("/usr/bin/yum").exists()
 }
 
-fn run_capture(program: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(program)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
+const DNF_LIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
+const DNF_MUTATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+fn run_capture_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    let out = crate::panel_ops_docker_probe::output_with_timeout(program, args, timeout)
         .map_err(|e| format!("Failed to run {program}: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
@@ -138,6 +140,10 @@ fn run_capture(program: &str, args: &[&str]) -> Result<String, String> {
             stderr.lines().next().unwrap_or("no details").trim()
         ))
     }
+}
+
+fn run_capture(program: &str, args: &[&str]) -> Result<String, String> {
+    run_capture_timeout(program, args, DNF_LIST_TIMEOUT)
 }
 
 fn package_names_from_dnf_list(raw: &str) -> BTreeSet<String> {
@@ -381,9 +387,10 @@ pub fn install_extension(branch: &str, package: &str) -> Result<String, String> 
     if !dnf_available() {
         return Err("dnf is not available on this host".into());
     }
-    run_capture(
+    run_capture_timeout(
         "dnf",
         &["--setopt=lock_timeout=60", "install", "-y", package],
+        DNF_MUTATE_TIMEOUT,
     )?;
     Ok(format!("Installed {package} for PHP {}", ver.branch))
 }
@@ -405,9 +412,10 @@ pub fn uninstall_extension(branch: &str, package: &str) -> Result<String, String
     if !dnf_available() {
         return Err("dnf is not available on this host".into());
     }
-    run_capture(
+    run_capture_timeout(
         "dnf",
         &["--setopt=lock_timeout=60", "remove", "-y", package],
+        DNF_MUTATE_TIMEOUT,
     )?;
     Ok(format!("Removed {package} from PHP {}", ver.branch))
 }

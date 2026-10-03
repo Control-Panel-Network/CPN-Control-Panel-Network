@@ -311,12 +311,12 @@ mod tests {
             ("users", "/account/users", "Users overview"),
             ("security", "/security", "Security overview"),
             ("databases", "/databases", "Databases overview"),
-            ("ftp", "/ftp/accounts", "FTP overview"),
+            ("ftp", "/ftp", "FTP overview"),
             ("plugins", "/plugins", "Plugins overview"),
             ("backups", "/backups", "Backups overview"),
             ("ssl", "/security/ssl", "SSL overview"),
             ("dns", "/server/dns/zones", "DNS overview"),
-            ("php", "/server/php/extensions", "PHP overview"),
+            ("php", "/server/php", "PHP overview"),
             ("logs", "/server/logs", "Logs overview"),
         ];
         if crate::panel_feature_gate::docker_installed() {

@@ -106,6 +106,21 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
                 "Email hub features that depend on the local mail stack may fail until Email is reinstalled",
             ],
         },
+        AppId::Redis => HostPackageMeta {
+            category: "Utility",
+            version: "system",
+            pricing: "free",
+            released_on: "2026-10-03",
+            updated_on: "2026-10-03",
+            install_count: 40,
+            featured: false,
+            description: "Redis in-memory store. Install once on the host; sites Activate or attach (no second host install).",
+            install_status: HostInstallStatus::Live,
+            uninstall_impacts: &[
+                "Stops and removes the redis / redis-server unit",
+                "Sites attached to host Redis lose :6379 until Redis is reinstalled",
+            ],
+        },
         AppId::Rabbitmq => HostPackageMeta {
             category: "Utility",
             version: "system",
