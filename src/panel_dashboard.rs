@@ -152,6 +152,11 @@ pub fn panel_dashboard_html(username: &str) -> String {
         "Sites",
         &crate::panel_dashboard_tools::dashboard_sites_panel(),
     );
+    let stats = crate::panel_dashboard_layout::wrap_dash_widget(
+        "stats",
+        "Statistics",
+        &crate::panel_dashboard_stats::dashboard_stats_html(username),
+    );
     let gauges = crate::panel_dashboard_layout::wrap_dash_widget(
         "gauges",
         "Usage gauges",
@@ -231,6 +236,7 @@ pub fn panel_dashboard_html(username: &str) -> String {
     );
     let mut by_id = std::collections::HashMap::new();
     by_id.insert("sites", sites);
+    by_id.insert("stats", stats);
     by_id.insert("gauges", gauges);
     by_id.insert("tools", tools);
     by_id.insert("health", health);
