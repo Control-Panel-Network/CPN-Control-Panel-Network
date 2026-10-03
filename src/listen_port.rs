@@ -159,7 +159,9 @@ mod tests {
 
     #[test]
     fn cli_port_overrides_env_and_default() {
-        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // SAFETY: serialized with other CPN_DATA_DIR / env tests via DATA_DIR_TEST_LOCK.
         unsafe {
             env::remove_var("CPN_LISTEN_PORT");
@@ -170,7 +172,9 @@ mod tests {
 
     #[test]
     fn env_port_used_without_cli() {
-        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap();
+        let _guard = DATA_DIR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // SAFETY: serialized with other CPN_DATA_DIR / env tests via DATA_DIR_TEST_LOCK.
         unsafe {
             env::set_var("CPN_LISTEN_PORT", "3333");
