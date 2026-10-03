@@ -389,7 +389,9 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
     notes.push("Downloaded WordPress core.".into());
 
     if let Ok(user) = chown_docroot_to_web_user(&docroot) {
-        notes.push(format!("Confirmed document root ownership as `{user}` after download."));
+        notes.push(format!(
+            "Confirmed document root ownership as `{user}` after download."
+        ));
     }
 
     wp_config_create(&docroot, &db_name, &db_user, &db_password)?;
@@ -425,9 +427,7 @@ pub fn install_wordpress(req: WordpressInstallRequest) -> Result<WordpressInstal
     }
     if let Some(first) = req.plugin_zip_paths.first()
         && let Some(parent) = first.parent()
-        && parent
-            .to_string_lossy()
-            .contains("cpn-wp-plugin-uploads")
+        && parent.to_string_lossy().contains("cpn-wp-plugin-uploads")
     {
         let _ = fs::remove_dir_all(parent);
     }

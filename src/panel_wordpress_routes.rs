@@ -2,17 +2,16 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
-    urlencoding_simple,
+    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
-    WordpressInstallDraft, wordpress_install_page, wordpress_list_page, wordpress_manage_page,
-    wordpress_subsites_install_page, wordpress_subsites_list_page,
+    wordpress_install_page, wordpress_list_page, wordpress_manage_page,
+    wordpress_subsites_install_page, wordpress_subsites_list_page, WordpressInstallDraft,
 };
 use crate::wordpress_install::{
-    UploadedPluginZip, WordpressInstallRequest, install_wordpress, parse_plugin_sources,
-    store_uploaded_plugin_zips,
+    install_wordpress, parse_plugin_sources, store_uploaded_plugin_zips, UploadedPluginZip,
+    WordpressInstallRequest,
 };
 use crate::wordpress_manage::{
     activate_theme, all_sites_snapshot, delete_wordpress, install_plugin, refresh_wordpress_site,
@@ -20,7 +19,7 @@ use crate::wordpress_manage::{
 };
 use crate::wordpress_scan::scan_wordpress_sites;
 use crate::wordpress_wpcli::{detect_wp_cli, ensure_wp_cli, sanitize_wp_cli_error};
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use std::sync::Arc;
 
 const WP_INSTALL_DRAFT_COOKIE: &str = "cpn_wp_install_draft";
@@ -177,7 +176,12 @@ pub async fn wordpress_subsites_list_route(
             &user,
             "wordpress-subsites",
             "WordPress Sub-sites",
-            &wordpress_subsites_list_page(notice.as_deref(), error.as_deref(), &wp_cli, q.as_deref()),
+            &wordpress_subsites_list_page(
+                notice.as_deref(),
+                error.as_deref(),
+                &wp_cli,
+                q.as_deref(),
+            ),
         )
     })
     .await
@@ -477,12 +481,7 @@ pub async fn wordpress_manage_route(
         &user,
         "wordpress",
         "Manage WordPress",
-        &wordpress_manage_page(
-            &snapshot,
-            &tab,
-            notice.as_deref(),
-            error.as_deref(),
-        ),
+        &wordpress_manage_page(&snapshot, &tab, notice.as_deref(), error.as_deref()),
     ))
 }
 

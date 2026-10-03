@@ -108,12 +108,8 @@ fn sync_public_phar(private: &Path) -> Result<PathBuf, String> {
             let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o755));
         }
     }
-    fs::copy(private, &public).map_err(|e| {
-        format!(
-            "Could not publish WP-CLI phar to {}: {e}",
-            public.display()
-        )
-    })?;
+    fs::copy(private, &public)
+        .map_err(|e| format!("Could not publish WP-CLI phar to {}: {e}", public.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
