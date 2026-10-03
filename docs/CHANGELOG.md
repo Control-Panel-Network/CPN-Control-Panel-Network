@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sidebar feedback modal**: Signed-in users can open Feedback beside the sidebar theme toggle and send categorized feedback without leaving the current page. `POST /api/panel/feedback` validates the session, same-origin request, HMAC CSRF token, required fields, length limits, and a five-per-hour account rate limit, then uses the configured SMTP or local Postfix path to deliver identical messages to both support inboxes with user, host, and panel-version context.
 - **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
 
 ## [1.1.2] - 03/10/2026
