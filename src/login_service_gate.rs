@@ -222,6 +222,9 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 ///
 /// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
 /// are not locked out. Cached briefly to keep `/login` fast under poll load.
+///
+/// `CPN_LOGIN_SERVICE_GATE=0` always bypasses the cache so parallel tests (and
+/// operator recovery) cannot see a stale not-ready result from another thread.
 pub fn evaluate_login_services() -> LoginServiceStatus {
     // Env disable must win over a hot cache (parallel tests / recovery).
     if gate_disabled_by_env() {
@@ -251,6 +254,9 @@ pub fn invalidate_login_services_cache() {
 
 /// True when password/passkey POST handlers may proceed.
 pub fn login_services_ready() -> bool {
+    if gate_disabled_by_env() {
+        return true;
+    }
     evaluate_login_services().ready
 }
 
@@ -306,6 +312,48 @@ mod tests {
         unsafe {
             std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
         }
+        let status = evaluate_login_services();
+        unsafe {
+            std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
+        }
+        invalidate_login_services_cache();
+        assert!(status.ready);
+        assert!(status.blocking.is_empty());
+    }
+
+    #[test]
+    fn env_disable_bypasses_stale_not_ready_cache() {
+        invalidate_login_services_cache();
+        if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
+            *guard = Some((
+                Instant::now(),
+                LoginServiceStatus {
+                    ready: false,
+                    message: "stale".into(),
+                    web: ServiceSlice {
+                        expected: true,
+                        running: false,
+                        label: "x".into(),
+                    },
+                    database: ServiceSlice {
+                        expected: true,
+                        running: false,
+                        label: "x".into(),
+                    },
+                    mail: ServiceSlice {
+                        expected: false,
+                        running: false,
+                        label: "x".into(),
+                    },
+                    blocking: vec!["Web server"],
+                    warnings: Vec::new(),
+                },
+            ));
+        }
+        unsafe {
+            std::env::set_var("CPN_LOGIN_SERVICE_GATE", "0");
+        }
+        assert!(login_services_ready());
         let status = evaluate_login_services();
         unsafe {
             std::env::remove_var("CPN_LOGIN_SERVICE_GATE");
