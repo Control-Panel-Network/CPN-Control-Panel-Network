@@ -16,12 +16,34 @@ fn html_escape(value: &str) -> String {
 pub fn search_catalog_json() -> String {
     let mut entries: Vec<(&str, &str, &str)> = vec![
         ("Dashboard", "/dashboard", "overview home"),
-        ("Websites", "/websites", "sites domains"),
+        ("Websites", "/websites", "sites domains main"),
+        ("List Websites", "/websites", "list main domains"),
+        ("Create Website", "/websites/create", "create main domain"),
+        (
+            "List Sub-domains",
+            "/subdomains",
+            "subdomain nested sites list",
+        ),
+        (
+            "Create Sub-domain",
+            "/subdomains/create",
+            "create nested subdomain",
+        ),
         ("WordPress", "/wordpress", "wordpress wp-cli plugins themes"),
         (
             "Install WordPress",
             "/wordpress/install",
             "wordpress install plugins",
+        ),
+        (
+            "WordPress Sub-sites",
+            "/wordpress/subsites",
+            "wordpress subdomain nested",
+        ),
+        (
+            "Install WordPress Sub-site",
+            "/wordpress/subsites/install",
+            "wordpress install subdomain",
         ),
         (
             "Email Accounts",

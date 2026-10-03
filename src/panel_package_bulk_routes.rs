@@ -133,7 +133,7 @@ pub async fn packages_duplicate(
             .append_header(("Location", packages_redirect(None, Some(&error))))
             .finish();
     }
-    match duplicate_package(&form.id, &form.new_name) {
+    match duplicate_package(&form.id, &form.new_name, &user) {
         Ok(pkg) => HttpResponse::SeeOther()
             .append_header((
                 "Location",

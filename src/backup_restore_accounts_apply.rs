@@ -7,7 +7,9 @@ use crate::account::{
     hash_password, load_bootstrap, new_password_salt, now_unix, write_account_file,
 };
 use crate::account_mgmt::{find_account, require_new_username, require_username};
-use crate::packages::{PackageInput, UNLIMITED, assign_package, create_package, list_packages};
+use crate::packages::{
+    PackageInput, UNLIMITED, assign_package, create_package, create_package_for, list_packages,
+};
 use crate::reserved_usernames::is_reserved_username;
 use crate::site_acl::{SiteAclGrant, add_grant, list_grants};
 use serde::Deserialize;
@@ -203,12 +205,16 @@ pub(crate) fn apply_package_hint(
             .into(),
         sidebar_hidden_nav_ids: Vec::new(),
     };
-    let pkg = match create_package(input) {
+    let pkg = match create_package_for(username, input) {
         Ok(p) => p,
         Err(e) if e.contains("already exists") => {
             let existing = list_packages()?
                 .into_iter()
-                .find(|p| p.name.eq_ignore_ascii_case(&pkg_name))
+                .find(|p| {
+                    p.name.eq_ignore_ascii_case(&pkg_name)
+                        || p.name
+                            .eq_ignore_ascii_case(&format!("{username}_{pkg_name}"))
+                })
                 .ok_or(e)?;
             warnings.push(format!(
                 "Package `{}` already exists; reusing id `{}`.",

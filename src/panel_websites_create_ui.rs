@@ -132,23 +132,22 @@ fn domain_fields_html(cloudflare_mode: bool, zones: &[String], zone_error: Optio
             ""
         };
         format!(
-            r#"<p class="muted"><strong>DNS mode:</strong> Cloudflare connected. Domain must be one of your Cloudflare zones (or a subdomain under that zone).</p>
+            r#"<p class="muted"><strong>DNS mode:</strong> Cloudflare connected. Choose an apex zone for a main website. Use <a href="/subdomains/create">Create Sub-domain</a> for nested sites.</p>
           {err}
           {empty_hint}
           <label for="cf_zone">Cloudflare zone</label>
           <select id="cf_zone" name="cf_zone" required {disabled}>
             {options}
           </select>
-          <label for="cf_subdomain">Subdomain (optional)</label>
-          <input id="cf_subdomain" name="cf_subdomain" type="text" placeholder="blog" autocomplete="off" {disabled}>
-          <p class="muted">Leave subdomain empty to create the apex zone (example.com). Enter <code>blog</code> for <code>blog.example.com</code>. Parent site must exist first for subdomains.</p>"#,
+          <input type="hidden" name="cf_subdomain" value="">
+          <p class="muted">Creates the apex zone only (example.com). For <code>blog.example.com</code>, use Create Sub-domain.</p>"#,
             err = err,
             empty_hint = empty_hint,
             options = options,
             disabled = if zones.is_empty() { "disabled" } else { "" },
         )
     } else {
-        r#"<p class="muted"><strong>DNS mode:</strong> Local DNS (Cloudflare not connected). Enter any valid domain; existing validation still applies. Subdomains require the parent domain first.</p>
+        r#"<p class="muted"><strong>DNS mode:</strong> Local DNS (Cloudflare not connected). Enter a main domain only. Nested sites use <a href="/subdomains/create">Create Sub-domain</a>.</p>
           <label for="domain">Domain</label>
           <input id="domain" name="domain" type="text" required placeholder="example.com" autocomplete="off">"#
             .to_string()
@@ -248,22 +247,93 @@ pub fn websites_create_main(username: &str, notice: Option<&str>, error: Option<
       {err}
       <article class="section-card">
         <h2>Create Website</h2>
-        <p>Creates the site home and document root. Subdomains require the parent domain first.</p>
-        <p class="muted"><a href="/websites">Back to site list</a></p>
+        <p>Creates a main domain home and document root. Nested sites belong under <a href="/subdomains/create">Create Sub-domain</a>.</p>
+        <p class="muted"><a href="/websites">Back to website list</a> · <a href="/subdomains">Sub-domains</a></p>
         <form method="post" action="/websites/create" class="stack-form" style="max-width:560px;">
           {domain_html}
           {owner_html}
           {docroot_html}
-          <button type="submit" class="btn-primary">Create site</button>
+          <button type="submit" class="btn-primary">Create website</button>
         </form>
       </article>"#,
         heading = section_heading(
             "Create Website",
-            "Add a domain home under /home and optional document root.",
+            "Add a main domain home under /home and optional document root.",
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
         domain_html = domain_html,
+        owner_html = owner_fields_html(username, admin),
+        docroot_html = docroot_fields_html(admin),
+    )
+}
+
+/// Create Sub-domain page: parent main site + label.
+pub fn subdomains_create_main(
+    username: &str,
+    preselect_parent: Option<&str>,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    use crate::backups::is_subdomain_site;
+    use crate::sites::list_sites;
+
+    let admin = is_panel_admin(username);
+    let parents: Vec<_> = list_sites()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|site| !is_subdomain_site(&site.domain))
+        .collect();
+    let mut options = String::from(r#"<option value="">Select parent website…</option>"#);
+    let want = preselect_parent.unwrap_or("").trim().to_ascii_lowercase();
+    for site in &parents {
+        let selected = if site.domain.eq_ignore_ascii_case(&want) {
+            " selected"
+        } else {
+            ""
+        };
+        options.push_str(&format!(
+            r#"<option value="{v}"{selected}>{v}</option>"#,
+            v = html_escape(&site.domain),
+            selected = selected
+        ));
+    }
+    let empty = if parents.is_empty() {
+        r#"<p class="panel-notice error" role="status">No main websites yet. <a href="/websites/create">Create a Website</a> first, then add a sub-domain.</p>"#
+    } else {
+        ""
+    };
+    format!(
+        r#"{heading}
+      {ok}
+      {err}
+      <article class="section-card">
+        <h2>Create Sub-domain</h2>
+        <p>Creates a nested site under an existing parent (for example <code>ai.newstargeted.com</code> under <code>newstargeted.com</code>).</p>
+        <p class="muted"><a href="/subdomains">Back to sub-domain list</a> · <a href="/websites">Websites</a></p>
+        {empty}
+        <form method="post" action="/subdomains/create" class="stack-form" style="max-width:560px;">
+          <label for="parent">Parent website</label>
+          <select id="parent" name="parent" required {disabled}>
+            {options}
+          </select>
+          <label for="label">Sub-domain label</label>
+          <input id="label" name="label" type="text" required placeholder="blog" autocomplete="off" pattern="[A-Za-z0-9]([A-Za-z0-9-]{{0,61}}[A-Za-z0-9])?" {disabled}>
+          <p class="muted">Enter <code>blog</code> to create <code>blog.parent.com</code>. Parent must already exist.</p>
+          {owner_html}
+          {docroot_html}
+          <button type="submit" class="btn-primary" {disabled}>Create sub-domain</button>
+        </form>
+      </article>"#,
+        heading = section_heading(
+            "Create Sub-domain",
+            "Add a nested site under an existing main website.",
+        ),
+        ok = notice_block("ok", notice),
+        err = notice_block("error", error),
+        empty = empty,
+        options = options,
+        disabled = if parents.is_empty() { "disabled" } else { "" },
         owner_html = owner_fields_html(username, admin),
         docroot_html = docroot_fields_html(admin),
     )

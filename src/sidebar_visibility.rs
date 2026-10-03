@@ -206,31 +206,43 @@ fn package_hidden_ids(username: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Whether this user may see the given top-level nav entry id in the sidebar.
-pub fn can_see_nav_id(username: &str, nav_id: &str) -> bool {
-    if nav_id == "dashboard" || nav_id.is_empty() {
-        return true;
-    }
+fn nav_id_hidden(username: &str, nav_id: &str) -> bool {
     let admin = is_panel_admin(username);
     let grant = grant_for(username);
     if admin {
         match &grant {
             Some(g) if g.restrict_admin => {
                 if g.hidden_nav_ids.iter().any(|id| id == nav_id) {
-                    return false;
+                    return true;
                 }
             }
-            _ => return true,
+            _ => return false,
         }
     } else if let Some(g) = &grant
         && g.hidden_nav_ids.iter().any(|id| id == nav_id)
     {
+        return true;
+    }
+    package_hidden_ids(username).iter().any(|id| id == nav_id)
+}
+
+/// Whether this user may see the given top-level nav entry id in the sidebar.
+pub fn can_see_nav_id(username: &str, nav_id: &str) -> bool {
+    if nav_id == "dashboard" || nav_id.is_empty() {
+        return true;
+    }
+    // Sub-domain / WordPress sub-site sections follow their parent section ACL.
+    let paired = match nav_id {
+        "subdomains" => Some("websites"),
+        "wordpress-subsites" => Some("wordpress"),
+        _ => None,
+    };
+    if let Some(parent) = paired
+        && nav_id_hidden(username, parent)
+    {
         return false;
     }
-    if package_hidden_ids(username).iter().any(|id| id == nav_id) {
-        return false;
-    }
-    true
+    !nav_id_hidden(username, nav_id)
 }
 
 fn catalog_href_map() -> Vec<(&'static str, &'static str)> {
@@ -267,7 +279,7 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
         }
     }
     // Common aliases outside exact catalog children.
-    if path.starts_with("/websites") {
+    if path.starts_with("/subdomains") || path.starts_with("/websites") {
         return Some("websites");
     }
     if path.starts_with("/wordpress") {
@@ -414,9 +426,16 @@ mod tests {
             set_grant_for_member("ops", vec!["backups".into()], false).unwrap();
             assert!(!can_see_nav_id("ops", "backups"));
             assert!(can_see_nav_id("ops", "websites"));
+            assert!(can_see_nav_id("ops", "subdomains"));
             assert!(path_allowed("ops", "/dashboard"));
             assert!(!path_allowed("ops", "/backups/create"));
             assert_eq!(nav_id_for_path("/backups/create"), Some("backups"));
+            assert_eq!(nav_id_for_path("/subdomains/create"), Some("websites"));
+            assert_eq!(nav_id_for_path("/wordpress/subsites"), Some("wordpress"));
+            set_grant_for_member("ops", vec!["backups".into(), "websites".into()], false).unwrap();
+            assert!(!can_see_nav_id("ops", "websites"));
+            assert!(!can_see_nav_id("ops", "subdomains"));
+            assert!(!path_allowed("ops", "/subdomains"));
         });
     }
 

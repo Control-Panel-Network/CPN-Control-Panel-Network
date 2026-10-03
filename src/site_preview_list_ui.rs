@@ -215,6 +215,16 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
     } else {
         String::new()
     };
+    let parent_meta = match crate::sites::resolve_parent_domain(&site.domain)
+        .ok()
+        .flatten()
+    {
+        Some(parent) => format!(
+            r#"<div><span>Parent</span><strong><a href="/websites/manage?domain={p}">{p}</a></strong></div>"#,
+            p = html_escape(&parent),
+        ),
+        None => String::new(),
+    };
     format!(
         r#"<article class="site-card">
   {preview}
@@ -227,6 +237,7 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
     <div class="site-meta-grid">
       <div><span>State</span><strong>{status}</strong></div>
       <div><span>Owner</span><strong>{owner}</strong></div>
+      {parent_meta}
       {doc_meta}
     </div>
     {actions}
@@ -234,6 +245,8 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool) -> Stri
 </article>"#,
         preview = preview_slot(site, auto_capture),
         owner = html_escape(&site.owner),
+        parent_meta = parent_meta,
+        doc_meta = doc_meta,
         actions = site_action_buttons(site),
     )
 }
