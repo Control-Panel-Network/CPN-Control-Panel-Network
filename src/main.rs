@@ -73,6 +73,7 @@ use cpn_installer::panel_hub_routes::{
     security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
     security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
+    security_ssl_origin_backup,
     security_ssl_mail, security_ssl_mark_custom, security_ssl_provider, security_ssl_renew,
     security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect, server_dns_defaults,
     server_dns_defaults_save, server_dns_nameservers, server_dns_nameservers_add,
@@ -1394,6 +1395,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl_hostname)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
+            .service(security_ssl_origin_backup)
             .service(security_ssl_issue_all)
             .service(security_ssl_renew)
             .service(security_ssl_restore_le)

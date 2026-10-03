@@ -1,6 +1,8 @@
 //! Websites list Site preview cards (thumbnail + actions).
 
-use crate::panel_ops_ssl_inspect::{SslValidityKind, inspect_domain_ssl};
+use crate::panel_ops_ssl_public::{
+    inspect_public_ssl, offers_origin_backup, origin_backup_form, ssl_list_badge_html,
+};
 use crate::panel_user_prefs::load_user_minimalist_mode;
 use crate::site_preview_microlink::enabled_image_url;
 use crate::site_preview_thumb::{PreviewFreshness, freshness, image_path, load_meta};
@@ -52,6 +54,7 @@ pub fn site_preview_list_styles() -> &'static str {
   background:rgba(18,183,106,.16); color:#6ce9a6;
 }
 .site-ssl-badge.off { background:rgba(152,162,179,.14); color:#98a2b3; }
+.site-ssl-badge.cf { background:rgba(59,130,246,.2); color:#93c5fd; }
 .site-meta-grid {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px;
 }
@@ -64,7 +67,7 @@ pub fn site_preview_list_styles() -> &'static str {
 "#
 }
 
-fn site_action_buttons(site: &SiteRecord) -> String {
+fn site_action_buttons(site: &SiteRecord, show_origin_backup: bool) -> String {
     let domain = html_escape(&site.domain);
     let suspend = if site.enabled {
         format!(
@@ -81,11 +84,22 @@ fn site_action_buttons(site: &SiteRecord) -> String {
             </form>"#
         )
     };
+    let backup = if show_origin_backup {
+        let next = if crate::backups::is_subdomain_site(&site.domain) {
+            "/subdomains"
+        } else {
+            "/websites"
+        };
+        origin_backup_form(&site.domain, next, "Issue origin backup")
+    } else {
+        String::new()
+    };
     format!(
         r#"<div class="site-card-actions">
             <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
             <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/">Open preview</a>
             <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}&amp;tab=files">File manager</a>
+            {backup}
             {suspend}
             <form method="post" action="/websites/delete" class="inline-form" onsubmit="return confirm('Delete site {domain}? Document files under /home are kept.');">
               <input type="hidden" name="domain" value="{domain}">
@@ -172,32 +186,6 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     )
 }
 
-fn ssl_badge_html(domain: &str) -> String {
-    let insight = inspect_domain_ssl(domain);
-    let short = insight.kind.short_label();
-    let tip = insight
-        .expires_display
-        .as_deref()
-        .map(|d| format!("Expires {d}"))
-        .unwrap_or_else(|| insight.detail.clone());
-    let (bg, fg, class) = match insight.kind {
-        SslValidityKind::Valid => ("rgba(18,183,106,.18)", "#6ce9a6", ""),
-        SslValidityKind::ExpiringSoon => ("rgba(247,144,9,.2)", "#fdb022", ""),
-        SslValidityKind::Expired | SslValidityKind::Invalid | SslValidityKind::Mismatch => {
-            ("rgba(240,68,56,.18)", "#f97066", "")
-        }
-        SslValidityKind::None => ("rgba(152,162,179,.16)", "#98a2b3", " off"),
-    };
-    format!(
-        r#"<span class="site-ssl-badge{class}" title="{tip}" style="background:{bg};color:{fg};">{short}</span>"#,
-        tip = html_escape(&tip),
-        short = html_escape(short),
-        class = class,
-        bg = bg,
-        fg = fg,
-    )
-}
-
 fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer: &str) -> String {
     let domain = html_escape(&site.domain);
     let status = if site.enabled { "Active" } else { "Suspended" };
@@ -206,7 +194,8 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer:
     } else {
         "files ready"
     };
-    let ssl = ssl_badge_html(&site.domain);
+    let ssl_view = inspect_public_ssl(&site.domain);
+    let ssl = ssl_list_badge_html(&ssl_view);
     let disk_bytes = crate::panel_website_resources::approx_dir_bytes(
         std::path::Path::new(&site.docroot),
         4_000,
@@ -260,7 +249,7 @@ fn site_card(site: &SiteRecord, show_docroots: bool, auto_capture: bool, viewer:
         bw = bw_label,
         parent_meta = parent_meta,
         doc_meta = doc_meta,
-        actions = site_action_buttons(site),
+        actions = site_action_buttons(site, offers_origin_backup(site, &ssl_view)),
     )
 }
 

@@ -3,6 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
+use crate::panel_ops_ssl_issue::issue_origin_backup;
 use crate::panel_ops_ssl_le::{
     issue_le_for_all_without_custom, issue_lets_encrypt, renew_lets_encrypt_all,
     restore_lets_encrypt, set_coverage_mode, set_custom_ssl, set_domain_provider,
@@ -30,10 +31,36 @@ pub struct SslDomainForm {
 
 fn ssl_back(form_return: Option<&str>) -> String {
     match form_return.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(r) if r.starts_with("/websites/manage") || r.starts_with("/security/ssl") => {
+        Some(r)
+            if r.starts_with("/websites/manage")
+                || r.starts_with("/security/ssl")
+                || r == "/websites"
+                || r.starts_with("/websites?")
+                || r == "/subdomains"
+                || r.starts_with("/subdomains?") =>
+        {
             r.to_string()
         }
         _ => "/security/ssl".into(),
+    }
+}
+
+#[post("/security/ssl/origin-backup")]
+pub async fn security_ssl_origin_backup(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SslDomainForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let back = ssl_back(form.r#return.as_deref());
+    if let Some(resp) = admin_gate(&user, &back) {
+        return resp;
+    }
+    match issue_origin_backup(&form.domain) {
+        Ok(msg) => redirect_notice(&back, Some(&msg), None),
+        Err(err) => redirect_notice(&back, None, Some(&err)),
     }
 }
 

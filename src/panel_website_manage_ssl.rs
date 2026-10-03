@@ -1,17 +1,20 @@
 //! Manage site SSL tab (provider, coverage Wildcard/SAN, issue, custom upload).
 
-use crate::panel_ops_ssl_inspect::ssl_status_badge_html;
 use crate::panel_ops_ssl_le::{effective_coverage, ssl_status_for_domain};
 use crate::panel_ops_ssl_provider::{SslCoverageMode, SslProvider};
+use crate::panel_ops_ssl_public::{
+    inspect_public_ssl, offers_origin_backup, origin_backup_form, ssl_public_badge_html,
+};
 use crate::panel_website_manage_ui::{html_escape, section, tile};
 use crate::sites::SiteRecord;
 
 pub fn tab_ssl(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
     let row = ssl_status_for_domain(&site.domain);
-    let insight = crate::panel_ops_ssl_inspect::inspect_domain_ssl(&site.domain);
+    let view = inspect_public_ssl(&site.domain);
+    let insight = &view.origin;
     let status_block = {
-        let badge = ssl_status_badge_html(&insight);
+        let badge = ssl_public_badge_html(&view);
         let expires = insight
             .expires_display
             .as_deref()
@@ -27,21 +30,30 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
         } else {
             html_escape(&insight.sans.join(", "))
         };
+        let cf = if view.proxied {
+            "Cloudflare orange-cloud proxy is on for this hostname."
+        } else if view.zone_linked {
+            "Cloudflare zone is linked; proxy is DNS-only (not public edge TLS)."
+        } else {
+            "Cloudflare proxy was not detected for this hostname."
+        };
         format!(
             r#"<div class="manage-ssl ssl-{kind}" style="margin-bottom:16px;">
   <div>
     {badge}
-    <p class="ssl-meta" style="margin-top:10px;">Expires: <strong>{expires}</strong> · Issuer: <strong>{issuer}</strong></p>
+    <p class="ssl-meta" style="margin-top:10px;">Origin expires: <strong>{expires}</strong> · Issuer: <strong>{issuer}</strong></p>
     <p class="ssl-meta">SANs: <strong>{sans}</strong></p>
     <p>{detail}</p>
+    <p class="manage-muted">This badge is origin certificate files on this server (and live HTTPS on the site vhost). It is not Cloudflare orange-cloud edge TLS. Visitors can still get HTTPS via Cloudflare while origin has no local cert. {cf}</p>
   </div>
 </div>"#,
-            kind = insight.kind.as_str(),
+            kind = view.kind.as_str(),
             badge = badge,
             expires = expires,
             issuer = issuer,
             sans = sans,
-            detail = html_escape(&insight.detail),
+            detail = html_escape(&view.detail),
+            cf = html_escape(cf),
         )
     };
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
@@ -149,6 +161,21 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
             html_escape(&row.provider_label)
         )
     };
+    let backup = if offers_origin_backup(site, &view) {
+        format!(
+            r#"<div id="origin-backup"><h3>Origin Let's Encrypt backup</h3>
+<p class="manage-muted">Yes: keep Let's Encrypt on the origin even when Cloudflare is public TLS. If Cloudflare disconnects or proxy stops, origin HTTPS still works. This does not replace Cloudflare edge TLS.</p>
+{form}</div>"#,
+            form = origin_backup_form(
+                &site.domain,
+                &format!("/websites/manage?domain={domain_q}&tab=ssl"),
+                "Issue origin backup (Let's Encrypt)",
+            ),
+        )
+    } else {
+        r#"<div id="origin-backup"><h3>Origin Let's Encrypt backup</h3>
+<p class="manage-muted">Origin already has a current certificate. Renew from Issue / Renew above. Keep origin material so HTTPS still works if Cloudflare proxy stops.</p></div>"#.into()
+    };
 
     let manual = format!(
         r#"<div id="manual"><h3>Custom SSL upload</h3>
@@ -167,11 +194,12 @@ pub fn tab_ssl(site: &SiteRecord) -> String {
     );
 
     format!(
-        "{status}{tiles}{provider}{issue}{manual}",
+        "{status}{tiles}{provider}{issue}{backup}{manual}",
         status = status_block,
         tiles = section("SSL", &tiles),
         provider = provider_form,
         issue = issue,
+        backup = backup,
         manual = manual,
     )
 }

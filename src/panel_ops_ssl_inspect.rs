@@ -44,7 +44,7 @@ impl SslValidityKind {
 
     pub fn short_label(self) -> &'static str {
         match self {
-            Self::None => "None",
+            Self::None => "NONE",
             Self::Valid => "Valid",
             Self::ExpiringSoon => "Expiring",
             Self::Expired => "Expired",
