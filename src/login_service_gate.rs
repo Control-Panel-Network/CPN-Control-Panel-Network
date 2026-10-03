@@ -223,6 +223,11 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 /// On non-Unix hosts (no systemd services), always ready so Windows/dev builds
 /// are not locked out. Cached briefly to keep `/login` fast under poll load.
 pub fn evaluate_login_services() -> LoginServiceStatus {
+    // Env disable must win over a hot cache (parallel tests / recovery).
+    if gate_disabled_by_env() {
+        return ready_status_unrestricted("");
+    }
+
     if let Ok(guard) = LOGIN_GATE_CACHE.lock()
         && let Some((at, ref status)) = *guard
         && at.elapsed() < LOGIN_GATE_CACHE_TTL
