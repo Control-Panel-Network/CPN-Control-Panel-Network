@@ -1011,7 +1011,7 @@ pub async fn plugins_page(
         query.get("view").map(String::as_str),
         Some("host") | Some("apps")
     ) {
-        let mut loc = String::from("/plugins?view=store&category=Host&target=host");
+        let mut loc = String::from("/plugins?view=store&target=host");
         for (key, value) in query.iter() {
             if key == "view" || key == "category" {
                 continue;

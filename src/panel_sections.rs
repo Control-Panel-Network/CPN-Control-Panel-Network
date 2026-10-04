@@ -19,7 +19,7 @@ pub fn email_mail_stack_notice_html() -> String {
         return String::new();
     }
     format!(
-        r#"<p class="panel-notice error" role="alert">{detail} <a href="/plugins?view=store&amp;category=Host&amp;q=email">Open Email host package</a> and use Start, or Install if missing.</p>"#,
+        r#"<p class="panel-notice error" role="alert">{detail} <a href="/plugins?view=store&amp;target=host&amp;q=email">Open Email host package</a> and use Start, or Install if missing.</p>"#,
         detail = html_escape(&stack.detail),
     )
 }

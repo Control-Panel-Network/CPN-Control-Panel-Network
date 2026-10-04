@@ -192,7 +192,7 @@ pub(crate) fn toolbar(active: &str) -> String {
       <a class="{c}" href="/docker/list">Active Containers</a>
       <a class="{s}" href="/docker/stacks">Compose Stacks</a>
       <a class="{i}" href="/docker/images">Manage Images</a>
-      <a class="{h}" href="/plugins?view=store&amp;category=Host&amp;q=docker">Host package</a>
+      <a class="{h}" href="/plugins?view=store&amp;target=host&amp;q=docker">Host package</a>
     </p>
     <p class="muted">Prefer official or maintainer-published images from Docker Hub. CPN-managed stacks (label <code>com.cpn.managed=1</code>) keep data on the host under the CPN docker-data path; use Compose Stacks <strong>Pull &amp; Recreate</strong> or upgrade <code>--bypass</code> to refresh images without deleting volumes.</p>
     <p class="muted"><strong>Owner:</strong> panel-created containers use your account name; compose stacks use the owner you set on the stack. CLI or third-party containers show <strong>Unassigned</strong> until label <code>com.cpn.owner=username</code> is set. Missing image metadata shows as <strong>Unknown</strong> but the row still lists the container.</p>"#,
@@ -430,7 +430,7 @@ pub fn docker_manage_page(notice: Option<&str>, error: Option<&str>) -> String {
                     &status.detail,
                     "Install the Docker host package from Plugins > Store (search docker), or run cpn app install --name docker."
                 ),
-                r#"<p style="margin-top:12px;"><a class="btn-primary" href="/plugins?view=store&amp;category=Host&amp;q=docker">Open Store</a></p>"#
+                r#"<p style="margin-top:12px;"><a class="btn-primary" href="/plugins?view=store&amp;target=host&amp;q=docker">Open Store</a></p>"#
             ),
             notice,
             error,

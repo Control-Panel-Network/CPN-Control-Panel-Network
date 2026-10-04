@@ -6,7 +6,7 @@ use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
 use crate::plugin_activation::{catalog_entry_is_host_scoped, host_plugin_installed, is_activated};
-use crate::plugins::{CatalogEntry, catalog_entry_is_featured, format_iso_date_eu};
+use crate::plugins::{catalog_entry_is_featured, format_iso_date_eu, CatalogEntry};
 
 pub(crate) struct StoreListOpts<'a> {
     pub query: &'a str,
@@ -17,6 +17,8 @@ pub(crate) struct StoreListOpts<'a> {
     pub per_page: usize,
     /// Signed-in panel username (RBAC for Host Install vs Activate).
     pub username: &'a str,
+    /// `host`, `site`, or `all` (embed both for client-side filtering).
+    pub store_target: &'a str,
 }
 
 fn pricing_is_paid(pricing: &str) -> bool {
@@ -239,7 +241,7 @@ fn store_action_html(
         };
         return format!(
             r#"<span class="muted">Host package</span>
-            <a class="btn-primary" href="/plugins?view=store&amp;category=Host{domain_q}&amp;q=roundcube">Show Roundcube</a>"#,
+            <a class="btn-primary" href="/plugins?view=store&amp;target=host{domain_q}&amp;q=roundcube">Show Roundcube</a>"#,
             domain_q = domain_q,
         );
     }
@@ -342,7 +344,7 @@ fn dates_line(released_on: &str, updated_on: &str) -> String {
     }
     format!(
         r#"<p class="plugin-dates">{}</p>"#,
-        html_escape(&parts.join(" · "))
+        html_escape(&parts.join(" / "))
     )
 }
 
@@ -384,7 +386,7 @@ pub(crate) fn category_pills(
         domain_q = domain_q,
     ));
     out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Host{domain_q}">Host</a>"#,
+        r#"<a class="{cls}" href="/plugins?view=store&amp;target=host{domain_q}">Host</a>"#,
         cls = if active.eq_ignore_ascii_case("host") {
             "active"
         } else {

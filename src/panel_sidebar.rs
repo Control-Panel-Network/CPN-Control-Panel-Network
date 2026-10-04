@@ -65,7 +65,7 @@ pub fn search_catalog_json() -> String {
         ("Create Backup", "/backups/create", "backup"),
         (
             "Host packages",
-            "/plugins?view=store&category=Host",
+            "/plugins?view=store&target=host",
             "applications packages mariadb phpmyadmin",
         ),
         ("Plugins", "/plugins", "store extensions host packages"),
@@ -110,12 +110,12 @@ pub fn search_catalog_json() -> String {
     } else {
         entries.push((
             "Install Docker (Host package)",
-            "/plugins?view=store&category=Host&q=docker&target=host",
+            "/plugins?view=store&q=docker&target=host",
             "docker host package containers podman engine install store",
         ));
         entries.push((
             "Plugin Store Host packages",
-            "/plugins?view=store&category=Host&target=host",
+            "/plugins?view=store&target=host",
             "host packages docker mariadb applications",
         ));
     }

@@ -57,7 +57,7 @@ pub fn store_install_href(unit: &str) -> String {
         "firewalld" => "firewall",
         other => other,
     };
-    format!("/plugins?view=store&category=Host&q={q}")
+    format!("/plugins?view=store&target=host&q={q}")
 }
 
 fn systemctl_available() -> bool {
@@ -364,7 +364,7 @@ mod tests {
     fn store_install_href_targets_host_plugin_store() {
         let docker = store_install_href("docker");
         assert!(docker.contains("/plugins?view=store"));
-        assert!(docker.contains("category=Host"));
+        assert!(docker.contains("target=host"));
         assert!(docker.contains("q=docker"));
         assert!(store_install_href("pure-ftpd").contains("q=ftp"));
         assert!(store_install_href("pdns").contains("q=dns"));

@@ -237,7 +237,7 @@ pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> 
         r#"<p><strong>{label} is available as a free Plugin Store package.</strong></p>
         <p>Install <code>{id}</code> from the Plugin Store (Host scope). After install, this page and the Email sidebar entry unlock automatically.</p>
         <p style="margin-top:16px;">
-          <a class="btn primary" href="/plugins?view=store&amp;category=Host">Open Plugin Store</a>
+          <a class="btn primary" href="/plugins?view=store&amp;target=host">Open Plugin Store</a>
           <a class="btn" href="/plugins?view=store&amp;q={id_q}" style="margin-left:8px;">Search for {id}</a>
         </p>
         <p class="muted" style="margin-top:12px;">CLI: <code>sudo cpn plugin install --host --id {id}</code></p>"#,

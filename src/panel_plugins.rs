@@ -1,7 +1,7 @@
 //! HTML for CPN Panel Plugins (Installed + unified Store).
 
 use crate::apps::list_apps;
-use crate::panel_plugins_installed::{InstalledPageOpts, render_installed};
+use crate::panel_plugins_installed::{render_installed, InstalledPageOpts};
 use crate::panel_plugins_markup::{
     domain_picker, html_escape, notice_block, resolve_domain, resolve_store_target,
     section_heading, store_install_target_picker, view_tabs,
@@ -35,39 +35,47 @@ pub struct PluginsPageQuery<'a> {
     pub username: &'a str,
 }
 
-fn wrap_hub(inner: String) -> String {
+fn wrap_hub(inner: String, allow_host: bool) -> String {
     format!(
-        r#"<div id="plugins-hub" data-plugins-hub="1">{inner}</div>
+        r#"<div id="plugins-hub" data-plugins-hub="1" data-store-allow-host="{allow_host}">{inner}</div>
 {dialog}
 {script}"#,
         inner = inner,
+        allow_host = if allow_host { "1" } else { "0" },
         dialog = crate::uninstall_confirm::uninstall_dialog_bundle(),
         script = plugins_hub_script(),
     )
 }
 
 pub fn plugins_main(query: PluginsPageQuery<'_>) -> String {
-    wrap_hub(plugins_main_inner(query))
+    let allow_host = crate::panel_admin::is_panel_admin(query.username);
+    wrap_hub(plugins_main_inner(query), allow_host)
 }
 
 fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
-    let (view, category) = match query.view {
+    let allow_host = crate::panel_admin::is_panel_admin(query.username);
+    let (view, mut category) = match query.view {
         "store" | "view-store" => ("store", query.category),
-        "host" | "apps" => (
-            "store",
-            if query.category.trim().is_empty() {
-                "Host"
-            } else {
-                query.category
-            },
-        ),
+        "host" | "apps" => ("store", query.category),
         _ => ("installed", query.category),
+    };
+    let legacy_host_cat = category.trim().eq_ignore_ascii_case("host");
+    if legacy_host_cat {
+        category = "";
+    }
+    let requested_target = if legacy_host_cat && query.store_target.trim().is_empty() {
+        "host"
+    } else {
+        query.store_target
     };
     let mode = list_mode_from_query(query.mode);
     let per_page = per_page_from_query(&query.per_page.to_string());
     let page = page_from_query(&query.page.to_string());
     let sites = query.sites;
-    let store_target = resolve_store_target(query.store_target, category, sites);
+    let mut store_target = resolve_store_target(requested_target, "", sites);
+    if !allow_host {
+        store_target = "site";
+    }
     let domain = if view == "store" && store_target == "host" {
         String::new()
     } else {
@@ -83,6 +91,7 @@ fn plugins_main_inner(query: PluginsPageQuery<'_>) -> String {
             query.q,
             mode,
             per_page,
+            allow_host,
         )
     } else {
         domain_picker(sites, &domain, view)
@@ -200,6 +209,7 @@ fn render_store(
                         page,
                         per_page,
                         username: query.username,
+                        store_target,
                     },
                 ),
             );
@@ -230,7 +240,7 @@ fn render_store(
       <article class="section-card">
         <h2>Store</h2>
         {picker}
-        <p class="plugin-store-meta">One catalog: host packages and community plugins share the same grid. Badges mark Host vs Site. Use <strong>Install target</strong> above: <strong>Host</strong> for one-time server installs; <strong>Site</strong> for domain plugins under <code>{path}</code>. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
+        <p class="plugin-store-meta">One catalog. <strong>Install target</strong> is independent of category chips: <strong>Host</strong> shows server packages (Postfix/Dovecot, Tachyon, SnappyMail, Roundcube); <strong>Site</strong> shows per-domain plugins (BIMI, MTA-STS, Email Marketing) under <code>{path}</code>. HOST and SITE badges on each card mark the install scope. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
         <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install. Fail2ban and other Security plugins ship from Control-Panel-Network/CPN-Plugins.</p>
         {body}
       </article>"#,

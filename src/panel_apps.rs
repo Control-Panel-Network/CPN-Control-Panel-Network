@@ -1,11 +1,11 @@
 //! Panel Host packages page: store-like card grid (search, categories, pagination).
 
-use crate::apps::{AppStateKind, AppStatus, list_apps};
+use crate::apps::{list_apps, AppStateKind, AppStatus};
 use crate::apps_site::{bindings_for_domain, is_associable, is_site_scoped};
 use crate::backups::is_subdomain_site;
 use crate::host_packages_catalog::{
-    HostInstallStatus, filter_host_packages, format_host_dates, host_categories,
-    host_package_is_featured, meta_for,
+    filter_host_packages, format_host_dates, host_categories, host_package_is_featured, meta_for,
+    HostInstallStatus,
 };
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
@@ -418,7 +418,7 @@ pub(crate) fn host_card(
             {status_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
-          <p class="plugin-meta">Status: {state} Â· Id: <code>{id}</code></p>
+          <p class="plugin-meta">Status: {state} / Id: <code>{id}</code></p>
           <p class="plugin-meta">{detail}</p>
           {dates}
           {binding}
@@ -460,7 +460,7 @@ fn category_pills(
     ));
     let mut out = String::from(r#"<div class="category-pills">"#);
     out.push_str(&format!(
-        r#"<a class="{cls}" href="/plugins?view=store&amp;category=Host{domain_q}">All host packages</a>"#,
+        r#"<a class="{cls}" href="/plugins?view=store&amp;target=host{domain_q}">All host packages</a>"#,
         cls = if active.is_empty() || active.eq_ignore_ascii_case("all") || active.eq_ignore_ascii_case("host") {
             "active"
         } else {
@@ -631,7 +631,7 @@ pub fn apps_main(q: AppsPageQuery<'_>) -> String {
       {err}
       <article class="section-card" style="margin-bottom:14px;">
         <h2>Domain scope</h2>
-        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> Â· <code>cpn app activate --name roundcube</code></p>
+        <p>MariaDB, PostgreSQL, and RabbitMQ are host packages. phpMyAdmin, Email, and webmail clients (default: Tachyon; also SnappyMail, Roundcube, NextSnapMail, SOGo) appear as store-style cards below. Install a client, then use <strong>Set as active</strong> to switch the panel proxy without orphaning mailboxes. CLI: <code>cpn app install --name tachyon</code> / <code>cpn app activate --name roundcube</code></p>
         {picker}
       </article>
       {fragment}"#,

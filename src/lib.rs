@@ -317,6 +317,7 @@ pub mod panel_plugins_installed;
 pub mod panel_plugins_installed_data;
 pub mod panel_plugins_markup;
 pub mod panel_plugins_spa;
+pub mod panel_plugins_spa_script;
 pub mod panel_plugins_store;
 pub mod panel_plugins_unified;
 pub mod panel_prefs;
