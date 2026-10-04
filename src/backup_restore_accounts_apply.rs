@@ -332,6 +332,8 @@ pub(crate) fn merge_optional_packages_json(
         #[serde(default = "unlimited_default")]
         databases: i64,
         #[serde(default = "unlimited_default")]
+        database_disk_mb: i64,
+        #[serde(default = "unlimited_default")]
         ftp_accounts: i64,
         #[serde(default)]
         fqdn_enabled: bool,
@@ -352,6 +354,7 @@ pub(crate) fn merge_optional_packages_json(
             domains: row.domains,
             emails: row.emails,
             databases: row.databases,
+            database_disk_mb: row.database_disk_mb,
             ftp_accounts: row.ftp_accounts,
             fqdn_enabled: row.fqdn_enabled,
             notes: row.notes,

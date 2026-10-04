@@ -165,6 +165,8 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 
         databases_limit: package.databases,
 
+        database_disk_mb_limit: package.database_disk_mb,
+
         ftp_used,
 
         ftp_limit: package.ftp_accounts,
@@ -229,6 +231,12 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
         QuotaResource::Emails => ("Mailboxes", usage.emails_used, usage.emails_limit),
 
         QuotaResource::Databases => ("Databases", usage.databases_used, usage.databases_limit),
+
+        QuotaResource::DatabaseDiskMb => (
+            "Database disk (MB)",
+            crate::package_bandwidth::bytes_to_mb_ceil(usage.database_disk_bytes),
+            usage.database_disk_mb_limit,
+        ),
 
         QuotaResource::FtpAccounts => ("FTP accounts", usage.ftp_used, usage.ftp_limit),
 

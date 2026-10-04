@@ -24,6 +24,7 @@ pub enum QuotaResource {
     Domains,
     Emails,
     Databases,
+    DatabaseDiskMb,
     FtpAccounts,
     DiskMb,
     BandwidthMb,
@@ -44,6 +45,9 @@ pub struct Package {
     pub domains: i64,
     pub emails: i64,
     pub databases: i64,
+    /// MariaDB schema size quota in MB (`-1` = unlimited; `0` = none allowed).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub database_disk_mb: i64,
     pub ftp_accounts: i64,
     /// CPN distribution lists (virtual alias expansion).
     #[serde(default = "crate::package_limits::default_unlimited")]
@@ -103,6 +107,7 @@ pub struct PackageInput {
     pub domains: i64,
     pub emails: i64,
     pub databases: i64,
+    pub database_disk_mb: i64,
     pub ftp_accounts: i64,
     pub mailing_lists: i64,
     pub autoresponders: i64,
@@ -124,6 +129,7 @@ impl Default for PackageInput {
             domains: UNLIMITED,
             emails: UNLIMITED,
             databases: UNLIMITED,
+            database_disk_mb: UNLIMITED,
             ftp_accounts: UNLIMITED,
             mailing_lists: UNLIMITED,
             autoresponders: UNLIMITED,
@@ -148,6 +154,7 @@ pub struct PackageUsage {
     pub emails_limit: i64,
     pub databases_used: u64,
     pub databases_limit: i64,
+    pub database_disk_mb_limit: i64,
     pub ftp_used: u64,
     pub ftp_limit: i64,
     pub disk_mb_used: u64,
@@ -166,7 +173,7 @@ pub struct PackageUsage {
     pub alias_domains_limit: i64,
     pub subdomains_used: u64,
     pub subdomains_limit: i64,
-    /// Sum of owned MariaDB schema sizes in bytes (informational; not a package count limit).
+    /// Sum of owned MariaDB schema sizes in bytes, metered against `database_disk_mb`.
     pub database_disk_bytes: u64,
     pub fqdn_enabled: bool,
 }
@@ -307,6 +314,7 @@ fn validate_input(input: &PackageInput) -> Result<String, String> {
     validate_limit("domains", input.domains)?;
     validate_limit("emails", input.emails)?;
     validate_limit("databases", input.databases)?;
+    validate_limit("database_disk_mb", input.database_disk_mb)?;
     validate_limit("ftp_accounts", input.ftp_accounts)?;
     validate_limit("mailing_lists", input.mailing_lists)?;
     validate_limit("autoresponders", input.autoresponders)?;
@@ -377,6 +385,7 @@ fn default_package() -> Package {
         domains: 20,
         emails: 1000,
         databases: 1000,
+        database_disk_mb: UNLIMITED,
         ftp_accounts: 1000,
         mailing_lists: 1000,
         autoresponders: 1000,
@@ -466,6 +475,7 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
         domains: normalize_limit(input.domains),
         emails: normalize_limit(input.emails),
         databases: normalize_limit(input.databases),
+        database_disk_mb: normalize_limit(input.database_disk_mb),
         ftp_accounts: normalize_limit(input.ftp_accounts),
         mailing_lists: normalize_limit(input.mailing_lists),
         autoresponders: normalize_limit(input.autoresponders),
@@ -514,6 +524,7 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     pkg.domains = normalize_limit(input.domains);
     pkg.emails = normalize_limit(input.emails);
     pkg.databases = normalize_limit(input.databases);
+    pkg.database_disk_mb = normalize_limit(input.database_disk_mb);
     pkg.ftp_accounts = normalize_limit(input.ftp_accounts);
     pkg.mailing_lists = normalize_limit(input.mailing_lists);
     pkg.autoresponders = normalize_limit(input.autoresponders);

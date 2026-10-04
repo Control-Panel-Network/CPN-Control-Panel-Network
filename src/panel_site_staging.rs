@@ -124,7 +124,9 @@ pub fn apply_staging_extras(
 
     if opts.databases {
         for src_db in collect_linked_database_names(source) {
-            if let Err(err) = require_quota(owner, QuotaResource::Databases) {
+            if let Err(err) = require_quota(owner, QuotaResource::Databases)
+                .and_then(|_| require_quota(owner, QuotaResource::DatabaseDiskMb))
+            {
                 out.warnings
                     .push(format!("Database `{src_db}` not cloned: {err}"));
                 break;

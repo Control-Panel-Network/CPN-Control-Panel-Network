@@ -143,6 +143,7 @@ fn zero_limit_means_none_allowed() {
         assert_eq!(pkg.disk_mb, 0);
         assert_eq!(pkg.bandwidth_mb, 0);
         assert_eq!(pkg.domains, 0);
+        assert_eq!(pkg.database_disk_mb, UNLIMITED);
         assert!(!is_unlimited(pkg.emails));
         assert_eq!(format_limit_display(pkg.disk_mb, "MB"), "0 MB");
         assert_eq!(format_limit_display(0, ""), "0");

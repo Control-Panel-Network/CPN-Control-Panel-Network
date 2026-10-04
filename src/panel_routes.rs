@@ -924,6 +924,9 @@ pub async fn databases_create(
         user.clone()
     };
     let result = crate::packages::require_quota(&owner, crate::packages::QuotaResource::Databases)
+        .and_then(|_| {
+            crate::packages::require_quota(&owner, crate::packages::QuotaResource::DatabaseDiskMb)
+        })
         .and_then(|_| crate::resource_accounts::create_database(&owner, &form.name, &form.domain));
     match result {
         Ok(db) => HttpResponse::SeeOther()
