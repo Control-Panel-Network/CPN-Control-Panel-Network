@@ -7,7 +7,7 @@ use crate::panel_hubs::{
 };
 use crate::panel_ops_db::{create_database, drop_database};
 use crate::panel_ops_mail_extra::{
-    CatchAll, dkim_status, load_catchall, load_forwards, mail_stack_note, save_catchall,
+    dkim_status, load_catchall, load_forwards, mail_stack_note, save_catchall,
 };
 use crate::panel_sections::{databases_status_main, email_accounts_main};
 use crate::postfix_fallback::postfix_is_ready;
@@ -183,13 +183,7 @@ pub fn email_catchall_page(notice: Option<&str>, error: Option<&str>) -> String 
 }
 
 pub fn add_catchall(domain: &str, target: &str) -> Result<String, String> {
-    let mut rows = load_catchall();
-    rows.push(CatchAll {
-        domain: domain.trim().to_string(),
-        target: target.trim().to_string(),
-    });
-    save_catchall(&rows)?;
-    Ok("Catch-all saved".into())
+    crate::panel_ops_mail_extra::add_catchall_for("system", domain, target)
 }
 
 fn dkim_domain_table_html() -> String {

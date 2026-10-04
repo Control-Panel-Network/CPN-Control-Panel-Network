@@ -206,6 +206,7 @@ pub async fn packages_bulk(
                     } else {
                         None
                     },
+                    ..Default::default()
                 })
             })() {
                 Ok(patch) => patch,
