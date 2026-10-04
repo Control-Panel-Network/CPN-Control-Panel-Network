@@ -323,6 +323,7 @@ mod tests {
             assert!(html.contains("/account/users/profile"));
             assert!(html.contains("cpn-feedback-btn"));
             assert!(html.find("cpn-feedback-btn") < html.find("cpn-color-toggle"));
+            assert!(html.contains("cpn-feedback-modal"));
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
             assert!(html.contains("Mark all as read"));

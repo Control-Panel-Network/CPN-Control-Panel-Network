@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Light theme sidebar contrast**: Light mode now resets readable ink/surface tokens after Theme Store CSS and locks sidebar labels, nested items, search, IP card, and footer icons to dark-on-light. Dark mode tile pairing is unchanged.
 - **Feedback mail delivery**: `POST /api/panel/feedback` uses the owner-configured outbound provider (`smtp.json`) when present, otherwise local Postfix. Local injection uses a dedicated `127.0.0.1:2525` listener (no SASL, no virtual-mailbox reject) so support inboxes are not treated as hosted aliases. The send path waits for that listener after `postfix reload` instead of falling back to port 25. Failures return a precise operator error (no secrets).
+- **Feedback dialog placement**: The sidebar keeps the Feedback button. The form opens as a viewport-centered modal (body portal, backdrop, Esc, focus trap) so aside overflow and drawer transform cannot pin it to the nav column.
 
 ## [1.2.0] - 04/10/2026
 
