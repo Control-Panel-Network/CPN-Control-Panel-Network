@@ -13,17 +13,6 @@ use crate::os_support::require_installable_guest;
 use std::process::Stdio;
 use tokio::process::Command;
 
-async fn detect_lsws_unit() -> Result<&'static str, String> {
-    for unit in ["lsws", "lshttpd"] {
-        let lib = format!("/usr/lib/systemd/system/{unit}.service");
-        let etc = format!("/etc/systemd/system/{unit}.service");
-        if std::path::Path::new(&lib).exists() || std::path::Path::new(&etc).exists() {
-            return Ok(unit);
-        }
-    }
-    Err("OpenLiteSpeed vendor systemd unit not found (lsws/lshttpd)".into())
-}
-
 fn openlitespeed_config_is_valid(success: bool, output: &str) -> bool {
     let diagnostics = output
         .lines()
@@ -131,7 +120,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         )?;
     }
 
-    let unit = detect_lsws_unit().await?;
+    let unit = crate::litespeed_runtime::detect_systemd_unit()?;
     let validation = Command::new("/usr/local/lsws/bin/openlitespeed")
         .arg("-t")
         .env("LC_ALL", "C")
