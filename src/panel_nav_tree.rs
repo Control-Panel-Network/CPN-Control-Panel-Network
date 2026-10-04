@@ -527,7 +527,7 @@ mod tests {
         );
         assert!(
             !html.contains(">Host packages</"),
-            "Host packages must not appear under Plugins; use Store category=Host"
+            "Host packages must not appear under Plugins; use Store target=host"
         );
     }
 

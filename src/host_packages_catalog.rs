@@ -177,7 +177,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-14",
             install_count: 40,
             featured: true,
-            description: "Default CPN webmail (Tachyon): modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",
+            description: "Default CPN webmail (Tachyon). Host package: installs once on the server under /opt/cpn-webmail/tachyon. Modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Removes the Tachyon webmail install and related panel proxy paths",
@@ -285,7 +285,7 @@ pub fn format_host_dates(meta: &HostPackageMeta) -> String {
     if !meta.updated_on.is_empty() {
         parts.push(format!("Updated: {}", format_iso_date_eu(meta.updated_on)));
     }
-    parts.join(" · ")
+    parts.join(" / ")
 }
 
 fn host_pricing_is_paid(pricing: &str) -> bool {

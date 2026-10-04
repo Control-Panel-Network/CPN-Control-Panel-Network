@@ -868,7 +868,7 @@ pub fn plugins_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
             HubTile {
                 title: "Host packages",
                 subtitle: "Server engines (Docker, MariaDB, and more)",
-                href: "/plugins?view=store&category=Host&target=host",
+                href: "/plugins?view=store&target=host",
                 live: true,
             },
         ],

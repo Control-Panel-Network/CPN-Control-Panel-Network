@@ -38,7 +38,7 @@ fn apps_redirect_to(
     let mut url = if return_view.trim().eq_ignore_ascii_case("installed") {
         "/plugins?view=installed".to_string()
     } else {
-        "/plugins?view=store&category=Host".to_string()
+        "/plugins?view=store&target=host".to_string()
     };
     if !domain.trim().is_empty() {
         url.push_str(&format!("&domain={}", urlencoding_simple(domain.trim())));
@@ -81,7 +81,7 @@ pub async fn apps_page(
     let mut loc = if domain.is_some() {
         String::from("/plugins")
     } else {
-        String::from("/plugins?view=store&category=Host")
+        String::from("/plugins?view=store&target=host")
     };
     if let Some(domain) = domain {
         let sep = if loc.contains('?') { '&' } else { '?' };

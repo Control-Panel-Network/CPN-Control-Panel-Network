@@ -94,6 +94,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         }}
         .store-scope-btn.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
         .store-scope-hint {{ margin:8px 0 0; font-size:13px; }}
+        .store-scope-toggle[hidden], #store-host-hint[hidden], #store-site-picker[hidden] {{ display:none; }}
         .plugin-stats {{ display:flex; flex-wrap:wrap; gap:16px; margin:0 0 14px; font-size:14px; color:var(--ink); }}
         .plugin-stats strong {{ color:var(--ink); }}
         .plugin-grid {{
@@ -278,46 +279,46 @@ pub(crate) fn store_install_target_picker(
     q: &str,
     mode: &str,
     per_page: usize,
+    show_host: bool,
 ) -> String {
     let host_active = if target == "host" { " active" } else { "" };
     let site_active = if target == "site" { " active" } else { "" };
     let host_href = store_target_href(view, "host", category, "", mode, per_page, q);
     let site_href = store_target_href(view, "site", category, selected_domain, mode, per_page, q);
+    let host_btn = if show_host {
+        format!(
+            r#"<a class="store-scope-btn{host_active}" href="{host_href}" data-store-target-btn="host">Host</a>"#,
+            host_active = host_active,
+            host_href = html_escape(&host_href),
+        )
+    } else {
+        String::new()
+    };
     let toggle = format!(
         r#"<div class="store-scope-toggle" role="group" aria-label="Install target">
         <span class="store-scope-label">Install target</span>
-        <a class="store-scope-btn{host_active}" href="{host_href}">Host</a>
-        <a class="store-scope-btn{site_active}" href="{site_href}">Site</a>
+        {host_btn}
+        <a class="store-scope-btn{site_active}" href="{site_href}" data-store-target-btn="site">Site</a>
       </div>"#,
-        host_active = host_active,
+        host_btn = host_btn,
         site_active = site_active,
-        host_href = html_escape(&host_href),
         site_href = html_escape(&site_href),
     );
-    if target == "host" {
-        let site_hint = if sites.is_empty() {
-            String::new()
-        } else {
-            let site_link =
-                store_target_href(view, "site", category, selected_domain, mode, per_page, q);
-            format!(
-                r#"<p class="muted store-scope-hint">Host packages install once on this server. Sites only <strong>Activate</strong> or <strong>Deactivate</strong> them. <a href="{site_link}">Switch to Site</a> to pick a domain for site plugins or activation.</p>"#,
-                site_link = html_escape(&site_link),
-            )
-        };
-        return format!(
-            r#"{toggle}
-        {site_hint}
-        <p class="plugin-store-meta" style="margin-top:8px;">You are installing on the <strong>Host</strong>. The site dropdown is hidden because Host packages are not tied to one domain.</p>"#,
-            toggle = toggle,
-            site_hint = site_hint,
-        );
-    }
+    let host_hint = if show_host {
+        format!(
+            r#"<p id="store-host-hint" class="muted store-scope-hint"{hidden}>Host packages install once on this server (Postfix, Tachyon, Roundcube). Sites only Activate or Deactivate them. The site dropdown stays hidden for Host.</p>"#,
+            hidden = if target == "host" { "" } else { " hidden" },
+        )
+    } else {
+        String::new()
+    };
     if sites.is_empty() {
         return format!(
             r#"{toggle}
-        <p class="muted">No websites yet. Use <strong>Host</strong> to install Host packages. Create a site to install domain or sub-domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
+        {host_hint}
+        <p class="muted">No websites yet. Create a site to install domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
             toggle = toggle,
+            host_hint = host_hint,
         );
     }
     let mut options = String::new();
@@ -333,8 +334,11 @@ pub(crate) fn store_install_target_picker(
             sel = sel,
         ));
     }
+    let site_hidden = if target == "host" { " hidden" } else { "" };
     format!(
         r#"{toggle}
+      {host_hint}
+      <div id="store-site-picker"{site_hidden}>
       <form method="get" action="/plugins" class="domain-picker">
         <input type="hidden" name="view" value="{view}">
         <input type="hidden" name="target" value="site">
@@ -343,13 +347,16 @@ pub(crate) fn store_install_target_picker(
         <input type="hidden" name="category" value="{category}">
         <input type="hidden" name="q" value="{q}">
         <div>
-          <label for="domain"><strong>Site</strong> (for site plugins and Activate)</label><br>
+          <label for="domain"><strong>Site</strong> (for site plugins)</label><br>
           <select id="domain" name="domain">{options}</select>
         </div>
         <button type="submit" class="btn-secondary">Apply</button>
       </form>
-      <p class="muted store-scope-hint">Site plugins install under the selected domain. Host packages still show here with <strong>Install on Host</strong>; use the <strong>Host</strong> target above to hide this dropdown.</p>"#,
+      <p class="muted store-scope-hint">Site target lists per-domain plugins only (BIMI, MTA-STS). Switch to Host for server mail/webmail packages.</p>
+      </div>"#,
         toggle = toggle,
+        host_hint = host_hint,
+        site_hidden = site_hidden,
         view = html_escape(view),
         mode = html_escape(mode),
         per_page = per_page,
@@ -393,11 +400,15 @@ mod store_target_tests {
 
     #[test]
     fn store_picker_shows_host_toggle() {
-        let html = store_install_target_picker(&[], "", "host", "store", "Host", "", "page", 4);
+        let html = store_install_target_picker(&[], "", "host", "store", "", "", "page", 4, true);
         assert!(html.contains("Install target"));
+        assert!(html.contains("data-store-target-btn=\"host\""));
         assert!(html.contains("store-scope-btn active"));
         assert!(html.contains(">Host</a>"));
-        assert!(!html.contains("name=\"domain\""));
+        let no_host =
+            store_install_target_picker(&[], "", "site", "store", "", "", "page", 4, false);
+        assert!(!no_host.contains("data-store-target-btn=\"host\""));
+        assert!(no_host.contains("data-store-target-btn=\"site\""));
     }
 }
 
