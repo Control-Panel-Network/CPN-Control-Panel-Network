@@ -1,4 +1,4 @@
-﻿//! Sidebar color-mode toggle script and Manage Design editor markup.
+//! Sidebar color-mode toggle script and Manage Design editor markup.
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_theme::{
@@ -73,8 +73,9 @@ pub fn color_mode_toggle_script() -> &'static str {
   if (!btn) return;
 
   function applyMode(mode) {
+    if (mode !== "light" && mode !== "dark") mode = "light";
     document.documentElement.setAttribute("data-color-mode", mode);
-    document.body.setAttribute("data-color-mode", mode);
+    if (document.body) document.body.setAttribute("data-color-mode", mode);
     btn.setAttribute("data-mode", mode);
     btn.setAttribute("aria-pressed", mode === "dark" ? "true" : "false");
     var nextLabel = mode === "dark" ? "Switch to light mode" : "Switch to dark mode";
@@ -86,7 +87,22 @@ pub fn color_mode_toggle_script() -> &'static str {
   }
 
   function currentMode() {
-    return document.body.getAttribute("data-color-mode") === "dark" ? "dark" : "light";
+    var fromHtml = document.documentElement.getAttribute("data-color-mode");
+    var fromBody = document.body ? document.body.getAttribute("data-color-mode") : "";
+    if (fromHtml === "dark" || fromBody === "dark") return "dark";
+    return "light";
+  }
+
+  // Keep html/body in sync with persisted preference on load (boot may set html first).
+  try {
+    var stored = window.localStorage.getItem(KEY);
+    if (stored === "light" || stored === "dark") {
+      applyMode(stored);
+    } else {
+      applyMode(currentMode());
+    }
+  } catch (e) {
+    applyMode(currentMode());
   }
 
   btn.addEventListener("click", function () {

@@ -4,7 +4,9 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
 use crate::panel_nav_catalog::{MAIN, NavChild, NavEntry, SECURITY, SERVER, SETTINGS};
 
-pub use crate::panel_nav_tree_chrome::{nav_tree_script, nav_tree_styles};
+pub use crate::panel_nav_tree_chrome::{
+    nav_tree_script, nav_tree_styles, sidebar_nav_contrast_styles,
+};
 
 fn html_escape(value: &str) -> String {
     value
@@ -268,7 +270,7 @@ pub fn nav_links_html(active: &str, username: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{nav_links_html, nav_tree_styles};
+    use super::{nav_links_html, nav_tree_styles, sidebar_nav_contrast_styles};
 
     fn group_children_html(html: &str, group_id: &str) -> String {
         let marker = format!("data-nav-group=\"{group_id}\"");
@@ -538,6 +540,14 @@ mod tests {
         assert!(css.contains("flex-direction:column"));
         assert!(css.contains(".nav-tile-grid"));
         assert!(!css.contains("grid-template-columns:repeat(2"));
+        // Explicit tile text (not theme --ink) so light tiles stay readable.
+        assert!(css.contains("color:#1d1d1f"));
+        assert!(css.contains("html[data-color-mode=\"dark\"] .sidebar nav a.nav-tile"));
+        let lock = sidebar_nav_contrast_styles();
+        assert!(lock.contains("html[data-color-mode=\"light\"]"));
+        assert!(lock.contains("html[data-color-mode=\"dark\"]"));
+        assert!(lock.contains("background:#1c212b"));
+        assert!(lock.contains("color:#e5e7eb"));
     }
 
     #[test]
