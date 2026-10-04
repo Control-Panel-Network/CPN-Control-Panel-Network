@@ -177,10 +177,7 @@ mod tests {
             postfix_envelope_from("info@newstargeted.com"),
             "cpn-panel@localhost"
         );
-        assert_eq!(
-            postfix_envelope_from("cpn@localhost"),
-            "cpn@localhost"
-        );
+        assert_eq!(postfix_envelope_from("cpn@localhost"), "cpn@localhost");
         let settings = postfix_local_smtp("info@newstargeted.com");
         assert_eq!(settings.host, "127.0.0.1");
         assert!(settings.port == 25 || settings.port == 2525);

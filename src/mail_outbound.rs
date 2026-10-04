@@ -53,9 +53,7 @@ pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings
 /// Operator-facing mail error. Never include passwords, tokens, or AUTH secrets.
 pub fn public_mail_error(raw: &str) -> String {
     let lower = raw.to_ascii_lowercase();
-    if lower.contains("5.1.1")
-        || lower.contains("virtual alias")
-        || lower.contains("user unknown")
+    if lower.contains("5.1.1") || lower.contains("virtual alias") || lower.contains("user unknown")
     {
         return "Local Postfix treated the support inbox as a hosted mailbox. Feedback uses a panel outbound listener on port 2525 that relays off-box. Configure an outbound mail provider plugin if this host cannot reach the internet.".into();
     }
