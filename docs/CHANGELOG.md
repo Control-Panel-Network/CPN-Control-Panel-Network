@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Package limit semantics**: Only `-1` means unlimited (∞). `0` means none allowed (Used 0 of 0). Existing packages stored under schema 1 that used `0` as unlimited are migrated to `-1` on first load (schema 2). Package create/edit/bulk copy and Statistics meters use the new rules.
+- **Dashboard Statistics**: Stock overview order puts Statistics first. Missing stock widgets (including Statistics) are re-inserted at their default relative positions so a custom layout cannot bury or drop the meters unnoticed.
+
 ### Added
 
+- **Email provisioning meters**: Package limits and Statistics rows for mailing lists, autoresponders, forwarders, and email filters. LIVE panel routes at `/email/lists`, `/email/autoresponders`, `/email/filters`, plus Postfix map apply for forwarders. Database disk size is shown on Statistics (informational MariaDB schema sum).
 - **Sidebar feedback modal**: Signed-in users can open Feedback beside the sidebar theme toggle and send categorized feedback without leaving the current page. `POST /api/panel/feedback` validates the session, same-origin request, HMAC CSRF token, required fields, length limits, and a five-per-hour account rate limit, then uses the configured SMTP or local Postfix path to deliver identical messages to both support inboxes with user, host, and panel-version context.
 - **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
 - **Apps backup-first lifecycle**: Apps cards and `cpn apps` now show installed and source-available versions, support install/update/upgrade/downgrade, and list/restore backups. CMS Made Simple uses its official installer source; Redis, Node, and Python use configured OS repositories. Mutating version changes create a restore point before package or site files change.

@@ -7,8 +7,7 @@ use crate::panel_hubs::{
 };
 use crate::panel_ops_db::{create_database, drop_database};
 use crate::panel_ops_mail_extra::{
-    CatchAll, MailForward, dkim_status, load_catchall, load_forwards, mail_stack_note,
-    save_catchall, save_forwards,
+    CatchAll, dkim_status, load_catchall, load_forwards, mail_stack_note, save_catchall,
 };
 use crate::panel_sections::{databases_status_main, email_accounts_main};
 use crate::postfix_fallback::postfix_is_ready;
@@ -135,13 +134,8 @@ pub fn email_forwarding_page(notice: Option<&str>, error: Option<&str>) -> Strin
 }
 
 pub fn add_forward(from: &str, to: &str) -> Result<String, String> {
-    let mut rows = load_forwards();
-    rows.push(MailForward {
-        from: from.trim().to_string(),
-        to: to.trim().to_string(),
-    });
-    save_forwards(&rows)?;
-    Ok("Forward saved".into())
+    // Legacy helper: prefer `add_forward_for` from routes (owner + Postfix maps).
+    crate::panel_ops_mail_extra::add_forward_for("system", from, to)
 }
 
 pub fn email_catchall_page(notice: Option<&str>, error: Option<&str>) -> String {

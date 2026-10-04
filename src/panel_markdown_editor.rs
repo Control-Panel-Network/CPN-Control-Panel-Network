@@ -211,7 +211,16 @@ pub fn markdown_toolbar_assets() -> &'static str {
       });
     });
   }
-  document.querySelectorAll('[data-cpn-md]').forEach(bind);
+  function bindAll(){
+    document.querySelectorAll('[data-cpn-md]').forEach(bind);
+  }
+  // Assets are often emitted before the editor markup in the same response.
+  // Wait for DOM parse so toolbar / Preview / HTML source buttons bind.
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', bindAll);
+  } else {
+    bindAll();
+  }
 })();
 </script>
 "#

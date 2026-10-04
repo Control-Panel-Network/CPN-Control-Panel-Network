@@ -24,6 +24,7 @@ pub fn mb_limit_to_bytes(mb: i64) -> Option<u64> {
     if is_unlimited(mb) || mb < 0 {
         return None;
     }
+    // `0` is a hard zero quota (none allowed), not unlimited.
     u64::try_from(mb).ok()?.checked_mul(1024 * 1024)
 }
 
@@ -252,12 +253,13 @@ mod tests {
     #[test]
     fn unlimited_stays_unlimited() {
         assert_eq!(format_mb_limit(StorageUnitPref::Auto, UNLIMITED), "∞");
-        assert_eq!(format_mb_limit(StorageUnitPref::Auto, 0), "∞");
+        assert_eq!(format_mb_limit(StorageUnitPref::Auto, 0), "0 KB");
         assert_eq!(
             format_used_limit(StorageUnitPref::Auto, 1024, UNLIMITED),
             "Used 1 KB of ∞"
         );
-        assert_eq!(format_used_count(3, 0), "Used 3 of ∞");
+        assert_eq!(format_used_count(3, 0), "Used 3 of 0");
         assert_eq!(format_used_count(3, 10), "Used 3 of 10");
+        assert_eq!(format_used_count(0, UNLIMITED), "Used 0 of ∞");
     }
 }

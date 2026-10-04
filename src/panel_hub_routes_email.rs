@@ -9,10 +9,15 @@ use crate::panel_hub_pages_email_auth::{
     email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
     save_bimi_form, save_mta_sts_form,
 };
+use crate::mail_postfix_maps::owner_for_mail_domain;
+use crate::panel_hub_pages_email_features::email_forwarding_page_v2;
 use crate::panel_hub_pages_hosting::{
-    add_catchall, add_forward, email_accounts_page, email_catchall_page, email_create_page,
-    email_delivery_page, email_dkim_page, email_forwarding_page, ensure_dkim,
+    add_catchall, email_accounts_page, email_catchall_page, email_create_page, email_delivery_page,
+    email_dkim_page, ensure_dkim,
 };
+use crate::panel_ops_email_acl::require_email_csrf;
+use crate::panel_ops_mail_extra::{add_forward_for, apply_forward_maps, remove_forward};
+use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_pages_webmail::{
     apply_regenerate_path, apply_webmail_settings_form, email_webmail_app_page, email_webmail_page,
 };
@@ -81,31 +86,72 @@ pub async fn email_forwarding_route(
         &user,
         "email",
         "Forwarding",
-        &email_forwarding_page(
+        &email_forwarding_page_v2(
+            &user,
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
         ),
     ))
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct ForwardForm {
-    #[serde(default)]
-    from: String,
-    #[serde(default)]
-    to: String,
-}
-
 #[post("/email/forwarding/save")]
 pub async fn email_forwarding_save(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
-    form: web::Form<ForwardForm>,
+    form: web::Form<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
-    let Some(_user) = require_panel_user(&state, &http) else {
+    let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match add_forward(&form.from, &form.to) {
+    if let Some(resp) = require_email_csrf(&http, &user, &form, "/email/forwarding") {
+        return resp;
+    }
+    let from = form.get("from").map(String::as_str).unwrap_or("");
+    let to = form.get("to").map(String::as_str).unwrap_or("");
+    let owner = from
+        .rsplit_once('@')
+        .and_then(|(_, d)| owner_for_mail_domain(d))
+        .unwrap_or_else(|| user.clone());
+    match require_quota(&owner, QuotaResource::Forwarders)
+        .and_then(|_| add_forward_for(&user, from, to))
+    {
+        Ok(msg) => redirect_notice("/email/forwarding", Some(&msg), None),
+        Err(err) => redirect_notice("/email/forwarding", None, Some(&err)),
+    }
+}
+
+#[post("/email/forwarding/delete")]
+pub async fn email_forwarding_delete(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Some(resp) = require_email_csrf(&http, &user, &form, "/email/forwarding") {
+        return resp;
+    }
+    let from = form.get("from").map(String::as_str).unwrap_or("");
+    match remove_forward(&user, from) {
+        Ok(msg) => redirect_notice("/email/forwarding", Some(&msg), None),
+        Err(err) => redirect_notice("/email/forwarding", None, Some(&err)),
+    }
+}
+
+#[post("/email/forwarding/apply")]
+pub async fn email_forwarding_apply(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Some(resp) = require_email_csrf(&http, &user, &form, "/email/forwarding") {
+        return resp;
+    }
+    match apply_forward_maps() {
         Ok(msg) => redirect_notice("/email/forwarding", Some(&msg), None),
         Err(err) => redirect_notice("/email/forwarding", None, Some(&err)),
     }

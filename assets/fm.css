@@ -18,10 +18,27 @@
 .fm-pathform{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:10px;}
 .fm-pathform input{flex:1;min-width:180px;}
 .fm-table th:first-child,.fm-table td:first-child{width:2rem;}
-.fm-name{word-break:break-all;}
+.fm-name{word-break:break-all;display:flex;align-items:center;gap:8px;}
+.fm-icon{flex:0 0 auto;width:14px;height:14px;border-radius:2px;border:1px solid #64748b;background:#334155;}
+.fm-icon-dir{background:#1d4ed8;border-color:#60a5fa;border-radius:3px 3px 2px 2px;box-shadow:inset 0 -2px 0 #1e3a8a;}
+.fm-icon-file{background:#334155;border-color:#94a3b8;border-radius:2px;position:relative;}
+.fm-icon-file::after{content:"";position:absolute;top:2px;left:2px;right:2px;height:1px;background:#94a3b8;box-shadow:0 3px 0 #64748b,0 6px 0 #64748b;}
+.fm-link-dir,.fm-link-file{color:inherit;text-decoration:none;}
+.fm-link-dir:hover,.fm-link-file:hover{color:var(--blue,#006CFA);text-decoration:underline;}
+.fm-link-file{color:#93c5fd;}
+.fm-type{white-space:nowrap;}
+.fm-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;}
+.fm-badge-dir{background:#1e3a5f;color:#bfdbfe;border:1px solid #334155;}
+.fm-badge-file{background:#14532d;color:#bbf7d0;border:1px solid #166534;}
+.fm-row.fm-is-file .fm-name{font-weight:500;}
 .fm-hidden-form{display:none;}
 .fm-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:80;padding:16px;}
 .fm-modal-card{background:var(--surface,#12141a);border:1px solid var(--hairline,#2a2f3a);border-radius:10px;padding:16px;width:min(920px,100%);max-height:90vh;overflow:auto;}
+.fm-edit-card{width:min(980px,100%);}
+.fm-edit-hint{margin:0 0 10px;font-size:13px;}
+.fm-edit-card .cpn-md-box textarea,
+.fm-edit-card .cpn-md-html-source,
+.fm-edit-card .cpn-md-preview{min-height:320px;max-height:55vh;}
 .fm-editor{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#0b1220;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:10px;}
 .fm-modal-actions{display:flex;gap:8px;margin-top:12px;}
 @media (max-width:860px){

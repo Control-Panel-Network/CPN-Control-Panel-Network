@@ -53,12 +53,16 @@ use cpn_installer::panel_hub_routes::{
     docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
     email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
     email_catchall_save, email_create_route, email_debugger, email_delivery_route,
-    email_dkim_ensure, email_dkim_route, email_forwarding_route, email_forwarding_save,
-    email_limits, email_limits_delete, email_limits_save, email_mailscanner,
-    email_mailscanner_enable, email_marketing, email_marketing_list, email_marketing_recipient,
-    email_marketing_send, email_mta_sts_push_cf, email_mta_sts_route, email_mta_sts_save,
-    email_password, email_password_save, email_pattern_fwd, email_pattern_fwd_apply,
-    email_pattern_fwd_delete, email_pattern_fwd_save, email_plus, email_plus_save, email_queue,
+    email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
+    email_dkim_ensure, email_dkim_route, email_filters_delete, email_filters_route,
+    email_filters_save, email_forwarding_apply, email_forwarding_delete, email_forwarding_route,
+    email_forwarding_save, email_limits, email_limits_delete, email_limits_save,
+    email_lists_apply, email_lists_create, email_lists_delete, email_lists_member_add,
+    email_lists_member_delete, email_lists_route, email_mailscanner, email_mailscanner_enable,
+    email_marketing, email_marketing_list, email_marketing_recipient, email_marketing_send,
+    email_mta_sts_push_cf, email_mta_sts_route, email_mta_sts_save, email_password,
+    email_password_save, email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete,
+    email_pattern_fwd_save, email_plus, email_plus_save, email_queue,
     email_queue_delete, email_queue_delete_all, email_queue_flush, email_rspamd,
     email_rspamd_enable, email_spamassassin, email_spamassassin_enable, email_webmail_app_route,
     email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
@@ -1462,6 +1466,20 @@ async fn main() -> std::io::Result<()> {
             .service(email_create_route)
             .service(email_forwarding_route)
             .service(email_forwarding_save)
+            .service(email_forwarding_delete)
+            .service(email_forwarding_apply)
+            .service(email_autoresponders_route)
+            .service(email_autoresponders_save)
+            .service(email_autoresponders_delete)
+            .service(email_filters_route)
+            .service(email_filters_save)
+            .service(email_filters_delete)
+            .service(email_lists_route)
+            .service(email_lists_create)
+            .service(email_lists_member_add)
+            .service(email_lists_member_delete)
+            .service(email_lists_delete)
+            .service(email_lists_apply)
             .service(email_catchall_route)
             .service(email_catchall_save)
             .service(email_dkim_route)

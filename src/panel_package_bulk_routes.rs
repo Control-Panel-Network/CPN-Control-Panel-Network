@@ -45,7 +45,7 @@ fn parse_optional_limit(raw: &str, field: &str) -> Result<Option<i64>, String> {
     }
     let value = trimmed
         .parse::<i64>()
-        .map_err(|_| format!("{field} must be a number (0 or -1 = unlimited)"))?;
+        .map_err(|_| format!("{field} must be a number (-1 = unlimited; 0 = none)"))?;
     Ok(Some(crate::packages::normalize_limit(value)))
 }
 

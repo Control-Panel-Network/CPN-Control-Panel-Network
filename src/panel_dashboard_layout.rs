@@ -3,7 +3,7 @@
 use crate::panel_user_prefs::{UserUiPrefs, load_user_ui_prefs, save_user_ui_prefs};
 
 pub const DEFAULT_DASH_WIDGETS: [&str; 6] =
-    ["sites", "stats", "gauges", "tools", "health", "activity"];
+    ["stats", "sites", "gauges", "tools", "health", "activity"];
 
 pub fn is_known_widget(id: &str) -> bool {
     DEFAULT_DASH_WIDGETS.contains(&id)
@@ -17,10 +17,29 @@ pub fn normalize_dash_widgets(ids: &[String]) -> Vec<String> {
             out.push(key);
         }
     }
-    for def in DEFAULT_DASH_WIDGETS {
-        if !out.iter().any(|x| x == def) {
-            out.push(def.to_string());
+    // Insert any missing stock widgets at their default relative position so
+    // Statistics cannot fall off the bottom of a custom layout unnoticed.
+    for (idx, def) in DEFAULT_DASH_WIDGETS.iter().enumerate() {
+        if out.iter().any(|x| x == *def) {
+            continue;
         }
+        let insert_at = out
+            .iter()
+            .enumerate()
+            .filter_map(|(i, id)| {
+                DEFAULT_DASH_WIDGETS
+                    .iter()
+                    .position(|d| d == id)
+                    .filter(|&pos| pos > idx)
+                    .map(|_| i)
+            })
+            .next()
+            .unwrap_or(out.len());
+        out.insert(insert_at, (*def).to_string());
+    }
+    // Hard guarantee: Statistics is always present.
+    if !out.iter().any(|x| x == "stats") {
+        out.insert(0, "stats".into());
     }
     out
 }
@@ -241,17 +260,14 @@ mod tests {
             "Activity".into(),
             "gauges".into(),
         ]);
-        assert_eq!(
-            got,
-            vec![
-                "activity".to_string(),
-                "gauges".into(),
-                "sites".into(),
-                "stats".into(),
-                "tools".into(),
-                "health".into()
-            ]
-        );
+        assert!(got.contains(&"stats".to_string()));
+        assert!(got.contains(&"sites".to_string()));
+        assert!(got.contains(&"tools".to_string()));
+        assert!(got.contains(&"health".to_string()));
+        assert_eq!(got.iter().filter(|id| *id == "activity").count(), 1);
+        assert_eq!(got.iter().filter(|id| *id == "gauges").count(), 1);
+        assert!(!got.iter().any(|id| id == "nope"));
+        assert_eq!(got[0], "stats");
     }
 
     #[test]
@@ -260,13 +276,14 @@ mod tests {
             save_dashboard_layout("Admin", &["health".into(), "activity".into()], Some(true))
                 .unwrap();
             let prefs = load_user_ui_prefs("Admin");
-            assert_eq!(prefs.dashboard_widgets[0], "health");
+            assert!(prefs.dashboard_widgets.contains(&"health".to_string()));
+            assert!(prefs.dashboard_widgets.contains(&"stats".to_string()));
             assert!(prefs.activity_board_open);
             restore_dashboard_layout("Admin").unwrap();
             let prefs = load_user_ui_prefs("Admin");
             assert!(prefs.dashboard_widgets.is_empty());
             assert!(!prefs.activity_board_open);
-            assert_eq!(load_dashboard_widgets("Admin")[0], "sites");
+            assert_eq!(load_dashboard_widgets("Admin")[0], "stats");
         });
     }
 }

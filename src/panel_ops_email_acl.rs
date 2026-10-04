@@ -16,19 +16,13 @@ fn redirect_tool(path: &str, notice: Option<&str>, error: Option<&str>) -> HttpR
     }
 }
 
-pub fn require_email_admin_csrf(
+/// CSRF + same-origin for signed-in users (domain ownership enforced in ops).
+pub fn require_email_csrf(
     http: &HttpRequest,
     user: &str,
     form: &HashMap<String, String>,
     redirect: &str,
 ) -> Option<HttpResponse> {
-    if !is_panel_admin(user) {
-        return Some(redirect_tool(
-            redirect,
-            None,
-            Some("Only the panel admin can change email tools"),
-        ));
-    }
     if !same_origin_ok(http) {
         return Some(redirect_tool(
             redirect,
@@ -45,4 +39,20 @@ pub fn require_email_admin_csrf(
         ));
     }
     None
+}
+
+pub fn require_email_admin_csrf(
+    http: &HttpRequest,
+    user: &str,
+    form: &HashMap<String, String>,
+    redirect: &str,
+) -> Option<HttpResponse> {
+    if !is_panel_admin(user) {
+        return Some(redirect_tool(
+            redirect,
+            None,
+            Some("Only the panel admin can change email tools"),
+        ));
+    }
+    require_email_csrf(http, user, form, redirect)
 }
