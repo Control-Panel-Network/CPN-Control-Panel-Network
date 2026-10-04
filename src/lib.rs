@@ -129,6 +129,7 @@ pub mod panel_error_messages;
 pub mod panel_feature_flags;
 pub mod panel_feature_gate;
 pub mod panel_feedback;
+pub mod panel_feedback_mail;
 pub mod panel_firewall_store;
 pub mod panel_flash_guard;
 pub mod panel_footer_chrome;
