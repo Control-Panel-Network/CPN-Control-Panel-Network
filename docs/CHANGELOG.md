@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dashboard Database disk meter**: Statistics shows Database disk as Used X of Y like Storage. The denominator is the package `database_disk_mb` quota (`-1` = unlimited / ∞, `0` = none allowed). Existing packages without the field default to unlimited. Used is live MariaDB schema size for owned databases.
 
+### Fixed
+
+- **Light theme sidebar contrast**: Light mode now resets readable ink/surface tokens after Theme Store CSS and locks sidebar labels, nested items, search, IP card, and footer icons to dark-on-light. Dark mode tile pairing is unchanged.
+- **Feedback mail delivery**: `POST /api/panel/feedback` uses the owner-configured outbound provider (`smtp.json`) when present, otherwise local Postfix. Local injection uses a dedicated `127.0.0.1:2525` listener (no SASL, no virtual-mailbox reject) so support inboxes are not treated as hosted aliases. The send path waits for that listener after `postfix reload` instead of falling back to port 25. Failures return a precise operator error (no secrets).
+
 ## [1.2.0] - 04/10/2026
 
 Minor release after v1.1.2. Ships package limit schema 2 (`0` hard zero, `-1` unlimited), Dashboard Statistics first, LIVE email provisioning meters, Apps lifecycle, sidebar Feedback, Ubuntu 26.04 OpenLiteSpeed install/repair, and File Manager hardening.

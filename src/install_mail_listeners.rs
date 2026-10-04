@@ -152,9 +152,55 @@ pub fn append_cpn_mail_listeners(raw: &str) -> Option<String> {
     Some(format!("{base}{extra}"))
 }
 
+/// True when the CPN panel-outbound injector (127.0.0.1:2525) is present.
+pub fn master_cf_has_panel_outbound(raw: &str) -> bool {
+    master_cf_has_active(raw, "127.0.0.1:2525")
+}
+
+fn strip_cpn_panel_outbound_block(raw: &str) -> String {
+    const MARKER: &str = "# CPN panel outbound";
+    if let Some(idx) = raw.find(MARKER) {
+        return format!("{}\n", raw[..idx].trim_end());
+    }
+    raw.to_string()
+}
+
+/// Loopback smtpd for panel Feedback/reset mail: permit 127.0.0.1 and do not
+/// treat remote support inboxes as hosted virtual mailboxes.
+pub fn append_cpn_panel_outbound(raw: &str) -> Option<String> {
+    if master_cf_has_panel_outbound(raw) {
+        let has_unindented = raw
+            .lines()
+            .any(|line| line == "-o syslog_name=postfix/panel-out");
+        if !has_unindented {
+            return None;
+        }
+    }
+    let base = strip_cpn_panel_outbound_block(raw);
+    let extra = r#"
+# CPN panel outbound (Feedback and system mail; no SASL)
+127.0.0.1:2525 inet n - n - - smtpd
+  -o syslog_name=postfix/panel-out
+  -o smtpd_tls_security_level=none
+  -o smtpd_sasl_auth_enable=no
+  -o smtpd_reject_unlisted_recipient=no
+  -o smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination
+  -o smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination
+  -o virtual_alias_maps=
+  -o virtual_alias_domains=
+  -o virtual_mailbox_maps=
+  -o virtual_mailbox_domains=
+  -o local_recipient_maps=
+"#;
+    Some(format!("{base}{extra}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{append_cpn_mail_listeners, master_cf_has_smtps, master_cf_has_submission};
+    use super::{
+        append_cpn_mail_listeners, append_cpn_panel_outbound, master_cf_has_panel_outbound,
+        master_cf_has_smtps, master_cf_has_submission,
+    };
 
     #[test]
     fn commented_vendor_submission_does_not_count() {
@@ -204,5 +250,16 @@ mod tests {
                 .any(|l| l == "-o syslog_name=postfix/submission")
         );
         assert!(append_cpn_mail_listeners(&updated).is_none());
+    }
+
+    #[test]
+    fn panel_outbound_listener_relays_without_virtual_maps() {
+        let raw = "smtp inet n - n - - smtpd\n";
+        let updated = append_cpn_panel_outbound(raw).expect("append panel outbound");
+        assert!(master_cf_has_panel_outbound(&updated));
+        assert!(updated.contains("127.0.0.1:2525"));
+        assert!(updated.contains("\n  -o virtual_alias_maps=\n"));
+        assert!(updated.contains("smtpd_reject_unlisted_recipient=no"));
+        assert!(append_cpn_panel_outbound(&updated).is_none());
     }
 }

@@ -118,51 +118,117 @@ html[data-color-mode="dark"] .sidebar nav a.nav-tile .nav-chevron,
 "#
 }
 
-/// Last-in style block: keep sidebar nav tile background + label colors paired
-/// for both personal color modes, even when a Theme Store package sets --ink.
+/// Last-in style block: keep sidebar AND body text readable in both color modes.
+/// Theme Store packages may set pale --ink; never leave white-on-light labels.
 pub fn sidebar_nav_contrast_styles() -> &'static str {
     r#"
-/* Sidebar nav contrast lock (must follow design/theme CSS). */
+/* Contrast lock (must follow design/theme CSS). */
+html[data-color-mode="light"] {
+  --canvas:#ffffff; --surface:#e8edf4; --surface-soft:#f4f6fa;
+  --ink:#111318; --muted:#3f4a5a; --hairline:#c5cdd8;
+}
+html[data-color-mode="light"] body,
+html[data-color-mode="light"] .panel-layout {
+  background:var(--surface); color:var(--ink);
+}
+html[data-color-mode="light"] .sidebar {
+  background:#eef1f6; color:#111318; border-right-color:#c5cdd8;
+}
+html[data-color-mode="light"] .sidebar .panel-brand,
+html[data-color-mode="light"] .sidebar .panel-brand span {
+  color:#111318;
+}
+html[data-color-mode="light"] .sidebar-search-field,
+html[data-color-mode="light"] .sidebar-search-results,
+html[data-color-mode="light"] .host-status,
+html[data-color-mode="light"] .server-summary {
+  background:#ffffff; border:1px solid #c5cdd8; color:#111318;
+}
+html[data-color-mode="light"] .sidebar-search-field input {
+  color:#111318; background:transparent;
+}
+html[data-color-mode="light"] .sidebar-search-field input::placeholder {
+  color:#5b6573; opacity:1;
+}
+html[data-color-mode="light"] .sidebar-search-field svg,
+html[data-color-mode="light"] .host-status-row,
+html[data-color-mode="light"] .server-summary span {
+  color:#3f4a5a;
+}
+html[data-color-mode="light"] .host-status-row strong,
+html[data-color-mode="light"] .server-summary strong,
+html[data-color-mode="light"] .cpn-ip-blur__toggle {
+  color:#0b4a8a;
+}
+html[data-color-mode="light"] .footer-icon-btn,
+html[data-color-mode="light"] .theme-toggle,
+html[data-color-mode="light"] .sidebar-footer .logout {
+  color:#3f4a5a;
+}
+html[data-color-mode="light"] .footer-icon-btn:hover,
+html[data-color-mode="light"] .theme-toggle:hover,
+html[data-color-mode="light"] .sidebar-footer .logout:hover {
+  color:#111318; background:#dce3ee;
+}
+html[data-color-mode="light"] .panel-main,
+html[data-color-mode="light"] .section-card,
+html[data-color-mode="light"] .status-card,
+html[data-color-mode="light"] .activity-card,
+html[data-color-mode="light"] .dashboard-heading h1,
+html[data-color-mode="light"] .status-card h2,
+html[data-color-mode="light"] .section-card h2 {
+  color:#111318;
+}
 html[data-color-mode="light"] body .sidebar nav a.nav-tile,
 html[data-color-mode="light"] body .sidebar .nav-parent.nav-tile,
 html[data-color-mode="light"] body .sidebar .nav-child-btn,
 html[data-color-mode="light"] .sidebar nav a.nav-tile,
 html[data-color-mode="light"] .sidebar .nav-parent.nav-tile,
-html[data-color-mode="light"] .sidebar .nav-child-btn {
+html[data-color-mode="light"] .sidebar .nav-child-btn,
+html[data-color-mode="light"] .sidebar nav a.nav-tile > span:not(.nav-icon),
+html[data-color-mode="light"] .sidebar .nav-parent.nav-tile > span:not(.nav-icon),
+html[data-color-mode="light"] .sidebar .nav-child-btn span {
   background:#fff;
-  border-color:#e0e0e0;
-  color:#1d1d1f;
-  box-shadow:0 1px 2px rgba(29,29,31,.05);
+  border-color:#c5cdd8;
+  color:#111318;
+  box-shadow:0 1px 2px rgba(17,19,24,.06);
 }
 html[data-color-mode="light"] body .sidebar nav a.nav-tile:hover,
 html[data-color-mode="light"] body .sidebar .nav-parent.nav-tile:hover,
 html[data-color-mode="light"] body .sidebar .nav-child-btn:hover,
 html[data-color-mode="light"] .sidebar nav a.nav-tile:hover,
 html[data-color-mode="light"] .sidebar .nav-parent.nav-tile:hover,
-html[data-color-mode="light"] .sidebar .nav-child-btn:hover {
-  background:#f8fbff;
-  border-color:#c9d8ef;
-  color:#0066cc;
+html[data-color-mode="light"] .sidebar .nav-child-btn:hover,
+html[data-color-mode="light"] .sidebar nav a.nav-tile:hover > span:not(.nav-icon),
+html[data-color-mode="light"] .sidebar .nav-child-btn:hover span {
+  background:#f4f8ff;
+  border-color:#9ec2f0;
+  color:#0b4a8a;
 }
 html[data-color-mode="light"] body .sidebar nav a.nav-tile.active,
 html[data-color-mode="light"] body .sidebar .nav-parent-active,
 html[data-color-mode="light"] body .sidebar .nav-child-btn.active,
 html[data-color-mode="light"] .sidebar nav a.nav-tile.active,
 html[data-color-mode="light"] .sidebar .nav-parent-active,
-html[data-color-mode="light"] .sidebar .nav-child-btn.active {
-  background:#e7f1ff;
-  border-color:#9ec2f0;
-  color:#0066cc;
+html[data-color-mode="light"] .sidebar .nav-child-btn.active,
+html[data-color-mode="light"] .sidebar nav a.nav-tile.active > span:not(.nav-icon),
+html[data-color-mode="light"] .sidebar .nav-child-btn.active span {
+  background:#d9e8fc;
+  border-color:#6ea8e8;
+  color:#0b4a8a;
 }
 html[data-color-mode="light"] body .sidebar .nav-parent .nav-chevron,
 html[data-color-mode="light"] body .sidebar nav a.nav-tile .nav-chevron,
 html[data-color-mode="light"] .sidebar .nav-parent .nav-chevron,
 html[data-color-mode="light"] .sidebar nav a.nav-tile .nav-chevron {
-  color:#6e6e73;
+  color:#3f4a5a;
 }
 html[data-color-mode="light"] body .sidebar nav a,
 html[data-color-mode="light"] .sidebar nav a {
-  color:#1d1d1f;
+  color:#111318;
+}
+html[data-color-mode="light"] .nav-section-label {
+  background:#1d4ed8; color:#fff;
 }
 html[data-color-mode="dark"] body .sidebar nav a.nav-tile,
 html[data-color-mode="dark"] body .sidebar .nav-parent.nav-tile,

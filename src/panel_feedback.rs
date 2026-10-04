@@ -5,7 +5,7 @@ use crate::account_mgmt::find_account;
 use crate::auth_api::panel_user_from_request;
 use crate::http_helpers::VERSION;
 use crate::installer::AppState;
-use crate::mail_outbound::{OutboundMessage, resolve_outbound_settings, send_mail_with_settings};
+use crate::mail_outbound::{OutboundMessage, send_mail_with_fallback};
 use crate::panel_session::session_secret;
 use crate::panel_site_tools_security::same_origin_ok;
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -209,15 +209,6 @@ pub async fn panel_feedback_submit(
         message,
         &safe_host(&http),
     );
-    let settings = match resolve_outbound_settings(Some(RECIPIENTS[0])) {
-        Ok(settings) => settings,
-        Err(_) => {
-            return json_error(
-                actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
-                "Mail delivery is not configured on this panel.",
-            );
-        }
-    };
 
     for recipient in RECIPIENTS {
         let outbound = OutboundMessage {
@@ -225,15 +216,9 @@ pub async fn panel_feedback_submit(
             subject: format!("[CPN Feedback] {subject}"),
             body: mail_body.clone(),
         };
-        if let Err(error) = send_mail_with_settings(&settings, &outbound) {
-            eprintln!(
-                "panel_feedback: mail delivery failed for a configured recipient: {}",
-                error
-            );
-            return json_error(
-                actix_web::http::StatusCode::BAD_GATEWAY,
-                "Feedback could not be delivered. Try again later.",
-            );
+        if let Err(error) = send_mail_with_fallback(&outbound) {
+            eprintln!("panel_feedback: mail delivery failed for a configured recipient");
+            return json_error(actix_web::http::StatusCode::BAD_GATEWAY, &error);
         }
     }
 
