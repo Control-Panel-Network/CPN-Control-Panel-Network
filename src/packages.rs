@@ -37,7 +37,7 @@ pub enum QuotaResource {
 pub struct Package {
     pub id: String,
     pub name: String,
-    /// Disk quota in MB (`-1` = unlimited; `0` is accepted and stored as `-1`).
+    /// Disk quota in MB (`-1` = unlimited; `0` = none allowed).
     pub disk_mb: i64,
     /// Monthly bandwidth quota in MB (`-1` = unlimited), metered from site access logs.
     pub bandwidth_mb: i64,
