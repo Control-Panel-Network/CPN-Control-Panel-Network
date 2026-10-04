@@ -5,6 +5,7 @@ use crate::account_mgmt::find_account;
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::mail_outbound::{OutboundMessage, send_mail_with_fallback};
+use crate::panel_feedback_host::resolve_feedback_panel_host;
 use crate::panel_feedback_mail::{FeedbackMailInput, build_feedback_mail, html_escape};
 use crate::panel_session::session_secret;
 use crate::panel_site_tools_security::same_origin_ok;
@@ -97,19 +98,10 @@ fn json_error(status: actix_web::http::StatusCode, message: &str) -> HttpRespons
     json_response(status, serde_json::json!({ "ok": false, "error": message }))
 }
 
-fn safe_host(http: &HttpRequest) -> String {
+fn request_host_header(http: &HttpRequest) -> Option<&str> {
     http.headers()
         .get("host")
         .and_then(|value| value.to_str().ok())
-        .filter(|value| {
-            !value.is_empty()
-                && value.len() <= 253
-                && !value
-                    .chars()
-                    .any(|ch| ch.is_control() || ch == '/' || ch == '\\')
-        })
-        .unwrap_or("unknown")
-        .to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -172,13 +164,14 @@ pub async fn panel_feedback_submit(
     } else {
         sender_email.trim()
     };
+    let panel_host = resolve_feedback_panel_host(request_host_header(&http), state.bind_port);
     let (plain_body, html_body) = build_feedback_mail(&FeedbackMailInput {
         username: &username,
         sender_email,
         category,
         subject,
         message,
-        host: &safe_host(&http),
+        host: &panel_host,
         sent_at_unix: now_unix(),
     });
 

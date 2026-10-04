@@ -1,9 +1,10 @@
 //! Outbound mail helpers. Prefer configured SMTP; fall back to local Postfix.
 
+use crate::panel_feedback_mail::{FEEDBACK_LOGO_CID, feedback_logo_png};
 use crate::postfix_fallback::{postfix_is_ready, postfix_local_smtp};
 use crate::smtp_settings::{SmtpSettings, SmtpTlsMode, load_smtp};
 use lettre::message::header::{ContentTransferEncoding, ContentType};
-use lettre::message::{Body, Mailbox, Message, MultiPart, SinglePart};
+use lettre::message::{Attachment, Body, Mailbox, Message, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{SmtpTransport, Transport};
@@ -187,6 +188,9 @@ fn apply_from_name(mut mailbox: Mailbox, name: Option<&str>) -> Mailbox {
 fn encode_body(raw: Vec<u8>, preferred: ContentTransferEncoding) -> Result<Body, String> {
     Body::new_with_encoding(raw, preferred)
         .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::EightBit))
+        // Prefer QP over base64 so HTML (and cid: refs) stay inspectable when 8bit
+        // rejects long lines.
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::QuotedPrintable))
         .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::Base64))
         .map_err(|_| "Could not encode email body".to_string())
 }
@@ -235,26 +239,42 @@ fn build_outbound_message(
     let Some(html) = html_body.filter(|value| !value.trim().is_empty()) else {
         return build_plain_message(from, to, subject, body);
     };
+    let plain_part = text_part(
+        body,
+        mail_content_type("text/plain; charset=utf-8")?,
+        ContentTransferEncoding::QuotedPrintable,
+    )?;
+    // 8bit keeps tags and CSS readable for clients that sniff
+    // HTML before quoted-printable decode. Falls back in encode_body.
+    let html_part = text_part(
+        html,
+        mail_content_type("text/html; charset=utf-8")?,
+        ContentTransferEncoding::EightBit,
+    )?;
+    let alternative = if html.contains(&format!("cid:{FEEDBACK_LOGO_CID}")) {
+        MultiPart::alternative().singlepart(plain_part).multipart(
+            MultiPart::related()
+                .singlepart(html_part)
+                .singlepart(feedback_logo_inline_part()?),
+        )
+    } else {
+        MultiPart::alternative()
+            .singlepart(plain_part)
+            .singlepart(html_part)
+    };
     Message::builder()
         .from(from)
         .to(to)
         .subject(sanitize_header(subject))
-        .multipart(
-            MultiPart::alternative()
-                .singlepart(text_part(
-                    body,
-                    mail_content_type("text/plain; charset=utf-8")?,
-                    ContentTransferEncoding::QuotedPrintable,
-                )?)
-                .singlepart(text_part(
-                    html,
-                    mail_content_type("text/html; charset=utf-8")?,
-                    // 8bit keeps tags and CSS readable for clients that sniff
-                    // HTML before quoted-printable decode. Falls back in encode_body.
-                    ContentTransferEncoding::EightBit,
-                )?),
-        )
+        .multipart(alternative)
         .map_err(|error| format!("Could not build email: {error}"))
+}
+
+fn feedback_logo_inline_part() -> Result<SinglePart, String> {
+    Ok(Attachment::new_inline(FEEDBACK_LOGO_CID.to_string()).body(
+        feedback_logo_png().to_vec(),
+        mail_content_type("image/png")?,
+    ))
 }
 
 fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
@@ -474,5 +494,51 @@ mod tests {
             "HTML tags must appear decoded in the raw message:\n{raw}"
         );
         assert!(!raw.to_ascii_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn multipart_feedback_mail_embeds_logo_cid() {
+        let from: Mailbox =
+            apply_from_name("cpn-panel@localhost".parse().unwrap(), Some("CPN Panel"));
+        let to: Mailbox = "info@example.com".parse().unwrap();
+        let html = concat!(
+            "<img src=\"cid:cpn-logo@cpn\" alt=\"CPN Control Panel Network\">",
+            "<p>logo mail</p>"
+        );
+        let email = build_outbound_message(
+            from,
+            to,
+            "[CPN Feedback] logo",
+            "CPN Panel feedback\r\n",
+            Some(html),
+        )
+        .unwrap();
+        let raw = String::from_utf8_lossy(&email.formatted()).to_string();
+        let lower = raw.to_ascii_lowercase();
+        assert!(lower.contains("multipart/alternative"));
+        assert!(lower.contains("multipart/related"));
+        assert!(
+            lower.contains("content-id: <cpn-logo@cpn>")
+                || lower.contains("content-id:<cpn-logo@cpn>")
+        );
+        assert!(lower.contains("image/png"));
+        assert!(lower.contains("content-disposition: inline"));
+        // HTML body may be 8bit, quoted-printable, or base64 depending on encoder fallback.
+        // Base64 of a longer HTML document will not contain the base64 of the bare cid
+        // substring; match the fragment seen for `<img src="cid:cpn-logo@cpn" ...>`.
+        let has_cid_ref = raw.contains("cid:cpn-logo@cpn")
+            || raw.contains("cid:cpn-logo=40cpn")
+            || raw.contains("ImNpZDpjcG4tbG9nb0BjcG4i")
+            || raw.contains("Y2lkOmNwbi1sb2dvQGNwbg");
+        assert!(
+            has_cid_ref,
+            "expected cid logo reference in HTML part, got:\n{raw}"
+        );
+        let related_at = lower.find("multipart/related").expect("related");
+        let html_at = lower.find("text/html").expect("html");
+        assert!(
+            html_at > related_at,
+            "HTML should live under multipart/related"
+        );
     }
 }

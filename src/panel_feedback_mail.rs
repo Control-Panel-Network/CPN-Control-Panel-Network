@@ -2,6 +2,14 @@
 
 use crate::http_helpers::VERSION;
 
+/// CID for the inline CPN brand mark PNG (`multipart/related`).
+pub const FEEDBACK_LOGO_CID: &str = "cpn-logo@cpn";
+
+/// Panel brand mark PNG used in Feedback HTML (same asset as `/cpn-brand-mark` family).
+pub fn feedback_logo_png() -> &'static [u8] {
+    include_bytes!("../installer-ui/src/assets/cpn-brand-mark.png")
+}
+
 pub(crate) fn html_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -123,17 +131,12 @@ pub fn feedback_html_body(input: &FeedbackMailInput<'_>) -> String {
 <td style="background-color:#161F2B;background:#161F2B;padding:22px 24px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
 <tr>
-<td width="44" valign="middle" style="width:44px;">
-<table role="presentation" cellspacing="0" cellpadding="0"><tr>
-<td style="width:36px;height:36px;background-color:#006CFA;background:#006CFA;color:#ffffff;font-size:14px;font-weight:800;text-align:center;line-height:36px;">CPN</td>
-</tr></table>
+<td width="48" valign="middle" style="width:48px;">
+<img src="cid:cpn-logo@cpn" alt="CPN Control Panel Network" width="40" height="40" style="display:block;width:40px;height:40px;border:0;outline:none;text-decoration:none;border-radius:8px;">
 </td>
 <td valign="middle" style="padding-left:12px;">
 <div style="font-size:20px;line-height:1.2;font-weight:800;color:#ffffff;">CPN Panel</div>
 <div style="font-size:12px;color:#9db4d0;padding-top:4px;">Operator feedback</div>
-</td>
-<td align="right" valign="middle">
-<span style="display:inline-block;padding:6px 12px;background-color:#006CFA;background:#006CFA;color:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.08em;">HTML MESSAGE</span>
 </td>
 </tr>
 </table>
@@ -221,7 +224,9 @@ mod tests {
         assert!(!html.contains("multipart"));
         assert!(html.contains("CPN Panel"));
         assert!(html.contains("Operator feedback"));
-        assert!(html.contains("HTML MESSAGE"));
+        assert!(html.contains("cid:cpn-logo@cpn"));
+        assert!(html.contains("alt=\"CPN Control Panel Network\""));
+        assert!(!html.contains("HTML MESSAGE"));
         assert!(html.contains("04/10/2026 21:40 UTC"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
         assert!(!html.contains('\u{2014}'));
@@ -234,10 +239,19 @@ mod tests {
         assert!(html.contains("role=\"presentation\""));
         assert!(html.contains("background-color:#161F2B"));
         assert!(html.contains("background-color:#006CFA"));
-        assert!(html.contains("HTML MESSAGE"));
         assert!(html.contains("<h1"));
         assert!(html.contains("width:8px;background-color:#006CFA"));
+        assert!(html.contains("cid:cpn-logo@cpn"));
+        assert!(!html.contains("HTML MESSAGE"));
         assert!(!html.contains("<script"));
         assert!(!html.contains("javascript:"));
+    }
+
+    #[test]
+    fn feedback_logo_png_is_embedded_asset() {
+        let bytes = feedback_logo_png();
+        assert!(bytes.len() > 64);
+        assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']));
+        assert_eq!(FEEDBACK_LOGO_CID, "cpn-logo@cpn");
     }
 }
