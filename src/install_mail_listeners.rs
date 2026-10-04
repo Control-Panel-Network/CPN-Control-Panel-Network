@@ -167,12 +167,19 @@ fn strip_cpn_panel_outbound_block(raw: &str) -> String {
 
 /// Loopback smtpd for panel Feedback/reset mail: permit 127.0.0.1 and do not
 /// treat remote support inboxes as hosted virtual mailboxes.
+///
+/// smtpd `-o virtual_alias_maps=` only affects the SMTP dialogue. cleanup still
+/// applies main.cf virtual maps unless this listener uses its own cleanup
+/// service (`panelout-cleanup`) with empty virtual maps. Without that, Feedback
+/// to a domain listed in `virtual_alias_domains` (with no matching mailbox)
+/// bounces 5.1.1 after the panel already reported success.
 pub fn append_cpn_panel_outbound(raw: &str) -> Option<String> {
     if master_cf_has_panel_outbound(raw) {
         let has_unindented = raw
             .lines()
             .any(|line| line == "-o syslog_name=postfix/panel-out");
-        if !has_unindented {
+        let has_cleanup_override = raw.contains("cleanup_service_name=panelout-cleanup");
+        if !has_unindented && has_cleanup_override {
             return None;
         }
     }
@@ -184,6 +191,8 @@ pub fn append_cpn_panel_outbound(raw: &str) -> Option<String> {
   -o smtpd_tls_security_level=none
   -o smtpd_sasl_auth_enable=no
   -o smtpd_reject_unlisted_recipient=no
+  -o cleanup_service_name=panelout-cleanup
+  -o receive_override_options=no_address_mappings,no_unknown_recipient_checks
   -o smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination
   -o smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination
   -o virtual_alias_maps=
@@ -191,6 +200,15 @@ pub fn append_cpn_panel_outbound(raw: &str) -> Option<String> {
   -o virtual_mailbox_maps=
   -o virtual_mailbox_domains=
   -o local_recipient_maps=
+panelout-cleanup unix n - n - 0 cleanup
+  -o virtual_alias_maps=
+  -o virtual_alias_domains=
+  -o virtual_mailbox_maps=
+  -o virtual_mailbox_domains=
+  -o canonical_maps=
+  -o sender_canonical_maps=
+  -o recipient_canonical_maps=
+
 "#;
     Some(format!("{base}{extra}"))
 }
@@ -258,8 +276,25 @@ mod tests {
         let updated = append_cpn_panel_outbound(raw).expect("append panel outbound");
         assert!(master_cf_has_panel_outbound(&updated));
         assert!(updated.contains("127.0.0.1:2525"));
-        assert!(updated.contains("\n  -o virtual_alias_maps=\n"));
+        assert!(updated.contains("cleanup_service_name=panelout-cleanup"));
+        assert!(updated.contains("\npanelout-cleanup unix n - n - 0 cleanup\n"));
         assert!(updated.contains("smtpd_reject_unlisted_recipient=no"));
+        assert!(updated.contains("receive_override_options=no_address_mappings"));
+        assert!(append_cpn_panel_outbound(&updated).is_none());
+    }
+
+    #[test]
+    fn panel_outbound_rewrites_missing_cleanup_override() {
+        let raw = "\
+# CPN panel outbound (Feedback and system mail; no SASL)
+127.0.0.1:2525 inet n - n - - smtpd
+  -o syslog_name=postfix/panel-out
+  -o virtual_alias_maps=
+";
+        let updated = append_cpn_panel_outbound(raw).expect("rewrite for cleanup override");
+        assert!(updated.contains("cleanup_service_name=panelout-cleanup"));
+        assert!(updated.contains("panelout-cleanup unix"));
+        assert_eq!(updated.matches("127.0.0.1:2525").count(), 1);
         assert!(append_cpn_panel_outbound(&updated).is_none());
     }
 }
