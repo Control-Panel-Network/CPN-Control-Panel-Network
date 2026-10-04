@@ -52,7 +52,10 @@ pub(crate) fn resolve_feedback_panel_host_with(
 }
 
 fn push_unique(candidates: &mut Vec<String>, value: String) {
-    if !candidates.iter().any(|existing| existing.eq_ignore_ascii_case(&value)) {
+    if !candidates
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&value))
+    {
         candidates.push(value);
     }
 }
