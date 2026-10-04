@@ -72,6 +72,7 @@ pub async fn websites_pretty_manage(
     if matches!(
         domain.as_str(),
         "manage"
+            | "list"
             | "create"
             | "delete"
             | "suspend"
