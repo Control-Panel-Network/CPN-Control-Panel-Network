@@ -14,6 +14,10 @@
     if(extra) u+='&'+extra;
     return u;
   }
+  function goTo(href){
+    // Prefer assign over setting location.href so URL navigation stays explicit.
+    window.location.assign(href);
+  }
   function selected(){
     return Array.prototype.map.call(document.querySelectorAll('.fm-check:checked'), function(el){return el.value;});
   }
@@ -24,9 +28,6 @@
     document.getElementById('fm-archive-name').value=(extra&&extra.archive_name)||'';
     document.getElementById('fm-names-csv').value=((extra&&extra.names)||selected()).join('\n');
     document.getElementById('fm-op').submit();
-  }
-  function esc(s){
-    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   }
   function showStatus(msg, isErr){
     var el=document.getElementById('fm-list-status');
@@ -40,25 +41,58 @@
     if(path==='/'||path==='') return '/'+name;
     return path.replace(/\/$/,'')+'/'+name;
   }
+  function setRowsMessage(tb, message){
+    while(tb.firstChild) tb.removeChild(tb.firstChild);
+    var tr=document.createElement('tr');
+    var td=document.createElement('td');
+    td.colSpan=5;
+    td.textContent=message;
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  }
   function renderRows(data){
     var tb=document.getElementById('fm-rows');
     if(!tb) return;
     var entries=data.entries||[];
+    while(tb.firstChild) tb.removeChild(tb.firstChild);
     if(!entries.length){
-      tb.innerHTML='<tr><td colspan="5">This directory is empty.</td></tr>';
+      setRowsMessage(tb, 'This directory is empty.');
       return;
     }
-    var html='';
     for(var i=0;i<entries.length;i++){
       var ent=entries[i];
-      var nameCell=ent.is_dir
-        ? '<a href="'+pageHref(childPath(ent.basename))+'">'+esc(ent.label)+'</a>'
-        : esc(ent.label);
-      var size=ent.is_dir?'-':(Math.round((ent.size||0)/102.4)/10).toFixed(1);
-      html+='<tr><td><input type="checkbox" class="fm-check" value="'+esc(ent.basename)+'"></td>';
-      html+='<td class="fm-name">'+nameCell+'</td><td>'+size+'</td><td>'+esc(ent.mtime)+'</td><td><code>'+esc(ent.mode)+'</code></td></tr>';
+      var tr=document.createElement('tr');
+      var tdCheck=document.createElement('td');
+      var cb=document.createElement('input');
+      cb.type='checkbox';
+      cb.className='fm-check';
+      cb.value=String(ent.basename==null?'':ent.basename);
+      tdCheck.appendChild(cb);
+      var tdName=document.createElement('td');
+      tdName.className='fm-name';
+      if(ent.is_dir){
+        var a=document.createElement('a');
+        a.setAttribute('href', pageHref(childPath(ent.basename)));
+        a.textContent=String(ent.label==null?'':ent.label);
+        tdName.appendChild(a);
+      } else {
+        tdName.textContent=String(ent.label==null?'':ent.label);
+      }
+      var tdSize=document.createElement('td');
+      tdSize.textContent=ent.is_dir?'-':(Math.round((ent.size||0)/102.4)/10).toFixed(1);
+      var tdMtime=document.createElement('td');
+      tdMtime.textContent=String(ent.mtime==null?'':ent.mtime);
+      var tdMode=document.createElement('td');
+      var code=document.createElement('code');
+      code.textContent=String(ent.mode==null?'':ent.mode);
+      tdMode.appendChild(code);
+      tr.appendChild(tdCheck);
+      tr.appendChild(tdName);
+      tr.appendChild(tdSize);
+      tr.appendChild(tdMtime);
+      tr.appendChild(tdMode);
+      tb.appendChild(tr);
     }
-    tb.innerHTML=html;
   }
   function loadList(){
     var url=listUrl+(listUrl.indexOf('?')>=0?'&':'?')+qs+'path='+encodeURIComponent(path);
@@ -78,7 +112,8 @@
       .then(function(data){
         if(!data||data.ok===false){
           showStatus((data&&data.error)||'Could not list this directory.', true);
-          document.getElementById('fm-rows').innerHTML='<tr><td colspan="5">Listing unavailable.</td></tr>';
+          var tbFail=document.getElementById('fm-rows');
+          if(tbFail) setRowsMessage(tbFail, 'Listing unavailable.');
           return;
         }
         var notes=[];
@@ -90,7 +125,7 @@
       .catch(function(err){
         showStatus(err&&err.message?err.message:'Could not list this directory.', true);
         var tb=document.getElementById('fm-rows');
-        if(tb) tb.innerHTML='<tr><td colspan="5">Listing failed.</td></tr>';
+        if(tb) setRowsMessage(tb, 'Listing failed.');
       });
   }
   var selAll=document.getElementById('fm-select-all');
@@ -112,7 +147,7 @@
     var files=this.files; if(!files||!files.length) return;
     var i=0;
     function next(){
-      if(i>=files.length){ location.href=pageHref(path,'notice='+encodeURIComponent('Upload finished')); return; }
+      if(i>=files.length){ goTo(pageHref(path,'notice='+encodeURIComponent('Upload finished'))); return; }
       var f=files[i++];
       var reader=new FileReader();
       reader.onload=function(){
@@ -175,7 +210,7 @@
       }
       if(op==='edit'){
         if(names.length!==1){ alert('Select exactly one file to edit'); return; }
-        location.href=pageHref(path,'edit='+encodeURIComponent(childPath(names[0])));
+        goTo(pageHref(path,'edit='+encodeURIComponent(childPath(names[0]))));
         return;
       }
       if(op==='compress'){
