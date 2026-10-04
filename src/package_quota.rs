@@ -200,7 +200,6 @@ fn limit_reached(used: u64, limit: i64) -> bool {
 }
 
 /// Reject when the account would exceed its package quota for `resource`.
-
 pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), String> {
     let usage = usage_for_account(username)?;
 
@@ -254,7 +253,6 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
 }
 
 /// Enforce domain + FQDN + soft disk checks before creating a website or subdomain.
-
 pub fn require_site_create_allowed(owner: &str, domain_raw: &str) -> Result<(), String> {
     require_quota(owner, QuotaResource::Domains)?;
 
