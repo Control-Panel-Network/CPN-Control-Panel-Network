@@ -1,6 +1,6 @@
 //! One Store catalog: host packages + community plugins in a single filtered grid.
 
-use crate::apps::{AppStatus, list_apps};
+use crate::apps::{AppId, AppStatus, list_apps};
 use crate::host_packages_catalog::{
     filter_host_packages, host_categories, host_package_is_featured, meta_for,
 };
@@ -19,10 +19,11 @@ enum UnifiedItem<'a> {
     Catalog(&'a CatalogEntry),
 }
 
-fn sort_key(item: &UnifiedItem<'_>) -> String {
+fn sort_key(item: &UnifiedItem<'_>) -> (u8, String) {
     match item {
-        UnifiedItem::Host(s) => s.id.label().to_ascii_lowercase(),
-        UnifiedItem::Catalog(e) => e.name.to_ascii_lowercase(),
+        UnifiedItem::Host(s) if s.id == AppId::Tachyon => (0, s.id.label().to_ascii_lowercase()),
+        UnifiedItem::Host(s) => (1, s.id.label().to_ascii_lowercase()),
+        UnifiedItem::Catalog(e) => (1, e.name.to_ascii_lowercase()),
     }
 }
 
@@ -172,7 +173,7 @@ pub(crate) fn unified_category_pills(
 }
 
 fn attr_escape(value: &str) -> String {
-    html_escape(value).replace('\n', " ").replace('\r', " ")
+    html_escape(value).replace(['\n', '\r'], " ")
 }
 
 fn with_store_attrs(
@@ -401,6 +402,7 @@ mod tests {
         assert!(ids.contains(&AppId::Snappymail));
         assert!(ids.contains(&AppId::Email));
         assert!(!ids.contains(&AppId::Mariadb));
+        assert_eq!(ids.first().copied(), Some(AppId::Tachyon));
     }
 
     #[test]
