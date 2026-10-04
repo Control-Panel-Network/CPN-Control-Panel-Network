@@ -27,6 +27,9 @@ pub enum PackageCommands {
         emails: i64,
         #[arg(long, default_value_t = 1000)]
         databases: i64,
+        /// Database disk quota in MB (`-1` unlimited)
+        #[arg(long, default_value_t = -1)]
+        database_disk_mb: i64,
         #[arg(long, default_value_t = 1000)]
         ftp_accounts: i64,
         #[arg(long, default_value_t = true)]
@@ -50,6 +53,8 @@ pub enum PackageCommands {
         emails: i64,
         #[arg(long)]
         databases: i64,
+        #[arg(long)]
+        database_disk_mb: Option<i64>,
         #[arg(long)]
         ftp_accounts: i64,
         #[arg(long)]
@@ -81,7 +86,7 @@ pub enum PackageCommands {
 fn print_package_line(pkg: &crate::packages::Package) {
     // Quota counts only. Omit ftp_accounts on stdout (CodeQL cleartext-logging).
     println!(
-        "{}\tid={}\tdisk={}\tbw={}\tdomains={}\temails={}\tdbs={}\tfqdn={}",
+        "{}\tid={}\tdisk={}\tbw={}\tdomains={}\temails={}\tdbs={}\tdbdisk={}\tfqdn={}",
         pkg.name,
         pkg.id,
         format_limit_display(pkg.disk_mb, "MB"),
@@ -89,6 +94,7 @@ fn print_package_line(pkg: &crate::packages::Package) {
         format_limit_display(pkg.domains, ""),
         format_limit_display(pkg.emails, ""),
         format_limit_display(pkg.databases, ""),
+        format_limit_display(pkg.database_disk_mb, "MB"),
         pkg.fqdn_enabled
     );
 }
@@ -119,6 +125,7 @@ pub fn run(
             domains,
             emails,
             databases,
+            database_disk_mb,
             ftp_accounts,
             fqdn_enabled,
             notes,
@@ -133,6 +140,7 @@ pub fn run(
                     domains,
                     emails,
                     databases,
+                    database_disk_mb,
                     ftp_accounts,
                     fqdn_enabled,
                     notes,
@@ -151,6 +159,7 @@ pub fn run(
             domains,
             emails,
             databases,
+            database_disk_mb,
             ftp_accounts,
             fqdn_enabled,
             notes,
@@ -169,6 +178,7 @@ pub fn run(
                     domains,
                     emails,
                     databases,
+                    database_disk_mb: database_disk_mb.unwrap_or(existing.database_disk_mb),
                     ftp_accounts,
                     fqdn_enabled,
                     notes,

@@ -81,6 +81,8 @@ pub struct PackageForm {
     #[serde(default)]
     databases: String,
     #[serde(default)]
+    database_disk_mb: String,
+    #[serde(default)]
     ftp_accounts: String,
     #[serde(default)]
     mailing_lists: String,
@@ -136,6 +138,7 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         domains: collect_form_value(pairs, "domains"),
         emails: collect_form_value(pairs, "emails"),
         databases: collect_form_value(pairs, "databases"),
+        database_disk_mb: collect_form_value(pairs, "database_disk_mb"),
         ftp_accounts: collect_form_value(pairs, "ftp_accounts"),
         mailing_lists: collect_form_value(pairs, "mailing_lists"),
         autoresponders: collect_form_value(pairs, "autoresponders"),
@@ -159,6 +162,7 @@ impl PackageForm {
             domains: parse_limit(&self.domains, "domains")?,
             emails: parse_limit(&self.emails, "emails")?,
             databases: parse_limit(&self.databases, "databases")?,
+            database_disk_mb: parse_limit_or_default(&self.database_disk_mb, "database_disk_mb")?,
             ftp_accounts: parse_limit(&self.ftp_accounts, "ftp_accounts")?,
             mailing_lists: parse_limit_or_default(&self.mailing_lists, "mailing_lists")?,
             autoresponders: parse_limit_or_default(&self.autoresponders, "autoresponders")?,

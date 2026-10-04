@@ -156,6 +156,11 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.subdomains_used)
         .unwrap_or_else(|| subdomains_used(&sites));
     let db_disk = usage.as_ref().map(|u| u.database_disk_bytes).unwrap_or(0);
+    let db_disk_limit = usage
+        .as_ref()
+        .map(|u| u.database_disk_mb_limit)
+        .or_else(|| pkg.as_ref().map(|p| p.database_disk_mb))
+        .unwrap_or(UNLIMITED);
     let bw_bytes = crate::package_bandwidth::account_month_bytes(username);
     let disk_used = disk_bytes_used(&sites);
     let blurb = if is_panel_admin(username) {
@@ -173,12 +178,7 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.package_id.as_str())
         .or_else(|| pkg.as_ref().map(|p| p.id.as_str()))
         .unwrap_or("pkg-default");
-    let db_disk_html = format!(
-        "Used {}",
-        html_escape(&crate::panel_storage_fmt::format_bytes_for_user(
-            username, db_disk
-        ))
-    );
+    let db_disk_html = bytes_html(username, db_disk, db_disk_limit);
     let rows = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}",
         row("Websites", &count_html(domains_used, domains_limit)),
@@ -205,7 +205,7 @@ pub fn dashboard_stats_html(username: &str) -> String {
     </div>
   </div>
   <ul class="cpn-stats-list">{rows}</ul>
-  <p class="muted" style="margin-top:12px;">Databases is account count versus the package limit. Database disk is live MariaDB schema size for owned databases (informational; not a separate package count limit). Storage is website home disk usage.</p>
+  <p class="muted" style="margin-top:12px;">Databases is account count versus the package limit. Database disk is live MariaDB schema size versus the package Database disk (MB) quota (-1 = unlimited). Storage is website home disk usage.</p>
 </article>"#,
         blurb = html_escape(blurb),
         pkg = html_escape(pkg_name),
@@ -258,6 +258,29 @@ mod tests {
             assert!(html.contains("Email filters"), "{html}");
             assert!(html.contains("Database disk"), "{html}");
             assert!(html.contains("Databases"), "{html}");
+            let db_row = html
+                .split(r#"cpn-stats-label">Database disk</span>"#)
+                .nth(1)
+                .and_then(|rest| rest.split("</li>").next())
+                .unwrap_or("");
+            assert!(
+                db_row.contains(" of "),
+                "Database disk must include a denominator: {db_row}"
+            );
+            assert!(
+                db_row.contains("∞"),
+                "Default package Database disk quota is unlimited: {db_row}"
+            );
+            assert!(
+                !db_row.contains(">Used 0 KB<") && !db_row.ends_with("Used 0 KB"),
+                "Database disk must not be used-only: {db_row}"
+            );
+            assert!(
+                html.contains("Database disk (MB)")
+                    || html.contains("versus the package Database disk"),
+                "{html}"
+            );
+            assert!(!html.contains("informational; not a separate"), "{html}");
             assert!(html.contains("Assigned package"), "{html}");
             assert!(html.contains("pkg-default"), "{html}");
             assert!(html.contains("∞"), "{html}");

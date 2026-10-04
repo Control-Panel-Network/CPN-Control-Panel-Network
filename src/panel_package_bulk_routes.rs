@@ -102,6 +102,8 @@ pub struct PackageBulkForm {
     #[serde(default)]
     databases: String,
     #[serde(default)]
+    database_disk_mb: String,
+    #[serde(default)]
     ftp_accounts: String,
     #[serde(default)]
     fqdn_enabled: String,
@@ -192,6 +194,10 @@ pub async fn packages_bulk(
                     domains: parse_optional_limit(&form.domains, "domains")?,
                     emails: parse_optional_limit(&form.emails, "emails")?,
                     databases: parse_optional_limit(&form.databases, "databases")?,
+                    database_disk_mb: parse_optional_limit(
+                        &form.database_disk_mb,
+                        "database_disk_mb",
+                    )?,
                     ftp_accounts: parse_optional_limit(&form.ftp_accounts, "ftp_accounts")?,
                     fqdn_enabled: match form.fqdn_enabled.trim() {
                         "" => None,

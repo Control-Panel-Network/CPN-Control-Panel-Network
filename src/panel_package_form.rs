@@ -49,6 +49,7 @@ pub(crate) fn package_form(
         domains,
         emails,
         dbs,
+        db_disk,
         ftp,
         mailing_lists,
         autoresponders,
@@ -71,6 +72,7 @@ pub(crate) fn package_form(
             p.domains.to_string(),
             p.emails.to_string(),
             p.databases.to_string(),
+            p.database_disk_mb.to_string(),
             p.ftp_accounts.to_string(),
             p.mailing_lists.to_string(),
             p.autoresponders.to_string(),
@@ -89,6 +91,7 @@ pub(crate) fn package_form(
             "20".into(),
             "1000".into(),
             "1000".into(),
+            "-1".into(),
             "1000".into(),
             "1000".into(),
             "1000".into(),
@@ -178,11 +181,12 @@ pub(crate) fn package_form(
       </label>
       <fieldset class="cpn-check-fieldset" style="margin:0;padding:12px;border:1px solid var(--border,#d0d5dd);border-radius:8px;">
         <legend>Package limits</legend>
-        <p class="muted" style="margin:0 0 10px;">Same meters as Account Statistics: Websites, Mailboxes, Databases, FTP accounts, Storage, Bandwidth, Alias domains, Sub-domains, mailing lists, autoresponders, forwarders, and email filters. Storage and Bandwidth are entered in MB. Saving this package updates dashboard meters for accounts assigned to it.</p>
+        <p class="muted" style="margin:0 0 10px;">Same meters as Account Statistics: Websites, Mailboxes, Databases, Database disk, FTP accounts, Storage, Bandwidth, Alias domains, Sub-domains, mailing lists, autoresponders, forwarders, and email filters. Storage, Bandwidth, and Database disk are entered in MB. Saving this package updates dashboard meters for accounts assigned to it.</p>
         <div style="display:grid;gap:12px;">
           {websites_field}
           {mailboxes_field}
           {dbs_field}
+          {db_disk_field}
           {ftp_field}
           {storage_field}
           {bw_field}
@@ -214,6 +218,7 @@ pub(crate) fn package_form(
         websites_field = limit_field("domains", "Websites", &domains, unlimited_hint),
         mailboxes_field = limit_field("emails", "Mailboxes", &emails, unlimited_hint),
         dbs_field = limit_field("databases", "Databases", &dbs, unlimited_hint),
+        db_disk_field = limit_field("database_disk_mb", "Database disk (MB)", &db_disk, mb_hint),
         ftp_field = limit_field(
             "ftp_accounts",
             "FTP accounts",

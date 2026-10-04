@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dashboard Database disk meter**: Statistics shows Database disk as Used X of Y like Storage. The denominator is the package `database_disk_mb` quota (`-1` = unlimited / ∞, `0` = none allowed). Existing packages without the field default to unlimited. Used is live MariaDB schema size for owned databases.
+
 ## [1.2.0] - 04/10/2026
 
 Minor release after v1.1.2. Ships package limit schema 2 (`0` hard zero, `-1` unlimited), Dashboard Statistics first, LIVE email provisioning meters, Apps lifecycle, sidebar Feedback, Ubuntu 26.04 OpenLiteSpeed install/repair, and File Manager hardening.
