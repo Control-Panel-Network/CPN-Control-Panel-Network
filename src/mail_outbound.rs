@@ -462,12 +462,8 @@ mod tests {
         assert!(lower.contains("text/plain"));
         assert!(lower.contains("text/html"));
         assert!(lower.contains("charset=utf-8"));
-        let plain_at = lower
-            .find("text/plain")
-            .expect("plain part");
-        let html_at = lower
-            .find("text/html")
-            .expect("html part");
+        let plain_at = lower.find("text/plain").expect("plain part");
+        let html_at = lower.find("text/html").expect("html part");
         assert!(
             html_at > plain_at,
             "HTML alternative must be last so clients prefer it"
