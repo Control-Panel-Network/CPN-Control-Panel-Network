@@ -188,6 +188,9 @@ fn apply_from_name(mut mailbox: Mailbox, name: Option<&str>) -> Mailbox {
 fn encode_body(raw: Vec<u8>, preferred: ContentTransferEncoding) -> Result<Body, String> {
     Body::new_with_encoding(raw, preferred)
         .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::EightBit))
+        // Prefer QP over base64 so HTML (and cid: refs) stay inspectable when 8bit
+        // rejects long lines.
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::QuotedPrintable))
         .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::Base64))
         .map_err(|_| "Could not encode email body".to_string())
 }
@@ -521,8 +524,11 @@ mod tests {
         assert!(lower.contains("image/png"));
         assert!(lower.contains("content-disposition: inline"));
         // HTML body may be 8bit, quoted-printable, or base64 depending on encoder fallback.
+        // Base64 of a longer HTML document will not contain the base64 of the bare cid
+        // substring; match the fragment seen for `<img src="cid:cpn-logo@cpn" ...>`.
         let has_cid_ref = raw.contains("cid:cpn-logo@cpn")
             || raw.contains("cid:cpn-logo=40cpn")
+            || raw.contains("ImNpZDpjcG4tbG9nb0BjcG4i")
             || raw.contains("Y2lkOmNwbi1sb2dvQGNwbg");
         assert!(
             has_cid_ref,
