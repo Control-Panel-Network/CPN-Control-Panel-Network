@@ -117,27 +117,79 @@ fn read_cargo_version(root: &Path) -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+async fn run_checked(
+    program: &str,
+    args: &[&str],
+    cwd: &Path,
+    env: &[(&str, &str)],
+) -> Result<(), String> {
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (key, value) in env {
+        cmd.env(key, value);
+    }
+    let output = cmd
+        .output()
+        .await
+        .map_err(|error| format!("{program} failed to start: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim()
+        } else {
+            stdout.trim()
+        };
+        return Err(format!(
+            "{program} {} failed: {}",
+            args.join(" "),
+            detail.chars().take(600).collect::<String>()
+        ));
+    }
+    Ok(())
+}
+
+async fn build_installer_ui(state: &AppState, root: &Path) -> Result<(), String> {
+    let ui = root.join("installer-ui");
+    let dist_index = ui.join("dist").join("index.html");
+    if dist_index.is_file() {
+        return Ok(());
+    }
+    require_cmd("npm")?;
+    state
+        .progress("installing", 40, "Building installer UI (npm)")
+        .await;
+    run_checked("npm", &["ci"], &ui, &[]).await?;
+    run_checked("npm", &["run", "build"], &ui, &[]).await?;
+    if !dist_index.is_file() {
+        return Err("installer-ui build did not produce dist/index.html".into());
+    }
+    Ok(())
+}
+
 async fn cargo_build_release(state: &AppState, root: &Path, git_sha: &str) -> Result<(), String> {
+    build_installer_ui(state, root).await?;
     state
         .progress("installing", 45, "Building panel from stable tip (cargo)")
         .await;
-    let output = Command::new("cargo")
-        .args(["build", "--release", "--locked"])
-        .env("CPN_GIT_SHA", git_sha)
-        .current_dir(root)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|error| format!("cargo build failed to start: {error}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "cargo build --release failed: {}",
-            stderr.trim().chars().take(400).collect::<String>()
-        ));
-    }
+    run_checked(
+        "cargo",
+        &["build", "--release", "--locked"],
+        root,
+        &[("CPN_GIT_SHA", git_sha)],
+    )
+    .await
+    .map_err(|error| {
+        error.replacen(
+            "cargo build --release --locked failed",
+            "cargo build --release failed",
+            1,
+        )
+    })?;
     Ok(())
 }
 
