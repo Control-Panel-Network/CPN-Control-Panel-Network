@@ -81,6 +81,7 @@ pub mod install_webmail_runtime;
 pub mod installer;
 pub mod installer_transitions;
 pub mod listen_port;
+pub mod litespeed_packages;
 pub mod litespeed_stack;
 pub mod litespeed_webadmin_users;
 pub mod login_next;

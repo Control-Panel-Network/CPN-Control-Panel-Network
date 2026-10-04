@@ -1,6 +1,6 @@
 # Platform Support and Existing Hosts
 
-CPN is **alpha-only** today (published line **0.2.x-alpha**; no stable 1.x product release). Support tiers describe how much validation a platform currently receives; they do not imply identical maturity for every web, mail, database, or plugin combination.
+CPN's current stable line is **1.1.x** (first stable release: **v1.0.0**). Support tiers describe how much validation a platform currently receives; they do not imply identical maturity for every web, mail, database, or plugin combination.
 
 ## Operating-system support
 
@@ -8,7 +8,7 @@ CPN is **alpha-only** today (published line **0.2.x-alpha**; no stable 1.x produ
 |---|---|---|---|
 | AlmaLinux 9 / 10 | Supported | RPM / dnf | Primary EL targets |
 | Rocky Linux 9 | Supported | RPM / dnf | Automated Rocky smoke path |
-| Ubuntu 22.04 / 24.04 / 26.04 (including 26.04.1) | Supported | DEB / apt | Primary apt targets; 26.04 uses suite `resolute` |
+| Ubuntu 22.04 / 24.04 / 26.04 (including 26.04.1) | Supported | DEB / apt | Primary apt targets; 26.04 uses LiteSpeed's native `resolute` suite and verified scoped apt keyring |
 | AlmaLinux 8 | Partial | dnf recipes | Maintenance-era EL8; no native release RPM while its OpenSSL 1.1 toolchain cannot build CPN's WebAuthn dependency |
 | Rocky Linux 8 / 10 | Partial | RPM / dnf | EL8 uses recipes only; EL10 has a native RPM; less CPN smoke evidence |
 | RHEL 8 / 9 / 10 | Partial | RPM / dnf | EL8 uses recipes only; EL9/10 use matching RPMs and require working subscriptions/repos |
@@ -39,6 +39,8 @@ Current behavior includes:
 
 - Nginx, Caddy, and OpenLiteSpeed recipes detect an existing selected server and reuse it instead of deliberately installing a second copy.
 - Existing Caddy/LiteSpeed repository files that CPN must change are backed up through the install journal.
+- OpenLiteSpeed apt setup verifies the official signing-key fingerprints before enabling the source. The key is scoped with apt `signed-by`, not trusted globally.
+- System Repair can refresh the repository/keyring and restart an existing OpenLiteSpeed install. Web-server switching remains an explicit installer action.
 - OpenLiteSpeed configuration changes are journaled, and CPN avoids deleting administrator-owned systemd units while adopting an existing installation.
 - MariaDB defaults detect an existing Oracle MySQL service and refuse to install MariaDB until that conflict is cleared.
 - PHP setup keeps a sufficiently new existing PHP installation instead of blindly switching module streams.

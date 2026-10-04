@@ -190,12 +190,15 @@ pub(crate) fn server_recipes(guest: &GuestOs, server: ServerEngine) -> Vec<Comma
     }
 }
 
+fn openlitespeed_apt_repository_text(codename: &str) -> String {
+    format!(
+        "deb [signed-by=/usr/share/keyrings/litespeed-archive-keyring.gpg] https://rpms.litespeedtech.com/debian/ {codename} main\n\
+         #deb [signed-by=/usr/share/keyrings/litespeed-archive-keyring.gpg] https://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
+    )
+}
+
 /// Write the LiteSpeed repository without executing a remote shell script.
 pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), String> {
-    if web_server_present(ServerEngine::Openlitespeed) {
-        return Ok(());
-    }
-
     match guest.family {
         PackageFamily::Dnf => {
             let major = guest.major;
@@ -228,14 +231,11 @@ pub(crate) fn prepare_openlitespeed_repository(guest: &GuestOs) -> Result<(), St
         PackageFamily::Apt => {
             let codename = guest.apt_codename().ok_or_else(|| {
                 format!(
-                    "No LiteSpeed apt suite mapping for {} (need Ubuntu 22/24 or Debian 12/13)",
+                    "No LiteSpeed apt suite mapping for {} (need Ubuntu 22/24/26 or Debian 12/13)",
                     guest.label
                 )
             })?;
-            let repository = format!(
-                "deb https://rpms.litespeedtech.com/debian/ {codename} main\n\
-                 #deb https://rpms.litespeedtech.com/edge/debian/ {codename} main\n"
-            );
+            let repository = openlitespeed_apt_repository_text(codename);
             crate::install_journal::write_file_tracked(
                 "server",
                 Path::new("/etc/apt/sources.list.d/lst_debian_repo.list"),
@@ -257,16 +257,51 @@ pub(crate) fn prepare_openlitespeed_apt_command() -> CommandSpec {
         "bash",
         vec![
             "-c",
-            "if test -x /usr/local/lsws/bin/openlitespeed || command -v openlitespeed >/dev/null 2>&1 || command -v lshttpd >/dev/null 2>&1; then echo 'OpenLiteSpeed already installed; skipping repository bootstrap'; exit 0; fi; \
-apt-get update -y && apt-get install -y wget ca-certificates \
-&& (test -s /etc/apt/trusted.gpg.d/lst_debian_repo.gpg || wget -qO /etc/apt/trusted.gpg.d/lst_debian_repo.gpg https://rpms.litespeedtech.com/debian/lst_debian_repo.gpg) \
-&& (test -s /etc/apt/trusted.gpg.d/lst_repo.gpg || wget -qO /etc/apt/trusted.gpg.d/lst_repo.gpg https://rpms.litespeedtech.com/debian/lst_repo.gpg) \
-&& apt-get update -y",
+            "set -eu; \
+repo=/etc/apt/sources.list.d/lst_debian_repo.list; \
+disabled=${repo}.cpn-disabled; \
+keyring=/usr/share/keyrings/litespeed-archive-keyring.gpg; \
+tmpdir=$(mktemp -d /tmp/cpn-litespeed-key.XXXXXX); \
+export GNUPGHOME=\"$tmpdir/gnupg\"; \
+install -d -m 0700 \"$GNUPGHOME\"; \
+restore_repo() { if test -f \"$disabled\" && ! test -f \"$repo\"; then mv \"$disabled\" \"$repo\"; fi; rm -rf \"$tmpdir\"; }; \
+trap restore_repo EXIT HUP INT TERM; \
+if test -f \"$repo\"; then mv -f \"$repo\" \"$disabled\"; fi; \
+apt-get update -y; \
+DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg; \
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --output \"$tmpdir/lst_debian_repo.gpg\" https://rpms.litespeedtech.com/debian/lst_debian_repo.gpg; \
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --output \"$tmpdir/lst_repo.gpg\" https://rpms.litespeedtech.com/debian/lst_repo.gpg; \
+legacy_fingerprints=$(gpg --batch --show-keys --with-colons \"$tmpdir/lst_debian_repo.gpg\" | awk -F: '$1 == \"fpr\" { print $10 }'); \
+current_fingerprints=$(gpg --batch --show-keys --with-colons \"$tmpdir/lst_repo.gpg\" | awk -F: '$1 == \"fpr\" { print $10 }'); \
+case \"$legacy_fingerprints\" in *42259994257E19EB6A91CA853F6F627083084D0E*) ;; *) echo 'LiteSpeed legacy apt key fingerprint verification failed.' >&2; exit 1;; esac; \
+case \"$current_fingerprints\" in *3E892522DB44E1B063D366C5011AA62DEDA1F085*) ;; *) echo 'LiteSpeed apt key fingerprint verification failed.' >&2; exit 1;; esac; \
+install -d -m 0755 /usr/share/keyrings; \
+cat \"$tmpdir/lst_debian_repo.gpg\" \"$tmpdir/lst_repo.gpg\" > \"$tmpdir/litespeed-archive-keyring.gpg\"; \
+install -m 0644 \"$tmpdir/litespeed-archive-keyring.gpg\" \"$keyring\"; \
+if test -f \"$disabled\"; then mv -f \"$disabled\" \"$repo\"; fi; \
+apt-get update -y; \
+trap - EXIT HUP INT TERM; \
+rm -rf \"$tmpdir\"",
         ],
         "Preparing the OpenLiteSpeed apt repository",
         "downloading",
         3,
     )
+}
+
+pub(crate) fn openlitespeed_apt_repository_healthy() -> bool {
+    let source = Path::new("/etc/apt/sources.list.d/lst_debian_repo.list");
+    let keyring = Path::new("/usr/share/keyrings/litespeed-archive-keyring.gpg");
+    std::fs::read_to_string(source)
+        .map(|contents| {
+            contents.contains("signed-by=/usr/share/keyrings/litespeed-archive-keyring.gpg")
+                && contents.contains("https://rpms.litespeedtech.com/debian/")
+        })
+        .unwrap_or(false)
+        && keyring
+            .metadata()
+            .map(|metadata| metadata.is_file() && metadata.len() > 0)
+            .unwrap_or(false)
 }
 
 pub(crate) fn prepare_caddy_repository(guest: &GuestOs) -> Result<(), String> {
@@ -446,3 +481,7 @@ pub(crate) fn apt_update_command() -> CommandSpec {
         39,
     )
 }
+
+#[cfg(test)]
+#[path = "install_recipes_tests.rs"]
+mod tests;
