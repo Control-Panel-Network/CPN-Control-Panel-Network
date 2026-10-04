@@ -78,7 +78,7 @@ pub fn public_mail_error(raw: &str) -> String {
     if lower.contains("invalid smtp from") || lower.contains("invalid recipient") {
         return "Mail From or recipient address is not valid.".into();
     }
-    let mut cleaned = raw.replace('\r', " ").replace('\n', " ");
+    let mut cleaned = raw.replace(['\r', '\n'], " ");
     for needle in ["password=", "password:", "passwd=", "auth "] {
         if let Some(idx) = cleaned.to_ascii_lowercase().find(needle) {
             cleaned.truncate(idx);

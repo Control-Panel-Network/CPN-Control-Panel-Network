@@ -59,7 +59,11 @@ fn master_cf_declares_panel_outbound() -> bool {
 /// Prefers the panel-outbound injector on :2525 (no virtual-mailbox reject).
 /// Falls back to smtpd on :25 only when :2525 is not configured. Never uses :587 (SASL required).
 pub fn postfix_local_smtp(from_address: &str) -> SmtpSettings {
-    let port = if wait_for_panel_outbound_port(20) || master_cf_declares_panel_outbound() {
+    let declared = master_cf_declares_panel_outbound();
+    let port = if port_open("127.0.0.1:2525", 250) {
+        2525
+    } else if declared {
+        let _ = wait_for_panel_outbound_port(20);
         2525
     } else {
         25
