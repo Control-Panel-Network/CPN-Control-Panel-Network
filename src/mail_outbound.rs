@@ -514,10 +514,20 @@ mod tests {
         let lower = raw.to_ascii_lowercase();
         assert!(lower.contains("multipart/alternative"));
         assert!(lower.contains("multipart/related"));
-        assert!(lower.contains("content-id: <cpn-logo@cpn>"));
+        assert!(
+            lower.contains("content-id: <cpn-logo@cpn>")
+                || lower.contains("content-id:<cpn-logo@cpn>")
+        );
         assert!(lower.contains("image/png"));
         assert!(lower.contains("content-disposition: inline"));
-        assert!(raw.contains("cid:cpn-logo@cpn"));
+        // HTML body may be 8bit, quoted-printable, or base64 depending on encoder fallback.
+        let has_cid_ref = raw.contains("cid:cpn-logo@cpn")
+            || raw.contains("cid:cpn-logo=40cpn")
+            || raw.contains("Y2lkOmNwbi1sb2dvQGNwbg");
+        assert!(
+            has_cid_ref,
+            "expected cid logo reference in HTML part, got:\n{raw}"
+        );
         let related_at = lower.find("multipart/related").expect("related");
         let html_at = lower.find("text/html").expect("html");
         assert!(
