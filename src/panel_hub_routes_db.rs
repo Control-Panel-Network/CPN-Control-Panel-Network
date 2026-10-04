@@ -346,6 +346,22 @@ pub async fn databases_phpmyadmin_open(
     }
 }
 
+#[get("/ftp")]
+pub async fn ftp_overview_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "databases",
+        "FTP",
+        &crate::panel_hub_pages_category_overviews::ftp_hub_main(),
+    ))
+}
+
 #[get("/ftp/accounts")]
 pub async fn ftp_accounts_route(
     http: HttpRequest,

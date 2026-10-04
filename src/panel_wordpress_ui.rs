@@ -213,7 +213,7 @@ pub fn wordpress_list_page(
         site_table_rows(&sites)
     } else if sites.is_empty() {
         format!(
-            r#"<p class="empty-state">No WordPress sites match <strong>{}</strong>. <a href="/wordpress">Clear search</a>.</p>"#,
+            r#"<p class="empty-state">No WordPress sites match <strong>{}</strong>. <a href="/wordpress/list">Clear search</a>.</p>"#,
             html_escape(q_raw.unwrap_or("").trim())
         )
     } else {
@@ -252,7 +252,11 @@ pub fn wordpress_list_page(
         err = notice_block("error", error),
         wp_cli_card = wp_cli_status_card(wp_cli),
         count = sites.len(),
-        search = list_search_form("/wordpress", q_raw.unwrap_or("").trim(), "Search by domain"),
+        search = list_search_form(
+            "/wordpress/list",
+            q_raw.unwrap_or("").trim(),
+            "Search by domain"
+        ),
         filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
         rows = rows,
     )
@@ -287,7 +291,7 @@ pub fn wordpress_subsites_list_page(
           <p class="muted">Install WordPress on a CPN sub-domain, or open main WordPress Sites.</p>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
             <a class="btn-primary" href="/wordpress/subsites/install">Install WordPress Sub-site</a>
-            <a class="btn-secondary" href="/wordpress">WordPress Sites</a>
+            <a class="btn-secondary" href="/wordpress/list">WordPress Sites</a>
             <form method="post" action="/wordpress/subsites/scan" class="inline-form">
               <button type="submit" class="btn-secondary">Scan sites</button>
             </form>
@@ -296,7 +300,7 @@ pub fn wordpress_subsites_list_page(
       </div>
       <article class="section-card" style="margin-top:18px;">
         <h2>WordPress sub-sites ({count})</h2>
-        <p class="muted">Sub-domains only. Main WordPress installs are under <a href="/wordpress">WordPress Sites</a>.</p>
+        <p class="muted">Sub-domains only. Main WordPress installs are under <a href="/wordpress/list">WordPress Sites</a>.</p>
         {search}
         {filter_summary}
         {rows}

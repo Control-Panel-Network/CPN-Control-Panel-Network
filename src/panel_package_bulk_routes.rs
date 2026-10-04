@@ -43,10 +43,10 @@ fn parse_optional_limit(raw: &str, field: &str) -> Result<Option<i64>, String> {
     if trimmed.is_empty() {
         return Ok(None);
     }
-    trimmed
+    let value = trimmed
         .parse::<i64>()
-        .map(Some)
-        .map_err(|_| format!("{field} must be a number (-1 for unlimited)"))
+        .map_err(|_| format!("{field} must be a number (-1 = unlimited; 0 = none)"))?;
+    Ok(Some(crate::packages::normalize_limit(value)))
 }
 
 fn parse_bool_flag(raw: &str) -> bool {
@@ -206,6 +206,7 @@ pub async fn packages_bulk(
                     } else {
                         None
                     },
+                    ..Default::default()
                 })
             })() {
                 Ok(patch) => patch,

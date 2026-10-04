@@ -9,7 +9,12 @@ use crate::site_acl::resolve_target_domain;
 #[derive(Subcommand, Debug)]
 pub enum AppCommands {
     /// List app status on this host
-    List,
+    List {
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        subdomain: Option<String>,
+    },
     /// Install an app by name
     Install {
         #[arg(long)]
@@ -18,6 +23,8 @@ pub enum AppCommands {
         domain: Option<String>,
         #[arg(long)]
         subdomain: Option<String>,
+        #[arg(long)]
+        version: Option<String>,
     },
     /// Start a host app service
     Start {
@@ -56,6 +63,50 @@ pub enum AppCommands {
         #[arg(long)]
         name: String,
     },
+    /// Update an app to the latest or selected source version (backup first)
+    #[command(visible_alias = "upgrade")]
+    Update {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Install an older available version (backup first)
+    Downgrade {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        version: String,
+    },
+    /// Restore a prior app backup (`latest` when omitted)
+    Restore {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        backup: Option<String>,
+    },
+    /// List backup restore points for one site app
+    Backups {
+        #[command(subcommand)]
+        command: AppBackupCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AppBackupCommands {
+    /// List available restore points
+    List {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        domain: String,
+    },
 }
 
 fn optional_site(
@@ -82,15 +133,19 @@ pub fn run(
     confirm: impl FnOnce(&str, bool) -> Result<(), String>,
 ) -> Result<(), String> {
     match command {
-        AppCommands::List => list(),
+        AppCommands::List { domain, subdomain } => {
+            let site = optional_site(domain, subdomain)?;
+            list(site.as_deref())
+        }
         AppCommands::Install {
             name,
             domain,
             subdomain,
+            version,
         } => {
             require_root()?;
             let site = optional_site(domain, subdomain)?;
-            install(&name, site.as_deref())
+            install(&name, site.as_deref(), version.as_deref())
         }
         AppCommands::Start { name } => {
             require_root()?;
@@ -139,10 +194,66 @@ pub fn run(
             require_root()?;
             activate(&name)
         }
+        AppCommands::Update {
+            name,
+            domain,
+            version,
+        } => {
+            require_root()?;
+            lifecycle_update(&name, &domain, version.as_deref())
+        }
+        AppCommands::Downgrade {
+            name,
+            domain,
+            version,
+        } => {
+            require_root()?;
+            lifecycle_downgrade(&name, &domain, &version)
+        }
+        AppCommands::Restore {
+            name,
+            domain,
+            backup,
+        } => {
+            require_root()?;
+            lifecycle_restore(&name, &domain, backup.as_deref())
+        }
+        AppCommands::Backups { command } => match command {
+            AppBackupCommands::List { name, domain } => lifecycle_backups(&name, &domain),
+        },
     }
 }
 
-pub fn list() -> Result<(), String> {
+pub fn list(domain: Option<&str>) -> Result<(), String> {
+    if let Some(domain) = domain {
+        let site = crate::sites::load_site(domain)?;
+        for app in [
+            crate::site_app_lifecycle::SiteAppId::Cmsms,
+            crate::site_app_lifecycle::SiteAppId::Redis,
+            crate::site_app_lifecycle::SiteAppId::Node,
+            crate::site_app_lifecycle::SiteAppId::Python,
+        ] {
+            let status = crate::site_app_lifecycle::status(&site, app);
+            println!(
+                "{}\tinstalled={}\tlatest={}\tupdate={}\tbackups={}\tsource={}",
+                app.as_str(),
+                if status.installed_version.is_empty() {
+                    "none"
+                } else {
+                    &status.installed_version
+                },
+                if status.latest_version.is_empty() {
+                    "unavailable"
+                } else {
+                    &status.latest_version
+                },
+                crate::site_app_lifecycle::has_update(&status),
+                status.backups.len(),
+                status.source,
+            );
+        }
+        return Ok(());
+    }
     for status in list_apps() {
         let warn = status
             .warning
@@ -161,7 +272,75 @@ pub fn list() -> Result<(), String> {
     Ok(())
 }
 
-pub fn install(name: &str, domain: Option<&str>) -> Result<(), String> {
+fn lifecycle_update(name: &str, domain: &str, version: Option<&str>) -> Result<(), String> {
+    let app = crate::site_app_lifecycle::SiteAppId::parse(name)?;
+    let site = crate::sites::load_site(domain)?;
+    println!(
+        "{}",
+        crate::site_app_lifecycle::update(&site, app, version)?
+    );
+    Ok(())
+}
+
+fn lifecycle_restore(name: &str, domain: &str, backup: Option<&str>) -> Result<(), String> {
+    let app = crate::site_app_lifecycle::SiteAppId::parse(name)?;
+    let site = crate::sites::load_site(domain)?;
+    println!(
+        "{}",
+        crate::site_app_lifecycle::restore(&site, app, backup)?
+    );
+    Ok(())
+}
+
+fn lifecycle_downgrade(name: &str, domain: &str, version: &str) -> Result<(), String> {
+    let app = crate::site_app_lifecycle::SiteAppId::parse(name)?;
+    let site = crate::sites::load_site(domain)?;
+    println!(
+        "{}",
+        crate::site_app_lifecycle::downgrade(&site, app, version)?
+    );
+    Ok(())
+}
+
+fn lifecycle_backups(name: &str, domain: &str) -> Result<(), String> {
+    let app = crate::site_app_lifecycle::SiteAppId::parse(name)?;
+    let site = crate::sites::load_site(domain)?;
+    let status = crate::site_app_lifecycle::status(&site, app);
+    if status.backups.is_empty() {
+        println!("(no backups)");
+    } else {
+        for backup in status.backups {
+            println!(
+                "{}\tbytes={}\tpath={}",
+                backup.id,
+                backup.bytes,
+                backup.path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn install(name: &str, domain: Option<&str>, version: Option<&str>) -> Result<(), String> {
+    if let Ok(site_app) = crate::site_app_lifecycle::SiteAppId::parse(name)
+        && (domain.is_some() || !matches!(site_app, crate::site_app_lifecycle::SiteAppId::Redis))
+    {
+        let domain = domain
+            .ok_or_else(|| format!("--domain is required when installing site app `{name}`"))?;
+        let site = crate::sites::load_site(domain)?;
+        let mut message = crate::site_app_lifecycle::install(&site, site_app, version)?;
+        if matches!(site_app, crate::site_app_lifecycle::SiteAppId::Redis) {
+            message.push(' ');
+            message.push_str(&crate::apps_site::apply_site_scope(AppId::Redis, domain)?);
+        }
+        println!("{message}");
+        return Ok(());
+    }
+    if version.is_some() {
+        return Err(
+            "--version is supported for cmsms, redis, node, and python site app installs".into(),
+        );
+    }
     let id = AppId::parse(name)?;
     let msg = install_app_on(id, domain)?;
     println!("{msg}");

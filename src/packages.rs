@@ -1,7 +1,8 @@
 //! Hosting packages and per-account quota ACL.
 //!
 //! Registry: `$CPN_DATA_DIR/packages.json` and `$CPN_DATA_DIR/package-assignments.json`.
-//! Unlimited limits use the sentinel `-1`.
+//! Unlimited limits use the sentinel `-1`. `0` means none allowed.
+//! Schema upgrades from v1 migrate historical `0` (old unlimited) to `-1`.
 
 use crate::account::{data_dir, load_bootstrap, now_unix};
 use crate::account_mgmt::list_accounts;
@@ -9,9 +10,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const SCHEMA_VERSION: u32 = 1;
-/// Sentinel for unlimited resource limits.
-pub const UNLIMITED: i64 = -1;
+pub use crate::package_limits::{
+    UNLIMITED, format_limit_display, is_unlimited, migrate_legacy_zero_unlimited, normalize_limit,
+};
+
+/// Schema 2: `0` means hard zero (none allowed); only `-1` is unlimited.
+/// On upgrade from schema 1, stored `0` limits are migrated to `-1`.
+const SCHEMA_VERSION: u32 = 2;
 pub const DEFAULT_PACKAGE_ID: &str = "pkg-default";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,13 +27,17 @@ pub enum QuotaResource {
     FtpAccounts,
     DiskMb,
     BandwidthMb,
+    MailingLists,
+    Autoresponders,
+    Forwarders,
+    EmailFilters,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Package {
     pub id: String,
     pub name: String,
-    /// Disk quota in MB (`-1` = unlimited).
+    /// Disk quota in MB (`-1` = unlimited; `0` = none allowed).
     pub disk_mb: i64,
     /// Monthly bandwidth quota in MB (`-1` = unlimited), metered from site access logs.
     pub bandwidth_mb: i64,
@@ -36,6 +45,18 @@ pub struct Package {
     pub emails: i64,
     pub databases: i64,
     pub ftp_accounts: i64,
+    /// CPN distribution lists (virtual alias expansion).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub mailing_lists: i64,
+    /// Vacation / auto-reply scripts per mailbox.
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub autoresponders: i64,
+    /// Address forwarders (aliases).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub forwarders: i64,
+    /// Sieve email filter rules.
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub email_filters: i64,
     pub fqdn_enabled: bool,
     #[serde(default)]
     pub notes: String,
@@ -68,7 +89,7 @@ struct AssignmentsFile {
     assignments: Vec<PackageAssignment>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PackageInput {
     pub name: String,
     pub disk_mb: i64,
@@ -77,9 +98,34 @@ pub struct PackageInput {
     pub emails: i64,
     pub databases: i64,
     pub ftp_accounts: i64,
+    pub mailing_lists: i64,
+    pub autoresponders: i64,
+    pub forwarders: i64,
+    pub email_filters: i64,
     pub fqdn_enabled: bool,
     pub notes: String,
     pub sidebar_hidden_nav_ids: Vec<String>,
+}
+
+impl Default for PackageInput {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            disk_mb: UNLIMITED,
+            bandwidth_mb: UNLIMITED,
+            domains: UNLIMITED,
+            emails: UNLIMITED,
+            databases: UNLIMITED,
+            ftp_accounts: UNLIMITED,
+            mailing_lists: UNLIMITED,
+            autoresponders: UNLIMITED,
+            forwarders: UNLIMITED,
+            email_filters: UNLIMITED,
+            fqdn_enabled: true,
+            notes: String::new(),
+            sidebar_hidden_nav_ids: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -98,6 +144,16 @@ pub struct PackageUsage {
     pub disk_mb_limit: i64,
     pub bandwidth_mb_used: u64,
     pub bandwidth_mb_limit: i64,
+    pub mailing_lists_used: u64,
+    pub mailing_lists_limit: i64,
+    pub autoresponders_used: u64,
+    pub autoresponders_limit: i64,
+    pub forwarders_used: u64,
+    pub forwarders_limit: i64,
+    pub email_filters_used: u64,
+    pub email_filters_limit: i64,
+    /// Sum of owned MariaDB schema sizes in bytes (informational; not a package count limit).
+    pub database_disk_bytes: u64,
     pub fqdn_enabled: bool,
 }
 
@@ -155,10 +211,19 @@ fn load_packages_file() -> PackagesFile {
             packages: Vec::new(),
         };
     };
-    serde_json::from_str(&raw).unwrap_or(PackagesFile {
+    let mut file: PackagesFile = serde_json::from_str(&raw).unwrap_or(PackagesFile {
         schema_version: SCHEMA_VERSION,
         packages: Vec::new(),
-    })
+    });
+    // Schema 1 treated `0` as unlimited. Migrate those zeros to `-1` once.
+    if file.schema_version < 2 {
+        for pkg in &mut file.packages {
+            migrate_package_zero_unlimited(pkg);
+        }
+        file.schema_version = SCHEMA_VERSION;
+        let _ = save_packages_file(&file);
+    }
+    file
 }
 
 fn save_packages_file(file: &PackagesFile) -> Result<(), String> {
@@ -193,10 +258,23 @@ fn save_assignments_file(file: &AssignmentsFile) -> Result<(), String> {
 fn validate_limit(name: &str, value: i64) -> Result<(), String> {
     if value < UNLIMITED {
         return Err(format!(
-            "{name} must be -1 (unlimited) or a non-negative number"
+            "{name} must be -1 (unlimited), 0 (none), or a positive number"
         ));
     }
     Ok(())
+}
+
+fn migrate_package_zero_unlimited(pkg: &mut Package) {
+    pkg.disk_mb = migrate_legacy_zero_unlimited(pkg.disk_mb);
+    pkg.bandwidth_mb = migrate_legacy_zero_unlimited(pkg.bandwidth_mb);
+    pkg.domains = migrate_legacy_zero_unlimited(pkg.domains);
+    pkg.emails = migrate_legacy_zero_unlimited(pkg.emails);
+    pkg.databases = migrate_legacy_zero_unlimited(pkg.databases);
+    pkg.ftp_accounts = migrate_legacy_zero_unlimited(pkg.ftp_accounts);
+    pkg.mailing_lists = migrate_legacy_zero_unlimited(pkg.mailing_lists);
+    pkg.autoresponders = migrate_legacy_zero_unlimited(pkg.autoresponders);
+    pkg.forwarders = migrate_legacy_zero_unlimited(pkg.forwarders);
+    pkg.email_filters = migrate_legacy_zero_unlimited(pkg.email_filters);
 }
 
 fn validate_input(input: &PackageInput) -> Result<String, String> {
@@ -216,6 +294,10 @@ fn validate_input(input: &PackageInput) -> Result<String, String> {
     validate_limit("emails", input.emails)?;
     validate_limit("databases", input.databases)?;
     validate_limit("ftp_accounts", input.ftp_accounts)?;
+    validate_limit("mailing_lists", input.mailing_lists)?;
+    validate_limit("autoresponders", input.autoresponders)?;
+    validate_limit("forwarders", input.forwarders)?;
+    validate_limit("email_filters", input.email_filters)?;
     if has_control_chars(&input.notes) {
         return Err("Notes cannot include control characters".into());
     }
@@ -282,6 +364,10 @@ fn default_package() -> Package {
         emails: 1000,
         databases: 1000,
         ftp_accounts: 1000,
+        mailing_lists: 1000,
+        autoresponders: 1000,
+        forwarders: 1000,
+        email_filters: 1000,
         fqdn_enabled: true,
         notes: "Created automatically on first boot".into(),
         sidebar_hidden_nav_ids: Vec::new(),
@@ -359,12 +445,16 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
     let pkg = Package {
         id: allocate_package_id(&file),
         name,
-        disk_mb: input.disk_mb,
-        bandwidth_mb: input.bandwidth_mb,
-        domains: input.domains,
-        emails: input.emails,
-        databases: input.databases,
-        ftp_accounts: input.ftp_accounts,
+        disk_mb: normalize_limit(input.disk_mb),
+        bandwidth_mb: normalize_limit(input.bandwidth_mb),
+        domains: normalize_limit(input.domains),
+        emails: normalize_limit(input.emails),
+        databases: normalize_limit(input.databases),
+        ftp_accounts: normalize_limit(input.ftp_accounts),
+        mailing_lists: normalize_limit(input.mailing_lists),
+        autoresponders: normalize_limit(input.autoresponders),
+        forwarders: normalize_limit(input.forwarders),
+        email_filters: normalize_limit(input.email_filters),
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
         sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
@@ -401,12 +491,16 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     } else {
         pkg.name = name;
     }
-    pkg.disk_mb = input.disk_mb;
-    pkg.bandwidth_mb = input.bandwidth_mb;
-    pkg.domains = input.domains;
-    pkg.emails = input.emails;
-    pkg.databases = input.databases;
-    pkg.ftp_accounts = input.ftp_accounts;
+    pkg.disk_mb = normalize_limit(input.disk_mb);
+    pkg.bandwidth_mb = normalize_limit(input.bandwidth_mb);
+    pkg.domains = normalize_limit(input.domains);
+    pkg.emails = normalize_limit(input.emails);
+    pkg.databases = normalize_limit(input.databases);
+    pkg.ftp_accounts = normalize_limit(input.ftp_accounts);
+    pkg.mailing_lists = normalize_limit(input.mailing_lists);
+    pkg.autoresponders = normalize_limit(input.autoresponders);
+    pkg.forwarders = normalize_limit(input.forwarders);
+    pkg.email_filters = normalize_limit(input.email_filters);
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
     pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;
@@ -487,15 +581,6 @@ pub fn package_for_account(username: &str) -> Result<Package, String> {
     get_package(DEFAULT_PACKAGE_ID)
 }
 
-pub fn format_limit_display(limit: i64, unit: &str) -> String {
-    if limit == UNLIMITED {
-        "Unlimited".into()
-    } else if unit.is_empty() {
-        limit.to_string()
-    } else {
-        format!("{limit} {unit}")
-    }
-}
 pub use crate::package_quota::{require_quota, require_site_create_allowed, usage_for_account};
 
 #[cfg(test)]

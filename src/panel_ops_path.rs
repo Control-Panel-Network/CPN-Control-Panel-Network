@@ -1,7 +1,7 @@
 //! Path allowlisting, jail resolution, and directory listing for File Manager.
 
 use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 /// Admin Root File Manager may browse the whole host filesystem (documented risk).
 pub fn allowed_roots() -> Vec<PathBuf> {
@@ -16,11 +16,16 @@ pub fn root_jail() -> PathBuf {
 /// Cap File Manager directory listings so restore-sized trees cannot OOM the panel.
 pub const MAX_LIST_ENTRIES: usize = 2_000;
 
+/// Wall-clock cap for a single directory listing (slow `/home` restore trees, NFS).
+pub const LIST_TIME_BUDGET: Duration = Duration::from_secs(4);
+
 #[derive(Debug, Clone)]
 pub struct DirListResult {
     pub entries: Vec<DirEntryInfo>,
-    /// True when more entries exist than `MAX_LIST_ENTRIES`.
+    /// True when more entries exist than the entry cap (or the time budget ran out).
     pub truncated: bool,
+    /// True when listing stopped because [`LIST_TIME_BUDGET`] elapsed.
+    pub timed_out: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -157,16 +162,36 @@ pub fn list_dir(path: &Path) -> Result<Vec<DirEntryInfo>, String> {
 
 /// Same as [`list_dir`] but reports whether the listing was truncated.
 pub fn list_dir_detailed(path: &Path) -> Result<DirListResult, String> {
+    list_dir_bounded(path, MAX_LIST_ENTRIES, LIST_TIME_BUDGET)
+}
+
+/// Directory listing with an explicit entry cap and wall-clock budget.
+///
+/// Does not recurse. Listing `/` does not walk `/home`. Virtual filesystems
+/// (`proc`, `sys`, `dev`) are shown as stubs at `/` so stating them cannot hang.
+pub fn list_dir_bounded(
+    path: &Path,
+    max_entries: usize,
+    budget: Duration,
+) -> Result<DirListResult, String> {
+    let started = Instant::now();
     let meta = std::fs::symlink_metadata(path)
         .map_err(|e| format!("Cannot stat {}: {e}", path.display()))?;
     if !meta.is_dir() {
         return Err("Not a directory".into());
     }
+    let listing_root = path == Path::new("/");
     let mut entries = Vec::new();
     let mut truncated = false;
+    let mut timed_out = false;
     let rd = std::fs::read_dir(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
     for ent in rd.flatten() {
-        if entries.len() >= MAX_LIST_ENTRIES {
+        if started.elapsed() >= budget {
+            truncated = true;
+            timed_out = true;
+            break;
+        }
+        if entries.len() >= max_entries {
             truncated = true;
             break;
         }
@@ -174,9 +199,12 @@ pub fn list_dir_detailed(path: &Path) -> Result<DirListResult, String> {
         if basename == "." || basename == ".." {
             continue;
         }
+        if listing_root && is_virtual_fs_name(&basename) {
+            entries.push(virtual_stub_entry(basename));
+            continue;
+        }
         let file_type = ent.file_type().ok();
         let is_symlink = file_type.as_ref().map(|t| t.is_symlink()).unwrap_or(false);
-        // Never follow symlinks when stating entries (restore trees / bad mounts).
         let meta = std::fs::symlink_metadata(ent.path()).ok();
         let is_dir = if is_symlink {
             false
@@ -221,7 +249,27 @@ pub fn list_dir_detailed(path: &Path) -> Result<DirListResult, String> {
         (false, true) => std::cmp::Ordering::Greater,
         _ => a.basename.to_lowercase().cmp(&b.basename.to_lowercase()),
     });
-    Ok(DirListResult { entries, truncated })
+    Ok(DirListResult {
+        entries,
+        truncated,
+        timed_out,
+    })
+}
+
+fn is_virtual_fs_name(name: &str) -> bool {
+    matches!(name, "proc" | "sys" | "dev")
+}
+
+fn virtual_stub_entry(basename: String) -> DirEntryInfo {
+    DirEntryInfo {
+        label: basename.clone(),
+        basename,
+        is_dir: true,
+        is_symlink: false,
+        size: 0,
+        mtime_label: "-".into(),
+        mode_label: "d---------".into(),
+    }
 }
 
 fn format_mtime(t: SystemTime) -> String {
@@ -366,6 +414,15 @@ mod tests {
         let listing = list_dir_detailed(&dir).unwrap();
         assert_eq!(listing.entries.len(), MAX_LIST_ENTRIES);
         assert!(listing.truncated);
+        assert!(!listing.timed_out);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn virtual_fs_names_are_recognized() {
+        assert!(is_virtual_fs_name("proc"));
+        assert!(is_virtual_fs_name("sys"));
+        assert!(is_virtual_fs_name("dev"));
+        assert!(!is_virtual_fs_name("home"));
     }
 }

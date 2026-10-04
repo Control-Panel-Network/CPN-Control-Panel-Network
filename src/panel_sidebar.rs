@@ -59,7 +59,7 @@ pub fn search_catalog_json() -> String {
         ("DKIM Manager", "/email/dkim", "email dkim dns"),
         ("Email", "/email", "mail postfix email hub overview"),
         ("Databases", "/databases", "mariadb"),
-        ("FTP", "/ftp/accounts", "sftp jail"),
+        ("FTP", "/ftp", "sftp jail"),
         ("MariaDB Manager", "/databases/manager", "database"),
         ("Backups", "/backups", "restore"),
         ("Create Backup", "/backups/create", "backup"),
@@ -72,7 +72,7 @@ pub fn search_catalog_json() -> String {
         ("Packages", "/packages", "plans hosting"),
         ("Users", "/account/users", "accounts plans"),
         ("Server", "/server", "system services"),
-        ("PHP", "/server/php/extensions", "php extensions configs"),
+        ("PHP", "/server/php", "php extensions configs"),
         ("Manage Services", "/server/services", "systemd services"),
         ("SSL", "/security/ssl", "certificates tls"),
         (

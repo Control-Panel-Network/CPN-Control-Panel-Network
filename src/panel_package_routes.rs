@@ -51,9 +51,10 @@ fn parse_limit(raw: &str, field: &str) -> Result<i64, String> {
     if trimmed.is_empty() {
         return Err(format!("{field} is required"));
     }
-    trimmed
+    let value = trimmed
         .parse::<i64>()
-        .map_err(|_| format!("{field} must be a number (-1 for unlimited)"))
+        .map_err(|_| format!("{field} must be a number (-1 = unlimited; 0 = none)"))?;
+    Ok(crate::packages::normalize_limit(value))
 }
 
 fn parse_bool_flag(raw: &str) -> bool {
@@ -81,6 +82,14 @@ pub struct PackageForm {
     databases: String,
     #[serde(default)]
     ftp_accounts: String,
+    #[serde(default)]
+    mailing_lists: String,
+    #[serde(default)]
+    autoresponders: String,
+    #[serde(default)]
+    forwarders: String,
+    #[serde(default)]
+    email_filters: String,
     #[serde(default)]
     fqdn_enabled: String,
     #[serde(default)]
@@ -124,6 +133,10 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         emails: collect_form_value(pairs, "emails"),
         databases: collect_form_value(pairs, "databases"),
         ftp_accounts: collect_form_value(pairs, "ftp_accounts"),
+        mailing_lists: collect_form_value(pairs, "mailing_lists"),
+        autoresponders: collect_form_value(pairs, "autoresponders"),
+        forwarders: collect_form_value(pairs, "forwarders"),
+        email_filters: collect_form_value(pairs, "email_filters"),
         fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
         notes: collect_form_value(pairs, "notes"),
     };
@@ -141,11 +154,22 @@ impl PackageForm {
             emails: parse_limit(&self.emails, "emails")?,
             databases: parse_limit(&self.databases, "databases")?,
             ftp_accounts: parse_limit(&self.ftp_accounts, "ftp_accounts")?,
+            mailing_lists: parse_limit_or_default(&self.mailing_lists, "mailing_lists")?,
+            autoresponders: parse_limit_or_default(&self.autoresponders, "autoresponders")?,
+            forwarders: parse_limit_or_default(&self.forwarders, "forwarders")?,
+            email_filters: parse_limit_or_default(&self.email_filters, "email_filters")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
             sidebar_hidden_nav_ids,
         })
     }
+}
+
+fn parse_limit_or_default(raw: &str, field: &str) -> Result<i64, String> {
+    if raw.trim().is_empty() {
+        return Ok(crate::packages::UNLIMITED);
+    }
+    parse_limit(raw, field)
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -277,7 +277,7 @@ pub fn tab_files(site: &SiteRecord) -> String {
     )
 }
 
-pub fn tab_apps(site: &SiteRecord) -> String {
+pub fn tab_plugins(site: &SiteRecord) -> String {
     let domain_q = html_escape(&site.domain);
     let mut tiles = String::from(r#"<div class="manage-tile-grid">"#);
     tiles.push_str(&tile(
@@ -332,8 +332,8 @@ mod tests {
     }
 
     #[test]
-    fn apps_tab_is_single_plugins_entry() {
-        let html = tab_apps(&site());
+    fn plugins_tab_is_single_plugins_entry() {
+        let html = tab_plugins(&site());
         assert!(html.contains("<strong>Plugins</strong>"));
         assert!(html.contains("manage-section-title\">Plugins</h2>"));
         assert!(html.contains("/plugins?domain="));

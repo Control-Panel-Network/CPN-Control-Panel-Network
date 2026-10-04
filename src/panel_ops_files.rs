@@ -129,15 +129,54 @@ pub fn create_file(parent: &str, name: &str, jail: &Path) -> Result<String, Stri
     Ok(format!("Created file {}", dest.display()))
 }
 
+/// Known binary / non-text suffixes (basename match, case-insensitive).
+fn binary_kind_hint(path: &Path) -> Option<&'static str> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if name.ends_with(".sqlite-shm") || name.ends_with(".sqlite-wal") {
+        return Some("SQLite WAL/shared-memory");
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "sqlite" | "db" | "mdb" => Some("database"),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "ico" | "bmp" | "svgz" => Some("image"),
+        "mp3" | "mp4" | "wav" | "webm" | "ogg" | "avi" | "mkv" => Some("media"),
+        "zip" | "gz" | "tgz" | "bz2" | "xz" | "7z" | "rar" | "tar" => Some("archive"),
+        "pdf" | "woff" | "woff2" | "ttf" | "otf" | "eot" => Some("document/font"),
+        "exe" | "dll" | "so" | "o" | "a" | "dylib" | "bin" | "wasm" | "class" | "pyc" => {
+            Some("compiled binary")
+        }
+        _ => None,
+    }
+}
+
+fn text_editor_refusal(kind: &str) -> String {
+    format!(
+        "Cannot edit this file in the text editor ({kind}). \
+Only UTF-8 text is editable (for example .md, .html, .php, .js, .css, .log, .conf, .json, .txt), \
+up to {MAX_EDIT_BYTES} bytes. Use a host shell or database tool for binary formats."
+    )
+}
+
 pub fn read_text(path: &str, jail: &Path) -> Result<String, String> {
     let path = resolve(path, jail)?;
     let meta = fs::metadata(&path).map_err(|e| format!("Cannot read: {e}"))?;
     if meta.is_dir() {
         return Err("Cannot edit a directory".into());
     }
+    if let Some(kind) = binary_kind_hint(&path) {
+        return Err(text_editor_refusal(kind));
+    }
     if meta.len() > MAX_EDIT_BYTES {
         return Err(format!(
-            "File too large to edit (max {} bytes)",
+            "File too large to edit (max {} bytes). Open a smaller text file, or edit on the host with an editor suited to large files.",
             MAX_EDIT_BYTES
         ));
     }
@@ -146,9 +185,9 @@ pub fn read_text(path: &str, jail: &Path) -> Result<String, String> {
     f.read_to_end(&mut buf)
         .map_err(|e| format!("read failed: {e}"))?;
     if buf.contains(&0) {
-        return Err("Binary files cannot be edited in the text editor".into());
+        return Err(text_editor_refusal("binary data with null bytes"));
     }
-    String::from_utf8(buf).map_err(|_| "File is not valid UTF-8".to_string())
+    String::from_utf8(buf).map_err(|_| text_editor_refusal("not valid UTF-8"))
 }
 
 pub fn write_text(path: &str, content: &str, jail: &Path) -> Result<String, String> {
@@ -316,5 +355,15 @@ mod tests {
         let t = files_csrf_token("admin");
         assert!(verify_files_csrf("admin", &t));
         assert!(!verify_files_csrf("other", &t));
+    }
+
+    #[test]
+    fn binary_hint_detects_sqlite_shm() {
+        assert_eq!(
+            binary_kind_hint(Path::new("/tmp/logs_1.sqlite-shm")),
+            Some("SQLite WAL/shared-memory")
+        );
+        assert_eq!(binary_kind_hint(Path::new("/tmp/notes.md")), None);
+        assert_eq!(binary_kind_hint(Path::new("/tmp/photo.PNG")), Some("image"));
     }
 }

@@ -268,6 +268,7 @@ pub fn run_heals(heal_id: Option<&str>) -> Vec<HealResult> {
             "email.stack" => email::heal_email_stack(),
             "email.firewall" => email::heal_email_firewall(),
             "firewall" => host::heal_firewall(),
+            "openlitespeed" => host::heal_openlitespeed(),
             "phpmyadmin" => host::heal_phpmyadmin(),
             "docker.engine" => host::heal_docker_engine(),
             "site.preview.chromium" => site_preview::heal_chromium(),

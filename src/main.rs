@@ -30,6 +30,7 @@ use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
     panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
 };
+use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
@@ -48,12 +49,16 @@ use cpn_installer::panel_hub_routes::{
     databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
     docker_create_container, docker_create_route, docker_export_route, docker_home,
     docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
-    docker_logs_route, docker_stack_create, docker_stack_refresh, docker_stacks_route,
-    docker_view_exec, docker_view_route, email_accounts_route, email_bimi_push_cf,
-    email_bimi_route, email_bimi_save, email_catchall_route, email_catchall_save,
-    email_create_route, email_debugger, email_delivery_route, email_dkim_ensure, email_dkim_route,
-    email_forwarding_route, email_forwarding_save, email_limits, email_limits_delete,
-    email_limits_save, email_mailscanner, email_mailscanner_enable, email_marketing,
+    docker_list_route, docker_logs_route, docker_stack_create, docker_stack_refresh,
+    docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
+    email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
+    email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
+    email_catchall_save, email_create_route, email_debugger, email_delivery_route,
+    email_dkim_ensure, email_dkim_route, email_filters_delete, email_filters_route,
+    email_filters_save, email_forwarding_apply, email_forwarding_delete, email_forwarding_route,
+    email_forwarding_save, email_limits, email_limits_delete, email_limits_save, email_lists_apply,
+    email_lists_create, email_lists_delete, email_lists_member_add, email_lists_member_delete,
+    email_lists_route, email_mailscanner, email_mailscanner_enable, email_marketing,
     email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
     email_mta_sts_route, email_mta_sts_save, email_password, email_password_save,
     email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save,
@@ -61,54 +66,56 @@ use cpn_installer::panel_hub_routes::{
     email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
     email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
     email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
-    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_reset, ftp_reset_password_post,
-    ftp_reset_post, login_mfa_session, passkey_delete_post, passkey_login_finish,
-    passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
-    passkey_register_start, passkey_rename_post, security_fail2ban, security_firewall,
-    security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
-    security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
-    security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
-    security_firewall_rule_delete, security_firewall_rules_import, security_firewall_start,
-    security_firewall_stop, security_firewall_trusted_add, security_firewall_trusted_delete,
-    security_malware, security_modsec, security_modsec_rules, security_page, security_rule_packs,
-    security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
-    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
-    security_ssl_mail, security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
+    ftp_reset_password_post, ftp_reset_post, login_mfa_session, passkey_delete_post,
+    passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
+    passkey_register_finish, passkey_register_start, passkey_rename_post, security_fail2ban,
+    security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
+    security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
+    security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
+    security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
+    security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
+    security_firewall_trusted_delete, security_malware, security_modsec, security_modsec_rules,
+    security_page, security_rule_packs, security_ssh, security_ssh_show_review,
+    security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
+    security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_manage,
+    security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
     security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
     server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
     server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
     server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
     server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
     server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
-    server_filemanager_alias, server_files_op, server_files_page, server_files_upload,
+    server_filemanager_alias, server_files_asset_css, server_files_asset_js, server_files_list,
+    server_files_op, server_files_page, server_files_post, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
-    server_litespeed_serial, server_litespeed_tier, server_litespeed_upgrade,
-    server_litespeed_webadmin_url, server_log_view_route, server_logs_route,
-    server_openlitespeed_guest, server_openlitespeed_guest_remove, server_openlitespeed_page,
-    server_openlitespeed_password, server_openlitespeed_reset_cpn, server_packages_page,
-    server_page, server_php_configs, server_php_configs_post, server_php_configs_restart,
-    server_php_configs_save_advanced, server_php_configs_save_basic,
+    server_litespeed_plans_page, server_litespeed_serial, server_litespeed_tier,
+    server_litespeed_upgrade, server_litespeed_webadmin_url, server_log_view_route,
+    server_logs_route, server_openlitespeed_guest, server_openlitespeed_guest_remove,
+    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
+    server_packages_page, server_page, server_php_configs, server_php_configs_post,
+    server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
     server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
     server_php_extensions_install, server_php_extensions_set_default,
-    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_tuning,
-    server_processes_page, server_services_control, server_services_page, settings_connect_page,
-    settings_design_page, settings_error_messages_page, settings_error_messages_preview,
-    settings_error_messages_restore_all, settings_error_messages_restore_forbidden,
-    settings_error_messages_restore_internal, settings_error_messages_restore_not_found,
-    settings_error_messages_save, settings_logs_page, settings_logs_save,
-    settings_markdown_preview, settings_page, settings_port_page, settings_setup_page,
-    settings_setup_save, settings_site_messages_page, settings_site_messages_preview_site_ready,
-    settings_site_messages_reset, settings_site_messages_restore_site_ready,
-    settings_site_messages_restore_suspend, settings_site_messages_save,
-    settings_system_repair_redirect, settings_version_page, sidebar_acl_delete_post,
-    sidebar_acl_get, sidebar_acl_post, site_filemanager_alias, site_files_op,
-    site_files_page_route, site_files_upload, system_repair_api_route, system_repair_heal_route,
-    system_repair_report_route, system_repair_route, users_admin_details_post, users_create_get,
-    users_create_post, users_delete_post, users_list_route, users_manage_fragment_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
-    users_profile_password_post, users_profile_route, users_profile_totp_begin,
-    users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
-    users_reseller_route, users_status_post,
+    server_php_extensions_set_default_get, server_php_extensions_uninstall, server_php_overview,
+    server_php_tuning, server_processes_page, server_services_control, server_services_page,
+    settings_connect_page, settings_design_page, settings_error_messages_page,
+    settings_error_messages_preview, settings_error_messages_restore_all,
+    settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
+    settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
+    settings_logs_save, settings_markdown_preview, settings_page, settings_port_page,
+    settings_setup_page, settings_setup_save, settings_site_messages_page,
+    settings_site_messages_preview_site_ready, settings_site_messages_reset,
+    settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
+    settings_site_messages_save, settings_system_repair_redirect, settings_version_page,
+    sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
+    site_files_list, site_files_op, site_files_page_route, site_files_upload,
+    system_repair_api_route, system_repair_heal_route, system_repair_report_route,
+    system_repair_route, users_admin_details_post, users_create_get, users_create_post,
+    users_delete_post, users_list_route, users_manage_fragment_route, users_modify_get,
+    users_password_post, users_plans_page, users_profile_details_post, users_profile_password_post,
+    users_profile_route, users_profile_totp_begin, users_profile_totp_confirm,
+    users_profile_totp_disable, users_rename_post, users_reseller_route, users_status_post,
 };
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
@@ -132,11 +139,12 @@ use cpn_installer::panel_routes::{
     plugins_install_host, plugins_page, plugins_settings_page, plugins_settings_save,
     plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
     site_preview_image, site_preview_refresh, subdomains_create, subdomains_create_page,
-    subdomains_page, websites_create, websites_create_page, websites_delete, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
+    subdomains_page, websites_create, websites_create_page, websites_delete, websites_list_page,
+    websites_manage, websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
     websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
     websites_suspend_message, websites_suspend_message_restore,
 };
+use cpn_installer::panel_site_apps_routes::{websites_apps_get, websites_apps_post};
 use cpn_installer::panel_site_tools_routes::{
     websites_clone_post, websites_git_post, websites_terminal_ws, websites_tools_csrf_get,
 };
@@ -156,7 +164,7 @@ use cpn_installer::panel_website_logs_routes::websites_manage_logs;
 use cpn_installer::panel_website_metrics_routes::websites_manage_metrics;
 use cpn_installer::panel_wordpress_routes::{
     wordpress_delete_post, wordpress_ensure_wpcli_post, wordpress_install_get,
-    wordpress_install_post, wordpress_list_route, wordpress_manage_route,
+    wordpress_install_post, wordpress_list_route, wordpress_manage_route, wordpress_overview_route,
     wordpress_plugin_install_post, wordpress_refresh_post, wordpress_scan_post,
     wordpress_subsites_install_get, wordpress_subsites_install_post, wordpress_subsites_list_route,
     wordpress_subsites_scan_post, wordpress_theme_activate_post, wordpress_toggle_debug_post,
@@ -1127,6 +1135,7 @@ async fn main() -> std::io::Result<()> {
             .service(dashboard_ssh_security_review_snooze)
             .service(dashboard_ssh_security_review_show)
             .service(websites_page)
+            .service(websites_list_page)
             // Static /websites/create before /websites/{domain} catch-all.
             .service(websites_create_page)
             .service(subdomains_page)
@@ -1138,6 +1147,7 @@ async fn main() -> std::io::Result<()> {
             .service(websites_cron_add)
             .service(websites_cron_update)
             .service(websites_cron_delete)
+            .service(site_files_list)
             .service(site_files_page_route)
             .service(site_filemanager_alias)
             .service(site_files_op)
@@ -1158,6 +1168,7 @@ async fn main() -> std::io::Result<()> {
             .service(websites_reset_placeholder)
             .service(websites_prefs)
             .service(websites_preview_prefs)
+            .service(wordpress_overview_route)
             .service(wordpress_list_route)
             .service(wordpress_subsites_list_route)
             .service(wordpress_install_get)
@@ -1186,10 +1197,13 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
+            .service(panel_feedback_submit)
             .service(websites_manage_metrics)
             .service(websites_manage_logs)
             .service(websites_git_post)
             .service(websites_clone_post)
+            .service(websites_apps_get)
+            .service(websites_apps_post)
             .service(websites_tools_csrf_get)
             .route(
                 "/api/websites/terminal/ws",
@@ -1261,12 +1275,14 @@ async fn main() -> std::io::Result<()> {
             .service(server_openlitespeed_guest_remove)
             .service(server_litespeed_enterprise_page)
             .service(server_litespeed_page)
+            .service(server_litespeed_plans_page)
             .service(server_litespeed_tier)
             .service(server_litespeed_serial)
             .service(server_litespeed_webadmin_url)
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)
             .service(server_processes_page)
+            .service(server_php_overview)
             .service(server_php_extensions)
             .service(server_php_extensions_install)
             .service(server_php_extensions_uninstall)
@@ -1296,6 +1312,7 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_containers)
             .service(server_docker_images)
             .service(docker_home)
+            .service(docker_list_route)
             .service(docker_images_route)
             .service(docker_logs_route)
             .service(docker_view_route)
@@ -1310,7 +1327,11 @@ async fn main() -> std::io::Result<()> {
             .service(docker_stacks_route)
             .service(docker_stack_create)
             .service(docker_stack_refresh)
+            .service(server_files_asset_css)
+            .service(server_files_asset_js)
+            .service(server_files_list)
             .service(server_files_page)
+            .service(server_files_post)
             .service(filemanager_alias)
             .service(server_filemanager_alias)
             .service(server_files_op)
@@ -1391,6 +1412,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_rule_packs)
             .service(security_malware)
             .service(security_ssl)
+            .service(security_ssl_manage)
             .service(security_ssl_hostname)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
@@ -1444,6 +1466,20 @@ async fn main() -> std::io::Result<()> {
             .service(email_create_route)
             .service(email_forwarding_route)
             .service(email_forwarding_save)
+            .service(email_forwarding_delete)
+            .service(email_forwarding_apply)
+            .service(email_autoresponders_route)
+            .service(email_autoresponders_save)
+            .service(email_autoresponders_delete)
+            .service(email_filters_route)
+            .service(email_filters_save)
+            .service(email_filters_delete)
+            .service(email_lists_route)
+            .service(email_lists_create)
+            .service(email_lists_member_add)
+            .service(email_lists_member_delete)
+            .service(email_lists_delete)
+            .service(email_lists_apply)
             .service(email_catchall_route)
             .service(email_catchall_save)
             .service(email_dkim_route)
@@ -1495,6 +1531,7 @@ async fn main() -> std::io::Result<()> {
             .service(databases_manager_route)
             .service(databases_phpmyadmin_route)
             .service(databases_phpmyadmin_open)
+            .service(ftp_overview_route)
             .service(ftp_accounts_route)
             .service(ftp_create)
             .service(ftp_create_post)

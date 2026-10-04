@@ -398,15 +398,17 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
         crate::panel_footer_chrome::sidebar_footer_styles(),
+        crate::panel_feedback::feedback_styles(),
         crate::panel_hubs::hub_styles_with_icons(),
         crate::panel_dashboard_tools::dashboard_tools_styles(),
         crate::panel_dashboard_layout::dashboard_layout_styles(),
+        crate::panel_dashboard_stats::dashboard_stats_styles(),
         crate::panel_dashboard_activity::activity_board_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
@@ -416,12 +418,13 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}{}{}",
+        "{}{}{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_nav_tree::nav_tree_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script(),
-        crate::panel_footer_chrome::notifications_popover_script()
+        crate::panel_footer_chrome::notifications_popover_script(),
+        crate::panel_feedback::feedback_script()
     );
     format!(
         r#"<!DOCTYPE html>

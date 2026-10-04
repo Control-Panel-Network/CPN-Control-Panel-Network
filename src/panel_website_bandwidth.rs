@@ -1,6 +1,6 @@
 //! Per-vhost bandwidth hints from access logs and package quotas.
 
-use crate::packages::{UNLIMITED, package_for_account};
+use crate::packages::package_for_account;
 use crate::panel_storage_fmt::{
     format_bytes_for_user, format_mb_limit_for_user, format_used_limit_for_user,
 };
@@ -118,7 +118,7 @@ fn used_of_package_bandwidth(
     match quota_mb {
         Some(q) => {
             let label = format_used_limit_for_user(viewer, used_bytes, q);
-            let hint = if q == UNLIMITED {
+            let hint = if crate::packages::is_unlimited(q) {
                 "This site's transfer (calendar month when logs exist). Package bandwidth is unlimited."
                     .into()
             } else {
