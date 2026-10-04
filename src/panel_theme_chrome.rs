@@ -2,8 +2,8 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_theme::{
-    default_tokens, design_public_json, load_panel_design, resolve_tokens, ColorMode, DesignPreset,
-    DesignTokens, PanelDesignFile, COLOR_MODE_STORAGE_KEY,
+    COLOR_MODE_STORAGE_KEY, ColorMode, DesignPreset, DesignTokens, PanelDesignFile, default_tokens,
+    design_public_json, load_panel_design, resolve_tokens,
 };
 
 fn html_escape(value: &str) -> String {
