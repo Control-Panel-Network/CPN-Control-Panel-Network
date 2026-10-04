@@ -7,7 +7,7 @@ use crate::panel_hubs::{
 };
 use crate::panel_ops_db::{create_database, drop_database};
 use crate::panel_ops_mail_extra::{
-    dkim_status, load_catchall, load_forwards, mail_stack_note, save_catchall,
+    dkim_status, load_catchall, load_forwards, mail_stack_note,
 };
 use crate::panel_sections::{databases_status_main, email_accounts_main};
 use crate::postfix_fallback::postfix_is_ready;
