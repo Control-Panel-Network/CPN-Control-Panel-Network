@@ -171,14 +171,14 @@ impl AppState {
     }
 
     pub fn log(&self, line: impl Into<String>, level: &'static str) {
-        let line = line.into();
+        let line = crate::install_log_redaction::redact_sensitive_line(&line.into());
         append_installation_log(level, &line);
         let _ = self.events.send(InstallerEvent::Log { line, level });
     }
 
     /// Always write to `installation.log`; new runs also mirror all output.
     pub fn log_command_output(&self, line: impl Into<String>, level: &'static str) {
-        let line = line.into();
+        let line = crate::install_log_redaction::redact_sensitive_line(&line.into());
         append_installation_log(level, &line);
         if level == "error" || self.install_log_is_full() {
             let _ = self.events.send(InstallerEvent::Log { line, level });
@@ -317,10 +317,12 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
             tokio::select! {
                 line = out_lines.next_line(), if !out_done => match line {
                     Ok(Some(line)) => {
+                        let safe_line =
+                            crate::install_log_redaction::redact_sensitive_line(&line);
                         if diagnostic.len() == 12 { diagnostic.pop_front(); }
-                        diagnostic.push_back(line.clone());
+                        diagnostic.push_back(safe_line.clone());
                         if !line.trim().is_empty() {
-                            state.log_command_output(&line, "info");
+                            state.log_command_output(&safe_line, "info");
                         }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
@@ -330,10 +332,12 @@ pub(crate) async fn run_command(state: &AppState, spec: CommandSpec) -> Result<(
                 },
                 line = err_lines.next_line(), if !err_done => match line {
                     Ok(Some(line)) => {
+                        let safe_line =
+                            crate::install_log_redaction::redact_sensitive_line(&line);
                         if diagnostic.len() == 12 { diagnostic.pop_front(); }
-                        diagnostic.push_back(line.clone());
+                        diagnostic.push_back(safe_line.clone());
                         if !line.trim().is_empty() {
-                            state.log_command_output(&line, "info");
+                            state.log_command_output(&safe_line, "info");
                         }
                         if let Some(tracking) = spec.dnf {
                             process_dnf_line(state, tracking, &mut transaction, &line).await;
