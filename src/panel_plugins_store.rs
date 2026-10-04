@@ -6,7 +6,7 @@ use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
 use crate::plugin_activation::{catalog_entry_is_host_scoped, host_plugin_installed, is_activated};
-use crate::plugins::{catalog_entry_is_featured, format_iso_date_eu, CatalogEntry};
+use crate::plugins::{CatalogEntry, catalog_entry_is_featured, format_iso_date_eu};
 
 pub(crate) struct StoreListOpts<'a> {
     pub query: &'a str,

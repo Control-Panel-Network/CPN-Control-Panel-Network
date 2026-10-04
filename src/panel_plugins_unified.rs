@@ -1,6 +1,6 @@
 //! One Store catalog: host packages + community plugins in a single filtered grid.
 
-use crate::apps::{list_apps, AppStatus};
+use crate::apps::{AppStatus, list_apps};
 use crate::host_packages_catalog::{
     filter_host_packages, host_categories, host_package_is_featured, meta_for,
 };
@@ -10,9 +10,9 @@ use crate::panel_plugins_markup::{html_escape, store_scope_query_suffix, urlenco
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
-use crate::panel_plugins_store::{filter_store_entries, render_catalog_card, StoreListOpts};
+use crate::panel_plugins_store::{StoreListOpts, filter_store_entries, render_catalog_card};
 use crate::plugin_activation::catalog_entry_is_host_scoped;
-use crate::plugins::{catalog_entry_is_featured, CatalogEntry};
+use crate::plugins::{CatalogEntry, catalog_entry_is_featured};
 
 enum UnifiedItem<'a> {
     Host(&'a AppStatus),
@@ -364,9 +364,11 @@ mod tests {
         let apps = vec![stub(AppId::Mariadb), stub(AppId::Tachyon)];
         let entries = vec![site_entry("bimi", "Email")];
         let items = collect_unified(&apps, &entries, "", "", "host");
-        assert!(items
-            .iter()
-            .any(|i| matches!(i, UnifiedItem::Host(s) if s.id == AppId::Tachyon)));
+        assert!(
+            items
+                .iter()
+                .any(|i| matches!(i, UnifiedItem::Host(s) if s.id == AppId::Tachyon))
+        );
         assert!(!items.iter().any(|i| matches!(i, UnifiedItem::Catalog(_))));
     }
 

@@ -1,7 +1,7 @@
 //! Host packages store-like catalog metadata (dates, Featured, categories).
 
 use crate::apps::{AppId, AppStateKind, AppStatus};
-use crate::plugins_catalog::{format_iso_date_eu, FEATURED_MIN_INSTALLS, FEATURED_TOP_N};
+use crate::plugins_catalog::{FEATURED_MIN_INSTALLS, FEATURED_TOP_N, format_iso_date_eu};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HostPackageMeta {

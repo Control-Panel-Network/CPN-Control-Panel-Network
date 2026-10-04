@@ -1,7 +1,7 @@
 //! HTML for CPN Panel Plugins (Installed + unified Store).
 
 use crate::apps::list_apps;
-use crate::panel_plugins_installed::{render_installed, InstalledPageOpts};
+use crate::panel_plugins_installed::{InstalledPageOpts, render_installed};
 use crate::panel_plugins_markup::{
     domain_picker, html_escape, notice_block, resolve_domain, resolve_store_target,
     section_heading, store_install_target_picker, view_tabs,

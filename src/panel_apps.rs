@@ -1,11 +1,11 @@
 //! Panel Host packages page: store-like card grid (search, categories, pagination).
 
-use crate::apps::{list_apps, AppStateKind, AppStatus};
+use crate::apps::{AppStateKind, AppStatus, list_apps};
 use crate::apps_site::{bindings_for_domain, is_associable, is_site_scoped};
 use crate::backups::is_subdomain_site;
 use crate::host_packages_catalog::{
-    filter_host_packages, format_host_dates, host_categories, host_package_is_featured, meta_for,
-    HostInstallStatus,
+    HostInstallStatus, filter_host_packages, format_host_dates, host_categories,
+    host_package_is_featured, meta_for,
 };
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,

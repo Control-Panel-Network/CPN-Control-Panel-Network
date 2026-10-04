@@ -4,7 +4,7 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_plugins_spa::plugins_hub_styles;
 use crate::plugin_activation::is_host_owned_install;
 use crate::plugins::InstalledPlugin;
-use crate::site_acl::{can_manage_site, SitePerm};
+use crate::site_acl::{SitePerm, can_manage_site};
 use crate::sites::SiteRecord;
 use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
 
