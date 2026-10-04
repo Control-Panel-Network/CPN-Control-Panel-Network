@@ -581,7 +581,20 @@ body {{ font-size:calc(17px * var(--cpn-font-scale)); }}
     css
 }
 
+/// CSS selector scope for catalog theme surfaces.
+/// Prefer the theme's declared `color_mode` so Light/Dark toggle can fall back to
+/// built-in tokens in the opposite mode (avoids pale ink on white nav tiles).
+fn theme_surface_selector(bg: &ThemeBackground) -> &'static str {
+    match bg.color_mode.as_deref() {
+        Some("light") => "html[data-color-mode=\"light\"]",
+        Some("dark") => "html[data-color-mode=\"dark\"]",
+        // Legacy packages without color_mode: keep previous dual-mode apply.
+        _ => "html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"]",
+    }
+}
+
 fn theme_background_css(bg: &ThemeBackground, theme_id: Option<&str>) -> String {
+    let scope = theme_surface_selector(bg);
     let mut root_vars = String::new();
     if let Some(v) = bg.surface.as_deref() {
         root_vars.push_str(&format!("  --surface:{v};\n"));
@@ -603,10 +616,10 @@ fn theme_background_css(bg: &ThemeBackground, theme_id: Option<&str>) -> String 
     }
     let mut out = String::new();
     if !root_vars.is_empty() {
-        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"], :root {\n");
-        out.push_str(&root_vars);
-        out.push_str("}\n");
-        out.push_str("html[data-color-mode=\"dark\"], html[data-color-mode=\"light\"] {\n");
+        // Do not write theme ink/muted onto bare :root: that leaks pale text into
+        // the opposite personal color mode (white nav tiles + light --ink).
+        out.push_str(scope);
+        out.push_str(" {\n");
         out.push_str(&root_vars);
         out.push_str("}\n");
     }
@@ -633,18 +646,13 @@ fn theme_background_css(bg: &ThemeBackground, theme_id: Option<&str>) -> String 
             ("auto", "center", "no-repeat", "fixed")
         };
         out.push_str(&format!(
-            "html[data-color-mode=\"dark\"] body,\n\
-html[data-color-mode=\"light\"] body,\n\
-html[data-color-mode=\"dark\"] .panel-layout,\n\
-html[data-color-mode=\"light\"] .panel-layout,\n\
-body, .panel-layout {{\n  background-image:{layers};\n  background-size:{size};\n  background-position:{position};\n  background-repeat:{repeat};\n  background-attachment:{attachment};\n}}\n"
+            "{scope} body,\n\
+{scope} .panel-layout {{\n  background-image:{layers};\n  background-size:{size};\n  background-position:{position};\n  background-repeat:{repeat};\n  background-attachment:{attachment};\n}}\n"
         ));
     }
     if let Some(sidebar) = bg.sidebar.as_deref() {
         out.push_str(&format!(
-            "html[data-color-mode=\"dark\"] .sidebar,\n\
-html[data-color-mode=\"light\"] .sidebar,\n\
-.sidebar {{\n  background:{sidebar};\n  border-right-color:var(--hairline);\n}}\n"
+            "{scope} .sidebar {{\n  background:{sidebar};\n  border-right-color:var(--hairline);\n}}\n"
         ));
     }
     out
@@ -795,6 +803,45 @@ mod tests {
         assert_eq!(ColorMode::parse("nope"), None);
         assert_eq!(DesignPreset::parse("custom"), Some(DesignPreset::Custom));
         assert_eq!(DesignPreset::parse("x"), None);
+    }
+
+    #[test]
+    fn dark_theme_background_does_not_paint_light_mode_ink() {
+        let bg = ThemeBackground {
+            color_mode: Some("dark".into()),
+            sidebar: Some("linear-gradient(#111,#222)".into()),
+            ink: Some("#e8edf4".into()),
+            muted: Some("#9aa8b8".into()),
+            surface: Some("#0f141b".into()),
+            ..ThemeBackground::default()
+        };
+        let css = theme_background_css(&bg, Some("slate-pro"));
+        assert!(
+            css.contains("html[data-color-mode=\"dark\"]"),
+            "dark theme surfaces must target dark mode"
+        );
+        assert!(
+            !css.contains("html[data-color-mode=\"light\"]"),
+            "dark theme ink/sidebar must not apply in light mode"
+        );
+        assert!(css.contains("--ink:#e8edf4"));
+        assert!(css.contains(".sidebar"));
+    }
+
+    #[test]
+    fn light_theme_background_does_not_paint_dark_mode_ink() {
+        let bg = ThemeBackground {
+            color_mode: Some("light".into()),
+            sidebar: Some("#ffffff".into()),
+            ink: Some("#134e4a".into()),
+            ..ThemeBackground::default()
+        };
+        let css = theme_background_css(&bg, Some("arctic-mint"));
+        assert!(css.contains("html[data-color-mode=\"light\"]"));
+        assert!(
+            !css.contains("html[data-color-mode=\"dark\"]"),
+            "light theme ink/sidebar must not apply in dark mode"
+        );
     }
 
     #[test]

@@ -2,9 +2,11 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_icons::nav_icon_html;
-use crate::panel_nav_catalog::{MAIN, NavChild, NavEntry, SECURITY, SERVER, SETTINGS};
+use crate::panel_nav_catalog::{NavChild, NavEntry, MAIN, SECURITY, SERVER, SETTINGS};
 
-pub use crate::panel_nav_tree_chrome::{nav_tree_script, nav_tree_styles};
+pub use crate::panel_nav_tree_chrome::{
+    nav_tree_script, nav_tree_styles, sidebar_nav_contrast_styles,
+};
 
 fn html_escape(value: &str) -> String {
     value
@@ -427,8 +429,8 @@ mod tests {
     #[test]
     fn admin_sees_create_user_and_acl_links() {
         use crate::account::{
-            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
-            write_account_file,
+            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
+            PanelBootstrap,
         };
         with_test_data_dir(|| {
             let boot = PanelBootstrap {
@@ -460,8 +462,8 @@ mod tests {
     #[test]
     fn root_file_manager_is_admin_leaf_link() {
         use crate::account::{
-            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
-            write_account_file,
+            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
+            PanelBootstrap,
         };
         with_test_data_dir(|| {
             let salt = new_password_salt();
@@ -538,6 +540,14 @@ mod tests {
         assert!(css.contains("flex-direction:column"));
         assert!(css.contains(".nav-tile-grid"));
         assert!(!css.contains("grid-template-columns:repeat(2"));
+        // Explicit tile text (not theme --ink) so light tiles stay readable.
+        assert!(css.contains("color:#1d1d1f"));
+        assert!(css.contains("html[data-color-mode=\"dark\"] .sidebar nav a.nav-tile"));
+        let lock = sidebar_nav_contrast_styles();
+        assert!(lock.contains("html[data-color-mode=\"light\"]"));
+        assert!(lock.contains("html[data-color-mode=\"dark\"]"));
+        assert!(lock.contains("background:#1c212b"));
+        assert!(lock.contains("color:#e5e7eb"));
     }
 
     #[test]
@@ -597,8 +607,8 @@ mod tests {
     #[test]
     fn logs_is_a_collapsible_group_with_a_child_per_viewer() {
         use crate::account::{
-            PanelBootstrap, default_password_policy, new_password_salt, with_test_data_dir,
-            write_account_file,
+            default_password_policy, new_password_salt, with_test_data_dir, write_account_file,
+            PanelBootstrap,
         };
         with_test_data_dir(|| {
             let boot = PanelBootstrap {

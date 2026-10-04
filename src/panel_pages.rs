@@ -65,9 +65,9 @@ button { font:inherit; cursor:pointer; }
 }
 .sidebar nav a {
   display:flex; align-items:center; gap:10px; min-height:44px; padding:0 13px;
-  border-radius:8px; color:var(--ink); font-size:15px;
+  border-radius:8px; color:#1d1d1f; font-size:15px;
 }
-.sidebar nav a.active { background:#e7f1ff; color:var(--blue); font-weight:600; }
+.sidebar nav a.active { background:#e7f1ff; color:#0066cc; font-weight:600; }
 /* Size/centering for .nav-icon comes from panel_icons::icon_tone_styles */
 /* Section labels: panel_nav_tree::nav_tree_styles */
 /* Footer row layout: panel_footer_chrome::sidebar_footer_styles */
@@ -398,7 +398,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
@@ -411,6 +411,8 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_dashboard_activity::activity_board_styles(),
         crate::panel_theme::color_mode_styles(),
         crate::panel_theme::design_css_vars(&design),
+        // After Theme Store CSS so light/dark nav tile bg+text stay paired on toggle.
+        crate::panel_nav_tree::sidebar_nav_contrast_styles(),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
