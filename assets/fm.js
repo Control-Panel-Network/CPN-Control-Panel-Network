@@ -3,20 +3,38 @@
   var root=document.getElementById('fm-root');
   if(!root) return;
   var csrf=root.getAttribute('data-csrf')||'';
-  var path=root.getAttribute('data-path')||'/';
-  var base=root.getAttribute('data-base')||'/server/files';
-  var opUrl=root.getAttribute('data-op')||(base+'/op');
-  var uploadUrl=root.getAttribute('data-upload')||(base+'/upload');
-  var listUrl=root.getAttribute('data-list')||(base+'/list');
-  var qs=root.getAttribute('data-qs')||'';
+  // Build navigation from the current page URL so path/base never flow from
+  // data-* attributes into href / location sinks (CodeQL js/xss-through-dom).
+  var base=(window.location.pathname||'/server/files').replace(/\/$/,'')||'/server/files';
+  var pageParams=new URLSearchParams(window.location.search||'');
+  var path=pageParams.get('path')||'/';
+  if(path.charAt(0)!=='/') path='/'+path;
+  var opUrl=base+'/op';
+  var uploadUrl=base+'/upload';
+  var listUrl=base+'/list';
   function pageHref(p, extra){
-    var u=base+'?'+qs+'path='+encodeURIComponent(p);
-    if(extra) u+='&'+extra;
-    return u;
+    var sp=new URLSearchParams(window.location.search||'');
+    sp.set('path', p);
+    if(extra){
+      String(extra).split('&').forEach(function(pair){
+        if(!pair) return;
+        var i=pair.indexOf('=');
+        var k=i<0?pair:pair.slice(0,i);
+        var v=i<0?'':pair.slice(i+1);
+        if(k) sp.set(decodeURIComponent(k), decodeURIComponent(v||''));
+      });
+    } else {
+      sp.delete('edit');
+      sp.delete('notice');
+    }
+    var u=new URL(base, window.location.origin);
+    u.search=sp.toString();
+    return u.pathname+u.search;
   }
   function goTo(href){
-    // Prefer assign over setting location.href so URL navigation stays explicit.
-    window.location.assign(href);
+    var u=new URL(href, window.location.origin);
+    if(u.origin!==window.location.origin) return;
+    window.location.assign(u.pathname+u.search+u.hash);
   }
   function selected(){
     return Array.prototype.map.call(document.querySelectorAll('.fm-check:checked'), function(el){return el.value;});
@@ -79,10 +97,10 @@
       tdName.appendChild(icon);
       var a=document.createElement('a');
       if(ent.is_dir){
-        a.setAttribute('href', pageHref(childPath(ent.basename)));
+        a.href=new URL(pageHref(childPath(String(ent.basename==null?'':ent.basename))), window.location.origin).href;
         a.className='fm-link-dir';
       } else {
-        a.setAttribute('href', pageHref(path,'edit='+encodeURIComponent(childPath(ent.basename))));
+        a.href=new URL(pageHref(path,'edit='+encodeURIComponent(childPath(String(ent.basename==null?'':ent.basename)))), window.location.origin).href;
         a.className='fm-link-file';
         a.title='Open text editor';
       }
@@ -119,7 +137,9 @@
     }
   }
   function loadList(){
-    var url=listUrl+(listUrl.indexOf('?')>=0?'&':'?')+qs+'path='+encodeURIComponent(path);
+    var sp=new URLSearchParams(window.location.search||'');
+    sp.set('path', path);
+    var url=listUrl+'?'+sp.toString();
     fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json'}})
       .then(function(res){
         if(res.status===503){
@@ -185,13 +205,9 @@
         body.set('path', path);
         body.set('filename', f.name);
         body.set('file_b64', b64);
-        if(qs){
-          qs.split('&').forEach(function(pair){
-            if(!pair) return;
-            var kv=pair.split('=');
-            if(kv[0]) body.set(decodeURIComponent(kv[0]), decodeURIComponent(kv[1]||''));
-          });
-        }
+        new URLSearchParams(window.location.search||'').forEach(function(v,k){
+          if(k && k!=='path' && k!=='edit' && k!=='notice') body.set(k, v);
+        });
         fetch(uploadUrl, {
           method:'POST',
           credentials:'same-origin',

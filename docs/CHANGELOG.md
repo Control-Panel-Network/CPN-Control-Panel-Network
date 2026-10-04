@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 04/10/2026
+
+Minor release after v1.1.2. Ships package limit schema 2 (`0` hard zero, `-1` unlimited), Dashboard Statistics first, LIVE email provisioning meters, Apps lifecycle, sidebar Feedback, Ubuntu 26.04 OpenLiteSpeed install/repair, and File Manager hardening.
+
 ### Changed
 
-- **Package limit semantics**: Only `-1` means unlimited (∞). `0` means none allowed (Used 0 of 0). Existing packages stored under schema 1 that used `0` as unlimited are migrated to `-1` on first load (schema 2). Package create/edit/bulk copy and Statistics meters use the new rules.
+- **Package limit semantics**: Only `-1` means unlimited (infinity symbol). `0` means none allowed (Used 0 of 0). Existing packages stored under schema 1 that used `0` as unlimited are migrated to `-1` on first load (schema 2). Package create/edit/bulk copy and Statistics meters use the new rules.
 - **Dashboard Statistics**: Stock overview order puts Statistics first. Missing stock widgets (including Statistics) are re-inserted at their default relative positions so a custom layout cannot bury or drop the meters unnoticed.
 
 ### Added
@@ -18,11 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidebar feedback modal**: Signed-in users can open Feedback beside the sidebar theme toggle and send categorized feedback without leaving the current page. `POST /api/panel/feedback` validates the session, same-origin request, HMAC CSRF token, required fields, length limits, and a five-per-hour account rate limit, then uses the configured SMTP or local Postfix path to deliver identical messages to both support inboxes with user, host, and panel-version context.
 - **Website Manage Apps tab**: Clean URL `/websites/manage?domain=...&tab=apps` (also `/websites/apps`). Per-site cards for CMS Made Simple (2.2.x installer in the site document root), Redis (host install once, site Activate/attach), Node, and Python (version picker, jailed app path, start/status). Host engines stay host-wide. Site users cannot uninstall host packages. WordPress stays under WordPress.
 - **Apps backup-first lifecycle**: Apps cards and `cpn apps` now show installed and source-available versions, support install/update/upgrade/downgrade, and list/restore backups. CMS Made Simple uses its official installer source; Redis, Node, and Python use configured OS repositories. Mutating version changes create a restore point before package or site files change.
+- **Category hub overview tiles**: Sidebar category overviews render as LIVE/SCAFFOLD tile hubs (Users-style) instead of dumping into list pages.
 
 ### Fixed
 
-- **Ubuntu 26.04 OpenLiteSpeed install and repair**: OLS apt setup now temporarily disables the source while bootstrapping prerequisites, verifies both official LiteSpeed signing-key fingerprints, installs a repository-scoped keyring with `signed-by`, and only then refreshes apt. This removes the first-run `NO_PUBKEY` loop on `resolute`. Installer stack selection configures and starts the normal OLS vhost/listeners, while System Repair can refresh the keyring/repository and restart an existing OLS install without silently switching web servers.
+- **Ubuntu 26.04 OpenLiteSpeed install and repair**: OLS apt setup now temporarily disables the source while bootstrapping prerequisites, verifies both official LiteSpeed signing-key fingerprints, installs a repository-scoped keyring with `signed-by`, and only then refreshes apt. This removes the first-run `NO_PUBKEY` loop on `resolute`. Runtime ownership resolves the `nobody` user's actual primary group (`nogroup` on Ubuntu), canonical `lshttpd` service units are preferred over linked `lsws` aliases, and vendor-generated WebAdmin credentials are redacted from installer events and logs. Installer stack selection configures and starts the normal OLS vhost/listeners, while System Repair can refresh the keyring/repository and restart an existing OLS install without silently switching web servers.
 - **Root File Manager (`/server/files`)**: The GET page no longer walks `/home` (or other restore-sized trees) on first load. Listing is a bounded JSON call (`/server/files/list`) with a time and entry cap. Slow listings return **503** JSON/UI instead of a hung connection that the browser reports as **408**. File Manager CSS/JS are versioned (`?v=panel-version-fm1`) so upgrades cache-bust without hashed asset filenames that 404. POST `/server/files/op` and `/server/files/upload` stay compatible for open tabs after update.
+- **File Manager DOM XSS**: File Manager row builders use safe DOM APIs (no HTML string assembly of names/paths) and ship `fm.js` as UTF-8 text.
+- **Sidebar Theme Store contrast**: Sidebar nav stays readable across Theme Store color modes (paired light/dark tile background and text after design CSS vars).
 
 ## [1.1.2] - 03/10/2026
 
