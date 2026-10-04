@@ -3,9 +3,9 @@
 use crate::account::now_unix;
 use crate::account_mgmt::find_account;
 use crate::auth_api::panel_user_from_request;
-use crate::http_helpers::VERSION;
 use crate::installer::AppState;
 use crate::mail_outbound::{OutboundMessage, send_mail_with_fallback};
+use crate::panel_feedback_mail::{FeedbackMailInput, build_feedback_mail, html_escape};
 use crate::panel_session::session_secret;
 use crate::panel_site_tools_security::same_origin_ok;
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -23,15 +23,6 @@ const RATE_MAX: u32 = 5;
 const MAX_SUBJECT_CHARS: usize = 120;
 const MAX_MESSAGE_CHARS: usize = 10_000;
 static RATE: Mutex<Option<HashMap<String, (u64, u32)>>> = Mutex::new(None);
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
 
 fn hmac_hex(secret: &str, payload: &str) -> String {
     let mut mac =
@@ -121,26 +112,6 @@ fn safe_host(http: &HttpRequest) -> String {
         .to_string()
 }
 
-fn feedback_body(
-    username: &str,
-    sender_email: &str,
-    category: &str,
-    subject: &str,
-    message: &str,
-    host: &str,
-) -> String {
-    format!(
-        "CPN Panel feedback\r\n\r\n\
-Category: {category}\r\n\
-Subject: {subject}\r\n\
-User: {username}\r\n\
-User email: {sender_email}\r\n\
-Panel host: {host}\r\n\
-Panel version: {VERSION}\r\n\r\n\
-Message:\r\n{message}\r\n"
-    )
-}
-
 #[derive(Debug, Deserialize)]
 pub struct FeedbackBody {
     #[serde(default)]
@@ -201,20 +172,23 @@ pub async fn panel_feedback_submit(
     } else {
         sender_email.trim()
     };
-    let mail_body = feedback_body(
-        &username,
+    let (plain_body, html_body) = build_feedback_mail(&FeedbackMailInput {
+        username: &username,
         sender_email,
         category,
         subject,
         message,
-        &safe_host(&http),
-    );
+        host: &safe_host(&http),
+        sent_at_unix: now_unix(),
+    });
 
     for recipient in RECIPIENTS {
         let outbound = OutboundMessage {
             to: recipient.to_string(),
             subject: format!("[CPN Feedback] {subject}"),
-            body: mail_body.clone(),
+            body: plain_body.clone(),
+            html_body: Some(html_body.clone()),
+            from_name: Some("CPN Panel".into()),
         };
         if let Err(error) = send_mail_with_fallback(&outbound) {
             eprintln!("panel_feedback: mail delivery failed for a configured recipient");
@@ -400,22 +374,6 @@ mod tests {
             assert!(verify_feedback_csrf("Admin", &token));
             assert!(!verify_feedback_csrf("Other", &token));
         });
-    }
-
-    #[test]
-    fn feedback_body_includes_context_and_message() {
-        let body = feedback_body(
-            "operator",
-            "operator@example.com",
-            "Bug",
-            "Broken button",
-            "Details here",
-            "panel.example",
-        );
-        assert!(body.contains("operator@example.com"));
-        assert!(body.contains("panel.example"));
-        assert!(body.contains(VERSION));
-        assert!(body.contains("Details here"));
     }
 
     #[test]

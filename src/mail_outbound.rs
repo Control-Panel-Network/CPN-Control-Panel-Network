@@ -3,7 +3,7 @@
 use crate::postfix_fallback::{postfix_is_ready, postfix_local_smtp};
 use crate::smtp_settings::{SmtpSettings, SmtpTlsMode, load_smtp};
 use lettre::message::header::{ContentTransferEncoding, ContentType};
-use lettre::message::{Body, Mailbox, Message, SinglePart};
+use lettre::message::{Body, Mailbox, Message, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{SmtpTransport, Transport};
@@ -14,6 +14,20 @@ pub struct OutboundMessage {
     pub to: String,
     pub subject: String,
     pub body: String,
+    pub html_body: Option<String>,
+    pub from_name: Option<String>,
+}
+
+impl OutboundMessage {
+    pub fn new(to: impl Into<String>, subject: impl Into<String>, body: impl Into<String>) -> Self {
+        Self {
+            to: to.into(),
+            subject: subject.into(),
+            body: body.into(),
+            html_body: None,
+            from_name: None,
+        }
+    }
 }
 
 fn smtp_configured(settings: &SmtpSettings) -> bool {
@@ -148,7 +162,13 @@ pub fn send_mail_with_settings(
         .parse()
         .map_err(|error| format!("Invalid recipient address: {error}"))?;
 
-    let email = build_plain_message(from, to, &message.subject, &message.body)?;
+    let email = build_outbound_message(
+        apply_from_name(from, message.from_name.as_deref()),
+        to,
+        &message.subject,
+        &message.body,
+        message.html_body.as_deref(),
+    )?;
 
     let transport = build_transport(settings)?;
     transport
@@ -157,27 +177,75 @@ pub fn send_mail_with_settings(
     Ok(())
 }
 
-/// Build a plain-text message without quoted-printable so `token=` URLs stay intact.
+fn apply_from_name(mut mailbox: Mailbox, name: Option<&str>) -> Mailbox {
+    if let Some(raw) = name.map(str::trim).filter(|value| !value.is_empty()) {
+        mailbox.name = Some(sanitize_header(raw));
+    }
+    mailbox
+}
+
+fn encode_body(raw: Vec<u8>, preferred: ContentTransferEncoding) -> Result<Body, String> {
+    Body::new_with_encoding(raw, preferred)
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::EightBit))
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::Base64))
+        .map_err(|_| "Could not encode email body".to_string())
+}
+
+fn text_part(
+    body: &str,
+    content_type: ContentType,
+    encoding: ContentTransferEncoding,
+) -> Result<SinglePart, String> {
+    Ok(SinglePart::builder()
+        .header(content_type)
+        .body(encode_body(body.as_bytes().to_vec(), encoding)?))
+}
+
+/// Plain-text only: avoid quoted-printable so `token=` URLs stay intact.
 fn build_plain_message(
     from: Mailbox,
     to: Mailbox,
     subject: &str,
     body: &str,
 ) -> Result<Message, String> {
-    let raw = body.as_bytes().to_vec();
-    // Prefer 7bit for ASCII (readable in mail spools). Fall back to base64 for non-ASCII.
-    let encoded = Body::new_with_encoding(raw.clone(), ContentTransferEncoding::SevenBit)
-        .or_else(|_| Body::new_with_encoding(raw, ContentTransferEncoding::Base64))
-        .map_err(|_| "Could not encode email body".to_string())?;
-
     Message::builder()
         .from(from)
         .to(to)
         .subject(sanitize_header(subject))
-        .singlepart(
-            SinglePart::builder()
-                .header(ContentType::TEXT_PLAIN)
-                .body(encoded),
+        .singlepart(text_part(
+            body,
+            ContentType::TEXT_PLAIN,
+            ContentTransferEncoding::SevenBit,
+        )?)
+        .map_err(|error| format!("Could not build email: {error}"))
+}
+
+fn build_outbound_message(
+    from: Mailbox,
+    to: Mailbox,
+    subject: &str,
+    body: &str,
+    html_body: Option<&str>,
+) -> Result<Message, String> {
+    let Some(html) = html_body.filter(|value| !value.trim().is_empty()) else {
+        return build_plain_message(from, to, subject, body);
+    };
+    Message::builder()
+        .from(from)
+        .to(to)
+        .subject(sanitize_header(subject))
+        .multipart(
+            MultiPart::alternative()
+                .singlepart(text_part(
+                    body,
+                    ContentType::TEXT_PLAIN,
+                    ContentTransferEncoding::QuotedPrintable,
+                )?)
+                .singlepart(text_part(
+                    html,
+                    ContentType::TEXT_HTML,
+                    ContentTransferEncoding::QuotedPrintable,
+                )?),
         )
         .map_err(|error| format!("Could not build email: {error}"))
 }
@@ -248,11 +316,7 @@ pub fn build_setup_confirmation(
             "\r\nThe password was not included in this message. Use the password you set during setup.\r\n",
         );
     }
-    OutboundMessage {
-        to: String::new(),
-        subject: "CPN panel account ready".into(),
-        body,
-    }
+    OutboundMessage::new(String::new(), "CPN panel account ready", body)
 }
 
 /// Password reset email with a one-time reset URL (preferred path).
@@ -283,11 +347,7 @@ Sign in page: ",
     body.push_str(
         "\r\n\r\nIf the link does not work, ask a server operator to reset the account with the CPN CLI.\r\n",
     );
-    OutboundMessage {
-        to: String::new(),
-        subject: "CPN panel password reset request".into(),
-        body,
-    }
+    OutboundMessage::new(String::new(), "CPN panel password reset request", body)
 }
 
 /// Legacy notice without a token (kept for callers that only have a login URL).
@@ -369,5 +429,32 @@ mod tests {
                     .contains("content-transfer-encoding: base64"),
             "expected 7bit or base64 CTE, got:\n{raw}"
         );
+    }
+
+    #[test]
+    fn multipart_feedback_mail_has_html_fallback_and_from_name() {
+        let from: Mailbox =
+            apply_from_name("cpn-panel@localhost".parse().unwrap(), Some("CPN Panel"));
+        let to: Mailbox = "info@example.com".parse().unwrap();
+        let html = "<p>Hello &lt;script&gt;</p>";
+        let email = build_outbound_message(
+            from,
+            to,
+            "[CPN Feedback] test",
+            "CPN Panel feedback\r\n\r\nMessage:\r\ntest\r\n",
+            Some(html),
+        )
+        .unwrap();
+        let raw = String::from_utf8_lossy(&email.formatted()).to_string();
+        let lower = raw.to_ascii_lowercase();
+        assert!(lower.contains("from:"));
+        assert!(lower.contains("cpn panel"));
+        assert!(lower.contains("cpn-panel@localhost"));
+        assert!(lower.contains("multipart/alternative"));
+        assert!(lower.contains("text/plain"));
+        assert!(lower.contains("text/html"));
+        assert!(raw.contains("CPN Panel feedback"));
+        assert!(raw.contains("Hello") && raw.contains("script"));
+        assert!(!raw.to_ascii_lowercase().contains("cyberpanel"));
     }
 }

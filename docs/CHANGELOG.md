@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dashboard Database disk meter**: Statistics shows Database disk as Used X of Y like Storage. The denominator is the package `database_disk_mb` quota (`-1` = unlimited / ∞, `0` = none allowed). Existing packages without the field default to unlimited. Used is live MariaDB schema size for owned databases.
+- **Feedback HTML mail**: `POST /api/panel/feedback` sends `multipart/alternative` (plain text plus branded HTML). Recipients stay `info@newstargeted.com` and `info@discord-bot-network.com`. From display name is `CPN Panel` without changing the envelope address. User fields are HTML-escaped. Body includes a `dd/mm/yyyy` 24-hour UTC timestamp.
 
 ### Fixed
 
