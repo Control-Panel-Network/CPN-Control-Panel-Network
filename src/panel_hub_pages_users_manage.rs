@@ -6,6 +6,7 @@ use crate::panel_hub_pages_profile::users_self_edit_body_with_tab;
 use crate::panel_password_gen::{
     password_field_and_gen_html, password_gen_script, password_gen_styles,
 };
+use crate::panel_user_package::package_assign_section;
 
 fn html_escape(value: &str) -> String {
     value
@@ -32,6 +33,8 @@ pub fn manage_modal_shell() -> &'static str {
   margin:0 0 14px;
 }
 .users-manage-head h2 { margin:0; font-size:18px; }
+#users-manage-body .modify-tabpanel[hidden] { display:none !important; }
+#users-manage-body .modify-tabs { min-width:0; }
 </style>
 <dialog id="users-manage-dialog" class="users-manage-dialog" aria-labelledby="users-manage-title">
   <div class="users-manage-card">
@@ -48,13 +51,26 @@ pub fn manage_modal_shell() -> &'static str {
   var body=document.getElementById('users-manage-body');
   var closeBtn=document.getElementById('users-manage-close');
   if(!dlg||!body) return;
+  function runInlineScripts(root){
+    var list=[].slice.call(root.querySelectorAll('script'));
+    list.forEach(function(old){
+      var s=document.createElement('script');
+      if(old.type) s.type=old.type;
+      if(old.src){ s.src=old.src; s.async=false; }
+      else { s.text=old.textContent; }
+      old.parentNode.replaceChild(s, old);
+    });
+  }
   function openFor(name){
     body.innerHTML='<p class="muted">Loading…</p>';
     if(dlg.showModal) dlg.showModal();
     var u='/account/users/manage-fragment?username='+encodeURIComponent(name);
     fetch(u,{credentials:'same-origin',headers:{'Accept':'text/html'}})
       .then(function(r){ if(!r.ok) throw new Error('Could not load user'); return r.text(); })
-      .then(function(html){ body.innerHTML=html; })
+      .then(function(html){
+        body.innerHTML=html;
+        runInlineScripts(body);
+      })
       .catch(function(err){ body.innerHTML='<p class="panel-notice error">'+String(err.message||err)+'</p>'; });
   }
   document.addEventListener('click', function(ev){
@@ -68,6 +84,11 @@ pub fn manage_modal_shell() -> &'static str {
   });
   if(closeBtn) closeBtn.addEventListener('click', function(){ dlg.close(); });
   dlg.addEventListener('click', function(ev){ if(ev.target===dlg) dlg.close(); });
+  try{
+    var q=new URLSearchParams(location.search||'');
+    var reopen=q.get('manage');
+    if(reopen) openFor(reopen);
+  }catch(e){}
 })();
 </script>
 "#
@@ -96,12 +117,14 @@ fn other_account_tab(target: &str, recovery_email: &str, lang: &str) -> String {
           </select>
         </label>
         <button type="submit" class="btn-primary">Save details</button>
-      </form>"#,
+      </form>
+      {pkg}"#,
         user = html_escape(target),
         email = html_escape(recovery_email),
         en_sel = en_sel,
         es_sel = es_sel,
         nb_sel = nb_sel,
+        pkg = package_assign_section(target, true),
     )
 }
 
@@ -205,4 +228,17 @@ pub fn users_manage_fragment(viewer: &str, target_raw: &str) -> Result<String, S
         Some(&other),
         "account",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::manage_modal_shell;
+
+    #[test]
+    fn modal_reexecutes_injected_scripts() {
+        let html = manage_modal_shell();
+        assert!(html.contains("runInlineScripts"), "{html}");
+        assert!(html.contains("users-manage-dialog"), "{html}");
+        assert!(html.contains("q.get('manage')"), "{html}");
+    }
 }

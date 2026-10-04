@@ -43,6 +43,7 @@ pub fn modify_tabs_styles() -> &'static str {
 }
 .modify-tabpanel[hidden] { display:none !important; }
 .modify-tabpanel { min-width:0; max-width:100%; }
+#users-manage-body .modify-back-profile { display:none; }
 @media (max-width:719.98px) {
   .modify-tablist { flex-wrap:nowrap; }
   .modify-tab { min-height:44px; padding:10px 14px; }
@@ -59,13 +60,6 @@ pub fn modify_tabs_styles() -> &'static str {
 pub fn modify_tabs_script() -> &'static str {
     r#"
 (function(){
-  var root=document.getElementById('modify-user-tabs');
-  if(!root) return;
-  var tabs=[].slice.call(root.querySelectorAll('[data-modify-tab]'));
-  var panels=[].slice.call(root.querySelectorAll('.modify-tabpanel'));
-  function known(id){
-    return !!root.querySelector('[data-modify-tab="'+id+'"]');
-  }
   function resolve(raw){
     var v=String(raw||'').toLowerCase().replace(/^#/,'');
     if(v==='passkeys'||v==='passkey'||v==='totp'||v==='password'||v==='mfa') return 'security';
@@ -73,18 +67,12 @@ pub fn modify_tabs_script() -> &'static str {
     if(v==='security'||v==='account'||v==='other') return v;
     return '';
   }
-  function syncUrl(id){
-    try{
-      if(root.closest && root.closest('dialog')) return;
-      var u=new URL(location.href);
-      u.searchParams.set('tab', id);
-      // Canonical deep-link is ?tab= only. Clear any leftover hash fragment.
-      u.hash='';
-      history.replaceState(null,'', u.pathname+u.search);
-    }catch(e){}
-  }
-  function activate(id, pushUrl){
-    if(!known(id)) id='account';
+  function activateIn(root, id, pushUrl){
+    if(!root) return;
+    var tabs=[].slice.call(root.querySelectorAll('[data-modify-tab]'));
+    var panels=[].slice.call(root.querySelectorAll('.modify-tabpanel'));
+    var known=!!root.querySelector('[data-modify-tab="'+id+'"]');
+    if(!known) id='account';
     tabs.forEach(function(btn){
       var on=btn.getAttribute('data-modify-tab')===id;
       btn.setAttribute('aria-selected', on?'true':'false');
@@ -94,41 +82,74 @@ pub fn modify_tabs_script() -> &'static str {
       var on=panel.id==='modify-panel-'+id;
       if(on) panel.removeAttribute('hidden'); else panel.setAttribute('hidden','');
     });
-    if(pushUrl) syncUrl(id);
+    if(pushUrl){
+      try{
+        if(root.closest && root.closest('dialog')) return;
+        var u=new URL(location.href);
+        u.searchParams.set('tab', id);
+        u.hash='';
+        history.replaceState(null,'', u.pathname+u.search);
+      }catch(e){}
+    }
   }
-  tabs.forEach(function(btn, idx){
-    btn.addEventListener('click', function(){
-      activate(btn.getAttribute('data-modify-tab'), true);
+  if(!window.__cpnModifyTabsBound){
+    window.__cpnModifyTabsBound=1;
+    document.addEventListener('click', function(ev){
+      var t=ev.target;
+      if(!t||!t.closest) return;
+      var btn=t.closest('[data-modify-tab]');
+      if(!btn) return;
+      var root=btn.closest('.modify-tabs');
+      if(!root) return;
+      ev.preventDefault();
+      activateIn(root, btn.getAttribute('data-modify-tab'), true);
       btn.focus();
     });
-    btn.addEventListener('keydown', function(ev){
+    document.addEventListener('keydown', function(ev){
+      var t=ev.target;
+      if(!t||!t.closest) return;
+      var btn=t.closest('[data-modify-tab]');
+      if(!btn) return;
+      var root=btn.closest('.modify-tabs');
+      if(!root) return;
       var key=ev.key;
       if(key!=='ArrowLeft' && key!=='ArrowRight' && key!=='Home' && key!=='End') return;
       ev.preventDefault();
+      var tabs=[].slice.call(root.querySelectorAll('[data-modify-tab]'));
+      var idx=tabs.indexOf(btn);
+      if(idx<0) return;
       var next=idx;
       if(key==='ArrowLeft') next=(idx-1+tabs.length)%tabs.length;
       if(key==='ArrowRight') next=(idx+1)%tabs.length;
       if(key==='Home') next=0;
       if(key==='End') next=tabs.length-1;
       tabs[next].focus();
-      activate(tabs[next].getAttribute('data-modify-tab'), true);
+      activateIn(root, tabs[next].getAttribute('data-modify-tab'), true);
     });
+  }
+  var roots=[].slice.call(document.querySelectorAll('.modify-tabs'));
+  roots.forEach(function(root){
+    var inDialog=!!(root.closest && root.closest('dialog'));
+    var want='';
+    if(!inDialog){
+      try{
+        var q=new URLSearchParams(location.search||'');
+        want=resolve(q.get('tab')||'');
+        if(!want && q.get('enroll')==='1') want='security';
+      }catch(e){}
+      var hashTab=resolve((location.hash||'').replace(/^#/,''));
+      if(!want && hashTab) want=hashTab;
+    }
+    if(!want) want=resolve(root.getAttribute('data-initial-tab')||'');
+    if(!want) want='account';
+    var hadHash=false;
+    var qHasTab=false;
+    if(!inDialog){
+      hadHash=!!((location.hash||'').replace(/^#/,''));
+      try{ qHasTab=!!(new URLSearchParams(location.search||'').get('tab')); }catch(e){}
+    }
+    activateIn(root, want, !inDialog && (hadHash || !qHasTab));
   });
-  var want='';
-  try{
-    var q=new URLSearchParams(location.search||'');
-    want=resolve(q.get('tab')||'');
-    if(!want && q.get('enroll')==='1') want='security';
-  }catch(e){}
-  // Accept legacy hash deep-links once (#security, #passkeys), then normalize to ?tab=.
-  var hashTab=resolve((location.hash||'').replace(/^#/,''));
-  if(!want && hashTab) want=hashTab;
-  if(!want) want=resolve(root.getAttribute('data-initial-tab')||'');
-  if(!want || !known(want)) want='account';
-  var hadHash=!!((location.hash||'').replace(/^#/,''));
-  var qHasTab=false;
-  try{ qHasTab=!!(new URLSearchParams(location.search||'').get('tab')); }catch(e){}
-  activate(want, hadHash || !qHasTab);
 })();
 "#
 }
@@ -255,8 +276,8 @@ mod tests {
     fn tab_script_uses_query_only_not_hash() {
         let html = wrap_modify_tabs("<p>a</p>", "<p>s</p>", None, "account");
         assert!(
-            html.contains("u.searchParams.set('tab', id)"),
-            "tab switching must update ?tab="
+            html.contains("closest('[data-modify-tab]')"),
+            "tabs must use delegated clicks so modal innerHTML still switches panels"
         );
         assert!(
             html.contains("u.hash=''"),

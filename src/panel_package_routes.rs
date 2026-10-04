@@ -91,6 +91,10 @@ pub struct PackageForm {
     #[serde(default)]
     email_filters: String,
     #[serde(default)]
+    alias_domains: String,
+    #[serde(default)]
+    subdomains: String,
+    #[serde(default)]
     fqdn_enabled: String,
     #[serde(default)]
     notes: String,
@@ -137,6 +141,8 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         autoresponders: collect_form_value(pairs, "autoresponders"),
         forwarders: collect_form_value(pairs, "forwarders"),
         email_filters: collect_form_value(pairs, "email_filters"),
+        alias_domains: collect_form_value(pairs, "alias_domains"),
+        subdomains: collect_form_value(pairs, "subdomains"),
         fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
         notes: collect_form_value(pairs, "notes"),
     };
@@ -158,6 +164,8 @@ impl PackageForm {
             autoresponders: parse_limit_or_default(&self.autoresponders, "autoresponders")?,
             forwarders: parse_limit_or_default(&self.forwarders, "forwarders")?,
             email_filters: parse_limit_or_default(&self.email_filters, "email_filters")?,
+            alias_domains: parse_limit_or_default(&self.alias_domains, "alias_domains")?,
+            subdomains: parse_limit_or_default(&self.subdomains, "subdomains")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
             sidebar_hidden_nav_ids,
