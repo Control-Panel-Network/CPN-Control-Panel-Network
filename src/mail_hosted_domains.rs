@@ -1,20 +1,10 @@
 //! Hosted-domain local delivery for the CPN Postfix + Dovecot stack.
 //!
-//! Panel mailboxes are system users (`smoke@example.com` is system user `smoke`,
-//! Maildir under `/home/smoke/Maildir`). Postfix only delivers locally for domains
-//! in `mydestination`; for any other domain it looks up MX and relays to the
-//! public mail host, which bounces with `User unknown`.
+//! Mailboxes are system users (`smoke@example.com` -> user `smoke`, Maildir
+//! `/home/smoke/Maildir`). Unknown recipients in a hosted domain bounce unless
+//! Postfix is loopback-only (then unknown addresses relay to the public MX).
 //!
-//! This module publishes two Postfix hash tables owned by CPN and wires them into
-//! `main.cf` through `virtual_alias_domains` and `virtual_alias_maps`:
-//!
-//! - `/etc/postfix/cpn_virtual_domains`: every domain that has an enabled local mailbox
-//! - `/etc/postfix/cpn_virtual_aliases`: `user@domain  user@<myhostname>` per mailbox
-//!
-//! Only explicit mailbox addresses are accepted. Unknown recipients in a hosted
-//! domain are rejected at SMTP time (`User unknown in virtual alias table`),
-//! and domains without any local mailbox are never intercepted, so mail for
-//! sites that use an external mail provider keeps relaying normally.
+//! Maps: `/etc/postfix/cpn_virtual_domains` and `/etc/postfix/cpn_virtual_aliases`.
 
 use crate::mail_accounts::{MailAccount, MailSmtpMode};
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,6 +146,26 @@ pub fn merge_list_value(existing: &str, reference: &str) -> String {
     parts.join(", ")
 }
 
+/// True when Postfix only listens on loopback, so this host cannot be the public MX.
+pub fn inet_interfaces_loopback_only(raw: &str) -> bool {
+    let parts: Vec<&str> = raw
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.is_empty() {
+        return false;
+    }
+    parts.iter().all(|part| {
+        let lower = part.to_ascii_lowercase();
+        lower == "loopback-only"
+            || lower == "localhost"
+            || lower == "localhost.localdomain"
+            || lower == "127.0.0.1"
+            || lower == "::1"
+    })
+}
+
 #[cfg(unix)]
 mod unix_impl {
     use super::*;
@@ -279,13 +289,19 @@ mod unix_impl {
         }
         let accounts = crate::mail_accounts::list_accounts();
         let excluded = mydestination_domains();
-        let plan = plan_from_accounts(
+        let mut plan = plan_from_accounts(
             &accounts,
             &crate::panel_ops_mailbox_provision::user_exists,
             &excluded,
         );
+        // Loopback-only Postfix cannot be the public MX. Exclusive
+        // virtual_alias_domains would bounce unknown recipients (Feedback to
+        // info@ on a domain that also has one lab mailbox) instead of relaying.
+        if inet_interfaces_loopback_only(&postconf_value(&["-h", "inet_interfaces"])) {
+            plan.domains.clear();
+        }
         let domains_present = Path::new(VIRTUAL_DOMAINS_PATH).exists();
-        if plan.domains.is_empty() && !domains_present {
+        if plan.mailboxes.is_empty() && plan.domains.is_empty() && !domains_present {
             return Ok(HostedMailReport {
                 skipped: Some("No hosted mailboxes to route".into()),
                 ..HostedMailReport::default()
@@ -465,5 +481,15 @@ mod tests {
         let stale = map_reference("hash", VIRTUAL_ALIASES_PATH);
         let merged = merge_list_value(&format!("hash:/etc/postfix/virtual, {stale}"), &lmdb);
         assert_eq!(merged, format!("hash:/etc/postfix/virtual, {lmdb}"));
+    }
+
+    #[test]
+    fn loopback_interfaces_are_not_treated_as_public_mx() {
+        assert!(inet_interfaces_loopback_only("localhost"));
+        assert!(inet_interfaces_loopback_only("127.0.0.1, ::1"));
+        assert!(inet_interfaces_loopback_only("loopback-only"));
+        assert!(!inet_interfaces_loopback_only("all"));
+        assert!(!inet_interfaces_loopback_only("127.0.0.1, 10.0.2.15"));
+        assert!(!inet_interfaces_loopback_only(""));
     }
 }
