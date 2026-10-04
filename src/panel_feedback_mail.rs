@@ -79,10 +79,7 @@ Message:\r\n{message}\r\n",
 }
 
 fn nl2br_escaped(value: &str) -> String {
-    html_escape(value)
-        .replace("\r\n", "<br>")
-        .replace('\n', "<br>")
-        .replace('\r', "<br>")
+    html_escape(value).lines().collect::<Vec<_>>().join("<br>")
 }
 
 fn meta_row(label: &str, value: &str) -> String {
