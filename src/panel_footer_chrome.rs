@@ -118,6 +118,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
         r#"<span class="notify-badge" id="cpn-notify-badge" hidden>0</span>"#.to_string()
     };
     let toggle = sidebar_theme_toggle(color_mode);
+    let feedback = crate::panel_feedback::feedback_markup(username);
     format!(
         r#"<div class="sidebar-footer-actions">
           <div class="notify-wrap">
@@ -138,12 +139,14 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
           </div>
           <a class="footer-icon-btn" href="/account/users/profile"
             aria-label="Account settings" title="Account settings">{gear}</a>
+          {feedback}
           {toggle}
         </div>
         <a class="logout" href="/logout">Log out</a>"#,
         bell = bell_svg(),
         badge = badge,
         gear = gear_svg(),
+        feedback = feedback,
         toggle = toggle,
     )
 }
@@ -318,6 +321,8 @@ mod tests {
             let html = sidebar_footer_markup("Admin", ColorMode::Light);
             assert!(html.contains("cpn-notify-btn"));
             assert!(html.contains("/account/users/profile"));
+            assert!(html.contains("cpn-feedback-btn"));
+            assert!(html.find("cpn-feedback-btn") < html.find("cpn-color-toggle"));
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
             assert!(html.contains("Mark all as read"));
