@@ -191,6 +191,11 @@ fn encode_body(raw: Vec<u8>, preferred: ContentTransferEncoding) -> Result<Body,
         .map_err(|_| "Could not encode email body".to_string())
 }
 
+fn mail_content_type(spec: &'static str) -> Result<ContentType, String> {
+    spec.parse::<ContentType>()
+        .map_err(|error| format!("Could not set mail content type: {error}"))
+}
+
 fn text_part(
     body: &str,
     content_type: ContentType,
@@ -214,7 +219,7 @@ fn build_plain_message(
         .subject(sanitize_header(subject))
         .singlepart(text_part(
             body,
-            ContentType::TEXT_PLAIN,
+            mail_content_type("text/plain; charset=utf-8")?,
             ContentTransferEncoding::SevenBit,
         )?)
         .map_err(|error| format!("Could not build email: {error}"))
@@ -238,13 +243,15 @@ fn build_outbound_message(
             MultiPart::alternative()
                 .singlepart(text_part(
                     body,
-                    ContentType::TEXT_PLAIN,
+                    mail_content_type("text/plain; charset=utf-8")?,
                     ContentTransferEncoding::QuotedPrintable,
                 )?)
                 .singlepart(text_part(
                     html,
-                    ContentType::TEXT_HTML,
-                    ContentTransferEncoding::QuotedPrintable,
+                    mail_content_type("text/html; charset=utf-8")?,
+                    // 8bit keeps tags and CSS readable for clients that sniff
+                    // HTML before quoted-printable decode. Falls back in encode_body.
+                    ContentTransferEncoding::EightBit,
                 )?),
         )
         .map_err(|error| format!("Could not build email: {error}"))
@@ -450,11 +457,26 @@ mod tests {
         assert!(lower.contains("from:"));
         assert!(lower.contains("cpn panel"));
         assert!(lower.contains("cpn-panel@localhost"));
+        assert!(lower.contains("mime-version: 1.0"));
         assert!(lower.contains("multipart/alternative"));
         assert!(lower.contains("text/plain"));
         assert!(lower.contains("text/html"));
+        assert!(lower.contains("charset=utf-8"));
+        let plain_at = lower
+            .find("text/plain")
+            .expect("plain part");
+        let html_at = lower
+            .find("text/html")
+            .expect("html part");
+        assert!(
+            html_at > plain_at,
+            "HTML alternative must be last so clients prefer it"
+        );
         assert!(raw.contains("CPN Panel feedback"));
-        assert!(raw.contains("Hello") && raw.contains("script"));
+        assert!(
+            raw.contains("<p>Hello"),
+            "HTML tags must appear decoded in the raw message:\n{raw}"
+        );
         assert!(!raw.to_ascii_lowercase().contains("cyberpanel"));
     }
 }
