@@ -397,94 +397,9 @@ pub(crate) fn restart_litespeed() -> String {
     "Could not restart LiteSpeed automatically; restart the service from Server > Services.".into()
 }
 
-/// Soft package refresh for OpenLiteSpeed (best-effort).
-pub fn upgrade_openlitespeed_packages() -> Result<String, String> {
-    if !openlitespeed_installed() {
-        return Err("OpenLiteSpeed is not installed on this host.".into());
-    }
-    if Command::new("dnf").arg("--version").status().is_ok() {
-        let status = Command::new("dnf")
-            .args(["upgrade", "-y", "openlitespeed"])
-            .status()
-            .map_err(|e| format!("dnf: {e}"))?;
-        if !status.success() {
-            return Err("dnf upgrade openlitespeed failed.".into());
-        }
-        let _ = restart_litespeed();
-        return Ok("OpenLiteSpeed packages upgraded via dnf.".into());
-    }
-    if Command::new("apt-get").arg("--version").status().is_ok() {
-        let _ = Command::new("apt-get").args(["update", "-y"]).status();
-        let status = Command::new("apt-get")
-            .args(["install", "--only-upgrade", "-y", "openlitespeed"])
-            .status()
-            .map_err(|e| format!("apt-get: {e}"))?;
-        if !status.success() {
-            return Err("apt-get upgrade openlitespeed failed.".into());
-        }
-        let _ = restart_litespeed();
-        return Ok("OpenLiteSpeed packages upgraded via apt.".into());
-    }
-    Err("No supported package manager (dnf/apt-get).".into())
-}
-
-/// Best-effort downgrade of `openlitespeed` to an explicit version string.
-pub fn downgrade_openlitespeed_to(version: &str) -> Result<String, String> {
-    let version = version.trim();
-    if version.is_empty()
-        || version.contains(' ')
-        || version.contains(';')
-        || version.contains('&')
-        || version.contains('|')
-        || version.contains('`')
-    {
-        return Err("Provide a clean package version (example: 1.8.2).".into());
-    }
-    if !openlitespeed_installed() {
-        return Err("OpenLiteSpeed is not installed on this host.".into());
-    }
-    let pkg = format!("openlitespeed-{version}");
-    if Command::new("dnf").arg("--version").status().is_ok() {
-        let status = Command::new("dnf")
-            .args(["downgrade", "-y", &pkg])
-            .status()
-            .map_err(|e| format!("dnf: {e}"))?;
-        if !status.success() {
-            let status2 = Command::new("dnf")
-                .args(["install", "-y", "--allowerasing", &pkg])
-                .status()
-                .map_err(|e| format!("dnf: {e}"))?;
-            if !status2.success() {
-                return Err(format!(
-                    "dnf could not downgrade/install {pkg}. Check repo mirrors for that version."
-                ));
-            }
-        }
-        let _ = restart_litespeed();
-        return Ok(format!("OpenLiteSpeed moved toward {pkg} via dnf."));
-    }
-    if Command::new("apt-get").arg("--version").status().is_ok() {
-        let status = Command::new("apt-get")
-            .args([
-                "install",
-                "-y",
-                "--allow-downgrades",
-                &format!("openlitespeed={version}"),
-            ])
-            .status()
-            .map_err(|e| format!("apt-get: {e}"))?;
-        if !status.success() {
-            return Err(format!(
-                "apt-get could not install openlitespeed={version}."
-            ));
-        }
-        let _ = restart_litespeed();
-        return Ok(format!(
-            "OpenLiteSpeed moved toward openlitespeed={version} via apt."
-        ));
-    }
-    Err("No supported package manager (dnf/apt-get).".into())
-}
+pub use crate::litespeed_packages::{
+    downgrade_openlitespeed_to, repair_openlitespeed, upgrade_openlitespeed_packages,
+};
 
 #[cfg(test)]
 mod tests {

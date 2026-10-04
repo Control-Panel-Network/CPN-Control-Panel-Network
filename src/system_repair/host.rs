@@ -11,7 +11,7 @@ use crate::service_detect::{self, port_open, systemd_unit_active};
 use std::path::Path;
 use std::process::Command;
 
-pub const HOST_HEAL_IDS: &[&str] = &["firewall", "phpmyadmin", "docker.engine"];
+pub const HOST_HEAL_IDS: &[&str] = &["firewall", "openlitespeed", "phpmyadmin", "docker.engine"];
 
 fn free_disk_mb(path: &str) -> Option<(u64, u64)> {
     #[cfg(unix)]
@@ -105,13 +105,21 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
     let ols_active = systemd_unit_active("lshttpd")
         || systemd_unit_active("lsws")
         || (litespeed_stack::openlitespeed_installed() && port_open("127.0.0.1:80", 250));
+    let ols_apt_repo_healthy = !Path::new("/etc/debian_version").is_file()
+        || crate::install_recipes::openlitespeed_apt_repository_healthy();
+    let ols_needs_heal = ols && (!ols_active || !ols_apt_repo_healthy);
     push(
         checks,
         "host.web_server",
         "web",
         "Web server",
         if ols {
-            if ols_active || port_open("127.0.0.1:80", 250) || port_open("127.0.0.1:443", 250) {
+            if ols_needs_heal {
+                CheckStatus::Warn
+            } else if ols_active
+                || port_open("127.0.0.1:80", 250)
+                || port_open("127.0.0.1:443", 250)
+            {
                 CheckStatus::Pass
             } else {
                 CheckStatus::Warn
@@ -120,7 +128,9 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             CheckStatus::Pass
         },
         if ols {
-            if ols_active || port_open("127.0.0.1:80", 250) {
+            if !ols_apt_repo_healthy {
+                "OpenLiteSpeed is installed, but its apt repository/keyring needs repair"
+            } else if ols_active || port_open("127.0.0.1:80", 250) {
                 "OpenLiteSpeed / lshttpd present and responding"
             } else {
                 "OLS/lshttpd binary present but HTTP listeners quiet"
@@ -129,7 +139,11 @@ pub fn collect(checks: &mut Vec<super::RepairCheck>) {
             "no OLS/lshttpd binary detected (optional)"
         },
         false,
-        None,
+        if ols_needs_heal {
+            Some("openlitespeed")
+        } else {
+            None
+        },
     );
 
     if let Some((free_mb, total_mb)) = free_disk_mb("/") {
@@ -334,6 +348,31 @@ pub fn heal_firewall() -> HealResult {
 
 pub fn heal_phpmyadmin() -> HealResult {
     host_apps::heal_phpmyadmin()
+}
+
+pub fn heal_openlitespeed() -> HealResult {
+    #[cfg(unix)]
+    {
+        if unsafe { libc::geteuid() } != 0 {
+            return HealResult {
+                heal_id: "openlitespeed".into(),
+                ok: false,
+                message: "requires root".into(),
+            };
+        }
+    }
+    match litespeed_stack::repair_openlitespeed() {
+        Ok(message) => HealResult {
+            heal_id: "openlitespeed".into(),
+            ok: true,
+            message,
+        },
+        Err(message) => HealResult {
+            heal_id: "openlitespeed".into(),
+            ok: false,
+            message,
+        },
+    }
 }
 
 pub fn heal_docker_engine() -> HealResult {
