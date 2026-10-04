@@ -546,6 +546,9 @@ mod tests {
         let lock = sidebar_nav_contrast_styles();
         assert!(lock.contains("html[data-color-mode=\"light\"]"));
         assert!(lock.contains("html[data-color-mode=\"dark\"]"));
+        assert!(lock.contains("--ink:#111318"));
+        assert!(lock.contains(".sidebar-search-field"));
+        assert!(lock.contains(".footer-icon-btn"));
         assert!(lock.contains("background:#1c212b"));
         assert!(lock.contains("color:#e5e7eb"));
     }

@@ -7,6 +7,7 @@ use lettre::message::{Body, Mailbox, Message, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{SmtpTransport, Transport};
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct OutboundMessage {
@@ -15,33 +16,114 @@ pub struct OutboundMessage {
     pub body: String,
 }
 
-pub fn smtp_is_ready() -> bool {
-    if load_smtp().is_some_and(|settings| {
-        !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
-    }) {
-        return true;
-    }
-    postfix_is_ready()
+fn smtp_configured(settings: &SmtpSettings) -> bool {
+    !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
 }
 
-/// Resolve outbound settings: disk SMTP first, else Postfix localhost when ready.
+/// Owner-configured outbound provider from `smtp.json` (installer SMTP or a mail plugin).
+/// Localhost rows without credentials are treated as Postfix, not a remote provider.
+pub fn configured_provider_smtp() -> Option<SmtpSettings> {
+    let settings = load_smtp().filter(smtp_configured)?;
+    let host = settings.host.trim();
+    let local = host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost");
+    if local && settings.username.trim().is_empty() {
+        return None;
+    }
+    Some(settings)
+}
+
+pub fn smtp_is_ready() -> bool {
+    configured_provider_smtp().is_some() || postfix_is_ready()
+}
+
+/// Resolve outbound settings: configured provider first, else Postfix localhost.
 pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings, String> {
-    if let Some(settings) = load_smtp()
-        && !settings.host.trim().is_empty()
-        && !settings.from_address.trim().is_empty()
-    {
+    if let Some(settings) = configured_provider_smtp() {
         return Ok(settings);
     }
     if postfix_is_ready() {
         return Ok(postfix_local_smtp(from_hint.unwrap_or("")));
     }
-    Err("No outbound mail path: configure SMTP or install/enable local Postfix.".into())
+    Err(
+        "No outbound mail path: install and configure an outbound mail provider plugin, or enable local Postfix."
+            .into(),
+    )
 }
 
-/// Best-effort send via configured SMTP or Postfix localhost.
+/// Operator-facing mail error. Never include passwords, tokens, or AUTH secrets.
+pub fn public_mail_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("5.1.1") || lower.contains("virtual alias") || lower.contains("user unknown")
+    {
+        return "Local Postfix treated the support inbox as a hosted mailbox. Feedback uses a panel outbound listener on port 2525 that relays off-box. Configure an outbound mail provider plugin if this host cannot reach the internet.".into();
+    }
+    if lower.contains("relay")
+        || lower.contains("5.7.1")
+        || lower.contains("authentication required")
+        || lower.contains("sasl")
+    {
+        return "Local mail rejected the message (relay or authentication). Feedback uses Postfix on port 25 without AUTH. Configure an outbound mail provider plugin if this host cannot send to the internet.".into();
+    }
+    if lower.contains("connection refused")
+        || (lower.contains("connect") && lower.contains("os error"))
+    {
+        return "Could not connect to the mail service. Enable Postfix or the installed outbound mail provider.".into();
+    }
+    if lower.contains("timed out") || lower.contains("timeout") {
+        return "Mail server timed out. Check Postfix or the outbound provider host and TLS settings.".into();
+    }
+    if lower.contains("starttls") || (lower.contains("tls") && lower.contains("failed")) {
+        return "Mail TLS handshake failed. Set the correct TLS mode on the outbound mail provider, or use local Postfix.".into();
+    }
+    if lower.contains("invalid smtp from") || lower.contains("invalid recipient") {
+        return "Mail From or recipient address is not valid.".into();
+    }
+    let mut cleaned = raw.replace(['\r', '\n'], " ");
+    for needle in ["password=", "password:", "passwd=", "auth "] {
+        if let Some(idx) = cleaned.to_ascii_lowercase().find(needle) {
+            cleaned.truncate(idx);
+            cleaned.push_str("[redacted]");
+            break;
+        }
+    }
+    cleaned = cleaned.chars().take(180).collect();
+    if cleaned.trim().is_empty() {
+        return "Feedback could not be delivered. Configure an outbound mail provider or local Postfix.".into();
+    }
+    format!("Feedback could not be delivered: {cleaned}")
+}
+
+/// Best-effort send via configured SMTP provider, then Postfix localhost.
 pub fn send_mail(message: &OutboundMessage) -> Result<(), String> {
-    let settings = resolve_outbound_settings(Some(message.to.as_str()))?;
-    send_mail_with_settings(&settings, message)
+    send_mail_with_fallback(message)
+}
+
+pub fn send_mail_with_fallback(message: &OutboundMessage) -> Result<(), String> {
+    if let Some(settings) = configured_provider_smtp() {
+        match send_mail_with_settings(&settings, message) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if postfix_is_ready() {
+                    let _ = crate::postfix_fallback::ensure_postfix_panel_outbound();
+                    let local = postfix_local_smtp("");
+                    match send_mail_with_settings(&local, message) {
+                        Ok(()) => return Ok(()),
+                        Err(local_error) => return Err(public_mail_error(&local_error)),
+                    }
+                }
+                return Err(public_mail_error(&error));
+            }
+        }
+    }
+    if postfix_is_ready() {
+        let _ = crate::postfix_fallback::ensure_postfix_panel_outbound();
+        return send_mail_with_settings(&postfix_local_smtp(""), message)
+            .map_err(|error| public_mail_error(&error));
+    }
+    Err(
+        "No outbound mail path: install and configure an outbound mail provider plugin, or enable local Postfix."
+            .into(),
+    )
 }
 
 pub fn send_mail_with_settings(
@@ -102,6 +184,7 @@ fn build_plain_message(
 
 fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
     let host = settings.host.trim();
+    let timeout = Some(Duration::from_secs(20));
     let mut builder = match settings.tls_mode {
         SmtpTlsMode::Tls => {
             let tls = TlsParameters::new(host.to_string())
@@ -109,6 +192,7 @@ fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
             SmtpTransport::relay(host)
                 .map_err(|error| format!("SMTP relay setup failed: {error}"))?
                 .port(settings.port)
+                .timeout(timeout)
                 .tls(Tls::Wrapper(tls))
         }
         SmtpTlsMode::Starttls => {
@@ -117,9 +201,12 @@ fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
             SmtpTransport::starttls_relay(host)
                 .map_err(|error| format!("SMTP STARTTLS setup failed: {error}"))?
                 .port(settings.port)
+                .timeout(timeout)
                 .tls(Tls::Required(tls))
         }
-        SmtpTlsMode::None => SmtpTransport::builder_dangerous(host).port(settings.port),
+        SmtpTlsMode::None => SmtpTransport::builder_dangerous(host)
+            .port(settings.port)
+            .timeout(timeout),
     };
 
     if !settings.username.trim().is_empty() {
@@ -211,6 +298,18 @@ pub fn build_password_reset_notice(login_url: &str) -> OutboundMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn public_mail_error_hides_secrets_and_maps_relay() {
+        let relay = public_mail_error(
+            "SMTP send failed: 5.7.1 Relay access denied AUTH LOGIN password=supersecret",
+        );
+        assert!(!relay.to_ascii_lowercase().contains("supersecret"));
+        assert!(relay.contains("port 25") || relay.contains("relay"));
+        let auth = public_mail_error("failed password=hunter2");
+        assert!(!auth.contains("hunter2"));
+        assert!(auth.contains("[redacted]") || auth.contains("delivered"));
+    }
 
     #[test]
     fn password_reset_email_contains_token_url() {

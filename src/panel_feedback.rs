@@ -1,11 +1,11 @@
-//! Authenticated sidebar feedback modal and dual-recipient mail delivery.
+//! Authenticated sidebar Feedback button and viewport-centered mail dialog.
 
 use crate::account::now_unix;
 use crate::account_mgmt::find_account;
 use crate::auth_api::panel_user_from_request;
 use crate::http_helpers::VERSION;
 use crate::installer::AppState;
-use crate::mail_outbound::{OutboundMessage, resolve_outbound_settings, send_mail_with_settings};
+use crate::mail_outbound::{OutboundMessage, send_mail_with_fallback};
 use crate::panel_session::session_secret;
 use crate::panel_site_tools_security::same_origin_ok;
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -209,15 +209,6 @@ pub async fn panel_feedback_submit(
         message,
         &safe_host(&http),
     );
-    let settings = match resolve_outbound_settings(Some(RECIPIENTS[0])) {
-        Ok(settings) => settings,
-        Err(_) => {
-            return json_error(
-                actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
-                "Mail delivery is not configured on this panel.",
-            );
-        }
-    };
 
     for recipient in RECIPIENTS {
         let outbound = OutboundMessage {
@@ -225,15 +216,9 @@ pub async fn panel_feedback_submit(
             subject: format!("[CPN Feedback] {subject}"),
             body: mail_body.clone(),
         };
-        if let Err(error) = send_mail_with_settings(&settings, &outbound) {
-            eprintln!(
-                "panel_feedback: mail delivery failed for a configured recipient: {}",
-                error
-            );
-            return json_error(
-                actix_web::http::StatusCode::BAD_GATEWAY,
-                "Feedback could not be delivered. Try again later.",
-            );
+        if let Err(error) = send_mail_with_fallback(&outbound) {
+            eprintln!("panel_feedback: mail delivery failed for a configured recipient");
+            return json_error(actix_web::http::StatusCode::BAD_GATEWAY, &error);
         }
     }
 
@@ -298,17 +283,27 @@ pub fn feedback_markup(username: &str) -> String {
 
 pub fn feedback_styles() -> &'static str {
     r#"
+/* Viewport overlay (JS portals to body). Aside overflow/transform must not clip this. */
 .feedback-modal[hidden] { display:none !important; }
-.feedback-modal { position:fixed; inset:0; z-index:300; display:grid; place-items:center;
-  padding:18px; background:rgba(15,23,42,.58); }
-.feedback-dialog { width:min(560px,100%); max-height:calc(100dvh - 36px); overflow:auto;
-  padding:20px; border:1px solid var(--hairline); border-radius:14px;
-  background:var(--canvas); color:var(--ink); box-shadow:0 24px 60px rgba(0,0,0,.28); }
+body > .feedback-modal, .feedback-modal {
+  position:fixed !important; inset:0 !important; left:0; top:0; right:0; bottom:0;
+  width:100vw; width:100dvw; height:100vh; height:100dvh; margin:0;
+  z-index:400; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:rgba(15,23,42,.58); box-sizing:border-box;
+  transform:none !important; filter:none !important;
+}
+.feedback-dialog {
+  position:relative; flex:0 1 auto; margin:0 auto;
+  width:min(560px, calc(100vw - 48px)); max-height:min(720px, calc(100dvh - 48px));
+  overflow:auto; padding:22px 22px 18px; border:1px solid var(--hairline); border-radius:14px;
+  background:var(--canvas); color:var(--ink); box-shadow:0 24px 60px rgba(0,0,0,.28);
+}
 .feedback-dialog header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.feedback-dialog h2 { margin:0; font-size:22px; }
-.feedback-close { border:0; background:transparent; color:var(--muted); font-size:28px; line-height:1; }
+.feedback-dialog h2 { margin:0; font-size:22px; color:var(--ink); }
+.feedback-close { border:0; background:transparent; color:var(--muted); font-size:28px; line-height:1; cursor:pointer; }
+.feedback-close:hover { color:var(--ink); }
 #cpn-feedback-form { display:grid; gap:14px; margin-top:14px; }
-#cpn-feedback-form label { display:grid; gap:6px; font-size:14px; font-weight:600; }
+#cpn-feedback-form label { display:grid; gap:6px; font-size:14px; font-weight:600; color:var(--ink); }
 #cpn-feedback-form input, #cpn-feedback-form select, #cpn-feedback-form textarea {
   width:100%; padding:10px 12px; border:1px solid var(--hairline); border-radius:9px;
   background:var(--canvas); color:var(--ink); font:inherit; color-scheme:light dark; }
@@ -322,10 +317,12 @@ pub fn feedback_styles() -> &'static str {
 .feedback-cancel { border:1px solid var(--hairline); background:var(--canvas); color:var(--ink); }
 .feedback-submit { border:1px solid var(--blue); background:var(--blue); color:#fff; font-weight:600; }
 .feedback-submit:disabled { opacity:.65; cursor:wait; }
+html[data-color-mode="dark"] .feedback-dialog,
+[data-color-mode="dark"] .feedback-dialog { background:#161b22; color:#e5e7eb; }
 [data-color-mode="dark"] .feedback-status.error { color:#fda4af; }
 @media (max-width:520px) {
-  .feedback-modal { align-items:end; padding:10px; }
-  .feedback-dialog { max-height:calc(100dvh - 20px); padding:16px; }
+  .feedback-modal { padding:12px; align-items:center; justify-content:center; }
+  .feedback-dialog { width:min(560px, calc(100vw - 24px)); max-height:calc(100dvh - 24px); padding:16px; }
   .feedback-actions { flex-direction:column-reverse; }
   .feedback-actions button { width:100%; }
 }
@@ -344,6 +341,7 @@ pub fn feedback_script() -> &'static str {
   var cancelBtn=modal&&modal.querySelector(".feedback-cancel");
   var status=document.getElementById("cpn-feedback-status");
   if(!openBtn||!modal||!dialog||!form||!closeBtn||!status)return;
+  if(modal.parentNode!==document.body)document.body.appendChild(modal);
   var previousFocus=null;
   function focusable(){return Array.prototype.slice.call(dialog.querySelectorAll(
     'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')); }
@@ -429,6 +427,13 @@ mod tests {
             assert!(html.contains("aria-modal=\"true\""));
             assert!(feedback_script().contains("event.key===\"Escape\""));
             assert!(feedback_script().contains("/api/panel/feedback"));
+            assert!(feedback_script().contains("document.body.appendChild(modal)"));
+            let css = feedback_styles();
+            assert!(css.contains("z-index:400"));
+            assert!(css.contains("100vw") || css.contains("100dvw"));
+            assert!(css.contains("align-items:center"));
+            assert!(css.contains("justify-content:center"));
+            assert!(!css.contains("align-items:end"));
         });
     }
 }
