@@ -57,6 +57,12 @@ pub struct Package {
     /// Sieve email filter rules.
     #[serde(default = "crate::package_limits::default_unlimited")]
     pub email_filters: i64,
+    /// Parked / alias hostnames on owned sites.
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub alias_domains: i64,
+    /// Nested sub-domain sites (separate from main website count).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub subdomains: i64,
     pub fqdn_enabled: bool,
     #[serde(default)]
     pub notes: String,
@@ -102,6 +108,8 @@ pub struct PackageInput {
     pub autoresponders: i64,
     pub forwarders: i64,
     pub email_filters: i64,
+    pub alias_domains: i64,
+    pub subdomains: i64,
     pub fqdn_enabled: bool,
     pub notes: String,
     pub sidebar_hidden_nav_ids: Vec<String>,
@@ -121,6 +129,8 @@ impl Default for PackageInput {
             autoresponders: UNLIMITED,
             forwarders: UNLIMITED,
             email_filters: UNLIMITED,
+            alias_domains: UNLIMITED,
+            subdomains: UNLIMITED,
             fqdn_enabled: true,
             notes: String::new(),
             sidebar_hidden_nav_ids: Vec::new(),
@@ -152,6 +162,10 @@ pub struct PackageUsage {
     pub forwarders_limit: i64,
     pub email_filters_used: u64,
     pub email_filters_limit: i64,
+    pub alias_domains_used: u64,
+    pub alias_domains_limit: i64,
+    pub subdomains_used: u64,
+    pub subdomains_limit: i64,
     /// Sum of owned MariaDB schema sizes in bytes (informational; not a package count limit).
     pub database_disk_bytes: u64,
     pub fqdn_enabled: bool,
@@ -368,6 +382,8 @@ fn default_package() -> Package {
         autoresponders: 1000,
         forwarders: 1000,
         email_filters: 1000,
+        alias_domains: UNLIMITED,
+        subdomains: 20,
         fqdn_enabled: true,
         notes: "Created automatically on first boot".into(),
         sidebar_hidden_nav_ids: Vec::new(),
@@ -455,6 +471,8 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
         autoresponders: normalize_limit(input.autoresponders),
         forwarders: normalize_limit(input.forwarders),
         email_filters: normalize_limit(input.email_filters),
+        alias_domains: normalize_limit(input.alias_domains),
+        subdomains: normalize_limit(input.subdomains),
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
         sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
@@ -501,6 +519,8 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     pkg.autoresponders = normalize_limit(input.autoresponders);
     pkg.forwarders = normalize_limit(input.forwarders);
     pkg.email_filters = normalize_limit(input.email_filters);
+    pkg.alias_domains = normalize_limit(input.alias_domains);
+    pkg.subdomains = normalize_limit(input.subdomains);
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
     pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;

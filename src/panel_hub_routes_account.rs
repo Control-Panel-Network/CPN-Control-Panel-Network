@@ -453,4 +453,38 @@ pub async fn users_admin_details_post(
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct UserAssignPackageForm {
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    package_id: String,
+}
+
+#[post("/account/users/assign-package")]
+pub async fn users_assign_package_post(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<UserAssignPackageForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if let Err(error) = require_admin(&user) {
+        return redirect_notice("/account/users/list", None, Some(&error));
+    }
+    let target = form.username.trim();
+    match crate::packages::assign_package(target, form.package_id.trim()) {
+        Ok(()) => {
+            let loc = format!(
+                "/account/users/list?notice={}&manage={}",
+                crate::panel_hub_http::urlencoding_simple(&format!("Assigned package to {target}")),
+                crate::panel_hub_http::urlencoding_simple(target)
+            );
+            crate::panel_hub_http::redirect(&loc)
+        }
+        Err(error) => redirect_notice("/account/users/list", None, Some(&error)),
+    }
+}
+
 pub use crate::panel_hub_routes_account_acl::*;
