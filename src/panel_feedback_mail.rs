@@ -220,7 +220,8 @@ mod tests {
         assert!(html.contains("<br>"));
         assert!(!html.contains("multipart"));
         assert!(html.contains("CPN Panel"));
-        assert!(html.contains("Feedback"));
+        assert!(html.contains("Operator feedback"));
+        assert!(html.contains("HTML MESSAGE"));
         assert!(html.contains("04/10/2026 21:40 UTC"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
         assert!(!html.contains('\u{2014}'));
