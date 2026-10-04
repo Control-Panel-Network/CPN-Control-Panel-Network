@@ -81,17 +81,7 @@ async fn configure_openlitespeed(state: &AppState) -> Result<&'static str, Strin
         "docRoot                   $VH_ROOT/html/\nenableGzip                1\nindex  {\n  useServer               0\n  indexFiles              index.html, index.php\n}\n",
     )?;
 
-    run_command(
-        state,
-        command(
-            "chown",
-            vec!["-R", "nobody:nobody", "/var/www/cpn"],
-            "Adjusting permissions for OpenLiteSpeed",
-            "installing",
-            81,
-        ),
-    )
-    .await?;
+    run_command(state, crate::litespeed_runtime::ownership_command()).await?;
 
     let httpd = "/usr/local/lsws/conf/httpd_config.conf";
     let mut conf = std::fs::read_to_string(httpd)
