@@ -188,14 +188,8 @@ pub fn dashboard_stats_html(username: &str) -> String {
         row("FTP accounts", &count_html(ftp_used, ftp_limit)),
         row("Storage", &bytes_html(username, disk_used, disk_limit)),
         row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit)),
-        row(
-            "Alias domains",
-            &count_html(alias_used, alias_limit),
-        ),
-        row(
-            "Sub-domains",
-            &count_html(sub_used, sub_limit),
-        ),
+        row("Alias domains", &count_html(alias_used, alias_limit),),
+        row("Sub-domains", &count_html(sub_used, sub_limit),),
         row("Mailing lists", &count_html(lists_used, lists_limit)),
         row("Autoresponders", &count_html(ar_used, ar_limit)),
         row("Forwarders", &count_html(fwd_used, fwd_limit)),

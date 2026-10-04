@@ -126,10 +126,7 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         .into_iter()
         .filter(|s| names_equal(&s.owner, username))
         .collect();
-    let alias_domains_used = owned_sites
-        .iter()
-        .map(|s| s.aliases.len() as u64)
-        .sum();
+    let alias_domains_used = owned_sites.iter().map(|s| s.aliases.len() as u64).sum();
     let subdomains_used = owned_sites
         .iter()
         .filter(|s| is_subdomain_site(&s.domain))

@@ -1,8 +1,6 @@
 //! Hosting package picker for Manage user / Modify User Account tab.
 
-use crate::packages::{
-    DEFAULT_PACKAGE_ID, is_panel_admin, list_packages, package_for_account,
-};
+use crate::packages::{DEFAULT_PACKAGE_ID, is_panel_admin, list_packages, package_for_account};
 
 fn html_escape(value: &str) -> String {
     value

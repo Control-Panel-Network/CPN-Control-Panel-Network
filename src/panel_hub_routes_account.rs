@@ -478,9 +478,7 @@ pub async fn users_assign_package_post(
         Ok(()) => {
             let loc = format!(
                 "/account/users/list?notice={}&manage={}",
-                crate::panel_hub_http::urlencoding_simple(&format!(
-                    "Assigned package to {target}"
-                )),
+                crate::panel_hub_http::urlencoding_simple(&format!("Assigned package to {target}")),
                 crate::panel_hub_http::urlencoding_simple(target)
             );
             crate::panel_hub_http::redirect(&loc)
