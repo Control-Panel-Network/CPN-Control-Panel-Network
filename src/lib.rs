@@ -394,6 +394,8 @@ pub mod service_detect;
 pub mod sidebar_access_guard;
 pub mod sidebar_visibility;
 pub mod site_acl;
+pub mod site_app_backups;
+pub mod site_app_lifecycle;
 pub mod site_messages;
 pub mod site_preview_capture;
 pub mod site_preview_list_ui;

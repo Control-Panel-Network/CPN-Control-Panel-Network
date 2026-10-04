@@ -297,15 +297,24 @@ sudo cpn plugin migrate --domain example.com
 
 ## Apps
 
-Supported app IDs currently include MariaDB, PostgreSQL, phpMyAdmin, Email, RabbitMQ, and webmail packages (SnappyMail, Tachyon, and related). CPN does not offer Oracle MySQL as a host package.
+`app` also has the plural alias `apps`. Host app IDs include MariaDB, PostgreSQL, phpMyAdmin, Email, RabbitMQ, Redis, and webmail packages. Site lifecycle IDs are `cmsms`, `redis`, `node`, and `python`.
 
 ```bash
 cpn app list
+cpn apps list --domain example.com
 sudo cpn app install --name postgresql
+sudo cpn apps install --name cmsms --domain example.com --version 2.2.23
 sudo cpn app start --name postgresql
 sudo cpn app stop --name postgresql
 sudo cpn app reinstall --name postgresql --yes
 sudo cpn app uninstall --name postgresql --yes
+
+# Backup-first lifecycle operations
+sudo cpn apps update --name cmsms --domain example.com
+sudo cpn apps upgrade --name node --domain example.com
+sudo cpn apps downgrade --name python --domain example.com --version 3.11.9-1
+cpn apps backups list --name cmsms --domain example.com
+sudo cpn apps restore --name cmsms --domain example.com --backup latest
 ```
 
 Install, reinstall, and uninstall can optionally target a site:
@@ -320,7 +329,11 @@ Relevant options:
 - `--name <APP>` : application ID.
 - `--domain <DOMAIN>` : optional site scope.
 - `--subdomain <HOST>` : optional subdomain scope.
+- `--version <VERSION>` : exact version returned by the original package source.
+- `--backup <ID|latest>` : restore point shown by `cpn apps backups`.
 - `--yes` : skip confirmation for reinstall/uninstall.
+
+CMS Made Simple uses the verified official 2.2.x installer source. Redis, Node, and Python use the configured operating system package repositories. Every update, upgrade, or downgrade creates a restore point first. Site app backups are stored under `/home/<domain>/backups/apps/<app>/`; host Redis backups are stored under the protected CPN data directory.
 
 ## Hosting packages
 

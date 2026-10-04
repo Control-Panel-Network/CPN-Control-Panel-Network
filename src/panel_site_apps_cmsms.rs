@@ -8,7 +8,7 @@ use std::process::Command;
 
 pub const CMSMS_TARGET: &str = "2.2.23";
 pub const CMSMS_INSTALLER: &str = "cmsms-2.2.23-install.php";
-const CMSMS_INSTALLER_URL: &str =
+pub const CMSMS_INSTALLER_URL: &str =
     "https://s3.amazonaws.com/cmsms/downloads/15022/cmsms-2.2.23-install.php";
 
 #[derive(Debug, Clone)]
@@ -27,6 +27,13 @@ fn read_limited(path: &Path, max: usize) -> String {
             String::from_utf8_lossy(&b[..n]).into_owned()
         })
         .unwrap_or_default()
+}
+
+fn valid_installer(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|meta| meta.is_file() && meta.len() >= 80_000)
+        .unwrap_or(false)
+        && read_limited(path, 256).contains("<?php")
 }
 
 fn parse_cms_version(text: &str) -> Option<String> {
@@ -87,6 +94,15 @@ pub fn detect_cmsms(site: &SiteRecord) -> CmsmsStatus {
 }
 
 pub fn install_cmsms(site: &SiteRecord) -> Result<String, String> {
+    install_cmsms_version(site, CMSMS_TARGET)
+}
+
+pub fn install_cmsms_version(site: &SiteRecord, version: &str) -> Result<String, String> {
+    if version.trim() != CMSMS_TARGET {
+        return Err(format!(
+            "CMS Made Simple {version} is not in the verified 2.2.x installer catalog"
+        ));
+    }
     let doc = Path::new(&site.docroot);
     if is_wordpress_docroot(doc) {
         return Err(
@@ -95,24 +111,17 @@ pub fn install_cmsms(site: &SiteRecord) -> Result<String, String> {
         );
     }
     let current = detect_cmsms(site);
-    if current.installed {
-        return Ok(current.detail);
-    }
     fs::create_dir_all(doc).map_err(|e| format!("Could not create document root: {e}"))?;
     let dest = doc.join(CMSMS_INSTALLER);
     if dest.is_file() {
         return Ok(format!(
-            "Installer already present as {CMSMS_INSTALLER}. Open the site and finish CMS Made Simple setup."
+            "Installer already present as {CMSMS_INSTALLER}. Open the site and finish the CMS Made Simple install or update."
         ));
     }
     let cache_dir = crate::paths::join_data("cache");
     fs::create_dir_all(&cache_dir).map_err(|e| format!("Could not create cache dir: {e}"))?;
     let cached = cache_dir.join(CMSMS_INSTALLER);
-    if !cached.is_file()
-        || fs::metadata(&cached)
-            .map(|m| m.len() < 80_000)
-            .unwrap_or(true)
-    {
+    if !valid_installer(&cached) {
         let tmp = cache_dir.join(format!("{CMSMS_INSTALLER}.tmp"));
         let tmp_s = tmp
             .to_str()
@@ -137,6 +146,12 @@ pub fn install_cmsms(site: &SiteRecord) -> Result<String, String> {
                     .into(),
             );
         }
+        if !valid_installer(&tmp) {
+            let _ = fs::remove_file(&tmp);
+            return Err(
+                "The official CMS Made Simple source returned an invalid installer payload.".into(),
+            );
+        }
         fs::rename(&tmp, &cached).map_err(|e| format!("Could not store installer: {e}"))?;
     }
     fs::copy(&cached, &dest).map_err(|e| format!("Could not copy installer into the site: {e}"))?;
@@ -145,8 +160,9 @@ pub fn install_cmsms(site: &SiteRecord) -> Result<String, String> {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o644));
     }
+    let operation = if current.installed { "update" } else { "setup" };
     Ok(format!(
-        "Copied CMS Made Simple {CMSMS_TARGET} installer to the site document root as {CMSMS_INSTALLER}. Open the site to finish setup, then remove the installer."
+        "Copied CMS Made Simple {CMSMS_TARGET} installer to the site document root as {CMSMS_INSTALLER}. Open the site to finish {operation}, then remove the installer."
     ))
 }
 
