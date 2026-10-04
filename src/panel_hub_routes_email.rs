@@ -1,6 +1,8 @@
 //! Email hub feature routes.
 
 use crate::installer::AppState;
+use crate::mail_postfix_maps::owner_for_mail_domain;
+use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_http::{
     flash_messages, html_blocking, html_ok, html_ok_pop_flash, login_redirect, redirect_flash,
     redirect_notice, require_panel_user,
@@ -9,18 +11,16 @@ use crate::panel_hub_pages_email_auth::{
     email_bimi_page, email_mta_sts_page, push_bimi_cloudflare, push_mta_sts_cloudflare,
     save_bimi_form, save_mta_sts_form,
 };
-use crate::mail_postfix_maps::owner_for_mail_domain;
 use crate::panel_hub_pages_email_features::email_forwarding_page_v2;
 use crate::panel_hub_pages_hosting::{
     add_catchall, email_accounts_page, email_catchall_page, email_create_page, email_delivery_page,
     email_dkim_page, ensure_dkim,
 };
-use crate::panel_ops_email_acl::require_email_csrf;
-use crate::panel_ops_mail_extra::{add_forward_for, apply_forward_maps, remove_forward};
-use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_pages_webmail::{
     apply_regenerate_path, apply_webmail_settings_form, email_webmail_app_page, email_webmail_page,
 };
+use crate::panel_ops_email_acl::require_email_csrf;
+use crate::panel_ops_mail_extra::{add_forward_for, apply_forward_maps, remove_forward};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;

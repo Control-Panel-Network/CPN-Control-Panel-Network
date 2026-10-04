@@ -80,7 +80,10 @@ fn sieve_escape(value: &str) -> String {
 fn render_sieve_for_address(address: &str, rules: &[EmailFilter]) -> String {
     let mut out = String::from("require [\"fileinto\", \"mailbox\"];\n");
     let mut any = false;
-    for rule in rules.iter().filter(|r| r.enabled && r.address.eq_ignore_ascii_case(address)) {
+    for rule in rules
+        .iter()
+        .filter(|r| r.enabled && r.address.eq_ignore_ascii_case(address))
+    {
         let header = match rule.match_field.as_str() {
             "from_contains" => "From",
             "to_contains" => "To",
@@ -201,11 +204,7 @@ pub fn remove_filter(actor: &str, id: &str) -> Result<String, String> {
         return Err(format!("Filter `{id}` not found"));
     };
     let rule = store.rules.remove(pos);
-    let domain = rule
-        .address
-        .rsplit_once('@')
-        .map(|(_, d)| d)
-        .unwrap_or("");
+    let domain = rule.address.rsplit_once('@').map(|(_, d)| d).unwrap_or("");
     if !can_manage_mail_domain(actor, domain) {
         return Err("You cannot delete this filter".into());
     }

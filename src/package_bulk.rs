@@ -176,8 +176,8 @@ mod tests {
             fqdn_enabled: true,
             notes: "base".into(),
             sidebar_hidden_nav_ids: Vec::new(),
-                ..Default::default()
-            }
+            ..Default::default()
+        }
     }
 
     #[test]

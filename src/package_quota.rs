@@ -1,7 +1,5 @@
 //! Package quota usage and create-time enforcement.
 
-
-
 use crate::mail_accounts;
 
 use crate::packages::{PackageUsage, QuotaResource, format_limit_display, package_for_account};
@@ -24,98 +22,63 @@ use std::fs;
 
 use std::path::Path;
 
-
-
 fn names_equal(a: &str, b: &str) -> bool {
-
     a.trim().eq_ignore_ascii_case(b.trim())
-
 }
 
-
-
 fn owned_site_domains(username: &str) -> Result<Vec<String>, String> {
-
     let sites = list_sites()?;
 
     Ok(sites
-
         .into_iter()
-
         .filter(|s| names_equal(&s.owner, username))
-
         .map(|s| s.domain)
-
         .collect())
-
 }
 
-
-
 fn dir_size_mb(path: &Path, budget_bytes: &mut u64) -> u64 {
-
     if *budget_bytes == 0 {
-
         return 0;
-
     }
 
     let Ok(meta) = fs::symlink_metadata(path) else {
-
         return 0;
-
     };
 
     if meta.file_type().is_symlink() {
-
         return 0;
-
     }
 
     if meta.is_file() {
-
         let len = meta.len().min(*budget_bytes);
 
         *budget_bytes = budget_bytes.saturating_sub(len);
 
         return len.div_ceil(1024 * 1024);
-
     }
 
     if !meta.is_dir() {
-
         return 0;
-
     }
 
     let Ok(entries) = fs::read_dir(path) else {
-
         return 0;
-
     };
 
     let mut total = 0u64;
 
     for entry in entries.flatten() {
-
         if *budget_bytes == 0 {
-
             break;
-
         }
 
         total = total.saturating_add(dir_size_mb(&entry.path(), budget_bytes));
-
     }
 
     total
-
 }
 
-
-
 fn disk_used_mb(username: &str) -> Result<u64, String> {
-
     let sites = list_sites()?;
 
     let mut total = 0u64;
@@ -125,27 +88,18 @@ fn disk_used_mb(username: &str) -> Result<u64, String> {
     let mut budget = 50u64 * 1024 * 1024 * 1024;
 
     for site in sites
-
         .into_iter()
-
         .filter(|s| names_equal(&s.owner, username))
-
     {
-
         let home = site_home_from_record(&site);
 
         total = total.saturating_add(dir_size_mb(&home, &mut budget));
-
     }
 
     Ok(total)
-
 }
 
-
-
 pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
-
     let package = package_for_account(username)?;
 
     let owned = owned_site_domains(username)?;
@@ -153,55 +107,36 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
     let domains_used = owned.len() as u64;
 
     let emails_used = mail_accounts::list_accounts()
-
         .into_iter()
-
         .filter(|m| {
-
             if owned.iter().any(|d| names_equal(d, &m.domain)) {
-
                 return true;
-
             }
 
             m.address
-
                 .rsplit_once('@')
-
                 .map(|(_, domain)| owned.iter().any(|d| names_equal(d, domain)))
-
                 .unwrap_or(false)
-
         })
-
         .count() as u64;
 
     let databases_used = list_databases()
-
         .into_iter()
-
         .filter(|d| names_equal(&d.owner, username))
-
         .count() as u64;
 
     let ftp_used = list_ftp_accounts()
-
         .into_iter()
-
         .filter(|f| names_equal(&f.owner, username))
-
         .count() as u64;
 
     let disk_mb_used = disk_used_mb(username)?;
 
     let bandwidth_mb_used = crate::package_bandwidth::bytes_to_mb_ceil(
-
         crate::package_bandwidth::account_month_bytes(username),
-
     );
 
     Ok(PackageUsage {
-
         package_id: package.id,
 
         package_name: package.name,
@@ -249,41 +184,27 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         database_disk_bytes: database_disk_bytes_for_owner(username),
 
         fqdn_enabled: package.fqdn_enabled,
-
     })
-
 }
 
-
-
 fn limit_reached(used: u64, limit: i64) -> bool {
-
     if crate::packages::is_unlimited(limit) {
-
         return false;
-
     }
 
     if limit < 0 {
-
         return true;
-
     }
 
     used >= limit as u64
-
 }
-
-
 
 /// Reject when the account would exceed its package quota for `resource`.
 
 pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), String> {
-
     let usage = usage_for_account(username)?;
 
     let (label, used, limit) = match resource {
-
         QuotaResource::Domains => ("Websites", usage.domains_used, usage.domains_limit),
 
         QuotaResource::Emails => ("Mailboxes", usage.emails_used, usage.emails_limit),
@@ -295,73 +216,46 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
         QuotaResource::DiskMb => ("Storage (MB)", usage.disk_mb_used, usage.disk_mb_limit),
 
         QuotaResource::BandwidthMb => (
-
             "Bandwidth (MB)",
-
             usage.bandwidth_mb_used,
-
             usage.bandwidth_mb_limit,
-
         ),
 
         QuotaResource::MailingLists => (
-
             "Mailing lists",
-
             usage.mailing_lists_used,
-
             usage.mailing_lists_limit,
-
         ),
 
         QuotaResource::Autoresponders => (
-
             "Autoresponders",
-
             usage.autoresponders_used,
-
             usage.autoresponders_limit,
-
         ),
 
         QuotaResource::Forwarders => ("Forwarders", usage.forwarders_used, usage.forwarders_limit),
 
         QuotaResource::EmailFilters => (
-
             "Email filters",
-
             usage.email_filters_used,
-
             usage.email_filters_limit,
-
         ),
-
     };
 
     if limit_reached(used, limit) {
-
         return Err(format!(
-
             "Package `{}` quota exceeded for {label}: used {used}, limit {}",
-
             usage.package_name,
-
             format_limit_display(limit, "")
-
         ));
-
     }
 
     Ok(())
-
 }
-
-
 
 /// Enforce domain + FQDN + soft disk checks before creating a website or subdomain.
 
 pub fn require_site_create_allowed(owner: &str, domain_raw: &str) -> Result<(), String> {
-
     require_quota(owner, QuotaResource::Domains)?;
 
     require_quota(owner, QuotaResource::DiskMb)?;
@@ -373,28 +267,18 @@ pub fn require_site_create_allowed(owner: &str, domain_raw: &str) -> Result<(), 
     let is_subdomain = !parent_domain_candidates(&domain).is_empty();
 
     if is_subdomain {
-
         let package = package_for_account(owner)?;
 
         if !package.fqdn_enabled {
-
             return Err(format!(
-
                 "Package `{}` does not allow FQDN / subdomain creation",
-
                 package.name
-
             ));
-
         }
-
     }
 
     Ok(())
-
 }
-
-
 
 #[cfg(test)]
 
@@ -409,23 +293,16 @@ mod tests {
     use crate::model::PasswordPolicy;
 
     use crate::packages::{
-
         DEFAULT_PACKAGE_ID, PackageInput, UNLIMITED, assign_package, create_package,
-
         ensure_default_package, update_package,
-
     };
 
     use crate::sites::create_site;
 
     use std::fs;
 
-
-
     fn policy() -> PasswordPolicy {
-
         PasswordPolicy {
-
             min_length: 8,
 
             require_special: false,
@@ -433,27 +310,17 @@ mod tests {
             require_uppercase: true,
 
             require_number: true,
-
         }
-
     }
-
-
 
     #[test]
 
     fn default_package_and_quota_math() {
-
         with_test_data_dir(|| {
-
             let home = std::env::temp_dir().join(format!(
-
                 "cpn-pkg-home-{}-{}",
-
                 std::process::id(),
-
                 now_unix()
-
             ));
 
             let _ = fs::remove_dir_all(&home);
@@ -461,12 +328,8 @@ mod tests {
             fs::create_dir_all(&home).unwrap();
 
             unsafe {
-
                 std::env::set_var("CPN_SITES_HOME", &home);
-
             }
-
-
 
             let pkg = ensure_default_package().unwrap();
 
@@ -474,32 +337,19 @@ mod tests {
 
             assert_eq!(pkg.domains, 20);
 
-
-
             create_account(
-
                 "ops",
-
                 Some("OpsPass1!"),
-
                 false,
-
                 "ops@example.com",
-
                 policy(),
-
                 "en",
-
             )
-
             .unwrap();
 
             assign_package("ops", DEFAULT_PACKAGE_ID).unwrap();
 
-
-
             let tight = create_package(PackageInput {
-
                 name: "Tiny".into(),
 
                 disk_mb: UNLIMITED,
@@ -521,14 +371,10 @@ mod tests {
                 sidebar_hidden_nav_ids: Vec::new(),
 
                 ..Default::default()
-
             })
-
             .unwrap();
 
             assign_package("ops", &tight.id).unwrap();
-
-
 
             create_site("example.com", "ops", None, None, None).unwrap();
 
@@ -536,14 +382,9 @@ mod tests {
 
             assert!(err.contains("quota exceeded") || err.contains("does not allow FQDN"));
 
-
-
             update_package(
-
                 &tight.id,
-
                 PackageInput {
-
                     name: "Tiny".into(),
 
                     disk_mb: UNLIMITED,
@@ -565,31 +406,19 @@ mod tests {
                     sidebar_hidden_nav_ids: Vec::new(),
 
                     ..Default::default()
-
                 },
-
             )
-
             .unwrap();
 
             let err = require_site_create_allowed("ops", "blog.example.com").unwrap_err();
 
             assert!(err.contains("FQDN"));
 
-
-
             unsafe {
-
                 std::env::remove_var("CPN_SITES_HOME");
-
             }
 
             let _ = fs::remove_dir_all(&home);
-
         });
-
     }
-
 }
-
-

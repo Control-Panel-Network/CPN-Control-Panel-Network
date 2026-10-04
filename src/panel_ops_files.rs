@@ -187,9 +187,7 @@ pub fn read_text(path: &str, jail: &Path) -> Result<String, String> {
     if buf.contains(&0) {
         return Err(text_editor_refusal("binary data with null bytes"));
     }
-    String::from_utf8(buf).map_err(|_| {
-        text_editor_refusal("not valid UTF-8")
-    })
+    String::from_utf8(buf).map_err(|_| text_editor_refusal("not valid UTF-8"))
 }
 
 pub fn write_text(path: &str, content: &str, jail: &Path) -> Result<String, String> {

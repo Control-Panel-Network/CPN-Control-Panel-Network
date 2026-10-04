@@ -83,10 +83,7 @@ pub fn owner_for_mail_domain(domain: &str) -> Option<String> {
         if s.domain.eq_ignore_ascii_case(&domain) {
             return Some(s.owner);
         }
-        if s.aliases
-            .iter()
-            .any(|a| a.eq_ignore_ascii_case(&domain))
-        {
+        if s.aliases.iter().any(|a| a.eq_ignore_ascii_case(&domain)) {
             return Some(s.owner);
         }
         None

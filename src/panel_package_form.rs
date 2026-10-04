@@ -214,8 +214,12 @@ pub(crate) fn package_form(
         ),
         storage_field = limit_field("disk_mb", "Storage (MB)", &disk, mb_hint),
         bw_field = limit_field("bandwidth_mb", "Bandwidth (MB)", &bw, mb_hint),
-        mailing_lists_field =
-            limit_field("mailing_lists", "Mailing lists", &mailing_lists, unlimited_hint),
+        mailing_lists_field = limit_field(
+            "mailing_lists",
+            "Mailing lists",
+            &mailing_lists,
+            unlimited_hint
+        ),
         autoresponders_field = limit_field(
             "autoresponders",
             "Autoresponders",
@@ -223,8 +227,12 @@ pub(crate) fn package_form(
             unlimited_hint,
         ),
         forwarders_field = limit_field("forwarders", "Forwarders", &forwarders, unlimited_hint),
-        email_filters_field =
-            limit_field("email_filters", "Email filters", &email_filters, unlimited_hint),
+        email_filters_field = limit_field(
+            "email_filters",
+            "Email filters",
+            &email_filters,
+            unlimited_hint
+        ),
         fqdn_checked = fqdn_checked,
         notes = html_escape(notes),
         sidebar = package_sidebar_fields(pkg),

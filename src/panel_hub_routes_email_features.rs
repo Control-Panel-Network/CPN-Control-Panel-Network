@@ -2,6 +2,7 @@
 
 use crate::installer::AppState;
 use crate::mail_postfix_maps::owner_for_mail_domain;
+use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_email_features::{
     autoresponders_page, email_filters_page, mailing_lists_page,
@@ -14,7 +15,6 @@ use crate::panel_ops_mail_filters::{add_filter, remove_filter};
 use crate::panel_ops_mail_lists::{
     add_list_member, apply_list_maps, create_mailing_list, delete_mailing_list, remove_list_member,
 };
-use crate::packages::{QuotaResource, require_quota};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
@@ -141,16 +141,9 @@ pub async fn email_filters_save(
     let action = form.get("action").map(String::as_str).unwrap_or("");
     let action_arg = form.get("action_arg").map(String::as_str).unwrap_or("");
     let owner = owner_for_address(&user, address);
-    match require_quota(&owner, QuotaResource::EmailFilters).and_then(|_| {
-        add_filter(
-            &user,
-            address,
-            match_field,
-            match_value,
-            action,
-            action_arg,
-        )
-    }) {
+    match require_quota(&owner, QuotaResource::EmailFilters)
+        .and_then(|_| add_filter(&user, address, match_field, match_value, action, action_arg))
+    {
         Ok(msg) => redirect_notice("/email/filters", Some(&msg), None),
         Err(err) => redirect_notice("/email/filters", None, Some(&err)),
     }

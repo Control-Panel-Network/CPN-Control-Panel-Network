@@ -123,11 +123,7 @@ pub fn add_list_member(actor: &str, list_id: &str, member: &str) -> Result<Strin
     let Some(list) = store.lists.iter_mut().find(|l| l.id == list_id.trim()) else {
         return Err("Mailing list not found".into());
     };
-    let domain = list
-        .address
-        .rsplit_once('@')
-        .map(|(_, d)| d)
-        .unwrap_or("");
+    let domain = list.address.rsplit_once('@').map(|(_, d)| d).unwrap_or("");
     if !can_manage_mail_domain(actor, domain) {
         return Err("You cannot edit this mailing list".into());
     }
@@ -149,11 +145,7 @@ pub fn remove_list_member(actor: &str, list_id: &str, member: &str) -> Result<St
     let Some(list) = store.lists.iter_mut().find(|l| l.id == list_id.trim()) else {
         return Err("Mailing list not found".into());
     };
-    let domain = list
-        .address
-        .rsplit_once('@')
-        .map(|(_, d)| d)
-        .unwrap_or("");
+    let domain = list.address.rsplit_once('@').map(|(_, d)| d).unwrap_or("");
     if !can_manage_mail_domain(actor, domain) {
         return Err("You cannot edit this mailing list".into());
     }
@@ -173,11 +165,7 @@ pub fn delete_mailing_list(actor: &str, list_id: &str) -> Result<String, String>
         return Err("Mailing list not found".into());
     };
     let list = &store.lists[pos];
-    let domain = list
-        .address
-        .rsplit_once('@')
-        .map(|(_, d)| d)
-        .unwrap_or("");
+    let domain = list.address.rsplit_once('@').map(|(_, d)| d).unwrap_or("");
     if !can_manage_mail_domain(actor, domain) {
         return Err("You cannot delete this mailing list".into());
     }

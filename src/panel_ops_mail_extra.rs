@@ -1,4 +1,4 @@
-﻿//! Extra mail features: forwarding, catch-all, DKIM file stores when Postfix exists.
+//! Extra mail features: forwarding, catch-all, DKIM file stores when Postfix exists.
 
 use crate::mail_postfix_maps::{
     apply_virtual_alias_map, can_manage_mail_domain, normalize_email, owner_for_mail_domain,
@@ -48,8 +48,7 @@ pub fn mail_stack_note() -> String {
         "Postfix is ready. Forwarders and catch-all rules apply to virtual alias maps under the CPN data dir."
             .into()
     } else {
-        "Postfix not detected. Rules persist in the panel; maps apply when Postfix is up."
-            .into()
+        "Postfix not detected. Rules persist in the panel; maps apply when Postfix is up.".into()
     }
 }
 
@@ -167,7 +166,10 @@ pub fn apply_catchall_maps() -> Result<String, String> {
         if domain.is_empty() {
             continue;
         }
-        body.push_str(&format!("@{domain}\t{}\n", row.target.trim().to_ascii_lowercase()));
+        body.push_str(&format!(
+            "@{domain}\t{}\n",
+            row.target.trim().to_ascii_lowercase()
+        ));
     }
     apply_virtual_alias_map(&catchall_map_path(), &body)
 }

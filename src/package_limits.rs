@@ -10,11 +10,7 @@ pub fn is_unlimited(limit: i64) -> bool {
 
 /// Pass-through normalizer: `0` stays `0` (hard zero); `-1` stays unlimited.
 pub fn normalize_limit(value: i64) -> i64 {
-    if value == UNLIMITED {
-        UNLIMITED
-    } else {
-        value
-    }
+    if value == UNLIMITED { UNLIMITED } else { value }
 }
 
 /// Serde default for newly added package limit fields (unlimited).
@@ -24,11 +20,7 @@ pub fn default_unlimited() -> i64 {
 
 /// Historical packages used `0` as unlimited. Convert those zeros to `-1`.
 pub fn migrate_legacy_zero_unlimited(value: i64) -> i64 {
-    if value == 0 {
-        UNLIMITED
-    } else {
-        value
-    }
+    if value == 0 { UNLIMITED } else { value }
 }
 
 pub fn format_limit_display(limit: i64, unit: &str) -> String {
