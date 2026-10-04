@@ -115,33 +115,46 @@ pub fn feedback_html_body(input: &FeedbackMailInput<'_>) -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPN Panel feedback</title>
 </head>
-<body style="margin:0;padding:0;background-color:#e8eef5;color:#161F2B;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#e8eef5;padding:24px 12px;">
+<body style="margin:0;padding:0;background-color:#0b1220;color:#161F2B;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0b1220;background:#0b1220;padding:28px 12px;">
 <tr><td align="center">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background-color:#ffffff;border:1px solid #d0d7e2;border-radius:12px;">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background-color:#ffffff;background:#ffffff;border:1px solid #1e3a5f;">
 <tr>
-<td style="background-color:#161F2B;padding:18px 22px;border-radius:12px 12px 0 0;">
+<td style="background-color:#161F2B;background:#161F2B;padding:22px 24px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
 <tr>
-<td style="font-size:18px;line-height:1.2;font-weight:700;color:#ffffff;">CPN Panel</td>
-<td align="right" style="font-size:13px;color:#9db4d0;">Feedback</td>
+<td width="44" valign="middle" style="width:44px;">
+<table role="presentation" cellspacing="0" cellpadding="0"><tr>
+<td style="width:36px;height:36px;background-color:#006CFA;background:#006CFA;color:#ffffff;font-size:14px;font-weight:800;text-align:center;line-height:36px;">CPN</td>
+</tr></table>
+</td>
+<td valign="middle" style="padding-left:12px;">
+<div style="font-size:20px;line-height:1.2;font-weight:800;color:#ffffff;">CPN Panel</div>
+<div style="font-size:12px;color:#9db4d0;padding-top:4px;">Operator feedback</div>
+</td>
+<td align="right" valign="middle">
+<span style="display:inline-block;padding:6px 12px;background-color:#006CFA;background:#006CFA;color:#ffffff;font-size:11px;font-weight:800;letter-spacing:0.08em;">HTML MESSAGE</span>
+</td>
 </tr>
 </table>
 </td>
 </tr>
-<tr><td style="height:4px;line-height:4px;font-size:0;background-color:#006CFA;">&nbsp;</td></tr>
+<tr><td style="height:8px;line-height:8px;font-size:0;background-color:#006CFA;background:#006CFA;">&nbsp;</td></tr>
 <tr>
-<td style="padding:22px 22px 8px 22px;">
-<span style="display:inline-block;padding:4px 10px;border-radius:999px;background-color:{pill_bg};color:{pill_fg};font-size:12px;font-weight:700;letter-spacing:0.02em;">{category}</span>
-<h1 style="margin:12px 0 16px 0;font-size:22px;line-height:1.3;color:#161F2B;font-weight:700;">{subject}</h1>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fb;border:1px solid #e2e8f0;border-radius:8px;">
-<tr><td style="padding:16px;color:#1e293b;font-size:15px;line-height:1.55;">{message}</td></tr>
+<td style="padding:24px 24px 10px 24px;">
+<span style="display:inline-block;padding:5px 12px;border-radius:999px;background-color:{pill_bg};color:{pill_fg};font-size:12px;font-weight:800;letter-spacing:0.04em;">{category}</span>
+<h1 style="margin:14px 0 18px 0;font-size:24px;line-height:1.25;color:#0b1220;font-weight:800;">{subject}</h1>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+<tr>
+<td style="width:8px;background-color:#006CFA;background:#006CFA;font-size:0;line-height:0;">&nbsp;</td>
+<td style="padding:18px 16px;background-color:#f4f7fb;background:#f4f7fb;color:#0f172a;font-size:16px;line-height:1.6;">{message}</td>
+</tr>
 </table>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">{meta}</table>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">{meta}</table>
 </td>
 </tr>
 <tr>
-<td style="padding:8px 22px 20px 22px;color:#64748b;font-size:12px;line-height:1.4;">Sent from CPN Panel. This message is operator feedback only.</td>
+<td style="padding:14px 24px 22px 24px;background-color:#eef3f9;background:#eef3f9;color:#334155;font-size:12px;line-height:1.5;">Sent from CPN Panel as an HTML email. If you only see a plain text block, refresh or switch the client to HTML view.</td>
 </tr>
 </table>
 </td></tr>
@@ -207,7 +220,8 @@ mod tests {
         assert!(html.contains("<br>"));
         assert!(!html.contains("multipart"));
         assert!(html.contains("CPN Panel"));
-        assert!(html.contains("Feedback"));
+        assert!(html.contains("Operator feedback"));
+        assert!(html.contains("HTML MESSAGE"));
         assert!(html.contains("04/10/2026 21:40 UTC"));
         assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
         assert!(!html.contains('\u{2014}'));
@@ -220,7 +234,9 @@ mod tests {
         assert!(html.contains("role=\"presentation\""));
         assert!(html.contains("background-color:#161F2B"));
         assert!(html.contains("background-color:#006CFA"));
+        assert!(html.contains("HTML MESSAGE"));
         assert!(html.contains("<h1"));
+        assert!(html.contains("width:8px;background-color:#006CFA"));
         assert!(!html.contains("<script"));
         assert!(!html.contains("javascript:"));
     }
