@@ -261,6 +261,28 @@ pub fn plugins_hub_script() -> String {
     }
     var href = a.getAttribute('href');
     if (!href || href.indexOf('/plugins') !== 0) return;
+    if (a.hasAttribute('data-store-target-btn') || a.hasAttribute('data-store-cat')) {
+      ev.preventDefault();
+      var u = new URL(window.location.href);
+      u.pathname = '/plugins';
+      u.searchParams.set('view', 'store');
+      if (a.hasAttribute('data-store-target-btn')) {
+        u.searchParams.set('target', a.getAttribute('data-store-target-btn'));
+        if (a.getAttribute('data-store-target-btn') === 'host') {
+          u.searchParams.delete('domain');
+        }
+      }
+      if (a.hasAttribute('data-store-cat')) {
+        var cat = a.getAttribute('data-store-cat') || '';
+        if (!cat) u.searchParams.delete('category');
+        else u.searchParams.set('category', cat);
+      }
+      u.searchParams.set('page', '1');
+      u.searchParams.delete('partial');
+      syncUrl(u.pathname + u.search, false);
+      applyStoreFilter(true);
+      return;
+    }
     if (isStoreClientNav(a)) {
       ev.preventDefault();
       var next = new URL(href, window.location.origin);
