@@ -5,9 +5,15 @@ use crate::panel_hub_http::urlencoding_simple;
 use crate::panel_hub_pages_files_assets::{fm_asset_tags, fm_inline_boot};
 use crate::panel_hub_pages_files_tree::build_tree_html;
 use crate::panel_hubs::{feature_shell, notice_block};
+use crate::panel_markdown::{
+    MARKDOWN_PREVIEW_PATH, html_template_editor_field, markdown_editor_field_with_preview,
+    markdown_toolbar_assets,
+};
 use crate::panel_ops_files::files_csrf_token;
 use crate::panel_ops_path::resolve_under_jail;
 use std::path::Path;
+
+const SITE_READY_PREVIEW_PATH: &str = "/settings/site-messages/preview-site-ready";
 
 fn html_escape(value: &str) -> String {
     value
@@ -137,8 +143,8 @@ pub fn files_page(opts: &FilesPageOpts<'_>) -> String {
       <p id="fm-list-status" class="muted" hidden></p>
       <div class="table-wrap fm-table-wrap">
         <table class="data-table fm-table">
-          <thead><tr><th></th><th>File Name</th><th>Size (KB)</th><th>Last Modified</th><th>Permissions</th></tr></thead>
-          <tbody id="fm-rows"><tr><td colspan="5">Loading directory…</td></tr></tbody>
+          <thead><tr><th></th><th>Name</th><th>Type</th><th>Size (KB)</th><th>Last Modified</th><th>Permissions</th></tr></thead>
+          <tbody id="fm-rows"><tr><td colspan="6">Loading directory…</td></tr></tbody>
         </table>
       </div>
       <noscript><p class="panel-notice error">Enable JavaScript to list this directory. File operations stay on {op}.</p></noscript>
@@ -204,7 +210,7 @@ pub fn root_files_page(
         title: "Root File Manager",
         subtitle: "Browse and manage the server filesystem from CPN Panel.",
         brand_sub: "Root File Manager",
-        risk_note: "Admin-only full filesystem access. Path traversal is blocked; protected system paths refuse delete/overwrite. Prefer site jails for routine hosting work.",
+        risk_note: "Admin-only full filesystem access. Path traversal is blocked; protected system paths refuse delete/overwrite. Prefer site jails for routine hosting work. The left tree is folders only; the table lists folders and files. Click a file name to edit UTF-8 text.",
         crumbs: &crumbs,
         notice,
         error,
@@ -251,7 +257,7 @@ pub fn site_files_page(
         title: &title,
         subtitle: &subtitle,
         brand_sub: "Site File Manager",
-        risk_note: "Access is limited to this site home. Path traversal and sibling sites are blocked.",
+        risk_note: "Access is limited to this site home. Path traversal and sibling sites are blocked. The left tree is folders only; the table lists folders and files. Click a file name to edit UTF-8 text.",
         crumbs: &crumbs,
         notice,
         error,
@@ -261,26 +267,51 @@ pub fn site_files_page(
     })
 }
 
+fn path_looks_like_html(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".html") || lower.ends_with(".htm") || lower.ends_with(".xhtml")
+}
+
 fn edit_modal(opts: &FilesPageOpts<'_>, csrf: &str, cwd: &str) -> String {
     let Some(path) = opts.edit_path.filter(|p| !p.is_empty()) else {
         return String::new();
     };
+    let body = opts.edit_content.unwrap_or("");
+    let editor = if path_looks_like_html(path) {
+        html_template_editor_field(
+            "HTML source",
+            "content",
+            body,
+            "<!DOCTYPE html>...",
+            SITE_READY_PREVIEW_PATH,
+        )
+    } else {
+        markdown_editor_field_with_preview(
+            "File contents (Markdown toolbar, Preview, View HTML source)",
+            "content",
+            body,
+            "Edit UTF-8 text…",
+            MARKDOWN_PREVIEW_PATH,
+        )
+    };
     format!(
         r#"<div class="fm-modal" role="dialog" aria-modal="true" aria-label="Edit file">
-  <form method="post" action="{op}" class="fm-modal-card">
+  <form method="post" action="{op}" class="fm-modal-card fm-edit-card">
     <h3>Edit {name}</h3>
+    <p class="muted fm-edit-hint">Text editor: UTF-8 only. Use Preview and View HTML source for Markdown/HTML. Binary files (databases, images, archives) cannot be edited here.</p>
     <input type="hidden" name="csrf" value="{csrf}">
     {domain}
     <input type="hidden" name="path" value="{cwd}">
     <input type="hidden" name="op" value="write">
     <input type="hidden" name="new_name" value="{path}">
-    <textarea name="content" rows="18" class="fm-editor">{body}</textarea>
+    {editor}
     <div class="fm-modal-actions">
       <button type="submit" class="btn-primary">Save</button>
       <a class="btn-secondary" href="{cancel}">Cancel</a>
     </div>
   </form>
-</div>"#,
+</div>
+{assets}"#,
         op = html_escape(opts.op_url),
         name = html_escape(path),
         csrf = html_escape(csrf),
@@ -288,6 +319,7 @@ fn edit_modal(opts: &FilesPageOpts<'_>, csrf: &str, cwd: &str) -> String {
         cwd = html_escape(cwd),
         cancel = page_href(opts, cwd),
         path = html_escape(path),
-        body = html_escape(opts.edit_content.unwrap_or("")),
+        editor = editor,
+        assets = markdown_toolbar_assets(),
     )
 }

@@ -604,6 +604,24 @@ pub fn email_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "Autoresponders",
+                    subtitle: "Vacation auto-reply",
+                    href: "/email/autoresponders",
+                    live: true,
+                },
+                HubTile {
+                    title: "Email Filters",
+                    subtitle: "Sieve filter rules",
+                    href: "/email/filters",
+                    live: true,
+                },
+                HubTile {
+                    title: "Mailing Lists",
+                    subtitle: "Distribution lists",
+                    href: "/email/lists",
+                    live: true,
+                },
+                HubTile {
                     title: "Catch-All",
                     subtitle: "Catch unrouted mail",
                     href: "/email/catchall",

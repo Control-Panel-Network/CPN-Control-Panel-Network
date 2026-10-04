@@ -76,6 +76,18 @@ const EMAIL_CHILDREN: &[NavChild] = &[
         href: "/email/forwarding",
     },
     NavChild {
+        label: "Autoresponders",
+        href: "/email/autoresponders",
+    },
+    NavChild {
+        label: "Email Filters",
+        href: "/email/filters",
+    },
+    NavChild {
+        label: "Mailing Lists",
+        href: "/email/lists",
+    },
+    NavChild {
         label: "Catch-All",
         href: "/email/catchall",
     },

@@ -45,7 +45,7 @@
     while(tb.firstChild) tb.removeChild(tb.firstChild);
     var tr=document.createElement('tr');
     var td=document.createElement('td');
-    td.colSpan=5;
+    td.colSpan=6;
     td.textContent=message;
     tr.appendChild(td);
     tb.appendChild(tr);
@@ -59,9 +59,12 @@
       setRowsMessage(tb, 'This directory is empty.');
       return;
     }
+    var folders=0, files=0;
     for(var i=0;i<entries.length;i++){
       var ent=entries[i];
+      if(ent.is_dir) folders++; else files++;
       var tr=document.createElement('tr');
+      tr.className=ent.is_dir?'fm-row fm-is-dir':'fm-row fm-is-file';
       var tdCheck=document.createElement('td');
       var cb=document.createElement('input');
       cb.type='checkbox';
@@ -70,14 +73,27 @@
       tdCheck.appendChild(cb);
       var tdName=document.createElement('td');
       tdName.className='fm-name';
+      var icon=document.createElement('span');
+      icon.className=ent.is_dir?'fm-icon fm-icon-dir':'fm-icon fm-icon-file';
+      icon.setAttribute('aria-hidden','true');
+      tdName.appendChild(icon);
+      var a=document.createElement('a');
       if(ent.is_dir){
-        var a=document.createElement('a');
         a.setAttribute('href', pageHref(childPath(ent.basename)));
-        a.textContent=String(ent.label==null?'':ent.label);
-        tdName.appendChild(a);
+        a.className='fm-link-dir';
       } else {
-        tdName.textContent=String(ent.label==null?'':ent.label);
+        a.setAttribute('href', pageHref(path,'edit='+encodeURIComponent(childPath(ent.basename))));
+        a.className='fm-link-file';
+        a.title='Open text editor';
       }
+      a.textContent=String(ent.label==null?'':ent.label);
+      tdName.appendChild(a);
+      var tdType=document.createElement('td');
+      tdType.className='fm-type';
+      var badge=document.createElement('span');
+      badge.className=ent.is_dir?'fm-badge fm-badge-dir':'fm-badge fm-badge-file';
+      badge.textContent=ent.is_dir?'Folder':'File';
+      tdType.appendChild(badge);
       var tdSize=document.createElement('td');
       tdSize.textContent=ent.is_dir?'-':(Math.round((ent.size||0)/102.4)/10).toFixed(1);
       var tdMtime=document.createElement('td');
@@ -88,10 +104,18 @@
       tdMode.appendChild(code);
       tr.appendChild(tdCheck);
       tr.appendChild(tdName);
+      tr.appendChild(tdType);
       tr.appendChild(tdSize);
       tr.appendChild(tdMtime);
       tr.appendChild(tdMode);
       tb.appendChild(tr);
+    }
+    var summary=folders+' folder'+(folders===1?'':'s')+', '+files+' file'+(files===1?'':'s');
+    if(data.timed_out||data.truncated){
+      // Caller may prepend notes via showStatus; keep summary in data attribute.
+      tb.setAttribute('data-fm-summary', summary);
+    } else {
+      showStatus(summary, false);
     }
   }
   function loadList(){
@@ -119,8 +143,12 @@
         var notes=[];
         if(data.timed_out) notes.push('Listing stopped after a time limit so the panel stays responsive.');
         if(data.truncated) notes.push('Showing a bounded set of entries. Open a narrower path for restore-sized directories.');
-        showStatus(notes.join(' '), false);
         renderRows(data);
+        if(notes.length){
+          var tb=document.getElementById('fm-rows');
+          var summary=tb?tb.getAttribute('data-fm-summary'):'';
+          showStatus((summary?summary+'. ':'')+notes.join(' '), false);
+        }
       })
       .catch(function(err){
         showStatus(err&&err.message?err.message:'Could not list this directory.', true);

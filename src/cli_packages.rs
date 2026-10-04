@@ -137,6 +137,7 @@ pub fn run(
                     fqdn_enabled,
                     notes,
                     sidebar_hidden_nav_ids: Vec::new(),
+                    ..Default::default()
                 },
             )?;
             println!("created package {} id={}", pkg.name, pkg.id);
@@ -172,6 +173,7 @@ pub fn run(
                     fqdn_enabled,
                     notes,
                     sidebar_hidden_nav_ids: existing.sidebar_hidden_nav_ids,
+                    ..Default::default()
                 },
             )?;
             println!("updated package {} id={}", pkg.name, pkg.id);

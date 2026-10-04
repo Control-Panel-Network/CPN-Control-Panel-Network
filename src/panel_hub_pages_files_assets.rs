@@ -6,7 +6,7 @@
 use crate::http_helpers::VERSION;
 
 /// Bump when File Manager JS/CSS behavior changes (upgrade cache bust).
-pub const FM_ASSET_REV: &str = "fm1";
+pub const FM_ASSET_REV: &str = "fm2";
 
 pub fn fm_asset_version() -> String {
     format!("{VERSION}-{FM_ASSET_REV}")

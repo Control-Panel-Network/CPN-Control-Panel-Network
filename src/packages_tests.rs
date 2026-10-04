@@ -37,6 +37,7 @@ fn delete_blocked_when_assigned() {
                 fqdn_enabled: true,
                 notes: String::new(),
                 sidebar_hidden_nav_ids: Vec::new(),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -66,6 +67,7 @@ fn default_update_keeps_default_name() {
                 fqdn_enabled: true,
                 notes: String::new(),
                 sidebar_hidden_nav_ids: Vec::new(),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -90,6 +92,7 @@ fn edit_keeps_owner_prefix() {
                 fqdn_enabled: true,
                 notes: String::new(),
                 sidebar_hidden_nav_ids: Vec::new(),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -108,6 +111,7 @@ fn edit_keeps_owner_prefix() {
                 fqdn_enabled: true,
                 notes: String::new(),
                 sidebar_hidden_nav_ids: Vec::new(),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -117,12 +121,12 @@ fn edit_keeps_owner_prefix() {
 }
 
 #[test]
-fn zero_limit_saves_as_unlimited() {
+fn zero_limit_means_none_allowed() {
     with_test_data_dir(|| {
         let pkg = create_package_for(
             "ops",
             PackageInput {
-                name: "Open".into(),
+                name: "Locked".into(),
                 disk_mb: 0,
                 bandwidth_mb: 0,
                 domains: 0,
@@ -132,14 +136,16 @@ fn zero_limit_saves_as_unlimited() {
                 fqdn_enabled: true,
                 notes: String::new(),
                 sidebar_hidden_nav_ids: Vec::new(),
+                ..Default::default()
             },
         )
         .unwrap();
-        assert_eq!(pkg.disk_mb, UNLIMITED);
-        assert_eq!(pkg.bandwidth_mb, UNLIMITED);
-        assert_eq!(pkg.domains, UNLIMITED);
-        assert!(is_unlimited(pkg.emails));
-        assert_eq!(format_limit_display(pkg.disk_mb, "MB"), "∞");
-        assert_eq!(format_limit_display(0, ""), "∞");
+        assert_eq!(pkg.disk_mb, 0);
+        assert_eq!(pkg.bandwidth_mb, 0);
+        assert_eq!(pkg.domains, 0);
+        assert!(!is_unlimited(pkg.emails));
+        assert_eq!(format_limit_display(pkg.disk_mb, "MB"), "0 MB");
+        assert_eq!(format_limit_display(0, ""), "0");
+        assert_eq!(format_limit_display(UNLIMITED, ""), "∞");
     });
 }

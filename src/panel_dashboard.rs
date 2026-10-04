@@ -241,11 +241,24 @@ pub fn panel_dashboard_html(username: &str) -> String {
     by_id.insert("tools", tools);
     by_id.insert("health", health);
     by_id.insert("activity", activity);
-    let stack = crate::panel_dashboard_layout::load_dashboard_widgets(username)
-        .into_iter()
-        .filter_map(|id| by_id.remove(id.as_str()))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut order = crate::panel_dashboard_layout::load_dashboard_widgets(username);
+    // Ensure Statistics renders even if prefs were empty or stale on an older build.
+    if !order.iter().any(|id| id == "stats") {
+        order.insert(0, "stats".into());
+    }
+    let mut stack_parts = Vec::new();
+    for id in &order {
+        if let Some(html) = by_id.remove(id.as_str()) {
+            stack_parts.push(html);
+        }
+    }
+    // Append any leftover known widgets that prefs omitted after normalize.
+    for def in crate::panel_dashboard_layout::DEFAULT_DASH_WIDGETS {
+        if let Some(html) = by_id.remove(def) {
+            stack_parts.push(html);
+        }
+    }
+    let stack = stack_parts.join("\n");
 
     let main = format!(
         r#"

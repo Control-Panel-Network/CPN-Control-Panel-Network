@@ -15,7 +15,7 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn limit_field(name: &str, label: &str, value: &str) -> String {
+fn limit_field(name: &str, label: &str, value: &str, hint: &str) -> String {
     let mark = if value.parse::<i64>().ok().is_some_and(is_unlimited) {
         format!(" {}", unlimited_html())
     } else {
@@ -24,12 +24,13 @@ fn limit_field(name: &str, label: &str, value: &str) -> String {
     format!(
         r#"<label>{label}{mark}
         <input name="{name}" type="number" min="-1" required value="{value}">
-        <span class="muted" style="font-weight:500;">0 or -1 = unlimited</span>
+        <span class="muted" style="font-weight:500;">{hint}</span>
       </label>"#,
         label = html_escape(label),
         mark = mark,
         name = html_escape(name),
         value = html_escape(value),
+        hint = html_escape(hint),
     )
 }
 
@@ -40,7 +41,22 @@ pub(crate) fn package_form(
     creator_username: &str,
 ) -> String {
     let is_default = pkg.is_some_and(|p| p.id == DEFAULT_PACKAGE_ID);
-    let (id, name_value, disk, bw, domains, emails, dbs, ftp, fqdn, notes) = match pkg {
+    let (
+        id,
+        name_value,
+        disk,
+        bw,
+        domains,
+        emails,
+        dbs,
+        ftp,
+        mailing_lists,
+        autoresponders,
+        forwarders,
+        email_filters,
+        fqdn,
+        notes,
+    ) = match pkg {
         Some(p) => (
             p.id.as_str(),
             if is_default {
@@ -54,6 +70,10 @@ pub(crate) fn package_form(
             p.emails.to_string(),
             p.databases.to_string(),
             p.ftp_accounts.to_string(),
+            p.mailing_lists.to_string(),
+            p.autoresponders.to_string(),
+            p.forwarders.to_string(),
+            p.email_filters.to_string(),
             p.fqdn_enabled,
             p.notes.as_str(),
         ),
@@ -63,6 +83,10 @@ pub(crate) fn package_form(
             "1000".into(),
             "1000".into(),
             "20".into(),
+            "1000".into(),
+            "1000".into(),
+            "1000".into(),
+            "1000".into(),
             "1000".into(),
             "1000".into(),
             "1000".into(),
@@ -136,6 +160,9 @@ pub(crate) fn package_form(
     } else {
         "Package name (custom part)"
     };
+    // Labels match Account Statistics meters (same package fields; form units stay MB for storage/bandwidth).
+    let unlimited_hint = "-1 = unlimited; 0 = none allowed";
+    let mb_hint = "Value in MB. -1 = unlimited; 0 = none allowed";
     format!(
         r#"<form method="post" action="{action}" class="stack-form" style="margin-top:12px;display:grid;gap:12px;max-width:520px;">
       {id_field}
@@ -143,12 +170,22 @@ pub(crate) fn package_form(
       <label>{name_label}
         <input name="name"{name_attrs} value="{name}">
       </label>
-      {disk_field}
-      {bw_field}
-      {domains_field}
-      {emails_field}
-      {dbs_field}
-      {ftp_field}
+      <fieldset class="cpn-check-fieldset" style="margin:0;padding:12px;border:1px solid var(--border,#d0d5dd);border-radius:8px;">
+        <legend>Package limits</legend>
+        <p class="muted" style="margin:0 0 10px;">Same meters as Account Statistics: Websites, Mailboxes, Databases, FTP accounts, Storage, Bandwidth, mailing lists, autoresponders, forwarders, and email filters. Storage and Bandwidth are entered in MB.</p>
+        <div style="display:grid;gap:12px;">
+          {websites_field}
+          {mailboxes_field}
+          {dbs_field}
+          {ftp_field}
+          {storage_field}
+          {bw_field}
+          {mailing_lists_field}
+          {autoresponders_field}
+          {forwarders_field}
+          {email_filters_field}
+        </div>
+      </fieldset>
       <label style="display:flex;align-items:center;gap:8px;">
         <input type="checkbox" name="fqdn_enabled" value="1"{fqdn_checked}>
         Allow FQDN / subdomain creation
@@ -166,12 +203,36 @@ pub(crate) fn package_form(
         name_label = html_escape(name_label),
         name_attrs = name_attrs,
         name = html_escape(&name_value),
-        disk_field = limit_field("disk_mb", "Disk space (MB)", &disk),
-        bw_field = limit_field("bandwidth_mb", "Bandwidth (MB)", &bw),
-        domains_field = limit_field("domains", "Domains", &domains),
-        emails_field = limit_field("emails", "Emails", &emails),
-        dbs_field = limit_field("databases", "Databases", &dbs),
-        ftp_field = limit_field("ftp_accounts", "FTP accounts", &ftp),
+        websites_field = limit_field("domains", "Websites", &domains, unlimited_hint),
+        mailboxes_field = limit_field("emails", "Mailboxes", &emails, unlimited_hint),
+        dbs_field = limit_field("databases", "Databases", &dbs, unlimited_hint),
+        ftp_field = limit_field(
+            "ftp_accounts",
+            "FTP accounts",
+            &ftp,
+            "Includes jailed SFTP. -1 = unlimited; 0 = none allowed",
+        ),
+        storage_field = limit_field("disk_mb", "Storage (MB)", &disk, mb_hint),
+        bw_field = limit_field("bandwidth_mb", "Bandwidth (MB)", &bw, mb_hint),
+        mailing_lists_field = limit_field(
+            "mailing_lists",
+            "Mailing lists",
+            &mailing_lists,
+            unlimited_hint
+        ),
+        autoresponders_field = limit_field(
+            "autoresponders",
+            "Autoresponders",
+            &autoresponders,
+            unlimited_hint,
+        ),
+        forwarders_field = limit_field("forwarders", "Forwarders", &forwarders, unlimited_hint),
+        email_filters_field = limit_field(
+            "email_filters",
+            "Email filters",
+            &email_filters,
+            unlimited_hint
+        ),
         fqdn_checked = fqdn_checked,
         notes = html_escape(notes),
         sidebar = package_sidebar_fields(pkg),

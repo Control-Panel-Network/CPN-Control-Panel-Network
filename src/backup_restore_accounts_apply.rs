@@ -204,6 +204,7 @@ pub(crate) fn apply_package_hint(
         notes: "Best-effort import from classic source-panel meta.xml (websites limit only)."
             .into(),
         sidebar_hidden_nav_ids: Vec::new(),
+        ..Default::default()
     };
     let pkg = match create_package_for(username, input) {
         Ok(p) => p,
@@ -355,6 +356,7 @@ pub(crate) fn merge_optional_packages_json(
             fqdn_enabled: row.fqdn_enabled,
             notes: row.notes,
             sidebar_hidden_nav_ids: Vec::new(),
+            ..Default::default()
         };
         match create_package(input) {
             Ok(p) => warnings.push(format!("Imported package `{}` from archive.", p.name)),

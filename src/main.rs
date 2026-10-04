@@ -51,39 +51,43 @@ use cpn_installer::panel_hub_routes::{
     docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
     docker_list_route, docker_logs_route, docker_stack_create, docker_stack_refresh,
     docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
+    email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
     email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
     email_catchall_save, email_create_route, email_debugger, email_delivery_route,
-    email_dkim_ensure, email_dkim_route, email_forwarding_route, email_forwarding_save,
-    email_limits, email_limits_delete, email_limits_save, email_mailscanner,
-    email_mailscanner_enable, email_marketing, email_marketing_list, email_marketing_recipient,
-    email_marketing_send, email_mta_sts_push_cf, email_mta_sts_route, email_mta_sts_save,
-    email_password, email_password_save, email_pattern_fwd, email_pattern_fwd_apply,
-    email_pattern_fwd_delete, email_pattern_fwd_save, email_plus, email_plus_save, email_queue,
-    email_queue_delete, email_queue_delete_all, email_queue_flush, email_rspamd,
-    email_rspamd_enable, email_spamassassin, email_spamassassin_enable, email_webmail_app_route,
-    email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
-    filemanager_alias, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
-    ftp_delete_post, ftp_overview_route, ftp_reset, ftp_reset_password_post, ftp_reset_post,
-    login_mfa_session, passkey_delete_post, passkey_login_finish, passkey_login_start,
-    passkey_mfa_finish, passkey_mfa_start, passkey_register_finish, passkey_register_start,
-    passkey_rename_post, security_fail2ban, security_firewall, security_firewall_ban_add,
-    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
-    security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
-    security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
-    security_firewall_rules_import, security_firewall_start, security_firewall_stop,
-    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
-    security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
-    security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
-    security_ssl_manage, security_ssl_mark_custom, security_ssl_origin_backup,
-    security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
-    server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
-    server_dns_nameservers, server_dns_nameservers_add, server_dns_nameservers_delete,
-    server_dns_nameservers_save, server_dns_record_add, server_dns_record_delete, server_dns_zones,
-    server_dns_zones_create_get, server_dns_zones_create_post, server_dns_zones_delete,
-    server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
-    server_docker_images, server_filemanager_alias, server_files_asset_css, server_files_asset_js,
-    server_files_list, server_files_op, server_files_page, server_files_post, server_files_upload,
+    email_dkim_ensure, email_dkim_route, email_filters_delete, email_filters_route,
+    email_filters_save, email_forwarding_apply, email_forwarding_delete, email_forwarding_route,
+    email_forwarding_save, email_limits, email_limits_delete, email_limits_save, email_lists_apply,
+    email_lists_create, email_lists_delete, email_lists_member_add, email_lists_member_delete,
+    email_lists_route, email_mailscanner, email_mailscanner_enable, email_marketing,
+    email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_password_save,
+    email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save,
+    email_plus, email_plus_save, email_queue, email_queue_delete, email_queue_delete_all,
+    email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
+    email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
+    email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
+    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
+    ftp_reset_password_post, ftp_reset_post, login_mfa_session, passkey_delete_post,
+    passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
+    passkey_register_finish, passkey_register_start, passkey_rename_post, security_fail2ban,
+    security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
+    security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
+    security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
+    security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
+    security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
+    security_firewall_trusted_delete, security_malware, security_modsec, security_modsec_rules,
+    security_page, security_rule_packs, security_ssh, security_ssh_show_review,
+    security_ssh_toggle, security_ssl, security_ssl_defaults, security_ssl_hostname,
+    security_ssl_issue, security_ssl_issue_all, security_ssl_mail, security_ssl_manage,
+    security_ssl_mark_custom, security_ssl_origin_backup, security_ssl_provider,
+    security_ssl_renew, security_ssl_restore_le, security_ssl_upload, server_cloudflare_redirect,
+    server_dns_defaults, server_dns_defaults_save, server_dns_nameservers,
+    server_dns_nameservers_add, server_dns_nameservers_delete, server_dns_nameservers_save,
+    server_dns_record_add, server_dns_record_delete, server_dns_zones, server_dns_zones_create_get,
+    server_dns_zones_create_post, server_dns_zones_delete, server_dns_zones_manage,
+    server_dns_zones_save, server_docker_apps, server_docker_containers, server_docker_images,
+    server_filemanager_alias, server_files_asset_css, server_files_asset_js, server_files_list,
+    server_files_op, server_files_page, server_files_post, server_files_upload,
     server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
     server_litespeed_plans_page, server_litespeed_serial, server_litespeed_tier,
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_log_view_route,
@@ -1462,6 +1466,20 @@ async fn main() -> std::io::Result<()> {
             .service(email_create_route)
             .service(email_forwarding_route)
             .service(email_forwarding_save)
+            .service(email_forwarding_delete)
+            .service(email_forwarding_apply)
+            .service(email_autoresponders_route)
+            .service(email_autoresponders_save)
+            .service(email_autoresponders_delete)
+            .service(email_filters_route)
+            .service(email_filters_save)
+            .service(email_filters_delete)
+            .service(email_lists_route)
+            .service(email_lists_create)
+            .service(email_lists_member_add)
+            .service(email_lists_member_delete)
+            .service(email_lists_delete)
+            .service(email_lists_apply)
             .service(email_catchall_route)
             .service(email_catchall_save)
             .service(email_dkim_route)
