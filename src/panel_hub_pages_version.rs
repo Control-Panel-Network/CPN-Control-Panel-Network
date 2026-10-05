@@ -228,7 +228,7 @@ pub fn version_management_page(can_manage: bool) -> String {
 <p class="muted" style="margin-top:14px;max-width:640px;">
   CPN supports the <strong>latest two published releases</strong> only (current tip plus the previous release).
   Older tags remain listed for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
-  When <code>stable</code> advances without a new tag, use <strong>Upgrade to stable tip</strong> (commit path: builds from the branch tip SHA).
+  When <code>stable</code> advances without a new tag, use <strong>Upgrade to stable tip</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to Main Log and Error logs.
 </p>
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
