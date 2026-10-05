@@ -42,12 +42,20 @@ fn now_stamp() -> String {
 }
 
 pub fn format_line(level: &str, message: &str, retry: Option<u32>) -> String {
+    format_line_for(MODULE, level, message, retry)
+}
+
+pub fn format_line_for(module: &str, level: &str, message: &str, retry: Option<u32>) -> String {
     let safe = redact_sensitive_line(message);
     let retry_part = match retry {
         Some(n) => format!(" retry={n}"),
         None => String::new(),
     };
-    format!("[{}] [{MODULE}] [{level}] {safe}{retry_part}", now_stamp())
+    let mod_name = if module.is_empty() { MODULE } else { module };
+    format!(
+        "[{}] [{mod_name}] [{level}] {safe}{retry_part}",
+        now_stamp()
+    )
 }
 
 fn append_path(path: &str, line: &str) -> bool {
@@ -97,6 +105,18 @@ pub fn log_failure(message: impl AsRef<str>, retry: Option<u32>) {
     log_event("error", message.as_ref(), retry);
 }
 
+/// Main Log line with `[upgrade]`, `[repair]`, or `[upgrade_tip]`.
+pub fn log_tagged(module: &str, level: &str, message: &str) {
+    let Ok(_guard) = WRITE_LOCK.lock() else {
+        return;
+    };
+    let line = format_line_for(module, level, message, None);
+    write_main(&line);
+    if level.eq_ignore_ascii_case("error") || level.eq_ignore_ascii_case("err") {
+        write_error(&line);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +141,15 @@ mod tests {
         );
         assert!(line.contains("[REDACTED]"));
         assert!(!line.contains(&generated));
+    }
+
+    #[test]
+    fn tagged_lines_use_upgrade_or_repair_module() {
+        let upgrade = format_line_for("upgrade", "info", "Scheduled detached reload", None);
+        assert!(upgrade.contains("[upgrade]"));
+        assert!(upgrade.contains("[info]"));
+        let repair = format_line_for("repair", "info", "Scheduled detached reload", None);
+        assert!(repair.contains("[repair]"));
+        assert!(!repair.contains('\u{2014}'));
     }
 }

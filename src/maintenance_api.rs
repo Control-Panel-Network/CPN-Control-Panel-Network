@@ -259,6 +259,7 @@ pub async fn api_maintenance_status(
         "busy": busy,
         "error": status.error,
         "version": status.version,
+        "restart_scheduled": status.restart_scheduled,
     }))
 }
 
