@@ -148,10 +148,18 @@ pub async fn apply_release(
                 return Ok(ManifestSource::Rpm);
             }
             NativePackageKind::Deb => {
-                return Err(format!(
-                    "Release {} has a DEB for this host, but DEB apply is not wired yet. Use the binary asset or build from source.",
-                    release.tag_name
-                ));
+                state
+                    .progress("downloading", 20, format!("Downloading {}", asset.name))
+                    .await;
+                let path = ephemeral_path(&asset.name)?;
+                download_file(&asset.browser_download_url, &path).await?;
+                verify_downloaded_artifact(state, release, &path).await?;
+                state
+                    .progress("installing", 60, format!("Installing DEB ({})", asset.name))
+                    .await;
+                crate::upgrade_pkg::install_deb(&path, force, allow_oldpackage).await?;
+                let _ = std::fs::remove_file(&path);
+                return Ok(ManifestSource::Deb);
             }
         }
     }
@@ -188,4 +196,24 @@ pub async fn apply_release(
             available.join(", ")
         }
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn deb_apply_calls_install_deb_not_stub() {
+        let src = include_str!("upgrade_apply.rs");
+        assert!(
+            !src.contains("DEB apply is not wired yet"),
+            "Ubuntu/Debian Version upgrades must apply the matching DEB"
+        );
+        assert!(
+            src.contains("install_deb"),
+            "DEB apply must call upgrade_pkg::install_deb"
+        );
+        assert!(
+            src.contains("ManifestSource::Deb"),
+            "successful DEB apply must record ManifestSource::Deb"
+        );
+    }
 }

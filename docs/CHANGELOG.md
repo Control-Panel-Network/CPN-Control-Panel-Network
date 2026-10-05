@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Version DEB apply on Ubuntu/Debian**: `/settings/version` upgrade, repair, and downgrade now install the guest-matching `.deb` from GitHub Releases (`apt-get install` on a local path, then `dpkg -i` plus `apt-get install -f` if apt refuses the file). The previous stub ("DEB apply is not wired yet") is gone. SHA-256 verification is unchanged. The running panel is not stopped by `pkill`; detached reload after apply is unchanged.
+
 ## [1.3.0] - 05/10/2026
 
 Minor release after v1.2.0. Operator-facing features: Dashboard meters follow the signed-in user's assigned package, Database disk is Used of the package quota, Feedback sends branded HTML with a CID logo and public Panel host, and Plugin Store uses a Host/Site install target. Tip-upgrade cargo PATH healing and Postfix loopback Feedback relay land in the same cut.
