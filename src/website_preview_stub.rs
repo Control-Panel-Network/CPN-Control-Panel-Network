@@ -198,11 +198,17 @@ mod tests {
         .unwrap();
         assert!(primary_index_is_php(&root));
         assert!(!docroot_should_use_live_origin(&root));
-        assert!(preview_should_use_live_origin(&root, "newstargeted.ddns.net"));
+        assert!(preview_should_use_live_origin(
+            &root,
+            "newstargeted.ddns.net"
+        ));
         assert!(!preview_should_use_live_origin(&root, "lab.test"));
         fs::write(root.join("index.html"), b"<h1>Static</h1>").unwrap();
         assert!(!primary_index_is_php(&root));
-        assert!(!preview_should_use_live_origin(&root, "newstargeted.ddns.net"));
+        assert!(!preview_should_use_live_origin(
+            &root,
+            "newstargeted.ddns.net"
+        ));
         let _ = fs::remove_dir_all(&root);
     }
 }

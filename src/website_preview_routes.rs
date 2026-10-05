@@ -243,9 +243,10 @@ async fn serve_live_preview(
     }
     let domain_owned = domain.to_string();
     let live_owned = live.to_string();
-    let fetched =
-        web::block(move || crate::website_preview_live::fetch_live_origin(&domain_owned, &relative))
-            .await;
+    let fetched = web::block(move || {
+        crate::website_preview_live::fetch_live_origin(&domain_owned, &relative)
+    })
+    .await;
     match fetched {
         Ok(Ok(item)) => {
             let final_origin = item.final_origin;

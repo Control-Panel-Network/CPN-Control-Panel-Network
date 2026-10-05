@@ -1,7 +1,9 @@
 //! Fetch the live public origin for Preview when the local docroot is a stub
 //! or a PHP index that the panel cannot execute.
 
-use crate::website_preview::{guess_content_type, is_blocked_preview_host, validate_preview_fetch_url};
+use crate::website_preview::{
+    guess_content_type, is_blocked_preview_host, validate_preview_fetch_url,
+};
 use crate::website_preview_stub::is_public_internet_host;
 use std::net::IpAddr;
 use std::path::Path;
@@ -198,10 +200,7 @@ fn inject_live_base(html: &str, origin: &str) -> String {
 
 fn split_effective_marker(raw: &[u8]) -> (Vec<u8>, Option<String>) {
     let marker = EFFECTIVE_MARKER.as_bytes();
-    if let Some(pos) = raw
-        .windows(marker.len())
-        .rposition(|w| w == marker)
-    {
+    if let Some(pos) = raw.windows(marker.len()).rposition(|w| w == marker) {
         let before = raw[..pos].to_vec();
         let after = String::from_utf8_lossy(&raw[pos + marker.len()..])
             .trim()
@@ -355,10 +354,8 @@ mod tests {
 
     #[test]
     fn php_unavailable_mentions_execute() {
-        let html = php_preview_unavailable_html(
-            "newstargeted.ddns.net",
-            "https://newstargeted.ddns.net/",
-        );
+        let html =
+            php_preview_unavailable_html("newstargeted.ddns.net", "https://newstargeted.ddns.net/");
         assert!(html.contains("cannot execute PHP"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
     }
@@ -377,10 +374,7 @@ mod tests {
     fn strips_effective_marker() {
         let raw = b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>ok</html>\nCPN_EFFECTIVE_URL:https://newstargeted.com/";
         let (body_side, eff) = split_effective_marker(raw);
-        assert_eq!(
-            eff.as_deref(),
-            Some("https://newstargeted.com/")
-        );
+        assert_eq!(eff.as_deref(), Some("https://newstargeted.com/"));
         assert!(String::from_utf8_lossy(&body_side).contains("<html>ok</html>"));
         assert!(!String::from_utf8_lossy(&body_side).contains("CPN_EFFECTIVE_URL"));
     }
