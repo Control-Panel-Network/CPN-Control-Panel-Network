@@ -159,7 +159,7 @@ pub async fn preview_content(
             .append_header(("Cache-Control", "private, no-store"))
             .body(page);
     }
-    if crate::website_preview_stub::docroot_is_placeholder(docroot) {
+    if crate::website_preview_stub::docroot_should_use_live_origin(docroot) {
         let mut relative = tail;
         let query = http.query_string();
         if !query.is_empty() {
