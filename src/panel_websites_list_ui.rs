@@ -1,12 +1,16 @@
-//! List HTML for `/websites` and `/subdomains` (GET `q=` filter).
+//! List HTML for `/websites/list` and `/subdomains` (GET `q=` + pagination).
 
 use crate::backups::is_subdomain_site;
 use crate::panel_list_search::{
-    domain_matches_q, list_filter_summary, list_search_form, normalize_list_q,
+    domain_matches_q, list_filter_summary, list_search_form_with_extras, normalize_list_q,
 };
 use crate::panel_prefs::load_panel_ui_prefs;
+use crate::panel_websites_list_pager::{
+    paginate_slice, sites_list_opts, sites_list_toolbar, sites_list_toolbar_bottom,
+    sites_search_extras, SitesListOpts,
+};
 use crate::site_preview_list_ui::{site_preview_cards, site_preview_list_styles};
-use crate::sites::{list_sites, resolve_parent_domain};
+use crate::sites::{list_sites, resolve_parent_domain, SiteRecord};
 
 fn html_escape(value: &str) -> String {
     value
@@ -46,13 +50,44 @@ fn notice_block(kind: &str, message: Option<&str>) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+fn list_rows_html(
+    total: usize,
+    filtered_empty: bool,
+    page_sites: &[SiteRecord],
+    show: bool,
+    username: &str,
+    empty_html: &str,
+    no_match_html: String,
+    action: &str,
+    opts: &SitesListOpts,
+    page: usize,
+    total_pages: usize,
+    filtered: usize,
+) -> String {
+    if total == 0 {
+        empty_html.to_string()
+    } else if filtered_empty {
+        no_match_html
+    } else {
+        let top = sites_list_toolbar(action, opts, page, total_pages, filtered);
+        let bottom = sites_list_toolbar_bottom(action, opts, page, total_pages, filtered);
+        let cards = site_preview_cards(page_sites, show, username);
+        format!("{top}{cards}{bottom}")
+    }
+}
+
 /// List Websites page body (apex / main domains only; create lives at `/websites/create`).
 pub fn websites_main(
     username: &str,
     notice: Option<&str>,
     error: Option<&str>,
     q_raw: Option<&str>,
+    page: Option<&str>,
+    per_page: Option<&str>,
+    mode: Option<&str>,
 ) -> String {
+    let opts = sites_list_opts(q_raw, page, per_page, mode);
     let q = normalize_list_q(q_raw);
     let all: Vec<_> = list_sites()
         .unwrap_or_default()
@@ -64,6 +99,7 @@ pub fn websites_main(
         .into_iter()
         .filter(|site| domain_matches_q(&site.domain, None, &q))
         .collect();
+    let (page_n, total_pages, filtered, page_sites) = paginate_slice(&sites, &opts);
     let prefs = load_panel_ui_prefs();
     let show = prefs.show_document_roots;
     let toggle_label = if show {
@@ -84,18 +120,24 @@ pub fn websites_main(
     } else {
         "Screenshot service is off: thumbnails come only from local captures on this host."
     };
-    let rows = if total == 0 {
+    let rows = list_rows_html(
+        total,
+        sites.is_empty(),
+        page_sites,
+        show,
+        username,
         r#"<p class="empty-state">No main websites yet. Create one below, or open <a href="/subdomains">Sub-domains</a> for nested sites.</p>
-        <p class="muted">Main websites store files under the domain home (for example <code>/home/example.com/public_html</code>).</p>"#
-            .to_string()
-    } else if sites.is_empty() {
+        <p class="muted">Main websites store files under the domain home (for example <code>/home/example.com/public_html</code>).</p>"#,
         format!(
             r#"<p class="empty-state">No websites match <strong>{}</strong>. <a href="/websites/list">Clear search</a>.</p>"#,
             html_escape(q_raw.unwrap_or("").trim())
-        )
-    } else {
-        site_preview_cards(&sites, show, username)
-    };
+        ),
+        "/websites/list",
+        &opts,
+        page_n,
+        total_pages,
+        filtered,
+    );
     format!(
         r#"<style>{preview_css}</style>
       {heading}
@@ -129,9 +171,14 @@ pub fn websites_main(
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
-        count = sites.len(),
-        search = list_search_form("/websites", q_raw.unwrap_or("").trim(), "Search by domain"),
-        filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
+        count = filtered,
+        search = list_search_form_with_extras(
+            "/websites/list",
+            q_raw.unwrap_or("").trim(),
+            "Search by domain",
+            &sites_search_extras(&opts),
+        ),
+        filter_summary = list_filter_summary(filtered, total, q_raw.unwrap_or("")),
         toggle_value = toggle_value,
         toggle_label = toggle_label,
         remote_value = remote_value,
@@ -147,7 +194,11 @@ pub fn subdomains_main(
     notice: Option<&str>,
     error: Option<&str>,
     q_raw: Option<&str>,
+    page: Option<&str>,
+    per_page: Option<&str>,
+    mode: Option<&str>,
 ) -> String {
+    let opts = sites_list_opts(q_raw, page, per_page, mode);
     let q = normalize_list_q(q_raw);
     let all: Vec<_> = list_sites()
         .unwrap_or_default()
@@ -162,20 +213,27 @@ pub fn subdomains_main(
             domain_matches_q(&site.domain, parent.as_deref(), &q)
         })
         .collect();
+    let (page_n, total_pages, filtered, page_sites) = paginate_slice(&sites, &opts);
     let prefs = load_panel_ui_prefs();
     let show = prefs.show_document_roots;
-    let rows = if total == 0 {
+    let rows = list_rows_html(
+        total,
+        sites.is_empty(),
+        page_sites,
+        show,
+        username,
         r#"<p class="empty-state">No sub-domains yet. Create one under an existing website, or open <a href="/websites/list">List Websites</a>.</p>
-        <p class="muted">Sub-domains nest under the parent home (for example <code>/home/example.com/blog.example.com</code>).</p>"#
-            .to_string()
-    } else if sites.is_empty() {
+        <p class="muted">Sub-domains nest under the parent home (for example <code>/home/example.com/blog.example.com</code>).</p>"#,
         format!(
             r#"<p class="empty-state">No sub-domains match <strong>{}</strong>. <a href="/subdomains">Clear search</a>.</p>"#,
             html_escape(q_raw.unwrap_or("").trim())
-        )
-    } else {
-        site_preview_cards(&sites, show, username)
-    };
+        ),
+        "/subdomains",
+        &opts,
+        page_n,
+        total_pages,
+        filtered,
+    );
     format!(
         r#"<style>{preview_css}</style>
       {heading}
@@ -197,13 +255,27 @@ pub fn subdomains_main(
         ),
         ok = notice_block("ok", notice),
         err = notice_block("error", error),
-        count = sites.len(),
-        search = list_search_form(
+        count = filtered,
+        search = list_search_form_with_extras(
             "/subdomains",
             q_raw.unwrap_or("").trim(),
             "Search by domain or parent",
+            &sites_search_extras(&opts),
         ),
-        filter_summary = list_filter_summary(sites.len(), total, q_raw.unwrap_or("")),
+        filter_summary = list_filter_summary(filtered, total, q_raw.unwrap_or("")),
         rows = rows,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::websites_main;
+
+    #[test]
+    fn websites_list_includes_search_action() {
+        let html = websites_main("owner", None, None, None, None, None, None);
+        assert!(html.contains(r#"action="/websites/list""#));
+        assert!(html.contains(r#"name="q""#));
+        assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
 }

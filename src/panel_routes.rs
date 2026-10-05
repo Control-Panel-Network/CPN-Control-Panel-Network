@@ -122,12 +122,15 @@ pub async fn websites_list_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(String::as_str);
+    let page = query.get("page").map(String::as_str);
+    let per_page = query.get("per_page").map(String::as_str);
+    let mode = query.get("mode").map(String::as_str);
     spawn_origin_backup_pass();
     html_ok(panel_shell(
         &user,
         "websites",
         "List Websites",
-        &websites_main(&user, notice, error, q),
+        &websites_main(&user, notice, error, q, page, per_page, mode),
     ))
 }
 
@@ -171,12 +174,15 @@ pub async fn subdomains_page(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(String::as_str);
+    let page = query.get("page").map(String::as_str);
+    let per_page = query.get("per_page").map(String::as_str);
+    let mode = query.get("mode").map(String::as_str);
     spawn_origin_backup_pass();
     html_ok(panel_shell(
         &user,
         "websites",
         "Sub-domains",
-        &subdomains_main(&user, notice, error, q),
+        &subdomains_main(&user, notice, error, q, page, per_page, mode),
     ))
 }
 
