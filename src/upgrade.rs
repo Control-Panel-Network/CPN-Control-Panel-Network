@@ -7,6 +7,7 @@ use crate::manifest::{
 };
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
 use crate::releases::{self, CpnRelease, compare_versions, is_retag_migration, normalize_version};
+use crate::upgrade_reload::{schedule_apply_reload, will_schedule_reload};
 use std::cmp::Ordering;
 use std::path::Path;
 use std::process::Stdio;
@@ -105,6 +106,7 @@ async fn finish_already_up_to_date(state: Arc<AppState>, installed: &str) -> Res
     status.progress = 100;
     status.error = None;
     status.message = message;
+    status.restart_scheduled = false;
     let _ = state.events.send(crate::model::InstallerEvent::Completed {
         status: status.clone(),
     });
@@ -313,6 +315,7 @@ async fn run_maintenance_inner(
             status.progress = 100;
             status.error = None;
             status.message = message;
+            status.restart_scheduled = will_schedule_reload(request.action, "tip");
             if let Some(info) = status.maintenance.as_mut() {
                 info.installed_version = tip.package_version.clone();
                 info.running_sha = Some(tip.sha.clone());
@@ -325,29 +328,7 @@ async fn run_maintenance_inner(
             });
         }
 
-        if matches!(
-            request.action,
-            MaintenanceAction::Upgrade | MaintenanceAction::Repair
-        ) && crate::panel_service::running_under_systemd()
-        {
-            match crate::panel_service::schedule_detached_panel_restart("post-tip-upgrade") {
-                Ok(()) => {
-                    crate::upgrade_tip_log::log_info(
-                        "Scheduled detached cpn-installer.service reload after tip apply",
-                    );
-                    state.log(
-                        "Scheduled detached cpn-installer.service reload after tip apply"
-                            .to_string(),
-                        "info",
-                    );
-                }
-                Err(error) => {
-                    let msg = format!("Could not schedule detached panel reload: {error}");
-                    crate::upgrade_tip_log::log_failure(&msg, None);
-                    state.log(format!("Warning: {msg}"), "error");
-                }
-            }
-        }
+        schedule_apply_reload(&state, request.action, "tip");
         return Ok(());
     }
 
@@ -566,6 +547,7 @@ async fn run_maintenance_inner(
         "Maintenance {:?} completed for {}",
         request.action, release.tag_name
     );
+    status.restart_scheduled = will_schedule_reload(request.action, "package");
     if let Some(info) = status.maintenance.as_mut() {
         info.installed_version = release.version.clone();
         info.plan = Some(build_plan(
@@ -580,33 +562,7 @@ async fn run_maintenance_inner(
     });
     drop(status);
 
-    // After UI package apply, reload the unit out-of-band so the new binary is live
-    // without systemctl stop killing this worker mid-flight.
-    if matches!(
-        request.action,
-        MaintenanceAction::Upgrade | MaintenanceAction::Repair
-    ) && crate::panel_service::running_under_systemd()
-    {
-        let _ = crate::panel_maintenance_mode::mark_restarting(
-            "Restarting the panel process after package apply",
-        );
-        match crate::panel_service::schedule_detached_panel_restart("post-upgrade") {
-            Ok(()) => state.log(
-                "Scheduled detached cpn-installer.service reload after package apply".to_string(),
-                "info",
-            ),
-            Err(error) => {
-                state.log(
-                    format!("Warning: could not schedule detached panel reload: {error}"),
-                    "error",
-                );
-                let _ = crate::panel_maintenance_mode::clear_with_reason("restart-schedule-failed");
-            }
-        }
-    } else {
-        // CLI / non-systemd: package apply finished in-process; drop the flag now.
-        let _ = crate::panel_maintenance_mode::clear_with_reason("completed");
-    }
+    schedule_apply_reload(&state, request.action, "package");
 
     Ok(())
 }
