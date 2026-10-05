@@ -6,6 +6,10 @@ use std::cmp::Ordering;
 
 pub const OFFICIAL_GITHUB_REPO: &str = "Control-Panel-Network/CPN-Control-Panel-Network";
 
+/// Max releases returned to Version UI, `/api/releases`, and `--to` lookup after GitHub pagination.
+/// High enough to cover the full published history for upgrade/downgrade; not a support window.
+pub const RELEASE_LIST_LIMIT: usize = 200;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseAsset {
     pub name: String,
@@ -137,11 +141,26 @@ pub fn pick_newest_release(releases: &[CpnRelease]) -> Option<&CpnRelease> {
         .max_by(|left, right| compare_versions(&left.version, &right.version))
 }
 
-fn release_has_downloadable_assets(release: &CpnRelease) -> bool {
+pub fn release_has_downloadable_assets(release: &CpnRelease) -> bool {
     !release.assets.is_empty()
         || release.rpm_asset.is_some()
         || release.binary_asset.is_some()
         || release.checksums_asset.is_some()
+}
+
+/// Keep only releases that have installable assets (skip hollow/empty-asset tags).
+/// If none have assets, return the original list so operators still see discovered tags.
+pub fn releases_for_version_picker(releases: Vec<CpnRelease>) -> Vec<CpnRelease> {
+    let publishable: Vec<CpnRelease> = releases
+        .iter()
+        .filter(|item| release_has_downloadable_assets(item))
+        .cloned()
+        .collect();
+    if publishable.is_empty() {
+        releases
+    } else {
+        publishable
+    }
 }
 
 /// Newest release that has package/binary assets when any such release exists.
@@ -387,7 +406,7 @@ mod tests {
         CpnRelease, ReleaseAsset, cargo_version_from_rpm, compare_versions, deb_name_matches,
         expand_compact_prerelease, format_release_published_display, is_active_0_2_line,
         is_retag_migration, is_retired_cpn_1_0_identity, normalize_version,
-        pick_newest_publishable_release, rpm_name_matches,
+        pick_newest_publishable_release, releases_for_version_picker, rpm_name_matches,
     };
     use std::cmp::Ordering;
 
@@ -448,6 +467,49 @@ mod tests {
         let only_older = [older];
         let both = pick_newest_publishable_release(&only_older).expect("pick");
         assert_eq!(both.version, "0.2.6-alpha.45");
+    }
+
+    #[test]
+    fn version_picker_skips_hollow_when_assets_exist() {
+        let hollow = CpnRelease {
+            tag_name: "v1.4.0".into(),
+            version: "1.4.0".into(),
+            name: "x".into(),
+            published_at: "2026-10-05".into(),
+            prerelease: false,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: Vec::new(),
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let with_assets = CpnRelease {
+            tag_name: "v1.3.0".into(),
+            version: "1.3.0".into(),
+            name: "x".into(),
+            published_at: "2026-10-05".into(),
+            prerelease: false,
+            draft: false,
+            html_url: "https://example.invalid".into(),
+            assets: vec![ReleaseAsset {
+                name: "cpn-installer".into(),
+                browser_download_url: "https://example.invalid/cpn-installer".into(),
+                content_type: "application/octet-stream".into(),
+                size: 1,
+            }],
+            rpm_asset: None,
+            binary_asset: None,
+            checksums_asset: None,
+            checksums_asc_asset: None,
+        };
+        let filtered = releases_for_version_picker(vec![hollow.clone(), with_assets.clone()]);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].version, "1.3.0");
+        let only_hollow = releases_for_version_picker(vec![hollow]);
+        assert_eq!(only_hollow.len(), 1);
+        assert_eq!(only_hollow[0].version, "1.4.0");
     }
 
     #[test]

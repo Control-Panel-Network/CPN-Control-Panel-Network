@@ -71,14 +71,17 @@ async fn resolve_target_release(
             }
             // Default upgrade target: newest publishable release from configured source.
             // Stale disk cache can still tip at an older tag after a newer install; refresh once.
-            let mut fetched = releases::list_releases_cached(30, false).await?;
+            let mut fetched =
+                releases::list_releases_cached(releases::RELEASE_LIST_LIMIT, false).await?;
             let mut tip = releases::pick_newest_publishable_release(&fetched.releases)
                 .cloned()
                 .ok_or_else(|| {
                     "No GitHub release found. Publish a release with RPM/binary assets, or set CPN_GITHUB_REPO.".to_string()
                 })?;
             if compare_versions(&tip.version, installed_version) == Ordering::Less {
-                fetched = releases::list_releases_cached_opts(30, true, true).await?;
+                fetched =
+                    releases::list_releases_cached_opts(releases::RELEASE_LIST_LIMIT, true, true)
+                        .await?;
                 if let Some(refreshed) =
                     releases::pick_newest_publishable_release(&fetched.releases)
                 {
