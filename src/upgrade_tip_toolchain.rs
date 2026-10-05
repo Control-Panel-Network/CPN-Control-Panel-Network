@@ -145,11 +145,7 @@ mod tests {
                 .iter()
                 .any(|p| p.contains("/home/cpn/.cargo/bin/cargo"))
         );
-        assert!(
-            display
-                .iter()
-                .any(|p| p.contains("/root/.cargo/bin/cargo"))
-        );
+        assert!(display.iter().any(|p| p.contains("/root/.cargo/bin/cargo")));
     }
 
     #[test]

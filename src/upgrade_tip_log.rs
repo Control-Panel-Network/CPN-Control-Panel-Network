@@ -47,10 +47,7 @@ pub fn format_line(level: &str, message: &str, retry: Option<u32>) -> String {
         Some(n) => format!(" retry={n}"),
         None => String::new(),
     };
-    format!(
-        "[{}] [{MODULE}] [{level}] {safe}{retry_part}",
-        now_stamp()
-    )
+    format!("[{}] [{MODULE}] [{level}] {safe}{retry_part}", now_stamp())
 }
 
 fn append_path(path: &str, line: &str) -> bool {

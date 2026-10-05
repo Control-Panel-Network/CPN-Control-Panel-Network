@@ -89,8 +89,13 @@ fn find_built_installer(root: &Path) -> Option<PathBuf> {
 }
 
 /// Returns Ok(true) when binaries were installed from Actions artifacts.
-pub async fn try_apply_actions_artifacts(repo: &str, sha: &str, work: &Path) -> Result<bool, String> {
-    let url = format!("https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=10");
+pub async fn try_apply_actions_artifacts(
+    repo: &str,
+    sha: &str,
+    work: &Path,
+) -> Result<bool, String> {
+    let url =
+        format!("https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=10");
     let (status, body) = curl_github_json(&url).await?;
     if status == 401 || status == 403 {
         upgrade_tip_log::log_info(format!(
@@ -114,7 +119,8 @@ pub async fn try_apply_actions_artifacts(repo: &str, sha: &str, work: &Path) -> 
         let Some(run_id) = run.get("id").and_then(|v| v.as_u64()) else {
             continue;
         };
-        let art_url = format!("https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts");
+        let art_url =
+            format!("https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts");
         let (art_status, art_body) = curl_github_json(&art_url).await?;
         if art_status != 200 {
             continue;
@@ -127,10 +133,7 @@ pub async fn try_apply_actions_artifacts(repo: &str, sha: &str, work: &Path) -> 
             .cloned()
             .unwrap_or_default();
         for artifact in artifacts {
-            let name = artifact
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let name = artifact.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let expired = artifact
                 .get("expired")
                 .and_then(|v| v.as_bool())

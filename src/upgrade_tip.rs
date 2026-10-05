@@ -223,13 +223,7 @@ async fn cargo_build_release(
     let cargo = tools.cargo.to_string_lossy().into_owned();
     let mut env = tools.env.clone();
     env.push(("CPN_GIT_SHA".into(), git_sha.to_string()));
-    run_checked(
-        &cargo,
-        &["build", "--release", "--locked"],
-        root,
-        &env,
-    )
-    .await?;
+    run_checked(&cargo, &["build", "--release", "--locked"], root, &env).await?;
     Ok(())
 }
 
@@ -300,7 +294,8 @@ async fn ensure_toolchain(state: &AppState) -> Result<Toolchain, String> {
     if let Err(error) = heal_rustup(state).await {
         return Err(error);
     }
-    upgrade_tip_toolchain::discover().ok_or_else(|| fail(upgrade_tip_toolchain::missing_cargo_message(), Some(1)))
+    upgrade_tip_toolchain::discover()
+        .ok_or_else(|| fail(upgrade_tip_toolchain::missing_cargo_message(), Some(1)))
 }
 
 fn maybe_cleanup_build_trees(root: &Path) {
@@ -327,10 +322,7 @@ async fn install_built_bins(root: &Path, tools: &Toolchain) -> Result<(), String
         "/home/cpn/cpn-cargo-target/release/cpn-installer",
     ));
     let Some(built_installer) = candidates.into_iter().find(|p| p.is_file()) else {
-        return Err(fail(
-            "tip build missing target/release/cpn-installer",
-            None,
-        ));
+        return Err(fail("tip build missing target/release/cpn-installer", None));
     };
     let cli = built_installer.with_file_name("cpn");
     install_from_paths(&built_installer, &cli).await
@@ -355,11 +347,7 @@ async fn install_from_paths(installer: &Path, cli: &Path) -> Result<(), String> 
         )
         .await;
         if cli.is_file() {
-            let _ = install_binary(
-                cli.to_str().unwrap_or(""),
-                "/usr/local/bin/cpn",
-            )
-            .await;
+            let _ = install_binary(cli.to_str().unwrap_or(""), "/usr/local/bin/cpn").await;
         }
     }
     Ok(())
