@@ -235,8 +235,11 @@ pub async fn api_releases(
     if !version_read_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
-    match releases::list_releases(20).await {
-        Ok(list) => HttpResponse::Ok().json(list),
+    match releases::list_releases(releases::RELEASE_LIST_LIMIT).await {
+        Ok(list) => {
+            let list = releases::releases_for_version_picker(list);
+            HttpResponse::Ok().json(list)
+        }
         Err(error) => HttpResponse::BadGateway().json(serde_json::json!({ "error": error })),
     }
 }

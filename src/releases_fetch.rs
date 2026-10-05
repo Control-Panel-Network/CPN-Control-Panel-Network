@@ -7,6 +7,10 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 const GITHUB_API_VERSION: &str = "2022-11-28";
+/// GitHub max page size for `/repos/.../releases`.
+const GITHUB_RELEASES_PER_PAGE: usize = 100;
+/// Safety cap so a huge fork cannot loop forever (100 * 5 = 500 tags).
+const MAX_RELEASE_PAGES: usize = 5;
 
 struct GithubHttpResponse {
     status: u16,
@@ -16,6 +20,12 @@ struct GithubHttpResponse {
 
 fn installer_user_agent() -> String {
     format!("CPN-Installer/{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn releases_list_url(repo: &str, page: usize) -> String {
+    format!(
+        "https://api.github.com/repos/{repo}/releases?per_page={GITHUB_RELEASES_PER_PAGE}&page={page}"
+    )
 }
 
 fn http_error_message(status: u16, repo: &str) -> String {
@@ -116,18 +126,53 @@ fn take_newest(mut releases: Vec<CpnRelease>, limit: usize) -> Vec<CpnRelease> {
     releases
 }
 
-fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, String> {
+/// Parse one GitHub Releases API page (no truncate). Drafts are skipped.
+fn parse_releases_page(body: &str) -> Result<Vec<CpnRelease>, String> {
     let value: serde_json::Value =
         serde_json::from_str(body).map_err(|error| format!("Invalid releases JSON: {error}"))?;
     let items = value
         .as_array()
         .ok_or_else(|| "GitHub Releases response was not an array".to_string())?;
-    let releases = items
+    Ok(items
         .iter()
         .filter_map(parse_release)
         .filter(|release| !release.draft)
-        .collect::<Vec<_>>();
-    Ok(take_newest(releases, limit))
+        .collect())
+}
+
+fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, String> {
+    Ok(take_newest(parse_releases_page(body)?, limit))
+}
+
+/// After a successful page-1 fetch, pull remaining pages so older tags stay available for
+/// upgrade/downgrade. Stops on a short page, HTTP error, or [`MAX_RELEASE_PAGES`].
+async fn fetch_remaining_release_pages(
+    repo: &str,
+    mut collected: Vec<CpnRelease>,
+) -> Vec<CpnRelease> {
+    if collected.len() < GITHUB_RELEASES_PER_PAGE {
+        return collected;
+    }
+    for page in 2..=MAX_RELEASE_PAGES {
+        let url = releases_list_url(repo, page);
+        let response = match curl_github_releases(&url, None).await {
+            Ok(resp) => resp,
+            Err(_) => break,
+        };
+        if response.status < 200 || response.status >= 300 {
+            break;
+        }
+        let more = match parse_releases_page(&response.body) {
+            Ok(items) => items,
+            Err(_) => break,
+        };
+        let count = more.len();
+        collected.extend(more);
+        if count < GITHUB_RELEASES_PER_PAGE {
+            break;
+        }
+    }
+    collected
 }
 
 async fn direct_fallback_result(
@@ -232,7 +277,7 @@ pub async fn list_releases_for_repo_opts(
         }
     }
 
-    let url = format!("https://api.github.com/repos/{repo}/releases?per_page=30");
+    let url = releases_list_url(repo, 1);
     let etag = existing.as_ref().and_then(|c| c.etag.clone());
     let response = match curl_github_releases(&url, etag.as_deref()).await {
         Ok(resp) => resp,
@@ -346,9 +391,13 @@ pub async fn list_releases_for_repo_opts(
         return Ok(direct_fallback_result(limit, repo, existing, &msg).await);
     }
 
-    let releases = parse_releases_json(&response.body, limit)?;
-    let stored = store_success(repo, releases.clone(), response.etag, existing);
+    let page_one = parse_releases_page(&response.body)?;
+    let mut all = fetch_remaining_release_pages(repo, page_one).await;
+    sort_releases_newest_first(&mut all);
+    // Cache the full discovered list; callers still receive at most `limit` newest.
+    let stored = store_success(repo, all.clone(), response.etag, existing);
     let _ = save_cache_for(repo, &stored);
+    let releases = take_newest(all, limit);
     Ok(releases_cache::ReleasesFetchResult {
         releases,
         from_cache: false,
@@ -389,7 +438,9 @@ pub async fn list_releases(limit: usize) -> Result<Vec<CpnRelease>, String> {
 pub async fn find_release(version_or_tag: &str) -> Result<CpnRelease, String> {
     let wanted = normalize_version(version_or_tag);
     let repo = github_repo();
-    let releases = list_releases_for_repo(&repo, 30, false).await?.releases;
+    let releases = list_releases_for_repo(&repo, crate::releases::RELEASE_LIST_LIMIT, false)
+        .await?
+        .releases;
     if let Some(found) = releases.into_iter().find(|release| {
         normalize_version(&release.version) == wanted
             || normalize_version(&release.tag_name) == wanted
@@ -421,5 +472,28 @@ mod tests {
     #[test]
     fn user_agent_includes_version() {
         assert!(installer_user_agent().starts_with("CPN-Installer/"));
+    }
+
+    #[test]
+    fn releases_list_url_paginates() {
+        let page1 = releases_list_url("Control-Panel-Network/CPN-Control-Panel-Network", 1);
+        assert!(page1.contains("per_page=100"));
+        assert!(page1.contains("page=1"));
+        let page2 = releases_list_url("Acme/Fork", 2);
+        assert!(page2.contains("page=2"));
+        assert!(page2.contains("Acme/Fork"));
+    }
+
+    #[test]
+    fn parse_releases_page_skips_drafts_without_truncate() {
+        let body = r#"[
+          {"tag_name":"v1.0.0","name":"1.0.0","draft":false,"prerelease":false,"published_at":"2026-10-01T00:00:00Z","html_url":"https://example.invalid/1","assets":[{"name":"cpn-installer","browser_download_url":"https://example.invalid/a","content_type":"application/octet-stream","size":1}]},
+          {"tag_name":"v0.9.0","name":"0.9.0","draft":true,"prerelease":false,"published_at":"2026-09-01T00:00:00Z","html_url":"https://example.invalid/2","assets":[]}
+        ]"#;
+        let parsed = parse_releases_page(body).expect("parse");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].tag_name, "v1.0.0");
+        let limited = parse_releases_json(body, 1).expect("limit");
+        assert_eq!(limited.len(), 1);
     }
 }

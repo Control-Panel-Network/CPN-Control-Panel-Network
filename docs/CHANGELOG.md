@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Version Management release picker**: Lists all discovered GitHub Releases that have installable assets (paginated API fetch, empty-asset tags skipped), not only the newest 20. Support policy text stays latest two releases only; selecting an older tag still warns outside support. CLI `--to` / `--downgrade` and `/api/releases` use the same full publishable list so operators can upgrade or downgrade later.
+
 ### Fixed
 
 - **Passkey / WebAuthn after restart**: `/login/2fa` keeps one in-flight `credentials.get` (abort stale requests, no duplicate pending error). Passkey files live under `/var/lib/cpn/mfa/passkeys/` (legacy `$CPN_DATA_DIR/passkeys/*.json` is copied, never deleted). Loopback RP ID stays `localhost` with remembered `localhost` and `127.0.0.1` origins across upgrade, downgrade, repair, and restart. Missing MFA pending session redirects to `/login`. WebAuthn failures log to Main/Error without secrets.
