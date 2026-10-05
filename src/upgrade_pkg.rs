@@ -388,10 +388,7 @@ mod tests {
             apt_local_deb_arg("cpn-installer_1.3.0_amd64.deb"),
             "./cpn-installer_1.3.0_amd64.deb"
         );
-        assert_eq!(
-            apt_local_deb_arg("/var/tmp/pkg.deb"),
-            "/var/tmp/pkg.deb"
-        );
+        assert_eq!(apt_local_deb_arg("/var/tmp/pkg.deb"), "/var/tmp/pkg.deb");
         assert_eq!(apt_local_deb_arg("./already.deb"), "./already.deb");
     }
 }
