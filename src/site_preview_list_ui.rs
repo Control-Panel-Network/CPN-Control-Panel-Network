@@ -96,7 +96,7 @@ fn site_action_buttons(site: &SiteRecord, show_origin_backup: bool) -> String {
     format!(
         r#"<div class="site-card-actions">
             <a class="btn-primary" style="min-height:36px;padding:0 14px;font-size:13px;" href="/websites/manage?domain={domain}">Manage</a>
-            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/">Open preview</a>
+            <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/preview/{domain}/" target="_blank" rel="noopener noreferrer">Open preview</a>
             <a class="btn-secondary" style="min-height:36px;padding:0 12px;border-radius:999px;background:#f2f4f7;color:#344054;font-weight:700;display:inline-flex;align-items:center;font-size:13px;" href="/websites/manage?domain={domain}&amp;tab=files">File manager</a>
             {backup}
             {suspend}
@@ -316,8 +316,9 @@ pub fn manage_overview_preview(site: &SiteRecord) -> String {
   </div>
   <div>
     <strong style="display:block;font-size:14px;">Site preview</strong>
-    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Refresh preview captures with a local headless browser. Public sites whose document root is still the CPN placeholder are captured from the live URL.</p>
+    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Refresh preview captures with a local headless browser. Public sites whose document root is still the CPN placeholder, or has no index file, are captured from the live URL.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <a class="manage-btn" href="/preview/{domain}/" target="_blank" rel="noopener noreferrer">Open preview</a>
       <a class="manage-btn" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
       <form method="post" action="/websites/site-preview/refresh" class="inline-form">
         <input type="hidden" name="domain" value="{domain}">
@@ -407,6 +408,10 @@ mod tests {
             assert!(html.contains("8.5"), "{html}");
             assert!(html.contains("Package bandwidth"), "{html}");
             assert!(html.contains("Used "), "{html}");
+            assert!(
+                html.contains(r#"href="/preview/card.example/" target="_blank" rel="noopener noreferrer""#),
+                "{html}"
+            );
             assert!(html.contains("<span>IP</span>"), "{html}");
             assert!(!html.contains(" B<"), "{html}");
             assert!(!html.contains(" B</"), "{html}");

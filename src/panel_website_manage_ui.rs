@@ -234,7 +234,7 @@ pub fn manage_banner(site: &SiteRecord, username: &str) -> String {
   <h1>{domain}<span class="manage-badge {badge}">{status}</span>{php}{ssl}</h1>
   <p>Manage your website with powerful tools and real-time monitoring.</p>
   <div class="manage-banner-actions">
-    <a class="manage-btn primary" href="{preview}">Preview Website</a>
+    <a class="manage-btn primary" href="{preview}" target="_blank" rel="noopener noreferrer">Preview Website</a>
     <a class="manage-btn" href="/websites/files?domain={domain_q}">File Manager</a>
     {design}
   </div>

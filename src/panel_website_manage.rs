@@ -188,6 +188,7 @@ mod tests {
         assert!(html.contains("manage-tabs"));
         assert!(html.contains("Disk Usage"));
         assert!(html.contains("/preview/cpn-lab-test.example/"));
+        assert!(html.contains(r#"href="/preview/cpn-lab-test.example/" target="_blank" rel="noopener noreferrer""#));
         assert!(!html.to_lowercase().contains("cyberpanel"));
         assert!(!html.to_lowercase().contains("email marketing"));
     }

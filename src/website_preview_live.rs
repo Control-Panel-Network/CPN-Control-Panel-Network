@@ -122,7 +122,7 @@ pub fn live_fetch_error_html(domain: &str, live_url: &str, err: &str) -> String 
 </head>
 <body>
   <h1>Live preview unavailable</h1>
-  <p>The local document root is still the CPN placeholder. Preview tried the public site and could not load it.</p>
+  <p>The local document root is still the CPN placeholder or has no index file. Preview tried the public site and could not load it.</p>
   <p>{err_e}</p>
   <p><a href="{live_e}" target="_blank" rel="noopener noreferrer">Open {domain_e} in a new tab</a></p>
 </body>

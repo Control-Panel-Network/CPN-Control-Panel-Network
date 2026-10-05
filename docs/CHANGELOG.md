@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Website Open preview**: Opens in a new tab (`target=_blank`, `rel=noopener`). When the document root is the CPN Site ready stub, missing, or has no `index.html` / `index.htm` / `index.php`, `/preview/{domain}/` and Site preview captures use the live public HTTPS origin instead of an empty directory listing. Local Chromium remains primary; Microlink stays a fallback for public hostnames only.
+
 ## [1.3.0] - 05/10/2026
 
 Minor release after v1.2.0. Operator-facing features: Dashboard meters follow the signed-in user's assigned package, Database disk is Used of the package quota, Feedback sends branded HTML with a CID logo and public Panel host, and Plugin Store uses a Host/Site install target. Tip-upgrade cargo PATH healing and Postfix loopback Feedback relay land in the same cut.
