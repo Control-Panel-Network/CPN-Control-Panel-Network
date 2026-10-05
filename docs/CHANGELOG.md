@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Version DEB apply on Ubuntu/Debian**: `/settings/version` upgrade, repair, and downgrade now install the guest-matching `.deb` from GitHub Releases (`apt-get install` on a local path, then `dpkg -i` plus `apt-get install -f` if apt refuses the file). The previous stub that refused DEB package apply is gone. SHA-256 verification is unchanged. The running panel is not stopped by `pkill`; detached reload after apply is unchanged.
 - **Passkey / WebAuthn after restart**: `/login/2fa` keeps one in-flight `credentials.get` (abort stale requests, no duplicate pending error). Passkey files live under `/var/lib/cpn/mfa/passkeys/` (legacy `$CPN_DATA_DIR/passkeys/*.json` is copied, never deleted). Loopback RP ID stays `localhost` with remembered `localhost` and `127.0.0.1` origins across upgrade, downgrade, repair, and restart. Missing MFA pending session redirects to `/login`. WebAuthn failures log to Main/Error without secrets.
 - **Website Open preview**: Opens in a new tab (`target=_blank`, `rel=noopener`). When the document root is the CPN Site ready stub, missing, or has no `index.html` / `index.htm` / `index.php`, `/preview/{domain}/` and Site preview captures use the live public HTTPS origin instead of an empty directory listing. Local Chromium remains primary; Microlink stays a fallback for public hostnames only.
 

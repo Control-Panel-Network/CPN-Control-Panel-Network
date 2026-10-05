@@ -1,4 +1,4 @@
-//! RPM/binary package apply helpers for upgrade/repair/retag.
+//! RPM/DEB/binary package apply helpers for upgrade/repair/retag.
 
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
@@ -230,9 +230,129 @@ pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Apt treats a name without a slash as a repo package. Local DEBs must be a path.
+pub fn apt_local_deb_arg(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return "./package.deb".to_string();
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return trimmed.replace('\\', "/");
+    }
+    format!("./{trimmed}")
+}
+
+async fn dpkg_deb_field(path: &str, field: &str) -> Option<String> {
+    let output = Command::new("dpkg-deb")
+        .args(["-f", path, field])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() { None } else { Some(value) }
+}
+
+async fn dpkg_query_field(package: &str, format: &str) -> Option<String> {
+    let output = Command::new("dpkg-query")
+        .args(["-W", "-f", format, package])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() { None } else { Some(value) }
+}
+
+async fn deb_already_installed(path: &str) -> bool {
+    let Some(pkg) = dpkg_deb_field(path, "Package").await else {
+        return false;
+    };
+    let Some(file_ver) = dpkg_deb_field(path, "Version").await else {
+        return false;
+    };
+    let Some(inst_ver) = dpkg_query_field(&pkg, "${Version}").await else {
+        return false;
+    };
+    if inst_ver != file_ver {
+        return false;
+    }
+    dpkg_query_field(&pkg, "${Status}")
+        .await
+        .map(|status| status.contains("install ok installed"))
+        .unwrap_or(false)
+}
+
+/// Install or replace the `cpn-installer` DEB on apt-family guests (Ubuntu/Debian).
+///
+/// Tries `apt-get install` with a local path, then `dpkg -i` plus `apt-get install -f`
+/// when apt refuses the file (seen on Ubuntu 26.04). Does not stop the running panel.
+pub async fn install_deb(path: &str, force: bool, allow_downgrade: bool) -> Result<(), String> {
+    if !force && !allow_downgrade && deb_already_installed(path).await {
+        return Ok(());
+    }
+    let spec = apt_local_deb_arg(path);
+    let allow = force || allow_downgrade;
+
+    let mut apt_args = vec!["install", "-y"];
+    if allow {
+        apt_args.push("--allow-downgrades");
+        apt_args.push("--reinstall");
+    }
+    apt_args.push(spec.as_str());
+    let apt_output = Command::new("apt-get")
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .args(&apt_args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|error| format!("apt-get install failed: {error}"))?;
+    if apt_output.status.success() {
+        return Ok(());
+    }
+    if !force && !allow_downgrade && deb_already_installed(path).await {
+        return Ok(());
+    }
+
+    let dpkg_output = Command::new("dpkg")
+        .args(["-i", path])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|error| format!("dpkg -i failed: {error}"))?;
+    let _ = Command::new("apt-get")
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .args(["install", "-f", "-y"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+    if dpkg_output.status.success() || deb_already_installed(path).await {
+        return Ok(());
+    }
+    let apt_err = cmd_failure_detail("apt-get", &apt_output);
+    let dpkg_err = cmd_failure_detail("dpkg", &dpkg_output);
+    Err(format!("{apt_err}; also {dpkg_err}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::install_binary;
+    use super::{apt_local_deb_arg, install_binary};
     use std::fs;
     use std::path::PathBuf;
 
@@ -260,5 +380,15 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn apt_local_deb_arg_uses_path_not_repo_name() {
+        assert_eq!(
+            apt_local_deb_arg("cpn-installer_1.3.0_amd64.deb"),
+            "./cpn-installer_1.3.0_amd64.deb"
+        );
+        assert_eq!(apt_local_deb_arg("/var/tmp/pkg.deb"), "/var/tmp/pkg.deb");
+        assert_eq!(apt_local_deb_arg("./already.deb"), "./already.deb");
     }
 }
