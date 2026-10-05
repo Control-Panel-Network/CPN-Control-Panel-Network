@@ -1009,6 +1009,7 @@ async fn main() -> std::io::Result<()> {
         mail_releases,
         smtp: Some(smtp_status_public()),
         maintenance: Some(maintenance),
+        restart_scheduled: false,
     };
     initial = enrich_status(initial, &token);
     cpn_installer::installer::persist_status_snapshot(&initial);
