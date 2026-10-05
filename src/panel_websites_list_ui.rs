@@ -80,7 +80,7 @@ pub fn websites_main(
     };
     let remote_value = if remote { "0" } else { "1" };
     let remote_hint = if remote {
-        "Public domains without a cached local capture load a thumbnail from the Microlink screenshot API, so the site hostname is sent to that service."
+        "Refresh preview may use the Microlink screenshot API for public domains when no local headless browser is installed. List pages only show disk cache or placeholders (7-day TTL)."
     } else {
         "Screenshot service is off: thumbnails come only from local captures on this host."
     };

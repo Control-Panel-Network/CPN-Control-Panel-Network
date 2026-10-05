@@ -4,10 +4,12 @@ use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::site_acl::{SitePerm, require_manage_site};
-use crate::site_preview_capture::{capture_available, capture_site_preview};
+use crate::site_preview_capture::{
+    capture_available, capture_site_preview, capture_site_preview_local,
+};
 use crate::site_preview_microlink::remote_preview_ready;
 use crate::site_preview_thumb::{
-    PreviewFreshness, freshness, load_meta, placeholder_svg, read_cached_image,
+    PreviewFreshness, cached_shot_usable, freshness, load_meta, placeholder_svg, read_cached_image,
 };
 use crate::sites::normalize_domain;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -54,13 +56,16 @@ pub async fn site_preview_image(
     }
 
     let meta = load_meta(&domain);
-    if meta.ok
+    // Serve any successful disk cache (Fresh or Stale). List reloads must not
+    // force a remote recapture just because TTL expired.
+    if cached_shot_usable(&domain)
         && let Ok((bytes, ctype)) = read_cached_image(&domain)
     {
         let cache = if freshness(&domain) == PreviewFreshness::Fresh {
-            "private, max-age=300"
+            // Align browser cache with durable disk TTL; `v=` busts after Refresh.
+            "private, max-age=3600"
         } else {
-            "private, max-age=60"
+            "private, max-age=300"
         };
         return HttpResponse::Ok()
             .content_type(ctype)
@@ -188,8 +193,20 @@ fn release_capture(domain: &str) {
 }
 
 /// Kick a background capture when the list page loads (non-minimalist).
+///
+/// Local Chromium only. Never calls Microlink from list N+1 loads. Skips when a
+/// usable (Fresh or Stale) disk cache already exists. Missing shots wait for
+/// Refresh when no headless browser is installed.
 pub fn spawn_background_capture(domain: String) {
+    if cached_shot_usable(&domain) {
+        return;
+    }
     if freshness(&domain) == PreviewFreshness::Fresh {
+        return;
+    }
+    if !capture_available() {
+        // No local browser: leave the SVG placeholder. Remote capture is
+        // Refresh-only so /websites and /subdomains do not burn API quota.
         return;
     }
     if !claim_capture(&domain) {
@@ -200,7 +217,7 @@ pub fn spawn_background_capture(domain: String) {
         .spawn({
             let domain = domain.clone();
             move || {
-                let _ = capture_site_preview(&domain);
+                let _ = capture_site_preview_local(&domain);
                 release_capture(&domain);
             }
         })
