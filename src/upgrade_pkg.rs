@@ -215,8 +215,7 @@ pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("/usr/bin"));
     let tmp: PathBuf = parent.join(format!(".{name}.cpn-new"));
-    std::fs::copy(path, &tmp)
-        .map_err(|error| format!("Could not stage {dest}: {error}"))?;
+    std::fs::copy(path, &tmp).map_err(|error| format!("Could not stage {dest}: {error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
