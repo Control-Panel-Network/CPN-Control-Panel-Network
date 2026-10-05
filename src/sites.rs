@@ -386,7 +386,16 @@ pub fn list_sites() -> Result<Vec<SiteRecord>, String> {
         if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
             continue;
         }
-        sites.push(load_site_at(&path)?);
+        match load_site_at(&path) {
+            Ok(site) => sites.push(site),
+            Err(error) => {
+                // One incomplete plugin/lab stub must not empty Websites and Sub-domains.
+                eprintln!(
+                    "cpn: skipping invalid site record {}: {error}",
+                    path.display()
+                );
+            }
+        }
     }
     sites.sort_by(|a, b| a.domain.cmp(&b.domain));
     Ok(sites)
@@ -716,6 +725,22 @@ mod tests {
         with_temp_data(|| {
             assert!(is_legacy_docroot("/var/www/old.example.com/public_html"));
             assert!(is_legacy_docroot("/var/lib/cpn/sites/old.example.com"));
+        });
+    }
+
+    #[test]
+    fn list_sites_skips_incomplete_json_stub() {
+        with_temp_data(|| {
+            create_site("example.com", "cpnowner", None, None, None).expect("create");
+            let stub = sites_dir().join("filegator-lab.local.json");
+            fs::write(
+                &stub,
+                r#"{"domain":"filegator-lab.local","home":"/home/filegator-lab.local","docroot":"/home/filegator-lab.local/public_html","created_unix":1}"#,
+            )
+            .unwrap();
+            let listed = list_sites().expect("list");
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0].domain, "example.com");
         });
     }
 }

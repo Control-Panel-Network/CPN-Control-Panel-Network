@@ -4,7 +4,7 @@ use crate::account::{
     PanelBootstrap, default_password_policy, generate_password, hash_password, new_password_salt,
     with_test_data_dir, write_account_file,
 };
-use crate::auth_api::{dashboard_page, login_page, login_submit};
+use crate::auth_api::{dashboard_page, login_mfa_page, login_page, login_submit};
 use crate::http_helpers::build_allowed_hosts;
 use crate::installer::AppState;
 use crate::model::{AccountPublic, InstallerStatus};
@@ -357,6 +357,34 @@ fn login_and_dashboard_accept_head() {
                 .to_request();
             let dash_resp = actix_web::test::call_service(&app, dash_head).await;
             assert_eq!(dash_resp.status(), StatusCode::SEE_OTHER);
+        });
+    });
+}
+
+#[test]
+fn login_2fa_without_pending_session_redirects_to_login() {
+    with_test_data_dir(|| {
+        runtime().block_on(async {
+            let app = actix_web::test::init_service(
+                App::new()
+                    .app_data(test_state("completed"))
+                    .service(login_mfa_page),
+            )
+            .await;
+            let req = actix_web::test::TestRequest::get()
+                .uri("/login/2fa")
+                .to_request();
+            let resp = actix_web::test::call_service(&app, req).await;
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let location = resp
+                .headers()
+                .get(actix_web::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("");
+            assert!(
+                location == "/login" || location.starts_with("/login?"),
+                "missing MFA session must leave /login/2fa for /login, got {location}"
+            );
         });
     });
 }
