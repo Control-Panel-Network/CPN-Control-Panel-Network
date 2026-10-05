@@ -482,6 +482,26 @@ pub fn start_authentication_for_user(
     Ok((id, rcr))
 }
 
+/// Map library verify failures to short operator copy (no W3C URLs / secrets).
+fn map_auth_verify_error(err: impl std::fmt::Display) -> String {
+    let raw = err.to_string();
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("origin")
+        || lower.contains("rp id")
+        || lower.contains("rpid")
+        || lower.contains("relying party")
+    {
+        return "Passkey could not be verified for this site address. Open http://localhost with the same panel port and try again.".into();
+    }
+    if lower.contains("challenge") || lower.contains("ceremony") || lower.contains("expired") {
+        return "Passkey challenge expired. Try sign-in with passkey again.".into();
+    }
+    if lower.contains("counter") || lower.contains("cloned") {
+        return "This passkey looks out of sync. Try another authenticator or re-enroll.".into();
+    }
+    "Incorrect passkey. Try again or use another sign-in method.".into()
+}
+
 pub fn finish_authentication(
     webauthn: &Webauthn,
     ceremony_id: &str,
@@ -493,8 +513,13 @@ pub fn finish_authentication(
         CeremonyKind::Authenticate { state } => {
             let result = webauthn
                 .finish_securitykey_authentication(credential, &state)
-                .map_err(|_| {
-                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
+                .map_err(|err| {
+                    crate::upgrade_tip_log::log_tagged(
+                        "webauthn",
+                        "error",
+                        &format!("auth verify failed: {err}"),
+                    );
+                    map_auth_verify_error(err)
                 })?;
             let username = passkey_owner(result.cred_id())
                 .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
@@ -503,8 +528,13 @@ pub fn finish_authentication(
         CeremonyKind::Discoverable(state) => {
             let (_, credential_id) = webauthn
                 .identify_discoverable_authentication(credential)
-                .map_err(|_| {
-                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
+                .map_err(|err| {
+                    crate::upgrade_tip_log::log_tagged(
+                        "webauthn",
+                        "error",
+                        &format!("discoverable identify failed: {err}"),
+                    );
+                    map_auth_verify_error(err)
                 })?;
             let username = passkey_owner(credential_id)
                 .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
@@ -514,8 +544,13 @@ pub fn finish_authentication(
                 .collect::<Vec<_>>();
             let result = webauthn
                 .finish_discoverable_authentication(credential, state, &keys)
-                .map_err(|_| {
-                    "Incorrect passkey. Try again or use another sign-in method.".to_string()
+                .map_err(|err| {
+                    crate::upgrade_tip_log::log_tagged(
+                        "webauthn",
+                        "error",
+                        &format!("discoverable verify failed: {err}"),
+                    );
+                    map_auth_verify_error(err)
                 })?;
             (username, result)
         }
@@ -755,6 +790,16 @@ mod tests {
                 "browser Origin must be allowed among {origins2:?}"
             );
         });
+    }
+
+    #[test]
+    fn map_auth_verify_error_distinguishes_origin() {
+        assert!(
+            map_auth_verify_error("Invalid Origin on registration")
+                .to_ascii_lowercase()
+                .contains("localhost")
+        );
+        assert!(map_auth_verify_error("unknown credential").contains("Incorrect passkey"));
     }
 
     #[test]
