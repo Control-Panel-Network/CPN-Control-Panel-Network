@@ -1,6 +1,6 @@
 # CPN install and upgrade options
 
-CPN is **alpha-only** for now. Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
+Current stable is **v1.3.0** (first stable was **v1.0.0**). Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
 
 ## Preferred one-liners
 
@@ -38,7 +38,7 @@ curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- --branch v0.2.6-
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --ref v0.2.6-alpha.21 --bypass
 ```
 
-Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v1.0.0`.
+Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v1.3.0`.
 
 Behavior:
 
@@ -52,6 +52,34 @@ Behavior:
 If `-b` is set but **no Release** exists for that ref, the script exits with a clear English error. It does not invent packages from source.
 
 Shared helpers live in [`scripts/cpn-bootstrap-lib.sh`](../scripts/cpn-bootstrap-lib.sh) (also served at `https://cpn.newstargeted.com/cpn-bootstrap-lib.sh`).
+
+## Docker Hub images (optional)
+
+Official installer runtime images: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer). Source tree: [GitHub `stable`](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/tree/stable). Current release on Hub is **v1.3.0**.
+
+These images are for maintainer smoke tests and labs (systemd in a privileged container). They are not a replacement for native RPM/DEB on production hosts.
+
+```bash
+docker pull master3395/cpn-installer:almalinux9
+docker pull master3395/cpn-installer:almalinux10
+docker pull master3395/cpn-installer:ubuntu26.04
+docker pull master3395/cpn-installer:latest      # AlmaLinux 9
+docker pull master3395/cpn-installer:1.3.0       # semver on the AlmaLinux 9 image
+```
+
+Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, plus the release semver. There are no `ubuntu22.04` or `ubuntu24.04` Hub tags; install those Ubuntu hosts with native DEB from GitHub Releases.
+
+Privileged run (cgroup mount required):
+
+```bash
+docker run -d --privileged \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  --cgroupns=host \
+  -p 2087:2087 \
+  master3395/cpn-installer:almalinux9
+```
+
+To **build and run from this checkout** (local RPM into a container, not a Hub pull), use [`scripts/docker-run.sh`](../scripts/docker-run.sh). Hub overview source is [`docker/hub-overview.md`](../docker/hub-overview.md) (synced by `.github/workflows/docker-hub.yml` on image publish).
 
 ## Raw GitHub URLs (correct form)
 
