@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 05/10/2026
+
+Minor release after v1.2.0. Operator-facing features: Dashboard meters follow the signed-in user's assigned package, Database disk is Used of the package quota, Feedback sends branded HTML with a CID logo and public Panel host, and Plugin Store uses a Host/Site install target. Tip-upgrade cargo PATH healing and Postfix loopback Feedback relay land in the same cut.
+
+### Added
+
+- **Assigned package dashboard meters**: Statistics Used of limit cards follow the signed-in user's assigned package (Manage user Account tab picker), not the last-edited package. Websites, mailboxes, databases, FTP/SFTP, storage, and bandwidth use the same package fields.
+- **Plugin Store Host/Site install target**: Store filters switch Host vs Site without a full reload. Host is owner/admin only (site dropdown hidden). Email stays in the Email category when the target changes. Tachyon is listed first among Host Email options.
+- **Feedback CID logo and public Panel host**: HTML Feedback embeds the CPN logo as a CID image. Panel host uses the public server IP or hostname plus port from `panel_public_url`, never `127.0.0.1`, localhost, or lab NAT guest IPs when a public address exists.
+
+### Changed
+
+- **Dashboard Database disk meter**: Statistics shows Database disk as Used X of Y like Storage. The denominator is the package `database_disk_mb` quota (`-1` = unlimited / infinity, `0` = none allowed). Existing packages without the field default to unlimited. Used is live MariaDB schema size for owned databases.
+- **Feedback HTML mail**: `POST /api/panel/feedback` sends `multipart/alternative` (plain text plus branded HTML). Recipients stay `info@newstargeted.com` and `info@discord-bot-network.com`. From display name is `CPN Panel` without changing the envelope address. User fields are HTML-escaped. Body includes a `dd/mm/yyyy` 24-hour UTC timestamp. HTML is last, uses `text/html; charset=utf-8` and 8bit transfer so clients like SnappyMail prefer the branded card over the plain fallback.
+
 ### Fixed
 
 - **Version Upgrade to stable tip**: Commit/tip upgrades no longer hard-fail when `cargo` is missing from the systemd PATH. The apply path searches rustup homes (`/home/cpn/.cargo/bin`, `/root/.cargo/bin`, `/usr/local`), tries GitHub Actions tip binaries for the commit SHA, and can install rustup once on lab/source hosts. Failures (missing cargo/npm, compile, package apply, detached reload) are written to `/var/log/cpn/panel.log` (Main Log) and `/var/log/cpn/error.log` (Error logs) with timestamp, module `upgrade_tip`, message, and retry count. Secrets stay redacted. Detached panel reload after apply is unchanged. Binary replace uses a same-directory rename so the running `/usr/bin/cpn-installer` is not truncated (that produced Exec format error).
@@ -14,11 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Feedback mail delivery**: `POST /api/panel/feedback` uses the owner-configured outbound provider (`smtp.json`) when present, otherwise local Postfix. Local injection uses a dedicated `127.0.0.1:2525` listener (no SASL, no virtual-mailbox reject) so support inboxes are not treated as hosted aliases. The send path waits for that listener after `postfix reload` instead of falling back to port 25. Failures return a precise operator error (no secrets).
 - **Feedback Postfix 5.1.1 bounce**: The `:2525` injector now uses a dedicated `panelout-cleanup` service with empty virtual maps. Hosted-mail sync no longer lists domains in `virtual_alias_domains` when Postfix `inet_interfaces` is loopback-only (this host cannot be the public MX). A lab mailbox such as `smoke@newstargeted.com` therefore no longer makes `info@newstargeted.com` bounce locally; Feedback relays to the real MX. Existing `master.cf` listeners are rewritten on the next Feedback send.
 - **Feedback dialog placement**: The sidebar keeps the Feedback button. The form opens as a viewport-centered modal (body portal, backdrop, Esc, focus trap) so aside overflow and drawer transform cannot pin it to the nav column.
-
-### Changed
-
-- **Dashboard Database disk meter**: Statistics shows Database disk as Used X of Y like Storage. The denominator is the package `database_disk_mb` quota (`-1` = unlimited / ∞, `0` = none allowed). Existing packages without the field default to unlimited. Used is live MariaDB schema size for owned databases.
-- **Feedback HTML mail**: `POST /api/panel/feedback` sends `multipart/alternative` (plain text plus branded HTML). Recipients stay `info@newstargeted.com` and `info@discord-bot-network.com`. From display name is `CPN Panel` without changing the envelope address. User fields are HTML-escaped. Body includes a `dd/mm/yyyy` 24-hour UTC timestamp. HTML is last, uses `text/html; charset=utf-8` and 8bit transfer so clients like SnappyMail prefer the branded card over the plain fallback.
 
 ## [1.2.0] - 04/10/2026
 
