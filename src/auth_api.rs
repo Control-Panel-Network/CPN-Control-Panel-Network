@@ -20,7 +20,9 @@ use crate::login_next::{
     login_return_cookie_header, mfa_location, post_login_location, read_login_return_cookie,
     referer_return_path, request_return_path,
 };
-use crate::login_service_gate::{evaluate_login_services, login_services_ready};
+use crate::login_service_gate::{
+    LOGIN_SERVICE_TIMEOUT_WARNING, evaluate_login_services, login_services_ready,
+};
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
@@ -261,27 +263,40 @@ fn login_fail_fast_html(message: &str, next: Option<&str>) -> String {
 #[get("/api/login/services")]
 pub async fn login_services_status() -> HttpResponse {
     // Off the Actix worker so a slow gate cannot starve other /login requests.
+    // Short timeout + fail-open: labs under restore/rsync must still reach the form.
     match tokio::time::timeout(
-        std::time::Duration::from_secs(3),
+        std::time::Duration::from_millis(2200),
         tokio::task::spawn_blocking(evaluate_login_services),
     )
     .await
     {
         Ok(Ok(status)) => HttpResponse::Ok().json(status),
-        Ok(Err(_)) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "ready": true,
-            "message": "Could not check panel services. Sign-in may still work; reload if the form stays disabled.",
-            "blocking": [],
-            "warnings": ["Service check failed unexpectedly."],
-        })),
-        Err(_) => HttpResponse::Ok()
-            .insert_header(("Retry-After", "3"))
-            .json(serde_json::json!({
+        Ok(Err(_)) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: /api/login/services task failed; sign-in left open",
+                None,
+            );
+            HttpResponse::InternalServerError().json(serde_json::json!({
                 "ready": true,
-                "message": "Service check is slow; sign-in is allowed. Reload if something looks wrong.",
+                "message": LOGIN_SERVICE_TIMEOUT_WARNING,
                 "blocking": [],
-                "warnings": ["Service check timed out; sign-in left open."],
-            })),
+                "warnings": [LOGIN_SERVICE_TIMEOUT_WARNING],
+            }))
+        }
+        Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: /api/login/services timed out; sign-in left open",
+                None,
+            );
+            HttpResponse::Ok()
+                .insert_header(("Retry-After", "2"))
+                .json(serde_json::json!({
+                    "ready": true,
+                    "message": LOGIN_SERVICE_TIMEOUT_WARNING,
+                    "blocking": [],
+                    "warnings": [LOGIN_SERVICE_TIMEOUT_WARNING],
+                }))
+        }
     }
 }
 
@@ -335,7 +350,30 @@ pub async fn login_submit(
 
     let payload = enrich_status(status, &state.token);
     let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
-    if !login_services_ready() {
+    // Bound the gate on POST the same way as GET/API: never pin the worker forever.
+    let gate_ready = match tokio::time::timeout(
+        std::time::Duration::from_millis(2200),
+        tokio::task::spawn_blocking(login_services_ready),
+    )
+    .await
+    {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: POST /login gate task failed; sign-in left open",
+                None,
+            );
+            true
+        }
+        Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: POST /login gate timed out; sign-in left open",
+                None,
+            );
+            true
+        }
+    };
+    if !gate_ready {
         return services_not_ready_login(&payload, next.as_deref());
     }
 
@@ -363,12 +401,15 @@ pub async fn login_submit(
     };
 
     let Some(session_user) = authed else {
+        // Avoid a second slow host probe when re-rendering the form after a bad password.
+        let gate = evaluate_login_services();
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
-            .body(panel_login_html(
+            .body(crate::auth_pages::panel_login_html_with_gate(
                 &payload,
                 Some(login_error_message(locale)),
                 next.as_deref(),
+                &gate,
             ));
     };
 

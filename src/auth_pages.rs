@@ -50,7 +50,7 @@ fn shared_auth_styles() -> &'static str {
     .hint { margin-top:14px; font-size:.9rem; }
     .error {
       margin:0 0 14px; padding:12px 14px; border-radius:10px; background:#fef2f2;
-      border:1px solid #fecaca; color:#991b1b; font-size:.95rem; font-weight:650; line-height:1.45;
+      border:2px solid #b91c1c; color:#7f1d1d; font-size:.98rem; font-weight:750; line-height:1.45;
     }
     .notice {
       margin:0 0 14px; padding:12px 14px; border-radius:10px; background:#fffbeb;
@@ -163,10 +163,11 @@ pub fn panel_login_html_with_gate(
     }
   }
   var pollFails=0;
+  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.';
   async function poll(){
     try{
       var ctrl=new AbortController();
-      var t=setTimeout(function(){ctrl.abort();},8000);
+      var t=setTimeout(function(){ctrl.abort();},5000);
       var res=await fetch('/api/login/services',{credentials:'same-origin',headers:{'Accept':'application/json'},signal:ctrl.signal});
       clearTimeout(t);
       if(!res.ok){ throw new Error('http '+res.status); }
@@ -182,9 +183,12 @@ pub fn panel_login_html_with_gate(
       if(!ready && notice) notice.setAttribute('data-was-blocked','1');
     }catch(e){
       pollFails++;
-      if(pollFails>=3 && notice){
+      // Fail-open: keep the form usable when the probe is slow or the lab is busy.
+      applyReady(true, defaultTimeoutMsg);
+      if(pollFails>=2 && notice){
         notice.hidden=false;
-        notice.textContent='Could not check panel services (timeout or network). Sign-in may still work; if the button spins then stops with no message, wait and retry.';
+        notice.setAttribute('data-ready','1');
+        notice.textContent=defaultTimeoutMsg;
       }
     }
     setTimeout(poll, 4000);
@@ -196,16 +200,35 @@ pub fn panel_login_html_with_gate(
   if(form && submit){
     form.addEventListener('submit', function(ev){
       if(form.getAttribute('data-cpn-native')==='1') return;
+      if(form.getAttribute('data-cpn-submitting')==='1'){
+        ev.preventDefault();
+        return;
+      }
       ev.preventDefault();
       if(err){ err.hidden=true; err.textContent=''; }
-      var label=submit.textContent;
+      var label=submit.getAttribute('data-cpn-label')||submit.textContent||'Sign in';
+      submit.setAttribute('data-cpn-label', label);
+      form.setAttribute('data-cpn-submitting','1');
       submit.disabled=true;
-      submit.textContent='Signing in…';
+      submit.textContent='Signing in...';
+      function resetSubmit(){
+        form.removeAttribute('data-cpn-submitting');
+        submit.disabled=false;
+        submit.textContent=submit.getAttribute('data-cpn-label')||label||'Sign in';
+      }
       // Actix web::Form expects application/x-www-form-urlencoded.
       // FormData alone makes fetch send multipart/form-data (HTTP 415).
       var body=new URLSearchParams(new FormData(form));
       var ctrl=new AbortController();
-      var timer=setTimeout(function(){ctrl.abort();},25000);
+      var settled=false;
+      var timer=setTimeout(function(){ctrl.abort();},12000);
+      // Safety net if the promise never settles (hung browser fetch).
+      var safety=setTimeout(function(){
+        if(settled) return;
+        try{ ctrl.abort(); }catch(_e){}
+        showErr('Sign-in timed out. The panel may be busy with background work; wait a moment and try again.');
+        resetSubmit();
+      },13000);
       fetch(form.getAttribute('action')||'/login',{
         method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -220,6 +243,8 @@ pub fn panel_login_html_with_gate(
           return null;
         }
         if(res.status>=300 && res.status<400){
+          settled=true;
+          clearTimeout(safety);
           var loc=res.headers.get('Location')||'/dashboard';
           location.href=loc;
           return null;
@@ -229,11 +254,15 @@ pub fn panel_login_html_with_gate(
           // MFA-pending password login 303s to /login/2fa. Successful non-MFA login
           // sets a session cookie and may 303 to enroll-2fa/dashboard; /login/2fa
           // detects that session and continues there (never traps on empty passkeys).
+          settled=true;
+          clearTimeout(safety);
           location.href='/login/2fa';
           return null;
         }
         return res.text().then(function(html){
           if(res.status===401 || res.status===503 || res.ok){
+            settled=true;
+            clearTimeout(safety);
             document.open();
             document.write(html);
             document.close();
@@ -249,8 +278,9 @@ pub fn panel_login_html_with_gate(
           showErr('Could not reach the panel. Confirm the service is running, then retry.');
         }
       }).finally(function(){
-        submit.disabled=false;
-        submit.textContent=label;
+        if(settled) return;
+        clearTimeout(safety);
+        resetSubmit();
       });
     });
   }
@@ -716,6 +746,10 @@ mod tests {
         assert!(html.contains("cpnTogglePassword"));
         assert!(html.contains("cpn-login-services"));
         assert!(html.contains("/api/login/services"));
+        assert!(html.contains("Signing in..."));
+        assert!(html.contains("data-cpn-submitting"));
+        assert!(html.contains("MariaDB/web health"));
+        assert!(html.contains("12000"));
     }
 
     #[test]
