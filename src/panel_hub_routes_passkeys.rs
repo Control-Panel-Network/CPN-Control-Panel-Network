@@ -263,7 +263,22 @@ pub async fn passkey_login_start(
     body: web::Json<PasskeyLoginStartBody>,
 ) -> HttpResponse {
     let _ = &body.username; // Accepted for backward compatibility; login is RP-wide.
-    if !login_services_ready() {
+    let gate_ready = match tokio::time::timeout(
+        std::time::Duration::from_millis(2200),
+        tokio::task::spawn_blocking(login_services_ready),
+    )
+    .await
+    {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) | Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: passkey start gate timed out; sign-in left open",
+                None,
+            );
+            true
+        }
+    };
+    if !gate_ready {
         return services_unavailable_json();
     }
     let https = request_https_from_headers(&http);
@@ -297,7 +312,22 @@ pub async fn passkey_login_finish(
     state: web::Data<Arc<AppState>>,
     body: web::Json<PasskeyLoginFinishBody>,
 ) -> HttpResponse {
-    if !login_services_ready() {
+    let gate_ready = match tokio::time::timeout(
+        std::time::Duration::from_millis(2200),
+        tokio::task::spawn_blocking(login_services_ready),
+    )
+    .await
+    {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) | Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: passkey finish gate timed out; sign-in left open",
+                None,
+            );
+            true
+        }
+    };
+    if !gate_ready {
         return services_unavailable_json();
     }
     let https = request_https_from_headers(&http);
