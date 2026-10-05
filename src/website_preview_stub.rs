@@ -76,6 +76,12 @@ fn read_index_html(docroot: &Path) -> Option<String> {
     None
 }
 
+fn has_index_file(docroot: &Path) -> bool {
+    ["index.html", "index.htm", "index.php"]
+        .iter()
+        .any(|name| docroot.join(name).is_file())
+}
+
 /// True when the site document root still has the default CPN placeholder index.
 pub fn docroot_is_placeholder(docroot: &Path) -> bool {
     if !docroot.is_dir() {
@@ -85,6 +91,18 @@ pub fn docroot_is_placeholder(docroot: &Path) -> bool {
         Some(html) => html_looks_like_placeholder(&html),
         None => false,
     }
+}
+
+/// True when Preview should fetch the public origin instead of local files:
+/// CPN Site ready stub, missing document root, or no index.html/htm/php.
+pub fn docroot_should_use_live_origin(docroot: &Path) -> bool {
+    if !docroot.is_dir() {
+        return true;
+    }
+    if !has_index_file(docroot) {
+        return true;
+    }
+    docroot_is_placeholder(docroot)
 }
 
 #[cfg(test)]
@@ -130,8 +148,14 @@ mod tests {
         )
         .unwrap();
         assert!(docroot_is_placeholder(&root));
+        assert!(docroot_should_use_live_origin(&root));
         fs::write(root.join("index.html"), b"<h1>Real CMS</h1>").unwrap();
         assert!(!docroot_is_placeholder(&root));
+        assert!(!docroot_should_use_live_origin(&root));
+        fs::remove_file(root.join("index.html")).unwrap();
+        assert!(docroot_should_use_live_origin(&root));
+        let missing = root.join("does-not-exist");
+        assert!(docroot_should_use_live_origin(&missing));
         let _ = fs::remove_dir_all(&root);
     }
 }
