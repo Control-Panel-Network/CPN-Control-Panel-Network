@@ -227,7 +227,8 @@ pub fn version_management_page(can_manage: bool) -> String {
 {manage_block}
 <p class="muted" style="margin-top:14px;max-width:640px;">
   CPN supports the <strong>latest two published releases</strong> only (current tip plus the previous release).
-  Older tags remain listed for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
+  The searchable picker lists <strong>all GitHub Releases with installable assets</strong> so you can upgrade or downgrade later.
+  Older tags remain selectable for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
   When <code>stable</code> advances without a new tag, use <strong>Upgrade to stable tip</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to Main Log and Error logs.
 </p>
 <p class="muted" style="margin-top:18px;">
@@ -287,6 +288,7 @@ mod tests {
         assert!(html.contains("Upgrade to stable tip"));
         assert!(html.contains("cpn-version-stable-tip"));
         assert!(html.contains("latest two published releases"));
+        assert!(html.contains("all GitHub Releases with installable assets"));
         assert!(html.contains("cpn-version-running-date"));
         assert!(html.contains("cpn-version-installed-at"));
         assert!(html.contains("version-kv"));

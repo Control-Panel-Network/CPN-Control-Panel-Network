@@ -14,7 +14,7 @@ use crate::panel_session::{
 };
 use crate::panel_webauthn::{
     RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
-    start_authentication_for_user, start_registration, webauthn_for_request,
+    start_authentication_for_user, start_registration, webauthn_for_request_origin,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -25,6 +25,22 @@ fn host_header(http: &HttpRequest) -> Option<&str> {
     http.headers()
         .get(actix_web::http::header::HOST)
         .and_then(|v| v.to_str().ok())
+}
+
+fn origin_header(http: &HttpRequest) -> Option<&str> {
+    http.headers()
+        .get(actix_web::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+}
+
+fn webauthn_from_http(http: &HttpRequest) -> Result<webauthn_rs::prelude::Webauthn, String> {
+    let https = request_https_from_headers(http);
+    webauthn_for_request_origin(host_header(http), https, origin_header(http)).map(|(w, _)| w)
+}
+
+fn log_webauthn_failure(op: &str, error: &str) {
+    let safe = strip_urls(error);
+    crate::upgrade_tip_log::log_tagged("webauthn", "error", &format!("{op} failed: {safe}"));
 }
 
 fn strip_urls(message: &str) -> String {
@@ -45,6 +61,11 @@ fn strip_urls(message: &str) -> String {
 fn json_err(status: actix_web::http::StatusCode, message: &str) -> HttpResponse {
     let safe = strip_urls(message);
     HttpResponse::build(status).json(serde_json::json!({ "error": safe }))
+}
+
+fn json_webauthn_err(op: &str, status: actix_web::http::StatusCode, error: &str) -> HttpResponse {
+    log_webauthn_failure(op, error);
+    json_err(status, error)
 }
 
 /// The MFA pending cookie is missing, expired, or invalid: tell the page to go back
@@ -119,10 +140,12 @@ pub async fn passkey_register_start(
     let Some(user) = require_panel_user(&state, &http) else {
         return HttpResponse::Unauthorized().json(serde_json::json!({"error": "Sign in required"}));
     };
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     let kind = RegisterAuthenticatorKind::parse(&body.kind);
     match start_registration(&webauthn, &user, kind) {
@@ -145,7 +168,11 @@ pub async fn passkey_register_start(
             }
             json_ok(value)
         }
-        Err(error) => json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+        Err(error) => json_webauthn_err(
+            "register/start",
+            actix_web::http::StatusCode::BAD_REQUEST,
+            &error,
+        ),
     }
 }
 
@@ -158,10 +185,12 @@ pub async fn passkey_register_finish(
     let Some(user) = require_panel_user(&state, &http) else {
         return HttpResponse::Unauthorized().json(serde_json::json!({"error": "Sign in required"}));
     };
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     let client_meta = body.authenticator.clone().unwrap_or_default();
     match finish_registration(
@@ -176,7 +205,11 @@ pub async fn passkey_register_finish(
             let redirect = crate::login_next::passkey_register_location(body.next.as_deref());
             json_ok(serde_json::json!({ "ok": true, "redirect": redirect }))
         }
-        Err(error) => json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+        Err(error) => json_webauthn_err(
+            "register/finish",
+            actix_web::http::StatusCode::BAD_REQUEST,
+            &error,
+        ),
     }
 }
 
@@ -263,13 +296,30 @@ pub async fn passkey_login_start(
     body: web::Json<PasskeyLoginStartBody>,
 ) -> HttpResponse {
     let _ = &body.username; // Accepted for backward compatibility; login is RP-wide.
-    if !login_services_ready() {
+    let gate_ready = match tokio::time::timeout(
+        std::time::Duration::from_millis(2200),
+        tokio::task::spawn_blocking(login_services_ready),
+    )
+    .await
+    {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) | Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: passkey start gate timed out; sign-in left open",
+                None,
+            );
+            true
+        }
+    };
+    if !gate_ready {
         return services_unavailable_json();
     }
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     match start_authentication(&webauthn) {
         Ok((ceremony_id, rcr)) => {
@@ -287,7 +337,11 @@ pub async fn passkey_login_start(
             }
             json_ok(value)
         }
-        Err(error) => json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+        Err(error) => json_webauthn_err(
+            "login/start",
+            actix_web::http::StatusCode::BAD_REQUEST,
+            &error,
+        ),
     }
 }
 
@@ -297,13 +351,30 @@ pub async fn passkey_login_finish(
     state: web::Data<Arc<AppState>>,
     body: web::Json<PasskeyLoginFinishBody>,
 ) -> HttpResponse {
-    if !login_services_ready() {
+    let gate_ready = match tokio::time::timeout(
+        std::time::Duration::from_millis(2200),
+        tokio::task::spawn_blocking(login_services_ready),
+    )
+    .await
+    {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(_)) | Err(_) => {
+            crate::upgrade_tip_log::log_failure(
+                "login_service_gate: passkey finish gate timed out; sign-in left open",
+                None,
+            );
+            true
+        }
+    };
+    if !gate_ready {
         return services_unavailable_json();
     }
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     match finish_authentication(&webauthn, body.ceremony_id.trim(), &body.credential) {
         Ok(username) => {
@@ -320,7 +391,11 @@ pub async fn passkey_login_finish(
             ]);
             json_session_ok(&http, &state, &session_user, next.as_deref())
         }
-        Err(error) => json_err(actix_web::http::StatusCode::UNAUTHORIZED, &error),
+        Err(error) => json_webauthn_err(
+            "login/finish",
+            actix_web::http::StatusCode::UNAUTHORIZED,
+            &error,
+        ),
     }
 }
 
@@ -347,10 +422,12 @@ pub async fn passkey_mfa_start(http: HttpRequest, state: web::Data<Arc<AppState>
     let Some(username) = mfa_pending_username(&http, &state) else {
         return mfa_session_expired_json();
     };
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     match start_authentication_for_user(&webauthn, &username) {
         Ok((ceremony_id, rcr)) => {
@@ -368,7 +445,11 @@ pub async fn passkey_mfa_start(http: HttpRequest, state: web::Data<Arc<AppState>
             }
             json_ok(value)
         }
-        Err(error) => json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+        Err(error) => json_webauthn_err(
+            "mfa/start",
+            actix_web::http::StatusCode::BAD_REQUEST,
+            &error,
+        ),
     }
 }
 
@@ -381,10 +462,12 @@ pub async fn passkey_mfa_finish(
     let Some(pending_user) = mfa_pending_username(&http, &state) else {
         return mfa_session_expired_json();
     };
-    let https = request_https_from_headers(&http);
-    let webauthn = match webauthn_for_request(host_header(&http), https) {
-        Ok((w, _)) => w,
-        Err(error) => return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error),
+    let webauthn = match webauthn_from_http(&http) {
+        Ok(w) => w,
+        Err(error) => {
+            log_webauthn_failure("builder", &error);
+            return json_err(actix_web::http::StatusCode::BAD_REQUEST, &error);
+        }
     };
     match finish_authentication(&webauthn, body.ceremony_id.trim(), &body.credential) {
         Ok(username) => {
@@ -408,7 +491,11 @@ pub async fn passkey_mfa_finish(
             // login_success_response (via json_session_ok) already clears the MFA pending cookie.
             json_session_ok(&http, &state, &session_user, next.as_deref())
         }
-        Err(error) => json_err(actix_web::http::StatusCode::UNAUTHORIZED, &error),
+        Err(error) => json_webauthn_err(
+            "mfa/finish",
+            actix_web::http::StatusCode::UNAUTHORIZED,
+            &error,
+        ),
     }
 }
 

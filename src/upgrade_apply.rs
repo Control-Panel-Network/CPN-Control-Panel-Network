@@ -203,8 +203,10 @@ mod tests {
     #[test]
     fn deb_apply_calls_install_deb_not_stub() {
         let src = include_str!("upgrade_apply.rs");
+        // Split the old stub phrase so this test body cannot match include_str.
+        let stub_marker = ["DEB apply is not ", "wired yet"].concat();
         assert!(
-            !src.contains("DEB apply is not wired yet"),
+            !src.contains(&stub_marker),
             "Ubuntu/Debian Version upgrades must apply the matching DEB"
         );
         assert!(

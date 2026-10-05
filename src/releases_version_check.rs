@@ -2,8 +2,8 @@
 
 use crate::manifest;
 use crate::releases::{
-    OFFICIAL_GITHUB_REPO, VersionCheck, compare_versions, github_repo, package_source_label,
-    pick_newest_publishable_release,
+    OFFICIAL_GITHUB_REPO, RELEASE_LIST_LIMIT, VersionCheck, compare_versions, github_repo,
+    package_source_label, pick_newest_publishable_release, releases_for_version_picker,
 };
 use crate::releases_fetch::list_releases_for_repo;
 use crate::releases_source;
@@ -165,16 +165,17 @@ pub async fn version_check_with_options(
     let token_configured = releases_source::github_token_configured();
     let upstream_repo = OFFICIAL_GITHUB_REPO.to_string();
     let tip = attach_stable_tip(&repo, installed_version).await;
-    match list_releases_for_repo(&repo, 20, force_network).await {
+    match list_releases_for_repo(&repo, RELEASE_LIST_LIMIT, force_network).await {
         Ok(fetched) => {
-            let latest = pick_newest_publishable_release(&fetched.releases);
+            let releases = releases_for_version_picker(fetched.releases);
+            let latest = pick_newest_publishable_release(&releases);
             let latest_version = latest.map(|item| item.version.clone());
             let latest_tag = latest.map(|item| item.tag_name.clone());
             let release_update_available = latest_version
                 .as_ref()
                 .map(|latest| compare_versions(installed_version, latest) == Ordering::Less)
                 .unwrap_or(false);
-            let downgrade_possible = fetched.releases.iter().any(|release| {
+            let downgrade_possible = releases.iter().any(|release| {
                 compare_versions(&release.version, installed_version) == Ordering::Less
             });
             let (upstream_latest_version, upstream_latest_tag) = if using_fork {
@@ -191,7 +192,7 @@ pub async fn version_check_with_options(
                 downgrade_possible,
                 repo,
                 source,
-                fetched.releases,
+                releases,
                 fetched.soft_error.clone(),
                 fetched.from_cache,
                 fetched.cache_age_secs,

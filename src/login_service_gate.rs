@@ -5,6 +5,9 @@
 //! Mail is informational only (never blocks login). Installer/bootstrap token
 //! routes stay reachable outside this gate.
 //!
+//! When host probes are slow (heavy disk I/O, restore, wedged systemd), the gate
+//! fails open after a short budget so `/login` POST cannot hang forever.
+//!
 //! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
 //!
 //! Results are cached briefly so `/login` and `/api/login/services` never spam
@@ -22,6 +25,12 @@ use std::time::{Duration, Instant};
 
 /// Reuse the last evaluation for a few seconds (login poll interval is 4s).
 const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(3);
+
+/// Hard wall clock for a fresh gate evaluation (many `systemctl` probes).
+const LOGIN_GATE_EVAL_BUDGET: Duration = Duration::from_millis(1800);
+
+/// Operator-facing text when probes exceed the budget (fail-open).
+pub const LOGIN_SERVICE_TIMEOUT_WARNING: &str = "Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.";
 
 static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::new(None);
 
@@ -93,6 +102,56 @@ fn ready_status_unrestricted(message: &str) -> LoginServiceStatus {
         } else {
             vec![message.to_string()]
         },
+    }
+}
+
+fn timed_out_fail_open_status() -> LoginServiceStatus {
+    LoginServiceStatus {
+        ready: true,
+        message: LOGIN_SERVICE_TIMEOUT_WARNING.to_string(),
+        web: ServiceSlice {
+            expected: true,
+            running: true,
+            label: "check timed out".into(),
+        },
+        database: ServiceSlice {
+            expected: true,
+            running: true,
+            label: "check timed out".into(),
+        },
+        mail: ServiceSlice {
+            expected: false,
+            running: true,
+            label: "n/a".into(),
+        },
+        blocking: Vec::new(),
+        warnings: vec![LOGIN_SERVICE_TIMEOUT_WARNING.to_string()],
+    }
+}
+
+fn log_gate_timeout(where_: &str) {
+    // Main Log + Error logs; no credentials or usernames.
+    crate::upgrade_tip_log::log_failure(
+        format!("login_service_gate: {where_} timed out; sign-in left open (fail-open)"),
+        None,
+    );
+}
+
+/// Run a fresh evaluation with a hard wall clock so login never blocks indefinitely.
+fn evaluate_login_services_budgeted() -> LoginServiceStatus {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("cpn-login-gate".into())
+        .spawn(move || {
+            let _ = tx.send(evaluate_login_services_fresh());
+        })
+        .ok();
+    match rx.recv_timeout(LOGIN_GATE_EVAL_BUDGET) {
+        Ok(status) => status,
+        Err(_) => {
+            log_gate_timeout("evaluate");
+            timed_out_fail_open_status()
+        }
     }
 }
 
@@ -249,7 +308,7 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
         return status.clone();
     }
 
-    let status = evaluate_login_services_fresh();
+    let status = evaluate_login_services_budgeted();
     if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
         *guard = Some((Instant::now(), status.clone()));
     }
@@ -390,5 +449,19 @@ mod tests {
         }
         invalidate_login_services_cache();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn timeout_fail_open_status_is_ready_with_clear_warning() {
+        let status = timed_out_fail_open_status();
+        assert!(status.ready);
+        assert!(status.blocking.is_empty());
+        assert!(
+            status
+                .warnings
+                .iter()
+                .any(|w| w.contains("MariaDB/web health"))
+        );
+        assert!(status.message.contains("still sign in"));
     }
 }
