@@ -574,8 +574,8 @@ pub fn finish_authentication(
 #[cfg(test)]
 mod tests {
     use super::{
-        RegisterAuthenticatorKind, start_authentication, start_registration, webauthn_for_request,
-        webauthn_for_request_origin,
+        RegisterAuthenticatorKind, map_auth_verify_error, start_authentication, start_registration,
+        webauthn_for_request, webauthn_for_request_origin,
     };
     use crate::account::with_test_data_dir;
 
