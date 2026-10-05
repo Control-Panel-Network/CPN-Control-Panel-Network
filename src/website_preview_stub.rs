@@ -82,6 +82,20 @@ fn has_index_file(docroot: &Path) -> bool {
         .any(|name| docroot.join(name).is_file())
 }
 
+/// True when the first index file under the docroot is PHP (no HTML index ahead of it).
+/// Panel preview cannot execute PHP; public hosts should use the live origin instead.
+pub fn primary_index_is_php(docroot: &Path) -> bool {
+    if !docroot.is_dir() {
+        return false;
+    }
+    for name in ["index.html", "index.htm"] {
+        if docroot.join(name).is_file() {
+            return false;
+        }
+    }
+    docroot.join("index.php").is_file()
+}
+
 /// True when the site document root still has the default CPN placeholder index.
 pub fn docroot_is_placeholder(docroot: &Path) -> bool {
     if !docroot.is_dir() {
@@ -103,6 +117,15 @@ pub fn docroot_should_use_live_origin(docroot: &Path) -> bool {
         return true;
     }
     docroot_is_placeholder(docroot)
+}
+
+/// Stub/empty/missing index, or a PHP primary index on a public hostname.
+/// Local static HTML indexes stay on the same-origin docroot proxy.
+pub fn preview_should_use_live_origin(docroot: &Path, domain: &str) -> bool {
+    if docroot_should_use_live_origin(docroot) {
+        return true;
+    }
+    primary_index_is_php(docroot) && is_public_internet_host(domain)
 }
 
 #[cfg(test)]
@@ -156,6 +179,36 @@ mod tests {
         assert!(docroot_should_use_live_origin(&root));
         let missing = root.join("does-not-exist");
         assert!(docroot_should_use_live_origin(&missing));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn php_primary_index_uses_live_on_public_hosts() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cpn-php-doc-{stamp}"));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("index.php"),
+            b"<?php header('Location: https://example.com/', true, 301); exit;\n",
+        )
+        .unwrap();
+        assert!(primary_index_is_php(&root));
+        assert!(!docroot_should_use_live_origin(&root));
+        assert!(preview_should_use_live_origin(
+            &root,
+            "newstargeted.ddns.net"
+        ));
+        assert!(!preview_should_use_live_origin(&root, "lab.test"));
+        fs::write(root.join("index.html"), b"<h1>Static</h1>").unwrap();
+        assert!(!primary_index_is_php(&root));
+        assert!(!preview_should_use_live_origin(
+            &root,
+            "newstargeted.ddns.net"
+        ));
         let _ = fs::remove_dir_all(&root);
     }
 }

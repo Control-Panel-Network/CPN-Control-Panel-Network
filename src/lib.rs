@@ -384,6 +384,7 @@ pub mod panel_website_metrics_ring;
 pub mod panel_website_metrics_routes;
 pub mod panel_website_resources;
 pub mod panel_websites_create_ui;
+pub mod panel_websites_list_pager;
 pub mod panel_websites_list_ui;
 pub mod panel_wordpress_routes;
 pub mod panel_wordpress_ui;

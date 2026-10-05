@@ -8,6 +8,9 @@ use crate::website_preview::{
     guess_content_type, preview_content_url, preview_mode_html, preview_mode_url, public_site_url,
     resolve_index_file, resolve_under_docroot,
 };
+use crate::website_preview_stub::{
+    is_public_internet_host, preview_should_use_live_origin, primary_index_is_php,
+};
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::path::Path;
 use std::sync::Arc;
@@ -159,48 +162,22 @@ pub async fn preview_content(
             .append_header(("Cache-Control", "private, no-store"))
             .body(page);
     }
-    if crate::website_preview_stub::docroot_should_use_live_origin(docroot) {
-        let mut relative = tail;
-        let query = http.query_string();
-        if !query.is_empty() {
-            if relative.contains('?') {
-                relative.push('&');
-            } else {
-                relative.push('?');
-            }
-            relative.push_str(query);
-        }
-        let domain = site.domain.clone();
-        let live = crate::website_preview_live::live_public_origin(&domain)
-            .unwrap_or_else(|_| format!("https://{}", domain));
-        let fetched =
-            web::block(move || crate::website_preview_live::fetch_live_origin(&domain, &relative))
-                .await;
-        return match fetched {
-            Ok(Ok(item)) => HttpResponse::Ok()
-                .content_type(item.content_type)
-                .append_header(("X-Content-Type-Options", "nosniff"))
-                .append_header(("Cache-Control", "private, no-store"))
-                .append_header(("X-CPN-Preview-Origin", "live"))
-                .body(item.bytes),
-            Ok(Err(err)) => HttpResponse::Ok()
-                .content_type("text/html; charset=utf-8")
-                .append_header(("Cache-Control", "private, no-store"))
-                .append_header(("X-CPN-Preview-Origin", "live-error"))
-                .body(crate::website_preview_live::live_fetch_error_html(
-                    &site.domain,
-                    &live,
-                    &err,
-                )),
-            Err(_) => HttpResponse::Ok()
-                .content_type("text/html; charset=utf-8")
-                .append_header(("Cache-Control", "private, no-store"))
-                .body(crate::website_preview_live::live_fetch_error_html(
-                    &site.domain,
-                    &live,
-                    "Live preview timed out",
-                )),
-        };
+    let live = crate::website_preview_live::live_public_origin(&site.domain)
+        .unwrap_or_else(|_| format!("https://{}", site.domain));
+    // PHP indexes cannot be executed here. Never stream them as octet-stream (browser download).
+    if primary_index_is_php(docroot) && !is_public_internet_host(&site.domain) {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .append_header(("X-Content-Type-Options", "nosniff"))
+            .append_header(("Cache-Control", "private, no-store"))
+            .append_header(("X-CPN-Preview-Origin", "php-local"))
+            .body(crate::website_preview_live::php_preview_unavailable_html(
+                &site.domain,
+                &live,
+            ));
+    }
+    if preview_should_use_live_origin(docroot, &site.domain) {
+        return serve_live_preview(&http, &site.domain, &live, tail).await;
     }
     let resolved = match resolve_under_docroot(docroot, &tail) {
         Ok(path) => path,
@@ -224,15 +201,88 @@ pub async fn preview_content(
     if !file_path.is_file() {
         return HttpResponse::NotFound().body("File not found in site document root");
     }
-    // Do not execute PHP; serve source or static bytes only.
+    if path_is_php(&file_path) {
+        if is_public_internet_host(&site.domain) {
+            return serve_live_preview(&http, &site.domain, &live, tail).await;
+        }
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .append_header(("X-Content-Type-Options", "nosniff"))
+            .append_header(("Cache-Control", "private, no-store"))
+            .append_header(("X-CPN-Preview-Origin", "php-local"))
+            .body(crate::website_preview_live::php_preview_unavailable_html(
+                &site.domain,
+                &live,
+            ));
+    }
     match std::fs::read(&file_path) {
         Ok(bytes) => HttpResponse::Ok()
             .content_type(guess_content_type(&file_path))
             .append_header(("X-Content-Type-Options", "nosniff"))
             .append_header(("Cache-Control", "private, no-store"))
+            .append_header(("X-CPN-Preview-Origin", "local"))
             .body(bytes),
         Err(err) => HttpResponse::InternalServerError().body(format!("Cannot read file: {err}")),
     }
+}
+
+async fn serve_live_preview(
+    http: &HttpRequest,
+    domain: &str,
+    live: &str,
+    mut relative: String,
+) -> HttpResponse {
+    let query = http.query_string();
+    if !query.is_empty() {
+        if relative.contains('?') {
+            relative.push('&');
+        } else {
+            relative.push('?');
+        }
+        relative.push_str(query);
+    }
+    let domain_owned = domain.to_string();
+    let live_owned = live.to_string();
+    let fetched = web::block(move || {
+        crate::website_preview_live::fetch_live_origin(&domain_owned, &relative)
+    })
+    .await;
+    match fetched {
+        Ok(Ok(item)) => {
+            let final_origin = item.final_origin;
+            HttpResponse::Ok()
+                .content_type(item.content_type)
+                .append_header(("X-Content-Type-Options", "nosniff"))
+                .append_header(("Cache-Control", "private, no-store"))
+                .append_header(("X-CPN-Preview-Origin", "live"))
+                .append_header(("X-CPN-Preview-Final-Origin", final_origin))
+                .body(item.bytes)
+        }
+        Ok(Err(err)) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .append_header(("Cache-Control", "private, no-store"))
+            .append_header(("X-CPN-Preview-Origin", "live-error"))
+            .body(crate::website_preview_live::live_fetch_error_html(
+                domain,
+                &live_owned,
+                &err,
+            )),
+        Err(_) => HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .append_header(("Cache-Control", "private, no-store"))
+            .body(crate::website_preview_live::live_fetch_error_html(
+                domain,
+                &live_owned,
+                "Live preview timed out",
+            )),
+    }
+}
+
+fn path_is_php(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("php"))
+        .unwrap_or(false)
 }
 
 fn html_escape_min(value: &str) -> String {
