@@ -18,7 +18,7 @@ use crate::site_preview_thumb::{
 use crate::sites::{load_site, normalize_domain};
 use crate::website_preview::ssl_material_present;
 use crate::website_preview_live::live_public_origin;
-use crate::website_preview_stub::{docroot_should_use_live_origin, is_public_internet_host};
+use crate::website_preview_stub::{is_public_internet_host, preview_should_use_live_origin};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -73,7 +73,7 @@ fn uses_live_origin(domain: &str) -> bool {
         return false;
     }
     match load_site(domain) {
-        Ok(site) => docroot_should_use_live_origin(std::path::Path::new(&site.docroot)),
+        Ok(site) => preview_should_use_live_origin(std::path::Path::new(&site.docroot), domain),
         Err(_) => true,
     }
 }

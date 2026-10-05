@@ -34,6 +34,16 @@ pub fn domain_matches_q(domain: &str, parent: Option<&str>, q: &str) -> bool {
 
 /// Compact mobile-friendly GET search row (reuses plugin-search look).
 pub fn list_search_form(action: &str, q: &str, placeholder: &str) -> String {
+    list_search_form_with_extras(action, q, placeholder, "")
+}
+
+/// Search row with optional hidden fields (for example pagination `per_page` / `mode`).
+pub fn list_search_form_with_extras(
+    action: &str,
+    q: &str,
+    placeholder: &str,
+    extras_html: &str,
+) -> String {
     let clear = if q.trim().is_empty() {
         String::new()
     } else {
@@ -45,12 +55,14 @@ pub fn list_search_form(action: &str, q: &str, placeholder: &str) -> String {
     format!(
         r#"<style>{css}</style>
 <form method="get" action="{action}" class="plugin-search-row cpn-list-search" role="search">
+  {extras}
   <label for="cpn-list-q">Search</label>
   <input class="plugin-search" id="cpn-list-q" name="q" type="search" value="{q}" placeholder="{ph}" maxlength="120" autocomplete="off" aria-label="{ph}">
   <button type="submit" class="btn-primary">Search</button>{clear}
 </form>"#,
         css = list_search_styles(),
         action = html_escape(action),
+        extras = extras_html,
         q = html_escape(q),
         ph = html_escape(placeholder),
         clear = clear,
@@ -100,7 +112,9 @@ pub fn list_filter_summary(shown: usize, total: usize, q: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{domain_matches_q, list_search_form, normalize_list_q};
+    use super::{
+        domain_matches_q, list_search_form, list_search_form_with_extras, normalize_list_q,
+    };
 
     #[test]
     fn normalize_trims_and_lowercases() {
@@ -138,5 +152,17 @@ mod tests {
         assert!(html.contains("Clear"));
         assert!(html.contains(r#"action="/websites""#));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn form_extras_preserved() {
+        let html = list_search_form_with_extras(
+            "/websites/list",
+            "",
+            "Search",
+            r#"<input type="hidden" name="per_page" value="5">"#,
+        );
+        assert!(html.contains(r#"name="per_page""#));
+        assert!(html.contains(r#"value="5""#));
     }
 }
