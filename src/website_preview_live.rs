@@ -94,10 +94,7 @@ pub fn fetch_live_origin(domain: &str, relative: &str) -> Result<LiveFetch, Stri
         return Err("Live site response exceeds size cap".into());
     }
     let final_origin = match effective_url {
-        Some(ref eff) => match origin_from_public_url(eff) {
-            Ok(origin) => origin,
-            Err(err) => return Err(err),
-        },
+        Some(ref eff) => origin_from_public_url(eff)?,
         None => start_origin.clone(),
     };
     let header_ctype = content_type_from_headers(&headers);
