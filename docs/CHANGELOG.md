@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Site preview cache TTL**: Successful homepage thumbnails under `/var/lib/cpn/site-previews/` stay Fresh for **7 days** (was 24 hours). JSON sidecars store `expires_at`. `/websites` and `/subdomains` list loads serve disk cache or placeholders only: they never N+1 Microlink (or other remote screenshot APIs). Background auto-capture uses local Chromium only when no usable cache exists. **Refresh preview** still force-recaptures (local first, Microlink only when no browser and remote previews are enabled). Microlink requests are debounced host-wide and reuse Fresh disk cache when `force` is false.
 - **Version Management release picker**: Lists all discovered GitHub Releases that have installable assets (paginated API fetch, empty-asset tags skipped), not only the newest 20. Support policy text stays latest two releases only; selecting an older tag still warns outside support. CLI `--to` / `--downgrade` and `/api/releases` use the same full publishable list so operators can upgrade or downgrade later.
 
 ### Fixed
