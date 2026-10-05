@@ -1,5 +1,6 @@
 //! RPM/binary package apply helpers for upgrade/repair/retag.
 
+use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
 use tokio::process::Command;
 
@@ -201,11 +202,64 @@ pub async fn install_rpm(path: &str, force: bool, allow_oldpackage: bool) -> Res
 }
 
 pub async fn install_binary(path: &str, dest: &str) -> Result<(), String> {
-    std::fs::copy(path, dest).map_err(|error| format!("Could not replace {dest}: {error}"))?;
+    if path == dest {
+        return Ok(());
+    }
+    let dest_path = Path::new(dest);
+    let name = dest_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("cpn-bin");
+    let parent = dest_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("/usr/bin"));
+    let tmp: PathBuf = parent.join(format!(".{name}.cpn-new"));
+    std::fs::copy(path, &tmp)
+        .map_err(|error| format!("Could not stage {dest}: {error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755));
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
     }
+    // Rename over a running ELF. Copy-truncate of /usr/bin/cpn-installer
+    // while it is executing produces "Exec format error" on the next start.
+    std::fs::rename(&tmp, dest).map_err(|error| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Could not replace {dest}: {error}")
+    })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::install_binary;
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[tokio::test]
+    async fn atomic_replace_does_not_truncate_in_place() {
+        let dir = std::env::temp_dir().join(format!("cpn-bin-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let src = dir.join("src.bin");
+        let dest = dir.join("dest.bin");
+        fs::write(&src, b"new-payload-bytes").unwrap();
+        fs::write(&dest, b"old").unwrap();
+        install_binary(src.to_str().unwrap(), dest.to_str().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"new-payload-bytes");
+        let leftovers: Vec<PathBuf> = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .contains("cpn-new")
+            })
+            .collect();
+        assert!(leftovers.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
