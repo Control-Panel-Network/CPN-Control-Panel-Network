@@ -372,6 +372,7 @@ const MFA_SESSION_WATCH_JS: &str = r#"
       .catch(function(){});
   }
   setInterval(check,15000);
+  check();
   document.addEventListener('visibilitychange',function(){ if(!document.hidden) check(); });
   window.addEventListener('pageshow',function(e){ if(e.persisted) check(); });
 })();
@@ -748,6 +749,10 @@ mod tests {
         );
         assert!(html.contains("/login/2fa/session"));
         assert!(html.contains("cpnMfaExpired"));
+        assert!(
+            html.contains("check();"),
+            "session watch must run immediately so a stale /login/2fa does not trap"
+        );
         assert!(html.contains("id=\"cpn-mfa-back\""));
         assert!(
             html.contains("error=mfa_session_expired") || html.contains("'mfa_session_expired'"),

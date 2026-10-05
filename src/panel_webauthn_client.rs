@@ -27,9 +27,19 @@ function cpnPasskeyUserMessage(err,kind){
     return 'Passkey could not run for this site address. Use http://localhost with the same port (127.0.0.1 is redirected automatically), or your panel hostname.';
   }
   if(name==='InvalidStateError' || /already registered|invalid state/i.test(lower)){
+    if(/already pending|pending/i.test(lower)){
+      return kind==='login'
+        ? 'Passkey sign-in is already waiting. Approve or cancel the previous prompt, then try again.'
+        : 'Passkey registration is already waiting. Approve or cancel the previous prompt, then try again.';
+    }
     return kind==='login'
       ? 'This passkey cannot be used right now. Try another device or authenticator.'
       : 'This passkey is already registered.';
+  }
+  if(/already pending/i.test(lower)){
+    return kind==='login'
+      ? 'Passkey sign-in is already waiting. Approve or cancel the previous prompt, then try again.'
+      : 'Passkey registration is already waiting. Approve or cancel the previous prompt, then try again.';
   }
   if(name==='NotSupportedError' || /not supported|incongruent|inconsistent|protection policy/i.test(lower)){
     return kind==='login'
@@ -53,6 +63,11 @@ function cpnPasskeyUserMessage(err,kind){
   // Do not treat a W3C URL in the message as cancel; many WebAuthn errors include one.
   if(/incorrect passkey|not registered|different account|unknown credential/i.test(lower)){
     return cpnStripUrls(raw) || 'Incorrect passkey. Try again or use another sign-in method.';
+  }
+  if((err&&(err.status===408||err.status===504||err.status===502)) || name==='TimeoutError'){
+    return kind==='login'
+      ? 'Passkey sign-in timed out. Try again and complete the prompt sooner.'
+      : 'Passkey registration timed out. Try again and complete the prompt sooner.';
   }
   if(/timed out|timeout/i.test(lower) && !/not allowed/i.test(lower)){
     return kind==='login'
@@ -158,6 +173,11 @@ async function cpnJson(url,body){{
   }});
   const data=await res.json().catch(()=>({{}}));
   if(!res.ok){{
+    if(res.status===408||res.status===504||res.status===502){{
+      const te=new Error(cpnStripUrls(data.error||'Passkey request timed out. Try again.'));
+      te.status=res.status; te.name='TimeoutError'; te.code=data.code||''; te.redirect=data.redirect||'';
+      throw te;
+    }}
     const e=new Error(cpnStripUrls(data.error||('Request failed ('+res.status+')')));
     e.status=res.status; e.code=data.code||''; e.redirect=data.redirect||'';
     throw e;
@@ -177,9 +197,15 @@ function cpnShowPasskeyError(message){{
   const status=document.getElementById('cpn-passkey-login-status')
     ||document.getElementById('cpn-passkey-status');
   if(status){{
-    status.textContent=msg;
-    status.style.color='#fecaca';
-    status.style.fontWeight='650';
+    if(banner){{
+      status.textContent='';
+      status.style.color='';
+      status.style.fontWeight='';
+    }}else{{
+      status.textContent=msg;
+      status.style.color='#fecaca';
+      status.style.fontWeight='650';
+    }}
   }}
   if(!banner && !status){{
     try{{ window.alert(msg); }}catch(e){{}}
@@ -208,6 +234,20 @@ function cpnPreferLocalhostForPasskeys(){{
     return true;
   }}
   return false;
+}}
+function cpnBeginPasskeyCeremony(){{
+  window.__cpnPasskeySeq=(window.__cpnPasskeySeq||0)+1;
+  const seq=window.__cpnPasskeySeq;
+  try{{ if(window.__cpnPasskeyAbort) window.__cpnPasskeyAbort.abort(); }}catch(e){{}}
+  let abort=null;
+  try{{ abort=new AbortController(); window.__cpnPasskeyAbort=abort; }}catch(e){{}}
+  return {{seq:seq, abort:abort}};
+}}
+function cpnPasskeyStillCurrent(seq){{
+  return seq===window.__cpnPasskeySeq;
+}}
+function cpnFinishPasskeyCeremony(abort){{
+  if(window.__cpnPasskeyAbort===abort) window.__cpnPasskeyAbort=null;
 }}
 {messages}
 function cpnNormalizeCreateOptions(pk, kind){{
@@ -245,20 +285,28 @@ async function cpnRegisterPasskey(){{
         }}
         const start=await cpnJson('/account/users/profile/passkey/register/start',{{kind:kind}});
         const pk=cpnNormalizeCreateOptions(await cpnDecodeCreateOptions(start.publicKey), kind);
-        const cred=await navigator.credentials.create({{publicKey:pk}});
-        if(!cred) throw new Error('Passkey registration did not complete.');
-        const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
-          ceremony_id:start.ceremony_id,
-          label:label,
-          next:next,
-          authenticator:cpnAuthenticatorMeta(cred,kind),
-          credential:cpnCredToJson(cred)
-        }});
-        if(status) status.textContent='Passkey registered.';
-        const go=finish.redirect||next||'';
-        if(go){{ location.href=go; return; }}
-        location.reload();
-        return;
+        const cer=cpnBeginPasskeyCeremony();
+        try{{
+          const createOpts={{publicKey:pk}};
+          if(cer.abort) createOpts.signal=cer.abort.signal;
+          const cred=await navigator.credentials.create(createOpts);
+          if(!cpnPasskeyStillCurrent(cer.seq)) return;
+          if(!cred) throw new Error('Passkey registration did not complete.');
+          const finish=await cpnJson('/account/users/profile/passkey/register/finish',{{
+            ceremony_id:start.ceremony_id,
+            label:label,
+            next:next,
+            authenticator:cpnAuthenticatorMeta(cred,kind),
+            credential:cpnCredToJson(cred)
+          }});
+          if(status) status.textContent='Passkey registered.';
+          const go=finish.redirect||next||'';
+          if(go){{ location.href=go; return; }}
+          location.reload();
+          return;
+        }}finally{{
+          cpnFinishPasskeyCeremony(cer.abort);
+        }}
       }}catch(err){{
         lastErr=err;
         const name=String((err&&err.name)||'');
@@ -304,6 +352,7 @@ function cpnPasskeyRegisterNext(){{
 }}
 async function cpnLoginPasskey(){{
   const status=document.getElementById('cpn-passkey-login-status');
+  const cer=cpnBeginPasskeyCeremony();
   try{{
     cpnClearPasskeyError();
     if(document.body && document.body.getAttribute('data-services-ready')==='0'){{
@@ -313,8 +362,12 @@ async function cpnLoginPasskey(){{
     if(cpnPreferLocalhostForPasskeys()) return;
     if(status){{ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }}
     const start=await cpnJson('/login/passkey/start',{{}});
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     const pk=await cpnDecodeGetOptions(start.publicKey);
-    const cred=await navigator.credentials.get({{publicKey:pk}});
+    const getOpts={{publicKey:pk}};
+    if(cer.abort) getOpts.signal=cer.abort.signal;
+    const cred=await navigator.credentials.get(getOpts);
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     if(!cred) throw new Error('Passkey sign-in did not complete.');
     const finish=await cpnJson('/login/passkey/finish',{{
       ceremony_id:start.ceremony_id,
@@ -323,23 +376,27 @@ async function cpnLoginPasskey(){{
     }});
     location.href=finish.redirect||'/dashboard';
   }}catch(err){{
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
+  }}finally{{
+    cpnFinishPasskeyCeremony(cer.abort);
   }}
 }}
 async function cpnMfaPasskey(){{
   const status=document.getElementById('cpn-passkey-login-status');
-  let abort=null;
+  const cer=cpnBeginPasskeyCeremony();
   try{{
     cpnClearPasskeyError();
     if(!window.PublicKeyCredential) throw new Error('This browser does not support passkeys');
     if(cpnPreferLocalhostForPasskeys()) return;
     if(status){{ status.textContent='Waiting for authenticator...'; status.style.color=''; status.style.fontWeight=''; }}
-    try{{ abort=new AbortController(); window.__cpnPasskeyAbort=abort; }}catch(e){{ abort=null; }}
     const start=await cpnJson('/login/2fa/passkey/start',{{}});
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     const pk=await cpnDecodeGetOptions(start.publicKey);
     const getOpts={{publicKey:pk}};
-    if(abort) getOpts.signal=abort.signal;
+    if(cer.abort) getOpts.signal=cer.abort.signal;
     const cred=await navigator.credentials.get(getOpts);
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     if(!cred) throw new Error('Passkey sign-in did not complete.');
     const finish=await cpnJson('/login/2fa/passkey/finish',{{
       ceremony_id:start.ceremony_id,
@@ -348,8 +405,8 @@ async function cpnMfaPasskey(){{
     }});
     location.href=finish.redirect||'/dashboard';
   }}catch(err){{
+    if(!cpnPasskeyStillCurrent(cer.seq)) return;
     if(err&&err.name==='AbortError'&&window.__cpnMfaLeaving){{
-      // Session watch aborted an in-flight WebAuthn prompt; expiry banner already shown.
       return;
     }}
     if(err&&err.code==='mfa_session_expired'&&typeof window.cpnMfaExpired==='function'){{
@@ -358,7 +415,7 @@ async function cpnMfaPasskey(){{
     }}
     cpnShowPasskeyError(cpnPasskeyUserMessage(err,'login'));
   }}finally{{
-    if(window.__cpnPasskeyAbort===abort) window.__cpnPasskeyAbort=null;
+    cpnFinishPasskeyCeremony(cer.abort);
   }}
 }}
 "#
@@ -438,6 +495,14 @@ mod tests {
             "NotAllowedError copy should guide YubiKey / Hello"
         );
         assert!(
+            logic.contains("already pending") || logic.contains("already waiting"),
+            "Chrome pending-request errors need a friendly mapper"
+        );
+        assert!(
+            logic.contains("err.status===408") || logic.contains("TimeoutError"),
+            "HTTP 408/abort timeout must map to a visible timeout message"
+        );
+        assert!(
             !logic.contains("Use Register with Windows Hello"),
             "register errors must not point at dual Hello/security-key buttons"
         );
@@ -451,8 +516,24 @@ mod tests {
             "single-button status must say Waiting for authenticator"
         );
         assert!(
-            script.contains("__cpnMfaLeaving") && script.contains("__cpnPasskeyAbort"),
-            "MFA passkey must abort cleanly on session expiry without silencing user cancel"
+            script.contains("function cpnBeginPasskeyCeremony"),
+            "must abort a stale credentials.get before starting another"
+        );
+        assert!(
+            script.contains("cpnPasskeyStillCurrent"),
+            "must ignore results from a superseded WebAuthn request"
+        );
+        assert!(
+            script.contains("already pending"),
+            "must map Chrome pending-request errors to friendly copy"
+        );
+        assert!(
+            script.contains("status===408"),
+            "must surface 408/timeout instead of silent fail"
+        );
+        assert!(
+            script.contains("if(banner)"),
+            "2FA errors belong on the high-contrast banner, not a duplicate faint footer"
         );
         assert!(
             !script.contains("Waiting for Windows Hello"),

@@ -66,8 +66,16 @@ pub struct PasskeyStore {
     pub credentials: Vec<StoredPasskey>,
 }
 
-fn passkeys_dir() -> PathBuf {
+fn canonical_passkeys_dir() -> PathBuf {
+    data_dir().join("mfa").join("passkeys")
+}
+
+fn legacy_passkeys_dir() -> PathBuf {
     data_dir().join("passkeys")
+}
+
+fn passkeys_dir() -> PathBuf {
+    canonical_passkeys_dir()
 }
 
 fn user_key(username: &str) -> String {
@@ -85,6 +93,26 @@ fn user_key(username: &str) -> String {
 
 fn store_path(username: &str) -> PathBuf {
     passkeys_dir().join(format!("{}.json", user_key(username)))
+}
+
+fn legacy_store_path(username: &str) -> PathBuf {
+    legacy_passkeys_dir().join(format!("{}.json", user_key(username)))
+}
+
+/// Copy legacy `$CPN_DATA_DIR/passkeys/<user>.json` into `mfa/passkeys/` without
+/// deleting the source (upgrade/repair must never wipe MFA material).
+fn migrate_legacy_store(username: &str) {
+    let dest = store_path(username);
+    if dest.is_file() {
+        return;
+    }
+    let src = legacy_store_path(username);
+    if !src.is_file() {
+        return;
+    }
+    if let Ok(bytes) = fs::read(&src) {
+        let _ = write_secret_file(&dest, &bytes);
+    }
 }
 
 fn write_secret_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -121,6 +149,7 @@ fn empty_store(username: &str) -> PasskeyStore {
 }
 
 pub fn load_passkeys(username: &str) -> PasskeyStore {
+    migrate_legacy_store(username);
     let path = store_path(username);
     let Ok(raw) = fs::read_to_string(&path) else {
         return empty_store(username);
@@ -333,6 +362,12 @@ pub fn classify_authenticator(meta: &PasskeyAuthenticatorMeta) -> &'static str {
     if !aaguid.is_empty() && is_windows_hello_aaguid(aaguid) {
         return "Windows Hello";
     }
+    // Windows Hello can complete the first (platform) register attempt with a
+    // roaming key. Prefer the browser attachment and security-key path over
+    // registration_path so a YubiKey is not labeled Windows Hello.
+    if path == Some("security-key") || attachment == Some("cross-platform") {
+        return "Security key";
+    }
     // Platform / internal without roaming transports: Hello-first path and internal
     // authenticators map to Windows Hello; bare platform attachment stays generic.
     if path == Some("platform") || has_transport(&transports, "internal") {
@@ -340,9 +375,6 @@ pub fn classify_authenticator(meta: &PasskeyAuthenticatorMeta) -> &'static str {
     }
     if attachment == Some("platform") {
         return "Platform authenticator";
-    }
-    if path == Some("security-key") || attachment == Some("cross-platform") {
-        return "Security key";
     }
     "Passkey"
 }
@@ -483,43 +515,57 @@ pub fn passkeys_for_auth(username: &str) -> Vec<Passkey> {
         .collect()
 }
 
+fn collect_store_usernames() -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for dir in [canonical_passkeys_dir(), legacy_passkeys_dir()] {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                continue;
+            }
+            let Ok(raw) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(store) = serde_json::from_str::<PasskeyStore>(&raw) else {
+                continue;
+            };
+            let key = store.username.to_ascii_lowercase();
+            if seen.insert(key) {
+                names.push(store.username);
+            }
+        }
+    }
+    names
+}
+
 /// Return every registered credential with its owning account. Login is RP-wide,
 /// so the user does not have to type an account name before choosing a passkey.
 pub fn all_passkeys_for_auth() -> Vec<(String, Passkey)> {
-    let Ok(entries) = fs::read_dir(passkeys_dir()) else {
-        return Vec::new();
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("json"))
-        .filter_map(|entry| fs::read_to_string(entry.path()).ok())
-        .filter_map(|raw| serde_json::from_str::<PasskeyStore>(&raw).ok())
-        .flat_map(|store| {
-            store
+    collect_store_usernames()
+        .into_iter()
+        .flat_map(|username| {
+            load_passkeys(&username)
                 .credentials
                 .into_iter()
-                .map(move |credential| (store.username.clone(), credential.passkey))
+                .map(move |credential| (username.clone(), credential.passkey))
         })
         .collect()
 }
 
 pub fn passkey_owner(cred_id: &[u8]) -> Option<String> {
     let wanted = base64url(cred_id);
-    let Ok(entries) = fs::read_dir(passkeys_dir()) else {
-        return None;
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("json"))
-        .filter_map(|entry| fs::read_to_string(entry.path()).ok())
-        .filter_map(|raw| serde_json::from_str::<PasskeyStore>(&raw).ok())
-        .find_map(|store| {
-            store
-                .credentials
-                .iter()
-                .any(|credential| credential.id == wanted)
-                .then_some(store.username)
-        })
+    collect_store_usernames().into_iter().find_map(|username| {
+        let store = load_passkeys(&username);
+        store
+            .credentials
+            .iter()
+            .any(|credential| credential.id == wanted)
+            .then_some(store.username)
+    })
 }
 
 pub fn update_passkey_after_auth(
@@ -573,6 +619,30 @@ mod tests {
             let store = load_passkeys("Admin");
             assert!(store.credentials.is_empty());
             assert!(!has_passkeys("Admin"));
+            let dest = store_path("Admin");
+            let dest_s = dest.to_string_lossy();
+            assert!(
+                dest_s.contains("mfa") && dest_s.contains("passkeys"),
+                "passkeys must live under mfa/passkeys: {dest_s}"
+            );
+        });
+    }
+
+    #[test]
+    fn load_migrates_legacy_passkeys_dir_without_deleting_source() {
+        with_test_data_dir(|| {
+            let legacy = legacy_store_path("cpnowner");
+            let store = empty_store("cpnowner");
+            let json = serde_json::to_string_pretty(&store).expect("json");
+            write_secret_file(&legacy, json.as_bytes()).expect("legacy write");
+            assert!(legacy.is_file());
+            let loaded = load_passkeys("cpnowner");
+            assert_eq!(loaded.username, "cpnowner");
+            assert!(store_path("cpnowner").is_file());
+            assert!(
+                legacy.is_file(),
+                "legacy passkey file must not be wiped on migrate"
+            );
         });
     }
 
@@ -637,6 +707,18 @@ mod tests {
             classify_authenticator(&PasskeyAuthenticatorMeta {
                 registration_path: Some("security-key".into()),
                 authenticator_attachment: Some("cross-platform".into()),
+                ..Default::default()
+            }),
+            "Security key"
+        );
+        // YubiKey completed via the platform-first ceremony (Windows Hello picker).
+        assert_eq!(
+            classify_authenticator(&PasskeyAuthenticatorMeta {
+                registration_path: Some("platform".into()),
+                authenticator_attachment: Some("cross-platform".into()),
+                cred_props_rk: Some(false),
+                backup_eligible: Some(false),
+                backup_state: Some(false),
                 ..Default::default()
             }),
             "Security key"
