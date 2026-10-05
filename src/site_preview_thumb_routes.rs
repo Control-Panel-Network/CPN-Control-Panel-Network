@@ -4,7 +4,9 @@ use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::site_acl::{SitePerm, require_manage_site};
-use crate::site_preview_capture::{capture_available, capture_site_preview, capture_site_preview_local};
+use crate::site_preview_capture::{
+    capture_available, capture_site_preview, capture_site_preview_local,
+};
 use crate::site_preview_microlink::remote_preview_ready;
 use crate::site_preview_thumb::{
     PreviewFreshness, cached_shot_usable, freshness, load_meta, placeholder_svg, read_cached_image,
