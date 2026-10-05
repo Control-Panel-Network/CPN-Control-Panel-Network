@@ -409,7 +409,9 @@ mod tests {
             assert!(html.contains("Package bandwidth"), "{html}");
             assert!(html.contains("Used "), "{html}");
             assert!(
-                html.contains(r#"href="/preview/card.example/" target="_blank" rel="noopener noreferrer""#),
+                html.contains(
+                    r#"href="/preview/card.example/" target="_blank" rel="noopener noreferrer""#
+                ),
                 "{html}"
             );
             assert!(html.contains("<span>IP</span>"), "{html}");
