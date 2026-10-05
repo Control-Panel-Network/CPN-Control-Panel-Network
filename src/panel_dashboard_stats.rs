@@ -126,6 +126,16 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.email_filters_limit)
         .or_else(|| pkg.as_ref().map(|p| p.email_filters))
         .unwrap_or(UNLIMITED);
+    let alias_limit = usage
+        .as_ref()
+        .map(|u| u.alias_domains_limit)
+        .or_else(|| pkg.as_ref().map(|p| p.alias_domains))
+        .unwrap_or(UNLIMITED);
+    let sub_limit = usage
+        .as_ref()
+        .map(|u| u.subdomains_limit)
+        .or_else(|| pkg.as_ref().map(|p| p.subdomains))
+        .unwrap_or(UNLIMITED);
     let domains_used = usage
         .as_ref()
         .map(|u| u.domains_used)
@@ -137,25 +147,38 @@ pub fn dashboard_stats_html(username: &str) -> String {
     let ar_used = usage.as_ref().map(|u| u.autoresponders_used).unwrap_or(0);
     let fwd_used = usage.as_ref().map(|u| u.forwarders_used).unwrap_or(0);
     let filt_used = usage.as_ref().map(|u| u.email_filters_used).unwrap_or(0);
+    let alias_used = usage
+        .as_ref()
+        .map(|u| u.alias_domains_used)
+        .unwrap_or_else(|| aliases_used(&sites));
+    let sub_used = usage
+        .as_ref()
+        .map(|u| u.subdomains_used)
+        .unwrap_or_else(|| subdomains_used(&sites));
     let db_disk = usage.as_ref().map(|u| u.database_disk_bytes).unwrap_or(0);
+    let db_disk_limit = usage
+        .as_ref()
+        .map(|u| u.database_disk_mb_limit)
+        .or_else(|| pkg.as_ref().map(|p| p.database_disk_mb))
+        .unwrap_or(UNLIMITED);
     let bw_bytes = crate::package_bandwidth::account_month_bytes(username);
     let disk_used = disk_bytes_used(&sites);
     let blurb = if is_panel_admin(username) {
-        "Totals for sites you own, against your assigned package. ∞ means unlimited (package limit -1). 0 means none allowed."
+        "Totals for sites you own, against your assigned package. ∞ means unlimited (package limit -1). 0 means none allowed. Assign a package on Manage user to change these limits."
     } else {
-        "Used versus your package quotas. ∞ means unlimited (package limit -1). 0 means none allowed."
+        "Used versus your assigned package quotas. ∞ means unlimited (package limit -1). 0 means none allowed."
     };
     let pkg_name = usage
         .as_ref()
         .map(|u| u.package_name.as_str())
         .or_else(|| pkg.as_ref().map(|p| p.name.as_str()))
         .unwrap_or("Default");
-    let db_disk_html = format!(
-        "Used {}",
-        html_escape(&crate::panel_storage_fmt::format_bytes_for_user(
-            username, db_disk
-        ))
-    );
+    let pkg_id = usage
+        .as_ref()
+        .map(|u| u.package_id.as_str())
+        .or_else(|| pkg.as_ref().map(|p| p.id.as_str()))
+        .unwrap_or("pkg-default");
+    let db_disk_html = bytes_html(username, db_disk, db_disk_limit);
     let rows = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}",
         row("Websites", &count_html(domains_used, domains_limit)),
@@ -165,14 +188,8 @@ pub fn dashboard_stats_html(username: &str) -> String {
         row("FTP accounts", &count_html(ftp_used, ftp_limit)),
         row("Storage", &bytes_html(username, disk_used, disk_limit)),
         row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit)),
-        row(
-            "Alias domains",
-            &count_html(aliases_used(&sites), UNLIMITED)
-        ),
-        row(
-            "Sub-domains",
-            &count_html(subdomains_used(&sites), domains_limit),
-        ),
+        row("Alias domains", &count_html(alias_used, alias_limit),),
+        row("Sub-domains", &count_html(sub_used, sub_limit),),
         row("Mailing lists", &count_html(lists_used, lists_limit)),
         row("Autoresponders", &count_html(ar_used, ar_limit)),
         row("Forwarders", &count_html(fwd_used, fwd_limit)),
@@ -184,14 +201,15 @@ pub fn dashboard_stats_html(username: &str) -> String {
     <div>
       <p class="eyebrow">ACCOUNT</p>
       <h2>Statistics</h2>
-      <p class="muted" style="margin:6px 0 0;">{blurb} Package: {pkg}.</p>
+      <p class="muted" style="margin:6px 0 0;">{blurb} Assigned package: {pkg} (<code>{pkg_id}</code>).</p>
     </div>
   </div>
   <ul class="cpn-stats-list">{rows}</ul>
-  <p class="muted" style="margin-top:12px;">Databases is account count versus the package limit. Database disk is live MariaDB schema size for owned databases (informational; not a separate package count limit). Storage is website home disk usage.</p>
+  <p class="muted" style="margin-top:12px;">Databases is account count versus the package limit. Database disk is live MariaDB schema size versus the package Database disk (MB) quota (-1 = unlimited). Storage is website home disk usage.</p>
 </article>"#,
         blurb = html_escape(blurb),
         pkg = html_escape(pkg_name),
+        pkg_id = html_escape(pkg_id),
         rows = rows,
     )
 }
@@ -240,6 +258,31 @@ mod tests {
             assert!(html.contains("Email filters"), "{html}");
             assert!(html.contains("Database disk"), "{html}");
             assert!(html.contains("Databases"), "{html}");
+            let db_row = html
+                .split(r#"cpn-stats-label">Database disk</span>"#)
+                .nth(1)
+                .and_then(|rest| rest.split("</li>").next())
+                .unwrap_or("");
+            assert!(
+                db_row.contains(" of "),
+                "Database disk must include a denominator: {db_row}"
+            );
+            assert!(
+                db_row.contains("∞"),
+                "Default package Database disk quota is unlimited: {db_row}"
+            );
+            assert!(
+                !db_row.contains(">Used 0 KB<") && !db_row.ends_with("Used 0 KB"),
+                "Database disk must not be used-only: {db_row}"
+            );
+            assert!(
+                html.contains("Database disk (MB)")
+                    || html.contains("versus the package Database disk"),
+                "{html}"
+            );
+            assert!(!html.contains("informational; not a separate"), "{html}");
+            assert!(html.contains("Assigned package"), "{html}");
+            assert!(html.contains("pkg-default"), "{html}");
             assert!(html.contains("∞"), "{html}");
             assert!(html.contains("Used "), "{html}");
             assert!(!html.contains("not provisioned yet"), "{html}");

@@ -924,6 +924,9 @@ pub async fn databases_create(
         user.clone()
     };
     let result = crate::packages::require_quota(&owner, crate::packages::QuotaResource::Databases)
+        .and_then(|_| {
+            crate::packages::require_quota(&owner, crate::packages::QuotaResource::DatabaseDiskMb)
+        })
         .and_then(|_| crate::resource_accounts::create_database(&owner, &form.name, &form.domain));
     match result {
         Ok(db) => HttpResponse::SeeOther()
@@ -1008,7 +1011,7 @@ pub async fn plugins_page(
         query.get("view").map(String::as_str),
         Some("host") | Some("apps")
     ) {
-        let mut loc = String::from("/plugins?view=store&category=Host&target=host");
+        let mut loc = String::from("/plugins?view=store&target=host");
         for (key, value) in query.iter() {
             if key == "view" || key == "category" {
                 continue;

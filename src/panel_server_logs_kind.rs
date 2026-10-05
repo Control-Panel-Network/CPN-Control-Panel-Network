@@ -95,6 +95,7 @@ impl HostLogKind {
                 "/var/log/httpd/error_log",
                 "/var/log/nginx/error.log",
                 "/var/log/apache2/error.log",
+                "/var/log/cpn/error.log",
             ],
             Self::Email => &[
                 "/var/log/maillog",

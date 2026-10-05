@@ -209,7 +209,14 @@ async fn run_maintenance_inner(
         } else {
             Vec::new()
         };
-        let tip = crate::upgrade_tip::apply_tip_ref(&state, &repo, &tip_ref).await?;
+        let tip = match crate::upgrade_tip::apply_tip_ref(&state, &repo, &tip_ref).await {
+            Ok(tip) => tip,
+            Err(error) => {
+                crate::upgrade_tip_log::log_failure(&error, None);
+                state.log(error.clone(), "error");
+                return Err(error);
+            }
+        };
         let status_snapshot = state
             .status
             .read()
@@ -324,14 +331,21 @@ async fn run_maintenance_inner(
         ) && crate::panel_service::running_under_systemd()
         {
             match crate::panel_service::schedule_detached_panel_restart("post-tip-upgrade") {
-                Ok(()) => state.log(
-                    "Scheduled detached cpn-installer.service reload after tip apply".to_string(),
-                    "info",
-                ),
-                Err(error) => state.log(
-                    format!("Warning: could not schedule detached panel reload: {error}"),
-                    "error",
-                ),
+                Ok(()) => {
+                    crate::upgrade_tip_log::log_info(
+                        "Scheduled detached cpn-installer.service reload after tip apply",
+                    );
+                    state.log(
+                        "Scheduled detached cpn-installer.service reload after tip apply"
+                            .to_string(),
+                        "info",
+                    );
+                }
+                Err(error) => {
+                    let msg = format!("Could not schedule detached panel reload: {error}");
+                    crate::upgrade_tip_log::log_failure(&msg, None);
+                    state.log(format!("Warning: {msg}"), "error");
+                }
             }
         }
         return Ok(());

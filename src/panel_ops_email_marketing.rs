@@ -162,11 +162,7 @@ pub fn send_campaign(
     for to in &list.recipients {
         match send_mail_with_settings(
             &settings,
-            &OutboundMessage {
-                to: to.clone(),
-                subject: subject.to_string(),
-                body: body.to_string(),
-            },
+            &OutboundMessage::new(to.clone(), subject.to_string(), body.to_string()),
         ) {
             Ok(()) => sent += 1,
             Err(e) => {

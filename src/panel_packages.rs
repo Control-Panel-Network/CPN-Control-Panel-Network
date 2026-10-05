@@ -164,6 +164,7 @@ fn bulk_toolbar() -> String {
         <label>Websites<input name="domains" type="number" min="-1" placeholder="unchanged"></label>
         <label>Mailboxes<input name="emails" type="number" min="-1" placeholder="unchanged"></label>
         <label>Databases<input name="databases" type="number" min="-1" placeholder="unchanged"></label>
+        <label>Database disk (MB)<input name="database_disk_mb" type="number" min="-1" placeholder="unchanged"></label>
         <label>FTP accounts<input name="ftp_accounts" type="number" min="-1" placeholder="unchanged"></label>
         <label>Storage (MB)<input name="disk_mb" type="number" min="-1" placeholder="unchanged"></label>
         <label>Bandwidth (MB)<input name="bandwidth_mb" type="number" min="-1" placeholder="unchanged"></label>
@@ -267,6 +268,7 @@ fn usage_card(viewer: &str, usage: &PackageUsage) -> String {
         <li>Websites: {d}</li>
         <li>Mailboxes: {e}</li>
         <li>Databases: {db}</li>
+        <li>Database disk: {dbdisk}</li>
         <li>FTP accounts: {f}</li>
         <li>Storage: {disk}</li>
         <li>Bandwidth (this month): {bw}{bw_note}</li>
@@ -289,6 +291,11 @@ fn usage_card(viewer: &str, usage: &PackageUsage) -> String {
         db = html_escape(&crate::panel_storage_fmt::format_used_count(
             usage.databases_used,
             usage.databases_limit,
+        )),
+        dbdisk = html_escape(&crate::panel_storage_fmt::format_used_limit_for_user(
+            viewer,
+            usage.database_disk_bytes,
+            usage.database_disk_mb_limit,
         )),
         f = html_escape(&crate::panel_storage_fmt::format_used_count(
             usage.ftp_used,

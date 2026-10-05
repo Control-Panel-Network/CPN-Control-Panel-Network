@@ -12,6 +12,7 @@ pub struct PackageBulkPatch {
     pub domains: Option<i64>,
     pub emails: Option<i64>,
     pub databases: Option<i64>,
+    pub database_disk_mb: Option<i64>,
     pub ftp_accounts: Option<i64>,
     pub mailing_lists: Option<i64>,
     pub autoresponders: Option<i64>,
@@ -28,6 +29,7 @@ impl PackageBulkPatch {
             && self.domains.is_none()
             && self.emails.is_none()
             && self.databases.is_none()
+            && self.database_disk_mb.is_none()
             && self.ftp_accounts.is_none()
             && self.mailing_lists.is_none()
             && self.autoresponders.is_none()
@@ -77,11 +79,14 @@ pub fn duplicate_package(source_id: &str, new_name: &str, owner: &str) -> Result
             domains: src.domains,
             emails: src.emails,
             databases: src.databases,
+            database_disk_mb: src.database_disk_mb,
             ftp_accounts: src.ftp_accounts,
             mailing_lists: src.mailing_lists,
             autoresponders: src.autoresponders,
             forwarders: src.forwarders,
             email_filters: src.email_filters,
+            alias_domains: src.alias_domains,
+            subdomains: src.subdomains,
             fqdn_enabled: src.fqdn_enabled,
             notes: src.notes,
             sidebar_hidden_nav_ids: src.sidebar_hidden_nav_ids,
@@ -97,11 +102,14 @@ fn apply_patch(pkg: &Package, patch: &PackageBulkPatch) -> PackageInput {
         domains: patch.domains.unwrap_or(pkg.domains),
         emails: patch.emails.unwrap_or(pkg.emails),
         databases: patch.databases.unwrap_or(pkg.databases),
+        database_disk_mb: patch.database_disk_mb.unwrap_or(pkg.database_disk_mb),
         ftp_accounts: patch.ftp_accounts.unwrap_or(pkg.ftp_accounts),
         mailing_lists: patch.mailing_lists.unwrap_or(pkg.mailing_lists),
         autoresponders: patch.autoresponders.unwrap_or(pkg.autoresponders),
         forwarders: patch.forwarders.unwrap_or(pkg.forwarders),
         email_filters: patch.email_filters.unwrap_or(pkg.email_filters),
+        alias_domains: pkg.alias_domains,
+        subdomains: pkg.subdomains,
         fqdn_enabled: patch.fqdn_enabled.unwrap_or(pkg.fqdn_enabled),
         notes: patch.notes.clone().unwrap_or_else(|| pkg.notes.clone()),
         sidebar_hidden_nav_ids: pkg.sidebar_hidden_nav_ids.clone(),

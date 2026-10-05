@@ -1,47 +1,144 @@
 //! Outbound mail helpers. Prefer configured SMTP; fall back to local Postfix.
 
+use crate::panel_feedback_mail::{FEEDBACK_LOGO_CID, feedback_logo_png};
 use crate::postfix_fallback::{postfix_is_ready, postfix_local_smtp};
 use crate::smtp_settings::{SmtpSettings, SmtpTlsMode, load_smtp};
 use lettre::message::header::{ContentTransferEncoding, ContentType};
-use lettre::message::{Body, Mailbox, Message, SinglePart};
+use lettre::message::{Attachment, Body, Mailbox, Message, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{SmtpTransport, Transport};
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct OutboundMessage {
     pub to: String,
     pub subject: String,
     pub body: String,
+    pub html_body: Option<String>,
+    pub from_name: Option<String>,
+}
+
+impl OutboundMessage {
+    pub fn new(to: impl Into<String>, subject: impl Into<String>, body: impl Into<String>) -> Self {
+        Self {
+            to: to.into(),
+            subject: subject.into(),
+            body: body.into(),
+            html_body: None,
+            from_name: None,
+        }
+    }
+}
+
+fn smtp_configured(settings: &SmtpSettings) -> bool {
+    !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
+}
+
+/// Owner-configured outbound provider from `smtp.json` (installer SMTP or a mail plugin).
+/// Localhost rows without credentials are treated as Postfix, not a remote provider.
+pub fn configured_provider_smtp() -> Option<SmtpSettings> {
+    let settings = load_smtp().filter(smtp_configured)?;
+    let host = settings.host.trim();
+    let local = host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost");
+    if local && settings.username.trim().is_empty() {
+        return None;
+    }
+    Some(settings)
 }
 
 pub fn smtp_is_ready() -> bool {
-    if load_smtp().is_some_and(|settings| {
-        !settings.host.trim().is_empty() && !settings.from_address.trim().is_empty()
-    }) {
-        return true;
-    }
-    postfix_is_ready()
+    configured_provider_smtp().is_some() || postfix_is_ready()
 }
 
-/// Resolve outbound settings: disk SMTP first, else Postfix localhost when ready.
+/// Resolve outbound settings: configured provider first, else Postfix localhost.
 pub fn resolve_outbound_settings(from_hint: Option<&str>) -> Result<SmtpSettings, String> {
-    if let Some(settings) = load_smtp()
-        && !settings.host.trim().is_empty()
-        && !settings.from_address.trim().is_empty()
-    {
+    if let Some(settings) = configured_provider_smtp() {
         return Ok(settings);
     }
     if postfix_is_ready() {
         return Ok(postfix_local_smtp(from_hint.unwrap_or("")));
     }
-    Err("No outbound mail path: configure SMTP or install/enable local Postfix.".into())
+    Err(
+        "No outbound mail path: install and configure an outbound mail provider plugin, or enable local Postfix."
+            .into(),
+    )
 }
 
-/// Best-effort send via configured SMTP or Postfix localhost.
+/// Operator-facing mail error. Never include passwords, tokens, or AUTH secrets.
+pub fn public_mail_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("5.1.1") || lower.contains("virtual alias") || lower.contains("user unknown")
+    {
+        return "Local Postfix treated the support inbox as a hosted mailbox. Feedback uses a panel outbound listener on port 2525 that relays off-box. Configure an outbound mail provider plugin if this host cannot reach the internet.".into();
+    }
+    if lower.contains("relay")
+        || lower.contains("5.7.1")
+        || lower.contains("authentication required")
+        || lower.contains("sasl")
+    {
+        return "Local mail rejected the message (relay or authentication). Feedback uses Postfix on port 25 without AUTH. Configure an outbound mail provider plugin if this host cannot send to the internet.".into();
+    }
+    if lower.contains("connection refused")
+        || (lower.contains("connect") && lower.contains("os error"))
+    {
+        return "Could not connect to the mail service. Enable Postfix or the installed outbound mail provider.".into();
+    }
+    if lower.contains("timed out") || lower.contains("timeout") {
+        return "Mail server timed out. Check Postfix or the outbound provider host and TLS settings.".into();
+    }
+    if lower.contains("starttls") || (lower.contains("tls") && lower.contains("failed")) {
+        return "Mail TLS handshake failed. Set the correct TLS mode on the outbound mail provider, or use local Postfix.".into();
+    }
+    if lower.contains("invalid smtp from") || lower.contains("invalid recipient") {
+        return "Mail From or recipient address is not valid.".into();
+    }
+    let mut cleaned = raw.replace(['\r', '\n'], " ");
+    for needle in ["password=", "password:", "passwd=", "auth "] {
+        if let Some(idx) = cleaned.to_ascii_lowercase().find(needle) {
+            cleaned.truncate(idx);
+            cleaned.push_str("[redacted]");
+            break;
+        }
+    }
+    cleaned = cleaned.chars().take(180).collect();
+    if cleaned.trim().is_empty() {
+        return "Feedback could not be delivered. Configure an outbound mail provider or local Postfix.".into();
+    }
+    format!("Feedback could not be delivered: {cleaned}")
+}
+
+/// Best-effort send via configured SMTP provider, then Postfix localhost.
 pub fn send_mail(message: &OutboundMessage) -> Result<(), String> {
-    let settings = resolve_outbound_settings(Some(message.to.as_str()))?;
-    send_mail_with_settings(&settings, message)
+    send_mail_with_fallback(message)
+}
+
+pub fn send_mail_with_fallback(message: &OutboundMessage) -> Result<(), String> {
+    if let Some(settings) = configured_provider_smtp() {
+        match send_mail_with_settings(&settings, message) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if postfix_is_ready() {
+                    let _ = crate::postfix_fallback::ensure_postfix_panel_outbound();
+                    let local = postfix_local_smtp("");
+                    match send_mail_with_settings(&local, message) {
+                        Ok(()) => return Ok(()),
+                        Err(local_error) => return Err(public_mail_error(&local_error)),
+                    }
+                }
+                return Err(public_mail_error(&error));
+            }
+        }
+    }
+    if postfix_is_ready() {
+        let _ = crate::postfix_fallback::ensure_postfix_panel_outbound();
+        return send_mail_with_settings(&postfix_local_smtp(""), message)
+            .map_err(|error| public_mail_error(&error));
+    }
+    Err(
+        "No outbound mail path: install and configure an outbound mail provider plugin, or enable local Postfix."
+            .into(),
+    )
 }
 
 pub fn send_mail_with_settings(
@@ -66,7 +163,13 @@ pub fn send_mail_with_settings(
         .parse()
         .map_err(|error| format!("Invalid recipient address: {error}"))?;
 
-    let email = build_plain_message(from, to, &message.subject, &message.body)?;
+    let email = build_outbound_message(
+        apply_from_name(from, message.from_name.as_deref()),
+        to,
+        &message.subject,
+        &message.body,
+        message.html_body.as_deref(),
+    )?;
 
     let transport = build_transport(settings)?;
     transport
@@ -75,33 +178,108 @@ pub fn send_mail_with_settings(
     Ok(())
 }
 
-/// Build a plain-text message without quoted-printable so `token=` URLs stay intact.
+fn apply_from_name(mut mailbox: Mailbox, name: Option<&str>) -> Mailbox {
+    if let Some(raw) = name.map(str::trim).filter(|value| !value.is_empty()) {
+        mailbox.name = Some(sanitize_header(raw));
+    }
+    mailbox
+}
+
+fn encode_body(raw: Vec<u8>, preferred: ContentTransferEncoding) -> Result<Body, String> {
+    Body::new_with_encoding(raw, preferred)
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::EightBit))
+        // Prefer QP over base64 so HTML (and cid: refs) stay inspectable when 8bit
+        // rejects long lines.
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::QuotedPrintable))
+        .or_else(|bytes| Body::new_with_encoding(bytes, ContentTransferEncoding::Base64))
+        .map_err(|_| "Could not encode email body".to_string())
+}
+
+fn mail_content_type(spec: &'static str) -> Result<ContentType, String> {
+    spec.parse::<ContentType>()
+        .map_err(|error| format!("Could not set mail content type: {error}"))
+}
+
+fn text_part(
+    body: &str,
+    content_type: ContentType,
+    encoding: ContentTransferEncoding,
+) -> Result<SinglePart, String> {
+    Ok(SinglePart::builder()
+        .header(content_type)
+        .body(encode_body(body.as_bytes().to_vec(), encoding)?))
+}
+
+/// Plain-text only: avoid quoted-printable so `token=` URLs stay intact.
 fn build_plain_message(
     from: Mailbox,
     to: Mailbox,
     subject: &str,
     body: &str,
 ) -> Result<Message, String> {
-    let raw = body.as_bytes().to_vec();
-    // Prefer 7bit for ASCII (readable in mail spools). Fall back to base64 for non-ASCII.
-    let encoded = Body::new_with_encoding(raw.clone(), ContentTransferEncoding::SevenBit)
-        .or_else(|_| Body::new_with_encoding(raw, ContentTransferEncoding::Base64))
-        .map_err(|_| "Could not encode email body".to_string())?;
-
     Message::builder()
         .from(from)
         .to(to)
         .subject(sanitize_header(subject))
-        .singlepart(
-            SinglePart::builder()
-                .header(ContentType::TEXT_PLAIN)
-                .body(encoded),
-        )
+        .singlepart(text_part(
+            body,
+            mail_content_type("text/plain; charset=utf-8")?,
+            ContentTransferEncoding::SevenBit,
+        )?)
         .map_err(|error| format!("Could not build email: {error}"))
+}
+
+fn build_outbound_message(
+    from: Mailbox,
+    to: Mailbox,
+    subject: &str,
+    body: &str,
+    html_body: Option<&str>,
+) -> Result<Message, String> {
+    let Some(html) = html_body.filter(|value| !value.trim().is_empty()) else {
+        return build_plain_message(from, to, subject, body);
+    };
+    let plain_part = text_part(
+        body,
+        mail_content_type("text/plain; charset=utf-8")?,
+        ContentTransferEncoding::QuotedPrintable,
+    )?;
+    // 8bit keeps tags and CSS readable for clients that sniff
+    // HTML before quoted-printable decode. Falls back in encode_body.
+    let html_part = text_part(
+        html,
+        mail_content_type("text/html; charset=utf-8")?,
+        ContentTransferEncoding::EightBit,
+    )?;
+    let alternative = if html.contains(&format!("cid:{FEEDBACK_LOGO_CID}")) {
+        MultiPart::alternative().singlepart(plain_part).multipart(
+            MultiPart::related()
+                .singlepart(html_part)
+                .singlepart(feedback_logo_inline_part()?),
+        )
+    } else {
+        MultiPart::alternative()
+            .singlepart(plain_part)
+            .singlepart(html_part)
+    };
+    Message::builder()
+        .from(from)
+        .to(to)
+        .subject(sanitize_header(subject))
+        .multipart(alternative)
+        .map_err(|error| format!("Could not build email: {error}"))
+}
+
+fn feedback_logo_inline_part() -> Result<SinglePart, String> {
+    Ok(Attachment::new_inline(FEEDBACK_LOGO_CID.to_string()).body(
+        feedback_logo_png().to_vec(),
+        mail_content_type("image/png")?,
+    ))
 }
 
 fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
     let host = settings.host.trim();
+    let timeout = Some(Duration::from_secs(20));
     let mut builder = match settings.tls_mode {
         SmtpTlsMode::Tls => {
             let tls = TlsParameters::new(host.to_string())
@@ -109,6 +287,7 @@ fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
             SmtpTransport::relay(host)
                 .map_err(|error| format!("SMTP relay setup failed: {error}"))?
                 .port(settings.port)
+                .timeout(timeout)
                 .tls(Tls::Wrapper(tls))
         }
         SmtpTlsMode::Starttls => {
@@ -117,9 +296,12 @@ fn build_transport(settings: &SmtpSettings) -> Result<SmtpTransport, String> {
             SmtpTransport::starttls_relay(host)
                 .map_err(|error| format!("SMTP STARTTLS setup failed: {error}"))?
                 .port(settings.port)
+                .timeout(timeout)
                 .tls(Tls::Required(tls))
         }
-        SmtpTlsMode::None => SmtpTransport::builder_dangerous(host).port(settings.port),
+        SmtpTlsMode::None => SmtpTransport::builder_dangerous(host)
+            .port(settings.port)
+            .timeout(timeout),
     };
 
     if !settings.username.trim().is_empty() {
@@ -161,11 +343,7 @@ pub fn build_setup_confirmation(
             "\r\nThe password was not included in this message. Use the password you set during setup.\r\n",
         );
     }
-    OutboundMessage {
-        to: String::new(),
-        subject: "CPN panel account ready".into(),
-        body,
-    }
+    OutboundMessage::new(String::new(), "CPN panel account ready", body)
 }
 
 /// Password reset email with a one-time reset URL (preferred path).
@@ -196,11 +374,7 @@ Sign in page: ",
     body.push_str(
         "\r\n\r\nIf the link does not work, ask a server operator to reset the account with the CPN CLI.\r\n",
     );
-    OutboundMessage {
-        to: String::new(),
-        subject: "CPN panel password reset request".into(),
-        body,
-    }
+    OutboundMessage::new(String::new(), "CPN panel password reset request", body)
 }
 
 /// Legacy notice without a token (kept for callers that only have a login URL).
@@ -211,6 +385,18 @@ pub fn build_password_reset_notice(login_url: &str) -> OutboundMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn public_mail_error_hides_secrets_and_maps_relay() {
+        let relay = public_mail_error(
+            "SMTP send failed: 5.7.1 Relay access denied AUTH LOGIN password=supersecret",
+        );
+        assert!(!relay.to_ascii_lowercase().contains("supersecret"));
+        assert!(relay.contains("port 25") || relay.contains("relay"));
+        let auth = public_mail_error("failed password=hunter2");
+        assert!(!auth.contains("hunter2"));
+        assert!(auth.contains("[redacted]") || auth.contains("delivered"));
+    }
 
     #[test]
     fn password_reset_email_contains_token_url() {
@@ -269,6 +455,90 @@ mod tests {
                     .to_ascii_lowercase()
                     .contains("content-transfer-encoding: base64"),
             "expected 7bit or base64 CTE, got:\n{raw}"
+        );
+    }
+
+    #[test]
+    fn multipart_feedback_mail_has_html_fallback_and_from_name() {
+        let from: Mailbox =
+            apply_from_name("cpn-panel@localhost".parse().unwrap(), Some("CPN Panel"));
+        let to: Mailbox = "info@example.com".parse().unwrap();
+        let html = "<p>Hello &lt;script&gt;</p>";
+        let email = build_outbound_message(
+            from,
+            to,
+            "[CPN Feedback] test",
+            "CPN Panel feedback\r\n\r\nMessage:\r\ntest\r\n",
+            Some(html),
+        )
+        .unwrap();
+        let raw = String::from_utf8_lossy(&email.formatted()).to_string();
+        let lower = raw.to_ascii_lowercase();
+        assert!(lower.contains("from:"));
+        assert!(lower.contains("cpn panel"));
+        assert!(lower.contains("cpn-panel@localhost"));
+        assert!(lower.contains("mime-version: 1.0"));
+        assert!(lower.contains("multipart/alternative"));
+        assert!(lower.contains("text/plain"));
+        assert!(lower.contains("text/html"));
+        assert!(lower.contains("charset=utf-8"));
+        let plain_at = lower.find("text/plain").expect("plain part");
+        let html_at = lower.find("text/html").expect("html part");
+        assert!(
+            html_at > plain_at,
+            "HTML alternative must be last so clients prefer it"
+        );
+        assert!(raw.contains("CPN Panel feedback"));
+        assert!(
+            raw.contains("<p>Hello"),
+            "HTML tags must appear decoded in the raw message:\n{raw}"
+        );
+        assert!(!raw.to_ascii_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn multipart_feedback_mail_embeds_logo_cid() {
+        let from: Mailbox =
+            apply_from_name("cpn-panel@localhost".parse().unwrap(), Some("CPN Panel"));
+        let to: Mailbox = "info@example.com".parse().unwrap();
+        let html = concat!(
+            "<img src=\"cid:cpn-logo@cpn\" alt=\"CPN Control Panel Network\">",
+            "<p>logo mail</p>"
+        );
+        let email = build_outbound_message(
+            from,
+            to,
+            "[CPN Feedback] logo",
+            "CPN Panel feedback\r\n",
+            Some(html),
+        )
+        .unwrap();
+        let raw = String::from_utf8_lossy(&email.formatted()).to_string();
+        let lower = raw.to_ascii_lowercase();
+        assert!(lower.contains("multipart/alternative"));
+        assert!(lower.contains("multipart/related"));
+        assert!(
+            lower.contains("content-id: <cpn-logo@cpn>")
+                || lower.contains("content-id:<cpn-logo@cpn>")
+        );
+        assert!(lower.contains("image/png"));
+        assert!(lower.contains("content-disposition: inline"));
+        // HTML body may be 8bit, quoted-printable, or base64 depending on encoder fallback.
+        // Base64 of a longer HTML document will not contain the base64 of the bare cid
+        // substring; match the fragment seen for `<img src="cid:cpn-logo@cpn" ...>`.
+        let has_cid_ref = raw.contains("cid:cpn-logo@cpn")
+            || raw.contains("cid:cpn-logo=40cpn")
+            || raw.contains("ImNpZDpjcG4tbG9nb0BjcG4i")
+            || raw.contains("Y2lkOmNwbi1sb2dvQGNwbg");
+        assert!(
+            has_cid_ref,
+            "expected cid logo reference in HTML part, got:\n{raw}"
+        );
+        let related_at = lower.find("multipart/related").expect("related");
+        let html_at = lower.find("text/html").expect("html");
+        assert!(
+            html_at > related_at,
+            "HTML should live under multipart/related"
         );
     }
 }

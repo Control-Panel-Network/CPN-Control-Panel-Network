@@ -1,5 +1,6 @@
 //! Package quota usage and create-time enforcement.
 
+use crate::backups::is_subdomain_site;
 use crate::mail_accounts;
 
 use crate::packages::{PackageUsage, QuotaResource, format_limit_display, package_for_account};
@@ -120,6 +121,17 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         })
         .count() as u64;
 
+    let sites = list_sites().unwrap_or_default();
+    let owned_sites: Vec<_> = sites
+        .into_iter()
+        .filter(|s| names_equal(&s.owner, username))
+        .collect();
+    let alias_domains_used = owned_sites.iter().map(|s| s.aliases.len() as u64).sum();
+    let subdomains_used = owned_sites
+        .iter()
+        .filter(|s| is_subdomain_site(&s.domain))
+        .count() as u64;
+
     let databases_used = list_databases()
         .into_iter()
         .filter(|d| names_equal(&d.owner, username))
@@ -153,6 +165,8 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 
         databases_limit: package.databases,
 
+        database_disk_mb_limit: package.database_disk_mb,
+
         ftp_used,
 
         ftp_limit: package.ftp_accounts,
@@ -180,6 +194,14 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         email_filters_used: panel_ops_mail_filters::count_for_owner(username),
 
         email_filters_limit: package.email_filters,
+
+        alias_domains_used,
+
+        alias_domains_limit: package.alias_domains,
+
+        subdomains_used,
+
+        subdomains_limit: package.subdomains,
 
         database_disk_bytes: database_disk_bytes_for_owner(username),
 
@@ -209,6 +231,12 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
         QuotaResource::Emails => ("Mailboxes", usage.emails_used, usage.emails_limit),
 
         QuotaResource::Databases => ("Databases", usage.databases_used, usage.databases_limit),
+
+        QuotaResource::DatabaseDiskMb => (
+            "Database disk (MB)",
+            crate::package_bandwidth::bytes_to_mb_ceil(usage.database_disk_bytes),
+            usage.database_disk_mb_limit,
+        ),
 
         QuotaResource::FtpAccounts => ("FTP accounts", usage.ftp_used, usage.ftp_limit),
 

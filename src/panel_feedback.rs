@@ -1,11 +1,12 @@
-//! Authenticated sidebar feedback modal and dual-recipient mail delivery.
+//! Authenticated sidebar Feedback button and viewport-centered mail dialog.
 
 use crate::account::now_unix;
 use crate::account_mgmt::find_account;
 use crate::auth_api::panel_user_from_request;
-use crate::http_helpers::VERSION;
 use crate::installer::AppState;
-use crate::mail_outbound::{OutboundMessage, resolve_outbound_settings, send_mail_with_settings};
+use crate::mail_outbound::{OutboundMessage, send_mail_with_fallback};
+use crate::panel_feedback_host::resolve_feedback_panel_host;
+use crate::panel_feedback_mail::{FeedbackMailInput, build_feedback_mail, html_escape};
 use crate::panel_session::session_secret;
 use crate::panel_site_tools_security::same_origin_ok;
 use actix_web::{HttpRequest, HttpResponse, post, web};
@@ -23,15 +24,6 @@ const RATE_MAX: u32 = 5;
 const MAX_SUBJECT_CHARS: usize = 120;
 const MAX_MESSAGE_CHARS: usize = 10_000;
 static RATE: Mutex<Option<HashMap<String, (u64, u32)>>> = Mutex::new(None);
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
 
 fn hmac_hex(secret: &str, payload: &str) -> String {
     let mut mac =
@@ -106,39 +98,10 @@ fn json_error(status: actix_web::http::StatusCode, message: &str) -> HttpRespons
     json_response(status, serde_json::json!({ "ok": false, "error": message }))
 }
 
-fn safe_host(http: &HttpRequest) -> String {
+fn request_host_header(http: &HttpRequest) -> Option<&str> {
     http.headers()
         .get("host")
         .and_then(|value| value.to_str().ok())
-        .filter(|value| {
-            !value.is_empty()
-                && value.len() <= 253
-                && !value
-                    .chars()
-                    .any(|ch| ch.is_control() || ch == '/' || ch == '\\')
-        })
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-fn feedback_body(
-    username: &str,
-    sender_email: &str,
-    category: &str,
-    subject: &str,
-    message: &str,
-    host: &str,
-) -> String {
-    format!(
-        "CPN Panel feedback\r\n\r\n\
-Category: {category}\r\n\
-Subject: {subject}\r\n\
-User: {username}\r\n\
-User email: {sender_email}\r\n\
-Panel host: {host}\r\n\
-Panel version: {VERSION}\r\n\r\n\
-Message:\r\n{message}\r\n"
-    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -201,39 +164,28 @@ pub async fn panel_feedback_submit(
     } else {
         sender_email.trim()
     };
-    let mail_body = feedback_body(
-        &username,
+    let panel_host = resolve_feedback_panel_host(request_host_header(&http), state.bind_port);
+    let (plain_body, html_body) = build_feedback_mail(&FeedbackMailInput {
+        username: &username,
         sender_email,
         category,
         subject,
         message,
-        &safe_host(&http),
-    );
-    let settings = match resolve_outbound_settings(Some(RECIPIENTS[0])) {
-        Ok(settings) => settings,
-        Err(_) => {
-            return json_error(
-                actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
-                "Mail delivery is not configured on this panel.",
-            );
-        }
-    };
+        host: &panel_host,
+        sent_at_unix: now_unix(),
+    });
 
     for recipient in RECIPIENTS {
         let outbound = OutboundMessage {
             to: recipient.to_string(),
             subject: format!("[CPN Feedback] {subject}"),
-            body: mail_body.clone(),
+            body: plain_body.clone(),
+            html_body: Some(html_body.clone()),
+            from_name: Some("CPN Panel".into()),
         };
-        if let Err(error) = send_mail_with_settings(&settings, &outbound) {
-            eprintln!(
-                "panel_feedback: mail delivery failed for a configured recipient: {}",
-                error
-            );
-            return json_error(
-                actix_web::http::StatusCode::BAD_GATEWAY,
-                "Feedback could not be delivered. Try again later.",
-            );
+        if let Err(error) = send_mail_with_fallback(&outbound) {
+            eprintln!("panel_feedback: mail delivery failed for a configured recipient");
+            return json_error(actix_web::http::StatusCode::BAD_GATEWAY, &error);
         }
     }
 
@@ -298,17 +250,27 @@ pub fn feedback_markup(username: &str) -> String {
 
 pub fn feedback_styles() -> &'static str {
     r#"
+/* Viewport overlay (JS portals to body). Aside overflow/transform must not clip this. */
 .feedback-modal[hidden] { display:none !important; }
-.feedback-modal { position:fixed; inset:0; z-index:300; display:grid; place-items:center;
-  padding:18px; background:rgba(15,23,42,.58); }
-.feedback-dialog { width:min(560px,100%); max-height:calc(100dvh - 36px); overflow:auto;
-  padding:20px; border:1px solid var(--hairline); border-radius:14px;
-  background:var(--canvas); color:var(--ink); box-shadow:0 24px 60px rgba(0,0,0,.28); }
+body > .feedback-modal, .feedback-modal {
+  position:fixed !important; inset:0 !important; left:0; top:0; right:0; bottom:0;
+  width:100vw; width:100dvw; height:100vh; height:100dvh; margin:0;
+  z-index:400; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:rgba(15,23,42,.58); box-sizing:border-box;
+  transform:none !important; filter:none !important;
+}
+.feedback-dialog {
+  position:relative; flex:0 1 auto; margin:0 auto;
+  width:min(560px, calc(100vw - 48px)); max-height:min(720px, calc(100dvh - 48px));
+  overflow:auto; padding:22px 22px 18px; border:1px solid var(--hairline); border-radius:14px;
+  background:var(--canvas); color:var(--ink); box-shadow:0 24px 60px rgba(0,0,0,.28);
+}
 .feedback-dialog header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.feedback-dialog h2 { margin:0; font-size:22px; }
-.feedback-close { border:0; background:transparent; color:var(--muted); font-size:28px; line-height:1; }
+.feedback-dialog h2 { margin:0; font-size:22px; color:var(--ink); }
+.feedback-close { border:0; background:transparent; color:var(--muted); font-size:28px; line-height:1; cursor:pointer; }
+.feedback-close:hover { color:var(--ink); }
 #cpn-feedback-form { display:grid; gap:14px; margin-top:14px; }
-#cpn-feedback-form label { display:grid; gap:6px; font-size:14px; font-weight:600; }
+#cpn-feedback-form label { display:grid; gap:6px; font-size:14px; font-weight:600; color:var(--ink); }
 #cpn-feedback-form input, #cpn-feedback-form select, #cpn-feedback-form textarea {
   width:100%; padding:10px 12px; border:1px solid var(--hairline); border-radius:9px;
   background:var(--canvas); color:var(--ink); font:inherit; color-scheme:light dark; }
@@ -322,10 +284,12 @@ pub fn feedback_styles() -> &'static str {
 .feedback-cancel { border:1px solid var(--hairline); background:var(--canvas); color:var(--ink); }
 .feedback-submit { border:1px solid var(--blue); background:var(--blue); color:#fff; font-weight:600; }
 .feedback-submit:disabled { opacity:.65; cursor:wait; }
+html[data-color-mode="dark"] .feedback-dialog,
+[data-color-mode="dark"] .feedback-dialog { background:#161b22; color:#e5e7eb; }
 [data-color-mode="dark"] .feedback-status.error { color:#fda4af; }
 @media (max-width:520px) {
-  .feedback-modal { align-items:end; padding:10px; }
-  .feedback-dialog { max-height:calc(100dvh - 20px); padding:16px; }
+  .feedback-modal { padding:12px; align-items:center; justify-content:center; }
+  .feedback-dialog { width:min(560px, calc(100vw - 24px)); max-height:calc(100dvh - 24px); padding:16px; }
   .feedback-actions { flex-direction:column-reverse; }
   .feedback-actions button { width:100%; }
 }
@@ -344,6 +308,7 @@ pub fn feedback_script() -> &'static str {
   var cancelBtn=modal&&modal.querySelector(".feedback-cancel");
   var status=document.getElementById("cpn-feedback-status");
   if(!openBtn||!modal||!dialog||!form||!closeBtn||!status)return;
+  if(modal.parentNode!==document.body)document.body.appendChild(modal);
   var previousFocus=null;
   function focusable(){return Array.prototype.slice.call(dialog.querySelectorAll(
     'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')); }
@@ -405,22 +370,6 @@ mod tests {
     }
 
     #[test]
-    fn feedback_body_includes_context_and_message() {
-        let body = feedback_body(
-            "operator",
-            "operator@example.com",
-            "Bug",
-            "Broken button",
-            "Details here",
-            "panel.example",
-        );
-        assert!(body.contains("operator@example.com"));
-        assert!(body.contains("panel.example"));
-        assert!(body.contains(VERSION));
-        assert!(body.contains("Details here"));
-    }
-
-    #[test]
     fn feedback_ui_is_modal_and_accessible() {
         with_test_data_dir(|| {
             let html = feedback_markup("Admin");
@@ -429,6 +378,13 @@ mod tests {
             assert!(html.contains("aria-modal=\"true\""));
             assert!(feedback_script().contains("event.key===\"Escape\""));
             assert!(feedback_script().contains("/api/panel/feedback"));
+            assert!(feedback_script().contains("document.body.appendChild(modal)"));
+            let css = feedback_styles();
+            assert!(css.contains("z-index:400"));
+            assert!(css.contains("100vw") || css.contains("100dvw"));
+            assert!(css.contains("align-items:center"));
+            assert!(css.contains("justify-content:center"));
+            assert!(!css.contains("align-items:end"));
         });
     }
 }

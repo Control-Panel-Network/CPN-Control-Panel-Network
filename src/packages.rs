@@ -24,6 +24,7 @@ pub enum QuotaResource {
     Domains,
     Emails,
     Databases,
+    DatabaseDiskMb,
     FtpAccounts,
     DiskMb,
     BandwidthMb,
@@ -44,6 +45,9 @@ pub struct Package {
     pub domains: i64,
     pub emails: i64,
     pub databases: i64,
+    /// MariaDB schema size quota in MB (`-1` = unlimited; `0` = none allowed).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub database_disk_mb: i64,
     pub ftp_accounts: i64,
     /// CPN distribution lists (virtual alias expansion).
     #[serde(default = "crate::package_limits::default_unlimited")]
@@ -57,6 +61,12 @@ pub struct Package {
     /// Sieve email filter rules.
     #[serde(default = "crate::package_limits::default_unlimited")]
     pub email_filters: i64,
+    /// Parked / alias hostnames on owned sites.
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub alias_domains: i64,
+    /// Nested sub-domain sites (separate from main website count).
+    #[serde(default = "crate::package_limits::default_unlimited")]
+    pub subdomains: i64,
     pub fqdn_enabled: bool,
     #[serde(default)]
     pub notes: String,
@@ -97,11 +107,14 @@ pub struct PackageInput {
     pub domains: i64,
     pub emails: i64,
     pub databases: i64,
+    pub database_disk_mb: i64,
     pub ftp_accounts: i64,
     pub mailing_lists: i64,
     pub autoresponders: i64,
     pub forwarders: i64,
     pub email_filters: i64,
+    pub alias_domains: i64,
+    pub subdomains: i64,
     pub fqdn_enabled: bool,
     pub notes: String,
     pub sidebar_hidden_nav_ids: Vec<String>,
@@ -116,11 +129,14 @@ impl Default for PackageInput {
             domains: UNLIMITED,
             emails: UNLIMITED,
             databases: UNLIMITED,
+            database_disk_mb: UNLIMITED,
             ftp_accounts: UNLIMITED,
             mailing_lists: UNLIMITED,
             autoresponders: UNLIMITED,
             forwarders: UNLIMITED,
             email_filters: UNLIMITED,
+            alias_domains: UNLIMITED,
+            subdomains: UNLIMITED,
             fqdn_enabled: true,
             notes: String::new(),
             sidebar_hidden_nav_ids: Vec::new(),
@@ -138,6 +154,7 @@ pub struct PackageUsage {
     pub emails_limit: i64,
     pub databases_used: u64,
     pub databases_limit: i64,
+    pub database_disk_mb_limit: i64,
     pub ftp_used: u64,
     pub ftp_limit: i64,
     pub disk_mb_used: u64,
@@ -152,7 +169,11 @@ pub struct PackageUsage {
     pub forwarders_limit: i64,
     pub email_filters_used: u64,
     pub email_filters_limit: i64,
-    /// Sum of owned MariaDB schema sizes in bytes (informational; not a package count limit).
+    pub alias_domains_used: u64,
+    pub alias_domains_limit: i64,
+    pub subdomains_used: u64,
+    pub subdomains_limit: i64,
+    /// Sum of owned MariaDB schema sizes in bytes, metered against `database_disk_mb`.
     pub database_disk_bytes: u64,
     pub fqdn_enabled: bool,
 }
@@ -293,6 +314,7 @@ fn validate_input(input: &PackageInput) -> Result<String, String> {
     validate_limit("domains", input.domains)?;
     validate_limit("emails", input.emails)?;
     validate_limit("databases", input.databases)?;
+    validate_limit("database_disk_mb", input.database_disk_mb)?;
     validate_limit("ftp_accounts", input.ftp_accounts)?;
     validate_limit("mailing_lists", input.mailing_lists)?;
     validate_limit("autoresponders", input.autoresponders)?;
@@ -363,11 +385,14 @@ fn default_package() -> Package {
         domains: 20,
         emails: 1000,
         databases: 1000,
+        database_disk_mb: UNLIMITED,
         ftp_accounts: 1000,
         mailing_lists: 1000,
         autoresponders: 1000,
         forwarders: 1000,
         email_filters: 1000,
+        alias_domains: UNLIMITED,
+        subdomains: 20,
         fqdn_enabled: true,
         notes: "Created automatically on first boot".into(),
         sidebar_hidden_nav_ids: Vec::new(),
@@ -450,11 +475,14 @@ pub fn create_package(input: PackageInput) -> Result<Package, String> {
         domains: normalize_limit(input.domains),
         emails: normalize_limit(input.emails),
         databases: normalize_limit(input.databases),
+        database_disk_mb: normalize_limit(input.database_disk_mb),
         ftp_accounts: normalize_limit(input.ftp_accounts),
         mailing_lists: normalize_limit(input.mailing_lists),
         autoresponders: normalize_limit(input.autoresponders),
         forwarders: normalize_limit(input.forwarders),
         email_filters: normalize_limit(input.email_filters),
+        alias_domains: normalize_limit(input.alias_domains),
+        subdomains: normalize_limit(input.subdomains),
         fqdn_enabled: input.fqdn_enabled,
         notes: input.notes.trim().to_string(),
         sidebar_hidden_nav_ids: sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?,
@@ -496,11 +524,14 @@ pub fn update_package(id: &str, input: PackageInput) -> Result<Package, String> 
     pkg.domains = normalize_limit(input.domains);
     pkg.emails = normalize_limit(input.emails);
     pkg.databases = normalize_limit(input.databases);
+    pkg.database_disk_mb = normalize_limit(input.database_disk_mb);
     pkg.ftp_accounts = normalize_limit(input.ftp_accounts);
     pkg.mailing_lists = normalize_limit(input.mailing_lists);
     pkg.autoresponders = normalize_limit(input.autoresponders);
     pkg.forwarders = normalize_limit(input.forwarders);
     pkg.email_filters = normalize_limit(input.email_filters);
+    pkg.alias_domains = normalize_limit(input.alias_domains);
+    pkg.subdomains = normalize_limit(input.subdomains);
     pkg.fqdn_enabled = input.fqdn_enabled;
     pkg.notes = input.notes.trim().to_string();
     pkg.sidebar_hidden_nav_ids = sanitize_sidebar_hidden(&input.sidebar_hidden_nav_ids)?;

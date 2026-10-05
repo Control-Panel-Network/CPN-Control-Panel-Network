@@ -81,6 +81,8 @@ pub struct PackageForm {
     #[serde(default)]
     databases: String,
     #[serde(default)]
+    database_disk_mb: String,
+    #[serde(default)]
     ftp_accounts: String,
     #[serde(default)]
     mailing_lists: String,
@@ -90,6 +92,10 @@ pub struct PackageForm {
     forwarders: String,
     #[serde(default)]
     email_filters: String,
+    #[serde(default)]
+    alias_domains: String,
+    #[serde(default)]
+    subdomains: String,
     #[serde(default)]
     fqdn_enabled: String,
     #[serde(default)]
@@ -132,11 +138,14 @@ fn package_input_from_pairs(pairs: &[(String, String)]) -> Result<(String, Packa
         domains: collect_form_value(pairs, "domains"),
         emails: collect_form_value(pairs, "emails"),
         databases: collect_form_value(pairs, "databases"),
+        database_disk_mb: collect_form_value(pairs, "database_disk_mb"),
         ftp_accounts: collect_form_value(pairs, "ftp_accounts"),
         mailing_lists: collect_form_value(pairs, "mailing_lists"),
         autoresponders: collect_form_value(pairs, "autoresponders"),
         forwarders: collect_form_value(pairs, "forwarders"),
         email_filters: collect_form_value(pairs, "email_filters"),
+        alias_domains: collect_form_value(pairs, "alias_domains"),
+        subdomains: collect_form_value(pairs, "subdomains"),
         fqdn_enabled: collect_form_value(pairs, "fqdn_enabled"),
         notes: collect_form_value(pairs, "notes"),
     };
@@ -153,11 +162,14 @@ impl PackageForm {
             domains: parse_limit(&self.domains, "domains")?,
             emails: parse_limit(&self.emails, "emails")?,
             databases: parse_limit(&self.databases, "databases")?,
+            database_disk_mb: parse_limit_or_default(&self.database_disk_mb, "database_disk_mb")?,
             ftp_accounts: parse_limit(&self.ftp_accounts, "ftp_accounts")?,
             mailing_lists: parse_limit_or_default(&self.mailing_lists, "mailing_lists")?,
             autoresponders: parse_limit_or_default(&self.autoresponders, "autoresponders")?,
             forwarders: parse_limit_or_default(&self.forwarders, "forwarders")?,
             email_filters: parse_limit_or_default(&self.email_filters, "email_filters")?,
+            alias_domains: parse_limit_or_default(&self.alias_domains, "alias_domains")?,
+            subdomains: parse_limit_or_default(&self.subdomains, "subdomains")?,
             fqdn_enabled: parse_bool_flag(&self.fqdn_enabled),
             notes: self.notes.clone(),
             sidebar_hidden_nav_ids,
