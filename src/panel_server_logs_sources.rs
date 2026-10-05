@@ -149,9 +149,16 @@ fn first_host_file(kind: HostLogKind) -> Option<(&'static str, String)> {
 
 fn collect_simple(kind: HostLogKind) -> Option<Collected> {
     let mut out = Collected::default();
-    if let Some((path, text)) = first_host_file(kind).filter(|(_, t)| !t.trim().is_empty()) {
-        out.sources.push(path.to_string());
-        out.push_text("", &text);
+    for path in kind.files() {
+        let p = Path::new(path);
+        if p.is_file()
+            && let Some(text) = read_tail(p, TAIL_BYTES).filter(|t| !t.trim().is_empty())
+        {
+            out.sources.push(path.to_string());
+            out.push_text("", &text);
+        }
+    }
+    if !out.sources.is_empty() {
         return Some(out);
     }
     let text = read_journal(kind.units())?;
@@ -174,6 +181,22 @@ fn collect_web(kind: HostLogKind, scope: &Scope) -> Option<Collected> {
             if let Some((path, text)) = first_host_file(kind) {
                 out.sources.push(format!("{path} (server-wide)"));
                 out.push_text("server", &text);
+            }
+            if kind == HostLogKind::Error {
+                let cpn_error = Path::new("/var/log/cpn/error.log");
+                let already = out
+                    .sources
+                    .iter()
+                    .any(|s| s.contains("/var/log/cpn/error.log"));
+                if !already
+                    && cpn_error.is_file()
+                    && let Some(text) =
+                        read_tail(cpn_error, TAIL_BYTES).filter(|t| !t.trim().is_empty())
+                {
+                    out.sources
+                        .push("/var/log/cpn/error.log (panel)".to_string());
+                    out.push_text("panel", &text);
+                }
             }
             list_sites().unwrap_or_default()
         }
