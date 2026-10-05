@@ -291,9 +291,7 @@ async fn ensure_toolchain(state: &AppState) -> Result<Toolchain, String> {
         return Ok(found);
     }
     upgrade_tip_log::log_failure("cargo not on PATH; attempting rustup heal", Some(1));
-    if let Err(error) = heal_rustup(state).await {
-        return Err(error);
-    }
+    heal_rustup(state).await?;
     upgrade_tip_toolchain::discover()
         .ok_or_else(|| fail(upgrade_tip_toolchain::missing_cargo_message(), Some(1)))
 }
