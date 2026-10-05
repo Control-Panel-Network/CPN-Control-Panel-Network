@@ -296,6 +296,9 @@ pub struct InstallerStatus {
     /// Outbound SMTP presence only; never includes passwords.
     pub smtp: Option<SmtpStatusPublic>,
     pub maintenance: Option<MaintenanceInfo>,
+    /// True when a detached panel reload was scheduled after upgrade/repair.
+    #[serde(default)]
+    pub restart_scheduled: bool,
 }
 
 impl Default for InstallerStatus {
@@ -332,6 +335,7 @@ impl Default for InstallerStatus {
             mail_releases: Vec::new(),
             smtp: None,
             maintenance: None,
+            restart_scheduled: false,
         }
     }
 }
