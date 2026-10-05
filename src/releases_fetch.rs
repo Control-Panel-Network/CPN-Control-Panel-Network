@@ -140,6 +140,7 @@ fn parse_releases_page(body: &str) -> Result<Vec<CpnRelease>, String> {
         .collect())
 }
 
+#[cfg(test)]
 fn parse_releases_json(body: &str, limit: usize) -> Result<Vec<CpnRelease>, String> {
     Ok(take_newest(parse_releases_page(body)?, limit))
 }
