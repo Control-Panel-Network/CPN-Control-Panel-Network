@@ -22,8 +22,8 @@ pub fn site_preview_list_styles() -> &'static str {
 .site-cards { display:grid; gap:14px; }
 .site-card {
   display:grid; grid-template-columns:minmax(160px,240px) 1fr; gap:16px;
-  padding:14px; border:1px solid var(--hairline, #2a2f3a); border-radius:14px;
-  background:var(--panel, #1a1d26); align-items:start;
+  padding:14px; border:1px solid var(--hairline, #e0e0e0); border-radius:14px;
+  background:var(--canvas, #fff); color:var(--ink, #1d1d1f); align-items:start;
 }
 @media (max-width:720px) {
   .site-card { grid-template-columns:1fr; }
@@ -31,38 +31,66 @@ pub fn site_preview_list_styles() -> &'static str {
 .site-preview-slot { display:grid; gap:8px; min-width:0; }
 .site-preview-frame {
   position:relative; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
-  border:1px solid var(--hairline, #2a2f3a); background:#0b0d12;
+  border:1px solid var(--hairline, #e0e0e0); background:var(--surface-soft, #fafafc);
 }
 .site-preview-frame img {
   width:100%; height:100%; object-fit:cover; object-position:top center; display:block;
-  background:#0b0d12;
+  background:var(--surface-soft, #fafafc);
 }
 .site-preview-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .site-preview-actions a, .site-preview-actions button {
   font-size:12px; font-weight:700; min-height:32px; padding:0 10px; border-radius:8px;
-  border:1px solid var(--hairline, #2a2f3a); background:transparent; color:inherit;
+  border:1px solid var(--hairline, #e0e0e0); background:transparent; color:var(--ink, #1d1d1f);
   cursor:pointer; text-decoration:none; display:inline-flex; align-items:center;
 }
-.site-preview-actions .visit-link { color:#3b82f6; border-color:transparent; padding:0; }
+.site-preview-actions .visit-link { color:var(--blue, #0066cc); border-color:transparent; padding:0; }
 .site-card-main { display:grid; gap:10px; min-width:0; }
 .site-card-head { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
-.site-card-head h3 { margin:0; font-size:18px; letter-spacing:-.02em; word-break:break-word; }
+.site-card-head h3 {
+  margin:0; font-size:18px; letter-spacing:-.02em; word-break:break-word;
+  color:var(--ink, #1d1d1f);
+}
+.site-card .muted { color:var(--muted, #6e6e73); }
 .site-ssl-badge {
   display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px;
   font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
-  background:rgba(18,183,106,.16); color:#6ce9a6;
+  background:rgba(24,134,75,.14); color:var(--green, #18864b);
 }
-.site-ssl-badge.off { background:rgba(152,162,179,.14); color:#98a2b3; }
-.site-ssl-badge.cf { background:rgba(59,130,246,.2); color:#93c5fd; }
+.site-ssl-badge.off { background:rgba(110,110,115,.12); color:var(--muted, #6e6e73); }
+.site-ssl-badge.cf { background:rgba(0,102,204,.14); color:var(--blue, #0066cc); }
 .site-meta-grid {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px;
 }
 .site-meta-grid div {
-  border:1px solid var(--hairline, #2a2f3a); border-radius:10px; padding:8px 10px;
+  border:1px solid var(--hairline, #e0e0e0); border-radius:10px; padding:8px 10px;
+  background:var(--surface-soft, #fafafc);
 }
-.site-meta-grid span { display:block; font-size:11px; color:#98a2b3; font-weight:600; }
-.site-meta-grid strong { display:block; margin-top:4px; font-size:13px; word-break:break-word; }
+.site-meta-grid span {
+  display:block; font-size:11px; color:var(--muted, #6e6e73); font-weight:600;
+}
+.site-meta-grid strong {
+  display:block; margin-top:4px; font-size:13px; word-break:break-word;
+  color:var(--ink, #1d1d1f); font-weight:700;
+}
+.site-meta-grid a { color:var(--blue, #0066cc); }
 .site-card-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start; }
+[data-color-mode="dark"] .site-card .muted,
+[data-color-mode="dark"] .site-meta-grid span {
+  color:#b7c0cc;
+}
+[data-color-mode="dark"] .site-ssl-badge {
+  background:rgba(18,183,106,.16); color:#6ce9a6;
+}
+[data-color-mode="dark"] .site-ssl-badge.off {
+  background:rgba(152,162,179,.14); color:#98a2b3;
+}
+[data-color-mode="dark"] .site-ssl-badge.cf {
+  background:rgba(59,130,246,.2); color:#93c5fd;
+}
+[data-color-mode="dark"] .site-preview-frame,
+[data-color-mode="dark"] .site-preview-frame img {
+  background:#0b0d12;
+}
 "#
 }
 
@@ -343,8 +371,14 @@ mod tests {
 
     #[test]
     fn styles_mention_site_preview_slot() {
-        assert!(site_preview_list_styles().contains("site-preview-slot"));
-        assert!(site_preview_list_styles().contains("site-preview-frame"));
+        let css = site_preview_list_styles();
+        assert!(css.contains("site-preview-slot"));
+        assert!(css.contains("site-preview-frame"));
+        assert!(css.contains("background:var(--canvas, #fff)"));
+        assert!(css.contains("color:var(--ink, #1d1d1f)"));
+        assert!(css.contains(".site-card .muted"));
+        assert!(css.contains("color:var(--muted, #6e6e73)"));
+        assert!(!css.contains("var(--panel"));
     }
 
     #[test]
