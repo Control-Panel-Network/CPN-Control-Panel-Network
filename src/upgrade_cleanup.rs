@@ -280,6 +280,10 @@ mod tests {
         assert!(is_preserved(Path::new(
             "/var/lib/cpn/mfa/passkeys/cpnowner.json"
         )));
+        assert!(is_preserved(Path::new(
+            "/var/lib/cpn/mfa/webauthn-origins.json"
+        )));
+        assert!(is_preserved(Path::new("/var/lib/cpn/mfa/webauthn-rpid")));
         // Removable allowlist must not include MFA paths.
         for path in removable_exact_files() {
             assert!(

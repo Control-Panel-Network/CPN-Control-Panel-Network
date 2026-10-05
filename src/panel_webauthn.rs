@@ -260,7 +260,7 @@ pub fn webauthn_for_request(
     let port_ref = port.as_deref();
     let loopback = is_loopback_host(&host_no_port);
     let rp_id = if loopback {
-        "localhost".to_string()
+        crate::panel_webauthn_origins::persisted_loopback_rpid()
     } else {
         host_no_port.clone()
     };
@@ -273,13 +273,14 @@ pub fn webauthn_for_request(
         // Avoid CredProtect UV-required + UV-preferred incongruence that Chrome/Edge
         // reject with NotSupportedError during security-key registration.
         .danger_set_user_presence_only_security_keys(true);
+    let mut extras: Vec<Url> = Vec::new();
     if loopback {
         // Accept either loopback spelling used by the lab browser/API client.
         for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
             if let Ok(alt) = origin_url(scheme, alt_host, port_ref)
                 && alt != primary
             {
-                builder = builder.append_allowed_origin(&alt);
+                extras.push(alt);
             }
         }
     }
@@ -287,7 +288,7 @@ pub fn webauthn_for_request(
     if let Some(public) = crate::panel_public_url::load_panel_public_url()
         && let Ok(public_url) = Url::parse(&public)
     {
-        builder = builder.append_allowed_origin(&public_url);
+        extras.push(public_url.clone());
         if let Some(host_str) = public_url.host_str()
             && is_loopback_host(host_str)
         {
@@ -295,15 +296,40 @@ pub fn webauthn_for_request(
             let pub_scheme = public_url.scheme();
             for alt_host in ["localhost", "127.0.0.1", "[::1]"] {
                 if let Ok(alt) = origin_url(pub_scheme, alt_host, pub_port.as_deref()) {
-                    builder = builder.append_allowed_origin(&alt);
+                    extras.push(alt);
                 }
             }
+        }
+    }
+    extras.extend(crate::panel_webauthn_origins::load_persisted_origins());
+    extras.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    extras.dedup();
+    for alt in &extras {
+        if alt != &primary {
+            builder = builder.append_allowed_origin(alt);
         }
     }
     let webauthn = builder
         .build()
         .map_err(|err| format!("WebAuthn build error: {err}"))?;
     Ok((webauthn, rp_id))
+}
+
+/// Same as [`webauthn_for_request`], plus the browser `Origin` header when present
+/// (`localhost` vs `127.0.0.1` after a NAT restart).
+pub fn webauthn_for_request_origin(
+    host_header: Option<&str>,
+    https: bool,
+    browser_origin: Option<&str>,
+) -> Result<(Webauthn, String), String> {
+    if let Some(origin) = crate::panel_webauthn_origins::parse_browser_origin(browser_origin) {
+        crate::panel_webauthn_origins::remember_origins(&[origin]);
+    }
+    webauthn_for_request(host_header, https)
+}
+
+pub fn remember_webauthn_origins(webauthn: &Webauthn) {
+    crate::panel_webauthn_origins::remember_origins(webauthn.get_allowed_origins());
 }
 
 pub fn start_registration(
@@ -387,6 +413,7 @@ pub fn finish_registration(
                 .finish_passkey_registration(credential, &state)
                 .map_err(|err| format!("Passkey registration failed: {err}"))?;
             add_passkey(username, label, passkey, meta)?;
+            remember_webauthn_origins(webauthn);
         }
         CeremonyKind::RegisterSecurityKey(state) => {
             if meta.registration_path.is_none() {
@@ -396,6 +423,7 @@ pub fn finish_registration(
                 .finish_securitykey_registration(credential, &state)
                 .map_err(|err| format!("Passkey registration failed: {err}"))?;
             add_passkey(username, label, security_key_to_passkey(security_key), meta)?;
+            remember_webauthn_origins(webauthn);
         }
         _ => return Err("Passkey ceremony type mismatch".into()),
     }
@@ -504,6 +532,7 @@ pub fn finish_authentication(
         let _ = pk.update_credential(&result);
         update_passkey_after_auth(&username, result.cred_id(), pk.clone())?;
     }
+    remember_webauthn_origins(webauthn);
     Ok(username)
 }
 
@@ -511,37 +540,43 @@ pub fn finish_authentication(
 mod tests {
     use super::{
         RegisterAuthenticatorKind, start_authentication, start_registration, webauthn_for_request,
+        webauthn_for_request_origin,
     };
     use crate::account::with_test_data_dir;
 
     #[test]
     fn loopback_ip_host_builds_webauthn() {
-        let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2087"), false)
-            .expect("builder should accept loopback");
-        assert_eq!(rp_id, "localhost");
-        let origins = wan.get_allowed_origins();
-        assert!(
-            origins.iter().any(|u| u.as_str().contains("127.0.0.1")),
-            "expected 127.0.0.1 origin among {origins:?}"
-        );
-        assert!(
-            origins.iter().any(|u| u.as_str().contains("localhost")),
-            "expected localhost origin among {origins:?}"
-        );
+        with_test_data_dir(|| {
+            let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2087"), false)
+                .expect("builder should accept loopback");
+            assert_eq!(rp_id, "localhost");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins.iter().any(|u| u.as_str().contains("127.0.0.1")),
+                "expected 127.0.0.1 origin among {origins:?}"
+            );
+            assert!(
+                origins.iter().any(|u| u.as_str().contains("localhost")),
+                "expected localhost origin among {origins:?}"
+            );
+        });
     }
 
     #[test]
     fn nat_public_port_host_builds_webauthn() {
-        let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2091"), false)
-            .expect("builder should accept NAT host port");
-        assert_eq!(rp_id, "localhost");
-        let origins = wan.get_allowed_origins();
-        assert!(
-            origins
-                .iter()
-                .any(|u| u.as_str().contains("127.0.0.1:2091") || u.as_str().contains("localhost")),
-            "expected loopback origin for public port among {origins:?}"
-        );
+        with_test_data_dir(|| {
+            let (wan, rp_id) = webauthn_for_request(Some("127.0.0.1:2091"), false)
+                .expect("builder should accept NAT host port");
+            assert_eq!(rp_id, "localhost");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins
+                    .iter()
+                    .any(|u| u.as_str().contains("127.0.0.1:2091")
+                        || u.as_str().contains("localhost")),
+                "expected loopback origin for public port among {origins:?}"
+            );
+        });
     }
 
     #[test]
@@ -562,31 +597,35 @@ mod tests {
 
     #[test]
     fn localhost_host_builds_webauthn() {
-        let (wan, rp_id) = webauthn_for_request(Some("localhost:2087"), false)
-            .expect("builder should accept localhost");
-        assert_eq!(rp_id, "localhost");
-        assert!(!wan.get_allowed_origins().is_empty());
+        with_test_data_dir(|| {
+            let (wan, rp_id) = webauthn_for_request(Some("localhost:2087"), false)
+                .expect("builder should accept localhost");
+            assert_eq!(rp_id, "localhost");
+            assert!(!wan.get_allowed_origins().is_empty());
+        });
     }
 
     #[test]
     fn localhost_nat_2091_allows_browser_origin() {
-        let (wan, rp_id) = webauthn_for_request(Some("localhost:2091"), false)
-            .expect("builder should accept localhost NAT port");
-        assert_eq!(rp_id, "localhost");
-        let origins = wan.get_allowed_origins();
-        assert!(
-            origins
-                .iter()
-                .any(|u| u.as_str() == "http://localhost:2091/"
-                    || u.as_str().contains("localhost:2091")),
-            "expected http://localhost:2091 among {origins:?}"
-        );
-        assert!(
-            origins
-                .iter()
-                .any(|u| u.as_str().contains("127.0.0.1:2091")),
-            "expected 127.0.0.1:2091 sibling origin among {origins:?}"
-        );
+        with_test_data_dir(|| {
+            let (wan, rp_id) = webauthn_for_request(Some("localhost:2091"), false)
+                .expect("builder should accept localhost NAT port");
+            assert_eq!(rp_id, "localhost");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins
+                    .iter()
+                    .any(|u| u.as_str() == "http://localhost:2091/"
+                        || u.as_str().contains("localhost:2091")),
+                "expected http://localhost:2091 among {origins:?}"
+            );
+            assert!(
+                origins
+                    .iter()
+                    .any(|u| u.as_str().contains("127.0.0.1:2091")),
+                "expected 127.0.0.1:2091 sibling origin among {origins:?}"
+            );
+        });
     }
 
     #[test]
@@ -684,6 +723,37 @@ mod tests {
             .expect("security-key registration should start");
             let json = serde_json::to_value(challenge).expect("challenge JSON");
             assert_create_options(&json, "discouraged", true, false);
+        });
+    }
+
+    #[test]
+    fn persisted_nat_origin_survives_host_port_change() {
+        with_test_data_dir(|| {
+            crate::panel_webauthn_origins::remember_origins(&[
+                url::Url::parse("http://localhost:2091/").expect("url"),
+                url::Url::parse("http://127.0.0.1:2091/").expect("url"),
+            ]);
+            let (wan, rp_id) =
+                webauthn_for_request(Some("localhost:2087"), false).expect("webauthn");
+            assert_eq!(rp_id, "localhost");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins.iter().any(|u| u.as_str().contains(":2091")),
+                "enrolled NAT origin must remain allowed after restart on :2087 among {origins:?}"
+            );
+            let (wan2, _) = webauthn_for_request_origin(
+                Some("127.0.0.1:2087"),
+                false,
+                Some("http://localhost:2087"),
+            )
+            .expect("origin header");
+            let origins2 = wan2.get_allowed_origins();
+            assert!(
+                origins2
+                    .iter()
+                    .any(|u| u.as_str().contains("localhost:2087")),
+                "browser Origin must be allowed among {origins2:?}"
+            );
         });
     }
 

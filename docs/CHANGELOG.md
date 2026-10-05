@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Passkey / WebAuthn after restart**: `/login/2fa` keeps one in-flight `credentials.get` (abort stale requests, no duplicate pending error). Passkey files live under `/var/lib/cpn/mfa/passkeys/` (legacy `$CPN_DATA_DIR/passkeys/*.json` is copied, never deleted). Loopback RP ID stays `localhost` with remembered `localhost` and `127.0.0.1` origins across upgrade, downgrade, repair, and restart. Missing MFA pending session redirects to `/login`. WebAuthn failures log to Main/Error without secrets.
+
 ## [1.3.0] - 05/10/2026
 
 Minor release after v1.2.0. Operator-facing features: Dashboard meters follow the signed-in user's assigned package, Database disk is Used of the package quota, Feedback sends branded HTML with a CID logo and public Panel host, and Plugin Store uses a Host/Site install target. Tip-upgrade cargo PATH healing and Postfix loopback Feedback relay land in the same cut.
