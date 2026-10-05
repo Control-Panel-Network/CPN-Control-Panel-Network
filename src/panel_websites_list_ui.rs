@@ -6,11 +6,11 @@ use crate::panel_list_search::{
 };
 use crate::panel_prefs::load_panel_ui_prefs;
 use crate::panel_websites_list_pager::{
-    paginate_slice, sites_list_opts, sites_list_toolbar, sites_list_toolbar_bottom,
-    sites_search_extras, SitesListOpts,
+    SitesListOpts, paginate_slice, sites_list_opts, sites_list_toolbar, sites_list_toolbar_bottom,
+    sites_search_extras,
 };
 use crate::site_preview_list_ui::{site_preview_cards, site_preview_list_styles};
-use crate::sites::{list_sites, resolve_parent_domain, SiteRecord};
+use crate::sites::{SiteRecord, list_sites, resolve_parent_domain};
 
 fn html_escape(value: &str) -> String {
     value

@@ -112,7 +112,9 @@ pub fn list_filter_summary(shown: usize, total: usize, q: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{domain_matches_q, list_search_form, list_search_form_with_extras, normalize_list_q};
+    use super::{
+        domain_matches_q, list_search_form, list_search_form_with_extras, normalize_list_q,
+    };
 
     #[test]
     fn normalize_trims_and_lowercases() {

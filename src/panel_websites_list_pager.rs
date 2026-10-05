@@ -338,7 +338,7 @@ pub fn sites_search_extras(opts: &SitesListOpts) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        SitesListOpts, paginate_slice, sites_list_opts, sites_list_url, sites_list_toolbar,
+        SitesListOpts, paginate_slice, sites_list_opts, sites_list_toolbar, sites_list_url,
         sites_mode_from_query, sites_page_from_query, sites_per_page_from_query,
     };
 
