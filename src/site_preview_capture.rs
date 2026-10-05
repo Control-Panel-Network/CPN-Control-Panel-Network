@@ -5,7 +5,8 @@
 //! still render when the panel can reach them.
 //!
 //! Local capture stays primary. Refresh always recaptures. Microlink is used
-//! only when no browser binary exists. Rate-limit / upsell copy is never shown.
+//! only when no browser binary exists and only on explicit Refresh (list pages
+//! never N+1 remote APIs). Rate-limit / upsell copy is never shown.
 
 use crate::site_preview_microlink::{
     capture_via_microlink, operator_remote_error, remote_preview_ready,
@@ -26,14 +27,29 @@ use std::time::Duration;
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(25);
 
 /// Run a capture for a registry domain. Overwrites cache on success.
+/// May fall back to Microlink when no local browser exists (Refresh path).
 pub fn capture_site_preview(domain_raw: &str) -> Result<PathBuf, String> {
+    capture_site_preview_inner(domain_raw, true)
+}
+
+/// Local Chromium / wkhtmltoimage only. Used by list-page background fills so
+/// websites / sub-domains loads never spend remote screenshot quota.
+pub fn capture_site_preview_local(domain_raw: &str) -> Result<PathBuf, String> {
+    capture_site_preview_inner(domain_raw, false)
+}
+
+fn capture_site_preview_inner(domain_raw: &str, allow_remote: bool) -> Result<PathBuf, String> {
     let domain = normalize_domain(domain_raw)?;
     invalidate_cached_image(&domain);
     let live_origin = uses_live_origin(&domain);
     let backends = discover_backends();
     if backends.is_empty() {
         let local_err = "No headless browser found. Install Chromium (System Repair: Site preview browser) and try Refresh preview again.";
-        return finish_without_browser(&domain, local_err);
+        if allow_remote {
+            return finish_without_browser(&domain, local_err);
+        }
+        let _ = record_capture_failure(&domain, local_err, "none");
+        return Err(local_err.to_string());
     }
 
     let urls = candidate_urls(&domain, live_origin);

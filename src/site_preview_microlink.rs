@@ -1,27 +1,72 @@
 //! Remote Site preview screenshots via the Microlink screenshot API.
 //!
 //! Local headless Chromium capture stays primary (see `site_preview_capture`).
-//! Microlink is a last-resort fallback only when no browser binary exists.
+//! Microlink is a last-resort fallback only when no browser binary exists, and
+//! only on explicit Refresh preview (list pages never N+1 this API).
+//!
+//! Successful remote shots are written under `/var/lib/cpn/site-previews/` with
+//! the same long local TTL as Chromium captures so repeats do not re-hit the API.
 //!
 //! Only publicly resolvable domains are sent. Lab-only hosts never leave the
 //! host. Operators can switch the remote path off in Websites preferences.
 
 use crate::panel_prefs::load_panel_ui_prefs;
-use crate::site_preview_thumb::{PREVIEW_MAX_BYTES, image_path, write_cached_image_typed};
+use crate::site_preview_thumb::{
+    PREVIEW_MAX_BYTES, PREVIEW_TTL, PreviewFreshness, cached_shot_usable, freshness, image_path,
+    write_cached_image_typed,
+};
 use crate::sites::normalize_domain;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// Public screenshot endpoint (no API key needed for basic usage).
 pub const MICROLINK_ENDPOINT: &str = "https://api.microlink.io/";
 
-/// Cache hint sent to the API: 24h, matching the local preview TTL.
-pub const MICROLINK_TTL_MS: u64 = 86_400_000;
+/// Cache hint sent to the API: match local preview TTL (7 days).
+pub const MICROLINK_TTL_MS: u64 = PREVIEW_TTL.as_secs() * 1000;
 
 /// Backend label stored in preview meta for remote shots.
 pub const MICROLINK_BACKEND: &str = "microlink";
 
 const FETCH_TIMEOUT_SECS: u64 = 30;
+
+/// Minimum gap between Microlink HTTP calls host-wide (debounce / rate limit).
+const MICROLINK_MIN_GAP: Duration = Duration::from_millis(750);
+
+fn microlink_gate() -> &'static Mutex<Option<Instant>> {
+    static GATE: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    GATE.get_or_init(|| Mutex::new(None))
+}
+
+/// Wait so concurrent Refresh / fallback captures do not stampede the API.
+fn wait_microlink_slot() {
+    loop {
+        let sleep_for = {
+            let Ok(mut guard) = microlink_gate().lock() else {
+                return;
+            };
+            let now = Instant::now();
+            if let Some(last) = *guard {
+                let elapsed = now.saturating_duration_since(last);
+                if elapsed < MICROLINK_MIN_GAP {
+                    Some(MICROLINK_MIN_GAP - elapsed)
+                } else {
+                    *guard = Some(now);
+                    None
+                }
+            } else {
+                *guard = Some(now);
+                None
+            }
+        };
+        match sleep_for {
+            Some(wait) => std::thread::sleep(wait),
+            None => return,
+        }
+    }
+}
 
 fn percent_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len() * 2);
@@ -103,6 +148,8 @@ pub fn fetch_microlink_screenshot(
     }
     let url = microlink_image_url(&domain, 0, force)
         .ok_or_else(|| format!("{domain} is not publicly resolvable for a remote screenshot"))?;
+
+    wait_microlink_slot();
 
     // No `--fail`: error bodies carry the reason (for example a lab domain that
     // resolves to a private IP), which is nicer than a bare status code.
@@ -195,8 +242,14 @@ fn remote_screenshot_error(bytes: &[u8]) -> String {
 }
 
 /// Fetch and store a remote screenshot in the authenticated preview cache.
+///
+/// When `force` is false and a Fresh disk cache already exists, returns that
+/// path without calling the remote API.
 pub fn capture_via_microlink(domain_raw: &str, force: bool) -> Result<PathBuf, String> {
     let domain = normalize_domain(domain_raw)?;
+    if !force && cached_shot_usable(&domain) && freshness(&domain) == PreviewFreshness::Fresh {
+        return image_path(&domain);
+    }
     let (bytes, ctype) = fetch_microlink_screenshot(&domain, force)?;
     write_cached_image_typed(&domain, &bytes, MICROLINK_BACKEND, &ctype)?;
     image_path(&domain)
@@ -229,6 +282,8 @@ mod tests {
         assert!(url.contains("screenshot=true"));
         assert!(url.contains("embed=screenshot.url"));
         assert!(url.contains("meta=false"));
+        assert!(url.contains(&format!("ttl={MICROLINK_TTL_MS}")));
+        assert_eq!(MICROLINK_TTL_MS, PREVIEW_TTL.as_secs() * 1000);
         assert!(!url.contains("force=true"));
         assert!(!url.contains("&t="));
     }
@@ -267,6 +322,22 @@ mod tests {
         let message = remote_screenshot_error(b"<html>502 Bad Gateway</html>");
         assert!(message.contains("no image"));
         assert!(message.contains("502"));
+    }
+
+    #[test]
+    fn capture_reuses_fresh_disk_cache_without_force() {
+        crate::account::with_test_data_dir(|| {
+            write_cached_image_typed(
+                "cached.example.com",
+                b"\x89PNG\r\n\x1a\ncached-remote",
+                MICROLINK_BACKEND,
+                "image/png",
+            )
+            .unwrap();
+            let path = capture_via_microlink("cached.example.com", false).expect("cached");
+            assert!(path.is_file());
+            assert_eq!(freshness("cached.example.com"), PreviewFreshness::Fresh);
+        });
     }
 
     #[test]

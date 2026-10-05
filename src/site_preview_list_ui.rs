@@ -4,7 +4,7 @@ use crate::panel_ops_ssl_public::{
     inspect_public_ssl, offers_origin_backup, origin_backup_form, ssl_list_badge_html,
 };
 use crate::panel_user_prefs::load_user_minimalist_mode;
-use crate::site_preview_thumb::{PreviewFreshness, freshness, image_path, load_meta};
+use crate::site_preview_thumb::{PreviewFreshness, cached_shot_usable, freshness, load_meta};
 use crate::site_preview_thumb_routes::spawn_background_capture;
 use crate::sites::SiteRecord;
 use crate::website_preview::public_site_url;
@@ -138,10 +138,7 @@ fn site_action_buttons(site: &SiteRecord, show_origin_backup: bool) -> String {
 
 /// True when an authenticated cached shot exists for this domain.
 fn cached_shot_present(domain: &str) -> bool {
-    load_meta(domain).ok
-        && image_path(domain)
-            .map(|path| path.is_file())
-            .unwrap_or(false)
+    cached_shot_usable(domain)
 }
 
 /// Thumbnail `<img>` markup uses the authenticated panel cache only.
@@ -164,13 +161,15 @@ fn preview_slot(site: &SiteRecord, auto_capture: bool) -> String {
     let visit = public_site_url(&site.domain).unwrap_or_else(|_| format!("http://{}", site.domain));
     let visit_e = html_escape(&visit);
     let state = freshness(&site.domain);
-    if auto_capture && matches!(state, PreviewFreshness::Missing | PreviewFreshness::Stale) {
+    let has_cached = cached_shot_present(&site.domain);
+    // List loads: never N+1 remote APIs. Background fill is local Chromium only
+    // and only when there is no usable disk cache yet.
+    if auto_capture && !has_cached && matches!(state, PreviewFreshness::Missing) {
         spawn_background_capture(site.domain.clone());
     }
     let meta = load_meta(&site.domain);
-    let has_cached = cached_shot_present(&site.domain);
     let status_hint = if has_cached && state == PreviewFreshness::Fresh {
-        "Cached thumbnail"
+        "Cached thumbnail (up to 7 days)"
     } else if has_cached {
         "Cached thumbnail, refresh for a newer shot"
     } else if !meta.error.is_empty() {
@@ -344,7 +343,7 @@ pub fn manage_overview_preview(site: &SiteRecord) -> String {
   </div>
   <div>
     <strong style="display:block;font-size:14px;">Site preview</strong>
-    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (24h). Refresh preview captures with a local headless browser. Public sites whose document root is still the CPN placeholder, or has no index file, are captured from the live URL.</p>
+    <p class="manage-muted" style="margin:6px 0 10px;">Cached homepage thumbnail (7 days). Refresh preview captures with a local headless browser. Public sites whose document root is still the CPN placeholder, or has no index file, are captured from the live URL.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       <a class="manage-btn" href="/preview/{domain}/" target="_blank" rel="noopener noreferrer">Open preview</a>
       <a class="manage-btn" href="{visit}" target="_blank" rel="noopener noreferrer">Visit site</a>
@@ -451,6 +450,69 @@ mod tests {
             assert!(html.contains("<span>IP</span>"), "{html}");
             assert!(!html.contains(" B<"), "{html}");
             assert!(!html.contains(" B</"), "{html}");
+        });
+    }
+
+    #[test]
+    fn list_does_not_spawn_when_cached_shot_exists() {
+        crate::account::with_test_data_dir(|| {
+            crate::site_preview_thumb::write_cached_image(
+                "cached-list.example",
+                b"\x89PNG\r\n\x1a\ncached",
+                "chromium",
+            )
+            .unwrap();
+            let site = SiteRecord {
+                schema_version: 5,
+                domain: "cached-list.example".into(),
+                owner: "Admin".into(),
+                docroot: "/tmp/cpn-card-missing/public_html".into(),
+                enabled: true,
+                engine: None,
+                notes: String::new(),
+                created_at_unix: 0,
+                updated_at_unix: 0,
+                vhost_wired: false,
+                ssl: Default::default(),
+                internal_ip: None,
+                owner_suspend_message: String::new(),
+                suspended_by: None,
+                php_version: Some("8.5".into()),
+                aliases: Vec::new(),
+                staging_of: None,
+            };
+            let html = site_preview_cards(&[site], false, "Admin");
+            assert!(html.contains("/websites/site-preview/image?domain=cached-list.example"));
+            assert!(!html.contains("api.microlink.io"));
+            assert!(html.contains("Cached thumbnail"));
+        });
+    }
+
+    #[test]
+    fn manage_overview_mentions_seven_day_cache() {
+        crate::account::with_test_data_dir(|| {
+            let site = SiteRecord {
+                schema_version: 5,
+                domain: "manage-preview.example".into(),
+                owner: "Admin".into(),
+                docroot: "/tmp/cpn-card-missing/public_html".into(),
+                enabled: true,
+                engine: None,
+                notes: String::new(),
+                created_at_unix: 0,
+                updated_at_unix: 0,
+                vhost_wired: false,
+                ssl: Default::default(),
+                internal_ip: None,
+                owner_suspend_message: String::new(),
+                suspended_by: None,
+                php_version: None,
+                aliases: Vec::new(),
+                staging_of: None,
+            };
+            let html = manage_overview_preview(&site);
+            assert!(html.contains("7 days"));
+            assert!(!html.contains("24h"));
         });
     }
 }
