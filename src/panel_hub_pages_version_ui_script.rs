@@ -147,7 +147,7 @@ pub fn version_page_ui_script() -> &'static str {
     var tipLine = "";
     if (info.stable_update_available || (tipShort && info.running_sha
       && String(info.running_sha).substring(0, 7) !== tipShort)) {
-      tipLine = "Stable tip: " + (info.stable_branch || "stable")
+      tipLine = "Stable commits: " + (info.stable_branch || "stable")
         + (tipShort ? (" @ " + tipShort) : "");
     }
     var stableTipEl = document.getElementById("cpn-version-stable-tip");
@@ -185,9 +185,9 @@ pub fn version_page_ui_script() -> &'static str {
         statusEl.textContent = info.cache_note;
       } else if (info.update_available) {
         if (info.stable_update_available && !info.release_update_available) {
-          statusEl.textContent = "Update available: stable tip is ahead of this build.";
+          statusEl.textContent = "Update available: stable commits are ahead of this build.";
         } else if (info.stable_update_available && info.release_update_available) {
-          statusEl.textContent = "Update available: newer release and stable tip.";
+          statusEl.textContent = "Update available: newer release and stable commits.";
         } else {
           statusEl.textContent = "Update available: newer release listed above.";
         }

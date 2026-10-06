@@ -146,6 +146,7 @@ impl AppState {
     }
 
     pub async fn progress(&self, phase: &'static str, progress: u8, message: impl Into<String>) {
+        crate::upgrade_busy::touch_job_heartbeat();
         let message = message.into();
         let snapshot = {
             let mut status = self.status.write().unwrap_or_else(|e| e.into_inner());
@@ -165,14 +166,23 @@ impl AppState {
             ),
         );
         persist_status_snapshot(&snapshot);
+        crate::upgrade_session_log::append_session(
+            "progress",
+            &format!(
+                "phase={} progress={} message={}",
+                snapshot.phase, snapshot.progress, snapshot.message
+            ),
+        );
         let _ = self
             .events
             .send(InstallerEvent::Progress { status: snapshot });
     }
 
     pub fn log(&self, line: impl Into<String>, level: &'static str) {
+        crate::upgrade_busy::touch_job_heartbeat();
         let line = crate::install_log_redaction::redact_sensitive_line(&line.into());
         append_installation_log(level, &line);
+        crate::upgrade_session_log::append_session(level, &line);
         let _ = self.events.send(InstallerEvent::Log { line, level });
     }
 

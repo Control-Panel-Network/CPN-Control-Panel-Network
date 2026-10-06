@@ -184,7 +184,7 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
     if (info && info.cache_note && !liveRetry) notes.push(info.cache_note);
     if (info && info.check_error && hasTip) notes.push("API note: " + info.check_error);
-    if (info && info.tip_check_error) notes.push("Tip check: " + info.tip_check_error);
+    if (info && info.tip_check_error) notes.push("Commit check: " + info.tip_check_error);
     setDetailRow("cpn-version-row-note", "cpn-version-note", notes.join(" · "));
   }}
   function releaseRowForVersion(ver) {{
@@ -221,7 +221,7 @@ pub fn version_page_script(can_manage: bool) -> String {
       if (installedEl && instVer) installedEl.textContent = instVer;
       var note = "";
       if (runVer && instVer && cmp(runVer, instVer) > 0) {{
-        note = "Binary tip ahead of packaged RPM/DEB. Upgrade the package to match the running binary.";
+        note = "Running binary is ahead of packaged RPM/DEB. Upgrade the package to match the running binary.";
       }} else if (runVer && instVer) {{
         note = "Packaged install differs from the running binary.";
       }}
@@ -396,8 +396,8 @@ pub fn version_page_script(can_manage: bool) -> String {
       }} else {{
         tipToken = "stable";
       }}
-      var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : "stable tip";
-      armConfirm("upgrade", tipToken, "upgrade to " + label + " (commit/source build)");
+      var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : "stable commits";
+      armConfirm("upgrade", tipToken, "upgrade to " + label + " (latest commits)");
     }});
     if (applyBtn) applyBtn.addEventListener("click", function () {{
       var tag = selectedTag || (searchEl && searchEl.value);
@@ -463,7 +463,7 @@ mod tests {
         assert!(js.contains("cpnVersionCache"));
         assert!(js.contains("paintIdentityRows"));
         assert!(js.contains("resumeIfBusy"));
-        assert!(js.contains("Binary tip ahead of packaged"));
+        assert!(js.contains("Running binary is ahead of packaged"));
         assert!(js.contains("Refreshing (keeping current values)"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
