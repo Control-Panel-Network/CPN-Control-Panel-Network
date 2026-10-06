@@ -29,8 +29,13 @@ pub fn apply_tip_build_env(tools: &mut Toolchain, git_sha: &str) {
         .env
         .push(("CARGO_TARGET_DIR".into(), target.display().to_string()));
     tools.env.push(("CARGO_INCREMENTAL".into(), "0".into()));
-    tools.env.retain(|(key, _)| key != "CPN_GIT_SHA");
+    tools
+        .env
+        .retain(|(key, _)| key != "CPN_GIT_SHA" && key != "CPN_BUILD_SHA");
     tools.env.push(("CPN_GIT_SHA".into(), git_sha.to_string()));
+    tools
+        .env
+        .push(("CPN_BUILD_SHA".into(), git_sha.to_string()));
 }
 
 pub fn write_tip_sha_file(root: &Path, git_sha: &str) -> Result<(), String> {
@@ -38,6 +43,49 @@ pub fn write_tip_sha_file(root: &Path, git_sha: &str) -> Result<(), String> {
     std::fs::write(&path, format!("{}\n", git_sha.trim()))
         .map_err(|error| format!("Could not write .cpn-git-sha: {error}"))?;
     Ok(())
+}
+
+/// Ensure extracted source compiles a strings-visible `CPN_BUILD_SHA=` keep-static.
+/// Older commit tarballs may omit it; LTO can also drop an unused concat.
+pub fn inject_keep_module(root: &Path, git_sha: &str) -> Result<(), String> {
+    let sha = git_sha.trim();
+    if !crate::build_meta::looks_like_git_sha(sha) {
+        return Err("Cannot inject SHA keep module: value is not a git SHA".into());
+    }
+    let src = root.join("src");
+    if !src.is_dir() {
+        return Ok(());
+    }
+    let keep_path = src.join("cpn_build_sha_keep.rs");
+    let body = format!(
+        "//! SHA keep-static for commit upgrades.\n\
+#[used]\n\
+#[allow(dead_code)]\n\
+static CPN_BUILD_SHA_KEEP: &[u8] = b\"CPN_BUILD_SHA={sha}\\0\";\n"
+    );
+    std::fs::write(&keep_path, body)
+        .map_err(|error| format!("Could not write SHA keep module: {error}"))?;
+    let lib_path = src.join("lib.rs");
+    if lib_path.is_file() {
+        let lib = std::fs::read_to_string(&lib_path).unwrap_or_default();
+        if !lib.contains("mod cpn_build_sha_keep") {
+            let mut next = lib;
+            if !next.ends_with('\n') {
+                next.push('\n');
+            }
+            next.push_str("mod cpn_build_sha_keep;\n");
+            std::fs::write(&lib_path, next)
+                .map_err(|error| format!("Could not patch lib.rs for SHA keep module: {error}"))?;
+        }
+    }
+    Ok(())
+}
+
+pub fn stamp_built_installer(path: &Path, git_sha: &str) -> Result<(), String> {
+    crate::build_meta::stamp_sha_marker_if_missing(path, git_sha).map_err(|error| {
+        upgrade_tip_log::log_failure(&error, None);
+        error
+    })
 }
 
 fn installer_candidates(root: &Path, tools: &Toolchain) -> Vec<PathBuf> {
@@ -61,7 +109,7 @@ pub fn require_built_sha(path: &Path, expected_sha: &str) -> Result<(), String> 
     let found = build_meta::sha_embedded_in_binary(path).unwrap_or_default();
     if found.is_empty() {
         let msg = format!(
-            "Tip build at {} has no CPN_BUILD_SHA marker. Refusing to install a binary that cannot prove it is {}.",
+            "Commit build at {} has no CPN_BUILD_SHA marker. Refusing to install a binary that cannot prove it is {}.",
             path.display(),
             short_sha(expected_sha)
         );
@@ -70,7 +118,7 @@ pub fn require_built_sha(path: &Path, expected_sha: &str) -> Result<(), String> 
     }
     if !sha_equal(&found, expected_sha) {
         let msg = format!(
-            "Tip build SHA {} does not match requested {}. Shared cargo cache was not used for this commit. Rebuild required.",
+            "Commit build SHA {} does not match requested {}. Shared cargo cache was not used for this commit. Rebuild required.",
             short_sha(&found),
             short_sha(expected_sha)
         );
@@ -78,7 +126,7 @@ pub fn require_built_sha(path: &Path, expected_sha: &str) -> Result<(), String> 
         return Err(msg);
     }
     upgrade_tip_log::log_info(format!(
-        "Tip binary SHA ok {} ({})",
+        "Commit binary SHA ok {} ({})",
         short_sha(expected_sha),
         path.display()
     ));
@@ -127,5 +175,30 @@ mod tests {
                 .iter()
                 .any(|(k, v)| k == "CPN_GIT_SHA" && v.starts_with("c27a4a2"))
         );
+        assert!(
+            tools
+                .env
+                .iter()
+                .any(|(k, v)| k == "CPN_BUILD_SHA" && v.starts_with("c27a4a2"))
+        );
+    }
+
+    #[test]
+    fn injects_keep_module_into_fake_crate() {
+        let dir = std::env::temp_dir().join(format!("cpn-keep-{}", std::process::id()));
+        let src = dir.join("src");
+        let _ = std::fs::create_dir_all(&src);
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nname=\"x\"\nversion=\"0.1.0\"\n",
+        )
+        .expect("toml");
+        std::fs::write(src.join("lib.rs"), "//! crate\n").expect("lib");
+        inject_keep_module(&dir, "c27a4a2aba629238593ae13907a8b5e66bb1f58c").expect("inject");
+        let keep = std::fs::read_to_string(src.join("cpn_build_sha_keep.rs")).expect("keep");
+        assert!(keep.contains("CPN_BUILD_SHA=c27a4a2aba629238593ae13907a8b5e66bb1f58c"));
+        let lib = std::fs::read_to_string(src.join("lib.rs")).expect("lib2");
+        assert!(lib.contains("mod cpn_build_sha_keep;"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

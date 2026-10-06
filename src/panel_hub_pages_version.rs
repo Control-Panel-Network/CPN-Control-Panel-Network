@@ -34,7 +34,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     let diverge_note = if versions_match {
         String::new()
     } else if cmp_ver_ahead(RUNNING_VERSION, &existing.package_version) {
-        "Binary tip ahead of packaged RPM/DEB. Upgrade the package to match the running binary."
+        "Running binary is ahead of packaged RPM/DEB. Upgrade the package to match the running binary."
             .to_string()
     } else {
         "Packaged install differs from the running binary.".to_string()
@@ -84,7 +84,7 @@ pub fn version_management_page(can_manage: bool) -> String {
   <p class="muted" style="margin-top:8px;">Selected: <strong id="cpn-version-selected-label">-</strong></p>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
     <button type="button" class="btn-primary" id="cpn-version-upgrade-latest">Upgrade to latest release</button>
-    <button type="button" class="btn-primary" id="cpn-version-upgrade-stable">Upgrade to stable tip</button>
+    <button type="button" class="btn-primary" id="cpn-version-upgrade-stable">Upgrade to latest commits</button>
     <button type="button" class="btn-primary" id="cpn-version-apply">Apply selected version</button>
     <button type="button" class="btn-primary" id="cpn-version-repair">Repair selected</button>
   </div>
@@ -101,6 +101,10 @@ pub fn version_management_page(can_manage: bool) -> String {
     </div>
     <p id="cpn-version-progress-label" class="muted" style="margin-top:8px;" role="status"></p>
   </div>
+  <details id="cpn-version-log" class="cpn-ssh-log">
+    <summary>Installer log</summary>
+    <pre id="cpn-version-log-pre" class="cpn-ssh-log-pre" aria-live="polite"></pre>
+  </details>
   <p id="cpn-version-op-error" class="muted" style="margin-top:10px;color:#f87171;" role="alert"></p>
 </div>"#
     } else {
@@ -147,6 +151,21 @@ pub fn version_management_page(can_manage: bool) -> String {
 .version-kv .kv-value[data-update-state="current"],
 .version-kv strong[data-update-state="current"] {{ color:#4ade80; }}
 .version-kv .kv-hint {{ color:var(--muted,#98a2b3); font-size:13px; line-height:1.45; }}
+.cpn-ssh-log {{
+  margin-top:14px; max-width:640px;
+  background:#0b1220; color:#d1fae5; border:1px solid #1f2937;
+  border-radius:8px; padding:0;
+}}
+.cpn-ssh-log summary {{
+  cursor:pointer; padding:10px 12px; color:#e2e8f0; font-weight:600;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px;
+}}
+.cpn-ssh-log-pre {{
+  margin:0; padding:10px 12px 12px; max-height:280px; overflow:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px;
+  line-height:1.45; white-space:pre-wrap; word-break:break-word; color:#d1fae5;
+}}
+.cpn-ssh-log-pre .ssh-fail {{ color:#fca5a5; }}
 @media (max-width:640px) {{
   .version-kv > li {{ grid-template-columns:1fr; gap:4px; }}
   .version-kv .kv-value {{ text-align:left; }}
@@ -226,10 +245,10 @@ pub fn version_management_page(can_manage: bool) -> String {
 {source_block}
 {manage_block}
 <p class="muted" style="margin-top:14px;max-width:640px;">
-  CPN supports the <strong>latest two published releases</strong> only (current tip plus the previous release).
+  CPN supports the <strong>latest two published releases</strong> only (current release plus the previous release).
   The searchable picker lists <strong>all GitHub Releases with installable assets</strong> so you can upgrade or downgrade later.
   Older tags remain selectable for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
-  When <code>stable</code> advances without a new tag, use <strong>Upgrade to stable tip</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to Main Log and Error logs.
+  When <code>stable</code> advances without a new tag, use <strong>Upgrade to latest commits</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to the installer log below, Main Log, and Error logs.
 </p>
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
@@ -285,7 +304,7 @@ mod tests {
         assert!(html.contains("Type to search tags"));
         assert!(!html.contains("id=\"cpn-version-select\""));
         assert!(html.contains("Upgrade to latest release"));
-        assert!(html.contains("Upgrade to stable tip"));
+        assert!(html.contains("Upgrade to latest commits"));
         assert!(html.contains("cpn-version-stable-tip"));
         assert!(html.contains("latest two published releases"));
         assert!(html.contains("all GitHub Releases with installable assets"));
@@ -300,6 +319,8 @@ mod tests {
         assert!(html.contains("version-card-toolbar"));
         assert!(html.contains("can lag after a hot-deploy"));
         assert!(html.contains("li[hidden]"));
+        assert!(html.contains("cpn-version-log-pre"));
+        assert!(html.contains("Installer log"));
         assert!(html.contains("data-update-state=\"stale\""));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));
