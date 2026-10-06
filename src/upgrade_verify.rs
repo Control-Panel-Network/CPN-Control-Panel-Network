@@ -56,22 +56,40 @@ fn unit_active(unit: &str) -> bool {
     service_detect::systemd_unit_active(unit)
 }
 
+/// True when curl's `%{http_code}` means the panel process is answering.
+///
+/// `200` is the normal login page. `503` is the upgrade maintenance page
+/// (`PanelMaintenanceGuard`); the process is healthy but visitors are gated
+/// until maintenance clears. Using `curl --fail` alone false-fails mid-upgrade.
+pub(crate) fn http_code_means_panel_up(code: &str) -> bool {
+    matches!(code.trim(), "200" | "503")
+}
+
+/// Probe `/login` without `--fail` so maintenance `503` counts as up.
 fn http_login_ok(port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/login");
-    Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--max-time",
-            "8",
-            "--output",
-            "/dev/null",
-            &url,
-        ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    let output = Command::new("curl").args([
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "5",
+        "--output",
+        "/dev/null",
+        "--write-out",
+        "%{http_code}",
+        &url,
+    ]).output();
+    match output {
+        Ok(out) => {
+            // Connection refused / timeout: non-zero status and often empty body.
+            if !out.status.success() && out.stdout.is_empty() {
+                return false;
+            }
+            let code = String::from_utf8_lossy(&out.stdout);
+            http_code_means_panel_up(&code)
+        }
+        Err(_) => false,
+    }
 }
 
 fn path_is_executable(path: &str) -> bool {
@@ -269,6 +287,11 @@ pub fn maybe_refresh_cpn_docker(bypass: bool) -> Vec<String> {
     notes
 }
 
+/// Default wait for `/login` after a Sync restart (or skip-rebuild listen check).
+/// About 20 × 2s = 40s of sleep, plus curl time, covers brief post-restart flaps.
+pub(crate) const LOGIN_WAIT_ATTEMPTS: u32 = 20;
+pub(crate) const LOGIN_WAIT_SLEEP_SECS: u64 = 2;
+
 fn wait_panel_unit_active(attempts: u32, sleep_secs: u64) -> bool {
     for _ in 0..attempts {
         if unit_active("cpn-installer.service") {
@@ -280,13 +303,18 @@ fn wait_panel_unit_active(attempts: u32, sleep_secs: u64) -> bool {
 }
 
 fn wait_http_login_ok(port: u16, attempts: u32, sleep_secs: u64) -> bool {
-    for _ in 0..attempts {
+    if attempts == 0 {
+        return http_login_ok(port);
+    }
+    for i in 0..attempts {
         if http_login_ok(port) {
             return true;
         }
-        thread::sleep(Duration::from_secs(sleep_secs));
+        if i + 1 < attempts {
+            thread::sleep(Duration::from_secs(sleep_secs));
+        }
     }
-    http_login_ok(port)
+    false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,15 +323,23 @@ enum PanelRestartKind {
     Sync,
     /// Web UI under systemd: restart scheduled via systemd-run / nohup.
     Deferred,
+    /// Tip skip-rebuild (binary already on tip): do not bounce MainPID.
+    SkipRestart,
 }
 
-fn ensure_panel_service_restarted() -> Result<PanelRestartKind, String> {
+fn ensure_panel_service_ready(binary_replaced: bool) -> Result<PanelRestartKind, String> {
     let allow_remote = panel_service::allow_remote_requested();
     panel_service::ensure_panel_service_after_install(
         PanelServiceMode::EnableAndStart,
         allow_remote,
     )
     .map(|_| ())?;
+
+    // Already on tip: enable/ensure only. Restarting would bounce /login and race
+    // maintenance 503 checks for no binary gain.
+    if !binary_replaced {
+        return Ok(PanelRestartKind::SkipRestart);
+    }
 
     // UI upgrades run as the systemd MainPID. Do not stop/restart here; the caller
     // schedules a detached reload after writing phase=completed so migrations finish.
@@ -337,10 +373,29 @@ fn ensure_panel_service_restarted() -> Result<PanelRestartKind, String> {
     Ok(PanelRestartKind::Sync)
 }
 
+fn push_http_login_check(report: &mut VerifyReport, port: u16, required: bool, detail_suffix: &str) {
+    let login_ok = wait_http_login_ok(port, LOGIN_WAIT_ATTEMPTS, LOGIN_WAIT_SLEEP_SECS);
+    let detail = if login_ok {
+        format!(
+            "GET http://127.0.0.1:{port}/login (200 or maintenance 503){detail_suffix}"
+        )
+    } else {
+        format!(
+            "GET http://127.0.0.1:{port}/login not answering after {LOGIN_WAIT_ATTEMPTS} attempts (~{}s){detail_suffix}",
+            LOGIN_WAIT_ATTEMPTS as u64 * LOGIN_WAIT_SLEEP_SECS
+        )
+    };
+    push(report, "panel.http_login", login_ok, detail, required);
+}
+
 /// Verify critical services after upgrade. Fails when required checks fail.
+///
+/// `binary_replaced`: false when tip/commit skip-rebuild left the on-disk binary
+/// unchanged. In that case the panel is not restarted mid-verify.
 pub fn verify_after_upgrade(
     bypass_docker: bool,
     previously_running_docker_ids: &[String],
+    binary_replaced: bool,
 ) -> Result<VerifyReport, String> {
     let mut report = VerifyReport::default();
 
@@ -355,7 +410,7 @@ pub fn verify_after_upgrade(
         return Ok(report);
     }
 
-    let restart_kind = match ensure_panel_service_restarted() {
+    let restart_kind = match ensure_panel_service_ready(binary_replaced) {
         Ok(kind) => Some(kind),
         Err(error) => {
             push(
@@ -392,7 +447,7 @@ pub fn verify_after_upgrade(
         }
         Some(PanelRestartKind::Sync) => {
             // Unit can be briefly inactive right after restart; wait before failing.
-            let active = wait_panel_unit_active(8, 1);
+            let active = wait_panel_unit_active(12, 1);
             push(
                 &mut report,
                 "panel.service",
@@ -406,13 +461,25 @@ pub fn verify_after_upgrade(
             );
             let port =
                 listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
-            let login_ok = wait_http_login_ok(port, 8, 1);
+            push_http_login_check(&mut report, port, true, "");
+        }
+        Some(PanelRestartKind::SkipRestart) => {
             push(
                 &mut report,
-                "panel.http_login",
-                login_ok,
-                format!("GET http://127.0.0.1:{port}/login"),
+                "panel.service",
                 true,
+                "binary already on tip; skipped panel restart during verify",
+                true,
+            );
+            let port =
+                listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
+            // Still probe /login with retries: maintenance begin or cleanup can
+            // briefly flap the listener even when the binary was not replaced.
+            push_http_login_check(
+                &mut report,
+                port,
+                true,
+                "; skip-rebuild path",
             );
         }
         None => {}
@@ -624,5 +691,24 @@ mod tests {
         );
         assert!(report.ok());
         assert!(report.failed_required().is_empty());
+    }
+
+    #[test]
+    fn login_http_200_and_maintenance_503_mean_panel_up() {
+        assert!(http_code_means_panel_up("200"));
+        assert!(http_code_means_panel_up("503"));
+        assert!(http_code_means_panel_up(" 503\n"));
+        assert!(!http_code_means_panel_up("000"));
+        assert!(!http_code_means_panel_up("404"));
+        assert!(!http_code_means_panel_up("500"));
+        assert!(!http_code_means_panel_up(""));
+    }
+
+    #[test]
+    fn login_wait_constants_cover_short_flaps() {
+        // Product intent: several attempts over tens of seconds, not a single probe.
+        assert!(LOGIN_WAIT_ATTEMPTS >= 15);
+        assert!(LOGIN_WAIT_SLEEP_SECS >= 1);
+        assert!(LOGIN_WAIT_ATTEMPTS as u64 * LOGIN_WAIT_SLEEP_SECS >= 30);
     }
 }
