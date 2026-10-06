@@ -8,14 +8,7 @@ use crate::installer::AppState;
 use std::collections::HashMap;
 use std::fs;
 
-const BUILDER_NAMES: &[&str] = &[
-    "cargo",
-    "rustc",
-    "rustc.exe",
-    "npm",
-    "node",
-    "node.exe",
-];
+const BUILDER_NAMES: &[&str] = &["cargo", "rustc", "rustc.exe", "npm", "node", "node.exe"];
 
 /// Parse `/proc/<pid>/stat` into (comm, ppid).
 pub fn parse_proc_stat(stat: &str) -> Option<(String, u32)> {

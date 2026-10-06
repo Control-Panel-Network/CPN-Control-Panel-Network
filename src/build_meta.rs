@@ -114,10 +114,7 @@ mod tests {
         )
         .expect("write");
         let got = sha_embedded_in_binary(&path).expect("sha");
-        assert!(sha_equal(
-            &got,
-            "c27a4a2aba629238593ae13907a8b5e66bb1f58c"
-        ));
+        assert!(sha_equal(&got, "c27a4a2aba629238593ae13907a8b5e66bb1f58c"));
         let _ = std::fs::remove_file(&path);
     }
 }

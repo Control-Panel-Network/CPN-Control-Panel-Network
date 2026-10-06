@@ -22,7 +22,9 @@ pub fn tip_cargo_target_dir(git_sha: &str) -> PathBuf {
 pub fn apply_tip_build_env(tools: &mut Toolchain, git_sha: &str) {
     let target = tip_cargo_target_dir(git_sha);
     let _ = std::fs::create_dir_all(&target);
-    tools.env.retain(|(key, _)| key != "CARGO_TARGET_DIR" && key != "CARGO_INCREMENTAL");
+    tools
+        .env
+        .retain(|(key, _)| key != "CARGO_TARGET_DIR" && key != "CARGO_INCREMENTAL");
     tools
         .env
         .push(("CARGO_TARGET_DIR".into(), target.display().to_string()));
