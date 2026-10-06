@@ -97,11 +97,23 @@ pub fn tail_session() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::DATA_DIR_TEST_LOCK;
 
     #[test]
     fn failed_prefix_marks_errors() {
-        let dir = std::env::temp_dir().join(format!("cpn-sess-{}", std::process::id()));
+        let _guard = DATA_DIR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let dir = std::env::temp_dir().join(format!(
+            "cpn-sess-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         let _ = fs::create_dir_all(&dir);
+        // SAFETY: tests hold DATA_DIR_TEST_LOCK while mutating CPN_DATA_DIR.
         unsafe {
             std::env::set_var("CPN_DATA_DIR", &dir);
         }
@@ -112,6 +124,9 @@ mod tests {
         assert!(tail.contains("cargo build --release"));
         assert!(tail.contains("FAILED marker missing"));
         assert!(!tail.contains("Bearer "));
+        unsafe {
+            std::env::remove_var("CPN_DATA_DIR");
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 }
