@@ -4,8 +4,9 @@ use std::path::Path;
 
 /// Marker bytes compiled into the panel ELF so commit-upgrade can verify the SHA.
 /// `#[used]` keeps the prefix visible to `strings` under thin LTO.
+/// `unsafe(no_mangle)` is required on current rustc (bare `#[no_mangle]` is denied).
 #[used]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static CPN_BUILD_SHA_MARKER: &[u8] =
     concat!("CPN_BUILD_SHA=", env!("CPN_GIT_SHA"), "\0").as_bytes();
 
