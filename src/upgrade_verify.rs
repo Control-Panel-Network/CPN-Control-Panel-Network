@@ -68,17 +68,19 @@ pub(crate) fn http_code_means_panel_up(code: &str) -> bool {
 /// Probe `/login` without `--fail` so maintenance `503` counts as up.
 fn http_login_ok(port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/login");
-    let output = Command::new("curl").args([
-        "--silent",
-        "--show-error",
-        "--max-time",
-        "5",
-        "--output",
-        "/dev/null",
-        "--write-out",
-        "%{http_code}",
-        &url,
-    ]).output();
+    let output = Command::new("curl")
+        .args([
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "5",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code}",
+            &url,
+        ])
+        .output();
     match output {
         Ok(out) => {
             // Connection refused / timeout: non-zero status and often empty body.
@@ -373,12 +375,15 @@ fn ensure_panel_service_ready(binary_replaced: bool) -> Result<PanelRestartKind,
     Ok(PanelRestartKind::Sync)
 }
 
-fn push_http_login_check(report: &mut VerifyReport, port: u16, required: bool, detail_suffix: &str) {
+fn push_http_login_check(
+    report: &mut VerifyReport,
+    port: u16,
+    required: bool,
+    detail_suffix: &str,
+) {
     let login_ok = wait_http_login_ok(port, LOGIN_WAIT_ATTEMPTS, LOGIN_WAIT_SLEEP_SECS);
     let detail = if login_ok {
-        format!(
-            "GET http://127.0.0.1:{port}/login (200 or maintenance 503){detail_suffix}"
-        )
+        format!("GET http://127.0.0.1:{port}/login (200 or maintenance 503){detail_suffix}")
     } else {
         format!(
             "GET http://127.0.0.1:{port}/login not answering after {LOGIN_WAIT_ATTEMPTS} attempts (~{}s){detail_suffix}",
@@ -475,12 +480,7 @@ pub fn verify_after_upgrade(
                 listen_port::load_preferred_listen_port().unwrap_or(listen_port::DEFAULT_PORT);
             // Still probe /login with retries: maintenance begin or cleanup can
             // briefly flap the listener even when the binary was not replaced.
-            push_http_login_check(
-                &mut report,
-                port,
-                true,
-                "; skip-rebuild path",
-            );
+            push_http_login_check(&mut report, port, true, "; skip-rebuild path");
         }
         None => {}
     }
