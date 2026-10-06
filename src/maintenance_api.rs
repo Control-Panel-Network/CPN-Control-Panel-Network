@@ -253,6 +253,7 @@ pub async fn api_maintenance_status(
     crate::upgrade_busy::heal_orphaned_busy(&state);
     let status = state.status.read().unwrap_or_else(|e| e.into_inner());
     let busy = busy_phase(status.phase);
+    let log = crate::upgrade_session_log::tail_session();
     HttpResponse::Ok().json(serde_json::json!({
         "phase": status.phase,
         "progress": status.progress,
@@ -261,6 +262,7 @@ pub async fn api_maintenance_status(
         "error": status.error,
         "version": status.version,
         "restart_scheduled": status.restart_scheduled,
+        "log": log,
     }))
 }
 

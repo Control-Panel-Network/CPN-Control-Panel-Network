@@ -7,13 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Version Management installer log**: `/settings/version` has a collapsible SSH-style transcript (closed until a job is in progress). `/api/maintenance/status` includes a redacted `log` tail from `/var/lib/cpn/upgrade-session.log` (same stream as CLI cargo/package output). Failures use a `FAILED` prefix. The last run stays until the next upgrade. Tokens are not included.
+
 ### Changed
 
+- **Version Management commit copy**: User-facing Version UI says commits instead of tip (`Upgrade to latest commits`, `Building panel from stable commits (cargo)`, `Stable commits:`). CLI `--to stable` is unchanged. Cargo cache dirs still use `tip-<sha>`.
 - **Site preview cache TTL**: Successful homepage thumbnails under `/var/lib/cpn/site-previews/` stay Fresh for **7 days** (was 24 hours). JSON sidecars store `expires_at`. `/websites` and `/subdomains` list loads serve disk cache or placeholders only: they never N+1 Microlink (or other remote screenshot APIs). Background auto-capture uses local Chromium only when no usable cache exists. **Refresh preview** still force-recaptures (local first, Microlink only when no browser and remote previews are enabled). Microlink requests are debounced host-wide and reuse Fresh disk cache when `force` is false.
 - **Version Management release picker**: Lists all discovered GitHub Releases that have installable assets (paginated API fetch, empty-asset tags skipped), not only the newest 20. Support policy text stays latest two releases only; selecting an older tag still warns outside support. CLI `--to` / `--downgrade` and `/api/releases` use the same full publishable list so operators can upgrade or downgrade later.
 
 ### Fixed
 
+- **Commit source builds missing CPN_BUILD_SHA**: Local `cargo build --release` now embeds a strings-visible `CPN_BUILD_SHA=` marker (`#[used]` keep-static, `CPN_BUILD_SHA`/`CPN_GIT_SHA` cargo env, `.cpn-git-sha`, git HEAD). After a commit cargo build, unmarked leftover ELFs are stamped only when they have no marker (mismatched SHA still refused). Extracted older trees get a keep module so verify can pass. Unmarked binaries that were not just built for that SHA are still refused.
 - **Open preview PHP download and redirect parity**: `/preview/{domain}/content/` no longer serves a PHP index as `application/octet-stream` (browser download). When the primary index is PHP on a public hostname (for example a ddns `index.php` that redirects to apex), Preview fetches the live HTTPS origin, follows redirects, and sets `<base href>` to the final origin so alias/ddns sites match Visit site. Local-only PHP hosts get an HTML explanation instead of a download. Open preview still opens in a new tab (`target=_blank`, `rel=noopener`). Stub or empty docroots keep the live-origin path. Local Chromium remains primary for thumbnails; Microlink stays a fallback for public hostnames only.
 - **Version DEB apply on Ubuntu/Debian**: `/settings/version` upgrade, repair, and downgrade now install the guest-matching `.deb` from GitHub Releases (`apt-get install` on a local path, then `dpkg -i` plus `apt-get install -f` if apt refuses the file). The previous stub that refused DEB package apply is gone. SHA-256 verification is unchanged. The running panel is not stopped by `pkill`; detached reload after apply is unchanged.
 - **Passkey / WebAuthn after restart**: `/login/2fa` keeps one in-flight `credentials.get` (abort stale requests, no duplicate pending error). Passkey files live under `/var/lib/cpn/mfa/passkeys/` (legacy `$CPN_DATA_DIR/passkeys/*.json` is copied, never deleted). Loopback RP ID stays `localhost` with remembered `localhost` and `127.0.0.1` origins across upgrade, downgrade, repair, and restart. Missing MFA pending session redirects to `/login`. WebAuthn failures log to Main/Error without secrets.

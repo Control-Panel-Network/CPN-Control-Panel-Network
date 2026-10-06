@@ -159,6 +159,7 @@ async fn run_maintenance_inner(
     request: MaintenanceRequest,
 ) -> Result<(), String> {
     require_root()?;
+    crate::upgrade_session_log::begin_session(&format!("{:?}", request.action));
     let existing = detect_existing_install(env!("CARGO_PKG_VERSION"));
     let installed = existing.package_version.clone();
 
@@ -213,7 +214,7 @@ async fn run_maintenance_inner(
         if let Err(error) = crate::panel_maintenance_mode::begin(
             source_label,
             "Updating CPN Panel",
-            &format!("Installing stable tip {tip_ref}"),
+            &format!("Installing stable commits {tip_ref}"),
             Some(tip_ref.as_str()),
         ) {
             state.log(

@@ -871,6 +871,7 @@ fn listen_hosts() -> Vec<String> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let _ = std::hint::black_box(cpn_installer::build_meta::CPN_BUILD_SHA_MARKER);
     let args: Vec<String> = env::args().collect();
     if let Some(mode) = cpn_installer::cli_maintenance::parse_cli(&args) {
         let code = cpn_installer::cli_maintenance::run_cli(mode).await;

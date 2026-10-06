@@ -6,6 +6,7 @@ use crate::releases_cache;
 use crate::releases_stable_tip::{self, StableTipInfo};
 use crate::upgrade_pkg::install_binary;
 use crate::upgrade_tip_artifacts;
+use crate::upgrade_tip_cmd;
 use crate::upgrade_tip_log;
 use crate::upgrade_tip_toolchain::{self, Toolchain};
 use rand::{Rng, distr::Alphanumeric};
@@ -140,45 +141,6 @@ fn read_cargo_version(root: &Path) -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-async fn run_checked(
-    program: &str,
-    args: &[&str],
-    cwd: &Path,
-    env: &[(String, String)],
-) -> Result<(), String> {
-    let mut cmd = Command::new(program);
-    cmd.args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    for (key, value) in env {
-        cmd.env(key, value);
-    }
-    let output = cmd
-        .output()
-        .await
-        .map_err(|error| fail(format!("{program} failed to start: {error}"), None))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let detail = if !stderr.trim().is_empty() {
-            stderr.trim()
-        } else {
-            stdout.trim()
-        };
-        return Err(fail(
-            format!(
-                "{program} {} failed: {}",
-                args.join(" "),
-                detail.chars().take(600).collect::<String>()
-            ),
-            None,
-        ));
-    }
-    Ok(())
-}
-
 async fn build_installer_ui(
     state: &AppState,
     root: &Path,
@@ -199,8 +161,8 @@ async fn build_installer_ui(
         .progress("installing", 40, "Building installer UI (npm)")
         .await;
     let npm_s = npm.to_string_lossy().into_owned();
-    run_checked(&npm_s, &["ci"], &ui, &tools.env).await?;
-    run_checked(&npm_s, &["run", "build"], &ui, &tools.env).await?;
+    upgrade_tip_cmd::run_checked(&npm_s, &["ci"], &ui, &tools.env).await?;
+    upgrade_tip_cmd::run_checked(&npm_s, &["run", "build"], &ui, &tools.env).await?;
     if !dist_index.is_file() {
         return Err(fail(
             "installer-ui build did not produce dist/index.html",
@@ -218,12 +180,18 @@ async fn cargo_build_release(
 ) -> Result<(), String> {
     build_installer_ui(state, root, tools).await?;
     state
-        .progress("installing", 45, "Building panel from stable tip (cargo)")
+        .progress(
+            "installing",
+            45,
+            "Building panel from stable commits (cargo)",
+        )
         .await;
     let cargo = tools.cargo.to_string_lossy().into_owned();
     let mut env = tools.env.clone();
+    env.retain(|(k, _)| k != "CPN_GIT_SHA" && k != "CPN_BUILD_SHA");
     env.push(("CPN_GIT_SHA".into(), git_sha.to_string()));
-    run_checked(&cargo, &["build", "--release", "--locked"], root, &env).await?;
+    env.push(("CPN_BUILD_SHA".into(), git_sha.to_string()));
+    upgrade_tip_cmd::run_checked(&cargo, &["build", "--release", "--locked"], root, &env).await?;
     Ok(())
 }
 
@@ -310,8 +278,13 @@ fn maybe_cleanup_build_trees(root: &Path) {
 
 async fn install_built_bins(root: &Path, tools: &Toolchain, git_sha: &str) -> Result<(), String> {
     let Some(built_installer) = crate::upgrade_tip_verify::find_built_installer(root, tools) else {
-        return Err(fail("tip build missing target/release/cpn-installer", None));
+        return Err(fail(
+            "commit build missing target/release/cpn-installer",
+            None,
+        ));
     };
+    crate::upgrade_tip_verify::stamp_built_installer(&built_installer, git_sha)
+        .map_err(|error| fail(error, None))?;
     crate::upgrade_tip_verify::require_built_sha(&built_installer, git_sha)
         .map_err(|error| fail(error, None))?;
     let cli = built_installer.with_file_name("cpn");
@@ -353,7 +326,7 @@ pub async fn apply_tip_ref(
     upgrade_tip_log::log_info(format!("Tip upgrade start repo={repo} ref={git_ref}"));
 
     state
-        .progress("downloading", 10, format!("Resolving tip ref {git_ref}"))
+        .progress("downloading", 10, format!("Resolving commit ref {git_ref}"))
         .await;
     let sha = releases_stable_tip::resolve_ref_sha(repo, git_ref)
         .await
@@ -385,7 +358,7 @@ pub async fn apply_tip_ref(
 
     let work = ephemeral_dir("cpn-tip")?;
     state
-        .progress("downloading", 15, "Checking GitHub Actions tip binaries")
+        .progress("downloading", 15, "Checking GitHub Actions commit binaries")
         .await;
     match upgrade_tip_artifacts::try_apply_actions_artifacts(repo, &sha, &work).await {
         Ok(true) => {
@@ -432,7 +405,7 @@ pub async fn apply_tip_ref(
     download_tarball(repo, &sha, &tarball).await?;
 
     state
-        .progress("installing", 35, "Extracting tip source")
+        .progress("installing", 35, "Extracting commit source")
         .await;
     let extract_status = Command::new("tar")
         .args(["-xzf", tarball.to_str().unwrap_or("tip.tar.gz"), "-C"])
@@ -450,6 +423,7 @@ pub async fn apply_tip_ref(
     let root = find_extracted_root(&work)?;
     maybe_cleanup_build_trees(&root);
     crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
+    crate::upgrade_tip_verify::inject_keep_module(&root, &sha)?;
     let package_version = read_cargo_version(&root);
     cargo_build_release(state, &root, &sha, &tools).await?;
     install_built_bins(&root, &tools, &sha).await?;

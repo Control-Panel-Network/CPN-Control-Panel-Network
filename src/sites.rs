@@ -631,7 +631,14 @@ mod tests {
         let _guard = DATA_DIR_TEST_LOCK
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let dir = std::env::temp_dir().join(format!("cpn-sites-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "cpn-sites-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|value| value.as_nanos())
+                .unwrap_or(0)
+        ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let home = dir.join("home");

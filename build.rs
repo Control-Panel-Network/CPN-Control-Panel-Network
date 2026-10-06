@@ -1,18 +1,31 @@
 //! Embed the git commit SHA used to build this panel binary.
 
 fn main() {
-    let sha = std::env::var("CPN_GIT_SHA")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .or_else(file_sha)
-        .or_else(git_head_sha)
-        .unwrap_or_default();
+    let sha = first_sha(&[
+        env_sha("CPN_BUILD_SHA"),
+        env_sha("CPN_GIT_SHA"),
+        file_sha(),
+        git_head_sha(),
+    ])
+    .unwrap_or_default();
     println!("cargo:rustc-env=CPN_GIT_SHA={sha}");
+    println!("cargo:rustc-env=CPN_BUILD_SHA={sha}");
     println!("cargo:rerun-if-env-changed=CPN_GIT_SHA");
+    println!("cargo:rerun-if-env-changed=CPN_BUILD_SHA");
     println!("cargo:rerun-if-changed=.cpn-git-sha");
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/heads/stable");
+}
+
+fn env_sha(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn first_sha(candidates: &[Option<String>]) -> Option<String> {
+    candidates.iter().cloned().find_map(|item| item)
 }
 
 fn file_sha() -> Option<String> {
