@@ -425,7 +425,7 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
   }}
   check(false);
-  if (canManage && typeof resumeIfBusy === "function") { resumeIfBusy(); }
+  if (canManage && typeof resumeIfBusy === "function") {{ resumeIfBusy(); }}
 }})();
 </script>"##,
         helpers = version_fetch_helpers_script(),
