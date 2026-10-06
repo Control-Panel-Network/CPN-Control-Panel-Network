@@ -92,9 +92,9 @@ pub fn is_busy_phase(phase: &str) -> bool {
 pub fn heal_orphaned_busy(state: &AppState) -> bool {
     let phase = {
         let status = state.status.read().unwrap_or_else(|e| e.into_inner());
-        status.phase.clone()
+        status.phase
     };
-    if !is_busy_phase(&phase) {
+    if !is_busy_phase(phase) {
         return false;
     }
     if builder_descendant_running() {

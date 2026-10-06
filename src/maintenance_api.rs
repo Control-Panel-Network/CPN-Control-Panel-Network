@@ -252,7 +252,7 @@ pub async fn api_maintenance_status(
     }
     crate::upgrade_busy::heal_orphaned_busy(&state);
     let status = state.status.read().unwrap_or_else(|e| e.into_inner());
-    let busy = busy_phase(&status.phase);
+    let busy = busy_phase(status.phase);
     HttpResponse::Ok().json(serde_json::json!({
         "phase": status.phase,
         "progress": status.progress,
@@ -291,7 +291,7 @@ pub async fn start_maintenance(
     }
     crate::upgrade_busy::heal_orphaned_busy(&state);
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
-    if busy_phase(&current.phase) {
+    if busy_phase(current.phase) {
         let hint = if crate::upgrade_busy::builder_descendant_running() {
             "An operation is already in progress (source build still running). Wait for Version Management progress, or refresh this page; do not start a second upgrade."
         } else {
