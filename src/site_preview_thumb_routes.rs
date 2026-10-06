@@ -113,7 +113,7 @@ pub async fn site_preview_refresh(
             return HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    format!("/websites?error={}", urlencoding_simple(&err)),
+                    format!("/websites/list?error={}", urlencoding_simple(&err)),
                 ))
                 .finish();
         }
@@ -122,7 +122,7 @@ pub async fn site_preview_refresh(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!("/websites?error={}", urlencoding_simple(&err)),
+                format!("/websites/list?error={}", urlencoding_simple(&err)),
             ))
             .finish();
     }
@@ -147,29 +147,49 @@ pub async fn site_preview_refresh(
         .finish()
 }
 
+fn path_of(url: &str) -> &str {
+    url.split(['?', '#']).next().unwrap_or(url)
+}
+
+fn query_joiner(trimmed: &str) -> &'static str {
+    if !trimmed.contains('?') {
+        "?"
+    } else if trimmed.ends_with('?') || trimmed.ends_with('&') {
+        ""
+    } else {
+        "&"
+    }
+}
+
+fn is_safe_relative(trimmed: &str) -> bool {
+    if !trimmed.starts_with('/') || trimmed.starts_with("//") {
+        return false;
+    }
+    if trimmed.contains('\n')
+        || trimmed.contains('\r')
+        || trimmed.contains('\\')
+        || trimmed.contains("://")
+    {
+        return false;
+    }
+    true
+}
+
 fn sanitize_next(raw: &str, domain: &str) -> String {
     let trimmed = raw.trim();
-    if trimmed.starts_with("/websites/manage?") && trimmed.contains(domain) {
-        let joiner = if trimmed.contains('?') {
-            if trimmed.ends_with('?') || trimmed.ends_with('&') {
-                ""
-            } else {
-                "&"
-            }
-        } else {
-            "?"
-        };
-        return format!("{trimmed}{joiner}");
+    if !is_safe_relative(trimmed) {
+        return "/websites/list?".to_string();
     }
-    if trimmed == "/subdomains" || trimmed.starts_with("/subdomains?") {
-        let joiner = if trimmed.contains('?') { "&" } else { "?" };
-        return format!("{trimmed}{joiner}");
+    let path = path_of(trimmed);
+    let allowed = match path {
+        "/subdomains" | "/websites" | "/websites/list" => true,
+        "/websites/manage" => !domain.is_empty() && trimmed.contains(domain),
+        _ => false,
+    };
+    if !allowed {
+        return "/websites/list?".to_string();
     }
-    if trimmed == "/websites" || trimmed.starts_with("/websites?") {
-        let joiner = if trimmed.contains('?') { "&" } else { "?" };
-        return format!("/websites{joiner}");
-    }
-    "/websites?".to_string()
+    format!("{trimmed}{}", query_joiner(trimmed))
 }
 
 /// Domains with a background capture already running, so repeated list loads do
@@ -242,5 +262,28 @@ mod tests {
         let n = sanitize_next("/subdomains", "cmstest.newstargeted.com");
         assert!(n.starts_with("/subdomains"));
         assert!(n.contains('?'));
+    }
+
+    #[test]
+    fn next_preserves_list_pagination_and_search() {
+        let websites = sanitize_next("/websites/list?q=blog&mode=page&per_page=5&page=2", "x.com");
+        assert_eq!(
+            websites,
+            "/websites/list?q=blog&mode=page&per_page=5&page=2&"
+        );
+        let subs = sanitize_next("/subdomains?mode=page&per_page=10&page=3", "a.b.com");
+        assert_eq!(subs, "/subdomains?mode=page&per_page=10&page=3&");
+        assert_eq!(sanitize_next("/websites/list", "x.com"), "/websites/list?");
+        assert_eq!(
+            sanitize_next("/websites/list-evil", "x.com"),
+            "/websites/list?"
+        );
+        assert_eq!(sanitize_next("//evil.example", "x.com"), "/websites/list?");
+    }
+
+    #[test]
+    fn next_allows_manage_with_domain() {
+        let n = sanitize_next("/websites/manage?domain=x.com&tab=overview", "x.com");
+        assert_eq!(n, "/websites/manage?domain=x.com&tab=overview&");
     }
 }

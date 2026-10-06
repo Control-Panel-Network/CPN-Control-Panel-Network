@@ -7,7 +7,7 @@ use crate::panel_list_search::{
 use crate::panel_prefs::load_panel_ui_prefs;
 use crate::panel_websites_list_pager::{
     SitesListOpts, paginate_slice, sites_list_opts, sites_list_toolbar, sites_list_toolbar_bottom,
-    sites_search_extras,
+    sites_list_url, sites_search_extras,
 };
 use crate::site_preview_list_ui::{site_preview_cards, site_preview_list_styles};
 use crate::sites::{SiteRecord, list_sites, resolve_parent_domain};
@@ -72,7 +72,10 @@ fn list_rows_html(
     } else {
         let top = sites_list_toolbar(action, opts, page, total_pages, filtered);
         let bottom = sites_list_toolbar_bottom(action, opts, page, total_pages, filtered);
-        let cards = site_preview_cards(page_sites, show, username);
+        let mut return_opts = opts.clone();
+        return_opts.page = page;
+        let list_next = sites_list_url(action, &return_opts);
+        let cards = site_preview_cards(page_sites, show, username, &list_next);
         format!("{top}{cards}{bottom}")
     }
 }
@@ -277,5 +280,23 @@ mod tests {
         assert!(html.contains(r#"action="/websites/list""#));
         assert!(html.contains(r#"name="q""#));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn websites_list_url_for_page_two_includes_query() {
+        use crate::panel_websites_list_pager::{SitesListOpts, sites_list_url};
+        let opts = SitesListOpts {
+            q: "blog".into(),
+            page: 2,
+            per_page: 5,
+            mode: "page".into(),
+        };
+        let url = sites_list_url("/websites/list", &opts);
+        assert!(url.contains("page=2"));
+        assert!(url.contains("per_page=5"));
+        assert!(url.contains("q=blog"));
+        let sub = sites_list_url("/subdomains", &opts);
+        assert!(sub.starts_with("/subdomains?"));
+        assert!(sub.contains("page=2"));
     }
 }
