@@ -417,6 +417,7 @@ pub mod site_app_backups;
 pub mod site_app_lifecycle;
 pub mod site_messages;
 pub mod site_preview_capture;
+pub mod site_preview_list_cards;
 pub mod site_preview_list_ui;
 pub mod site_preview_microlink;
 pub mod site_preview_thumb;
