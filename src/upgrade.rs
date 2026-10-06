@@ -303,7 +303,7 @@ async fn run_maintenance_inner(
             let binary_replaced = !tip.skipped_rebuild;
             if tip.skipped_rebuild {
                 state.log(
-                    "Skip-rebuild tip: verifying /login without restarting the panel".into(),
+                    "Skip-rebuild tip: verifying /login without restarting the panel".to_string(),
                     "info",
                 );
             }
@@ -368,7 +368,7 @@ async fn run_maintenance_inner(
         if tip.skipped_rebuild {
             let _ = crate::panel_maintenance_mode::clear_with_reason("completed");
             state.log(
-                "Skip-rebuild tip complete; panel reload not scheduled".into(),
+                "Skip-rebuild tip complete; panel reload not scheduled".to_string(),
                 "info",
             );
         } else {
