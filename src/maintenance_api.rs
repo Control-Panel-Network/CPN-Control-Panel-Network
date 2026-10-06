@@ -50,10 +50,7 @@ fn version_read_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequ
 }
 
 fn busy_phase(phase: &str) -> bool {
-    matches!(
-        phase,
-        "configuring" | "downloading" | "installing" | "testing" | "verifying"
-    )
+    crate::upgrade_busy::is_busy_phase(phase)
 }
 
 pub async fn load_maintenance_info() -> MaintenanceInfo {
@@ -253,6 +250,7 @@ pub async fn api_maintenance_status(
     if !maintenance_authorized(&state, &query, &http) {
         return HttpResponse::Unauthorized().finish();
     }
+    crate::upgrade_busy::heal_orphaned_busy(&state);
     let status = state.status.read().unwrap_or_else(|e| e.into_inner());
     let busy = busy_phase(status.phase);
     HttpResponse::Ok().json(serde_json::json!({
@@ -291,10 +289,15 @@ pub async fn start_maintenance(
             "error": "confirm_downgrade is required for downgrade"
         }));
     }
+    crate::upgrade_busy::heal_orphaned_busy(&state);
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if busy_phase(current.phase) {
-        return HttpResponse::Conflict()
-            .json(serde_json::json!({ "error": "An operation is already in progress" }));
+        let hint = if crate::upgrade_busy::builder_descendant_running() {
+            "An operation is already in progress (source build still running). Wait for Version Management progress, or refresh this page; do not start a second upgrade."
+        } else {
+            "An operation is already in progress"
+        };
+        return HttpResponse::Conflict().json(serde_json::json!({ "error": hint }));
     }
     let existing = detect_existing_install(VERSION);
     let plan = build_plan(

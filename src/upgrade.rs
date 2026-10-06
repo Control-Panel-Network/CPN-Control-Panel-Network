@@ -205,6 +205,22 @@ async fn run_maintenance_inner(
             ),
             "info",
         );
+        let source_label = if crate::panel_service::running_under_systemd() {
+            "ui"
+        } else {
+            "cli"
+        };
+        if let Err(error) = crate::panel_maintenance_mode::begin(
+            source_label,
+            "Updating CPN Panel",
+            &format!("Installing stable tip {tip_ref}"),
+            Some(tip_ref.as_str()),
+        ) {
+            state.log(
+                format!("Warning: could not set panel maintenance flag: {error}"),
+                "error",
+            );
+        }
         maybe_reset_data(request.reset_data)?;
         let docker_before = if matches!(
             request.action,
