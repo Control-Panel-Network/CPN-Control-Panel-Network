@@ -118,8 +118,10 @@ pub fn version_page_poll_script() -> &'static str {
         finishAfterReconnect(st);
         return;
       }
+      if (restartComing) { armMetaRefresh(); }
       if (!st.busy && st.phase === "completed") {
         awaitingReconnect = true;
+        armMetaRefresh();
         if (progressBar) progressBar.style.width = "100%";
         if (opError) opError.textContent = "";
         if (!restartComing) {
@@ -200,7 +202,6 @@ pub fn version_page_poll_script() -> &'static str {
     sawDisconnect = false;
     completedAt = 0;
     reloadStarted = false;
-    armMetaRefresh();
     if (opError) opError.textContent = "";
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
@@ -227,11 +228,42 @@ pub fn version_page_poll_script() -> &'static str {
     }).then(function () {
       schedulePoll(400);
     }).catch(function (err) {
+      var msg = friendlyFetchError(err, "Start maintenance");
+      if (String(msg).toLowerCase().indexOf("already in progress") !== -1) {
+        busy = true;
+        setActionsEnabled(false);
+        if (progressWrap) progressWrap.style.display = "block";
+        if (opError) opError.textContent = msg;
+        if (progressLabel) progressLabel.textContent = "Resuming in-progress operation...";
+        schedulePoll(400);
+        return;
+      }
       busy = false;
       setActionsEnabled(true);
-      if (opError) opError.textContent = friendlyFetchError(err, "Start maintenance");
+      if (opError) opError.textContent = msg;
       if (progressLabel) progressLabel.textContent = "Not started.";
     });
+  }
+  function resumeIfBusy() {
+    fetch("/api/maintenance/status", {
+      credentials: "same-origin",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    }).then(function (res) {
+      if (!res.ok) return null;
+      return res.json();
+    }).then(function (st) {
+      if (!st || !st.busy) return;
+      busy = true;
+      setActionsEnabled(false);
+      if (progressWrap) progressWrap.style.display = "block";
+      if (progressLabel) {
+        var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
+        var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
+        progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
+      }
+      schedulePoll(300);
+    }).catch(function () {});
   }
 "##
 }
@@ -251,6 +283,8 @@ mod tests {
         assert!(js.contains("shouldReloadNow"));
         assert!(js.contains("restart_scheduled"));
         assert!(js.contains("startJob"));
+        assert!(js.contains("resumeIfBusy"));
+        assert!(js.contains("Resuming in-progress operation"));
         assert!(js.contains("Repair") || js.contains("repair") || js.contains("action"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));

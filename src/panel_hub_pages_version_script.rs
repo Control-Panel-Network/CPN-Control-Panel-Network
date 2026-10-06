@@ -425,6 +425,7 @@ pub fn version_page_script(can_manage: bool) -> String {
     }}
   }}
   check(false);
+  if (canManage && typeof resumeIfBusy === "function") { resumeIfBusy(); }
 }})();
 </script>"##,
         helpers = version_fetch_helpers_script(),
@@ -461,6 +462,7 @@ mod tests {
         assert!(js.contains("isPrereleaseLabel"));
         assert!(js.contains("cpnVersionCache"));
         assert!(js.contains("paintIdentityRows"));
+        assert!(js.contains("resumeIfBusy"));
         assert!(js.contains("Binary tip ahead of packaged"));
         assert!(js.contains("Refreshing (keeping current values)"));
         assert!(!js.contains('\u{2014}'));

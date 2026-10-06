@@ -308,20 +308,12 @@ fn maybe_cleanup_build_trees(root: &Path) {
         .status();
 }
 
-async fn install_built_bins(root: &Path, tools: &Toolchain) -> Result<(), String> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    for (key, value) in &tools.env {
-        if key == "CARGO_TARGET_DIR" {
-            candidates.push(PathBuf::from(value).join("release/cpn-installer"));
-        }
-    }
-    candidates.push(root.join("target/release/cpn-installer"));
-    candidates.push(PathBuf::from(
-        "/home/cpn/cpn-cargo-target/release/cpn-installer",
-    ));
-    let Some(built_installer) = candidates.into_iter().find(|p| p.is_file()) else {
+async fn install_built_bins(root: &Path, tools: &Toolchain, git_sha: &str) -> Result<(), String> {
+    let Some(built_installer) = crate::upgrade_tip_verify::find_built_installer(root, tools) else {
         return Err(fail("tip build missing target/release/cpn-installer", None));
     };
+    crate::upgrade_tip_verify::require_built_sha(&built_installer, git_sha)
+        .map_err(|error| fail(error, None))?;
     let cli = built_installer.with_file_name("cpn");
     install_from_paths(&built_installer, &cli).await
 }
@@ -375,21 +367,47 @@ pub async fn apply_tip_ref(
     };
     upgrade_tip_log::log_info(format!("Resolved tip {label} sha={short}"));
 
+    if let Some(on_disk) =
+        crate::build_meta::sha_embedded_in_binary(std::path::Path::new(installer_bin()))
+        && crate::build_meta::sha_equal(&on_disk, &sha)
+    {
+        upgrade_tip_log::log_info(format!(
+            "Installed binary already matches tip {short}; skipping source rebuild"
+        ));
+        return Ok(TipApplyResult {
+            sha,
+            short_sha: short,
+            branch_label: label,
+            package_version: env!("CARGO_PKG_VERSION").to_string(),
+            source: ManifestSource::Local,
+        });
+    }
+
     let work = ephemeral_dir("cpn-tip")?;
     state
         .progress("downloading", 15, "Checking GitHub Actions tip binaries")
         .await;
     match upgrade_tip_artifacts::try_apply_actions_artifacts(repo, &sha, &work).await {
         Ok(true) => {
-            upgrade_tip_log::log_info(format!("Installed prebuilt tip binaries for {label}"));
-            let _ = std::fs::remove_dir_all(&work);
-            return Ok(TipApplyResult {
-                sha,
-                short_sha: short,
-                branch_label: label,
-                package_version: env!("CARGO_PKG_VERSION").to_string(),
-                source: ManifestSource::Local,
-            });
+            if crate::upgrade_tip_verify::require_built_sha(
+                std::path::Path::new(installer_bin()),
+                &sha,
+            )
+            .is_ok()
+            {
+                upgrade_tip_log::log_info(format!("Installed prebuilt tip binaries for {label}"));
+                let _ = std::fs::remove_dir_all(&work);
+                return Ok(TipApplyResult {
+                    sha,
+                    short_sha: short,
+                    branch_label: label,
+                    package_version: env!("CARGO_PKG_VERSION").to_string(),
+                    source: ManifestSource::Local,
+                });
+            }
+            upgrade_tip_log::log_info(
+                "Prebuilt tip SHA did not match; building from source instead",
+            );
         }
         Ok(false) => {
             upgrade_tip_log::log_info("No GitHub Actions tip binaries; building from source");
@@ -400,7 +418,8 @@ pub async fn apply_tip_ref(
         }
     }
 
-    let tools = ensure_toolchain(state).await?;
+    let mut tools = ensure_toolchain(state).await?;
+    crate::upgrade_tip_verify::apply_tip_build_env(&mut tools, &sha);
 
     let tarball = work.join("tip.tar.gz");
     state
@@ -430,9 +449,10 @@ pub async fn apply_tip_ref(
     }
     let root = find_extracted_root(&work)?;
     maybe_cleanup_build_trees(&root);
+    crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
     let package_version = read_cargo_version(&root);
     cargo_build_release(state, &root, &sha, &tools).await?;
-    install_built_bins(&root, &tools).await?;
+    install_built_bins(&root, &tools, &sha).await?;
 
     let _ = std::fs::remove_dir_all(&work);
     upgrade_tip_log::log_info(format!(
