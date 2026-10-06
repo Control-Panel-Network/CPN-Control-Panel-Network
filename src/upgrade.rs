@@ -300,8 +300,18 @@ async fn run_maintenance_inner(
             state
                 .progress("verifying", 96, "Verifying services after upgrade")
                 .await;
-            match crate::upgrade_verify::verify_after_upgrade(request.bypass_docker, &docker_before)
-            {
+            let binary_replaced = !tip.skipped_rebuild;
+            if tip.skipped_rebuild {
+                state.log(
+                    "Skip-rebuild tip: verifying /login without restarting the panel".to_string(),
+                    "info",
+                );
+            }
+            match crate::upgrade_verify::verify_after_upgrade(
+                request.bypass_docker,
+                &docker_before,
+                binary_replaced,
+            ) {
                 Ok(report) => {
                     for line in report.summary_lines() {
                         state.log(line, "info");
@@ -336,7 +346,13 @@ async fn run_maintenance_inner(
             status.progress = 100;
             status.error = None;
             status.message = message;
-            status.restart_scheduled = will_schedule_reload(request.action, "tip");
+            // Skip-rebuild: binary unchanged; do not bounce MainPID or leave UI
+            // waiting on a detached reload that never needed to run.
+            status.restart_scheduled = if tip.skipped_rebuild {
+                false
+            } else {
+                will_schedule_reload(request.action, "tip")
+            };
             if let Some(info) = status.maintenance.as_mut() {
                 info.installed_version = tip.package_version.clone();
                 info.running_sha = Some(tip.sha.clone());
@@ -349,7 +365,15 @@ async fn run_maintenance_inner(
             });
         }
 
-        schedule_apply_reload(&state, request.action, "tip");
+        if tip.skipped_rebuild {
+            let _ = crate::panel_maintenance_mode::clear_with_reason("completed");
+            state.log(
+                "Skip-rebuild tip complete; panel reload not scheduled".to_string(),
+                "info",
+            );
+        } else {
+            schedule_apply_reload(&state, request.action, "tip");
+        }
         return Ok(());
     }
 
@@ -541,7 +565,11 @@ async fn run_maintenance_inner(
         state
             .progress("verifying", 96, "Verifying services after upgrade")
             .await;
-        match crate::upgrade_verify::verify_after_upgrade(request.bypass_docker, &docker_before) {
+        match crate::upgrade_verify::verify_after_upgrade(
+            request.bypass_docker,
+            &docker_before,
+            true,
+        ) {
             Ok(report) => {
                 for line in report.summary_lines() {
                     state.log(line, "info");

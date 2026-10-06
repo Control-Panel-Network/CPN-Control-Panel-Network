@@ -193,7 +193,7 @@ sudo install -m 600 /dev/stdin /var/lib/cpn/secrets/github-token <<<'ghp_...'
 - If the selected packages are missing, CPN falls back (8.5 â†’ 8.4 â†’ 8.3 â†’ 8.2) and writes `/var/lib/cpn/php-default.json`.
 - See `to-do/PHP-INSTALL-DEFAULT-85.md`.
 
-Post-upgrade verification checks panel `/login`, web server units, and MariaDB when present.
+Post-upgrade verification checks panel `/login` (HTTP `200` or maintenance `503`), web server units, and MariaDB when present. Tip skip-rebuild (binary already on tip) verifies without restarting the panel and retries `/login` for about 40 seconds before failing.
 
 ## After package install
 

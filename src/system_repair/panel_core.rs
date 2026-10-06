@@ -44,20 +44,27 @@ fn symlink_or_exists(path: &str) -> bool {
 
 fn http_login_ok(port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/login");
-    Command::new("curl")
+    let output = Command::new("curl")
         .args([
-            "--fail",
             "--silent",
             "--show-error",
             "--max-time",
             "3",
             "--output",
             "/dev/null",
+            "--write-out",
+            "%{http_code}",
             &url,
         ])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .output();
+    match output {
+        Ok(out) => {
+            let code = String::from_utf8_lossy(&out.stdout);
+            // 200 login or 503 maintenance page both mean the panel is listening.
+            crate::upgrade_verify::http_code_means_panel_up(&code)
+        }
+        Err(_) => false,
+    }
 }
 
 fn which_cpn() -> Option<String> {
