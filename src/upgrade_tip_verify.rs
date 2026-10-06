@@ -82,9 +82,8 @@ static CPN_BUILD_SHA_KEEP: &[u8] = b\"CPN_BUILD_SHA={sha}\\0\";\n"
 }
 
 pub fn stamp_built_installer(path: &Path, git_sha: &str) -> Result<(), String> {
-    crate::build_meta::stamp_sha_marker_if_missing(path, git_sha).map_err(|error| {
-        upgrade_tip_log::log_failure(&error, None);
-        error
+    crate::build_meta::stamp_sha_marker_if_missing(path, git_sha).inspect_err(|error| {
+        upgrade_tip_log::log_failure(error, None);
     })
 }
 
