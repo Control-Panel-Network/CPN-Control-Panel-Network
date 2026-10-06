@@ -20,6 +20,8 @@ pub struct TipApplyResult {
     pub branch_label: String,
     pub package_version: String,
     pub source: ManifestSource,
+    /// True when the on-disk installer already matched the tip SHA (no rebuild).
+    pub skipped_rebuild: bool,
 }
 
 fn ephemeral_dir(prefix: &str) -> Result<PathBuf, String> {
@@ -353,6 +355,7 @@ pub async fn apply_tip_ref(
             branch_label: label,
             package_version: env!("CARGO_PKG_VERSION").to_string(),
             source: ManifestSource::Local,
+            skipped_rebuild: true,
         });
     }
 
@@ -376,6 +379,7 @@ pub async fn apply_tip_ref(
                     branch_label: label,
                     package_version: env!("CARGO_PKG_VERSION").to_string(),
                     source: ManifestSource::Local,
+                    skipped_rebuild: false,
                 });
             }
             upgrade_tip_log::log_info(
@@ -438,6 +442,7 @@ pub async fn apply_tip_ref(
         branch_label: label,
         package_version,
         source: ManifestSource::Local,
+        skipped_rebuild: false,
     })
 }
 
