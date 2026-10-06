@@ -46,79 +46,80 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
     // Unit tests skip live Cloudflare, DKIM, and auto-SSL (timeouts and temp-dir races).
     #[cfg(not(test))]
     {
-    // Website hostname A (+ www CNAME) when Cloudflare is connected. Independent of mail mode.
-    match ensure_site_cloudflare_dns(&domain) {
-        Ok(msg) => report.steps.push(msg),
-        Err(e) => report.warnings.push(format!("Cloudflare site DNS: {e}")),
-    }
-
-    match ensure_dkim_for_domain(&domain) {
-        Ok(msg) => report.steps.push(msg),
-        Err(e) => report.warnings.push(format!("DKIM: {e}")),
-    }
-
-    let onboarding = load_mail_onboarding();
-    if onboarding.mail_mode == MailMode::Local && !onboarding.skip_rdns {
-        match provision_mail_dns(&domain) {
+        // Website hostname A (+ www CNAME) when Cloudflare is connected. Independent of mail mode.
+        match ensure_site_cloudflare_dns(&domain) {
             Ok(msg) => report.steps.push(msg),
-            Err(e) => report.warnings.push(format!("Mail DNS: {e}")),
+            Err(e) => report.warnings.push(format!("Cloudflare site DNS: {e}")),
         }
-    } else if onboarding.mail_mode == MailMode::External {
-        report.steps.push(
+
+        match ensure_dkim_for_domain(&domain) {
+            Ok(msg) => report.steps.push(msg),
+            Err(e) => report.warnings.push(format!("DKIM: {e}")),
+        }
+
+        let onboarding = load_mail_onboarding();
+        if onboarding.mail_mode == MailMode::Local && !onboarding.skip_rdns {
+            match provision_mail_dns(&domain) {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!("Mail DNS: {e}")),
+            }
+        } else if onboarding.mail_mode == MailMode::External {
+            report.steps.push(
             "External mail mode: skipped local SPF/DKIM/DMARC auto-DNS (configure at your provider)."
                 .into(),
         );
-    } else if onboarding.skip_rdns {
-        report
-            .steps
-            .push("Skip email/rDNS onboarding: skipped mail DNS auto-provision.".into());
-    }
-
-    let site = match load_site(&domain) {
-        Ok(s) => s,
-        Err(e) => {
-            report.warnings.push(format!("SSL skipped: {e}"));
-            return report;
+        } else if onboarding.skip_rdns {
+            report
+                .steps
+                .push("Skip email/rDNS onboarding: skipped mail DNS auto-provision.".into());
         }
-    };
-    if site.ssl.provider.supports_auto_issue() {
-        if matches!(site.ssl.coverage_mode, SslCoverageMode::Wildcard) && !cloudflare_configured() {
-            let mut ssl = site.ssl.clone();
-            ssl.coverage_mode = SslCoverageMode::San;
-            ssl.include_subdomains_on_cert = false;
-            if modify_site(
-                &domain,
-                SiteModify {
-                    ssl: Some(ssl),
-                    ..SiteModify::default()
-                },
-            )
-            .is_ok()
-            {
-                report.steps.push(
-                    "Cloudflare DNS not configured: using SAN coverage for HTTP-01 auto SSL."
-                        .into(),
-                );
+
+        let site = match load_site(&domain) {
+            Ok(s) => s,
+            Err(e) => {
+                report.warnings.push(format!("SSL skipped: {e}"));
+                return report;
             }
-        }
-        match ensure_certbot_on_path() {
-            Ok(msg) => report.steps.push(msg),
-            Err(e) => report.warnings.push(format!("certbot: {e}")),
-        }
-        match issue_or_renew(&domain) {
-            Ok(msg) => report.steps.push(msg),
-            Err(e) => report.warnings.push(format!(
-                "Auto SSL ({}) deferred: {e}",
+        };
+        if site.ssl.provider.supports_auto_issue() {
+            if matches!(site.ssl.coverage_mode, SslCoverageMode::Wildcard)
+                && !cloudflare_configured()
+            {
+                let mut ssl = site.ssl.clone();
+                ssl.coverage_mode = SslCoverageMode::San;
+                ssl.include_subdomains_on_cert = false;
+                if modify_site(
+                    &domain,
+                    SiteModify {
+                        ssl: Some(ssl),
+                        ..SiteModify::default()
+                    },
+                )
+                .is_ok()
+                {
+                    report.steps.push(
+                        "Cloudflare DNS not configured: using SAN coverage for HTTP-01 auto SSL."
+                            .into(),
+                    );
+                }
+            }
+            match ensure_certbot_on_path() {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!("certbot: {e}")),
+            }
+            match issue_or_renew(&domain) {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!(
+                    "Auto SSL ({}) deferred: {e}",
+                    site.ssl.provider.label()
+                )),
+            }
+        } else if matches!(site.ssl.provider, SslProvider::None | SslProvider::Custom) {
+            report.steps.push(format!(
+                "SSL provider is {}; skipped auto-issue.",
                 site.ssl.provider.label()
-            )),
+            ));
         }
-    } else if matches!(site.ssl.provider, SslProvider::None | SslProvider::Custom) {
-        report.steps.push(format!(
-            "SSL provider is {}; skipped auto-issue.",
-            site.ssl.provider.label()
-        ));
-    }
-
     }
 
     report
