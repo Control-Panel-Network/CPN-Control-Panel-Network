@@ -145,6 +145,7 @@ pub async fn run_maintenance(
     state: Arc<AppState>,
     request: MaintenanceRequest,
 ) -> Result<(), String> {
+    let _job = crate::upgrade_busy::JobGuard::enter();
     match run_maintenance_inner(state, request).await {
         Ok(()) => Ok(()),
         Err(error) => {
@@ -392,10 +393,18 @@ async fn run_maintenance_inner(
         || retag
         || compare_versions(&release.version, &installed) != Ordering::Greater;
 
+    let repairing_current = matches!(request.action, MaintenanceAction::Repair)
+        && compare_versions(&release.version, &installed) == Ordering::Equal;
     state.log(
         format!(
-            "Maintenance {:?}: installed={installed} target={}",
-            request.action, release.tag_name
+            "Maintenance {:?}: installed={installed} target={}{}",
+            request.action,
+            release.tag_name,
+            if repairing_current {
+                " (reinstall current package)"
+            } else {
+                ""
+            }
         ),
         "info",
     );
@@ -563,10 +572,17 @@ async fn run_maintenance_inner(
     status.phase = "completed";
     status.progress = 100;
     status.error = None;
-    status.message = format!(
-        "Maintenance {:?} completed for {}",
-        request.action, release.tag_name
-    );
+    status.message = if matches!(request.action, MaintenanceAction::Repair) {
+        format!(
+            "Repair completed for {}. Core packages were reinstalled.",
+            release.tag_name
+        )
+    } else {
+        format!(
+            "Maintenance {:?} completed for {}",
+            request.action, release.tag_name
+        )
+    };
     status.restart_scheduled = will_schedule_reload(request.action, "package");
     if let Some(info) = status.maintenance.as_mut() {
         info.installed_version = release.version.clone();

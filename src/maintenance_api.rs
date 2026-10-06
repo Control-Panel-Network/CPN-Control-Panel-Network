@@ -294,8 +294,10 @@ pub async fn start_maintenance(
     crate::upgrade_busy::heal_orphaned_busy(&state);
     let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
     if busy_phase(current.phase) {
-        let hint = if crate::upgrade_busy::builder_descendant_running() {
-            "An operation is already in progress (source build still running). Wait for Version Management progress, or refresh this page; do not start a second upgrade."
+        let hint = if crate::upgrade_busy::job_in_flight()
+            || crate::upgrade_busy::worker_descendant_running()
+        {
+            "An operation is already in progress (upgrade/repair still running). Wait for Version Management progress, or refresh this page; do not start a second job."
         } else {
             "An operation is already in progress"
         };
@@ -350,6 +352,7 @@ pub async fn start_maintenance(
             tip_check_error: None,
         });
     }
+    crate::upgrade_busy::mark_job_started();
     current.phase = "downloading";
     current.progress = 1;
     current.error = None;
