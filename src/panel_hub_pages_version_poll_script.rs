@@ -24,6 +24,28 @@ pub fn version_page_poll_script() -> &'static str {
     pollFailCount = 0;
     pollBackoffMs = 500;
   }
+  function paintInstallerLog(text, forceOpen) {
+    var box = document.getElementById("cpn-version-log");
+    var pre = document.getElementById("cpn-version-log-pre");
+    if (!pre) return;
+    var raw = String(text || "");
+    pre.innerHTML = "";
+    if (!raw) {
+      pre.textContent = "";
+      return;
+    }
+    raw.split("\n").forEach(function (line) {
+      var span = document.createElement("span");
+      var low = line.toLowerCase();
+      if (line.indexOf("FAILED ") === 0 || low.indexOf("error") !== -1 || low.indexOf("failed") !== -1) {
+        span.className = "ssh-fail";
+      }
+      span.textContent = line + "\n";
+      pre.appendChild(span);
+    });
+    pre.scrollTop = pre.scrollHeight;
+    if (box && forceOpen) box.open = true;
+  }
   function versionReloadTarget() {
     var path = window.location.pathname || "/settings/version";
     if (path.indexOf("/settings/version") !== 0) {
@@ -99,6 +121,7 @@ pub fn version_page_poll_script() -> &'static str {
       }
       var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
       if (progressBar) progressBar.style.width = pct + "%";
+      paintInstallerLog(st.log, !!st.busy || st.phase === "failed");
       if (progressLabel) {
         var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
         progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
@@ -206,6 +229,7 @@ pub fn version_page_poll_script() -> &'static str {
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
     if (progressLabel) progressLabel.textContent = "1% Starting...";
+    paintInstallerLog("Starting maintenance...", true);
     var installed = infoCache && infoCache.installed_version ? infoCache.installed_version : "";
     var isDown = action === "downgrade" || (version && installed && cmp(version, installed) < 0);
     var body = {
@@ -253,7 +277,9 @@ pub fn version_page_poll_script() -> &'static str {
       if (!res.ok) return null;
       return res.json();
     }).then(function (st) {
-      if (!st || !st.busy) return;
+      if (!st) return;
+      paintInstallerLog(st.log, !!st.busy);
+      if (!st.busy) return;
       busy = true;
       setActionsEnabled(false);
       if (progressWrap) progressWrap.style.display = "block";
@@ -284,6 +310,8 @@ mod tests {
         assert!(js.contains("restart_scheduled"));
         assert!(js.contains("startJob"));
         assert!(js.contains("resumeIfBusy"));
+        assert!(js.contains("paintInstallerLog"));
+        assert!(js.contains("st.log"));
         assert!(js.contains("Resuming in-progress operation"));
         assert!(js.contains("Repair") || js.contains("repair") || js.contains("action"));
         assert!(!js.contains('\u{2014}'));

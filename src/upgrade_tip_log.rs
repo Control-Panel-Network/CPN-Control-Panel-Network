@@ -92,6 +92,7 @@ pub fn log_event(level: &str, message: &str, retry: Option<u32>) {
     };
     let line = format_line(level, message, retry);
     write_main(&line);
+    crate::upgrade_session_log::append_session(level, message);
     if level.eq_ignore_ascii_case("error") || level.eq_ignore_ascii_case("err") {
         write_error(&line);
     }
@@ -112,6 +113,7 @@ pub fn log_tagged(module: &str, level: &str, message: &str) {
     };
     let line = format_line_for(module, level, message, None);
     write_main(&line);
+    crate::upgrade_session_log::append_session(level, message);
     if level.eq_ignore_ascii_case("error") || level.eq_ignore_ascii_case("err") {
         write_error(&line);
     }
