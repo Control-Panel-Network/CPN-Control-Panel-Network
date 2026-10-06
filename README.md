@@ -10,11 +10,11 @@
 **CPN** (Control Panel Network) is a Rust web installer and hosting control panel from [News Targeted](https://newstargeted.com), with contributions and support from [Discord Bot Network](https://discord-bot-network.com). Install on AlmaLinux, Rocky, RHEL, Ubuntu, or Debian; manage sites, mail, databases, SSL, and more from the panel. Windows Server has a limited Phase A path.
 
 <p align="center">
-  <img src="docs/images/cpn-dashboard.png" alt="CPN Panel dashboard" width="900">
+  <img src="docs/images/cpn-dashboard.png" alt="CPN Panel dashboard with usage gauges" width="900">
 </p>
 
 <p align="center">
-  <img src="docs/images/cpn-websites.png" alt="CPN Panel websites list" width="440">
+  <img src="docs/images/cpn-websites.png" alt="CPN Panel websites list with pagination and Open preview" width="440">
   &nbsp;
   <img src="docs/images/cpn-login.png" alt="CPN Panel sign-in" width="440">
 </p>
