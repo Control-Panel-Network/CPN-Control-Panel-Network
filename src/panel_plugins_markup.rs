@@ -119,6 +119,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         .plugin-badge.paid {{ background:#ede9fe; color:#4c1d95; }}
         .plugin-badge.cat {{ background:#dbeafe; color:#1e3a8a; }}
         .plugin-badge.installed {{ background:#dbeafe; color:#1e3a8a; }}
+        .plugin-badge.update {{ background:#ffedd5; color:#9a3412; }}
         .plugin-dates {{ margin:0; color:var(--ink); opacity:.75; font-size:12px; line-height:1.4; }}
         .plugin-actions {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; }}
         .btn-secondary, .btn-warn {{
@@ -178,6 +179,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         [data-color-mode="dark"] .plugin-badge.paid {{ background:rgba(124,58,237,.28); color:#ddd6fe; }}
         [data-color-mode="dark"] .plugin-badge.cat,
         [data-color-mode="dark"] .plugin-badge.installed {{ background:rgba(37,99,235,.3); color:#bfdbfe; }}
+        [data-color-mode="dark"] .plugin-badge.update {{ background:rgba(249,115,22,.28); color:#fdba74; }}
         [data-color-mode="dark"] .plugin-risk-notice {{
           background:#0b1220; border-color:#60a5fa; color:#e2e8f0;
         }}
@@ -388,6 +390,13 @@ mod store_target_tests {
     use crate::sites::SiteRecord;
 
     #[test]
+    fn update_available_badge_markup() {
+        assert!(update_available_badge(true).contains("Update available"));
+        assert!(update_available_badge(true).contains("plugin-badge update"));
+        assert_eq!(update_available_badge(false), "");
+    }
+
+    #[test]
     fn resolve_store_target_defaults() {
         let sites = vec![SiteRecord {
             schema_version: 1,
@@ -480,8 +489,27 @@ fn badge_pricing(pricing: &str) -> String {
     }
 }
 
-pub(crate) fn installed_one_card(item: &InstalledPlugin, domain: &str, username: &str) -> String {
-    let html = installed_cards(std::slice::from_ref(item), "grid", domain, username);
+pub(crate) fn update_available_badge(update_available: bool) -> &'static str {
+    if update_available {
+        r#"<span class="plugin-badge update">Update available</span>"#
+    } else {
+        ""
+    }
+}
+
+pub(crate) fn installed_one_card(
+    item: &InstalledPlugin,
+    domain: &str,
+    username: &str,
+    update_available: bool,
+) -> String {
+    let html = installed_cards(
+        std::slice::from_ref(item),
+        "grid",
+        domain,
+        username,
+        &[update_available],
+    );
     html.replace(r#"<div class="plugin-grid">"#, "")
         .replacen("</div>", "", 1)
 }
@@ -491,18 +519,20 @@ pub(crate) fn installed_cards(
     layout: &str,
     domain: &str,
     username: &str,
+    updates: &[bool],
 ) -> String {
     if plugins.is_empty() {
         return r#"<p class="empty-state">No plugins installed for this site yet. Open the Store to install from the community catalog.</p>"#
             .into();
     }
     if layout == "table" {
-        return installed_table(plugins, domain, username);
+        return installed_table(plugins, domain, username, updates);
     }
     let admin = is_panel_admin(username);
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
-    for item in plugins {
+    for (idx, item) in plugins.iter().enumerate() {
         let m = &item.manifest;
+        let update_available = updates.get(idx).copied().unwrap_or(false);
         let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
         let active = if m.enabled { "Yes" } else { "No" };
         let status = if host_owned {
@@ -515,6 +545,7 @@ pub(crate) fn installed_cards(
         } else {
             r#"<span class="plugin-badge">Deactivated</span>"#
         };
+        let update_badge = update_available_badge(update_available);
         let scope_badge = if host_owned {
             r#"<span class="plugin-badge">Host</span>"#
         } else {
@@ -565,6 +596,7 @@ pub(crate) fn installed_cards(
             <span class="plugin-badge">v{ver}</span>
             {pricing}
             {active_badge}
+            {update_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Status: {status} · Active: {active}</p>
@@ -586,6 +618,7 @@ pub(crate) fn installed_cards(
             pricing = badge_pricing(&m.pricing),
             scope = scope_badge,
             active_badge = active_badge,
+            update_badge = update_badge,
             desc = html_escape(&m.description),
             status = status,
             active = active,
@@ -635,14 +668,20 @@ fn toggle_form(enabled: bool, id: &str, domain: &str, host_owned: bool) -> Strin
     )
 }
 
-fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) -> String {
+fn installed_table(
+    plugins: &[InstalledPlugin],
+    domain: &str,
+    username: &str,
+    updates: &[bool],
+) -> String {
     let admin = is_panel_admin(username);
     let mut rows = String::from(
         r#"<div class="table-wrap"><table class="data-table">
         <thead><tr><th>Plugin</th><th>Category</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody>"#,
     );
-    for item in plugins {
+    for (idx, item) in plugins.iter().enumerate() {
         let m = &item.manifest;
+        let update_available = updates.get(idx).copied().unwrap_or(false);
         let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
         let active = if m.enabled {
             if host_owned {
@@ -652,6 +691,11 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
             }
         } else {
             "Inactive"
+        };
+        let status_cell = if update_available {
+            format!("{active} · Update available")
+        } else {
+            active.to_string()
         };
         let toggle = toggle_form(m.enabled, &m.id, domain, host_owned);
         let can_uninstall_site = !host_owned
@@ -692,7 +736,7 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
             <td><strong>{name}</strong><div class="muted">{id}</div></td>
             <td>{cat}</td>
             <td>v{ver}</td>
-            <td>{active}</td>
+            <td>{status}</td>
             <td class="plugin-actions">
               <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
               {toggle}
@@ -700,10 +744,10 @@ fn installed_table(plugins: &[InstalledPlugin], domain: &str, username: &str) ->
             </td>
           </tr>"#,
             name = html_escape(&m.name),
+            status = html_escape(&status_cell),
             id = html_escape(&m.id),
             cat = html_escape(&m.category),
             ver = html_escape(&m.version),
-            active = active,
             toggle = toggle,
             uninstall = uninstall,
             domain_q = urlencoding_simple(domain),
