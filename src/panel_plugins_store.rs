@@ -86,8 +86,11 @@ pub(crate) fn filter_store_entries<'a>(
         out.sort_by(|a, b| {
             let sa = store_match_score(a, &q).unwrap_or(0);
             let sb = store_match_score(b, &q).unwrap_or(0);
-            sb.cmp(&sa)
-                .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+            sb.cmp(&sa).then_with(|| {
+                a.name
+                    .to_ascii_lowercase()
+                    .cmp(&b.name.to_ascii_lowercase())
+            })
         });
     }
     out

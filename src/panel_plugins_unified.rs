@@ -7,10 +7,10 @@ use crate::host_packages_catalog::{
 use crate::panel_admin::is_panel_admin;
 use crate::panel_apps::host_card;
 use crate::panel_plugins_markup::{html_escape, store_scope_query_suffix, urlencoding_simple};
+use crate::panel_plugins_search::{store_match_score, store_search_blob};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
-use crate::panel_plugins_search::{store_match_score, store_search_blob};
 use crate::panel_plugins_store::{StoreListOpts, filter_store_entries, render_catalog_card};
 use crate::plugin_activation::catalog_entry_is_host_scoped;
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured};

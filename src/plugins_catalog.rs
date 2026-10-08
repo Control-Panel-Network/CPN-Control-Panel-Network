@@ -404,7 +404,12 @@ mod tests {
         assert_eq!(entry.pricing, "free");
         assert_eq!(entry.install_count, 0);
         assert!(!entry.featured);
-        assert!(entry.keywords.iter().any(|k| k.eq_ignore_ascii_case("ports")));
+        assert!(
+            entry
+                .keywords
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case("ports"))
+        );
         assert!(entry.keywords.iter().any(|k| k.eq_ignore_ascii_case("mcp")));
     }
 

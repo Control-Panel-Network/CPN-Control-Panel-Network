@@ -99,11 +99,7 @@ pub(crate) fn store_match_score(entry: &CatalogEntry, query: &str) -> Option<u32
         hit = true;
         best = best.max(50);
     }
-    if hit {
-        Some(best)
-    } else {
-        None
-    }
+    if hit { Some(best) } else { None }
 }
 
 pub(crate) fn entry_matches_store_query(entry: &CatalogEntry, query: &str) -> bool {
@@ -111,7 +107,13 @@ pub(crate) fn entry_matches_store_query(entry: &CatalogEntry, query: &str) -> bo
 }
 
 /// Host-package haystack match using the same short-token rules.
-pub(crate) fn host_text_matches(name: &str, id: &str, description: &str, category: &str, query: &str) -> bool {
+pub(crate) fn host_text_matches(
+    name: &str,
+    id: &str,
+    description: &str,
+    category: &str,
+    query: &str,
+) -> bool {
     let q = query.trim().to_ascii_lowercase();
     if q.is_empty() {
         return true;
@@ -187,12 +189,7 @@ mod tests {
             "AI chat assistant for CPN with OpenAI keys.",
             &["ai", "mcp", "assistant"],
         );
-        let bimi = entry(
-            "bimi",
-            "BIMI",
-            "Unlocks Email -> BIMI in CPN Panel.",
-            &[],
-        );
+        let bimi = entry("bimi", "BIMI", "Unlocks Email -> BIMI in CPN Panel.", &[]);
         assert!(entry_matches_store_query(&agent, "ai"));
         assert!(!entry_matches_store_query(&bimi, "ai"));
         assert!(entry_matches_store_query(&bimi, "email"));
@@ -213,12 +210,7 @@ mod tests {
 
     #[test]
     fn longer_substring_still_works() {
-        let agent = entry(
-            "mrAgent",
-            "Mr Agent",
-            "AI chat assistant for CPN.",
-            &[],
-        );
+        let agent = entry("mrAgent", "Mr Agent", "AI chat assistant for CPN.", &[]);
         assert!(entry_matches_store_query(&agent, "assistant"));
         assert!(entry_matches_store_query(&agent, "chat assistant"));
     }
