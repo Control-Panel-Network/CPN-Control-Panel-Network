@@ -3,8 +3,8 @@
 //! Panel-native tools (MariaDB Manager, SFTP jail UI, scaffold stubs) stay visible.
 //! Optional host packages such as phpMyAdmin, webmail, fail2ban, and malware scanners
 //! appear only when installed or configured.
-//! Email MTA-STS / BIMI appear only when their catalog plugins (or host feature flags)
-//! are installed.
+//! Email MTA-STS / BIMI / Proton Mail appear only when their catalog plugins (or host
+//! feature flags) are installed.
 
 use crate::litespeed_stack::{
     any_litespeed_installed, litespeed_enterprise_installed, openlitespeed_installed,
@@ -79,6 +79,7 @@ pub struct InstalledOptionalFeatures {
     pub malware: bool,
     pub mta_sts: bool,
     pub bimi: bool,
+    pub proton_mail: bool,
     pub docker: bool,
 }
 
@@ -140,6 +141,7 @@ impl InstalledOptionalFeatures {
             malware: mal.installed || mal.engine == "nt-api",
             mta_sts: mta_sts_unlocked(),
             bimi: bimi_unlocked(),
+            proton_mail: proton_mail_unlocked(),
             docker: docker_installed(),
         }
     }
@@ -151,6 +153,7 @@ impl InstalledOptionalFeatures {
             "/email/webmail" => self.webmail,
             "/email/mta-sts" => self.mta_sts,
             "/email/bimi" => self.bimi,
+            "/email/proton" => self.proton_mail,
             "/server/openlitespeed" => self.openlitespeed,
             "/server/litespeed-enterprise" => self.litespeed_enterprise,
             "/server/litespeed" => self.litespeed_any,
@@ -231,7 +234,17 @@ pub fn bimi_unlocked() -> bool {
     plugin_id_enabled_anywhere("bimi")
 }
 
-/// Soft-gate body when MTA-STS / BIMI plugins are not installed.
+pub fn proton_mail_unlocked() -> bool {
+    if host_feature_enabled("proton-mail") {
+        return true;
+    }
+    if crate::plugin_activation::host_plugin_installed("protonMail") {
+        return true;
+    }
+    plugin_id_enabled_anywhere("protonMail")
+}
+
+/// Soft-gate body when MTA-STS / BIMI / Proton Mail plugins are not installed.
 pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> String {
     let body = format!(
         r#"<p><strong>{label} is available as a free Plugin Store package.</strong></p>
@@ -310,6 +323,7 @@ mod tests {
             malware,
             mta_sts,
             bimi,
+            proton_mail: false,
             docker: false,
         }
     }
@@ -360,12 +374,16 @@ mod tests {
         );
         assert!(!none.allows_href("/email/mta-sts"));
         assert!(!none.allows_href("/email/bimi"));
+        assert!(!none.allows_href("/email/proton"));
         assert!(none.allows_href("/email/accounts"));
         assert!(none.allows_href("/email/delivery"));
 
         let both = feats(false, false, false, false, false, false, false, true, true);
         assert!(both.allows_href("/email/mta-sts"));
         assert!(both.allows_href("/email/bimi"));
+        let mut with_proton = both;
+        with_proton.proton_mail = true;
+        assert!(with_proton.allows_href("/email/proton"));
     }
 
     #[test]

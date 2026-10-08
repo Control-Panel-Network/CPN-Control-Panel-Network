@@ -127,6 +127,9 @@ fn host_scoped_nav_links(id: &str) -> String {
     if id.contains("mta") && id.contains("sts") {
         return r#"<a class="btn-secondary" href="/email/mta-sts">Manage</a>"#.into();
     }
+    if id.eq_ignore_ascii_case("protonMail") || id.contains("proton") {
+        return r#"<a class="btn-secondary" href="/email/proton">Manage</a>"#.into();
+    }
     String::new()
 }
 
