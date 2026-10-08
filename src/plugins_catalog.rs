@@ -94,6 +94,28 @@ fn uninstall_impacts_from_meta(body: &str) -> Vec<String> {
     impacts
 }
 
+fn keywords_from_meta(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(block) = xml_tag(body, "keywords") {
+        // Comma/semicolon only so multi-word aliases stay intact.
+        for part in block.split(|c: char| c == ',' || c == ';') {
+            let part = sanitize_user_text(part.trim());
+            if !part.is_empty() {
+                out.push(part);
+            }
+        }
+    }
+    for kw in xml_tag_all(body, "keyword") {
+        let part = sanitize_user_text(kw.trim());
+        if !part.is_empty() {
+            out.push(part);
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    out.retain(|s| seen.insert(s.to_ascii_lowercase()));
+    out
+}
+
 /// Parse a legacy catalog `meta.xml` into a CPN catalog entry.
 pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, String> {
     let name = xml_tag(body, "name")
@@ -146,6 +168,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         featured,
         uninstall_impacts: uninstall_impacts_from_meta(body),
         host_scoped,
+        keywords: keywords_from_meta(body),
     })
 }
 
@@ -365,6 +388,8 @@ mod tests {
           <description>Ports for CyberPanel hosts</description>
           <author>master3395</author>
           <paid>false</paid>
+          <keywords>ports, firewall, ai</keywords>
+          <keyword>mcp</keyword>
         </plugin>
         "#;
         let entry = parse_meta_xml("port_manager", xml).unwrap();
@@ -379,6 +404,8 @@ mod tests {
         assert_eq!(entry.pricing, "free");
         assert_eq!(entry.install_count, 0);
         assert!(!entry.featured);
+        assert!(entry.keywords.iter().any(|k| k.eq_ignore_ascii_case("ports")));
+        assert!(entry.keywords.iter().any(|k| k.eq_ignore_ascii_case("mcp")));
     }
 
     #[test]

@@ -10,6 +10,7 @@ use crate::panel_plugins_markup::{html_escape, store_scope_query_suffix, urlenco
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
+use crate::panel_plugins_search::{store_match_score, store_search_blob};
 use crate::panel_plugins_store::{StoreListOpts, filter_store_entries, render_catalog_card};
 use crate::plugin_activation::catalog_entry_is_host_scoped;
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured};
@@ -101,7 +102,48 @@ fn collect_unified<'a>(
         }
     }
 
-    out.sort_by_key(|a| sort_key(a));
+    let q = query.trim().to_ascii_lowercase();
+    if q.is_empty() {
+        out.sort_by_key(|a| sort_key(a));
+    } else {
+        out.sort_by(|a, b| {
+            let sa = match a {
+                UnifiedItem::Catalog(e) => store_match_score(e, &q).unwrap_or(0),
+                UnifiedItem::Host(s) => {
+                    let meta = meta_for(s.id);
+                    if crate::panel_plugins_search::host_text_matches(
+                        s.id.label(),
+                        s.id.as_str(),
+                        meta.description,
+                        meta.category,
+                        &q,
+                    ) {
+                        50
+                    } else {
+                        0
+                    }
+                }
+            };
+            let sb = match b {
+                UnifiedItem::Catalog(e) => store_match_score(e, &q).unwrap_or(0),
+                UnifiedItem::Host(s) => {
+                    let meta = meta_for(s.id);
+                    if crate::panel_plugins_search::host_text_matches(
+                        s.id.label(),
+                        s.id.as_str(),
+                        meta.description,
+                        meta.category,
+                        &q,
+                    ) {
+                        50
+                    } else {
+                        0
+                    }
+                }
+            };
+            sb.cmp(&sa).then_with(|| sort_key(a).cmp(&sort_key(b)))
+        });
+    }
     out
 }
 
@@ -232,10 +274,7 @@ fn render_item(
             let host = catalog_entry_is_host_scoped(entry);
             let paid = entry.pricing.to_ascii_lowercase().contains("paid")
                 || entry.pricing.to_ascii_lowercase().contains("premium");
-            let search = format!(
-                "{} {} {} {}",
-                entry.name, entry.id, entry.description, entry.category
-            );
+            let search = store_search_blob(entry);
             with_store_attrs(
                 &render_catalog_card(entry, entries, installed_ids, domain, username),
                 if host { "host" } else { "site" },
@@ -357,6 +396,7 @@ mod tests {
             featured: false,
             uninstall_impacts: vec![],
             host_scoped: false,
+            keywords: vec![],
         }
     }
 

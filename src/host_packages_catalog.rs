@@ -337,10 +337,13 @@ pub fn filter_host_packages<'a>(
                     _ => false,
                 };
             }
-            status.id.label().to_ascii_lowercase().contains(&q)
-                || status.id.as_str().contains(&q)
-                || meta.description.to_ascii_lowercase().contains(&q)
-                || meta.category.to_ascii_lowercase().contains(&q)
+            crate::panel_plugins_search::host_text_matches(
+                status.id.label(),
+                status.id.as_str(),
+                meta.description,
+                meta.category,
+                &q,
+            )
         })
         .collect()
 }

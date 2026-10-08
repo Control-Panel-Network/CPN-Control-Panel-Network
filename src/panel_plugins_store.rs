@@ -2,6 +2,7 @@
 
 use crate::panel_admin::is_panel_admin;
 use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
+use crate::panel_plugins_search::{entry_matches_store_query, store_match_score};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
@@ -51,7 +52,7 @@ pub(crate) fn filter_store_entries<'a>(
     let q = query.trim().to_ascii_lowercase();
     let cat = category.trim().to_ascii_lowercase();
     let pricing_q = exact_pricing_query(&q);
-    entries
+    let mut out: Vec<&CatalogEntry> = entries
         .iter()
         .filter(|entry| {
             let cat_ok = if cat.is_empty() || cat == "all" {
@@ -78,11 +79,18 @@ pub(crate) fn filter_store_entries<'a>(
                     _ => false,
                 };
             }
-            entry.name.to_ascii_lowercase().contains(&q)
-                || entry.description.to_ascii_lowercase().contains(&q)
-                || entry.id.to_ascii_lowercase().contains(&q)
+            entry_matches_store_query(entry, &q)
         })
-        .collect()
+        .collect();
+    if !q.is_empty() && pricing_q.is_none() {
+        out.sort_by(|a, b| {
+            let sa = store_match_score(a, &q).unwrap_or(0);
+            let sb = store_match_score(b, &q).unwrap_or(0);
+            sb.cmp(&sa)
+                .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+        });
+    }
+    out
 }
 
 /// Legacy Store catalog markup (hub UI uses [`crate::panel_plugins_unified::unified_store_catalog`]).
@@ -440,6 +448,7 @@ mod tests {
             featured: false,
             uninstall_impacts: vec![],
             host_scoped: false,
+            keywords: vec![],
         }
     }
 
