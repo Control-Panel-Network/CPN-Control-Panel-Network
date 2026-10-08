@@ -115,6 +115,11 @@ fn host_card_html(status: &crate::apps::AppStatus, is_admin: bool) -> String {
 
 fn host_scoped_nav_links(id: &str) -> String {
     let id = id.trim().to_ascii_lowercase();
+    if id == "mragent" || id.contains("mragent") {
+        return r#"<a class="btn-primary" href="/plugins/settings?domain=_host&amp;id=mrAgent">Settings</a>
+          <a class="btn-secondary" href="/plugins/mr-agent?domain=_host">Open chat</a>"#
+            .into();
+    }
     if id.contains("fail2ban") {
         return r#"<a class="btn-primary" href="/security/fail2ban">Manage</a>"#.into();
     }

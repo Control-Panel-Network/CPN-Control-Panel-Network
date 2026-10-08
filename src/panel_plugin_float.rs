@@ -348,6 +348,12 @@ pub async fn plugins_float_chat(
             "error": "Float chat is only implemented for mrAgent."
         }));
     }
+    if !crate::mr_agent_policy::allow_host_chat() {
+        return HttpResponse::Forbidden().json(json!({
+            "ok": false,
+            "error": crate::mr_agent_policy::HOST_CHAT_DISABLED_MSG
+        }));
+    }
     let widget = match authorize_float_chat(&user, &query.domain, &query.id) {
         Ok(w) => w,
         Err(err) => {

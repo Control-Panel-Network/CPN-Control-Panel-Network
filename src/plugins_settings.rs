@@ -87,6 +87,13 @@ fn empty_extras() -> ManifestExtras {
 }
 
 fn load_manifest_extras(domain: &str, plugin_id: &str) -> ManifestExtras {
+    if is_host_settings_domain(domain) && plugin_id.eq_ignore_ascii_case("mrAgent") {
+        let path = crate::plugin_activation::host_plugin_path("mrAgent").join("cpn-plugin.json");
+        if let Ok(raw) = fs::read_to_string(&path) {
+            return serde_json::from_str(&raw).unwrap_or_else(|_| empty_extras());
+        }
+        return empty_extras();
+    }
     let Ok(path) = manifest_path(domain, plugin_id) else {
         return empty_extras();
     };
@@ -213,6 +220,66 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
             label: "Max chat messages per user per hour".into(),
             field_type: "number".into(),
             default: "60".into(),
+        },
+        PluginSettingField {
+            key: "max_message_length".into(),
+            label: "Max characters per user message".into(),
+            field_type: "number".into(),
+            default: "4000".into(),
+        },
+        PluginSettingField {
+            key: "max_tokens_per_reply".into(),
+            label: "Max tokens per model reply".into(),
+            field_type: "number".into(),
+            default: "1024".into(),
+        },
+        PluginSettingField {
+            key: "concurrent_requests".into(),
+            label: "Max concurrent chat requests per user (1 or 2)".into(),
+            field_type: "number".into(),
+            default: "2".into(),
+        },
+        PluginSettingField {
+            key: "max_upload_bytes".into(),
+            label: "Max HTTP request body bytes".into(),
+            field_type: "number".into(),
+            default: "262144".into(),
+        },
+        PluginSettingField {
+            key: "local_timeout_seconds".into(),
+            label: "Local provider request timeout (seconds)".into(),
+            field_type: "number".into(),
+            default: "45".into(),
+        },
+        PluginSettingField {
+            key: "local_max_response_bytes".into(),
+            label: "Local provider max response bytes".into(),
+            field_type: "number".into(),
+            default: "1048576".into(),
+        },
+        PluginSettingField {
+            key: "max_history_messages".into(),
+            label: "Max stored messages per conversation".into(),
+            field_type: "number".into(),
+            default: "100".into(),
+        },
+        PluginSettingField {
+            key: "max_stored_conversations".into(),
+            label: "Max stored conversations (oldest pruned)".into(),
+            field_type: "number".into(),
+            default: "200".into(),
+        },
+        PluginSettingField {
+            key: "chat_retention_days".into(),
+            label: "Auto-prune chat logs older than N days".into(),
+            field_type: "number".into(),
+            default: "30".into(),
+        },
+        PluginSettingField {
+            key: "max_chat_disk_mb".into(),
+            label: "Max chat log disk MB under /var/lib/cpn/mr-agent/".into(),
+            field_type: "number".into(),
+            default: "50".into(),
         },
         PluginSettingField {
             key: "local_base_url".into(),
@@ -345,6 +412,7 @@ fn default_float_asset(plugin_id: &str) -> String {
 
 /// Active plugins that declare (or imply) a panel float widget the user may see.
 pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
+    let host_chat_ok = crate::mr_agent_policy::allow_host_chat();
     let Ok(sites) = sites_manageable_by(username) else {
         return Vec::new();
     };
@@ -365,6 +433,10 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
             }
             let extras = load_manifest_extras(&site.domain, &item.manifest.id);
             let is_mr = item.manifest.id.eq_ignore_ascii_case("mrAgent");
+            // Host policy gates Mr Agent panel bubble (not other float plugins).
+            if is_mr && !host_chat_ok {
+                continue;
+            }
             let wants_float = extras.panel_float || is_mr;
             if !wants_float {
                 continue;
@@ -432,7 +504,8 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
         }
     }
     // Host-only install: bubble for ACL users even with no site activation.
-    if crate::plugin_activation::host_plugin_installed("mrAgent")
+    if host_chat_ok
+        && crate::plugin_activation::host_plugin_installed("mrAgent")
         && !out.iter().any(|w| w.id.eq_ignore_ascii_case("mrAgent"))
     {
         let settings = load_host_mragent_settings();
@@ -467,11 +540,31 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
     out
 }
 
+pub fn is_host_settings_domain(domain: &str) -> bool {
+    domain
+        .trim()
+        .eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL)
+}
+
+pub fn load_host_mragent_settings_public() -> PluginSettings {
+    load_host_mragent_settings()
+}
+
 fn load_host_mragent_settings() -> PluginSettings {
     let path = crate::plugin_activation::host_plugin_path("mrAgent").join("settings.json");
     if let Ok(raw) = std::fs::read_to_string(&path)
-        && let Ok(settings) = serde_json::from_str::<PluginSettings>(&raw)
+        && let Ok(mut settings) = serde_json::from_str::<PluginSettings>(&raw)
     {
+        for field in builtin_mragent_settings_fields("mrAgent") {
+            if is_hidden_settings_field(&field.key) {
+                continue;
+            }
+            settings
+                .fields
+                .entry(field.key.clone())
+                .or_insert_with(|| field.default.clone());
+        }
+        settings.fields.retain(|k, _| !is_hidden_settings_field(k));
         return settings;
     }
     let mut settings = PluginSettings {
@@ -479,9 +572,29 @@ fn load_host_mragent_settings() -> PluginSettings {
         ..Default::default()
     };
     for field in builtin_mragent_settings_fields("mrAgent") {
+        if is_hidden_settings_field(&field.key) {
+            continue;
+        }
         settings.fields.insert(field.key, field.default);
     }
     settings
+}
+
+pub fn save_host_mragent_settings(settings: &PluginSettings) -> Result<(), String> {
+    let mut clean = settings.clone();
+    clean.fields.retain(|k, _| !is_hidden_settings_field(k));
+    let dir = crate::plugin_activation::host_plugin_path("mrAgent");
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create host plugin dir: {e}"))?;
+    let path = dir.join(SETTINGS_FILE);
+    let raw = serde_json::to_string_pretty(&clean)
+        .map_err(|e| format!("Could not serialize settings: {e}"))?;
+    fs::write(&path, raw).map_err(|e| format!("Could not write host settings.json: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 pub fn manifest_panel_float(domain: &str, plugin_id: &str) -> bool {
@@ -503,8 +616,11 @@ pub fn load_plugin_settings(
     domain_raw: &str,
     plugin_id_raw: &str,
 ) -> Result<PluginSettings, String> {
-    let domain = load_site(domain_raw)?.domain;
     let id = normalize_plugin_id(plugin_id_raw)?;
+    if is_host_settings_domain(domain_raw) && id.eq_ignore_ascii_case("mrAgent") {
+        return Ok(load_host_mragent_settings());
+    }
+    let domain = load_site(domain_raw)?.domain;
     let path = settings_path(&domain, &id)?;
     if !path.is_file() {
         let mut settings = PluginSettings {
@@ -535,14 +651,21 @@ pub fn save_plugin_settings(
     plugin_id_raw: &str,
     settings: &PluginSettings,
 ) -> Result<(), String> {
-    let domain = load_site(domain_raw)?.domain;
     let id = normalize_plugin_id(plugin_id_raw)?;
+    if is_host_settings_domain(domain_raw) && id.eq_ignore_ascii_case("mrAgent") {
+        return save_host_mragent_settings(settings);
+    }
+    let domain = load_site(domain_raw)?.domain;
     let path = settings_path(&domain, &id)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create plugin dir: {error}"))?;
     }
-    let raw = serde_json::to_string_pretty(settings)
+    let mut clean = settings.clone();
+    if id.eq_ignore_ascii_case("mrAgent") {
+        clean.fields.retain(|k, _| !is_hidden_settings_field(k));
+    }
+    let raw = serde_json::to_string_pretty(&clean)
         .map_err(|error| format!("Could not serialize settings: {error}"))?;
     fs::write(&path, raw).map_err(|error| format!("Could not write settings.json: {error}"))?;
     #[cfg(unix)]
