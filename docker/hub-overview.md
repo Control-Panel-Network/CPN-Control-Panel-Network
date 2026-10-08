@@ -6,9 +6,9 @@
 
 AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer smoke tests and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
 
-## Status: stable (v1.3.0)
+## Status: stable (v1.4.0)
 
-CPN **v1.3.0** is the current stable release (first stable was **v1.0.0**). Keep backups and test upgrades on a staging host before production use.
+CPN **v1.4.0** is the current stable release (first stable was **v1.0.0**). Keep backups and test upgrades on a staging host before production use.
 
 ## Pull
 
@@ -17,7 +17,7 @@ docker pull master3395/cpn-installer:almalinux9
 docker pull master3395/cpn-installer:almalinux10
 docker pull master3395/cpn-installer:ubuntu26.04
 docker pull master3395/cpn-installer:latest   # same baseline as almalinux9
-docker pull master3395/cpn-installer:1.3.0    # semver on the AlmaLinux 9 image
+docker pull master3395/cpn-installer:1.4.0    # semver on the AlmaLinux 9 image
 ```
 
 | Tag | Base |

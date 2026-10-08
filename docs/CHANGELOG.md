@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.0] - 09/10/2026
+### Added
+
 - **Email Proton Mail** (plugin `protonMail`): Host-scoped Plugin Store package unlocks `/email/proton` (sidebar and hub tile gated until installed). Open Proton Mail (https://mail.proton.me), operator settings (display email, Bridge host/ports, button label), and Bridge guidance. Honest external integration: CPN does not host Proton encryption or replace Tachyon as default active webmail. Bridge automation remains follow-up.
 - **Webmail OpenPGP (classic PGP)**: Install/heal enables SnappyMail-family `openpgp` + `gnupg` in `application.ini` (Tachyon, SnappyMail, NextSnapMail) and Roundcube Enigma with keydir `/var/lib/cpn-webmail/roundcube-enigma` (outside the HTTP docroot). Soft-installs the GnuPG CLI when missing. Email > Webmail shows short EN+NO operator notes (Settings paths). Not Proton E2E. Details and gaps: `docs/WEBMAIL-OPENPGP.md`.
 - **Plugin Store CPN-only install target**: Install target is Host | CPN only | Site. Host remains owner/admin only. CPN only installs account-scoped panel tools under `$CPN_DATA_DIR/user-plugins/<user>/<id>/` (default `/var/lib/cpn/user-plugins/`; not a public site app; `.htaccess` deny marker). Catalog `<scope>` / `<install_scope>` supports `host`, `cpn`, `site`, and combinations (`host+cpn`, `cpn+site`, `host+cpn+site`). Store and Installed cards show Host / CPN / Site badges plus Active/Deactivated. Installed hub adds a CPN only section and filter pill. Routes: `POST /plugins/install-cpn`, `/uninstall-cpn`, `/enable-cpn`, `/disable-cpn`. Settings use domain token `_cpn:<username>`.
