@@ -388,8 +388,8 @@ mod tests {
     #[test]
     fn store_target_attr_combines_scopes() {
         let mut entry = CatalogEntry {
-            id: "autoBanSecurityAlerts".into(),
-            name: "Auto Ban".into(),
+            id: "demoCpnUtility".into(),
+            name: "Demo CPN Utility".into(),
             category: "Security".into(),
             version: "1.0.0".into(),
             description: "x".into(),
