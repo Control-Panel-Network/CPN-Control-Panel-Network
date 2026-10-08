@@ -273,6 +273,7 @@ fn with_store_attrs(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_item(
     item: &UnifiedItem<'_>,
     apps: &[AppStatus],
