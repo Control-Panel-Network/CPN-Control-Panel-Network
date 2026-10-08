@@ -282,10 +282,10 @@ fn page_main(user: &str, domain: &str, notice: Option<&str>, error: Option<&str>
   {site_link}
   <div id="mra-panel-log" style="min-height:220px;max-height:50vh;overflow:auto;border:1px solid var(--cpn-border,#334155);border-radius:8px;padding:12px;margin:12px 0;"></div>
   <form id="mra-panel-form" style="display:flex;gap:8px;flex-wrap:wrap;">
-    <input id="mra-panel-input" type="text" maxlength="8000" placeholder="Ask Mr Agent…" autocomplete="off" style="flex:1;min-width:200px;">
+    <input id="mra-panel-input" type="text" maxlength="8000" placeholder="Ask Mr Agentâ€¦" autocomplete="off" style="flex:1;min-width:200px;">
     <button type="submit" class="btn-primary">Send</button>
   </form>
-  <p class="muted" style="margin-top:12px;">{settings_link} · <a href="/plugins">Plugins</a></p>
+  <p class="muted" style="margin-top:12px;">{settings_link} Â· <a href="/plugins">Plugins</a></p>
 </article>
 <script>
 (function () {{
@@ -418,6 +418,106 @@ pub async fn plugins_mr_agent_host_policy(
             .finish(),
         Err(err) => HttpResponse::SeeOther()
             .append_header(("Location", host_policy_redirect(None, Some(&err))))
+            .finish(),
+    }
+}
+
+/// Panel-mediated setup (secrets + folder publish). Replaces SSH `install.sh` for normal use.
+#[post("/plugins/mr-agent/setup")]
+pub async fn plugins_mr_agent_setup(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<MrAgentActionForm>,
+) -> HttpResponse {
+    let Some(user) = panel_user_from_request(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let domain = form.domain.trim();
+    if domain.is_empty() {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect("", None, Some("Missing domain")),
+            ))
+            .finish();
+    }
+    if !form.id.trim().is_empty() && !crate::mr_agent_install::is_mr_agent(&form.id) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect(domain, None, Some("Setup is only for Mr Agent")),
+            ))
+            .finish();
+    }
+    if !domain.eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL)
+        && !matches!(can_manage_site(&user, domain, SitePerm::Enable), Ok(true))
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect(domain, None, Some("Not allowed to manage this site")),
+            ))
+            .finish();
+    }
+    let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+    let mode = if form.install_mode.trim().is_empty() {
+        crate::mr_agent_install::install_mode_from_settings(domain)
+    } else {
+        mode
+    };
+    match crate::mr_agent_install::run_setup(domain, &mode, &form.confirm_vhost) {
+        Ok(msg) => HttpResponse::SeeOther()
+            .append_header(("Location", settings_redirect(domain, Some(&msg), None)))
+            .finish(),
+        Err(err) => HttpResponse::SeeOther()
+            .append_header(("Location", settings_redirect(domain, None, Some(&err))))
+            .finish(),
+    }
+}
+
+/// Panel-mediated chat log prune (no SSH `cli_prune.php` required).
+#[post("/plugins/mr-agent/prune")]
+pub async fn plugins_mr_agent_prune(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<MrAgentActionForm>,
+) -> HttpResponse {
+    let Some(user) = panel_user_from_request(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let domain = form.domain.trim();
+    if domain.is_empty() {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect("", None, Some("Missing domain")),
+            ))
+            .finish();
+    }
+    if !form.id.trim().is_empty() && !crate::mr_agent_install::is_mr_agent(&form.id) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect(domain, None, Some("Prune is only for Mr Agent")),
+            ))
+            .finish();
+    }
+    if !domain.eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL)
+        && !matches!(can_manage_site(&user, domain, SitePerm::Enable), Ok(true))
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                settings_redirect(domain, None, Some("Not allowed to manage this site")),
+            ))
+            .finish();
+    }
+    match crate::mr_agent_install::prune_chat_logs(domain) {
+        Ok(msg) => HttpResponse::SeeOther()
+            .append_header(("Location", settings_redirect(domain, Some(&msg), None)))
+            .finish(),
+        Err(err) => HttpResponse::SeeOther()
+            .append_header(("Location", settings_redirect(domain, None, Some(&err))))
             .finish(),
     }
 }

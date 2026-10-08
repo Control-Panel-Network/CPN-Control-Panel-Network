@@ -119,7 +119,8 @@ use cpn_installer::panel_hub_routes::{
     users_reseller_route, users_status_post,
 };
 use cpn_installer::panel_mr_agent::{
-    plugins_mr_agent_page, plugins_mr_agent_prune, plugins_mr_agent_setup,
+    plugins_mr_agent_host_policy, plugins_mr_agent_page, plugins_mr_agent_prune,
+    plugins_mr_agent_setup,
 };
 use cpn_installer::panel_mr_agent_stats_route::plugins_mr_agent_stats;
 use cpn_installer::panel_network::{
@@ -1554,6 +1555,7 @@ async fn main() -> std::io::Result<()> {
             .service(plugins_settings_save)
             .service(plugins_dashboard_page)
             .service(plugins_mr_agent_page)
+            .service(plugins_mr_agent_host_policy)
             .service(plugins_mr_agent_setup)
             .service(plugins_mr_agent_prune)
             .service(plugins_mr_agent_stats)
