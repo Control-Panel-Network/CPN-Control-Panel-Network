@@ -129,7 +129,10 @@ pub fn plugin_settings_main(
         <p class="panel-notice error">Plugin `{id}` is not installed on `{domain}`.</p>
         <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin settings", "Configure a plugin for one site or CPN account."),
+            heading = section_heading(
+                "Plugin settings",
+                "Configure a plugin for one site or CPN account."
+            ),
             err = notice_block("error", error),
             id = html_escape(plugin_id),
             domain = html_escape(domain),
@@ -304,7 +307,10 @@ pub fn plugin_dashboard_main(
         <p class="panel-notice error">Plugin not found for this scope.</p>
         <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin dashboard", "Plugin overview for one site or CPN account."),
+            heading = section_heading(
+                "Plugin dashboard",
+                "Plugin overview for one site or CPN account."
+            ),
             err = notice_block("error", error),
         );
     };

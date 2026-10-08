@@ -28,7 +28,8 @@ use crate::plugin_activation::{
     uninstall_host_plugin,
 };
 use crate::plugin_cpn_scope::{
-    install_cpn_plugin, is_cpn_domain, parse_cpn_owner, set_cpn_plugin_enabled, uninstall_cpn_plugin,
+    install_cpn_plugin, is_cpn_domain, parse_cpn_owner, set_cpn_plugin_enabled,
+    uninstall_cpn_plugin,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
@@ -1370,10 +1371,7 @@ pub async fn plugins_uninstall_cpn(
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                plugins_redirect("", view, None, Some(&error)),
-            ))
+            .append_header(("Location", plugins_redirect("", view, None, Some(&error))))
             .finish(),
     }
 }

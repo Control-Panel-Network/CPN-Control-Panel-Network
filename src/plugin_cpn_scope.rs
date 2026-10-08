@@ -20,22 +20,14 @@ pub const CPN_DOMAIN_PREFIX: &str = "_cpn:";
 const CPN_SCOPED_ALLOWLIST: &[&str] = &["autoBanSecurityAlerts", "autoBan"];
 
 pub fn cpn_domain_for_user(username: &str) -> String {
-    format!(
-        "{}{}",
-        CPN_DOMAIN_PREFIX,
-        sanitize_username(username)
-    )
+    format!("{}{}", CPN_DOMAIN_PREFIX, sanitize_username(username))
 }
 
 pub fn parse_cpn_owner(domain_raw: &str) -> Option<String> {
     let d = domain_raw.trim();
     let rest = d.strip_prefix(CPN_DOMAIN_PREFIX)?;
     let user = sanitize_username(rest);
-    if user.is_empty() {
-        None
-    } else {
-        Some(user)
-    }
+    if user.is_empty() { None } else { Some(user) }
 }
 
 pub fn is_cpn_domain(domain_raw: &str) -> bool {
@@ -233,21 +225,16 @@ fn load_cpn_manifest(username: &str, plugin_id: &str) -> Result<CpnPluginManifes
     if path.is_file() {
         let raw = fs::read_to_string(&path)
             .map_err(|e| format!("Could not read CPN plugin manifest: {e}"))?;
-        return serde_json::from_str(&raw)
-            .map_err(|e| format!("Invalid CPN plugin manifest: {e}"));
+        return serde_json::from_str(&raw).map_err(|e| format!("Invalid CPN plugin manifest: {e}"));
     }
     let meta = cpn_plugin_path(username, plugin_id).join("meta.xml");
-    let body = fs::read_to_string(&meta)
-        .map_err(|e| format!("Could not read meta.xml: {e}"))?;
+    let body = fs::read_to_string(&meta).map_err(|e| format!("Could not read meta.xml: {e}"))?;
     let entry = parse_meta_xml(plugin_id, &body)?;
     write_cpn_manifest(username, plugin_id, &entry)
 }
 
 /// Install for the signed-in CPN user under `$CPN_DATA_DIR/user-plugins/<user>/<id>/`.
-pub fn install_cpn_plugin(
-    username: &str,
-    plugin_id: &str,
-) -> Result<CpnPluginManifest, String> {
+pub fn install_cpn_plugin(username: &str, plugin_id: &str) -> Result<CpnPluginManifest, String> {
     let user = sanitize_username(username);
     if user.is_empty() {
         return Err("Missing CPN username for account-scoped install".into());
@@ -258,7 +245,9 @@ pub fn install_cpn_plugin(
         // Route layer still checks catalog_entry_is_cpn_installable when possible.
     }
     if cpn_plugin_installed(&user, &id) {
-        return Err(format!("CPN plugin `{id}` is already installed for `{user}`"));
+        return Err(format!(
+            "CPN plugin `{id}` is already installed for `{user}`"
+        ));
     }
     let root = cpn_user_plugins_dir(&user);
     ensure_private_dir(&root)?;
