@@ -192,7 +192,7 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
         },
         PluginSettingField {
             key: "default_provider".into(),
-            label: "Default provider: free | openai | anthropic | custom".into(),
+            label: "Default provider: free | local | openai | anthropic | custom".into(),
             field_type: "text".into(),
             default: "free".into(),
         },
@@ -203,10 +203,35 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
             default: "60".into(),
         },
         PluginSettingField {
+            key: "local_base_url".into(),
+            label: "Local OpenAI-compatible base URL (server; Ollama 11434, LM Studio 1235)"
+                .into(),
+            field_type: "text".into(),
+            default: "http://127.0.0.1:11434/v1".into(),
+        },
+        PluginSettingField {
+            key: "local_model".into(),
+            label: "Local model name (e.g. llama3.2:1b)".into(),
+            field_type: "text".into(),
+            default: "llama3.2:1b".into(),
+        },
+        PluginSettingField {
+            key: "local_only_mode".into(),
+            label: "Local-only mode (never call cloud providers)".into(),
+            field_type: "checkbox".into(),
+            default: "0".into(),
+        },
+        PluginSettingField {
+            key: "local_allow_lan".into(),
+            label: "Allow local LLM on private LAN IPs".into(),
+            field_type: "checkbox".into(),
+            default: "0".into(),
+        },
+        PluginSettingField {
             key: "notes".into(),
             label: "Operator notes (optional)".into(),
             field_type: "text".into(),
-            default: "After Store install, run: sudo bash install.sh <domain>".into(),
+            default: "After Store install, run: sudo bash install.sh <domain>. Local LLM must run on this server.".into(),
         },
     ]
 }
