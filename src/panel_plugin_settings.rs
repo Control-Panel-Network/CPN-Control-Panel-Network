@@ -216,7 +216,7 @@ pub fn plugin_settings_main(
             <input type="checkbox" name="show_in_sidebar" value="1"{sidebar}>
             Show in sidebar
           </label>
-          <p class="muted">When enabled and the plugin is Active, webmail plugins appear under Email; other plugins appear under Installed plugins.</p>
+          <p class="muted">When enabled and the plugin is Active, webmail plugins appear under Email; other plugins appear under Installed plugins. The floating chat bubble (if the plugin declares one) is a separate setting, not this checkbox. The sidebar footer speech icon is Feedback.</p>
           {fields}
           <button type="submit" class="btn-primary">Save settings</button>
         </form>
