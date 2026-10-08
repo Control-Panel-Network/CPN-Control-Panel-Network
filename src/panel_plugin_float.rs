@@ -1,5 +1,6 @@
 //! Inject Active plugin float widgets (example: Mr Agent chat bubble) into panel chrome.
 
+use crate::panel_site_tools_security::same_origin_ok;
 use crate::plugins::plugins_dir_for_domain;
 use crate::plugins_settings::{
     PanelFloatWidget, load_plugin_settings, panel_float_widgets, plugin_visibility_allows,
@@ -316,6 +317,12 @@ pub async fn plugins_float_chat(
         return HttpResponse::Unauthorized()
             .json(json!({"ok": false, "error": "Sign in required"}));
     };
+    if !same_origin_ok(&http) {
+        return HttpResponse::Forbidden().json(json!({
+            "ok": false,
+            "error": "Cross-origin float chat is not allowed."
+        }));
+    }
     if !query.id.trim().eq_ignore_ascii_case("mrAgent") {
         return HttpResponse::BadRequest().json(json!({
             "ok": false,
@@ -348,7 +355,11 @@ pub async fn plugins_float_chat(
         }));
     }
     let domain = query.domain.trim().to_string();
-    let provider = body.provider.clone();
+    // auto/free: PHP bridge prefers local LLM for general chat; CPN help for navigation.
+    let mut provider = body.provider.trim().to_ascii_lowercase();
+    if provider.is_empty() || provider == "free" {
+        provider = "auto".into();
+    }
     let model = body.model.clone();
     let user_clone = user.clone();
     let result =
