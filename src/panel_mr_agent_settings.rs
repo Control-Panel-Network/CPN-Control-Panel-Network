@@ -178,11 +178,7 @@ fn access_policy_block(is_host: bool, is_admin: bool) -> String {
     let p = load_host_policy();
     if is_host && is_admin {
         let chat = if p.allow_host_chat { " checked" } else { "" };
-        let site = if p.allow_site_install {
-            " checked"
-        } else {
-            ""
-        };
+        let site = if p.allow_site_install { " checked" } else { "" };
         return format!(
             r#"<h3>Host policy</h3>
         <p class="muted">Stored in <code>/var/lib/cpn/mr-agent/host-policy.json</code>. Applies panel-wide.</p>
@@ -234,11 +230,7 @@ fn resolve_installed(domain: &str) -> Result<(String, String, String), String> {
         }
         let path = host_plugin_path("mrAgent");
         let ver = fs_version(&path);
-        return Ok((
-            "Mr Agent".into(),
-            ver,
-            path.display().to_string(),
-        ));
+        return Ok(("Mr Agent".into(), ver, path.display().to_string()));
     }
     let installed = list_installed(domain).unwrap_or_default();
     let item: Option<&InstalledPlugin> = installed
@@ -281,10 +273,8 @@ pub fn save_host_policy_from_form(
         return Err("Only panel administrators can change host policy".into());
     }
     let policy = MrAgentHostPolicy {
-        allow_host_chat: form.get("allow_host_chat").map(String::as_str)
-            == Some("1"),
-        allow_site_install: form.get("allow_site_install").map(String::as_str)
-            == Some("1"),
+        allow_host_chat: form.get("allow_host_chat").map(String::as_str) == Some("1"),
+        allow_site_install: form.get("allow_site_install").map(String::as_str) == Some("1"),
     };
     save_host_policy(&policy)
 }
@@ -336,9 +326,7 @@ pub fn mr_agent_settings_main(
         ("storage", "Storage"),
         ("statistics", "Statistics"),
     ] {
-        tabs.push_str(
-            &tab_btn(id, label, active).replace("{domain}", &html_escape(domain)),
-        );
+        tabs.push_str(&tab_btn(id, label, active).replace("{domain}", &html_escape(domain)));
         tabs.push('\n');
     }
 
@@ -404,7 +392,10 @@ pub fn mr_agent_settings_main(
         )
     };
     let stats_only = if active == "statistics" {
-        format!(r#"<div class="stack-form" style="max-width:720px;">{panel}</div>"#, panel = panel)
+        format!(
+            r#"<div class="stack-form" style="max-width:720px;">{panel}</div>"#,
+            panel = panel
+        )
     } else {
         String::new()
     };
