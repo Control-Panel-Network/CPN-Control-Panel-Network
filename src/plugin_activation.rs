@@ -495,6 +495,7 @@ mod tests {
                 featured: false,
                 uninstall_impacts: vec![],
                 host_scoped: true,
+                keywords: vec![],
             };
             write_host_manifest("clamav", &entry).unwrap();
             assert!(host_plugin_installed("clamav"));
