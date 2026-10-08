@@ -15,8 +15,7 @@ use std::path::{Path, PathBuf};
 const POLICY_DIR: &str = "/var/lib/cpn/mr-agent";
 const POLICY_FILE: &str = "host-policy.json";
 
-pub const SITE_INSTALL_DISABLED_MSG: &str =
-    "Site install of Mr Agent is disabled by the server owner. Ask the panel owner to enable Allow site install in Mr Agent host policy, or use panel chat when Allow host chat is on.";
+pub const SITE_INSTALL_DISABLED_MSG: &str = "Site install of Mr Agent is disabled by the server owner. Ask the panel owner to enable Allow site install in Mr Agent host policy, or use panel chat when Allow host chat is on.";
 
 pub const HOST_CHAT_DISABLED_MSG: &str =
     "Panel Mr Agent chat is disabled by the server owner (Allow host chat is off).";
@@ -80,8 +79,8 @@ pub fn save_host_policy(policy: &MrAgentHostPolicy) -> Result<(), String> {
         .map_err(|e| format!("Could not serialize host policy: {e}"))?;
     let tmp = path.with_extension("json.tmp");
     {
-        let mut f = fs::File::create(&tmp)
-            .map_err(|e| format!("Could not write host policy temp: {e}"))?;
+        let mut f =
+            fs::File::create(&tmp).map_err(|e| format!("Could not write host policy temp: {e}"))?;
         f.write_all(raw.as_bytes())
             .map_err(|e| format!("Could not write host policy: {e}"))?;
         f.write_all(b"\n")
@@ -137,8 +136,7 @@ mod tests {
         assert!(p.allow_host_chat);
         assert!(!p.allow_site_install);
         let p2: MrAgentHostPolicy =
-            serde_json::from_str(r#"{"allow_host_chat":false,"allow_site_install":true}"#)
-                .unwrap();
+            serde_json::from_str(r#"{"allow_host_chat":false,"allow_site_install":true}"#).unwrap();
         assert!(!p2.allow_host_chat);
         assert!(p2.allow_site_install);
     }
