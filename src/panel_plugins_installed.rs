@@ -102,6 +102,7 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
         ("All statuses", ""),
         ("Active", "active"),
         ("Deactivated", "deactivated"),
+        ("Updates", "updates"),
     ] {
         let cls = if st.is_empty() {
             if opts.status.is_empty() || opts.status.eq_ignore_ascii_case("all") {
@@ -247,7 +248,12 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         "plugin-grid-scroll"
     };
     let empty = if total == 0 {
-        r#"<p class="empty-state">No installed packages match this search or filter.</p>"#
+        let st = opts.status.trim().to_ascii_lowercase();
+        if matches!(st.as_str(), "updates" | "update" | "upgrades" | "upgrade") {
+            r#"<p class="empty-state">No installed plugins have updates available.</p>"#
+        } else {
+            r#"<p class="empty-state">No installed packages match this search or filter.</p>"#
+        }
     } else {
         ""
     };
@@ -265,7 +271,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       {tabs}
       <article class="section-card">
         <h2>Installed</h2>
-        <p class="muted">Host is server-wide. CPN only is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / CPN / Site plus Active or Deactivated.</p>
+        <p class="muted">Host is server-wide. CPN only is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / CPN / Site plus Active, Deactivated, or Update available. Use the Updates filter for packages with a newer catalog version.</p>
         {picker}
         <form method="get" action="/plugins" class="plugin-search-row">
           <input type="hidden" name="view" value="installed">
@@ -347,4 +353,35 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
             String::new()
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn updates_status_pill_and_empty_copy() {
+        let html = render_installed(InstalledPageOpts {
+            layout: "grid",
+            domain: "",
+            notice: None,
+            error: None,
+            sites: &[],
+            username: "cpnowner",
+            q: "",
+            category: "",
+            status: "updates",
+            mode: "page",
+            page: 1,
+            per_page: 10,
+        });
+        assert!(html.contains("status=updates"));
+        assert!(html.contains(">Updates</a>"));
+        assert!(html.contains("Update available"));
+        // With no catalog plugins needing updates, the Updates filter is empty.
+        assert!(html.contains("No installed plugins have updates available."));
+        // Scope copy from Host | CPN only | Site work stays present.
+        assert!(html.contains("CPN only"));
+        assert!(html.contains("Host is server-wide"));
+    }
 }

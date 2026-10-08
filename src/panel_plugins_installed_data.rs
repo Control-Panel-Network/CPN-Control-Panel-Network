@@ -6,12 +6,15 @@ use crate::backups::is_subdomain_site;
 use crate::host_packages_catalog::meta_for;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_apps::{host_action_buttons, host_nav_links};
-use crate::panel_plugins_markup::{html_escape, installed_one_card};
+use crate::panel_plugins_markup::{html_escape, installed_one_card, update_available_badge};
 use crate::plugin_activation::{is_host_owned_install, list_host_installed_plugins};
 use crate::plugin_cpn_scope::list_cpn_installed_plugins;
-use crate::plugins::{InstalledPlugin, list_installed};
+use crate::plugins::{InstalledPlugin, fetch_catalog, list_installed};
+use crate::releases::compare_versions;
 use crate::sites::SiteRecord;
 use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
+use std::cmp::Ordering;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Scope {
@@ -33,13 +36,42 @@ pub(crate) struct FlatItem {
     pub card_html: String,
 }
 
-fn status_filter_ok(active: bool, status: &str) -> bool {
+fn status_filter_ok(active: bool, status: &str, update_available: bool) -> bool {
     match status.trim().to_ascii_lowercase().as_str() {
         "" | "all" => true,
         "active" | "activated" | "enabled" => active,
         "deactivated" | "inactive" | "disabled" => !active,
+        "updates" | "update" | "upgrades" | "upgrade" => update_available,
         _ => true,
     }
+}
+
+fn catalog_version_map() -> HashMap<String, String> {
+    match fetch_catalog(false) {
+        Ok((entries, _)) => entries
+            .into_iter()
+            .map(|e| (e.id.to_ascii_lowercase(), e.version))
+            .collect(),
+        Err(_) => HashMap::new(),
+    }
+}
+
+/// True when the catalog version is newer than the installed version.
+pub(crate) fn plugin_update_available(
+    catalog: &HashMap<String, String>,
+    plugin_id: &str,
+    installed_version: &str,
+) -> bool {
+    let key = plugin_id.trim().to_ascii_lowercase();
+    let Some(catalog_ver) = catalog.get(&key) else {
+        return false;
+    };
+    let catalog_ver = catalog_ver.trim();
+    let installed = installed_version.trim();
+    if catalog_ver.is_empty() || installed.is_empty() {
+        return false;
+    }
+    compare_versions(catalog_ver, installed) == Ordering::Greater
 }
 
 fn text_match(q: &str, name: &str, id: &str, category: &str) -> bool {
@@ -143,13 +175,14 @@ fn host_scoped_nav_links(id: &str) -> String {
     String::new()
 }
 
-fn host_scoped_card(item: &InstalledPlugin, is_admin: bool) -> String {
+fn host_scoped_card(item: &InstalledPlugin, is_admin: bool, update_available: bool) -> String {
     let m = &item.manifest;
     let active_badge = if m.enabled {
         r#"<span class="plugin-badge installed">Active</span>"#
     } else {
         r#"<span class="plugin-badge">Deactivated</span>"#
     };
+    let update_badge = update_available_badge(update_available);
     let mut actions = host_scoped_nav_links(&m.id);
     if is_admin {
         let impacts = plugin_uninstall_impacts("", &m.id, &m.name);
@@ -176,6 +209,7 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool) -> String {
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {active}
+            {update}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Id: <code>{id}</code> · path: <code>{path}</code></p>
@@ -185,6 +219,7 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool) -> String {
         cat = html_escape(&m.category),
         ver = html_escape(&m.version),
         active = active_badge,
+        update = update_badge,
         desc = html_escape(&m.description),
         id = html_escape(&m.id),
         path = html_escape(&item.path.display().to_string()),
@@ -192,13 +227,14 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool) -> String {
     )
 }
 
-fn cpn_scoped_card(item: &InstalledPlugin) -> String {
+fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool) -> String {
     let m = &item.manifest;
     let active_badge = if m.enabled {
         r#"<span class="plugin-badge installed">Active</span>"#
     } else {
         r#"<span class="plugin-badge">Deactivated</span>"#
     };
+    let update_badge = update_available_badge(update_available);
     let domain_q = html_escape(&m.domain);
     let id = html_escape(&m.id);
     let toggle_action = if m.enabled {
@@ -218,6 +254,7 @@ fn cpn_scoped_card(item: &InstalledPlugin) -> String {
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {active}
+            {update}
           </div>
           <p class="plugin-desc">{desc}</p>
           <p class="plugin-meta">Id: <code>{id}</code> · path: <code>{path}</code> (account-scoped, not a public site app)</p>
@@ -239,6 +276,7 @@ fn cpn_scoped_card(item: &InstalledPlugin) -> String {
         cat = html_escape(&m.category),
         ver = html_escape(&m.version),
         active = active_badge,
+        update = update_badge,
         desc = html_escape(&m.description),
         id = id,
         path = html_escape(&item.path.display().to_string()),
@@ -268,6 +306,7 @@ pub(crate) fn collect_installed_flat(
     status: &str,
 ) -> Vec<FlatItem> {
     let is_admin = is_panel_admin(username);
+    let catalog = catalog_version_map();
     let mut out = Vec::new();
     for status_app in list_apps() {
         if !matches!(
@@ -278,7 +317,9 @@ pub(crate) fn collect_installed_flat(
         }
         let meta = meta_for(status_app.id);
         let active = host_active(&status_app);
-        if !status_filter_ok(active, status) {
+        // Host engines are system packages; catalog version updates apply to CPN Plugins only.
+        let update_available = false;
+        if !status_filter_ok(active, status, update_available) {
             continue;
         }
         if !category_match(category, meta.category, "host") {
@@ -304,7 +345,8 @@ pub(crate) fn collect_installed_flat(
     }
     for item in list_host_installed_plugins() {
         let m = &item.manifest;
-        if !status_filter_ok(m.enabled, status) {
+        let update_available = plugin_update_available(&catalog, &m.id, &m.version);
+        if !status_filter_ok(m.enabled, status, update_available) {
             continue;
         }
         if !category_match(category, &m.category, "host") {
@@ -320,12 +362,13 @@ pub(crate) fn collect_installed_flat(
             id: m.id.clone(),
             category: m.category.clone(),
             active: m.enabled,
-            card_html: host_scoped_card(&item, is_admin),
+            card_html: host_scoped_card(&item, is_admin, update_available),
         });
     }
     for item in list_cpn_installed_plugins(username) {
         let m = &item.manifest;
-        if !status_filter_ok(m.enabled, status) {
+        let update_available = plugin_update_available(&catalog, &m.id, &m.version);
+        if !status_filter_ok(m.enabled, status, update_available) {
             continue;
         }
         if !category_match(category, &m.category, "cpn") {
@@ -341,7 +384,7 @@ pub(crate) fn collect_installed_flat(
             id: m.id.clone(),
             category: m.category.clone(),
             active: m.enabled,
-            card_html: cpn_scoped_card(&item),
+            card_html: cpn_scoped_card(&item, update_available),
         });
     }
     for site in sites {
@@ -354,7 +397,8 @@ pub(crate) fn collect_installed_flat(
             let m = &p.manifest;
             let host_owned =
                 is_host_owned_install(&site.domain, &m.id) || m.source == "host-activation";
-            if !status_filter_ok(m.enabled, status) {
+            let update_available = plugin_update_available(&catalog, &m.id, &m.version);
+            if !status_filter_ok(m.enabled, status, update_available) {
                 continue;
             }
             if !category_match(
@@ -374,7 +418,7 @@ pub(crate) fn collect_installed_flat(
                 id: m.id.clone(),
                 category: m.category.clone(),
                 active: m.enabled,
-                card_html: installed_one_card(&p, &site.domain, username),
+                card_html: installed_one_card(&p, &site.domain, username, update_available),
             });
         }
     }
@@ -391,4 +435,39 @@ pub(crate) fn collect_installed_flat(
             ))
     });
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_filter_updates_requires_newer_catalog() {
+        assert!(status_filter_ok(true, "updates", true));
+        assert!(!status_filter_ok(true, "updates", false));
+        assert!(status_filter_ok(false, "upgrade", true));
+        assert!(status_filter_ok(true, "active", true));
+        assert!(!status_filter_ok(false, "active", true));
+        assert!(status_filter_ok(false, "deactivated", false));
+        assert!(status_filter_ok(true, "", false));
+    }
+
+    #[test]
+    fn plugin_update_compares_catalog_greater() {
+        let mut map = HashMap::new();
+        map.insert("mragent".into(), "1.2.0".into());
+        assert!(plugin_update_available(&map, "mrAgent", "1.1.0"));
+        assert!(!plugin_update_available(&map, "mrAgent", "1.2.0"));
+        assert!(!plugin_update_available(&map, "mrAgent", "1.3.0"));
+        assert!(!plugin_update_available(&map, "missing", "1.0.0"));
+        assert!(!plugin_update_available(&map, "mrAgent", ""));
+    }
+
+    #[test]
+    fn status_filter_updates_applies_to_cpn_and_site_scopes() {
+        // Same filter gate for Host catalog plugins, CPN-only, and Site installs.
+        assert!(status_filter_ok(true, "updates", true));
+        assert!(status_filter_ok(false, "updates", true));
+        assert!(!status_filter_ok(true, "updates", false));
+    }
 }
