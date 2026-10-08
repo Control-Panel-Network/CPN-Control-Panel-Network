@@ -98,6 +98,7 @@ pub mod manifest;
 pub mod model;
 pub mod motd;
 pub mod mr_agent_install;
+pub mod mr_agent_policy;
 pub mod os_support;
 pub mod package_bandwidth;
 pub mod package_bulk;

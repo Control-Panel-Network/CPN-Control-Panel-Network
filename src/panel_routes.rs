@@ -1257,6 +1257,14 @@ pub async fn plugins_install(
             ))
             .finish();
     }
+    if let Err(error) = crate::mr_agent_policy::refuse_site_install_if_disabled(&form.id) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish();
+    }
     let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
     if crate::mr_agent_install::is_mr_agent(&form.id)
         && mode == "vhost"

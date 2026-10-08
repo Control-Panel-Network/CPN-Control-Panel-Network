@@ -344,6 +344,7 @@ fn default_float_asset(plugin_id: &str) -> String {
 
 /// Active plugins that declare (or imply) a panel float widget the user may see.
 pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
+    let host_chat_ok = crate::mr_agent_policy::allow_host_chat();
     let Ok(sites) = sites_manageable_by(username) else {
         return Vec::new();
     };
@@ -364,6 +365,10 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
             }
             let extras = load_manifest_extras(&site.domain, &item.manifest.id);
             let is_mr = item.manifest.id.eq_ignore_ascii_case("mrAgent");
+            // Host policy gates Mr Agent panel bubble (not other float plugins).
+            if is_mr && !host_chat_ok {
+                continue;
+            }
             let wants_float = extras.panel_float || is_mr;
             if !wants_float {
                 continue;
@@ -431,7 +436,8 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
         }
     }
     // Host-only install: bubble for ACL users even with no site activation.
-    if crate::plugin_activation::host_plugin_installed("mrAgent")
+    if host_chat_ok
+        && crate::plugin_activation::host_plugin_installed("mrAgent")
         && !out.iter().any(|w| w.id.eq_ignore_ascii_case("mrAgent"))
     {
         let settings = load_host_mragent_settings();

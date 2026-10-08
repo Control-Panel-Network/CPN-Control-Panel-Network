@@ -167,6 +167,15 @@ pub fn plugin_settings_main(
     } else {
         r#"<p class="muted">Activate the plugin to use its dashboard route.</p>"#.into()
     };
+    let mr_agent_policy_note = if crate::mr_agent_install::is_mr_agent(&m.id) {
+        if crate::mr_agent_policy::allow_site_install() {
+            r#"<p class="muted">Host policy: site install is allowed. Panel owner can change this on <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        } else {
+            r#"<p class="muted">Host policy: new site installs are disabled by the server owner. This existing install stays. Owner toggles: <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        }
+    } else {
+        String::new()
+    };
     let webmail_actions = if crate::plugins_settings::is_webmail_plugin_id(&m.id)
         && crate::panel_webmail::webmail_ready()
     {
@@ -208,6 +217,7 @@ pub fn plugin_settings_main(
         <h2>{name}</h2>
         <p class="muted">{id} v{ver} on {domain}</p>
         <p class="muted">Settings file: <code>{path}/settings.json</code></p>
+        {mr_agent_policy_note}
         {webmail_actions}
         <form method="post" action="/plugins/settings" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="domain" value="{domain}">
@@ -236,6 +246,7 @@ pub fn plugin_settings_main(
         sidebar = sidebar_checked,
         fields = custom_fields,
         dash = dash_link,
+        mr_agent_policy_note = mr_agent_policy_note,
         webmail_actions = webmail_actions,
     )
 }
