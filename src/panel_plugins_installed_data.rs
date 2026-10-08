@@ -349,7 +349,11 @@ pub(crate) fn collect_installed_flat(
             if !status_filter_ok(m.enabled, status) {
                 continue;
             }
-            if !category_match(category, &m.category, if host_owned { "host" } else { "site" }) {
+            if !category_match(
+                category,
+                &m.category,
+                if host_owned { "host" } else { "site" },
+            ) {
                 continue;
             }
             if !text_match(q, &m.name, &m.id, &m.category) {
