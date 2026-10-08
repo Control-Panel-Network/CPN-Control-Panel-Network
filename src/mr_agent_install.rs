@@ -1,7 +1,9 @@
 //! Mr Agent site publish helpers: folder mode (default) and confirmed vhost takeover.
+//! Panel Install / Activate / settings buttons call these so operators need no SSH.
 
 use crate::plugin_activation::{host_plugin_installed, host_plugin_path};
 use crate::plugins::plugins_dir_for_domain;
+use crate::plugins_settings::load_plugin_settings;
 use crate::sites::load_site;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -95,6 +97,201 @@ fn write_mode_marker(plugin_root: &Path, domain: &str, mode: &str) -> Result<(),
     Ok(())
 }
 
+fn secret_dir_for(domain: &str) -> PathBuf {
+    let d = domain.trim();
+    if d.is_empty() || d.eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL) {
+        PathBuf::from("/var/lib/cpn/mr-agent/_host")
+    } else {
+        PathBuf::from("/var/lib/cpn/mr-agent").join(d)
+    }
+}
+
+fn chmod_mode(path: &Path, mode: u32) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+    }
+    let _ = mode;
+    let _ = path;
+}
+
+fn random_access_password() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("mra{nanos:x}")
+        .chars()
+        .take(24)
+        .collect()
+}
+
+/// Ensure `/var/lib/cpn/mr-agent/<domain>/` secrets, chats, locks, and optional config.php.
+pub fn ensure_site_secrets(domain: &str) -> Result<String, String> {
+    let plugin_root = resolve_mr_agent_root(domain)?;
+    let secret = secret_dir_for(domain);
+    let parent = PathBuf::from("/var/lib/cpn/mr-agent");
+    fs::create_dir_all(&parent).map_err(|e| format!("Could not create mr-agent secret root: {e}"))?;
+    chmod_mode(&parent, 0o700);
+    fs::create_dir_all(&secret).map_err(|e| format!("Could not create secret dir: {e}"))?;
+    chmod_mode(&secret, 0o700);
+    for sub in ["chats", "locks"] {
+        let p = secret.join(sub);
+        fs::create_dir_all(&p).map_err(|e| format!("Could not create {}: {e}", p.display()))?;
+        chmod_mode(&p, 0o700);
+    }
+    let keys = secret.join("keys.json");
+    if !keys.is_file() {
+        fs::write(&keys, "{\"host\":{},\"users\":{}}\n")
+            .map_err(|e| format!("Could not write keys.json: {e}"))?;
+        chmod_mode(&keys, 0o600);
+    }
+    let config = plugin_root.join("config.php");
+    let example = plugin_root.join("config.php.example");
+    if !config.is_file() && example.is_file() {
+        let pass = random_access_password();
+        let domain_s = if domain.trim().is_empty()
+            || domain.trim().eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL)
+        {
+            HOST_DOMAIN_SENTINEL
+        } else {
+            domain.trim()
+        };
+        let body = format!(
+            "<?php\nreturn [\n    'access_password' => '{pass}',\n    'domain' => '{domain_s}',\n    'openai_api_key' => '',\n    'anthropic_api_key' => '',\n    'custom_api_key' => '',\n    'custom_base_url' => '',\n    'local_base_url' => 'http://127.0.0.1:11434/v1',\n    'local_api_key' => '',\n    'local_model' => 'llama3.2:1b',\n];\n"
+        );
+        fs::write(&config, body).map_err(|e| format!("Could not write config.php: {e}"))?;
+        chmod_mode(&config, 0o640);
+        let pass_file = secret.join("access.password");
+        fs::write(&pass_file, format!("{pass}\n"))
+            .map_err(|e| format!("Could not write access.password: {e}"))?;
+        chmod_mode(&pass_file, 0o600);
+    } else if config.is_file() {
+        chmod_mode(&config, 0o640);
+    }
+    Ok(format!(
+        "Secrets ready under {}",
+        secret.display()
+    ))
+}
+
+/// Install-mode from saved plugin settings (defaults to folder).
+pub fn install_mode_from_settings(domain: &str) -> String {
+    let settings = load_plugin_settings(domain, MR_AGENT_ID).unwrap_or_default();
+    normalize_install_mode(
+        settings
+            .fields
+            .get("install_mode")
+            .map(String::as_str)
+            .unwrap_or("folder"),
+    )
+}
+
+/// Full panel-mediated setup: secrets + folder (or confirmed vhost) publish.
+/// Prefer this over telling operators to run `install.sh` over SSH.
+pub fn run_setup(domain: &str, mode: &str, confirm_vhost: &str) -> Result<String, String> {
+    let d = domain.trim();
+    if d.is_empty() || d.eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL) {
+        let host = finalize_host_install()?;
+        let secrets = ensure_site_secrets(HOST_DOMAIN_SENTINEL)?;
+        return Ok(format!("{host}. {secrets}"));
+    }
+    let secrets = ensure_site_secrets(d)?;
+    // Prefer native publish; fall back to install.sh when present (Linux guests).
+    match publish_for_mode(d, mode, confirm_vhost) {
+        Ok(pub_notice) => Ok(format!("{secrets}. {pub_notice}")),
+        Err(pub_err) => match run_install_sh(d, mode, confirm_vhost) {
+            Ok(sh_notice) => Ok(format!("{secrets}. Native publish failed ({pub_err}); {sh_notice}")),
+            Err(sh_err) => Err(format!(
+                "Setup incomplete: {pub_err}. install.sh fallback: {sh_err}. Use Plugin settings Run setup after fixing permissions."
+            )),
+        },
+    }
+}
+
+/// Run plugin `install.sh` when present (same effect as SSH for operators).
+pub fn run_install_sh(domain: &str, mode: &str, confirm_vhost: &str) -> Result<String, String> {
+    let plugin_root = resolve_mr_agent_root(domain)?;
+    let script = plugin_root.join("install.sh");
+    if !script.is_file() {
+        return Err("install.sh not found in plugin tree".into());
+    }
+    let mode = normalize_install_mode(mode);
+    let mut cmd = Command::new("bash");
+    cmd.arg(&script)
+        .arg(domain.trim())
+        .current_dir(&plugin_root)
+        .env("INSTALL_MODE", &mode);
+    if mode == "vhost" {
+        if !vhost_confirm_accepted(confirm_vhost) {
+            return Err(
+                "Vhost install cancelled: confirmation required. Use folder mode, or confirm vhost takeover."
+                    .into(),
+            );
+        }
+        cmd.env("CONFIRM", "yes");
+    }
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Could not run install.sh: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim()
+        } else {
+            stdout.trim()
+        };
+        return Err(format!(
+            "install.sh exited {}: {detail}",
+            output.status.code().unwrap_or(-1)
+        ));
+    }
+    Ok(format!(
+        "Ran install.sh for {} ({mode})",
+        domain.trim()
+    ))
+}
+
+/// Prune chat logs via `modules/cli_prune.php` (panel button; no SSH).
+pub fn prune_chat_logs(domain: &str) -> Result<String, String> {
+    let plugin_root = resolve_mr_agent_root(domain)?;
+    let script = plugin_root.join("modules").join("cli_prune.php");
+    if !script.is_file() {
+        return Err("cli_prune.php not found in plugin tree".into());
+    }
+    let arg = if domain.trim().is_empty()
+        || domain.trim().eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL)
+    {
+        HOST_DOMAIN_SENTINEL.to_string()
+    } else {
+        domain.trim().to_string()
+    };
+    let output = Command::new("php")
+        .arg(&script)
+        .arg(&arg)
+        .current_dir(&plugin_root)
+        .output()
+        .map_err(|e| format!("Could not run cli_prune.php: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Prune failed ({}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let summary = stdout.lines().next().unwrap_or("Prune finished").trim();
+    Ok(if summary.is_empty() {
+        format!("Pruned chat logs for {arg}")
+    } else {
+        format!("Pruned chat logs for {arg}: {summary}")
+    })
+}
+
 /// Publish folder mode: symlink `public/` -> `{docroot}/mr-agent` without wiping site index.
 pub fn publish_folder(domain: &str) -> Result<String, String> {
     let site = load_site(domain)?;
@@ -132,7 +329,7 @@ pub fn publish_folder(domain: &str) -> Result<String, String> {
         // Windows labs: copy a minimal junction via directory symlink when possible.
         std::os::windows::fs::symlink_dir(&public, &target).map_err(|e| {
             format!(
-                "Could not create /mr-agent symlink (Windows): {e}. Run install.sh on the guest."
+                "Could not create /mr-agent symlink (Windows): {e}. Use Plugin settings Run setup on the Linux guest."
             )
         })?;
     }
@@ -266,5 +463,17 @@ mod tests {
     fn expand_urls() {
         assert_eq!(panel_expand_url(""), "/plugins/mr-agent");
         assert!(panel_expand_url("ai.example.com").contains("ai.example.com"));
+    }
+
+    #[test]
+    fn secret_dir_host_sentinel() {
+        assert!(secret_dir_for("_host")
+            .display()
+            .to_string()
+            .ends_with("_host"));
+        assert!(secret_dir_for("ai.example.com")
+            .display()
+            .to_string()
+            .contains("ai.example.com"));
     }
 }

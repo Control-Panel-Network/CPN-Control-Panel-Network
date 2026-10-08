@@ -240,13 +240,15 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
             field_type: "checkbox".into(),
             default: "0".into(),
         },
-        PluginSettingField {
-            key: "notes".into(),
-            label: "Operator notes (optional)".into(),
-            field_type: "text".into(),
-            default: "Host: no site takeover. Site folder: /mr-agent/. Vhost needs confirm. Local LLM must run on this server.".into(),
-        },
     ]
+}
+
+/// Keys that must never appear as editable settings (CLI dumps, legacy Operator notes).
+pub fn is_hidden_settings_field(key: &str) -> bool {
+    matches!(
+        key.trim().to_ascii_lowercase().as_str(),
+        "notes" | "operator_notes" | "cli_notes"
+    )
 }
 
 fn merge_builtin_fields(plugin_id: &str, fields: &mut Vec<PluginSettingField>) {
@@ -268,6 +270,7 @@ fn merge_builtin_fields(plugin_id: &str, fields: &mut Vec<PluginSettingField>) {
 pub fn declared_settings_fields(domain: &str, plugin_id: &str) -> Vec<PluginSettingField> {
     let mut fields = load_manifest_extras(domain, plugin_id).settings_fields;
     merge_builtin_fields(plugin_id, &mut fields);
+    fields.retain(|f| !is_hidden_settings_field(&f.key));
     fields
 }
 
@@ -708,5 +711,14 @@ mod tests {
             }
             let _ = fs::remove_dir_all(&sites_home);
         });
+    }
+
+    #[test]
+    fn hides_operator_notes_field() {
+        assert!(is_hidden_settings_field("notes"));
+        assert!(is_hidden_settings_field("operator_notes"));
+        assert!(!is_hidden_settings_field("enabled"));
+        let fields = builtin_mragent_settings_fields("mrAgent");
+        assert!(!fields.iter().any(|f| f.key == "notes"));
     }
 }
