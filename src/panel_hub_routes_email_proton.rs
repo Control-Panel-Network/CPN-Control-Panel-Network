@@ -1,9 +1,7 @@
 //! Email → Proton Mail routes (external / Bridge plugin gate).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{
-    html_blocking, login_redirect, redirect_notice, require_panel_user,
-};
+use crate::panel_hub_http::{html_blocking, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_proton_mail::{email_proton_page, save_proton_mail_form};
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
