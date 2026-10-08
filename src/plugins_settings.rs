@@ -64,6 +64,12 @@ struct ManifestExtras {
     show_in_sidebar: Option<bool>,
     #[serde(default)]
     has_dashboard: bool,
+    /// When true, panel chrome may load `panel_float_asset` for Active installs.
+    #[serde(default)]
+    panel_float: bool,
+    /// Relative path under the plugin dir (example: `public/assets/panel-float/bubble.js`).
+    #[serde(default)]
+    panel_float_asset: String,
     /// Human-readable impacts shown in the uninstall confirm dialog.
     #[serde(default)]
     uninstall_impacts: Vec<String>,
@@ -74,6 +80,8 @@ fn empty_extras() -> ManifestExtras {
         settings_fields: Vec::new(),
         show_in_sidebar: None,
         has_dashboard: false,
+        panel_float: false,
+        panel_float_asset: String::new(),
         uninstall_impacts: Vec::new(),
     }
 }
@@ -140,19 +148,261 @@ pub fn is_webmail_plugin_id(plugin_id: &str) -> bool {
         || id.eq_ignore_ascii_case("roundcubeWebmail")
 }
 
-pub fn declared_settings_fields(domain: &str, plugin_id: &str) -> Vec<PluginSettingField> {
-    let mut fields = load_manifest_extras(domain, plugin_id).settings_fields;
+/// Built-in settings when an older install stripped catalog `settings_fields`.
+pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingField> {
+    if !plugin_id.trim().eq_ignore_ascii_case("mrAgent") {
+        return Vec::new();
+    }
+    vec![
+        PluginSettingField {
+            key: "public_path".into(),
+            label: "Public URL path (after install.sh)".into(),
+            field_type: "text".into(),
+            default: "/mr-agent".into(),
+        },
+        PluginSettingField {
+            key: "enabled".into(),
+            label: "Enable Mr Agent chat for this site".into(),
+            field_type: "checkbox".into(),
+            default: "1".into(),
+        },
+        PluginSettingField {
+            key: "show_floating_bubble".into(),
+            label: "Show floating chat bubble in CPN Panel".into(),
+            field_type: "checkbox".into(),
+            default: "1".into(),
+        },
+        PluginSettingField {
+            key: "visibility".into(),
+            label: "Who can use chat: admins_only | all_authenticated | packages".into(),
+            field_type: "text".into(),
+            default: "admins_only".into(),
+        },
+        PluginSettingField {
+            key: "package_ids".into(),
+            label: "Allowed package ids (comma list when visibility=packages)".into(),
+            field_type: "text".into(),
+            default: String::new(),
+        },
+        PluginSettingField {
+            key: "allow_user_keys".into(),
+            label: "Allow users to add their own provider API keys".into(),
+            field_type: "checkbox".into(),
+            default: "1".into(),
+        },
+        PluginSettingField {
+            key: "default_provider".into(),
+            label: "Default provider: free | openai | anthropic | custom".into(),
+            field_type: "text".into(),
+            default: "free".into(),
+        },
+        PluginSettingField {
+            key: "rate_limit_per_hour".into(),
+            label: "Max chat messages per user per hour".into(),
+            field_type: "number".into(),
+            default: "60".into(),
+        },
+        PluginSettingField {
+            key: "notes".into(),
+            label: "Operator notes (optional)".into(),
+            field_type: "text".into(),
+            default: "After Store install, run: sudo bash install.sh <domain>".into(),
+        },
+    ]
+}
+
+fn merge_builtin_fields(plugin_id: &str, fields: &mut Vec<PluginSettingField>) {
+    let builtins: Vec<PluginSettingField> = builtin_webmail_settings_fields(plugin_id)
+        .into_iter()
+        .chain(builtin_mragent_settings_fields(plugin_id))
+        .collect();
     if fields.is_empty() {
-        fields = builtin_webmail_settings_fields(plugin_id);
-    } else {
-        // Ensure webmail builtins exist even when the manifest declares a subset.
-        for builtin in builtin_webmail_settings_fields(plugin_id) {
-            if !fields.iter().any(|f| f.key == builtin.key) {
-                fields.push(builtin);
-            }
+        *fields = builtins;
+        return;
+    }
+    for builtin in builtins {
+        if !fields.iter().any(|f| f.key == builtin.key) {
+            fields.push(builtin);
         }
     }
+}
+
+pub fn declared_settings_fields(domain: &str, plugin_id: &str) -> Vec<PluginSettingField> {
+    let mut fields = load_manifest_extras(domain, plugin_id).settings_fields;
+    merge_builtin_fields(plugin_id, &mut fields);
     fields
+}
+
+/// Truthy checkbox / flag values from settings.json fields.
+pub fn settings_field_truthy(settings: &PluginSettings, key: &str, default_on: bool) -> bool {
+    match settings.fields.get(key).map(String::as_str) {
+        None => default_on,
+        Some(v) => {
+            let t = v.trim();
+            t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("on")
+        }
+    }
+}
+
+/// Whether the signed-in panel user may see/use a plugin under its visibility ACL.
+pub fn plugin_visibility_allows(username: &str, settings: &PluginSettings) -> bool {
+    let visibility = settings
+        .fields
+        .get("visibility")
+        .map(|s| s.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "admins_only".into());
+    match visibility.as_str() {
+        "all_authenticated" => !username.trim().is_empty(),
+        "packages" => {
+            let raw = settings
+                .fields
+                .get("package_ids")
+                .cloned()
+                .unwrap_or_default();
+            let allowed: Vec<String> = raw
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if allowed.is_empty() {
+                return crate::panel_admin::is_panel_admin(username);
+            }
+            let pkg = crate::packages::package_for_account(username)
+                .map(|p| p.id.to_ascii_lowercase())
+                .unwrap_or_default();
+            if !pkg.is_empty() && allowed.iter().any(|a| a == &pkg) {
+                return true;
+            }
+            crate::panel_admin::is_panel_admin(username)
+        }
+        // admins_only (default)
+        _ => {
+            if crate::panel_admin::is_panel_admin(username) {
+                return true;
+            }
+            let u = username.trim().to_ascii_lowercase();
+            u == "owner" || u == "admin" || u == "cpnowner"
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PanelFloatWidget {
+    pub id: String,
+    pub name: String,
+    pub domain: String,
+    pub public_path: String,
+    pub asset_js: String,
+    pub expand_url: String,
+}
+
+fn default_float_asset(plugin_id: &str) -> String {
+    if plugin_id.eq_ignore_ascii_case("mrAgent") {
+        "public/assets/panel-float/bubble.js".into()
+    } else {
+        String::new()
+    }
+}
+
+/// Active plugins that declare (or imply) a panel float widget the user may see.
+pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
+    let Ok(sites) = sites_manageable_by(username) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for site in sites {
+        let Ok(allowed) = can_manage_site(username, &site.domain, SitePerm::Enable) else {
+            continue;
+        };
+        if !allowed {
+            continue;
+        }
+        let Ok(installed) = crate::plugins::list_installed(&site.domain) else {
+            continue;
+        };
+        for item in installed {
+            if !item.manifest.enabled {
+                continue;
+            }
+            let extras = load_manifest_extras(&site.domain, &item.manifest.id);
+            let is_mr = item.manifest.id.eq_ignore_ascii_case("mrAgent");
+            let wants_float = extras.panel_float || is_mr;
+            if !wants_float {
+                continue;
+            }
+            let settings =
+                load_plugin_settings(&site.domain, &item.manifest.id).unwrap_or_default();
+            if !settings_field_truthy(&settings, "enabled", true) {
+                continue;
+            }
+            if !settings_field_truthy(&settings, "show_floating_bubble", true) {
+                continue;
+            }
+            if !plugin_visibility_allows(username, &settings) {
+                continue;
+            }
+            let asset = if !extras.panel_float_asset.trim().is_empty() {
+                extras.panel_float_asset.trim().to_string()
+            } else {
+                default_float_asset(&item.manifest.id)
+            };
+            if asset.is_empty() {
+                continue;
+            }
+            let public_path = settings
+                .fields
+                .get("public_path")
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| {
+                    if is_mr {
+                        "/mr-agent".into()
+                    } else {
+                        String::new()
+                    }
+                });
+            let expand_url = if public_path.is_empty() {
+                format!(
+                    "/plugins/dashboard?domain={}&id={}",
+                    urlencoding_simple(&site.domain),
+                    urlencoding_simple(&item.manifest.id)
+                )
+            } else {
+                let path = if public_path.starts_with('/') {
+                    public_path.clone()
+                } else {
+                    format!("/{public_path}")
+                };
+                format!("https://{}{}", site.domain, path)
+            };
+            out.push(PanelFloatWidget {
+                id: item.manifest.id.clone(),
+                name: item.manifest.name.clone(),
+                domain: site.domain.clone(),
+                public_path,
+                asset_js: asset,
+                expand_url,
+            });
+        }
+    }
+    out.sort_by(|a, b| {
+        (
+            a.name.to_ascii_lowercase(),
+            a.domain.to_ascii_lowercase(),
+            a.id.to_ascii_lowercase(),
+        )
+            .cmp(&(
+                b.name.to_ascii_lowercase(),
+                b.domain.to_ascii_lowercase(),
+                b.id.to_ascii_lowercase(),
+            ))
+    });
+    out
+}
+
+pub fn manifest_panel_float(domain: &str, plugin_id: &str) -> bool {
+    let extras = load_manifest_extras(domain, plugin_id);
+    extras.panel_float || plugin_id.eq_ignore_ascii_case("mrAgent")
 }
 
 pub fn manifest_has_dashboard(domain: &str, plugin_id: &str) -> bool {

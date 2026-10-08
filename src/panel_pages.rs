@@ -426,6 +426,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_footer_chrome::notifications_popover_script(),
         crate::panel_feedback::feedback_script()
     );
+    let plugin_float = crate::panel_plugin_float::panel_float_inject_html(username);
     format!(
         r#"<!DOCTYPE html>
 <html lang="en" data-color-mode="{mode}" data-design-preset="{preset}">
@@ -461,6 +462,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     </section>
   </div>
   {script}
+  {plugin_float}
 </body>
 </html>"#,
         title = html_escape(title),
@@ -475,6 +477,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         footer = footer,
         main = main,
         script = script,
+        plugin_float = plugin_float,
     )
 }
 

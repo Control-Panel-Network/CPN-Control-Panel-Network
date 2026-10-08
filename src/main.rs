@@ -130,6 +130,7 @@ use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
 };
+use cpn_installer::panel_plugin_float::{plugins_float_asset, plugins_float_chat};
 use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{
     apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
@@ -1548,6 +1549,8 @@ async fn main() -> std::io::Result<()> {
             .service(plugins_settings_page)
             .service(plugins_settings_save)
             .service(plugins_dashboard_page)
+            .service(plugins_float_asset)
+            .service(plugins_float_chat)
             .service(plugins_install)
             .service(plugins_install_host)
             .service(plugins_activate_host)
