@@ -42,7 +42,12 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
         qs.push_str(&format!("&amp;status={}", urlencoding_simple(opts.status)));
     }
     let mut out = String::from(r#"<div class="category-pills">"#);
-    for (label, cat) in [("All", ""), ("Host", "Host"), ("Site", "Site")] {
+    for (label, cat) in [
+        ("All", ""),
+        ("Host", "Host"),
+        ("CPN", "CPN"),
+        ("Site", "Site"),
+    ] {
         let cls = if cat.is_empty() {
             if opts.category.is_empty() || opts.category.eq_ignore_ascii_case("all") {
                 "active"
@@ -214,6 +219,11 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         .copied()
         .filter(|i| i.scope == Scope::Host)
         .collect();
+    let cpn_items: Vec<&FlatItem> = page_items
+        .iter()
+        .copied()
+        .filter(|i| i.scope == Scope::Cpn)
+        .collect();
     let domain_items: Vec<&FlatItem> = page_items
         .iter()
         .copied()
@@ -241,7 +251,10 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
     } else {
         ""
     };
-    let host_only_page = !host_items.is_empty() && domain_items.is_empty() && sub_items.is_empty();
+    let host_only_page = !host_items.is_empty()
+        && cpn_items.is_empty()
+        && domain_items.is_empty()
+        && sub_items.is_empty();
     // Show empty Domain/Sub placeholders on scroll or page 1 so scope stays clear.
     let show_empty_scopes = mode == "scroll" || page <= 1;
 
@@ -252,7 +265,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       {tabs}
       <article class="section-card">
         <h2>Installed</h2>
-        <p class="muted">Host packages stay visible even with zero websites. Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Active or Deactivated.</p>
+        <p class="muted">Host is server-wide. CPN only is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / CPN / Site plus Active or Deactivated.</p>
         {picker}
         <form method="get" action="/plugins" class="plugin-search-row">
           <input type="hidden" name="view" value="installed">
@@ -276,6 +289,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         <div class="{scroll_cls}">
           {empty}
           {host_sec}
+          {cpn_sec}
           {domain_sec}
           {sub_sec}
           {empty_scopes}
@@ -283,7 +297,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       </article>"#,
         heading = section_heading(
             "Plugins",
-            "Installed host packages and site plugins, plus the CPN Store.",
+            "Installed host packages, CPN-only tools, and site plugins, plus the CPN Store.",
         ),
         ok = notice_block("ok", opts.notice),
         err = notice_block("error", opts.error),
@@ -311,6 +325,11 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
             "Host",
             "Host engines, webmail clients, and host-scoped catalog plugins.",
             &host_items,
+        ),
+        cpn_sec = render_scope_group(
+            "CPN only",
+            "Account-scoped panel tools for your signed-in CPN user (not exposed as a public site feature).",
+            &cpn_items,
         ),
         domain_sec = render_scope_group(
             "Domain",

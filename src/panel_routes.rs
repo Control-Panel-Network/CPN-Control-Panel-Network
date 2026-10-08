@@ -27,6 +27,9 @@ use crate::plugin_activation::{
     is_host_owned_install, is_host_scoped_plugin, is_site_installable_plugin,
     uninstall_host_plugin,
 };
+use crate::plugin_cpn_scope::{
+    install_cpn_plugin, is_cpn_domain, parse_cpn_owner, set_cpn_plugin_enabled, uninstall_cpn_plugin,
+};
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
     declared_settings_fields, load_plugin_settings, save_plugin_settings,
@@ -1315,6 +1318,126 @@ pub async fn plugins_install(
     }
 }
 
+#[post("/plugins/install-cpn")]
+pub async fn plugins_install_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match install_cpn_plugin(&user, &form.id) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Installed {} for CPN only", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/uninstall-cpn")]
+pub async fn plugins_uninstall_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let view = if form.return_view.trim().eq_ignore_ascii_case("installed") {
+        "installed"
+    } else {
+        "store"
+    };
+    match uninstall_cpn_plugin(&user, &form.id) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", view, Some("Uninstalled CPN-only plugin"), None),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", view, None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/enable-cpn")]
+pub async fn plugins_enable_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match set_cpn_plugin_enabled(&user, &form.id, true) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Activated {}", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "installed", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/disable-cpn")]
+pub async fn plugins_disable_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match set_cpn_plugin_enabled(&user, &form.id, false) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Deactivated {}", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "installed", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
 #[post("/plugins/install-host")]
 pub async fn plugins_install_host(
     http: HttpRequest,
@@ -1706,6 +1829,13 @@ fn plugins_settings_authz(user: &str, domain: &str) -> Result<(), String> {
             return Ok(());
         }
         return Err("Only panel administrators can manage Host Mr Agent settings".into());
+    }
+    if is_cpn_domain(domain) {
+        let owner = parse_cpn_owner(domain).unwrap_or_default();
+        if is_panel_admin(user) || owner.eq_ignore_ascii_case(user) {
+            return Ok(());
+        }
+        return Err("You can only manage your own CPN-only plugins".into());
     }
     require_manage_site(user, domain, SitePerm::Enable).map(|_| ())
 }

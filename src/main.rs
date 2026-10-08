@@ -142,9 +142,10 @@ use cpn_installer::panel_routes::{
     apps_uninstall, backups_page, backups_run, databases_create, databases_ftp_create,
     databases_install_mariadb, databases_page, email_account_create, email_account_disable,
     email_account_enable, email_page, plugins_activate_host, plugins_dashboard_page,
-    plugins_deactivate_host, plugins_disable, plugins_enable, plugins_install,
-    plugins_install_host, plugins_page, plugins_settings_page, plugins_settings_save,
-    plugins_uninstall, plugins_uninstall_host, preview_content, preview_mode_page,
+    plugins_deactivate_host, plugins_disable, plugins_disable_cpn, plugins_enable,
+    plugins_enable_cpn, plugins_install, plugins_install_cpn, plugins_install_host, plugins_page,
+    plugins_settings_page, plugins_settings_save, plugins_uninstall, plugins_uninstall_cpn,
+    plugins_uninstall_host, preview_content, preview_mode_page,
     site_preview_image, site_preview_refresh, subdomains_create, subdomains_create_page,
     subdomains_page, websites_create, websites_create_page, websites_delete, websites_list_page,
     websites_manage, websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
@@ -1564,13 +1565,17 @@ async fn main() -> std::io::Result<()> {
             .service(plugins_float_asset)
             .service(plugins_float_chat)
             .service(plugins_install)
+            .service(plugins_install_cpn)
             .service(plugins_install_host)
             .service(plugins_activate_host)
             .service(plugins_deactivate_host)
             .service(plugins_uninstall)
+            .service(plugins_uninstall_cpn)
             .service(plugins_uninstall_host)
             .service(plugins_enable)
+            .service(plugins_enable_cpn)
             .service(plugins_disable)
+            .service(plugins_disable_cpn)
             .service(panel_alias)
             .service(logout_get)
             .service(logout_post)

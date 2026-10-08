@@ -8,6 +8,7 @@ use crate::panel_admin::is_panel_admin;
 use crate::panel_apps::{host_action_buttons, host_nav_links};
 use crate::panel_plugins_markup::{html_escape, installed_one_card};
 use crate::plugin_activation::{is_host_owned_install, list_host_installed_plugins};
+use crate::plugin_cpn_scope::list_cpn_installed_plugins;
 use crate::plugins::{InstalledPlugin, list_installed};
 use crate::sites::SiteRecord;
 use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
@@ -15,6 +16,7 @@ use crate::uninstall_confirm::{plugin_uninstall_impacts, uninstall_form_attrs};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Scope {
     Host,
+    Cpn,
     Domain,
     Subdomain,
 }
@@ -50,16 +52,19 @@ fn text_match(q: &str, name: &str, id: &str, category: &str) -> bool {
         || category.to_ascii_lowercase().contains(&q)
 }
 
-fn category_match(want: &str, category: &str, is_host: bool) -> bool {
+fn category_match(want: &str, category: &str, scope_kind: &str) -> bool {
     let want = want.trim().to_ascii_lowercase();
     if want.is_empty() || want == "all" {
         return true;
     }
     if want == "host" {
-        return is_host;
+        return scope_kind == "host";
+    }
+    if want == "cpn" || want == "cpn only" || want == "cpn_only" {
+        return scope_kind == "cpn";
     }
     if want == "site" {
-        return !is_host;
+        return scope_kind == "site";
     }
     category.eq_ignore_ascii_case(want.trim())
 }
@@ -187,6 +192,64 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool) -> String {
     )
 }
 
+fn cpn_scoped_card(item: &InstalledPlugin) -> String {
+    let m = &item.manifest;
+    let active_badge = if m.enabled {
+        r#"<span class="plugin-badge installed">Active</span>"#
+    } else {
+        r#"<span class="plugin-badge">Deactivated</span>"#
+    };
+    let domain_q = html_escape(&m.domain);
+    let id = html_escape(&m.id);
+    let toggle_action = if m.enabled {
+        "/plugins/disable-cpn"
+    } else {
+        "/plugins/enable-cpn"
+    };
+    let toggle_label = if m.enabled { "Deactivate" } else { "Activate" };
+    let toggle_cls = if m.enabled { "btn-warn" } else { "btn-primary" };
+    let impacts = plugin_uninstall_impacts(&m.domain, &m.id, &m.name);
+    let form_attrs = uninstall_form_attrs(&m.name, &impacts);
+    format!(
+        r#"<article class="plugin-card">
+          <h3>{name}</h3>
+          <div class="plugin-badges">
+            <span class="plugin-badge cat">CPN</span>
+            <span class="plugin-badge cat">{cat}</span>
+            <span class="plugin-badge">v{ver}</span>
+            {active}
+          </div>
+          <p class="plugin-desc">{desc}</p>
+          <p class="plugin-meta">Id: <code>{id}</code> · path: <code>{path}</code> (account-scoped, not a public site app)</p>
+          <div class="plugin-actions">
+            <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
+            <form method="post" action="{toggle_action}" class="inline-form">
+              <input type="hidden" name="id" value="{id}">
+              <button type="submit" class="{toggle_cls}">{toggle_label}</button>
+            </form>
+            <form method="post" action="/plugins/uninstall-cpn" {form_attrs}>
+              <input type="hidden" name="id" value="{id}">
+              <input type="hidden" name="return_view" value="installed">
+              <input type="hidden" name="confirm" value="">
+              <button type="submit" class="btn-danger">Uninstall from CPN</button>
+            </form>
+          </div>
+        </article>"#,
+        name = html_escape(&m.name),
+        cat = html_escape(&m.category),
+        ver = html_escape(&m.version),
+        active = active_badge,
+        desc = html_escape(&m.description),
+        id = id,
+        path = html_escape(&item.path.display().to_string()),
+        domain_q = domain_q,
+        toggle_action = toggle_action,
+        toggle_cls = toggle_cls,
+        toggle_label = toggle_label,
+        form_attrs = form_attrs,
+    )
+}
+
 fn site_plugins_for(domain: &str) -> Vec<InstalledPlugin> {
     let mut installed = list_installed(domain).unwrap_or_default();
     for act in crate::plugin_activation::activated_as_installed(domain) {
@@ -218,7 +281,7 @@ pub(crate) fn collect_installed_flat(
         if !status_filter_ok(active, status) {
             continue;
         }
-        if !category_match(category, meta.category, true) {
+        if !category_match(category, meta.category, "host") {
             continue;
         }
         if !text_match(
@@ -244,7 +307,7 @@ pub(crate) fn collect_installed_flat(
         if !status_filter_ok(m.enabled, status) {
             continue;
         }
-        if !category_match(category, &m.category, true) {
+        if !category_match(category, &m.category, "host") {
             continue;
         }
         if !text_match(q, &m.name, &m.id, &m.category) {
@@ -260,6 +323,27 @@ pub(crate) fn collect_installed_flat(
             card_html: host_scoped_card(&item, is_admin),
         });
     }
+    for item in list_cpn_installed_plugins(username) {
+        let m = &item.manifest;
+        if !status_filter_ok(m.enabled, status) {
+            continue;
+        }
+        if !category_match(category, &m.category, "cpn") {
+            continue;
+        }
+        if !text_match(q, &m.name, &m.id, &m.category) {
+            continue;
+        }
+        out.push(FlatItem {
+            scope: Scope::Cpn,
+            domain: m.domain.clone(),
+            name: m.name.clone(),
+            id: m.id.clone(),
+            category: m.category.clone(),
+            active: m.enabled,
+            card_html: cpn_scoped_card(&item),
+        });
+    }
     for site in sites {
         let scope = if is_subdomain_site(&site.domain) {
             Scope::Subdomain
@@ -273,7 +357,7 @@ pub(crate) fn collect_installed_flat(
             if !status_filter_ok(m.enabled, status) {
                 continue;
             }
-            if !category_match(category, &m.category, host_owned) {
+            if !category_match(category, &m.category, if host_owned { "host" } else { "site" }) {
                 continue;
             }
             if !text_match(q, &m.name, &m.id, &m.category) {

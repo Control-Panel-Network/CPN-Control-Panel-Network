@@ -178,6 +178,7 @@ mod tests {
             uninstall_impacts: vec![],
             host_scoped: false,
             site_installable: true,
+            cpn_installable: false,
             keywords: keywords.iter().map(|s| (*s).to_string()).collect(),
         }
     }
