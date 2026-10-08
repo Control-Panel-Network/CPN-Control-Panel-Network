@@ -167,13 +167,51 @@ fn manifest_path(domain: &str, plugin_id: &str) -> Result<PathBuf, String> {
         .join("cpn-plugin.json"))
 }
 
+/// Catalog / UX keys that live beside the core install manifest and must survive
+/// enable/disable rewrites (settings UI, sidebar default, panel float widgets).
+const MANIFEST_EXTRA_KEYS: &[&str] = &[
+    "settings_fields",
+    "show_in_sidebar",
+    "has_dashboard",
+    "panel_float",
+    "panel_float_asset",
+    "keywords",
+    "uninstall_impacts",
+];
+
 fn write_manifest(domain: &str, manifest: &CpnPluginManifest) -> Result<(), String> {
     let path = manifest_path(domain, &manifest.id)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create plugin dir: {error}"))?;
     }
-    let raw = serde_json::to_string_pretty(manifest)
+    let mut value = serde_json::to_value(manifest)
+        .map_err(|error| format!("Could not serialize plugin manifest: {error}"))?;
+    // Preserve catalog extras already on disk (install copies the full cpn-plugin.json
+    // before this rewrite; enable/disable must not strip settings_fields).
+    if path.is_file()
+        && let Ok(existing_raw) = fs::read_to_string(&path)
+        && let Ok(existing) = serde_json::from_str::<serde_json::Value>(&existing_raw)
+        && let (Some(obj), Some(old)) = (value.as_object_mut(), existing.as_object())
+    {
+        for key in MANIFEST_EXTRA_KEYS {
+            if !obj.contains_key(*key)
+                && let Some(v) = old.get(*key)
+            {
+                obj.insert((*key).to_string(), v.clone());
+            }
+        }
+        // Prefer catalog uninstall_impacts when the core struct is empty.
+        let core_empty = obj
+            .get("uninstall_impacts")
+            .and_then(|v| v.as_array())
+            .map(|a| a.is_empty())
+            .unwrap_or(true);
+        if core_empty && let Some(v) = old.get("uninstall_impacts") {
+            obj.insert("uninstall_impacts".into(), v.clone());
+        }
+    }
+    let raw = serde_json::to_string_pretty(&value)
         .map_err(|error| format!("Could not serialize plugin manifest: {error}"))?;
     fs::write(&path, raw).map_err(|error| format!("Could not write plugin manifest: {error}"))?;
     #[cfg(unix)]
@@ -530,6 +568,78 @@ mod tests {
         let text = sanitize_user_text("Discord login for CyberPanel admins");
         assert!(!text.to_ascii_lowercase().contains("cyberpanel"));
         assert!(text.contains("CPN Panel"));
+    }
+
+    #[test]
+    fn write_manifest_preserves_catalog_settings_fields() {
+        with_test_data_dir(|| {
+            let sites_home = std::env::temp_dir().join(format!(
+                "cpn-manifest-extras-{}-{}",
+                std::process::id(),
+                now_unix()
+            ));
+            let _ = fs::remove_dir_all(&sites_home);
+            fs::create_dir_all(&sites_home).unwrap();
+            unsafe {
+                std::env::set_var("CPN_SITES_HOME", &sites_home);
+            }
+            create_site("example.com", "admin", None, None, None).unwrap();
+            let dir = plugins_dir_for_domain("example.com")
+                .unwrap()
+                .join("demoPlugin");
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("cpn-plugin.json"),
+                r#"{
+                  "schema_version": 1,
+                  "id": "demoPlugin",
+                  "name": "Demo",
+                  "category": "Utility",
+                  "version": "1.0.0",
+                  "description": "Demo",
+                  "author": "master3395",
+                  "pricing": "free",
+                  "enabled": true,
+                  "installed_at_unix": 1,
+                  "source": "test",
+                  "catalog_repo": "Control-Panel-Network/CPN-Plugins",
+                  "domain": "example.com",
+                  "show_in_sidebar": true,
+                  "has_dashboard": true,
+                  "panel_float": true,
+                  "panel_float_asset": "public/assets/panel-float/bubble.js",
+                  "settings_fields": [{
+                    "key": "greeting",
+                    "label": "Greeting",
+                    "field_type": "text",
+                    "default": "Hello"
+                  }]
+                }"#,
+            )
+            .unwrap();
+            let mut manifest = load_manifest("example.com", "demoPlugin").unwrap();
+            manifest.enabled = false;
+            write_manifest("example.com", &manifest).unwrap();
+            let raw = fs::read_to_string(dir.join("cpn-plugin.json")).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            assert_eq!(value.get("enabled").and_then(|v| v.as_bool()), Some(false));
+            assert!(
+                value
+                    .get("settings_fields")
+                    .and_then(|v| v.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false),
+                "settings_fields must survive enable/disable rewrite"
+            );
+            assert_eq!(
+                value.get("panel_float").and_then(|v| v.as_bool()),
+                Some(true)
+            );
+            unsafe {
+                std::env::remove_var("CPN_SITES_HOME");
+            }
+            let _ = fs::remove_dir_all(&sites_home);
+        });
     }
 
     #[test]

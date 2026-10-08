@@ -315,6 +315,7 @@ pub mod panel_packages;
 pub mod panel_pages;
 pub mod panel_password_gen;
 pub mod panel_phpmyadmin_proxy;
+pub mod panel_plugin_float;
 pub mod panel_plugin_settings;
 pub mod panel_plugins;
 pub mod panel_plugins_installed;
