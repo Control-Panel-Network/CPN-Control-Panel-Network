@@ -24,7 +24,8 @@ use crate::panel_websites_create_ui::{
 use crate::panel_websites_list_ui::{subdomains_main, websites_main};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
-    is_host_owned_install, is_host_scoped_plugin, uninstall_host_plugin,
+    is_host_owned_install, is_host_scoped_plugin, is_site_installable_plugin,
+    uninstall_host_plugin,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
@@ -1138,6 +1139,12 @@ pub struct PluginIdForm {
     /// When `installed`, prefer Installed hub after host uninstall.
     #[serde(default)]
     return_view: String,
+    /// Mr Agent site publish: `folder` (default) or `vhost`.
+    #[serde(default)]
+    install_mode: String,
+    /// Required when install_mode=vhost (must be yes/1/true).
+    #[serde(default)]
+    confirm_vhost: String,
 }
 
 fn plugins_redirect(domain: &str, view: &str, notice: Option<&str>, error: Option<&str>) -> String {
@@ -1164,8 +1171,8 @@ pub async fn plugins_install(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    // Host-scoped: never full-copy under a site when host install exists (or is required).
-    if is_host_scoped_plugin(&form.id) {
+    // Host-only: never full-copy under a site. Dual-scoped (Mr Agent) falls through to site install.
+    if is_host_scoped_plugin(&form.id) && !is_site_installable_plugin(&form.id) {
         if crate::plugin_activation::host_plugin_installed(&form.id) {
             if let Err(error) = require_manage_site(&user, &form.domain, SitePerm::Enable) {
                 return HttpResponse::SeeOther()
@@ -1250,18 +1257,52 @@ pub async fn plugins_install(
             ))
             .finish();
     }
-    match install_plugin(&form.domain, &form.id) {
-        Ok(manifest) => HttpResponse::SeeOther()
+    let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+    if crate::mr_agent_install::is_mr_agent(&form.id)
+        && mode == "vhost"
+        && !crate::mr_agent_install::vhost_confirm_accepted(&form.confirm_vhost)
+    {
+        return HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 plugins_redirect(
                     &form.domain,
-                    "installed",
-                    Some(&format!("Installed {}", manifest.name)),
+                    "store",
                     None,
+                    Some(
+                        "Mr Agent vhost mode cancelled: confirmation required. This takes over the site document root. Use folder mode (default), or tick Confirm vhost takeover.",
+                    ),
                 ),
             ))
-            .finish(),
+            .finish();
+    }
+    match install_plugin(&form.domain, &form.id) {
+        Ok(manifest) => {
+            let mut notice = format!("Installed {}", manifest.name);
+            if crate::mr_agent_install::is_mr_agent(&form.id) {
+                match crate::mr_agent_install::publish_for_mode(
+                    &form.domain,
+                    &mode,
+                    &form.confirm_vhost,
+                ) {
+                    Ok(pub_notice) => {
+                        notice = format!("{notice}. {pub_notice}");
+                    }
+                    Err(err) => {
+                        notice = format!(
+                            "{notice}. Publish incomplete: {err}. Open /plugins/mr-agent?domain={} or run install.sh.",
+                            form.domain.trim()
+                        );
+                    }
+                }
+            }
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", Some(&notice), None),
+                ))
+                .finish()
+        }
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",

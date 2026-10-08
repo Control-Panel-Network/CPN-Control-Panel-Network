@@ -153,7 +153,18 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         .or_else(|| xml_tag(body, "install_scope"))
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let host_scoped = scope == "host" || scope == "host-package" || scope == "shared";
+    let (host_scoped, site_installable) = match scope.as_str() {
+        "host" | "host-package" | "shared" => (true, false),
+        "dual" | "host+site" | "host,site" | "both" => (true, true),
+        _ => {
+            // Allowlist dual plugins even if meta cache is stale.
+            if crate::mr_agent_install::is_dual_scoped_plugin(plugin_id) {
+                (true, true)
+            } else {
+                (false, true)
+            }
+        }
+    };
     Ok(CatalogEntry {
         id: plugin_id.to_string(),
         name: sanitize_user_text(&name),
@@ -168,6 +179,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         featured,
         uninstall_impacts: uninstall_impacts_from_meta(body),
         host_scoped,
+        site_installable,
         keywords: keywords_from_meta(body),
     })
 }
