@@ -98,7 +98,7 @@ fn keywords_from_meta(body: &str) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(block) = xml_tag(body, "keywords") {
         // Comma/semicolon only so multi-word aliases stay intact.
-        for part in block.split(|c: char| c == ',' || c == ';') {
+        for part in block.split([',', ';']) {
             let part = sanitize_user_text(part.trim());
             if !part.is_empty() {
                 out.push(part);
