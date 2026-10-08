@@ -12,8 +12,7 @@ pub const ROUNDCUBE_ENIGMA_HOMEDIR: &str = "/var/lib/cpn-webmail/roundcube-enigm
 
 const ROUNDCUBE_ROOT: &str = "/opt/cpn-webmail/roundcube";
 const ROUNDCUBE_CONFIG: &str = "/opt/cpn-webmail/roundcube/config/config.inc.php";
-const ROUNDCUBE_ENIGMA_CONFIG: &str =
-    "/opt/cpn-webmail/roundcube/plugins/enigma/config.inc.php";
+const ROUNDCUBE_ENIGMA_CONFIG: &str = "/opt/cpn-webmail/roundcube/plugins/enigma/config.inc.php";
 
 /// Enable OpenPGP on every installed webmail client that supports it.
 ///
