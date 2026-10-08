@@ -124,6 +124,7 @@ fn encode_query(value: &str) -> String {
     enc
 }
 
+#[allow(dead_code)]
 fn settings_redirect(domain: &str, notice: Option<&str>, error: Option<&str>) -> String {
     let mut url = format!(
         "/plugins/settings?domain={}&id=mrAgent",
