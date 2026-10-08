@@ -77,6 +77,7 @@ pub mod install_snappymail_prefs;
 pub mod install_snappymail_repo;
 pub mod install_webmail;
 pub mod install_webmail_health;
+pub mod install_webmail_openpgp;
 pub mod install_webmail_proxy;
 pub mod install_webmail_runtime;
 pub mod installer;

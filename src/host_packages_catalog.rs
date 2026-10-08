@@ -161,7 +161,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-01",
             install_count: 160,
             featured: true,
-            description: "Optional CPN webmail (SnappyMail) under /opt/cpn-webmail. Use Set as active to switch the panel proxy.",
+            description: "Optional CPN webmail (SnappyMail) under /opt/cpn-webmail. Built-in OpenPGP (public-key encrypt, Settings > OpenPGP). Use Set as active to switch the panel proxy.",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Removes SnappyMail under /opt/cpn-webmail and the /snappymail/ panel proxy",
@@ -177,7 +177,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-14",
             install_count: 40,
             featured: true,
-            description: "Default CPN webmail (Tachyon). Host package: installs once on the server under /opt/cpn-webmail/tachyon. Modern SnappyMail fork with mail, contacts, calendars. PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",
+            description: "Default CPN webmail (Tachyon). Host package under /opt/cpn-webmail/tachyon. SnappyMail fork with mail, contacts, calendars, and built-in OpenPGP (Thunderbird-like public-key encrypt). PHP 8.2+. Contacts use local MariaDB (admin UI type MySQL).",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Removes the Tachyon webmail install and related panel proxy paths",
@@ -209,7 +209,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-09-14",
             install_count: 70,
             featured: true,
-            description: "Optional Roundcube webmail under /opt/cpn-webmail/roundcube with panel proxy at /roundcube/ (IMAP localhost:143).",
+            description: "Optional Roundcube webmail under /opt/cpn-webmail/roundcube with panel proxy at /roundcube/ (IMAP localhost:143). Enigma OpenPGP enabled; keys under /var/lib/cpn-webmail/roundcube-enigma.",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Removes Roundcube under /opt/cpn-webmail/roundcube and the /roundcube/ panel proxy",

@@ -152,6 +152,8 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           <a class="btn-secondary" href="/email/webmail/app">Internal view</a>
         </p>
         <p class="muted">Public path: <code>{path}</code> (proxied through this panel to PHP-FPM on {health}). Mailbox data under <code>/var/lib/cpn-webmail</code> is preserved when you regenerate the path.</p>
+        <p class="muted"><strong>OpenPGP / encrypted mail</strong> (EN): Tachyon, SnappyMail, and NextSnapMail can store a contact's public key and encrypt outbound mail (Settings &gt; OpenPGP / Security), similar to Thunderbird. Roundcube uses Enigma (Settings &gt; PGP Keys). Prefer OpenPGP.js or Mailvelope in the browser for private keys; server GnuPG/Enigma keys stay under <code>/var/lib/cpn-webmail</code> (not web-readable). This is classic OpenPGP, not Proton end-to-end.</p>
+        <p class="muted"><strong>OpenPGP / kryptert e-post</strong> (NO): Tachyon, SnappyMail og NextSnapMail kan lagre mottakerens offentlige nøkkel og sende kryptert e-post (Innstillinger &gt; OpenPGP / Sikkerhet), slik som Thunderbird. Roundcube bruker Enigma (Innstillinger &gt; PGP-nøkler). Bruk OpenPGP.js eller Mailvelope i nettleseren for private nøkler; nøkler på server ligger under <code>/var/lib/cpn-webmail</code>. Dette er klassisk OpenPGP, ikke Proton E2E.</p>
         <form method="post" action="/email/webmail/settings" class="stack-form" style="max-width:520px;margin-top:16px;">
           <label for="auto_login_search">Preferred open account</label>
           <div class="cpn-mbox-combo">

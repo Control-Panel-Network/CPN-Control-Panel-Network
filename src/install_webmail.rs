@@ -312,10 +312,11 @@ pub(crate) async fn install_webmail(
                 .collect();
             // Hosts match provisioned Postfix submission (:587) and Dovecot IMAP (:143).
             let config = format!(
-                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0600';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload'];\n$config['skin'] = 'elastic';\n"
+                "<?php\n$config = [];\n$config['db_dsnw'] = 'sqlite:////opt/cpn-webmail/roundcube/db.sqlite?mode=0600';\n$config['imap_host'] = 'localhost:143';\n$config['smtp_host'] = 'localhost:587';\n$config['smtp_user'] = '%u';\n$config['smtp_pass'] = '%p';\n$config['product_name'] = 'Roundcube Webmail';\n$config['des_key'] = '{key}';\n$config['plugins'] = ['archive', 'zipdownload', 'enigma'];\n$config['skin'] = 'elastic';\n"
             );
             std::fs::write("/opt/cpn-webmail/roundcube/config/config.inc.php", config)
                 .map_err(|error| error.to_string())?;
+            let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
