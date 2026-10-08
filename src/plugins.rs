@@ -207,9 +207,7 @@ fn write_manifest(domain: &str, manifest: &CpnPluginManifest) -> Result<(), Stri
             .and_then(|v| v.as_array())
             .map(|a| a.is_empty())
             .unwrap_or(true);
-        if core_empty
-            && let Some(v) = old.get("uninstall_impacts")
-        {
+        if core_empty && let Some(v) = old.get("uninstall_impacts") {
             obj.insert("uninstall_impacts".into(), v.clone());
         }
     }
