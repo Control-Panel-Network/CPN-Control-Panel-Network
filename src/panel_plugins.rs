@@ -175,7 +175,7 @@ fn render_store(
             <input type="hidden" name="per_page" value="{per_page}">
             <input type="hidden" name="category" value="{category}">
             <label for="q">Search</label>
-            <input class="plugin-search" id="q" name="q" type="search" value="{q}" placeholder="Search by name, id, or description...">
+            <input class="plugin-search" id="q" name="q" type="search" value="{q}" placeholder="Search name, id, description, category, keywords...">
             <button type="submit" class="btn-primary">Search</button>
             <button type="submit" class="btn-secondary" name="refresh" value="1">Refresh catalog</button>
           </form>

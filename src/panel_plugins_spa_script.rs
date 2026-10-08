@@ -1,13 +1,20 @@
 //! Client-side Plugin Store: filter Host/Site, categories, search, and pagination
 //! from the already-rendered catalog (no full hub fetch on tab switches).
 
+use crate::panel_plugins_search::store_search_js_helpers;
+
 pub fn plugins_hub_script() -> String {
-    r#"
+    let mut out = String::from(
+        r#"
 <script>
 (function () {
   if (window.__cpnPluginsHubBound) return;
   window.__cpnPluginsHubBound = true;
-
+"#,
+    );
+    out.push_str(store_search_js_helpers());
+    out.push_str(
+        r#"
   function hubRoot() {
     return document.getElementById('plugins-hub');
   }
@@ -146,8 +153,8 @@ pub fn plugins_hub_script() -> String {
     if (!q) return true;
     if (q === 'paid' || q === 'premium') return el.getAttribute('data-paid') === '1';
     if (q === 'free') return el.getAttribute('data-paid') !== '1';
-    var hay = (el.getAttribute('data-search') || '').toLowerCase();
-    return hay.indexOf(q) >= 0;
+    var hay = el.getAttribute('data-search') || '';
+    return cpnHayMatches(hay, q);
   }
 
   function applyStoreFilter(replaceHistory) {
@@ -168,6 +175,19 @@ pub fn plugins_hub_script() -> String {
     src.querySelectorAll('article.plugin-card').forEach(function (el) {
       if (itemMatches(el, st)) cards.push(el);
     });
+    var qSort = (st.q || '').trim().toLowerCase();
+    if (qSort && qSort !== 'paid' && qSort !== 'premium' && qSort !== 'free') {
+      cards.sort(function (a, b) {
+        var sa = cpnMatchScore(a.getAttribute('data-search') || '', qSort);
+        var sb = cpnMatchScore(b.getAttribute('data-search') || '', qSort);
+        if (sb !== sa) return sb - sa;
+        var na = ((a.querySelector('h3') || {}).textContent || '').toLowerCase();
+        var nb = ((b.querySelector('h3') || {}).textContent || '').toLowerCase();
+        if (na < nb) return -1;
+        if (na > nb) return 1;
+        return 0;
+      });
+    }
     var total = cards.length;
     var per = st.mode === 'scroll' ? Math.max(total, 1) : st.per_page;
     var pages = st.mode === 'scroll' ? 1 : Math.max(Math.ceil(total / per) || 1, 1);
@@ -445,6 +465,7 @@ pub fn plugins_hub_script() -> String {
   applyStoreFilter(true);
 })();
 </script>
-"#
-    .to_string()
+"#,
+    );
+    out
 }

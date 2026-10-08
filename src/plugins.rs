@@ -70,6 +70,9 @@ pub struct CatalogEntry {
     /// Host-scoped: one host install, per-site Activate (from meta `<scope>host</scope>`).
     #[serde(default)]
     pub host_scoped: bool,
+    /// Search aliases from catalog meta (`<keywords>` / `<keyword>`).
+    #[serde(default)]
+    pub keywords: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
