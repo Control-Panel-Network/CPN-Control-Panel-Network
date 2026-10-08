@@ -401,7 +401,10 @@ pub async fn plugins_mr_agent_host_policy(
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                host_policy_redirect(None, Some("Only the panel owner can change Mr Agent host policy")),
+                host_policy_redirect(
+                    None,
+                    Some("Only the panel owner can change Mr Agent host policy"),
+                ),
             ))
             .finish();
     }
