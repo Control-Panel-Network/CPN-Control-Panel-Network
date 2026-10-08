@@ -1707,7 +1707,7 @@ fn plugins_settings_authz(user: &str, domain: &str) -> Result<(), String> {
         }
         return Err("Only panel administrators can manage Host Mr Agent settings".into());
     }
-    require_manage_site(user, domain, SitePerm::Enable)
+    require_manage_site(user, domain, SitePerm::Enable).map(|_| ())
 }
 
 fn plugins_settings_redirect(
