@@ -61,6 +61,7 @@ use cpn_installer::panel_hub_routes::{
     email_lists_route, email_mailscanner, email_mailscanner_enable, email_marketing,
     email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
     email_mta_sts_route, email_mta_sts_save, email_password, email_password_save,
+    email_proton_route, email_proton_save,
     email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save,
     email_plus, email_plus_save, email_queue, email_queue_delete, email_queue_delete_all,
     email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
@@ -1502,6 +1503,8 @@ async fn main() -> std::io::Result<()> {
             .service(email_bimi_route)
             .service(email_bimi_save)
             .service(email_bimi_push_cf)
+            .service(email_proton_route)
+            .service(email_proton_save)
             .service(email_delivery_route)
             .service(email_pattern_fwd)
             .service(email_pattern_fwd_save)

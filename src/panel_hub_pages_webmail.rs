@@ -143,6 +143,11 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
         } else {
             String::new()
         };
+        let proton_link = if crate::panel_feature_gate::proton_mail_unlocked() {
+            r#"<a class="btn-secondary" href="/email/proton">Proton Mail</a>"#.to_string()
+        } else {
+            String::new()
+        };
         format!(
             r#"{notice}{error}
         <p><strong>{label}</strong> is installed. Open the real webmail UI (not only the plugin dashboard).</p>
@@ -150,6 +155,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           <a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open {label}</a>
           <a class="btn-secondary" href="{admin}" target="_blank" rel="noopener noreferrer">{label} Admin</a>
           <a class="btn-secondary" href="/email/webmail/app">Internal view</a>
+          {proton_link}
         </p>
         <p class="muted">Public path: <code>{path}</code> (proxied through this panel to PHP-FPM on {health}). Mailbox data under <code>/var/lib/cpn-webmail</code> is preserved when you regenerate the path.</p>
         <p class="muted"><strong>OpenPGP / encrypted mail</strong> (EN): Tachyon, SnappyMail, and NextSnapMail can store a contact's public key and encrypt outbound mail (Settings &gt; OpenPGP / Security), similar to Thunderbird. Roundcube uses Enigma (Settings &gt; PGP Keys). Prefer OpenPGP.js or Mailvelope in the browser for private keys; server GnuPG/Enigma keys stay under <code>/var/lib/cpn-webmail</code> (not web-readable). This is classic OpenPGP, not Proton end-to-end.</p>
@@ -185,6 +191,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
             label = html_escape(label),
             open = html_escape(&open),
             admin = html_escape(&admin),
+            proton_link = proton_link,
             path = html_escape(&cfg.public_path),
             health = html_escape(webmail_health_hint()),
             auto = html_escape(&cfg.auto_login_account),

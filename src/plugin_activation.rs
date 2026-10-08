@@ -23,6 +23,7 @@ const HOST_SCOPED_ALLOWLIST: &[&str] = &[
     "malwareScanner",
     "roundcubeWebmail",
     "roundcube",
+    "protonMail",
 ];
 
 /// Host + Site (site install remains available without waiting for Host).
@@ -312,6 +313,14 @@ pub fn install_host_plugin(plugin_id: &str) -> Result<CpnPluginManifest, String>
     if crate::mr_agent_install::is_mr_agent(&id) {
         let _ = crate::mr_agent_install::finalize_host_install();
     }
+    if id.eq_ignore_ascii_case("protonMail") {
+        let _ = crate::panel_feature_flags::write_host_feature_flag("proton-mail");
+        crate::panel_feature_gate::invalidate_feature_cache();
+        let script = dest.join("install-host.sh");
+        if script.is_file() {
+            let _ = Command::new("bash").arg(&script).status();
+        }
+    }
     Ok(manifest)
 }
 
@@ -321,6 +330,14 @@ pub fn uninstall_host_plugin(plugin_id: &str) -> Result<(), String> {
     let dest = host_plugin_path(&id);
     if !dest.exists() {
         return Err(format!("Host plugin `{id}` is not installed"));
+    }
+    if id.eq_ignore_ascii_case("protonMail") {
+        let script = dest.join("uninstall-host.sh");
+        if script.is_file() {
+            let _ = Command::new("bash").arg(&script).status();
+        }
+        crate::panel_feature_flags::clear_host_feature_flag("proton-mail");
+        crate::panel_feature_gate::invalidate_feature_cache();
     }
     fs::remove_dir_all(&dest).map_err(|error| format!("Could not remove host plugin: {error}"))?;
     let mut file = load_activations();
@@ -502,6 +519,7 @@ mod tests {
         assert!(is_host_scoped_plugin("clamav"));
         assert!(is_host_scoped_plugin("fail2ban"));
         assert!(!is_host_scoped_plugin("bimi"));
+        assert!(is_host_scoped_plugin("protonMail"));
         assert!(is_dual_scoped_plugin("mrAgent"));
         assert!(is_site_installable_plugin("mrAgent"));
         assert!(!is_site_installable_plugin("clamav"));

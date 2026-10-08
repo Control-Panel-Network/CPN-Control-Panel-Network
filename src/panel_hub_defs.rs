@@ -669,6 +669,12 @@ pub fn email_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/email/bimi",
                     live: true,
                 },
+                HubTile {
+                    title: "Proton Mail",
+                    subtitle: "Open Proton / Bridge",
+                    href: "/email/proton",
+                    live: true,
+                },
             ],
         ),
         (
