@@ -45,6 +45,8 @@ pub async fn configure_webmail_runtime(
     if is_snappy_lineage_docroot(docroot) {
         configure_snappymail_external_data(docroot)?;
         let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
+    } else if docroot.contains("roundcube") {
+        let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     }
     write_php_fpm_pool(docroot)?;
     harden_permissions(docroot).await?;
@@ -494,6 +496,8 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
         let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
         let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
         crate::install_selinux_mail::ensure_webmail_selinux();
+    } else if docroot.contains("roundcube") {
+        let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     }
     Ok(())
 }
