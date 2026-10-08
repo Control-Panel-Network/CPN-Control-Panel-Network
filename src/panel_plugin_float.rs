@@ -224,7 +224,11 @@ pub struct FloatChatBody {
     pub model: String,
 }
 
-fn authorize_float_chat(user: &str, domain: &str, plugin_id: &str) -> Result<PanelFloatWidget, String> {
+fn authorize_float_chat(
+    user: &str,
+    domain: &str,
+    plugin_id: &str,
+) -> Result<PanelFloatWidget, String> {
     let widgets = panel_float_widgets(user);
     widgets
         .into_iter()
@@ -309,7 +313,8 @@ pub async fn plugins_float_chat(
     body: web::Json<FloatChatBody>,
 ) -> HttpResponse {
     let Some(user) = crate::auth_api::panel_user_from_request(&state, &http) else {
-        return HttpResponse::Unauthorized().json(json!({"ok": false, "error": "Sign in required"}));
+        return HttpResponse::Unauthorized()
+            .json(json!({"ok": false, "error": "Sign in required"}));
     };
     if !query.id.trim().eq_ignore_ascii_case("mrAgent") {
         return HttpResponse::BadRequest().json(json!({
@@ -346,10 +351,9 @@ pub async fn plugins_float_chat(
     let provider = body.provider.clone();
     let model = body.model.clone();
     let user_clone = user.clone();
-    let result = web::block(move || {
-        run_mr_agent_bridge(&domain, &user_clone, &message, &provider, &model)
-    })
-    .await;
+    let result =
+        web::block(move || run_mr_agent_bridge(&domain, &user_clone, &message, &provider, &model))
+            .await;
     match result {
         Ok(Ok(value)) => HttpResponse::Ok().json(value),
         Ok(Err(err)) => HttpResponse::BadGateway().json(json!({"ok": false, "error": err})),
