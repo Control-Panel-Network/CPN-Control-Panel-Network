@@ -1280,18 +1280,13 @@ pub async fn plugins_install(
         Ok(manifest) => {
             let mut notice = format!("Installed {}", manifest.name);
             if crate::mr_agent_install::is_mr_agent(&form.id) {
-                match crate::mr_agent_install::publish_for_mode(
-                    &form.domain,
-                    &mode,
-                    &form.confirm_vhost,
-                ) {
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
                     Ok(pub_notice) => {
                         notice = format!("{notice}. {pub_notice}");
                     }
                     Err(err) => {
                         notice = format!(
-                            "{notice}. Publish incomplete: {err}. Open /plugins/mr-agent?domain={} or run install.sh.",
-                            form.domain.trim()
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup.",
                         );
                     }
                 }
@@ -1387,17 +1382,31 @@ pub async fn plugins_activate_host(
             .finish();
     }
     match activate_host_plugin_for_domain(&form.domain, &form.id) {
-        Ok(manifest) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                plugins_redirect(
-                    &form.domain,
-                    "installed",
-                    Some(&format!("Activated {}", manifest.name)),
-                    None,
-                ),
-            ))
-            .finish(),
+        Ok(manifest) => {
+            let mut notice = format!("Activated {}", manifest.name);
+            if crate::mr_agent_install::is_mr_agent(&form.id) {
+                let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+                let mode = if mode.is_empty() || mode == "folder" {
+                    crate::mr_agent_install::install_mode_from_settings(&form.domain)
+                } else {
+                    mode
+                };
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
+                    Ok(msg) => notice = format!("{notice}. {msg}"),
+                    Err(err) => {
+                        notice = format!(
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup."
+                        );
+                    }
+                }
+            }
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", Some(&notice), None),
+                ))
+                .finish()
+        }
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -1611,17 +1620,31 @@ pub async fn plugins_enable(
             .finish();
     }
     match set_plugin_enabled(&form.domain, &form.id, true) {
-        Ok(manifest) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                plugins_redirect(
-                    &form.domain,
-                    "installed",
-                    Some(&format!("Activated {}", manifest.name)),
-                    None,
-                ),
-            ))
-            .finish(),
+        Ok(manifest) => {
+            let mut notice = format!("Activated {}", manifest.name);
+            if crate::mr_agent_install::is_mr_agent(&form.id) {
+                let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+                let mode = if form.install_mode.trim().is_empty() {
+                    crate::mr_agent_install::install_mode_from_settings(&form.domain)
+                } else {
+                    mode
+                };
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
+                    Ok(msg) => notice = format!("{notice}. {msg}"),
+                    Err(err) => {
+                        notice = format!(
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup."
+                        );
+                    }
+                }
+            }
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", Some(&notice), None),
+                ))
+                .finish()
+        }
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -1730,7 +1753,11 @@ pub async fn plugins_settings_save(
         .into_iter()
         .map(|f| f.key)
         .collect();
-    let settings = settings_from_form(&form, &previous, &declared);
+    let mut settings = settings_from_form(&form, &previous, &declared);
+    // Drop legacy Operator notes / CLI dump keys so they leave settings.json on save.
+    settings
+        .fields
+        .retain(|k, _| !crate::plugins_settings::is_hidden_settings_field(k));
     if crate::plugins_settings::is_webmail_plugin_id(id) {
         let mut cfg = crate::panel_webmail::load_webmail_config();
         if let Some(account) = settings.fields.get("auto_login_account") {

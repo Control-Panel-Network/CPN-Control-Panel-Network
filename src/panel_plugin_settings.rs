@@ -198,6 +198,34 @@ pub fn plugin_settings_main(
     } else {
         String::new()
     };
+    let mr_agent_actions = if crate::mr_agent_install::is_mr_agent(&m.id) {
+        let chat = crate::mr_agent_install::panel_expand_url(domain);
+        format!(
+            r#"<div class="section-card" style="margin-top:16px;padding:12px 0 0;">
+        <h3 style="margin:0 0 8px;">Setup actions</h3>
+        <p class="muted">Install and Activate from the Store already run setup. Use these buttons to re-publish the site folder or prune chat logs. No SSH required.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+          <form method="post" action="/plugins/mr-agent/setup" style="display:inline;margin:0;">
+            <input type="hidden" name="domain" value="{domain}">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="install_mode" value="folder">
+            <button type="submit" class="btn-primary">Run setup / Publish folder</button>
+          </form>
+          <form method="post" action="/plugins/mr-agent/prune" style="display:inline;margin:0;" onsubmit="return confirm('Prune Mr Agent chat logs for this site now?');">
+            <input type="hidden" name="domain" value="{domain}">
+            <input type="hidden" name="id" value="{id}">
+            <button type="submit" class="btn-secondary">Prune chat logs</button>
+          </form>
+          <a class="btn-secondary" href="{chat}">Open Mr Agent chat</a>
+        </div>
+      </div>"#,
+            domain = html_escape(domain),
+            id = html_escape(&m.id),
+            chat = html_escape(&chat),
+        )
+    } else {
+        String::new()
+    };
     let _ = sites;
     format!(
         r#"{heading}
@@ -209,6 +237,7 @@ pub fn plugin_settings_main(
         <p class="muted">{id} v{ver} on {domain}</p>
         <p class="muted">Settings file: <code>{path}/settings.json</code></p>
         {webmail_actions}
+        {mr_agent_actions}
         <form method="post" action="/plugins/settings" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="domain" value="{domain}">
           <input type="hidden" name="id" value="{id}">
@@ -237,6 +266,7 @@ pub fn plugin_settings_main(
         fields = custom_fields,
         dash = dash_link,
         webmail_actions = webmail_actions,
+        mr_agent_actions = mr_agent_actions,
     )
 }
 
