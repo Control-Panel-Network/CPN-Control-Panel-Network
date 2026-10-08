@@ -118,6 +118,7 @@ use cpn_installer::panel_hub_routes::{
     users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
     users_reseller_route, users_status_post,
 };
+use cpn_installer::panel_mr_agent::plugins_mr_agent_page;
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
@@ -130,7 +131,6 @@ use cpn_installer::panel_package_routes::{
     packages_assign, packages_create, packages_delete, packages_edit_page, packages_new_page,
     packages_page, packages_update,
 };
-use cpn_installer::panel_mr_agent::plugins_mr_agent_page;
 use cpn_installer::panel_plugin_float::{plugins_float_asset, plugins_float_chat};
 use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_url};
 use cpn_installer::panel_routes::{

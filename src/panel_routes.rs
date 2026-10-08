@@ -24,7 +24,8 @@ use crate::panel_websites_create_ui::{
 use crate::panel_websites_list_ui::{subdomains_main, websites_main};
 use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
-    is_host_owned_install, is_host_scoped_plugin, is_site_installable_plugin, uninstall_host_plugin,
+    is_host_owned_install, is_host_scoped_plugin, is_site_installable_plugin,
+    uninstall_host_plugin,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{

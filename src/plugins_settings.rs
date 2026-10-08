@@ -432,9 +432,7 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
     }
     // Host-only install: bubble for ACL users even with no site activation.
     if crate::plugin_activation::host_plugin_installed("mrAgent")
-        && !out
-            .iter()
-            .any(|w| w.id.eq_ignore_ascii_case("mrAgent"))
+        && !out.iter().any(|w| w.id.eq_ignore_ascii_case("mrAgent"))
     {
         let settings = load_host_mragent_settings();
         if settings_field_truthy(&settings, "enabled", true)

@@ -124,15 +124,15 @@ fn page_main(user: &str, domain: &str) -> String {
             domain = html_escape(domain),
         )
     };
-    let settings_link = if domain.eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL)
-    {
-        r#"<a href="/plugins?view=store&amp;target=host&amp;q=mrAgent">Host plugin</a>"#.into()
-    } else {
-        format!(
-            r#"<a href="/plugins/settings?domain={}&amp;id=mrAgent">Plugin settings</a>"#,
-            html_escape(domain)
-        )
-    };
+    let settings_link =
+        if domain.eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL) {
+            r#"<a href="/plugins?view=store&amp;target=host&amp;q=mrAgent">Host plugin</a>"#.into()
+        } else {
+            format!(
+                r#"<a href="/plugins/settings?domain={}&amp;id=mrAgent">Plugin settings</a>"#,
+                html_escape(domain)
+            )
+        };
     format!(
         r#"<article class="section-card">
   <h1>Mr Agent</h1>

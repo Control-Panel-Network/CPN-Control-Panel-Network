@@ -86,10 +86,7 @@ fn write_mode_marker(plugin_root: &Path, domain: &str, mode: &str) -> Result<(),
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&data, fs::Permissions::from_mode(0o700));
-        let _ = fs::set_permissions(
-            data.join("domain.txt"),
-            fs::Permissions::from_mode(0o600),
-        );
+        let _ = fs::set_permissions(data.join("domain.txt"), fs::Permissions::from_mode(0o600));
         let _ = fs::set_permissions(
             data.join("install_mode.txt"),
             fs::Permissions::from_mode(0o600),

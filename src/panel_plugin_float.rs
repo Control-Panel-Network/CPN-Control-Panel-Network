@@ -369,8 +369,7 @@ pub async fn plugins_float_chat(
             .unwrap_or_else(|| {
                 let mut s = crate::plugins_settings::PluginSettings::default();
                 s.fields.insert("enabled".into(), "1".into());
-                s.fields
-                    .insert("show_floating_bubble".into(), "1".into());
+                s.fields.insert("show_floating_bubble".into(), "1".into());
                 s.fields.insert("visibility".into(), "admins_only".into());
                 s
             })
