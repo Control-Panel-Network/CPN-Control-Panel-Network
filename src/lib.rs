@@ -404,6 +404,7 @@ pub mod paths;
 pub mod php_defaults;
 pub mod php_lifecycle;
 pub mod plugin_activation;
+pub mod plugin_cpn_scope;
 pub mod plugins;
 pub mod plugins_catalog;
 pub mod plugins_settings;

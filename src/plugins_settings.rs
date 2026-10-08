@@ -44,12 +44,18 @@ pub struct SidebarPluginLink {
 }
 
 fn settings_path(domain: &str, plugin_id: &str) -> Result<PathBuf, String> {
+    if let Some(user) = crate::plugin_cpn_scope::parse_cpn_owner(domain) {
+        return Ok(crate::plugin_cpn_scope::cpn_settings_path(&user, plugin_id));
+    }
     Ok(plugins_dir_for_domain(domain)?
         .join(plugin_id)
         .join(SETTINGS_FILE))
 }
 
 fn manifest_path(domain: &str, plugin_id: &str) -> Result<PathBuf, String> {
+    if let Some(user) = crate::plugin_cpn_scope::parse_cpn_owner(domain) {
+        return Ok(crate::plugin_cpn_scope::cpn_manifest_path(&user, plugin_id));
+    }
     Ok(plugins_dir_for_domain(domain)?
         .join(plugin_id)
         .join("cpn-plugin.json"))
@@ -612,6 +618,15 @@ pub fn default_show_in_sidebar(domain: &str, plugin_id: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn resolve_settings_domain(domain_raw: &str) -> Result<String, String> {
+    if crate::plugin_cpn_scope::is_cpn_domain(domain_raw) {
+        let owner = crate::plugin_cpn_scope::parse_cpn_owner(domain_raw)
+            .ok_or_else(|| "Invalid CPN-only domain token".to_string())?;
+        return Ok(crate::plugin_cpn_scope::cpn_domain_for_user(&owner));
+    }
+    Ok(load_site(domain_raw)?.domain)
+}
+
 pub fn load_plugin_settings(
     domain_raw: &str,
     plugin_id_raw: &str,
@@ -620,7 +635,7 @@ pub fn load_plugin_settings(
     if is_host_settings_domain(domain_raw) && id.eq_ignore_ascii_case("mrAgent") {
         return Ok(load_host_mragent_settings());
     }
-    let domain = load_site(domain_raw)?.domain;
+    let domain = resolve_settings_domain(domain_raw)?;
     let path = settings_path(&domain, &id)?;
     if !path.is_file() {
         let mut settings = PluginSettings {
@@ -655,7 +670,7 @@ pub fn save_plugin_settings(
     if is_host_settings_domain(domain_raw) && id.eq_ignore_ascii_case("mrAgent") {
         return save_host_mragent_settings(settings);
     }
-    let domain = load_site(domain_raw)?.domain;
+    let domain = resolve_settings_domain(domain_raw)?;
     let path = settings_path(&domain, &id)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
