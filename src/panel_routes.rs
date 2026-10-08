@@ -10,7 +10,7 @@ use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
-    plugin_dashboard_main, plugin_settings_main, settings_from_form,
+    plugin_dashboard_main, plugin_settings_main_with_tab, settings_from_form,
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
@@ -1257,6 +1257,14 @@ pub async fn plugins_install(
             ))
             .finish();
     }
+    if let Err(error) = crate::mr_agent_policy::refuse_site_install_if_disabled(&form.id) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish();
+    }
     let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
     if crate::mr_agent_install::is_mr_agent(&form.id)
         && mode == "vhost"
@@ -1692,6 +1700,40 @@ pub async fn plugins_disable(
     }
 }
 
+fn plugins_settings_authz(user: &str, domain: &str) -> Result<(), String> {
+    if crate::plugins_settings::is_host_settings_domain(domain) {
+        if is_panel_admin(user) {
+            return Ok(());
+        }
+        return Err("Only panel administrators can manage Host Mr Agent settings".into());
+    }
+    require_manage_site(user, domain, SitePerm::Enable).map(|_| ())
+}
+
+fn plugins_settings_redirect(
+    domain: &str,
+    id: &str,
+    tab: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    let mut url = format!(
+        "/plugins/settings?domain={}&id={}",
+        urlencoding_simple(domain),
+        urlencoding_simple(id)
+    );
+    if !tab.trim().is_empty() {
+        url.push_str(&format!("&tab={}", urlencoding_simple(tab)));
+    }
+    if let Some(n) = notice.filter(|s| !s.is_empty()) {
+        url.push_str(&format!("&notice={}", urlencoding_simple(n)));
+    }
+    if let Some(e) = error.filter(|s| !s.is_empty()) {
+        url.push_str(&format!("&error={}", urlencoding_simple(e)));
+    }
+    url
+}
+
 #[get("/plugins/settings")]
 pub async fn plugins_settings_page(
     http: HttpRequest,
@@ -1705,9 +1747,10 @@ pub async fn plugins_settings_page(
     let id = query.get("id").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let tab = query.get("tab").map(String::as_str);
     let sites = sites_manageable_by(&user).unwrap_or_default();
     if !domain.trim().is_empty()
-        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+        && let Err(err) = plugins_settings_authz(&user, domain)
     {
         return HttpResponse::SeeOther()
             .append_header((
@@ -1716,11 +1759,24 @@ pub async fn plugins_settings_page(
             ))
             .finish();
     }
+    let title = if crate::mr_agent_install::is_mr_agent(id) {
+        "Mr Agent settings"
+    } else {
+        "Plugin settings"
+    };
     html_ok(panel_shell(
         &user,
         "plugins",
-        "Plugin settings",
-        &plugin_settings_main(&sites, domain, id, notice, error),
+        title,
+        &plugin_settings_main_with_tab(
+            &sites,
+            domain,
+            id,
+            notice,
+            error,
+            tab,
+            is_panel_admin(&user),
+        ),
     ))
 }
 
@@ -1735,16 +1791,24 @@ pub async fn plugins_settings_save(
     };
     let domain = form.get("domain").map(String::as_str).unwrap_or("");
     let id = form.get("id").map(String::as_str).unwrap_or("");
-    if let Err(error) = require_manage_site(&user, domain, SitePerm::Enable) {
+    let tab = form.get("tab").map(String::as_str).unwrap_or("general");
+    if let Err(error) = plugins_settings_authz(&user, domain) {
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&error={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple(&error)
-                ),
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
+            ))
+            .finish();
+    }
+    if let Err(error) = crate::panel_mr_agent_settings::save_host_policy_from_form(
+        domain,
+        is_panel_admin(&user),
+        &form,
+    ) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
             ))
             .finish();
     }
@@ -1754,7 +1818,6 @@ pub async fn plugins_settings_save(
         .map(|f| f.key)
         .collect();
     let mut settings = settings_from_form(&form, &previous, &declared);
-    // Drop legacy Operator notes / CLI dump keys so they leave settings.json on save.
     settings
         .fields
         .retain(|k, _| !crate::plugins_settings::is_hidden_settings_field(k));
@@ -1780,23 +1843,13 @@ pub async fn plugins_settings_save(
         Ok(()) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&notice={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple("Settings saved")
-                ),
+                plugins_settings_redirect(domain, id, tab, Some("Settings saved"), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&error={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple(&error)
-                ),
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
             ))
             .finish(),
     }
