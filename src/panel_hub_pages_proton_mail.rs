@@ -174,6 +174,7 @@ pub fn email_proton_page(notice: Option<&str>, error: Option<&str>) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn save_proton_mail_form(
     account_email: &str,
     display_name: &str,
