@@ -176,7 +176,10 @@ pub(crate) fn render_catalog_card(
     } else {
         ""
     };
-    let host_badge = if host_scoped {
+    let site_ok = crate::plugin_activation::catalog_entry_is_site_installable(entry);
+    let host_badge = if host_scoped && site_ok {
+        r#"<span class="plugin-badge">Host</span><span class="plugin-badge cat">Site</span>"#
+    } else if host_scoped {
         r#"<span class="plugin-badge">Host</span>"#
     } else {
         r#"<span class="plugin-badge cat">Site</span>"#
@@ -187,6 +190,7 @@ pub(crate) fn render_catalog_card(
         domain,
         installed,
         host_scoped,
+        site_ok,
         on_host,
         activated,
         admin,
@@ -235,12 +239,14 @@ fn store_action_html(
     domain: &str,
     installed: bool,
     host_scoped: bool,
+    site_installable: bool,
     on_host: bool,
     activated: bool,
     admin: bool,
 ) -> String {
     let id = html_escape(&entry.id);
     let domain_e = html_escape(domain);
+    let is_mr = entry.id.eq_ignore_ascii_case("mrAgent");
     // Roundcube is a Host package (cpn app install); jump to that card in this Store.
     if entry.id.eq_ignore_ascii_case("roundcubeWebmail")
         || entry.id.eq_ignore_ascii_case("roundcube")
@@ -255,6 +261,55 @@ fn store_action_html(
             <a class="btn-primary" href="/plugins?view=store&amp;target=host{domain_q}&amp;q=roundcube">Show Roundcube</a>"#,
             domain_q = domain_q,
         );
+    }
+    // Dual-scoped Site target: allow a real per-site Install (folder/vhost), independent of Host.
+    if host_scoped && site_installable && !domain.is_empty() {
+        let mut parts = String::new();
+        if installed {
+            parts.push_str(r#"<span class="plugin-badge installed">Installed on site</span>"#);
+        } else if is_mr {
+            parts.push_str(&format!(
+                r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <label class="muted">Publish mode
+              <select name="install_mode">
+                <option value="folder" selected>Folder /mr-agent/ (keeps site)</option>
+                <option value="vhost">Vhost takeover (replaces site docroot)</option>
+              </select>
+            </label>
+            <label class="muted"><input type="checkbox" name="confirm_vhost" value="yes"> Confirm vhost takeover (required only for Vhost)</label>
+            <p class="muted" style="margin:0;">Vhost impact: document root for this domain becomes Mr Agent public/. Existing site files stay on disk but stop being served. Prefer Folder mode.</p>
+            <button type="submit" class="btn-primary">Install on this site</button>
+          </form>"#,
+                id = id,
+                domain = domain_e,
+            ));
+        } else {
+            parts.push_str(&format!(
+                r#"<form method="post" action="/plugins/install" class="inline-form">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <button type="submit" class="btn-primary">Install on this site</button>
+          </form>"#,
+                id = id,
+                domain = domain_e,
+            ));
+        }
+        if admin && !on_host {
+            parts.push_str(&format!(
+                r#" <form method="post" action="/plugins/install-host" class="inline-form" style="margin-top:8px;">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <button type="submit" class="btn-secondary">Install on Host instead</button>
+          </form>"#,
+                id = id,
+                domain = domain_e,
+            ));
+        } else if on_host {
+            parts.push_str(r#" <span class="plugin-badge installed">Also on Host</span>"#);
+        }
+        return parts;
     }
     if host_scoped {
         if on_host {
@@ -324,6 +379,24 @@ fn store_action_html(
     }
     if domain.is_empty() {
         return r#"<span class="muted">Select a domain to install</span>"#.into();
+    }
+    if is_mr {
+        return format!(
+            r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
+            <input type="hidden" name="id" value="{id}">
+            <input type="hidden" name="domain" value="{domain}">
+            <label class="muted">Publish mode
+              <select name="install_mode">
+                <option value="folder" selected>Folder /mr-agent/ (keeps site)</option>
+                <option value="vhost">Vhost takeover (replaces site docroot)</option>
+              </select>
+            </label>
+            <label class="muted"><input type="checkbox" name="confirm_vhost" value="yes"> Confirm vhost takeover (required only for Vhost)</label>
+            <button type="submit" class="btn-primary">Install</button>
+          </form>"#,
+            id = id,
+            domain = domain_e,
+        );
     }
     format!(
         r#"<form method="post" action="/plugins/install" class="inline-form">
@@ -451,6 +524,7 @@ mod tests {
             featured: false,
             uninstall_impacts: vec![],
             host_scoped: false,
+            site_installable: true,
             keywords: vec![],
         }
     }

@@ -155,8 +155,21 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
     }
     vec![
         PluginSettingField {
+            key: "install_mode".into(),
+            label: "Site publish mode: folder (default, /mr-agent/) | vhost (needs confirm)"
+                .into(),
+            field_type: "text".into(),
+            default: "folder".into(),
+        },
+        PluginSettingField {
+            key: "expand_via".into(),
+            label: "Bubble Expand target: panel (recommended) | site".into(),
+            field_type: "text".into(),
+            default: "panel".into(),
+        },
+        PluginSettingField {
             key: "public_path".into(),
-            label: "Public URL path (after install.sh)".into(),
+            label: "Public URL path for site folder mode".into(),
             field_type: "text".into(),
             default: "/mr-agent".into(),
         },
@@ -231,7 +244,7 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
             key: "notes".into(),
             label: "Operator notes (optional)".into(),
             field_type: "text".into(),
-            default: "After Store install, run: sudo bash install.sh <domain>. Local LLM must run on this server.".into(),
+            default: "Host: no site takeover. Site folder: /mr-agent/. Vhost needs confirm. Local LLM must run on this server.".into(),
         },
     ]
 }
@@ -386,7 +399,14 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
                         String::new()
                     }
                 });
-            let expand_url = if public_path.is_empty() {
+            let expand_via = settings
+                .fields
+                .get("expand_via")
+                .map(|s| s.trim().to_ascii_lowercase())
+                .unwrap_or_else(|| "panel".into());
+            let expand_url = if is_mr && expand_via != "site" {
+                crate::mr_agent_install::panel_expand_url(&site.domain)
+            } else if public_path.is_empty() {
                 format!(
                     "/plugins/dashboard?domain={}&id={}",
                     urlencoding_simple(&site.domain),
@@ -410,6 +430,29 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
             });
         }
     }
+    // Host-only install: bubble for ACL users even with no site activation.
+    if crate::plugin_activation::host_plugin_installed("mrAgent")
+        && !out
+            .iter()
+            .any(|w| w.id.eq_ignore_ascii_case("mrAgent"))
+    {
+        let settings = load_host_mragent_settings();
+        if settings_field_truthy(&settings, "enabled", true)
+            && settings_field_truthy(&settings, "show_floating_bubble", true)
+            && plugin_visibility_allows(username, &settings)
+        {
+            out.push(PanelFloatWidget {
+                id: "mrAgent".into(),
+                name: "Mr Agent".into(),
+                domain: crate::mr_agent_install::HOST_DOMAIN_SENTINEL.into(),
+                public_path: "/mr-agent".into(),
+                asset_js: default_float_asset("mrAgent"),
+                expand_url: crate::mr_agent_install::panel_expand_url(
+                    crate::mr_agent_install::HOST_DOMAIN_SENTINEL,
+                ),
+            });
+        }
+    }
     out.sort_by(|a, b| {
         (
             a.name.to_ascii_lowercase(),
@@ -423,6 +466,23 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
             ))
     });
     out
+}
+
+fn load_host_mragent_settings() -> PluginSettings {
+    let path = crate::plugin_activation::host_plugin_path("mrAgent").join("settings.json");
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        if let Ok(settings) = serde_json::from_str::<PluginSettings>(&raw) {
+            return settings;
+        }
+    }
+    let mut settings = PluginSettings {
+        show_in_sidebar: true,
+        ..Default::default()
+    };
+    for field in builtin_mragent_settings_fields("mrAgent") {
+        settings.fields.insert(field.key, field.default);
+    }
+    settings
 }
 
 pub fn manifest_panel_float(domain: &str, plugin_id: &str) -> bool {
