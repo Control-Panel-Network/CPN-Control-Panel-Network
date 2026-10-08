@@ -190,32 +190,32 @@ fn insert_enigma_plugin(raw: &str) -> String {
         if let Some(eq) = rest.find('=') {
             let after_eq = &rest[eq + 1..];
             let trimmed = after_eq.trim_start();
-            if trimmed.starts_with('[') {
-                if let Some(end) = trimmed.find(']') {
-                    let inner = &trimmed[1..end];
-                    let new_inner = if inner.trim().is_empty() {
-                        "'enigma'".to_string()
-                    } else {
-                        format!("{}, 'enigma'", inner.trim_end_matches(',').trim_end())
-                    };
-                    let before = &raw[..idx + eq + 1 + (after_eq.len() - trimmed.len())];
-                    let after = &trimmed[end..];
-                    return format!("{before}[{new_inner}{after}");
-                }
+            if trimmed.starts_with('[')
+                && let Some(end) = trimmed.find(']')
+            {
+                let inner = &trimmed[1..end];
+                let new_inner = if inner.trim().is_empty() {
+                    "'enigma'".to_string()
+                } else {
+                    format!("{}, 'enigma'", inner.trim_end_matches(',').trim_end())
+                };
+                let before = &raw[..idx + eq + 1 + (after_eq.len() - trimmed.len())];
+                let after = &trimmed[end..];
+                return format!("{before}[{new_inner}{after}");
             }
-            if trimmed.starts_with("array(") {
-                if let Some(end_rel) = find_matching_paren(trimmed, 5) {
-                    let inner = &trimmed[6..end_rel];
-                    let new_inner = if inner.trim().is_empty() {
-                        "'enigma'".to_string()
-                    } else {
-                        format!("{}, 'enigma'", inner.trim_end_matches(',').trim_end())
-                    };
-                    let prefix_len = idx + eq + 1 + (after_eq.len() - trimmed.len());
-                    let before = &raw[..prefix_len];
-                    let after = &trimmed[end_rel..];
-                    return format!("{before}array({new_inner}{after}");
-                }
+            if trimmed.starts_with("array(")
+                && let Some(end_rel) = find_matching_paren(trimmed, 5)
+            {
+                let inner = &trimmed[6..end_rel];
+                let new_inner = if inner.trim().is_empty() {
+                    "'enigma'".to_string()
+                } else {
+                    format!("{}, 'enigma'", inner.trim_end_matches(',').trim_end())
+                };
+                let prefix_len = idx + eq + 1 + (after_eq.len() - trimmed.len());
+                let before = &raw[..prefix_len];
+                let after = &trimmed[end_rel..];
+                return format!("{before}array({new_inner}{after}");
             }
         }
     }
