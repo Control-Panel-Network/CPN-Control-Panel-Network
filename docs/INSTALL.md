@@ -1,6 +1,6 @@
 # CPN install and upgrade options
 
-Current stable is **v1.3.0** (first stable was **v1.0.0**). Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
+Current stable is **v1.4.0** (first stable was **v1.0.0**). Prefer a disposable test host, keep backups, and read [Platform Support](SUPPORT.md) before production-like installs.
 
 ## Preferred one-liners
 
@@ -32,13 +32,13 @@ Hosts without curl: `wget -O - URL | bash`. Optional process substitution still 
 ## Pin a git ref or Release (`-b` / `--ref`)
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.3.0
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.4.0
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b 1.0.0-dev
 curl -fsSL https://cpn.newstargeted.com/install.sh | bash -s -- --branch v0.2.6-alpha.22
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --ref v0.2.6-alpha.21 --bypass
 ```
 
-Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v1.3.0`.
+Process substitution form (same flags): `bash <(curl -fsSL https://cpn.newstargeted.com/upgrade.sh) -b v1.4.0`.
 
 Behavior:
 
@@ -55,7 +55,7 @@ Shared helpers live in [`scripts/cpn-bootstrap-lib.sh`](../scripts/cpn-bootstrap
 
 ## Docker Hub images (optional)
 
-Official installer runtime images: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer). Source tree: [GitHub `stable`](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/tree/stable). Current release on Hub is **v1.3.0**.
+Official installer runtime images: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer). Source tree: [GitHub `stable`](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/tree/stable). Current release on Hub is **v1.4.0**.
 
 These images are for maintainer smoke tests and labs (systemd in a privileged container). They are not a replacement for native RPM/DEB on production hosts.
 
@@ -64,7 +64,7 @@ docker pull master3395/cpn-installer:almalinux9
 docker pull master3395/cpn-installer:almalinux10
 docker pull master3395/cpn-installer:ubuntu26.04
 docker pull master3395/cpn-installer:latest      # AlmaLinux 9
-docker pull master3395/cpn-installer:1.3.0       # semver on the AlmaLinux 9 image
+docker pull master3395/cpn-installer:1.4.0       # semver on the AlmaLinux 9 image
 ```
 
 Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, plus the release semver. There are no `ubuntu22.04` or `ubuntu24.04` Hub tags; install those Ubuntu hosts with native DEB from GitHub Releases.

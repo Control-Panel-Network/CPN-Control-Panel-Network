@@ -1,7 +1,7 @@
 # CPN Â· Control Panel Network
 
 > [!WARNING]
-> **v1.3.0** is the current stable release (first stable was **v1.0.0**) of CPN Control Panel Network, following the 0.2.x alpha line (last alpha tip v0.2.6-alpha.50). Keep backups, test upgrades on a staging host first, and read [Platform Support](docs/SUPPORT.md) before important hosts.
+> **v1.4.0** is the current stable release (first stable was **v1.0.0**) of CPN Control Panel Network, following the 0.2.x alpha line (last alpha tip v0.2.6-alpha.50). Keep backups, test upgrades on a staging host first, and read [Platform Support](docs/SUPPORT.md) before important hosts.
 
 [![CI](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml/badge.svg?branch=stable)](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/actions/workflows/ci.yml)
 [![Docker Hub](https://img.shields.io/badge/docker-master3395%2Fcpn--installer-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/master3395/cpn-installer)
@@ -47,14 +47,14 @@ Pins (`-b` / `--ref`), wget hosts, `--bypass`, env vars, and retag notes: **[doc
 
 ## Docker
 
-Official images on [Docker Hub `master3395/cpn-installer`](https://hub.docker.com/r/master3395/cpn-installer) track **v1.3.0** (`stable`). Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest` (AlmaLinux 9), and the release semver (`1.3.0`). There are no `ubuntu22.04` or `ubuntu24.04` Hub tags; those hosts use native DEB from GitHub Releases.
+Official images on [Docker Hub `master3395/cpn-installer`](https://hub.docker.com/r/master3395/cpn-installer) track **v1.4.0** (`stable`). Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest` (AlmaLinux 9), and the release semver (`1.4.0`). There are no `ubuntu22.04` or `ubuntu24.04` Hub tags; those hosts use native DEB from GitHub Releases.
 
 ```bash
 docker pull master3395/cpn-installer:almalinux9
 docker pull master3395/cpn-installer:almalinux10
 docker pull master3395/cpn-installer:ubuntu26.04
 docker pull master3395/cpn-installer:latest
-docker pull master3395/cpn-installer:1.3.0
+docker pull master3395/cpn-installer:1.4.0
 ```
 
 Privileged systemd run, `scripts/docker-run.sh` (local build), and native install vs containers: **[docs/INSTALL.md](docs/INSTALL.md)**. Prefer RPM/DEB on production hosts.
@@ -68,7 +68,7 @@ curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 Pin tip (example):
 
 ```bash
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.3.0
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.4.0
 ```
 
 After the package upgrade, `upgrade.sh` auto-runs `cpn-installer --upgrade` when a panel install is detected. Full options: [docs/INSTALL.md](docs/INSTALL.md).
