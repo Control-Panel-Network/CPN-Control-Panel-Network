@@ -1258,22 +1258,23 @@ pub async fn plugins_install(
             .finish();
     }
     let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
-    if crate::mr_agent_install::is_mr_agent(&form.id) && mode == "vhost" {
-        if !crate::mr_agent_install::vhost_confirm_accepted(&form.confirm_vhost) {
-            return HttpResponse::SeeOther()
-                .append_header((
-                    "Location",
-                    plugins_redirect(
-                        &form.domain,
-                        "store",
-                        None,
-                        Some(
-                            "Mr Agent vhost mode cancelled: confirmation required. This takes over the site document root. Use folder mode (default), or tick Confirm vhost takeover.",
-                        ),
+    if crate::mr_agent_install::is_mr_agent(&form.id)
+        && mode == "vhost"
+        && !crate::mr_agent_install::vhost_confirm_accepted(&form.confirm_vhost)
+    {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    &form.domain,
+                    "store",
+                    None,
+                    Some(
+                        "Mr Agent vhost mode cancelled: confirmation required. This takes over the site document root. Use folder mode (default), or tick Confirm vhost takeover.",
                     ),
-                ))
-                .finish();
-        }
+                ),
+            ))
+            .finish();
     }
     match install_plugin(&form.domain, &form.id) {
         Ok(manifest) => {

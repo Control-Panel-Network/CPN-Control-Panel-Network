@@ -44,12 +44,11 @@ fn resolve_plugin_asset(domain: &str, plugin_id: &str, rel: &str) -> Result<Path
     if let Ok(site_root) = plugins_dir_for_domain(domain) {
         roots.push(site_root.join(&id));
     }
-    if id.eq_ignore_ascii_case("mrAgent") {
-        if let Ok(host_root) = crate::mr_agent_install::resolve_mr_agent_root(domain) {
-            if !roots.iter().any(|r| r == &host_root) {
-                roots.push(host_root);
-            }
-        }
+    if id.eq_ignore_ascii_case("mrAgent")
+        && let Ok(host_root) = crate::mr_agent_install::resolve_mr_agent_root(domain)
+        && !roots.iter().any(|r| r == &host_root)
+    {
+        roots.push(host_root);
     }
     let mut file: Option<PathBuf> = None;
     let mut root_canon: Option<PathBuf> = None;

@@ -468,10 +468,10 @@ pub fn panel_float_widgets(username: &str) -> Vec<PanelFloatWidget> {
 
 fn load_host_mragent_settings() -> PluginSettings {
     let path = crate::plugin_activation::host_plugin_path("mrAgent").join("settings.json");
-    if let Ok(raw) = std::fs::read_to_string(&path) {
-        if let Ok(settings) = serde_json::from_str::<PluginSettings>(&raw) {
-            return settings;
-        }
+    if let Ok(raw) = std::fs::read_to_string(&path)
+        && let Ok(settings) = serde_json::from_str::<PluginSettings>(&raw)
+    {
+        return settings;
     }
     let mut settings = PluginSettings {
         show_in_sidebar: true,

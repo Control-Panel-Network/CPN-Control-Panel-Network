@@ -58,10 +58,10 @@ fn pick_domain(user: &str, requested: &str) -> String {
 
 fn host_settings() -> crate::plugins_settings::PluginSettings {
     let path = crate::plugin_activation::host_plugin_path("mrAgent").join("settings.json");
-    if let Ok(raw) = std::fs::read_to_string(path) {
-        if let Ok(settings) = serde_json::from_str(&raw) {
-            return settings;
-        }
+    if let Ok(raw) = std::fs::read_to_string(path)
+        && let Ok(settings) = serde_json::from_str(&raw)
+    {
+        return settings;
     }
     let mut settings = crate::plugins_settings::PluginSettings {
         show_in_sidebar: true,

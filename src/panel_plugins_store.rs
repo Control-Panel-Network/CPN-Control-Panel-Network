@@ -234,6 +234,7 @@ fn store_card(
     render_catalog_card(entry, all, installed_ids, domain, username)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn store_action_html(
     entry: &CatalogEntry,
     domain: &str,
