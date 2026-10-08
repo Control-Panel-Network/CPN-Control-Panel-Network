@@ -74,6 +74,25 @@ fn field_input(key: &str, field_type: &str, value: &str) -> String {
     )
 }
 
+/// Settings entry used by routes. Mr Agent gets tabbed Host/Site UI; others keep the long form.
+pub fn plugin_settings_main_with_tab(
+    sites: &[SiteRecord],
+    domain: &str,
+    plugin_id: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    tab: Option<&str>,
+    is_admin: bool,
+) -> String {
+    if crate::mr_agent_install::is_mr_agent(plugin_id) && !domain.trim().is_empty() {
+        return crate::panel_mr_agent_settings::mr_agent_settings_main(
+            domain, notice, error, tab, is_admin,
+        );
+    }
+    let _ = (tab, is_admin);
+    plugin_settings_main(sites, domain, plugin_id, notice, error)
+}
+
 pub fn plugin_settings_main(
     sites: &[SiteRecord],
     domain: &str,
@@ -167,6 +186,15 @@ pub fn plugin_settings_main(
     } else {
         r#"<p class="muted">Activate the plugin to use its dashboard route.</p>"#.into()
     };
+    let mr_agent_policy_note = if crate::mr_agent_install::is_mr_agent(&m.id) {
+        if crate::mr_agent_policy::allow_site_install() {
+            r#"<p class="muted">Host policy: site install is allowed. Panel owner can change this on <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        } else {
+            r#"<p class="muted">Host policy: new site installs are disabled by the server owner. This existing install stays. Owner toggles: <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        }
+    } else {
+        String::new()
+    };
     let webmail_actions = if crate::plugins_settings::is_webmail_plugin_id(&m.id)
         && crate::panel_webmail::webmail_ready()
     {
@@ -198,34 +226,6 @@ pub fn plugin_settings_main(
     } else {
         String::new()
     };
-    let mr_agent_actions = if crate::mr_agent_install::is_mr_agent(&m.id) {
-        let chat = crate::mr_agent_install::panel_expand_url(domain);
-        format!(
-            r#"<div class="section-card" style="margin-top:16px;padding:12px 0 0;">
-        <h3 style="margin:0 0 8px;">Setup actions</h3>
-        <p class="muted">Install and Activate from the Store already run setup. Use these buttons to re-publish the site folder or prune chat logs. No SSH required.</p>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-          <form method="post" action="/plugins/mr-agent/setup" style="display:inline;margin:0;">
-            <input type="hidden" name="domain" value="{domain}">
-            <input type="hidden" name="id" value="{id}">
-            <input type="hidden" name="install_mode" value="folder">
-            <button type="submit" class="btn-primary">Run setup / Publish folder</button>
-          </form>
-          <form method="post" action="/plugins/mr-agent/prune" style="display:inline;margin:0;" onsubmit="return confirm('Prune Mr Agent chat logs for this site now?');">
-            <input type="hidden" name="domain" value="{domain}">
-            <input type="hidden" name="id" value="{id}">
-            <button type="submit" class="btn-secondary">Prune chat logs</button>
-          </form>
-          <a class="btn-secondary" href="{chat}">Open Mr Agent chat</a>
-        </div>
-      </div>"#,
-            domain = html_escape(domain),
-            id = html_escape(&m.id),
-            chat = html_escape(&chat),
-        )
-    } else {
-        String::new()
-    };
     let _ = sites;
     format!(
         r#"{heading}
@@ -236,8 +236,8 @@ pub fn plugin_settings_main(
         <h2>{name}</h2>
         <p class="muted">{id} v{ver} on {domain}</p>
         <p class="muted">Settings file: <code>{path}/settings.json</code></p>
+        {mr_agent_policy_note}
         {webmail_actions}
-        {mr_agent_actions}
         <form method="post" action="/plugins/settings" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="domain" value="{domain}">
           <input type="hidden" name="id" value="{id}">
@@ -265,8 +265,8 @@ pub fn plugin_settings_main(
         sidebar = sidebar_checked,
         fields = custom_fields,
         dash = dash_link,
+        mr_agent_policy_note = mr_agent_policy_note,
         webmail_actions = webmail_actions,
-        mr_agent_actions = mr_agent_actions,
     )
 }
 
@@ -370,12 +370,21 @@ pub fn plugin_dashboard_main(
 }
 
 /// Build settings map from POST form keys (`field_*`, optional kv pair, deletes).
+///
+/// Tabbed Mr Agent saves send `mra_tab_keys` (comma list of keys on that tab) and
+/// `present_field_<key>=1` for checkboxes so unchecked boxes clear without wiping
+/// fields that live on other tabs.
 pub fn settings_from_form(
     form: &HashMap<String, String>,
     previous: &PluginSettings,
     declared_keys: &[String],
 ) -> PluginSettings {
-    let show_in_sidebar = form.get("show_in_sidebar").map(String::as_str) == Some("1");
+    let tabbed = form.contains_key("mra_tab_keys");
+    let show_in_sidebar = if tabbed && !form.contains_key("sidebar_present") {
+        previous.show_in_sidebar
+    } else {
+        form.get("show_in_sidebar").map(String::as_str) == Some("1")
+    };
     let mut fields = BTreeMap::new();
     if declared_keys.is_empty() {
         for (key, value) in &previous.fields {
@@ -401,6 +410,29 @@ pub fn settings_from_form(
             && kv_key.len() <= 64
         {
             fields.insert(kv_key, kv_value);
+        }
+    } else if tabbed {
+        fields = previous.fields.clone();
+        let tab_keys: Vec<String> = form
+            .get("mra_tab_keys")
+            .map(|s| {
+                s.split(',')
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for key in declared_keys {
+            if !tab_keys.iter().any(|k| k.eq_ignore_ascii_case(key)) {
+                continue;
+            }
+            let form_key = format!("field_{key}");
+            if let Some(v) = form.get(&form_key) {
+                fields.insert(key.clone(), v.clone());
+            } else if form.contains_key(&format!("present_field_{key}")) {
+                // Unchecked checkbox on this tab.
+                fields.insert(key.clone(), String::new());
+            }
         }
     } else {
         for key in declared_keys {

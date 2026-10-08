@@ -268,6 +268,16 @@ fn store_action_html(
         let mut parts = String::new();
         if installed {
             parts.push_str(r#"<span class="plugin-badge installed">Installed on site</span>"#);
+            if is_mr && !crate::mr_agent_policy::allow_site_install() {
+                parts.push_str(
+                    r#" <p class="muted" style="margin:6px 0 0;">New site installs are disabled by the server owner. This existing install stays; panel owner can re-enable Allow site install in Mr Agent host policy.</p>"#,
+                );
+            }
+        } else if is_mr && !crate::mr_agent_policy::allow_site_install() {
+            parts.push_str(&format!(
+                r#"<p class="panel-notice error" role="status" style="margin:0;">{msg}</p>"#,
+                msg = html_escape(crate::mr_agent_policy::SITE_INSTALL_DISABLED_MSG),
+            ));
         } else if is_mr {
             parts.push_str(&format!(
                 r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
@@ -382,6 +392,12 @@ fn store_action_html(
         return r#"<span class="muted">Select a domain to install</span>"#.into();
     }
     if is_mr {
+        if !crate::mr_agent_policy::allow_site_install() {
+            return format!(
+                r#"<p class="panel-notice error" role="status" style="margin:0;">{msg}</p>"#,
+                msg = html_escape(crate::mr_agent_policy::SITE_INSTALL_DISABLED_MSG),
+            );
+        }
         return format!(
             r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
             <input type="hidden" name="id" value="{id}">

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Webmail OpenPGP (classic PGP)**: Install/heal enables SnappyMail-family `openpgp` + `gnupg` in `application.ini` (Tachyon, SnappyMail, NextSnapMail) and Roundcube Enigma with keydir `/var/lib/cpn-webmail/roundcube-enigma` (outside the HTTP docroot). Soft-installs the GnuPG CLI when missing. Email > Webmail shows short EN+NO operator notes (Settings paths). Not Proton E2E. Details and gaps: `docs/WEBMAIL-OPENPGP.md`.
 - **Mr Agent panel setup buttons**: Plugin settings for `mrAgent` show **Run setup / Publish folder** and **Prune chat logs** (`POST /plugins/mr-agent/setup`, `POST /plugins/mr-agent/prune`). Store Install, Activate, and Enable run the same setup path (secrets + folder publish, optional `install.sh` fallback). Operator notes / CLI dump fields are hidden and stripped on save. SSH `install.sh` remains docs-only.
+- **Mr Agent host policy**: Panel owner toggles on `/plugins/mr-agent` (`POST /plugins/mr-agent/host-policy`), stored at `/var/lib/cpn/mr-agent/host-policy.json`. `allow_host_chat` (default on) gates the panel bubble and `/plugins/mr-agent`. `allow_site_install` (default off) blocks Store Site Install with a clear error. Existing site installs are left in place. Visibility ACL remains separate.
 - **Mr Agent Host/Site install modes**: Catalog dual scope (Host + Site). Host install serves panel chat with no site takeover. Site install defaults to folder publish under `/mr-agent/` (site index kept). Vhost takeover requires explicit confirmation in Store/Activate and never runs silently. New panel page `GET /plugins/mr-agent` is the bubble Expand target (does not depend on site docroot). Auto folder publish after site Install when the guest supports symlinks.
 - **Plugin float widgets (Mr Agent bubble)**: Panel shell injects Active site plugins that declare `panel_float` (Mr Agent implied). New routes: `GET /plugins/float-asset` (serves `public/assets/panel-float/*` only) and `POST /plugins/float-chat` (ACL-gated PHP bridge for mrAgent). Visibility ACL mirrors plugin settings (`admins_only` / `all_authenticated` / `packages`). Install/enable no longer strips catalog `settings_fields` from `cpn-plugin.json`. Builtin Mr Agent settings fields cover older stripped installs. Sidebar Feedback icon is unchanged.
 - **Version Management installer log**: `/settings/version` has a collapsible SSH-style transcript (closed until a job is in progress). `/api/maintenance/status` includes a redacted `log` tail from `/var/lib/cpn/upgrade-session.log` (same stream as CLI cargo/package output). Failures use a `FAILED` prefix. The last run stays until the next upgrade. Tokens are not included.
@@ -138,7 +139,7 @@ Second stable release after v1.0.0. Ships System Repair, Version tip-commit upda
 - **System Repair** (owner diagnostics): Panel hub at `/server/system-repair` (Settings tile redirects from `/settings/system-repair`) with pass/warn/fail cards and safe **Heal** actions for CLI shadows, panel service, email stack/ports/firewall, phpMyAdmin, firewalld, and Docker/Podman. Extends `cpn doctor` with aliases `troubleshoot` / `repair` / `system-repair`, subcommands `check` / `heal`, `--json`, and `--id`. MFA storage is checked only (never wiped).
 - **Panel upgrade maintenance page**: While an owner upgrades or repairs from **Settings > Version** or `cpn-installer --upgrade` / `--repair` / `--downgrade`, CPN writes `/var/lib/cpn/maintenance.json` and shows every visitor a dark branded maintenance card (progress, auto-retry, optional admin/bypass). Flag clears on success, failure, TTL (45m), startup heal after restart, or `cpn doctor --heal`. See `docs/PANEL-UPGRADE-MAINTENANCE.md`.
 - **Dashboard overview layout**: Signed-in users can Edit overview, drag widgets (Sites, gauges, Tools, health, Activity Board) on a wide screen, Save the order, or Restore default (with confirmation). Order is stored in per-user prefs under `/var/lib/cpn/user-prefs/`. JSON APIs: `GET`/`POST /api/panel/dashboard-layout` and `POST /api/panel/dashboard-layout/restore`.
-- **Dashboard Activity Board polish**: Default page size is 5 on every tab. Traffic and Disk IO show grouped numbers and static share charts (Minimalist mode stays snapshot-until-refresh). Top Process truncates long commands and offers Manage for the full line plus Server → Top Processes. Each row has More/Manage details. The board is collapsed by default and remembers expand via the same layout prefs.
+- **Dashboard Activity Board polish**: Default page size is 5 on every tab. Traffic and Disk IO show grouped numbers and static share charts (Minimalist mode stays snapshot-until-refresh). Top Process truncates long commands and offers Manage for the full line plus Server â†’ Top Processes. Each row has More/Manage details. The board is collapsed by default and remembers expand via the same layout prefs.
 - **Open phpMyAdmin auto-login latency**: `/databases/phpmyadmin/open` and the `/phpmyadmin/` proxy no longer re-run configuration-storage SQL (`create_tables.sql`), recursive TempDir `chown`, package queries, or OpenLiteSpeed/php-fpm rewrites when the sign-on bridge, storage marker, FPM socket, and `:8081` listener are already healthy. Optional Docker/Podman probes stay off this path. The dedicated FPM pool keeps a spare worker (`pm = dynamic`) so the first PHP request is not an ondemand cold start. Heal still runs when the sock, listener, or runtime stamp is missing (no restart thrash).
 - **Services status**: /server/services shows Active / Inactive / Enabled / Deactivated / Not installed with Plugin Store install CTAs and accurate Docker vs Podman detection.
 - **MariaDB Manager**: Change database passwords and confirmed delete with impact preview (protected users never touched).
@@ -199,13 +200,13 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 
 - **SnappyMail-family Contacts**: install/heal provisions a dedicated local **MariaDB** database and user per client (`cpn_snappymail_ab`, `cpn_tachyon_ab`, and NextSnapMail when present). Admin UI Storage type remains **MySQL** (PDO) pointed at `127.0.0.1:3306`; credentials are stored only under `/var/lib/cpn/webmail-contacts/` (mode 600). Branding stays on the webmail Admin **Branding** sidebar tab (`/?admin#/branding`); heal still sets title/loading/favicon to CPN Webmail / CPN Panel on every lineage data root. SQLite is used only when MariaDB is unavailable.
 - **Email > Change Password** (`/email/password`): mailbox dropdown includes a **Webmail admin** option (label shows live `admin_login` from each installed SnappyMail-family client). Selecting Admin updates bcrypt admin passwords for SnappyMail, Tachyon, and NextSnapMail when present (`/snappymail/?admin`, `/tachyon/?admin`, and NextSnapMail data). Selecting a mailbox only resets that mailbox. Copy is family-wide (not SnappyMail-only). Reloading the page heals lineage prefs and re-reads admin usernames from `application.ini`.
-- **SnappyMail-family operator defaults** (Markdown, AllowStyles, Sieve/ManageSieve domain prefs, branding, Contacts, system folders) apply via a shared helper to every installed data root under `/var/lib/cpn-webmail/{snappymail,tachyon,…}` and discovered NextSnapMail data. Tachyon install/heal now receives the same defaults as SnappyMail (not SnappyMail-only). Roundcube is unchanged.
+- **SnappyMail-family operator defaults** (Markdown, AllowStyles, Sieve/ManageSieve domain prefs, branding, Contacts, system folders) apply via a shared helper to every installed data root under `/var/lib/cpn-webmail/{snappymail,tachyon,â€¦}` and discovered NextSnapMail data. Tachyon install/heal now receives the same defaults as SnappyMail (not SnappyMail-only). Roundcube is unchanged.
 
 ### Fixed
 
 - **MFA enroll pending: profile access**: while administrators must still enroll TOTP or a passkey before Dashboard and other Hosting areas, the Users & Plans nav (`active = "users"`) stays reachable the same way Settings already does. Modify User shows its Account / Security / Other tabs (not the full-page enroll shell); enroll-2fa and Settings remain available. Forced password change still blocks these areas until the password is changed.
 - **Password policy blocked-list link**: Change password (Modify User), Create User, and Security hub policy copy now link **blocked-password list** to the live GitHub raw list (`docs/blocked-passwords.txt` on `stable`), opening in a new tab with `rel="noopener noreferrer"`. Dark mode uses readable accent link styling.
-- **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk** (Spam role), **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` → `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
+- **SnappyMail / Tachyon system folders**: mailbox create / email install / webmail heal now create IMAP **Sent**, **Drafts**, **Junk** (Spam role), **Trash**, and **Archive** (Maildir++ plus `doveadm`), enable Dovecot `auto = subscribe` with SPECIAL-USE (`\Sent`, `\Drafts`, `\Junk`, `\Trash`, `\Archive`), and pre-fill `settings_local` under both `/var/lib/cpn-webmail/snappymail/` and `/var/lib/cpn-webmail/tachyon/` (`JunkFolder` â†’ `Junk`, UI label Spam). Existing empty mappings migrate once so compose/send is not stuck on "Select system folders" with Spam = "Choose one".
 
 ### Added
 
@@ -213,7 +214,7 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 - **phpMyAdmin domain jail**: `/databases/phpmyadmin/open?domain=` mints an ephemeral MariaDB user granted only databases registered for that domain. Host open without `domain=` remains admin-only with full grants.
 - **Active webmail switching**: Host packages and `cpn app activate --name <client>` switch the active panel webmail among Tachyon, SnappyMail, Roundcube, and NextSnapMail (when installed). Preference is stored in `/var/lib/cpn/active-webmail.json`; panel-proxied clients also update `/opt/cpn-webmail/current`, `webmail-panel.json` public path, and PHP-FPM/proxy. Postfix/Dovecot mailboxes are unchanged.
 - **Nextcloud host package + NextSnapMail dependency chain**: `cpn app install --name nextcloud` (or Install Nextcloud first / Install Nextcloud + NextSnapMail on the NextSnapMail card) downloads Nextcloud under `/opt/nextcloud`, then installs the NextSnapMail app into `apps/nextsnapmail`. OCC/web setup remains an operator step for production.
-- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube` · `cpn app activate --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (CPN host paths only).
+- **Roundcube Email host package**: Roundcube is listed under Plugins > Host packages (Email) alongside SnappyMail and Tachyon. Install path is `/opt/cpn-webmail/roundcube` with panel proxy `/roundcube/` (IMAP `localhost:143`). CLI: `cpn app install --name roundcube` Â· `cpn app activate --name roundcube`. The Plugin Store `roundcubeWebmail` card no longer installs; it redirects operators to Host packages (CPN host paths only).
 - **Uninstall confirmation with impact list**: Installed plugins and Host packages (`/plugins?view=host`) require a Confirm / Cancel dialog that lists services and features that will stop or become unavailable. POST `/plugins/uninstall` and `/apps/uninstall` reject requests without `confirm=1`. Host impacts live in `host_packages_catalog` (`uninstall_impacts`); plugins may declare them in catalog `meta.xml` (`<uninstall_impact>`) or `cpn-plugin.json`, with built-in maps for known ids (fail2ban, mtaSts, bimi, and similar) and a generic fallback otherwise.
 
 ### Changed
@@ -229,7 +230,7 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 ### Fixed
 
 - **Backup / restore with MariaDB-only host DB**: selective database backups prefer `mariadb-dump` (fallback `mysqldump`); SQL restore/import uses the MariaDB client and Host packages MariaDB (no Oracle MySQL app id). cPanel-style `mysql/` dump folders still import into MariaDB; UI copy clarifies compatibility paths.
-- **SnappyMail Extensions / About repository hang**: upstream `snappymail.eu` package repo is often unreachable (connect timeout). Admin UI then waited until the browser aborted (~30s RequestTimeout / blank Extensions list). CPN now ships a local stub under `/var/lib/cpn-webmail/snappy-repo/v2/` and patches `Repository::get()` to read it first so installed plugins still list and core update checks return quickly. SELinux module `cpn_webmail_imap` **1.2** also allows `httpd_t` → `http_port_t` (HTTPS 443) for when the upstream repo returns. Webmail PHP-FPM sets `default_socket_timeout=8`; panel proxy caps admin Json at 35s.
+- **SnappyMail Extensions / About repository hang**: upstream `snappymail.eu` package repo is often unreachable (connect timeout). Admin UI then waited until the browser aborted (~30s RequestTimeout / blank Extensions list). CPN now ships a local stub under `/var/lib/cpn-webmail/snappy-repo/v2/` and patches `Repository::get()` to read it first so installed plugins still list and core update checks return quickly. SELinux module `cpn_webmail_imap` **1.2** also allows `httpd_t` â†’ `http_port_t` (HTTPS 443) for when the upstream repo returns. Webmail PHP-FPM sets `default_socket_timeout=8`; panel proxy caps admin Json at 35s.
 
 ### Added
 
@@ -281,7 +282,7 @@ First stable release. Version identity moves from the 0.2.6-alpha.50 line to 1.0
 
 ### Added
 
-- **Site File Manager** full page at `/websites/files?domain=…` (alias `/filemanager/site`): reuses the classic File Manager UI jailed to the site home (`/home/<domain>` or nested subdomain home). Manage banner and Files tab open that page (not Root FM). Path traversal and sibling sites are blocked.
+- **Site File Manager** full page at `/websites/files?domain=â€¦` (alias `/filemanager/site`): reuses the classic File Manager UI jailed to the site home (`/home/<domain>` or nested subdomain home). Manage banner and Files tab open that page (not Root FM). Path traversal and sibling sites are blocked.
 - **Root File Manager** sidebar leaf under Administration (admins): top-level nav item to `/server/files`, also listed in menu search.
 - **Root File Manager** (classic hosting file manager): full toolbar (Upload, New File, New Folder, Delete, Copy, Move, Rename, Edit, Compress, Extract), directory tree, and file table under `/server/files`, with aliases `/filemanager` and `/server/filemanager`. Admin-only; CSRF and same-origin checks on mutations; path traversal blocked; protected system paths refuse overwrite/delete; rate-limited dangerous ops. Starts at `/` for the panel owner (documented risk).
 - Dashboard **Activity Board** under Recent Activity: admin-only tabs for Recent SSH Logins, Recent SSH Logs (with light SSH security review and hardening tips), Top Process (snapshot plus link to `/server/processes`), Traffic (`/proc/net/dev` counters), Disk IO (`/proc/diskstats`), and CPU Usage. Log lines are sanitized; mobile tab strip wraps or scrolls. Table tabs include search, default **10** per page, page indicator, Prev/Next, and Go to page (CPU Usage stays KPI-only).
@@ -541,7 +542,7 @@ Fix RPM packaging failure: strip UTF-8 BOM from the installer spec so EL9/EL10 b
 
 ## [0.2.6-alpha.34] - 12/09/2026
 
-Finish Appsâ†’Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).
+Finish AppsÃ¢â€ â€™Plugins UI unification: one Plugins system in sidebar, website manage, and redirects (Cargo `0.2.6-alpha.34`).
 
 ### Fixed
 
@@ -868,7 +869,7 @@ First post-`0.2.2` alpha packaging cut after the `0.2.x` line. Install and upgra
 - Account security: TOTP 2FA and Passkeys (WebAuthn); MFA material stored per install under `/var/lib/cpn/mfa/`.
 - Default panel port **2087** (Cloudflare-friendly), choosable at install and changeable later.
 
-### Install and packaging (0.2.x Ã¢â€ â€™ 0.2.3-alpha.19)
+### Install and packaging (0.2.x ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 0.2.3-alpha.19)
 
 - Bootstrap scripts detect AlmaLinux / Rocky / RHEL (EL9/EL10) or Ubuntu / Debian and refuse unsupported OS versions closed.
 - Manual RPM/DEB/Windows zip install paths documented in the README and [RELEASES.md](RELEASES.md).
@@ -902,7 +903,7 @@ Pin with `CPN_RELEASE_TAG=v0.2.3-alpha.19` or `CPN_RELEASE_TAG=v0.2.4-alpha.19` 
 
 ## [0.2.2] alphas (summary)
 
-Pre-1.0 development line (`v0.2.2-alpha.1` Ã¢â‚¬Â¦ `v0.2.2-alpha.18`). Notable themes:
+Pre-1.0 development line (`v0.2.2-alpha.1` ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ `v0.2.2-alpha.18`). Notable themes:
 
 - Install/upgrade bootstrap one-liners and News Targeted `/install.sh` mirror.
 - Release signing, checksums, GPG, SBOM, and provenance.
