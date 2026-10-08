@@ -189,30 +189,28 @@ fn write_manifest(domain: &str, manifest: &CpnPluginManifest) -> Result<(), Stri
         .map_err(|error| format!("Could not serialize plugin manifest: {error}"))?;
     // Preserve catalog extras already on disk (install copies the full cpn-plugin.json
     // before this rewrite; enable/disable must not strip settings_fields).
-    if path.is_file() {
-        if let Ok(existing_raw) = fs::read_to_string(&path) {
-            if let Ok(existing) = serde_json::from_str::<serde_json::Value>(&existing_raw) {
-                if let (Some(obj), Some(old)) = (value.as_object_mut(), existing.as_object()) {
-                    for key in MANIFEST_EXTRA_KEYS {
-                        if !obj.contains_key(*key) {
-                            if let Some(v) = old.get(*key) {
-                                obj.insert((*key).to_string(), v.clone());
-                            }
-                        }
-                    }
-                    // Prefer catalog uninstall_impacts when the core struct is empty.
-                    let core_empty = obj
-                        .get("uninstall_impacts")
-                        .and_then(|v| v.as_array())
-                        .map(|a| a.is_empty())
-                        .unwrap_or(true);
-                    if core_empty {
-                        if let Some(v) = old.get("uninstall_impacts") {
-                            obj.insert("uninstall_impacts".into(), v.clone());
-                        }
-                    }
-                }
+    if path.is_file()
+        && let Ok(existing_raw) = fs::read_to_string(&path)
+        && let Ok(existing) = serde_json::from_str::<serde_json::Value>(&existing_raw)
+        && let (Some(obj), Some(old)) = (value.as_object_mut(), existing.as_object())
+    {
+        for key in MANIFEST_EXTRA_KEYS {
+            if !obj.contains_key(*key)
+                && let Some(v) = old.get(*key)
+            {
+                obj.insert((*key).to_string(), v.clone());
             }
+        }
+        // Prefer catalog uninstall_impacts when the core struct is empty.
+        let core_empty = obj
+            .get("uninstall_impacts")
+            .and_then(|v| v.as_array())
+            .map(|a| a.is_empty())
+            .unwrap_or(true);
+        if core_empty
+            && let Some(v) = old.get("uninstall_impacts")
+        {
+            obj.insert("uninstall_impacts".into(), v.clone());
         }
     }
     let raw = serde_json::to_string_pretty(&value)
