@@ -19,6 +19,7 @@ const HOST_SCOPED_ALLOWLIST: &[&str] = &[
     "clamav",
     "fail2ban",
     "autoBan",
+    "autoBanSecurityAlerts",
     "autoSnapshot",
     "malwareScanner",
     "roundcubeWebmail",
@@ -172,10 +173,18 @@ pub fn catalog_entry_is_host_scoped(entry: &CatalogEntry) -> bool {
 }
 
 pub fn catalog_entry_is_site_installable(entry: &CatalogEntry) -> bool {
+    // Explicit false from catalog (host-only / cpn-only) wins over allowlist defaults.
+    if !entry.site_installable && (entry.host_scoped || entry.cpn_installable) {
+        return false;
+    }
     if entry.site_installable {
         return true;
     }
     is_site_installable_plugin(&entry.id)
+}
+
+pub fn catalog_entry_is_cpn_installable(entry: &CatalogEntry) -> bool {
+    crate::plugin_cpn_scope::catalog_entry_is_cpn_installable(entry)
 }
 
 pub fn is_activated(domain_raw: &str, plugin_id: &str) -> bool {
@@ -535,6 +544,7 @@ mod tests {
                 uninstall_impacts: vec![],
                 host_scoped: true,
                 site_installable: false,
+                cpn_installable: false,
                 keywords: vec![],
             };
             write_host_manifest("clamav", &entry).unwrap();

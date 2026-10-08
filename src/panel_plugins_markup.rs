@@ -94,7 +94,7 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
         }}
         .store-scope-btn.active {{ background:#e7f1ff; color:#0b3d91; border-color:#93c5fd; }}
         .store-scope-hint {{ margin:8px 0 0; font-size:13px; }}
-        .store-scope-toggle[hidden], #store-host-hint[hidden], #store-site-picker[hidden] {{ display:none; }}
+        .store-scope-toggle[hidden], #store-host-hint[hidden], #store-cpn-hint[hidden], #store-site-picker[hidden] {{ display:none; }}
         .plugin-stats {{ display:flex; flex-wrap:wrap; gap:16px; margin:0 0 14px; font-size:14px; color:var(--ink); }}
         .plugin-stats strong {{ color:var(--ink); }}
         .plugin-grid {{
@@ -198,6 +198,7 @@ pub(crate) fn resolve_store_target(
 ) -> &'static str {
     match requested.trim().to_ascii_lowercase().as_str() {
         "host" => "host",
+        "cpn" | "cpn_only" | "cpn-only" | "account" => "cpn",
         "site" => "site",
         _ => {
             if category.trim().eq_ignore_ascii_case("host") || sites.is_empty() {
@@ -255,12 +256,14 @@ pub(crate) fn store_scope_query_suffix(
         urlencoding_simple(mode),
         per_page
     );
-    if target == "host" {
-        out.push_str("&amp;target=host");
-    } else {
-        out.push_str("&amp;target=site");
-        if !domain.is_empty() {
-            out.push_str(&format!("&amp;domain={}", urlencoding_simple(domain)));
+    match target {
+        "host" => out.push_str("&amp;target=host"),
+        "cpn" => out.push_str("&amp;target=cpn"),
+        _ => {
+            out.push_str("&amp;target=site");
+            if !domain.is_empty() {
+                out.push_str(&format!("&amp;domain={}", urlencoding_simple(domain)));
+            }
         }
     }
     if !q.trim().is_empty() {
@@ -282,8 +285,10 @@ pub(crate) fn store_install_target_picker(
     show_host: bool,
 ) -> String {
     let host_active = if target == "host" { " active" } else { "" };
+    let cpn_active = if target == "cpn" { " active" } else { "" };
     let site_active = if target == "site" { " active" } else { "" };
     let host_href = store_target_href(view, "host", category, "", mode, per_page, q);
+    let cpn_href = store_target_href(view, "cpn", category, "", mode, per_page, q);
     let site_href = store_target_href(view, "site", category, selected_domain, mode, per_page, q);
     let host_btn = if show_host {
         format!(
@@ -298,27 +303,36 @@ pub(crate) fn store_install_target_picker(
         r#"<div class="store-scope-toggle" role="group" aria-label="Install target">
         <span class="store-scope-label">Install target</span>
         {host_btn}
+        <a class="store-scope-btn{cpn_active}" href="{cpn_href}" data-store-target-btn="cpn">CPN only</a>
         <a class="store-scope-btn{site_active}" href="{site_href}" data-store-target-btn="site">Site</a>
       </div>"#,
         host_btn = host_btn,
+        cpn_active = cpn_active,
+        cpn_href = html_escape(&cpn_href),
         site_active = site_active,
         site_href = html_escape(&site_href),
     );
     let host_hint = if show_host {
         format!(
-            r#"<p id="store-host-hint" class="muted store-scope-hint"{hidden}>Host packages install once on this server (Postfix, Tachyon, Roundcube). Sites only Activate or Deactivate them. The site dropdown stays hidden for Host.</p>"#,
+            r#"<p id="store-host-hint" class="muted store-scope-hint"{hidden}>Host packages install once on this server for every user (Postfix, Tachyon, Roundcube). Sites only Activate or Deactivate them. The site dropdown stays hidden for Host.</p>"#,
             hidden = if target == "host" { "" } else { " hidden" },
         )
     } else {
         String::new()
     };
+    let cpn_hint = format!(
+        r#"<p id="store-cpn-hint" class="muted store-scope-hint"{hidden}>CPN only installs for your signed-in CPN account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public website feature). Use this for panel tools such as Auto Ban Security Alerts. Host stays owner/admin only.</p>"#,
+        hidden = if target == "cpn" { "" } else { " hidden" },
+    );
     if sites.is_empty() {
         return format!(
             r#"{toggle}
         {host_hint}
-        <p class="muted">No websites yet. Create a site to install domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
+        {cpn_hint}
+        <p class="muted">No websites yet. CPN-only plugins still install for your account. Create a site to install domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
             toggle = toggle,
             host_hint = host_hint,
+            cpn_hint = cpn_hint,
         );
     }
     let mut options = String::new();
@@ -334,10 +348,11 @@ pub(crate) fn store_install_target_picker(
             sel = sel,
         ));
     }
-    let site_hidden = if target == "host" { " hidden" } else { "" };
+    let site_hidden = if target == "site" { "" } else { " hidden" };
     format!(
         r#"{toggle}
       {host_hint}
+      {cpn_hint}
       <div id="store-site-picker"{site_hidden}>
       <form method="get" action="/plugins" class="domain-picker">
         <input type="hidden" name="view" value="{view}">
@@ -352,10 +367,11 @@ pub(crate) fn store_install_target_picker(
         </div>
         <button type="submit" class="btn-secondary">Apply</button>
       </form>
-      <p class="muted store-scope-hint">Site target lists per-domain plugins only (BIMI, MTA-STS). Switch to Host for server mail/webmail packages.</p>
+      <p class="muted store-scope-hint">Site installs live under the selected domain or sub-domain (<code>/home/&lt;domain&gt;/plugins/</code>) for public site features (BIMI, MTA-STS). CPN only is for your panel account, not a random subdomain.</p>
       </div>"#,
         toggle = toggle,
         host_hint = host_hint,
+        cpn_hint = cpn_hint,
         site_hidden = site_hidden,
         view = html_escape(view),
         mode = html_escape(mode),
@@ -395,6 +411,7 @@ mod store_target_tests {
         assert_eq!(resolve_store_target("", "Host", &sites), "host");
         assert_eq!(resolve_store_target("", "", &sites), "site");
         assert_eq!(resolve_store_target("host", "", &sites), "host");
+        assert_eq!(resolve_store_target("cpn", "", &sites), "cpn");
         assert_eq!(resolve_store_target("", "", &[]), "host");
     }
 
@@ -403,12 +420,15 @@ mod store_target_tests {
         let html = store_install_target_picker(&[], "", "host", "store", "", "", "page", 4, true);
         assert!(html.contains("Install target"));
         assert!(html.contains("data-store-target-btn=\"host\""));
+        assert!(html.contains("data-store-target-btn=\"cpn\""));
         assert!(html.contains("store-scope-btn active"));
         assert!(html.contains(">Host</a>"));
         let no_host =
-            store_install_target_picker(&[], "", "site", "store", "", "", "page", 4, false);
+            store_install_target_picker(&[], "", "cpn", "store", "", "", "page", 4, false);
         assert!(!no_host.contains("data-store-target-btn=\"host\""));
+        assert!(no_host.contains("data-store-target-btn=\"cpn\""));
         assert!(no_host.contains("data-store-target-btn=\"site\""));
+        assert!(no_host.contains("CPN only installs for your signed-in CPN account"));
     }
 }
 

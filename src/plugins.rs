@@ -74,6 +74,9 @@ pub struct CatalogEntry {
     /// Default true for backward-compatible site plugins; false for host-only packages.
     #[serde(default = "default_site_installable")]
     pub site_installable: bool,
+    /// When true, Store **CPN only** target may install under `$CPN_DATA_DIR/user-plugins/<user>/`.
+    #[serde(default)]
+    pub cpn_installable: bool,
     /// Search aliases from catalog meta (`<keywords>` / `<keyword>`).
     #[serde(default)]
     pub keywords: Vec<String>,

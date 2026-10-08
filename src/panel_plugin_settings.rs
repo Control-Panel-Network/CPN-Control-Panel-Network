@@ -1,5 +1,6 @@
 //! Plugin Settings and Dashboard HTML for CPN Panel.
 
+use crate::plugin_cpn_scope::{list_cpn_installed_plugins, parse_cpn_owner};
 use crate::plugins::{InstalledPlugin, list_installed};
 use crate::plugins_settings::{
     PluginSettings, declared_settings_fields, load_plugin_settings, manifest_has_dashboard,
@@ -51,6 +52,13 @@ fn find_plugin<'a>(plugins: &'a [InstalledPlugin], id: &str) -> Option<&'a Insta
         .find(|p| p.manifest.id.eq_ignore_ascii_case(id))
 }
 
+fn installed_for_domain(domain: &str) -> Vec<InstalledPlugin> {
+    if let Some(user) = parse_cpn_owner(domain) {
+        return list_cpn_installed_plugins(&user);
+    }
+    list_installed(domain).unwrap_or_default()
+}
+
 fn field_input(key: &str, field_type: &str, value: &str) -> String {
     let ft = field_type.to_ascii_lowercase();
     if ft == "checkbox" {
@@ -93,20 +101,19 @@ pub fn plugin_settings_main(
             err = notice_block("error", error),
         );
     }
-    let installed = list_installed(domain).unwrap_or_default();
+    let installed = installed_for_domain(domain);
     let Some(item) = find_plugin(&installed, plugin_id) else {
         return format!(
             r#"{heading}
       {err}
       <article class="section-card">
         <p class="panel-notice error">Plugin `{id}` is not installed on `{domain}`.</p>
-        <p><a class="btn-secondary" href="/plugins?domain={domain_q}">Back to Plugins</a></p>
+        <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin settings", "Configure a plugin for one site."),
+            heading = section_heading("Plugin settings", "Configure a plugin for one site or CPN account."),
             err = notice_block("error", error),
             id = html_escape(plugin_id),
             domain = html_escape(domain),
-            domain_q = html_escape(domain),
         );
     };
     let m = &item.manifest;
@@ -288,18 +295,17 @@ pub fn plugin_dashboard_main(
             err = notice_block("error", error),
         );
     }
-    let installed = list_installed(domain).unwrap_or_default();
+    let installed = installed_for_domain(domain);
     let Some(item) = find_plugin(&installed, plugin_id) else {
         return format!(
             r#"{heading}
       {err}
       <article class="section-card">
-        <p class="panel-notice error">Plugin not found on this site.</p>
-        <p><a class="btn-secondary" href="/plugins?domain={domain}">Back to Plugins</a></p>
+        <p class="panel-notice error">Plugin not found for this scope.</p>
+        <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin dashboard", "Plugin overview for one site."),
+            heading = section_heading("Plugin dashboard", "Plugin overview for one site or CPN account."),
             err = notice_block("error", error),
-            domain = html_escape(domain),
         );
     };
     let m = &item.manifest;
