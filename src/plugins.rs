@@ -70,9 +70,17 @@ pub struct CatalogEntry {
     /// Host-scoped: one host install, per-site Activate (from meta `<scope>host</scope>`).
     #[serde(default)]
     pub host_scoped: bool,
+    /// When true, Store Site target may install a per-site copy (dual scope).
+    /// Default true for backward-compatible site plugins; false for host-only packages.
+    #[serde(default = "default_site_installable")]
+    pub site_installable: bool,
     /// Search aliases from catalog meta (`<keywords>` / `<keyword>`).
     #[serde(default)]
     pub keywords: Vec<String>,
+}
+
+fn default_site_installable() -> bool {
+    true
 }
 
 #[derive(Debug, Clone)]
@@ -458,8 +466,11 @@ pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginMani
                 .into(),
         );
     }
-    // Host-scoped Security packages install once under host-plugins/, then Activate per site.
-    if crate::plugin_activation::is_host_scoped_plugin(&id) {
+    // Host-only packages install once under host-plugins/, then Activate per site.
+    // Dual-scoped plugins (Mr Agent) keep a real per-site install path.
+    if crate::plugin_activation::is_host_scoped_plugin(&id)
+        && !crate::plugin_activation::is_site_installable_plugin(&id)
+    {
         if !crate::plugin_activation::host_plugin_installed(&id) {
             crate::plugin_activation::install_host_plugin(&id)?;
         }

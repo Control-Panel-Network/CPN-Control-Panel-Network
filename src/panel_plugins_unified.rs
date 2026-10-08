@@ -82,7 +82,10 @@ fn collect_unified<'a>(
             if skip_catalog_duplicate(entry) {
                 continue;
             }
-            if catalog_entry_is_host_scoped(entry) {
+            // Host-only packages stay out of Site; dual (site_installable) appears here.
+            if catalog_entry_is_host_scoped(entry)
+                && !crate::plugin_activation::catalog_entry_is_site_installable(entry)
+            {
                 continue;
             }
             out.push(UnifiedItem::Catalog(entry));
@@ -396,6 +399,7 @@ mod tests {
             featured: false,
             uninstall_impacts: vec![],
             host_scoped: false,
+            site_installable: true,
             keywords: vec![],
         }
     }

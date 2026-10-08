@@ -177,6 +177,7 @@ mod tests {
             featured: false,
             uninstall_impacts: vec![],
             host_scoped: false,
+            site_installable: true,
             keywords: keywords.iter().map(|s| (*s).to_string()).collect(),
         }
     }
