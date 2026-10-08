@@ -25,6 +25,9 @@ const HOST_SCOPED_ALLOWLIST: &[&str] = &[
     "roundcube",
 ];
 
+/// Host + Site (site install remains available without waiting for Host).
+const DUAL_SCOPED_ALLOWLIST: &[&str] = &["mrAgent"];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginActivation {
     pub domain: String,
@@ -134,16 +137,45 @@ pub fn list_host_installed_plugins() -> Vec<InstalledPlugin> {
     out
 }
 
+pub fn is_dual_scoped_plugin(id: &str) -> bool {
+    let id = id.trim();
+    !id.is_empty()
+        && (crate::mr_agent_install::is_dual_scoped_plugin(id)
+            || DUAL_SCOPED_ALLOWLIST
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(id)))
+}
+
 pub fn is_host_scoped_plugin(id: &str) -> bool {
     let id = id.trim();
     !id.is_empty()
-        && HOST_SCOPED_ALLOWLIST
-            .iter()
-            .any(|known| known.eq_ignore_ascii_case(id))
+        && (is_dual_scoped_plugin(id)
+            || HOST_SCOPED_ALLOWLIST
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(id)))
+}
+
+/// Host-only packages cannot be full-copied under a site; dual packages can.
+pub fn is_site_installable_plugin(id: &str) -> bool {
+    let id = id.trim();
+    if id.is_empty() {
+        return false;
+    }
+    if is_dual_scoped_plugin(id) {
+        return true;
+    }
+    !is_host_scoped_plugin(id)
 }
 
 pub fn catalog_entry_is_host_scoped(entry: &CatalogEntry) -> bool {
     entry.host_scoped || is_host_scoped_plugin(&entry.id)
+}
+
+pub fn catalog_entry_is_site_installable(entry: &CatalogEntry) -> bool {
+    if entry.site_installable {
+        return true;
+    }
+    is_site_installable_plugin(&entry.id)
 }
 
 pub fn is_activated(domain_raw: &str, plugin_id: &str) -> bool {
@@ -276,7 +308,11 @@ pub fn install_host_plugin(plugin_id: &str) -> Result<CpnPluginManifest, String>
     }
     copy_dir_recursive(&src, &dest)?;
     let _ = fs::remove_dir_all(&extract);
-    write_host_manifest(&id, &entry)
+    let manifest = write_host_manifest(&id, &entry)?;
+    if crate::mr_agent_install::is_mr_agent(&id) {
+        let _ = crate::mr_agent_install::finalize_host_install();
+    }
+    Ok(manifest)
 }
 
 /// Remove host-shared plugin (admin only). Clears domain activations for it.
@@ -466,6 +502,9 @@ mod tests {
         assert!(is_host_scoped_plugin("clamav"));
         assert!(is_host_scoped_plugin("fail2ban"));
         assert!(!is_host_scoped_plugin("bimi"));
+        assert!(is_dual_scoped_plugin("mrAgent"));
+        assert!(is_site_installable_plugin("mrAgent"));
+        assert!(!is_site_installable_plugin("clamav"));
     }
 
     #[test]
@@ -495,6 +534,7 @@ mod tests {
                 featured: false,
                 uninstall_impacts: vec![],
                 host_scoped: true,
+                site_installable: false,
                 keywords: vec![],
             };
             write_host_manifest("clamav", &entry).unwrap();

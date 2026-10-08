@@ -27,11 +27,6 @@ fn resolve_plugin_asset(domain: &str, plugin_id: &str, rel: &str) -> Result<Path
     if rel.contains('\0') {
         return Err("Invalid asset path".into());
     }
-    let root = plugins_dir_for_domain(domain)?.join(&id);
-    let candidate = root.join(rel);
-    let root_canon = root
-        .canonicalize()
-        .map_err(|e| format!("Plugin root missing: {e}"))?;
     // Reject path traversal before canonicalize of missing files.
     for part in Path::new(rel).components() {
         match part {
@@ -45,16 +40,40 @@ fn resolve_plugin_asset(domain: &str, plugin_id: &str, rel: &str) -> Result<Path
     {
         return Err("Only public/assets/panel-float/* assets may be served".into());
     }
-    let file = if candidate.exists() {
-        candidate
-            .canonicalize()
-            .map_err(|e| format!("Could not resolve asset: {e}"))?
-    } else {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Ok(site_root) = plugins_dir_for_domain(domain) {
+        roots.push(site_root.join(&id));
+    }
+    if id.eq_ignore_ascii_case("mrAgent")
+        && let Ok(host_root) = crate::mr_agent_install::resolve_mr_agent_root(domain)
+        && !roots.iter().any(|r| r == &host_root)
+    {
+        roots.push(host_root);
+    }
+    let mut file: Option<PathBuf> = None;
+    let mut root_canon: Option<PathBuf> = None;
+    for root in roots {
+        let candidate = root.join(rel);
+        let Ok(rc) = root.canonicalize() else {
+            continue;
+        };
+        if !candidate.exists() {
+            continue;
+        }
+        let Ok(canon) = candidate.canonicalize() else {
+            continue;
+        };
+        if !canon.starts_with(&rc) {
+            continue;
+        }
+        file = Some(canon);
+        root_canon = Some(rc);
+        break;
+    }
+    let Some(file) = file else {
         return Err("Asset not found".into());
     };
-    if !file.starts_with(&root_canon) {
-        return Err("Asset escapes plugin directory".into());
-    }
+    let _ = root_canon;
     if !file.is_file() {
         return Err("Asset is not a file".into());
     }
@@ -247,11 +266,11 @@ fn run_mr_agent_bridge(
     provider: &str,
     model: &str,
 ) -> Result<serde_json::Value, String> {
-    let plugin_root = plugins_dir_for_domain(domain)?.join("mrAgent");
+    let plugin_root = crate::mr_agent_install::resolve_mr_agent_root(domain)?;
     let bridge = plugin_root.join("modules").join("panel_bridge.php");
     if !bridge.is_file() {
         return Err(
-            "Mr Agent panel bridge missing. Update the plugin to 1.2.0+ and re-run install.sh."
+            "Mr Agent panel bridge missing. Update the plugin to 1.3.0+ (Host or Site install)."
                 .into(),
         );
     }
@@ -337,7 +356,25 @@ pub async fn plugins_float_chat(
     };
     let _ = widget;
     // Re-check settings in case they changed mid-session.
-    let settings = load_plugin_settings(&query.domain, "mrAgent").unwrap_or_default();
+    let settings = if query
+        .domain
+        .trim()
+        .eq_ignore_ascii_case(crate::mr_agent_install::HOST_DOMAIN_SENTINEL)
+    {
+        let path = crate::plugin_activation::host_plugin_path("mrAgent").join("settings.json");
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .unwrap_or_else(|| {
+                let mut s = crate::plugins_settings::PluginSettings::default();
+                s.fields.insert("enabled".into(), "1".into());
+                s.fields.insert("show_floating_bubble".into(), "1".into());
+                s.fields.insert("visibility".into(), "admins_only".into());
+                s
+            })
+    } else {
+        load_plugin_settings(&query.domain, "mrAgent").unwrap_or_default()
+    };
     if !settings_field_truthy(&settings, "enabled", true)
         || !settings_field_truthy(&settings, "show_floating_bubble", true)
         || !plugin_visibility_allows(&user, &settings)

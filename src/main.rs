@@ -118,6 +118,7 @@ use cpn_installer::panel_hub_routes::{
     users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
     users_reseller_route, users_status_post,
 };
+use cpn_installer::panel_mr_agent::plugins_mr_agent_page;
 use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
@@ -1549,6 +1550,7 @@ async fn main() -> std::io::Result<()> {
             .service(plugins_settings_page)
             .service(plugins_settings_save)
             .service(plugins_dashboard_page)
+            .service(plugins_mr_agent_page)
             .service(plugins_float_asset)
             .service(plugins_float_chat)
             .service(plugins_install)
