@@ -1,5 +1,6 @@
 //! Plugin Settings and Dashboard HTML for CPN Panel.
 
+use crate::plugin_cpn_scope::{list_cpn_installed_plugins, parse_cpn_owner};
 use crate::plugins::{InstalledPlugin, list_installed};
 use crate::plugins_settings::{
     PluginSettings, declared_settings_fields, load_plugin_settings, manifest_has_dashboard,
@@ -51,6 +52,13 @@ fn find_plugin<'a>(plugins: &'a [InstalledPlugin], id: &str) -> Option<&'a Insta
         .find(|p| p.manifest.id.eq_ignore_ascii_case(id))
 }
 
+fn installed_for_domain(domain: &str) -> Vec<InstalledPlugin> {
+    if let Some(user) = parse_cpn_owner(domain) {
+        return list_cpn_installed_plugins(&user);
+    }
+    list_installed(domain).unwrap_or_default()
+}
+
 fn field_input(key: &str, field_type: &str, value: &str) -> String {
     let ft = field_type.to_ascii_lowercase();
     if ft == "checkbox" {
@@ -74,6 +82,25 @@ fn field_input(key: &str, field_type: &str, value: &str) -> String {
     )
 }
 
+/// Settings entry used by routes. Mr Agent gets tabbed Host/Site UI; others keep the long form.
+pub fn plugin_settings_main_with_tab(
+    sites: &[SiteRecord],
+    domain: &str,
+    plugin_id: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    tab: Option<&str>,
+    is_admin: bool,
+) -> String {
+    if crate::mr_agent_install::is_mr_agent(plugin_id) && !domain.trim().is_empty() {
+        return crate::panel_mr_agent_settings::mr_agent_settings_main(
+            domain, notice, error, tab, is_admin,
+        );
+    }
+    let _ = (tab, is_admin);
+    plugin_settings_main(sites, domain, plugin_id, notice, error)
+}
+
 pub fn plugin_settings_main(
     sites: &[SiteRecord],
     domain: &str,
@@ -93,20 +120,22 @@ pub fn plugin_settings_main(
             err = notice_block("error", error),
         );
     }
-    let installed = list_installed(domain).unwrap_or_default();
+    let installed = installed_for_domain(domain);
     let Some(item) = find_plugin(&installed, plugin_id) else {
         return format!(
             r#"{heading}
       {err}
       <article class="section-card">
         <p class="panel-notice error">Plugin `{id}` is not installed on `{domain}`.</p>
-        <p><a class="btn-secondary" href="/plugins?domain={domain_q}">Back to Plugins</a></p>
+        <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin settings", "Configure a plugin for one site."),
+            heading = section_heading(
+                "Plugin settings",
+                "Configure a plugin for one site or CPN account."
+            ),
             err = notice_block("error", error),
             id = html_escape(plugin_id),
             domain = html_escape(domain),
-            domain_q = html_escape(domain),
         );
     };
     let m = &item.manifest;
@@ -167,6 +196,15 @@ pub fn plugin_settings_main(
     } else {
         r#"<p class="muted">Activate the plugin to use its dashboard route.</p>"#.into()
     };
+    let mr_agent_policy_note = if crate::mr_agent_install::is_mr_agent(&m.id) {
+        if crate::mr_agent_policy::allow_site_install() {
+            r#"<p class="muted">Host policy: site install is allowed. Panel owner can change this on <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        } else {
+            r#"<p class="muted">Host policy: new site installs are disabled by the server owner. This existing install stays. Owner toggles: <a href="/plugins/mr-agent">Mr Agent host policy</a>.</p>"#.to_string()
+        }
+    } else {
+        String::new()
+    };
     let webmail_actions = if crate::plugins_settings::is_webmail_plugin_id(&m.id)
         && crate::panel_webmail::webmail_ready()
     {
@@ -208,6 +246,7 @@ pub fn plugin_settings_main(
         <h2>{name}</h2>
         <p class="muted">{id} v{ver} on {domain}</p>
         <p class="muted">Settings file: <code>{path}/settings.json</code></p>
+        {mr_agent_policy_note}
         {webmail_actions}
         <form method="post" action="/plugins/settings" class="stack-form" style="max-width:520px;">
           <input type="hidden" name="domain" value="{domain}">
@@ -236,6 +275,7 @@ pub fn plugin_settings_main(
         sidebar = sidebar_checked,
         fields = custom_fields,
         dash = dash_link,
+        mr_agent_policy_note = mr_agent_policy_note,
         webmail_actions = webmail_actions,
     )
 }
@@ -258,18 +298,20 @@ pub fn plugin_dashboard_main(
             err = notice_block("error", error),
         );
     }
-    let installed = list_installed(domain).unwrap_or_default();
+    let installed = installed_for_domain(domain);
     let Some(item) = find_plugin(&installed, plugin_id) else {
         return format!(
             r#"{heading}
       {err}
       <article class="section-card">
-        <p class="panel-notice error">Plugin not found on this site.</p>
-        <p><a class="btn-secondary" href="/plugins?domain={domain}">Back to Plugins</a></p>
+        <p class="panel-notice error">Plugin not found for this scope.</p>
+        <p><a class="btn-secondary" href="/plugins?view=installed">Back to Plugins</a></p>
       </article>"#,
-            heading = section_heading("Plugin dashboard", "Plugin overview for one site."),
+            heading = section_heading(
+                "Plugin dashboard",
+                "Plugin overview for one site or CPN account."
+            ),
             err = notice_block("error", error),
-            domain = html_escape(domain),
         );
     };
     let m = &item.manifest;
@@ -340,12 +382,21 @@ pub fn plugin_dashboard_main(
 }
 
 /// Build settings map from POST form keys (`field_*`, optional kv pair, deletes).
+///
+/// Tabbed Mr Agent saves send `mra_tab_keys` (comma list of keys on that tab) and
+/// `present_field_<key>=1` for checkboxes so unchecked boxes clear without wiping
+/// fields that live on other tabs.
 pub fn settings_from_form(
     form: &HashMap<String, String>,
     previous: &PluginSettings,
     declared_keys: &[String],
 ) -> PluginSettings {
-    let show_in_sidebar = form.get("show_in_sidebar").map(String::as_str) == Some("1");
+    let tabbed = form.contains_key("mra_tab_keys");
+    let show_in_sidebar = if tabbed && !form.contains_key("sidebar_present") {
+        previous.show_in_sidebar
+    } else {
+        form.get("show_in_sidebar").map(String::as_str) == Some("1")
+    };
     let mut fields = BTreeMap::new();
     if declared_keys.is_empty() {
         for (key, value) in &previous.fields {
@@ -371,6 +422,29 @@ pub fn settings_from_form(
             && kv_key.len() <= 64
         {
             fields.insert(kv_key, kv_value);
+        }
+    } else if tabbed {
+        fields = previous.fields.clone();
+        let tab_keys: Vec<String> = form
+            .get("mra_tab_keys")
+            .map(|s| {
+                s.split(',')
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for key in declared_keys {
+            if !tab_keys.iter().any(|k| k.eq_ignore_ascii_case(key)) {
+                continue;
+            }
+            let form_key = format!("field_{key}");
+            if let Some(v) = form.get(&form_key) {
+                fields.insert(key.clone(), v.clone());
+            } else if form.contains_key(&format!("present_field_{key}")) {
+                // Unchecked checkbox on this tab.
+                fields.insert(key.clone(), String::new());
+            }
         }
     } else {
         for key in declared_keys {

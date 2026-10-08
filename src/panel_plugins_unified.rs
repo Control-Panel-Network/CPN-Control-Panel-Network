@@ -13,6 +13,7 @@ use crate::panel_plugins_spa::{
 };
 use crate::panel_plugins_store::{StoreListOpts, filter_store_entries, render_catalog_card};
 use crate::plugin_activation::catalog_entry_is_host_scoped;
+use crate::plugin_cpn_scope::store_target_attr;
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured};
 
 enum UnifiedItem<'a> {
@@ -41,7 +42,9 @@ fn skip_catalog_duplicate(entry: &CatalogEntry) -> bool {
 fn normalize_target(raw: &str) -> &str {
     match raw.trim().to_ascii_lowercase().as_str() {
         "host" => "host",
+        "cpn" | "cpn_only" | "cpn-only" | "account" => "cpn",
         "all" | "both" => "all",
+        "user" => "user",
         _ => "site",
     }
 }
@@ -69,36 +72,63 @@ fn collect_unified<'a>(
     let target = normalize_target(target);
     let mut out: Vec<UnifiedItem<'a>> = Vec::new();
     let host_cat = if cat == "host" { "" } else { category };
+    let want_host = matches!(target, "host" | "all");
+    let want_cpn = matches!(target, "cpn" | "all" | "user");
+    let want_site = matches!(target, "site" | "all" | "user");
 
-    if target != "site" && include_host_for_category(apps, host_cat) {
+    if want_host && include_host_for_category(apps, host_cat) {
         for status in filter_host_packages(apps, query, host_cat) {
             out.push(UnifiedItem::Host(status));
         }
     }
 
-    if target != "host" {
+    if want_site {
         for entry in filter_store_entries(entries, query, if cat == "host" { "" } else { category })
         {
             if skip_catalog_duplicate(entry) {
                 continue;
             }
-            // Host-only packages stay out of Site; dual (site_installable) appears here.
-            if catalog_entry_is_host_scoped(entry)
-                && !crate::plugin_activation::catalog_entry_is_site_installable(entry)
-            {
+            // Host-only / CPN-only stay out of Site; dual site_installable appears here.
+            if !crate::plugin_activation::catalog_entry_is_site_installable(entry) {
                 continue;
             }
             out.push(UnifiedItem::Catalog(entry));
         }
     }
 
-    if target != "site" {
+    if want_cpn {
+        for entry in filter_store_entries(entries, query, if cat == "host" { "" } else { category })
+        {
+            if skip_catalog_duplicate(entry) {
+                continue;
+            }
+            if !crate::plugin_activation::catalog_entry_is_cpn_installable(entry) {
+                continue;
+            }
+            // Avoid duplicate cards when also listed under Site/Host in the same collect.
+            if out.iter().any(|i| match i {
+                UnifiedItem::Catalog(e) => e.id.eq_ignore_ascii_case(&entry.id),
+                _ => false,
+            }) {
+                continue;
+            }
+            out.push(UnifiedItem::Catalog(entry));
+        }
+    }
+
+    if want_host {
         for entry in filter_store_entries(entries, query, if cat == "host" { "" } else { category })
         {
             if skip_catalog_duplicate(entry) {
                 continue;
             }
             if !catalog_entry_is_host_scoped(entry) {
+                continue;
+            }
+            if out.iter().any(|i| match i {
+                UnifiedItem::Catalog(e) => e.id.eq_ignore_ascii_case(&entry.id),
+                _ => false,
+            }) {
                 continue;
             }
             out.push(UnifiedItem::Catalog(entry));
@@ -243,6 +273,7 @@ fn with_store_attrs(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_item(
     item: &UnifiedItem<'_>,
     apps: &[AppStatus],
@@ -251,6 +282,7 @@ fn render_item(
     domain: &str,
     username: &str,
     admin: bool,
+    store_target: &str,
 ) -> String {
     match item {
         UnifiedItem::Host(status) => {
@@ -274,13 +306,19 @@ fn render_item(
             )
         }
         UnifiedItem::Catalog(entry) => {
-            let host = catalog_entry_is_host_scoped(entry);
             let paid = entry.pricing.to_ascii_lowercase().contains("paid")
                 || entry.pricing.to_ascii_lowercase().contains("premium");
             let search = store_search_blob(entry);
             with_store_attrs(
-                &render_catalog_card(entry, entries, installed_ids, domain, username),
-                if host { "host" } else { "site" },
+                &render_catalog_card(
+                    entry,
+                    entries,
+                    installed_ids,
+                    domain,
+                    username,
+                    store_target,
+                ),
+                &store_target_attr(entry),
                 &entry.category,
                 catalog_entry_is_featured(entry, entries),
                 paid,
@@ -298,7 +336,7 @@ pub(crate) fn unified_store_catalog(
     let apps = list_apps();
     let admin = is_panel_admin(opts.username);
     let target = normalize_target(opts.store_target);
-    let source_target = if admin { "all" } else { "site" };
+    let source_target = if admin { "all" } else { "user" };
     let source_items = collect_unified(&apps, entries, "", "", source_target);
     let items = collect_unified(&apps, entries, opts.query, opts.category, target);
     let total = items.len();
@@ -335,6 +373,7 @@ pub(crate) fn unified_store_catalog(
             opts.domain,
             opts.username,
             admin,
+            target,
         ));
     }
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
@@ -348,6 +387,7 @@ pub(crate) fn unified_store_catalog(
                 opts.domain,
                 opts.username,
                 admin,
+                target,
             ));
         }
     }
@@ -400,6 +440,7 @@ mod tests {
             uninstall_impacts: vec![],
             host_scoped: false,
             site_installable: true,
+            cpn_installable: false,
             keywords: vec![],
         }
     }
@@ -424,6 +465,23 @@ mod tests {
         let items = collect_unified(&apps, &entries, "", "Email", "site");
         assert_eq!(items.len(), 1);
         assert!(matches!(items[0], UnifiedItem::Catalog(e) if e.id == "bimi"));
+    }
+
+    #[test]
+    fn cpn_target_lists_cpn_plugins_not_host_apps() {
+        let apps = vec![stub(AppId::Tachyon)];
+        let mut entry = site_entry("autoBanSecurityAlerts", "Security");
+        entry.site_installable = false;
+        entry.cpn_installable = true;
+        entry.host_scoped = true;
+        let entries = vec![entry];
+        let items = collect_unified(&apps, &entries, "", "", "cpn");
+        assert!(
+            items
+                .iter()
+                .any(|i| matches!(i, UnifiedItem::Catalog(e) if e.id == "autoBanSecurityAlerts"))
+        );
+        assert!(!items.iter().any(|i| matches!(i, UnifiedItem::Host(_))));
     }
 
     #[test]

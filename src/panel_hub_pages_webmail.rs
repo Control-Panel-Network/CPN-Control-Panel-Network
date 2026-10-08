@@ -143,6 +143,11 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
         } else {
             String::new()
         };
+        let proton_link = if crate::panel_feature_gate::proton_mail_unlocked() {
+            r#"<a class="btn-secondary" href="/email/proton">Proton Mail</a>"#.to_string()
+        } else {
+            String::new()
+        };
         format!(
             r#"{notice}{error}
         <p><strong>{label}</strong> is installed. Open the real webmail UI (not only the plugin dashboard).</p>
@@ -150,8 +155,11 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           <a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open {label}</a>
           <a class="btn-secondary" href="{admin}" target="_blank" rel="noopener noreferrer">{label} Admin</a>
           <a class="btn-secondary" href="/email/webmail/app">Internal view</a>
+          {proton_link}
         </p>
         <p class="muted">Public path: <code>{path}</code> (proxied through this panel to PHP-FPM on {health}). Mailbox data under <code>/var/lib/cpn-webmail</code> is preserved when you regenerate the path.</p>
+        <p class="muted"><strong>OpenPGP / encrypted mail</strong> (EN): Tachyon, SnappyMail, and NextSnapMail can store a contact's public key and encrypt outbound mail (Settings &gt; OpenPGP / Security), similar to Thunderbird. Roundcube uses Enigma (Settings &gt; PGP Keys). Prefer OpenPGP.js or Mailvelope in the browser for private keys; server GnuPG/Enigma keys stay under <code>/var/lib/cpn-webmail</code> (not web-readable). This is classic OpenPGP, not Proton end-to-end.</p>
+        <p class="muted"><strong>OpenPGP / kryptert e-post</strong> (NO): Tachyon, SnappyMail og NextSnapMail kan lagre mottakerens offentlige nøkkel og sende kryptert e-post (Innstillinger &gt; OpenPGP / Sikkerhet), slik som Thunderbird. Roundcube bruker Enigma (Innstillinger &gt; PGP-nøkler). Bruk OpenPGP.js eller Mailvelope i nettleseren for private nøkler; nøkler på server ligger under <code>/var/lib/cpn-webmail</code>. Dette er klassisk OpenPGP, ikke Proton E2E.</p>
         <form method="post" action="/email/webmail/settings" class="stack-form" style="max-width:520px;margin-top:16px;">
           <label for="auto_login_search">Preferred open account</label>
           <div class="cpn-mbox-combo">
@@ -183,6 +191,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
             label = html_escape(label),
             open = html_escape(&open),
             admin = html_escape(&admin),
+            proton_link = proton_link,
             path = html_escape(&cfg.public_path),
             health = html_escape(webmail_health_hint()),
             auto = html_escape(&cfg.auto_login_account),

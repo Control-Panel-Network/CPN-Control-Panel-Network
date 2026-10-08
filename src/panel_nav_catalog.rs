@@ -120,6 +120,10 @@ const EMAIL_CHILDREN: &[NavChild] = &[
         href: "/email/bimi",
     },
     NavChild {
+        label: "Proton Mail",
+        href: "/email/proton",
+    },
+    NavChild {
         label: "Email Delivery",
         href: "/email/delivery",
     },

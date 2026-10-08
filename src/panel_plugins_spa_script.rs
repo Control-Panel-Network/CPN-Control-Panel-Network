@@ -111,8 +111,9 @@ pub fn plugins_hub_script() -> String {
       target = 'host';
       category = '';
     }
-    if (target !== 'host' && target !== 'site') target = 'site';
-    if (target === 'host' && !allowHost()) target = 'site';
+    if (target === 'cpn_only' || target === 'cpn-only' || target === 'account') target = 'cpn';
+    if (target !== 'host' && target !== 'site' && target !== 'cpn') target = 'site';
+    if (target === 'host' && !allowHost()) target = 'cpn';
     var mode = (u.searchParams.get('mode') || 'page').toLowerCase();
     if (mode === 'scrollbar') mode = 'scroll';
     if (mode !== 'scroll') mode = 'page';
@@ -130,10 +131,17 @@ pub fn plugins_hub_script() -> String {
     };
   }
 
+  function targetAttrMatches(attr, want) {
+    var parts = String(attr || 'site').toLowerCase().split(/[,\s]+/).filter(Boolean);
+    if (!parts.length) parts = ['site'];
+    if (parts.indexOf('all') >= 0) return true;
+    if (parts.indexOf('both') >= 0 && (want === 'host' || want === 'site')) return true;
+    return parts.indexOf(want) >= 0;
+  }
+
   function itemMatches(el, st) {
     var t = (el.getAttribute('data-store-target') || 'site').toLowerCase();
-    if (st.target === 'host' && t !== 'host' && t !== 'both') return false;
-    if (st.target === 'site' && t !== 'site' && t !== 'both') return false;
+    if (!targetAttrMatches(t, st.target)) return false;
     var cat = (st.category || '').trim().toLowerCase();
     var itemCat = (el.getAttribute('data-cat') || '').toLowerCase();
     if (cat && cat !== 'all') {
@@ -144,7 +152,7 @@ pub fn plugins_hub_script() -> String {
       } else if (cat === 'free') {
         if (el.getAttribute('data-paid') === '1') return false;
       } else if (cat === 'host') {
-        if (t !== 'host' && t !== 'both') return false;
+        if (!targetAttrMatches(t, 'host')) return false;
       } else if (itemCat !== cat) {
         return false;
       }
@@ -245,8 +253,10 @@ pub fn plugins_hub_script() -> String {
       a.classList.toggle('active', a.getAttribute('data-store-target-btn') === st.target);
     });
     var hostHint = document.getElementById('store-host-hint');
+    var cpnHint = document.getElementById('store-cpn-hint');
     var siteBox = document.getElementById('store-site-picker');
     if (hostHint) hostHint.hidden = st.target !== 'host';
+    if (cpnHint) cpnHint.hidden = st.target !== 'cpn';
     if (siteBox) siteBox.hidden = st.target !== 'site';
     var qInput = document.getElementById('q');
     if (qInput && document.activeElement !== qInput) qInput.value = st.q;
@@ -288,7 +298,8 @@ pub fn plugins_hub_script() -> String {
       u.searchParams.set('view', 'store');
       if (a.hasAttribute('data-store-target-btn')) {
         u.searchParams.set('target', a.getAttribute('data-store-target-btn'));
-        if (a.getAttribute('data-store-target-btn') === 'host') {
+        if (a.getAttribute('data-store-target-btn') === 'host'
+            || a.getAttribute('data-store-target-btn') === 'cpn') {
           u.searchParams.delete('domain');
         }
       }
@@ -299,6 +310,11 @@ pub fn plugins_hub_script() -> String {
       }
       u.searchParams.set('page', '1');
       u.searchParams.delete('partial');
+      // Reload hub on Install target change so Install/Uninstall actions match Host / CPN / Site.
+      if (a.hasAttribute('data-store-target-btn')) {
+        loadHub(u.pathname + u.search, { replace: false });
+        return;
+      }
       syncUrl(u.pathname + u.search, false);
       applyStoreFilter(true);
       return;

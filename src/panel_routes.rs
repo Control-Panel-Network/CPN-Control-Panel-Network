@@ -10,7 +10,7 @@ use crate::panel_hub_routes::{databases_hub_html, email_hub_html};
 use crate::panel_ops_ssl_origin_retry::spawn_origin_backup_pass;
 use crate::panel_pages::panel_shell;
 use crate::panel_plugin_settings::{
-    plugin_dashboard_main, plugin_settings_main, settings_from_form,
+    plugin_dashboard_main, plugin_settings_main_with_tab, settings_from_form,
 };
 use crate::panel_plugins::{PluginsPageQuery, plugins_main};
 use crate::panel_sections::{
@@ -26,6 +26,10 @@ use crate::plugin_activation::{
     activate_host_plugin_for_domain, deactivate_host_plugin_for_domain, install_host_plugin,
     is_host_owned_install, is_host_scoped_plugin, is_site_installable_plugin,
     uninstall_host_plugin,
+};
+use crate::plugin_cpn_scope::{
+    install_cpn_plugin, is_cpn_domain, parse_cpn_owner, set_cpn_plugin_enabled,
+    uninstall_cpn_plugin,
 };
 use crate::plugins::{install_plugin, set_plugin_enabled, uninstall_plugin};
 use crate::plugins_settings::{
@@ -1257,6 +1261,14 @@ pub async fn plugins_install(
             ))
             .finish();
     }
+    if let Err(error) = crate::mr_agent_policy::refuse_site_install_if_disabled(&form.id) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish();
+    }
     let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
     if crate::mr_agent_install::is_mr_agent(&form.id)
         && mode == "vhost"
@@ -1280,18 +1292,13 @@ pub async fn plugins_install(
         Ok(manifest) => {
             let mut notice = format!("Installed {}", manifest.name);
             if crate::mr_agent_install::is_mr_agent(&form.id) {
-                match crate::mr_agent_install::publish_for_mode(
-                    &form.domain,
-                    &mode,
-                    &form.confirm_vhost,
-                ) {
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
                     Ok(pub_notice) => {
                         notice = format!("{notice}. {pub_notice}");
                     }
                     Err(err) => {
                         notice = format!(
-                            "{notice}. Publish incomplete: {err}. Open /plugins/mr-agent?domain={} or run install.sh.",
-                            form.domain.trim()
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup.",
                         );
                     }
                 }
@@ -1307,6 +1314,123 @@ pub async fn plugins_install(
             .append_header((
                 "Location",
                 plugins_redirect(&form.domain, "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/install-cpn")]
+pub async fn plugins_install_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match install_cpn_plugin(&user, &form.id) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Installed {} for CPN only", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "store", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/uninstall-cpn")]
+pub async fn plugins_uninstall_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let view = if form.return_view.trim().eq_ignore_ascii_case("installed") {
+        "installed"
+    } else {
+        "store"
+    };
+    match uninstall_cpn_plugin(&user, &form.id) {
+        Ok(()) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", view, Some("Uninstalled CPN-only plugin"), None),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header(("Location", plugins_redirect("", view, None, Some(&error))))
+            .finish(),
+    }
+}
+
+#[post("/plugins/enable-cpn")]
+pub async fn plugins_enable_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match set_cpn_plugin_enabled(&user, &form.id, true) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Activated {}", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "installed", None, Some(&error)),
+            ))
+            .finish(),
+    }
+}
+
+#[post("/plugins/disable-cpn")]
+pub async fn plugins_disable_cpn(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<PluginIdForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match set_cpn_plugin_enabled(&user, &form.id, false) {
+        Ok(manifest) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect(
+                    "",
+                    "installed",
+                    Some(&format!("Deactivated {}", manifest.name)),
+                    None,
+                ),
+            ))
+            .finish(),
+        Err(error) => HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_redirect("", "installed", None, Some(&error)),
             ))
             .finish(),
     }
@@ -1387,17 +1511,31 @@ pub async fn plugins_activate_host(
             .finish();
     }
     match activate_host_plugin_for_domain(&form.domain, &form.id) {
-        Ok(manifest) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                plugins_redirect(
-                    &form.domain,
-                    "installed",
-                    Some(&format!("Activated {}", manifest.name)),
-                    None,
-                ),
-            ))
-            .finish(),
+        Ok(manifest) => {
+            let mut notice = format!("Activated {}", manifest.name);
+            if crate::mr_agent_install::is_mr_agent(&form.id) {
+                let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+                let mode = if mode.is_empty() || mode == "folder" {
+                    crate::mr_agent_install::install_mode_from_settings(&form.domain)
+                } else {
+                    mode
+                };
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
+                    Ok(msg) => notice = format!("{notice}. {msg}"),
+                    Err(err) => {
+                        notice = format!(
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup."
+                        );
+                    }
+                }
+            }
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", Some(&notice), None),
+                ))
+                .finish()
+        }
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -1611,17 +1749,31 @@ pub async fn plugins_enable(
             .finish();
     }
     match set_plugin_enabled(&form.domain, &form.id, true) {
-        Ok(manifest) => HttpResponse::SeeOther()
-            .append_header((
-                "Location",
-                plugins_redirect(
-                    &form.domain,
-                    "installed",
-                    Some(&format!("Activated {}", manifest.name)),
-                    None,
-                ),
-            ))
-            .finish(),
+        Ok(manifest) => {
+            let mut notice = format!("Activated {}", manifest.name);
+            if crate::mr_agent_install::is_mr_agent(&form.id) {
+                let mode = crate::mr_agent_install::normalize_install_mode(&form.install_mode);
+                let mode = if form.install_mode.trim().is_empty() {
+                    crate::mr_agent_install::install_mode_from_settings(&form.domain)
+                } else {
+                    mode
+                };
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
+                    Ok(msg) => notice = format!("{notice}. {msg}"),
+                    Err(err) => {
+                        notice = format!(
+                            "{notice}. Setup incomplete: {err}. Open Plugin settings and use Run setup."
+                        );
+                    }
+                }
+            }
+            HttpResponse::SeeOther()
+                .append_header((
+                    "Location",
+                    plugins_redirect(&form.domain, "installed", Some(&notice), None),
+                ))
+                .finish()
+        }
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
@@ -1669,6 +1821,47 @@ pub async fn plugins_disable(
     }
 }
 
+fn plugins_settings_authz(user: &str, domain: &str) -> Result<(), String> {
+    if crate::plugins_settings::is_host_settings_domain(domain) {
+        if is_panel_admin(user) {
+            return Ok(());
+        }
+        return Err("Only panel administrators can manage Host Mr Agent settings".into());
+    }
+    if is_cpn_domain(domain) {
+        let owner = parse_cpn_owner(domain).unwrap_or_default();
+        if is_panel_admin(user) || owner.eq_ignore_ascii_case(user) {
+            return Ok(());
+        }
+        return Err("You can only manage your own CPN-only plugins".into());
+    }
+    require_manage_site(user, domain, SitePerm::Enable).map(|_| ())
+}
+
+fn plugins_settings_redirect(
+    domain: &str,
+    id: &str,
+    tab: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    let mut url = format!(
+        "/plugins/settings?domain={}&id={}",
+        urlencoding_simple(domain),
+        urlencoding_simple(id)
+    );
+    if !tab.trim().is_empty() {
+        url.push_str(&format!("&tab={}", urlencoding_simple(tab)));
+    }
+    if let Some(n) = notice.filter(|s| !s.is_empty()) {
+        url.push_str(&format!("&notice={}", urlencoding_simple(n)));
+    }
+    if let Some(e) = error.filter(|s| !s.is_empty()) {
+        url.push_str(&format!("&error={}", urlencoding_simple(e)));
+    }
+    url
+}
+
 #[get("/plugins/settings")]
 pub async fn plugins_settings_page(
     http: HttpRequest,
@@ -1682,9 +1875,10 @@ pub async fn plugins_settings_page(
     let id = query.get("id").map(String::as_str).unwrap_or("");
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
+    let tab = query.get("tab").map(String::as_str);
     let sites = sites_manageable_by(&user).unwrap_or_default();
     if !domain.trim().is_empty()
-        && let Err(err) = require_manage_site(&user, domain, SitePerm::Enable)
+        && let Err(err) = plugins_settings_authz(&user, domain)
     {
         return HttpResponse::SeeOther()
             .append_header((
@@ -1693,11 +1887,24 @@ pub async fn plugins_settings_page(
             ))
             .finish();
     }
+    let title = if crate::mr_agent_install::is_mr_agent(id) {
+        "Mr Agent settings"
+    } else {
+        "Plugin settings"
+    };
     html_ok(panel_shell(
         &user,
         "plugins",
-        "Plugin settings",
-        &plugin_settings_main(&sites, domain, id, notice, error),
+        title,
+        &plugin_settings_main_with_tab(
+            &sites,
+            domain,
+            id,
+            notice,
+            error,
+            tab,
+            is_panel_admin(&user),
+        ),
     ))
 }
 
@@ -1712,16 +1919,24 @@ pub async fn plugins_settings_save(
     };
     let domain = form.get("domain").map(String::as_str).unwrap_or("");
     let id = form.get("id").map(String::as_str).unwrap_or("");
-    if let Err(error) = require_manage_site(&user, domain, SitePerm::Enable) {
+    let tab = form.get("tab").map(String::as_str).unwrap_or("general");
+    if let Err(error) = plugins_settings_authz(&user, domain) {
         return HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&error={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple(&error)
-                ),
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
+            ))
+            .finish();
+    }
+    if let Err(error) = crate::panel_mr_agent_settings::save_host_policy_from_form(
+        domain,
+        is_panel_admin(&user),
+        &form,
+    ) {
+        return HttpResponse::SeeOther()
+            .append_header((
+                "Location",
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
             ))
             .finish();
     }
@@ -1730,7 +1945,10 @@ pub async fn plugins_settings_save(
         .into_iter()
         .map(|f| f.key)
         .collect();
-    let settings = settings_from_form(&form, &previous, &declared);
+    let mut settings = settings_from_form(&form, &previous, &declared);
+    settings
+        .fields
+        .retain(|k, _| !crate::plugins_settings::is_hidden_settings_field(k));
     if crate::plugins_settings::is_webmail_plugin_id(id) {
         let mut cfg = crate::panel_webmail::load_webmail_config();
         if let Some(account) = settings.fields.get("auto_login_account") {
@@ -1753,23 +1971,13 @@ pub async fn plugins_settings_save(
         Ok(()) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&notice={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple("Settings saved")
-                ),
+                plugins_settings_redirect(domain, id, tab, Some("Settings saved"), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                format!(
-                    "/plugins/settings?domain={}&id={}&error={}",
-                    urlencoding_simple(domain),
-                    urlencoding_simple(id),
-                    urlencoding_simple(&error)
-                ),
+                plugins_settings_redirect(domain, id, tab, None, Some(&error)),
             ))
             .finish(),
     }
