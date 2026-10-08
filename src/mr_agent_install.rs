@@ -122,10 +122,7 @@ fn random_access_password() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("mra{nanos:x}")
-        .chars()
-        .take(24)
-        .collect()
+    format!("mra{nanos:x}").chars().take(24).collect()
 }
 
 /// Ensure `/var/lib/cpn/mr-agent/<domain>/` secrets, chats, locks, and optional config.php.
@@ -133,7 +130,8 @@ pub fn ensure_site_secrets(domain: &str) -> Result<String, String> {
     let plugin_root = resolve_mr_agent_root(domain)?;
     let secret = secret_dir_for(domain);
     let parent = PathBuf::from("/var/lib/cpn/mr-agent");
-    fs::create_dir_all(&parent).map_err(|e| format!("Could not create mr-agent secret root: {e}"))?;
+    fs::create_dir_all(&parent)
+        .map_err(|e| format!("Could not create mr-agent secret root: {e}"))?;
     chmod_mode(&parent, 0o700);
     fs::create_dir_all(&secret).map_err(|e| format!("Could not create secret dir: {e}"))?;
     chmod_mode(&secret, 0o700);
@@ -171,10 +169,7 @@ pub fn ensure_site_secrets(domain: &str) -> Result<String, String> {
     } else if config.is_file() {
         chmod_mode(&config, 0o640);
     }
-    Ok(format!(
-        "Secrets ready under {}",
-        secret.display()
-    ))
+    Ok(format!("Secrets ready under {}", secret.display()))
 }
 
 /// Install-mode from saved plugin settings (defaults to folder).
@@ -203,7 +198,9 @@ pub fn run_setup(domain: &str, mode: &str, confirm_vhost: &str) -> Result<String
     match publish_for_mode(d, mode, confirm_vhost) {
         Ok(pub_notice) => Ok(format!("{secrets}. {pub_notice}")),
         Err(pub_err) => match run_install_sh(d, mode, confirm_vhost) {
-            Ok(sh_notice) => Ok(format!("{secrets}. Native publish failed ({pub_err}); {sh_notice}")),
+            Ok(sh_notice) => Ok(format!(
+                "{secrets}. Native publish failed ({pub_err}); {sh_notice}"
+            )),
             Err(sh_err) => Err(format!(
                 "Setup incomplete: {pub_err}. install.sh fallback: {sh_err}. Use Plugin settings Run setup after fixing permissions."
             )),
@@ -249,10 +246,7 @@ pub fn run_install_sh(domain: &str, mode: &str, confirm_vhost: &str) -> Result<S
             output.status.code().unwrap_or(-1)
         ));
     }
-    Ok(format!(
-        "Ran install.sh for {} ({mode})",
-        domain.trim()
-    ))
+    Ok(format!("Ran install.sh for {} ({mode})", domain.trim()))
 }
 
 /// Prune chat logs via `modules/cli_prune.php` (panel button; no SSH).
@@ -262,13 +256,12 @@ pub fn prune_chat_logs(domain: &str) -> Result<String, String> {
     if !script.is_file() {
         return Err("cli_prune.php not found in plugin tree".into());
     }
-    let arg = if domain.trim().is_empty()
-        || domain.trim().eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL)
-    {
-        HOST_DOMAIN_SENTINEL.to_string()
-    } else {
-        domain.trim().to_string()
-    };
+    let arg =
+        if domain.trim().is_empty() || domain.trim().eq_ignore_ascii_case(HOST_DOMAIN_SENTINEL) {
+            HOST_DOMAIN_SENTINEL.to_string()
+        } else {
+            domain.trim().to_string()
+        };
     let output = Command::new("php")
         .arg(&script)
         .arg(&arg)
@@ -467,13 +460,17 @@ mod tests {
 
     #[test]
     fn secret_dir_host_sentinel() {
-        assert!(secret_dir_for("_host")
-            .display()
-            .to_string()
-            .ends_with("_host"));
-        assert!(secret_dir_for("ai.example.com")
-            .display()
-            .to_string()
-            .contains("ai.example.com"));
+        assert!(
+            secret_dir_for("_host")
+                .display()
+                .to_string()
+                .ends_with("_host")
+        );
+        assert!(
+            secret_dir_for("ai.example.com")
+                .display()
+                .to_string()
+                .contains("ai.example.com")
+        );
     }
 }

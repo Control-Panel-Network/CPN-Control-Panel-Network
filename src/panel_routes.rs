@@ -1280,11 +1280,7 @@ pub async fn plugins_install(
         Ok(manifest) => {
             let mut notice = format!("Installed {}", manifest.name);
             if crate::mr_agent_install::is_mr_agent(&form.id) {
-                match crate::mr_agent_install::run_setup(
-                    &form.domain,
-                    &mode,
-                    &form.confirm_vhost,
-                ) {
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
                     Ok(pub_notice) => {
                         notice = format!("{notice}. {pub_notice}");
                     }
@@ -1395,11 +1391,7 @@ pub async fn plugins_activate_host(
                 } else {
                     mode
                 };
-                match crate::mr_agent_install::run_setup(
-                    &form.domain,
-                    &mode,
-                    &form.confirm_vhost,
-                ) {
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
                     Ok(msg) => notice = format!("{notice}. {msg}"),
                     Err(err) => {
                         notice = format!(
@@ -1637,11 +1629,7 @@ pub async fn plugins_enable(
                 } else {
                     mode
                 };
-                match crate::mr_agent_install::run_setup(
-                    &form.domain,
-                    &mode,
-                    &form.confirm_vhost,
-                ) {
+                match crate::mr_agent_install::run_setup(&form.domain, &mode, &form.confirm_vhost) {
                     Ok(msg) => notice = format!("{notice}. {msg}"),
                     Err(err) => {
                         notice = format!(

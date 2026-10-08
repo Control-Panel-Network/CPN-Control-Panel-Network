@@ -156,8 +156,7 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
     vec![
         PluginSettingField {
             key: "install_mode".into(),
-            label: "Site publish mode: folder (default, /mr-agent/) | vhost (needs confirm)"
-                .into(),
+            label: "Site publish mode: folder (default, /mr-agent/) | vhost (needs confirm)".into(),
             field_type: "text".into(),
             default: "folder".into(),
         },
@@ -217,8 +216,7 @@ pub fn builtin_mragent_settings_fields(plugin_id: &str) -> Vec<PluginSettingFiel
         },
         PluginSettingField {
             key: "local_base_url".into(),
-            label: "Local OpenAI-compatible base URL (server; Ollama 11434, LM Studio 1235)"
-                .into(),
+            label: "Local OpenAI-compatible base URL (server; Ollama 11434, LM Studio 1235)".into(),
             field_type: "text".into(),
             default: "http://127.0.0.1:11434/v1".into(),
         },
