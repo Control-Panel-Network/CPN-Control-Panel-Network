@@ -74,6 +74,9 @@ pub struct CatalogEntry {
     /// Default true for backward-compatible site plugins; false for host-only packages.
     #[serde(default = "default_site_installable")]
     pub site_installable: bool,
+    /// When true, Store **CPN only** target may install under `$CPN_DATA_DIR/user-plugins/<user>/`.
+    #[serde(default)]
+    pub cpn_installable: bool,
     /// Search aliases from catalog meta (`<keywords>` / `<keyword>`).
     #[serde(default)]
     pub keywords: Vec<String>,
@@ -406,6 +409,15 @@ fn sync_email_auth_feature_flags(plugin_id: &str) {
                 let _ = crate::panel_feature_flags::write_host_feature_flag("bimi");
             } else {
                 crate::panel_feature_flags::clear_host_feature_flag("bimi");
+            }
+        }
+        "protonMail" => {
+            if plugin_id_enabled_anywhere("protonMail")
+                || crate::plugin_activation::host_plugin_installed("protonMail")
+            {
+                let _ = crate::panel_feature_flags::write_host_feature_flag("proton-mail");
+            } else {
+                crate::panel_feature_flags::clear_host_feature_flag("proton-mail");
             }
         }
         _ => {}

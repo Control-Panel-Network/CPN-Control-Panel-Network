@@ -27,6 +27,8 @@ pub fn ensure_snappymail_operator_defaults() -> Result<(), String> {
         let _ = chown_data_tree(&data_dir);
     }
     let _ = crate::install_snappymail_folders::ensure_snappymail_system_folders();
+    // OpenPGP (SnappyMail-family + Roundcube Enigma when present).
+    let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     Ok(())
 }
 

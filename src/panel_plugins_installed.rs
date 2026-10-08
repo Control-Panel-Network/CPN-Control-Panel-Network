@@ -42,7 +42,12 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
         qs.push_str(&format!("&amp;status={}", urlencoding_simple(opts.status)));
     }
     let mut out = String::from(r#"<div class="category-pills">"#);
-    for (label, cat) in [("All", ""), ("Host", "Host"), ("Site", "Site")] {
+    for (label, cat) in [
+        ("All", ""),
+        ("Host", "Host"),
+        ("CPN", "CPN"),
+        ("Site", "Site"),
+    ] {
         let cls = if cat.is_empty() {
             if opts.category.is_empty() || opts.category.eq_ignore_ascii_case("all") {
                 "active"
@@ -97,6 +102,7 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
         ("All statuses", ""),
         ("Active", "active"),
         ("Deactivated", "deactivated"),
+        ("Updates", "updates"),
     ] {
         let cls = if st.is_empty() {
             if opts.status.is_empty() || opts.status.eq_ignore_ascii_case("all") {
@@ -214,6 +220,11 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         .copied()
         .filter(|i| i.scope == Scope::Host)
         .collect();
+    let cpn_items: Vec<&FlatItem> = page_items
+        .iter()
+        .copied()
+        .filter(|i| i.scope == Scope::Cpn)
+        .collect();
     let domain_items: Vec<&FlatItem> = page_items
         .iter()
         .copied()
@@ -237,11 +248,19 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         "plugin-grid-scroll"
     };
     let empty = if total == 0 {
-        r#"<p class="empty-state">No installed packages match this search or filter.</p>"#
+        let st = opts.status.trim().to_ascii_lowercase();
+        if matches!(st.as_str(), "updates" | "update" | "upgrades" | "upgrade") {
+            r#"<p class="empty-state">No installed plugins have updates available.</p>"#
+        } else {
+            r#"<p class="empty-state">No installed packages match this search or filter.</p>"#
+        }
     } else {
         ""
     };
-    let host_only_page = !host_items.is_empty() && domain_items.is_empty() && sub_items.is_empty();
+    let host_only_page = !host_items.is_empty()
+        && cpn_items.is_empty()
+        && domain_items.is_empty()
+        && sub_items.is_empty();
     // Show empty Domain/Sub placeholders on scroll or page 1 so scope stays clear.
     let show_empty_scopes = mode == "scroll" || page <= 1;
 
@@ -252,7 +271,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       {tabs}
       <article class="section-card">
         <h2>Installed</h2>
-        <p class="muted">Host packages stay visible even with zero websites. Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Active or Deactivated.</p>
+        <p class="muted">Host is server-wide. CPN only is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / CPN / Site plus Active, Deactivated, or Update available. Use the Updates filter for packages with a newer catalog version.</p>
         {picker}
         <form method="get" action="/plugins" class="plugin-search-row">
           <input type="hidden" name="view" value="installed">
@@ -276,6 +295,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
         <div class="{scroll_cls}">
           {empty}
           {host_sec}
+          {cpn_sec}
           {domain_sec}
           {sub_sec}
           {empty_scopes}
@@ -283,7 +303,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       </article>"#,
         heading = section_heading(
             "Plugins",
-            "Installed host packages and site plugins, plus the CPN Store.",
+            "Installed host packages, CPN-only tools, and site plugins, plus the CPN Store.",
         ),
         ok = notice_block("ok", opts.notice),
         err = notice_block("error", opts.error),
@@ -312,6 +332,11 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
             "Host engines, webmail clients, and host-scoped catalog plugins.",
             &host_items,
         ),
+        cpn_sec = render_scope_group(
+            "CPN only",
+            "Account-scoped panel tools for your signed-in CPN user (not exposed as a public site feature).",
+            &cpn_items,
+        ),
         domain_sec = render_scope_group(
             "Domain",
             "Plugins installed for apex / primary domains.",
@@ -328,4 +353,35 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
             String::new()
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn updates_status_pill_and_empty_copy() {
+        let html = render_installed(InstalledPageOpts {
+            layout: "grid",
+            domain: "",
+            notice: None,
+            error: None,
+            sites: &[],
+            username: "cpnowner",
+            q: "",
+            category: "",
+            status: "updates",
+            mode: "page",
+            page: 1,
+            per_page: 10,
+        });
+        assert!(html.contains("status=updates"));
+        assert!(html.contains(">Updates</a>"));
+        assert!(html.contains("Update available"));
+        // With no catalog plugins needing updates, the Updates filter is empty.
+        assert!(html.contains("No installed plugins have updates available."));
+        // Scope copy from Host | CPN only | Site work stays present.
+        assert!(html.contains("CPN only"));
+        assert!(html.contains("Host is server-wide"));
+    }
 }

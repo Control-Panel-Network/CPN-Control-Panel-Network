@@ -240,7 +240,7 @@ fn render_store(
       <article class="section-card">
         <h2>Store</h2>
         {picker}
-        <p class="plugin-store-meta">One catalog. <strong>Install target</strong> is independent of category chips: <strong>Host</strong> shows server packages (Postfix/Dovecot, Tachyon, SnappyMail, Roundcube); <strong>Site</strong> shows per-domain plugins (BIMI, MTA-STS, Email Marketing) under <code>{path}</code>. HOST and SITE badges on each card mark the install scope. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
+        <p class="plugin-store-meta">One catalog. <strong>Install target</strong> is independent of category chips: <strong>Host</strong> (owner/admin) is server-wide; <strong>CPN only</strong> is your signed-in account under <code>/var/lib/cpn/user-plugins/</code>; <strong>Site</strong> is per-domain plugins under <code>{path}</code>. Cards show Host / CPN / Site badges. Catalog: <a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>. {cache}</p>
         <p class="plugin-risk-notice" role="note">Third-party plugins run with site privileges. Review each package before install. Fail2ban and other Security plugins ship from Control-Panel-Network/CPN-Plugins.</p>
         {body}
       </article>"#,

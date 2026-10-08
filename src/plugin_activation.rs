@@ -19,10 +19,12 @@ const HOST_SCOPED_ALLOWLIST: &[&str] = &[
     "clamav",
     "fail2ban",
     "autoBan",
+    "autoBanSecurityAlerts",
     "autoSnapshot",
     "malwareScanner",
     "roundcubeWebmail",
     "roundcube",
+    "protonMail",
 ];
 
 /// Host + Site (site install remains available without waiting for Host).
@@ -172,10 +174,18 @@ pub fn catalog_entry_is_host_scoped(entry: &CatalogEntry) -> bool {
 }
 
 pub fn catalog_entry_is_site_installable(entry: &CatalogEntry) -> bool {
+    // Explicit false from catalog (host-only / cpn-only) wins over allowlist defaults.
+    if !entry.site_installable && (entry.host_scoped || entry.cpn_installable) {
+        return false;
+    }
     if entry.site_installable {
         return true;
     }
     is_site_installable_plugin(&entry.id)
+}
+
+pub fn catalog_entry_is_cpn_installable(entry: &CatalogEntry) -> bool {
+    crate::plugin_cpn_scope::catalog_entry_is_cpn_installable(entry)
 }
 
 pub fn is_activated(domain_raw: &str, plugin_id: &str) -> bool {
@@ -312,6 +322,14 @@ pub fn install_host_plugin(plugin_id: &str) -> Result<CpnPluginManifest, String>
     if crate::mr_agent_install::is_mr_agent(&id) {
         let _ = crate::mr_agent_install::finalize_host_install();
     }
+    if id.eq_ignore_ascii_case("protonMail") {
+        let _ = crate::panel_feature_flags::write_host_feature_flag("proton-mail");
+        crate::panel_feature_gate::invalidate_feature_cache();
+        let script = dest.join("install-host.sh");
+        if script.is_file() {
+            let _ = Command::new("bash").arg(&script).status();
+        }
+    }
     Ok(manifest)
 }
 
@@ -321,6 +339,14 @@ pub fn uninstall_host_plugin(plugin_id: &str) -> Result<(), String> {
     let dest = host_plugin_path(&id);
     if !dest.exists() {
         return Err(format!("Host plugin `{id}` is not installed"));
+    }
+    if id.eq_ignore_ascii_case("protonMail") {
+        let script = dest.join("uninstall-host.sh");
+        if script.is_file() {
+            let _ = Command::new("bash").arg(&script).status();
+        }
+        crate::panel_feature_flags::clear_host_feature_flag("proton-mail");
+        crate::panel_feature_gate::invalidate_feature_cache();
     }
     fs::remove_dir_all(&dest).map_err(|error| format!("Could not remove host plugin: {error}"))?;
     let mut file = load_activations();
@@ -502,6 +528,7 @@ mod tests {
         assert!(is_host_scoped_plugin("clamav"));
         assert!(is_host_scoped_plugin("fail2ban"));
         assert!(!is_host_scoped_plugin("bimi"));
+        assert!(is_host_scoped_plugin("protonMail"));
         assert!(is_dual_scoped_plugin("mrAgent"));
         assert!(is_site_installable_plugin("mrAgent"));
         assert!(!is_site_installable_plugin("clamav"));
@@ -535,6 +562,7 @@ mod tests {
                 uninstall_impacts: vec![],
                 host_scoped: true,
                 site_installable: false,
+                cpn_installable: false,
                 keywords: vec![],
             };
             write_host_manifest("clamav", &entry).unwrap();

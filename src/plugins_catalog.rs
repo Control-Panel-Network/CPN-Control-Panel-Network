@@ -153,18 +153,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         .or_else(|| xml_tag(body, "install_scope"))
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let (host_scoped, site_installable) = match scope.as_str() {
-        "host" | "host-package" | "shared" => (true, false),
-        "dual" | "host+site" | "host,site" | "both" => (true, true),
-        _ => {
-            // Allowlist dual plugins even if meta cache is stale.
-            if crate::mr_agent_install::is_dual_scoped_plugin(plugin_id) {
-                (true, true)
-            } else {
-                (false, true)
-            }
-        }
-    };
+    let (host_scoped, cpn_installable, site_installable) = parse_install_scopes(&scope, plugin_id);
     Ok(CatalogEntry {
         id: plugin_id.to_string(),
         name: sanitize_user_text(&name),
@@ -180,8 +169,48 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         uninstall_impacts: uninstall_impacts_from_meta(body),
         host_scoped,
         site_installable,
+        cpn_installable,
         keywords: keywords_from_meta(body),
     })
+}
+
+/// Parse catalog `<scope>` / `<install_scope>` into (host, cpn, site).
+fn parse_install_scopes(scope: &str, plugin_id: &str) -> (bool, bool, bool) {
+    let s = scope.trim().to_ascii_lowercase().replace(' ', "");
+    let allow_cpn = crate::plugin_cpn_scope::is_cpn_scoped_plugin(plugin_id);
+    let allow_dual = crate::mr_agent_install::is_dual_scoped_plugin(plugin_id);
+    match s.as_str() {
+        "host" | "host-package" | "shared" => (true, false, false),
+        "cpn" | "cpn_only" | "cpn-only" | "account" => (false, true, false),
+        "site" => (false, false, true),
+        "dual" | "host+site" | "host,site" | "both" => (true, false, true),
+        "host+cpn" | "host,cpn" | "cpn+host" | "cpn,host" => (true, true, false),
+        "cpn+site" | "cpn,site" | "site+cpn" | "site,cpn" => (false, true, true),
+        "host+cpn+site" | "host,cpn,site" | "all" | "any" => (true, true, true),
+        "" => {
+            if allow_dual {
+                (true, false, true)
+            } else if allow_cpn {
+                (true, true, false)
+            } else {
+                (false, false, true)
+            }
+        }
+        _ => {
+            let host = s.contains("host");
+            let cpn = s.contains("cpn");
+            let site = s.contains("site");
+            if host || cpn || site {
+                (host, cpn || allow_cpn, site)
+            } else if allow_dual {
+                (true, false, true)
+            } else if allow_cpn {
+                (true, true, false)
+            } else {
+                (false, false, true)
+            }
+        }
+    }
 }
 
 /// Top-N by install_count, or explicit `featured`, or install_count >= threshold.
@@ -389,6 +418,25 @@ pub fn format_unix_local(ts: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_meta_host_cpn_scope() {
+        let xml = r#"
+        <plugin>
+          <name>Auto Ban Security Alerts</name>
+          <type>Security</type>
+          <version>1.0.4</version>
+          <description>Ban from SSH alerts</description>
+          <author>master3395</author>
+          <paid>true</paid>
+          <scope>host+cpn</scope>
+        </plugin>
+        "#;
+        let entry = parse_meta_xml("autoBanSecurityAlerts", xml).unwrap();
+        assert!(entry.host_scoped);
+        assert!(entry.cpn_installable);
+        assert!(!entry.site_installable);
+    }
 
     #[test]
     fn parse_meta_builds_cpn_entry() {

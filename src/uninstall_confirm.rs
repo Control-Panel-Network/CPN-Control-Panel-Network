@@ -45,6 +45,12 @@ pub fn known_plugin_uninstall_impacts(plugin_id: &str) -> Option<Vec<&'static st
             "BIMI logo / selector UI becomes unavailable",
             "Clears the host bimi feature flag when no site still has it enabled",
         ]),
+        "protonMail" => Some(vec![
+            "Hides Email > Proton Mail until the plugin is installed again",
+            "Open Proton Mail hub and sidebar entry become unavailable",
+            "Clears the host proton-mail feature flag",
+            "Does not delete Proton accounts or Bridge on operator workstations",
+        ]),
         "snappymailWebmail" | "snappymailAdmin" => Some(vec![
             "Removes this site plugin entry and its Settings / Dashboard links",
             "Related SnappyMail sidebar entries for this site may disappear",

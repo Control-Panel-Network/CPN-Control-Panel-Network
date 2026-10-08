@@ -7,6 +7,7 @@ use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
 use crate::plugin_activation::{catalog_entry_is_host_scoped, host_plugin_installed, is_activated};
+use crate::plugin_cpn_scope::{cpn_plugin_installed, scope_badges_html};
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured, format_iso_date_eu};
 
 pub(crate) struct StoreListOpts<'a> {
@@ -18,7 +19,7 @@ pub(crate) struct StoreListOpts<'a> {
     pub per_page: usize,
     /// Signed-in panel username (RBAC for Host Install vs Activate).
     pub username: &'a str,
-    /// `host`, `site`, or `all` (embed both for client-side filtering).
+    /// `host`, `cpn`, `site`, or `all` (embed for client-side filtering).
     pub store_target: &'a str,
 }
 
@@ -164,10 +165,13 @@ pub(crate) fn render_catalog_card(
     installed_ids: &[String],
     domain: &str,
     username: &str,
+    store_target: &str,
 ) -> String {
     let installed = installed_ids.iter().any(|id| id == &entry.id);
     let host_scoped = catalog_entry_is_host_scoped(entry);
     let on_host = host_scoped && host_plugin_installed(&entry.id);
+    let cpn_ok = crate::plugin_activation::catalog_entry_is_cpn_installable(entry);
+    let on_cpn = cpn_ok && cpn_plugin_installed(username, &entry.id);
     let activated = !domain.is_empty() && is_activated(domain, &entry.id);
     let admin = is_panel_admin(username);
     let featured = catalog_entry_is_featured(entry, all);
@@ -177,21 +181,19 @@ pub(crate) fn render_catalog_card(
         ""
     };
     let site_ok = crate::plugin_activation::catalog_entry_is_site_installable(entry);
-    let host_badge = if host_scoped && site_ok {
-        r#"<span class="plugin-badge">Host</span><span class="plugin-badge cat">Site</span>"#
-    } else if host_scoped {
-        r#"<span class="plugin-badge">Host</span>"#
-    } else {
-        r#"<span class="plugin-badge cat">Site</span>"#
-    };
+    let scope_badges = scope_badges_html(entry);
     let dates = dates_line(&entry.released_on, &entry.updated_on);
     let action = store_action_html(
         entry,
         domain,
+        username,
+        store_target,
         installed,
         host_scoped,
         site_ok,
+        cpn_ok,
         on_host,
+        on_cpn,
         activated,
         admin,
     );
@@ -199,7 +201,7 @@ pub(crate) fn render_catalog_card(
         r#"<article class="plugin-card">
           <h3>{name}</h3>
           <div class="plugin-badges">
-            {host}
+            {scopes}
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {pricing}
@@ -216,7 +218,7 @@ pub(crate) fn render_catalog_card(
         ver = html_escape(&entry.version),
         pricing = badge_pricing(&entry.pricing),
         featured = featured_badge,
-        host = host_badge,
+        scopes = scope_badges,
         author = html_escape(&entry.author),
         dates = dates,
         action = action,
@@ -231,22 +233,27 @@ fn store_card(
     domain: &str,
     username: &str,
 ) -> String {
-    render_catalog_card(entry, all, installed_ids, domain, username)
+    render_catalog_card(entry, all, installed_ids, domain, username, "site")
 }
 
 #[allow(clippy::too_many_arguments)]
 fn store_action_html(
     entry: &CatalogEntry,
     domain: &str,
+    username: &str,
+    store_target: &str,
     installed: bool,
     host_scoped: bool,
     site_installable: bool,
+    cpn_installable: bool,
     on_host: bool,
+    on_cpn: bool,
     activated: bool,
     admin: bool,
 ) -> String {
     let id = html_escape(&entry.id);
     let domain_e = html_escape(domain);
+    let target = store_target.trim().to_ascii_lowercase();
     let is_mr = entry.id.eq_ignore_ascii_case("mrAgent");
     // Roundcube is a Host package (cpn app install); jump to that card in this Store.
     if entry.id.eq_ignore_ascii_case("roundcubeWebmail")
@@ -263,11 +270,44 @@ fn store_action_html(
             domain_q = domain_q,
         );
     }
+    if target == "cpn" && cpn_installable {
+        if on_cpn {
+            let cpn_domain = crate::plugin_cpn_scope::cpn_domain_for_user(username);
+            return format!(
+                r#"<span class="plugin-badge installed">Installed (CPN)</span>
+            <a class="btn-secondary" href="/plugins/settings?domain={dom}&amp;id={id}">Settings</a>
+            <form method="post" action="/plugins/uninstall-cpn" class="inline-form" onsubmit="return confirm('Uninstall CPN-only plugin {name}?');">
+              <input type="hidden" name="id" value="{id}">
+              <button type="submit" class="btn-danger">Uninstall from CPN</button>
+            </form>"#,
+                dom = html_escape(&cpn_domain),
+                id = id,
+                name = html_escape(&entry.name),
+            );
+        }
+        return format!(
+            r#"<form method="post" action="/plugins/install-cpn" class="inline-form">
+            <input type="hidden" name="id" value="{id}">
+            <button type="submit" class="btn-primary">Install for CPN</button>
+          </form>"#,
+            id = id,
+        );
+    }
     // Dual-scoped Site target: allow a real per-site Install (folder/vhost), independent of Host.
-    if host_scoped && site_installable && !domain.is_empty() {
+    if host_scoped && site_installable && !domain.is_empty() && target != "host" {
         let mut parts = String::new();
         if installed {
             parts.push_str(r#"<span class="plugin-badge installed">Installed on site</span>"#);
+            if is_mr && !crate::mr_agent_policy::allow_site_install() {
+                parts.push_str(
+                    r#" <p class="muted" style="margin:6px 0 0;">New site installs are disabled by the server owner. This existing install stays; panel owner can re-enable Allow site install in Mr Agent host policy.</p>"#,
+                );
+            }
+        } else if is_mr && !crate::mr_agent_policy::allow_site_install() {
+            parts.push_str(&format!(
+                r#"<p class="panel-notice error" role="status" style="margin:0;">{msg}</p>"#,
+                msg = html_escape(crate::mr_agent_policy::SITE_INSTALL_DISABLED_MSG),
+            ));
         } else if is_mr {
             parts.push_str(&format!(
                 r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
@@ -382,6 +422,12 @@ fn store_action_html(
         return r#"<span class="muted">Select a domain to install</span>"#.into();
     }
     if is_mr {
+        if !crate::mr_agent_policy::allow_site_install() {
+            return format!(
+                r#"<p class="panel-notice error" role="status" style="margin:0;">{msg}</p>"#,
+                msg = html_escape(crate::mr_agent_policy::SITE_INSTALL_DISABLED_MSG),
+            );
+        }
         return format!(
             r#"<form method="post" action="/plugins/install" class="plugin-install-form" style="display:grid;gap:8px;max-width:28rem;">
             <input type="hidden" name="id" value="{id}">
@@ -526,6 +572,7 @@ mod tests {
             uninstall_impacts: vec![],
             host_scoped: false,
             site_installable: true,
+            cpn_installable: false,
             keywords: vec![],
         }
     }
