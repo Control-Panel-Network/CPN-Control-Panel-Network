@@ -219,9 +219,10 @@ fn clean_obsolete_webmail_code_trees(report: &mut CleanupReport) {
 pub fn cleanup_stale_packaging() -> CleanupReport {
     let mut report = CleanupReport::default();
     if cfg!(windows) {
-        report
-            .notes
-            .push("cleanup skipped on Windows (packaging paths are Linux)".into());
+        report.notes.push(
+            "cleanup skipped on Windows (packaging paths are Linux); nothing removed, MFA and data dir preserved"
+                .into(),
+        );
         return report;
     }
 

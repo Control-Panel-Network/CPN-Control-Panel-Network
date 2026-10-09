@@ -134,6 +134,9 @@ pub(crate) fn which_exists(bin: &str) -> bool {
         || Path::new(&format!("/usr/bin/{bin}")).exists()
         || Path::new(&format!("/bin/{bin}")).exists()
         || Path::new(&format!("/sbin/{bin}")).exists()
+        // `PATH` scan (no spawn): covers /usr/local/bin and /opt prefixes on Linux and
+        // `cmd.exe` / `powershell` on Windows builds, where `which` does not exist.
+        || crate::path_lookup::path_env_has(bin)
         || cmd_ok("which", &[bin])
 }
 
