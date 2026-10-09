@@ -51,7 +51,7 @@ Sign in with the full mailbox address and the mailbox password set under Email >
 |---|---|---|
 | AlmaLinux / Rocky / RHEL 8 | Supported | Inverse nightly `rhel/8` |
 | AlmaLinux / Rocky / RHEL 9 | Supported | Inverse nightly `rhel/9` |
-| AlmaLinux / Rocky / RHEL 10 | Supported (EL9 build) | Inverse publishes no `rhel/10` channel yet, so CPN installs the Inverse nightly `rhel/9` build. It resolves cleanly on EL10 (SOPE 4.9, `gnustep-base` and `sogo` from the Inverse repo, `memcached` from AppStream) and is what CPN verifies on its AlmaLinux 10 lab. The card shows the source and a short note; set the override below to use another repository (for example an Inverse subscription channel). |
+| AlmaLinux / Rocky / RHEL 10 | Supported (EL9 build) | Inverse publishes no `rhel/10` channel yet, so CPN installs the Inverse nightly `rhel/9` build. It resolves cleanly on EL10 (SOPE 4.9, `gnustep-base` and `sogo` from the Inverse repo, `memcached` from AppStream). The EL9 build links `libsodium.so.23`, which EL10 no longer ships, so the repo file adds a second section `[cpn-sogo-el9-compat]` pointing at the signed EPEL 9 repository with `includepkgs=libsodium` (only that package is visible to dnf). Verified on the CPN AlmaLinux 10 lab. The card shows the source and a short note; set the override below to use another repository (for example an Inverse subscription channel). |
 | EL7 and older | Not available | No Inverse channel; Install fails fast with the reason unless an override is configured. |
 | Ubuntu 22.04 / 24.04 | Supported | distro or Inverse `jammy` / `noble` |
 | Ubuntu 26.04 | Supported | universe ships `sogo 5.12.x` (Inverse has no `resolute` suite yet) |

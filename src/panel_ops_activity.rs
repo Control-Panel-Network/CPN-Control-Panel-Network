@@ -33,6 +33,10 @@ pub fn sanitize_log_line(line: &str) -> String {
         return String::new();
     }
     let mut out = String::with_capacity(trimmed.len().min(MAX_LINE_CHARS));
+    // `to_ascii_lowercase` keeps every byte offset identical to `trimmed`, so char
+    // boundaries from `char_indices()` on `trimmed` stay valid on `lower`. Never index
+    // by raw byte position: log lines carry UTF-8 (systemd uses "→", Norwegian text
+    // uses æøå) and a slice inside a multibyte char would panic and abort the panel.
     let lower = trimmed.to_ascii_lowercase();
     let redact_keys = [
         "password=",
@@ -47,36 +51,46 @@ pub fn sanitize_log_line(line: &str) -> String {
         "apikey=",
     ];
     let mut skip_until_space = false;
-    let mut i = 0usize;
-    let bytes = trimmed.as_bytes();
-    while i < bytes.len() && out.chars().count() < MAX_LINE_CHARS {
+    let mut emitted = 0usize;
+    let mut truncated = false;
+    let mut chars = trimmed.char_indices().peekable();
+    while let Some((i, ch)) = chars.next() {
+        if emitted >= MAX_LINE_CHARS {
+            truncated = true;
+            break;
+        }
         if skip_until_space {
-            if bytes[i].is_ascii_whitespace() {
+            if ch.is_whitespace() {
                 skip_until_space = false;
-                out.push(bytes[i] as char);
+                out.push(ch);
+                emitted += 1;
             }
-            i += 1;
             continue;
         }
         let rest_lower = &lower[i..];
-        let mut matched = None;
-        for key in redact_keys {
-            if rest_lower.starts_with(key) {
-                matched = Some(key.len());
-                break;
-            }
-        }
+        let matched = redact_keys
+            .iter()
+            .find(|key| rest_lower.starts_with(**key))
+            .map(|key| key.len());
         if let Some(key_len) = matched {
+            // Keys are ASCII, so `i + key_len` is a char boundary in `trimmed`.
             out.push_str(&trimmed[i..i + key_len]);
             out.push_str("***");
-            i += key_len;
+            emitted += key_len + 3;
             skip_until_space = true;
+            while let Some(&(next_i, _)) = chars.peek() {
+                if next_i < i + key_len {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
             continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        out.push(ch);
+        emitted += 1;
     }
-    if i < bytes.len() {
+    if truncated {
         out.push('…');
     }
     out
@@ -364,6 +378,25 @@ mod tests {
     fn sanitize_truncates_long_lines() {
         let long = format!("prefix {}", "x".repeat(800));
         let out = sanitize_log_line(&long);
+        assert!(out.chars().count() <= MAX_LINE_CHARS + 1);
+        assert!(out.ends_with('…'));
+    }
+
+    #[test]
+    fn sanitize_keeps_multibyte_utf8_intact() {
+        // systemd unit warnings use "→"; Norwegian operator text uses æøå. Byte-indexed
+        // slicing used to panic here ("start byte index is not a char boundary").
+        let unit_warning = "sogod.service:11: PIDFile= references /var/run/sogo/sogo.pid → /run/sogo/sogo.pid; please update";
+        let out = sanitize_log_line(unit_warning);
+        assert_eq!(out, unit_warning);
+        let no = "Brukeren Åse endret passord: password=hemmelig ferdig æøå";
+        let out = sanitize_log_line(no);
+        assert!(out.starts_with("Brukeren Åse"));
+        assert!(out.contains("password=***"));
+        assert!(!out.contains("hemmelig"));
+        assert!(out.ends_with("ferdig æøå"));
+        let long_utf8 = "→".repeat(900);
+        let out = sanitize_log_line(&long_utf8);
         assert!(out.chars().count() <= MAX_LINE_CHARS + 1);
         assert!(out.ends_with('…'));
     }
