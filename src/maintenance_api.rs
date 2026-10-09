@@ -256,10 +256,8 @@ pub async fn api_maintenance_status(
     let log = crate::upgrade_session_log::tail_session();
     // Server-side elapsed time feeds the Version Management ETA so a page
     // reload mid-upgrade does not restart the estimate from zero.
-    let elapsed = crate::upgrade_busy::elapsed_for_status(
-        busy,
-        crate::upgrade_busy::job_elapsed_secs(),
-    );
+    let elapsed =
+        crate::upgrade_busy::elapsed_for_status(busy, crate::upgrade_busy::job_elapsed_secs());
     let started = crate::upgrade_busy::job_started_unix();
     HttpResponse::Ok().json(serde_json::json!({
         "phase": status.phase,

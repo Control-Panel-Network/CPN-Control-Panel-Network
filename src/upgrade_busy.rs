@@ -96,11 +96,7 @@ pub fn job_elapsed_secs() -> Option<u64> {
 /// job is still in a busy phase (download, install, verify). After completion
 /// or failure the UI clears the estimate, so report `None`.
 pub fn elapsed_for_status(busy: bool, elapsed: Option<u64>) -> Option<u64> {
-    if busy {
-        elapsed
-    } else {
-        None
-    }
+    if busy { elapsed } else { None }
 }
 
 pub fn touch_job_heartbeat() {
