@@ -637,7 +637,7 @@ pub(crate) fn installed_cards(
             {update_badge}
           </div>
           <p class="plugin-desc">{desc}</p>
-          <p class="plugin-meta">Status: {status} · Active: {active}</p>
+          <p class="plugin-meta">Status: {status} · Active: {active}{site_note}</p>
           <div class="plugin-actions">
             <a class="btn-secondary" href="/plugins/settings?domain={domain_q}&amp;id={id}">Settings</a>
             {toggle}
@@ -660,6 +660,11 @@ pub(crate) fn installed_cards(
             desc = html_escape(&m.description),
             status = status,
             active = active,
+            site_note = if domain.is_empty() {
+                String::new()
+            } else {
+                format!(" · Site: <code>{}</code>", html_escape(domain))
+            },
             toggle = toggle,
             uninstall = uninstall,
             domain_q = urlencoding_simple(domain),
