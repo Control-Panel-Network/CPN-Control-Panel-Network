@@ -393,6 +393,23 @@ mod store_target_tests {
     use crate::sites::SiteRecord;
 
     #[test]
+    fn unwrap_single_card_keeps_inner_divs_balanced() {
+        let html = r#"<div class="plugin-grid"><article class="plugin-card">
+          <div class="plugin-card-head"><span class="plugin-thumb"></span><h3>X</h3></div>
+          <div class="plugin-badges"><span>Site</span></div>
+          <p class="plugin-desc">d</p>
+        </article></div>"#;
+        let out = unwrap_single_grid_card(html);
+        assert!(out.starts_with(r#"<article class="plugin-card">"#));
+        assert!(out.ends_with("</article>"));
+        assert!(!out.contains(r#"<div class="plugin-grid">"#));
+        let opens = out.matches("<div").count();
+        let closes = out.matches("</div>").count();
+        assert_eq!(opens, closes, "card head and badges must both stay closed");
+        assert!(out.contains(r#"<h3>X</h3></div>"#));
+    }
+
+    #[test]
     fn update_available_badge_markup() {
         assert!(update_available_badge(true).contains("Update available"));
         assert!(update_available_badge(true).contains("plugin-badge update"));
@@ -515,8 +532,20 @@ pub(crate) fn installed_one_card(
         &[update_available],
         &[icon_url.to_string()],
     );
-    html.replace(r#"<div class="plugin-grid">"#, "")
-        .replacen("</div>", "", 1)
+    unwrap_single_grid_card(&html)
+}
+
+/// Unwrap one card from its `<div class="plugin-grid">...</div>` wrapper. Only the
+/// leading wrapper tag and the trailing `</div>` are removed (never the first `</div>`,
+/// which closes a child of the card and would leave the card head swallowing the body).
+fn unwrap_single_grid_card(html: &str) -> String {
+    let unwrapped = html
+        .strip_prefix(r#"<div class="plugin-grid">"#)
+        .unwrap_or(html);
+    unwrapped
+        .strip_suffix("</div>")
+        .unwrap_or(unwrapped)
+        .to_string()
 }
 
 /// `icons[idx]` is the optional catalog icon URL for `plugins[idx]` (empty = none).
