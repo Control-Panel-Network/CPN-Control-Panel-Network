@@ -58,27 +58,94 @@ pub fn sha_embedded_in_binary(path: &Path) -> Option<String> {
     parse_marker_from_bytes(&bytes)
 }
 
+/// XOR-obfuscated `CPN_BUILD_SHA=` so the parser and stamper do not compile a decoy
+/// marker prefix into `.rodata`. The only contiguous `CPN_BUILD_SHA=` bytes in a
+/// release binary must be the real marker (static above or the EOF stamp); otherwise
+/// older panels that only inspect the first occurrence read an empty SHA.
+const MARKER_NEEDLE_KEY: u8 = 0x5A;
+const MARKER_NEEDLE_OBF: [u8; 14] = [
+    b'C' ^ MARKER_NEEDLE_KEY,
+    b'P' ^ MARKER_NEEDLE_KEY,
+    b'N' ^ MARKER_NEEDLE_KEY,
+    b'_' ^ MARKER_NEEDLE_KEY,
+    b'B' ^ MARKER_NEEDLE_KEY,
+    b'U' ^ MARKER_NEEDLE_KEY,
+    b'I' ^ MARKER_NEEDLE_KEY,
+    b'L' ^ MARKER_NEEDLE_KEY,
+    b'D' ^ MARKER_NEEDLE_KEY,
+    b'_' ^ MARKER_NEEDLE_KEY,
+    b'S' ^ MARKER_NEEDLE_KEY,
+    b'H' ^ MARKER_NEEDLE_KEY,
+    b'A' ^ MARKER_NEEDLE_KEY,
+    b'=' ^ MARKER_NEEDLE_KEY,
+];
+
+/// Runtime-built `CPN_BUILD_SHA=` prefix (never a contiguous literal in the binary).
+pub fn marker_needle() -> Vec<u8> {
+    let key = std::hint::black_box(MARKER_NEEDLE_KEY);
+    MARKER_NEEDLE_OBF.iter().map(|byte| byte ^ key).collect()
+}
+
+fn find_from(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+    if needle.is_empty() || from >= haystack.len() {
+        return None;
+    }
+    haystack[from..]
+        .windows(needle.len())
+        .position(|window| window == needle)
+        .map(|rel| from + rel)
+}
+
+/// Scan every `CPN_BUILD_SHA=` occurrence and return the best SHA candidate.
+///
+/// A release ELF can contain more than one occurrence of the prefix (for example
+/// a format-string piece or a needle literal from older source), and `.rodata`
+/// layout decides which one comes first. Older code stopped at the first match,
+/// so a decoy prefix followed by non-hex bytes made the real marker unreadable
+/// ("Stamped CPN_BUILD_SHA marker was not readable back from the binary").
+///
+/// Ranking: NUL-terminated 40-hex (the compiled static or the EOF stamp) wins,
+/// then any NUL-terminated SHA, then a bare 40-hex run, then a shorter run.
 fn parse_marker_from_bytes(bytes: &[u8]) -> Option<String> {
-    let needle = b"CPN_BUILD_SHA=";
-    let pos = bytes.windows(needle.len()).position(|w| w == needle)?;
-    let start = pos + needle.len();
-    let rest = bytes.get(start..)?;
-    let mut sha = String::new();
-    for byte in rest.iter().copied() {
-        if byte.is_ascii_hexdigit() {
-            sha.push(byte as char);
-            if sha.len() >= 40 {
+    let needle = marker_needle();
+    let mut best: Option<(u8, String)> = None;
+    let mut cursor = 0usize;
+    while let Some(pos) = find_from(bytes, &needle, cursor) {
+        let start = pos + needle.len();
+        cursor = start;
+        let mut sha = String::new();
+        let mut idx = start;
+        while idx < bytes.len() && sha.len() < 40 && bytes[idx].is_ascii_hexdigit() {
+            sha.push(bytes[idx] as char);
+            idx += 1;
+        }
+        if !looks_like_git_sha(&sha) {
+            continue;
+        }
+        let next = bytes.get(idx).copied();
+        // A 40-hex run that continues with more hex digits is not a SHA marker.
+        if sha.len() == 40 && next.map(|b| b.is_ascii_hexdigit()).unwrap_or(false) {
+            continue;
+        }
+        let nul_terminated = matches!(next, Some(0) | None);
+        let rank = match (nul_terminated, sha.len() == 40) {
+            (true, true) => 3,
+            (true, false) => 2,
+            (false, true) => 1,
+            (false, false) => 0,
+        };
+        let better = match &best {
+            Some((best_rank, _)) => rank > *best_rank,
+            None => true,
+        };
+        if better {
+            best = Some((rank, sha));
+            if rank == 3 {
                 break;
             }
-        } else {
-            break;
         }
     }
-    if looks_like_git_sha(&sha) {
-        Some(sha)
-    } else {
-        None
-    }
+    best.map(|(_, sha)| sha)
 }
 
 /// After a source cargo build of `expected_sha`, stamp the marker when LTO dropped it
@@ -99,7 +166,7 @@ pub fn stamp_sha_marker_if_missing(path: &Path, expected_sha: &str) -> Result<()
             let mut bytes = std::fs::read(path)
                 .map_err(|error| format!("Could not read built installer: {error}"))?;
             bytes.push(0);
-            bytes.extend_from_slice(b"CPN_BUILD_SHA=");
+            bytes.extend_from_slice(&marker_needle());
             bytes.extend_from_slice(expected.as_bytes());
             bytes.push(0);
             std::fs::write(path, bytes)
@@ -109,15 +176,20 @@ pub fn stamp_sha_marker_if_missing(path: &Path, expected_sha: &str) -> Result<()
                 use std::os::unix::fs::PermissionsExt;
                 let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
             }
-            if sha_embedded_in_binary(path)
-                .filter(|got| sha_equal(got, expected))
-                .is_none()
-            {
-                return Err(
-                    "Stamped CPN_BUILD_SHA marker was not readable back from the binary".into(),
-                );
+            match sha_embedded_in_binary(path) {
+                Some(got) if sha_equal(&got, expected) => Ok(()),
+                Some(got) => Err(format!(
+                    "Stamped CPN_BUILD_SHA marker for {} but {} reads back as {}. Retry the commit upgrade; if it repeats, report the panel log.",
+                    short_sha(expected),
+                    path.display(),
+                    short_sha(&got)
+                )),
+                None => Err(format!(
+                    "Stamped CPN_BUILD_SHA marker for {} but it was not readable back from {}. Retry the commit upgrade; if it repeats, report the panel log.",
+                    short_sha(expected),
+                    path.display()
+                )),
             }
-            Ok(())
         }
     }
 }
@@ -174,6 +246,64 @@ mod tests {
         let got = sha_embedded_in_binary(&path).expect("sha");
         assert!(sha_equal(&got, "c27a4a2aba629238593ae13907a8b5e66bb1f58c"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn needle_is_built_at_runtime_and_matches_marker_prefix() {
+        assert_eq!(marker_needle(), b"CPN_BUILD_SHA=".to_vec());
+    }
+
+    #[test]
+    fn skips_decoy_prefix_before_real_marker() {
+        // Layout observed on a lab tip build: the inject_keep_module format string
+        // piece (`... = b"CPN_BUILD_SHA=` + fmt boundary bytes) sits in .rodata
+        // before the real static marker.
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"KEEP: &[u8] = b\"CPN_BUILD_SHA=");
+        bytes.extend_from_slice(&[0xC0, 0x05]);
+        bytes.extend_from_slice(b"\\0\";\n\0!phpMyAdmin OLS listener ready at ");
+        bytes.extend_from_slice(b"nc/mpmc/list.rs\0");
+        bytes.extend_from_slice(
+            b"CPN_BUILD_SHA=cc78b0e3a434dc426193ca90dd636aa4c44d6dc0\0/rustc/b9",
+        );
+        let got = parse_marker_from_bytes(&bytes).expect("real marker after decoy");
+        assert_eq!(got, "cc78b0e3a434dc426193ca90dd636aa4c44d6dc0");
+    }
+
+    #[test]
+    fn reads_eof_stamp_when_compiled_marker_is_empty() {
+        // Release binary compiled without a SHA (`CPN_BUILD_SHA=\0`) plus a later
+        // EOF stamp must resolve to the stamped SHA.
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"mp/diy_float.rs\0CPN_BUILD_SHA=\0\x01v\xC0\0\x0EFailed to run");
+        bytes.extend_from_slice(&[0u8; 64]);
+        bytes.extend_from_slice(b"CPN_BUILD_SHA=c27a4a2aba629238593ae13907a8b5e66bb1f58c\0");
+        let got = parse_marker_from_bytes(&bytes).expect("eof stamp");
+        assert_eq!(got, "c27a4a2aba629238593ae13907a8b5e66bb1f58c");
+    }
+
+    #[test]
+    fn prefers_nul_terminated_full_sha_over_hex_like_noise() {
+        // A decoy prefix adjacent to a hex lookup table must not win over the
+        // NUL-terminated 40-hex marker that follows it.
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"CPN_BUILD_SHA=0123456789abcdefXYZ");
+        bytes.extend_from_slice(b"\0pad\0");
+        bytes.extend_from_slice(b"CPN_BUILD_SHA=c27a4a2aba629238593ae13907a8b5e66bb1f58c\0");
+        let got = parse_marker_from_bytes(&bytes).expect("marker");
+        assert_eq!(got, "c27a4a2aba629238593ae13907a8b5e66bb1f58c");
+    }
+
+    #[test]
+    fn ignores_hex_runs_longer_than_a_sha() {
+        let bytes = b"CPN_BUILD_SHA=c27a4a2aba629238593ae13907a8b5e66bb1f58c0123\0";
+        assert!(parse_marker_from_bytes(bytes).is_none());
+    }
+
+    #[test]
+    fn returns_none_without_any_valid_marker() {
+        assert!(parse_marker_from_bytes(b"CPN_BUILD_SHA=\0 and CPN_BUILD_SHA=zz").is_none());
+        assert!(parse_marker_from_bytes(b"nothing here").is_none());
     }
 
     #[test]

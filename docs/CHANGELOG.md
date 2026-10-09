@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Upgrade to latest commits failed with "Stamped CPN_BUILD_SHA marker was not readable back from the binary"**: The marker reader only inspected the first `CPN_BUILD_SHA=` occurrence in the built ELF. A release binary also carried decoy copies of that prefix in `.rodata` (the `inject_keep_module` format string and the parser needle literal), so depending on linker layout the first hit was followed by non-hex bytes and the real marker (and the EOF stamp) were never read. The reader now scans every occurrence and prefers a NUL-terminated 40-hex marker; the parser/stamper build the prefix at runtime so new commit builds no longer contain a decoy prefix (older first-match readers also succeed on them). Stamp readback errors now name the SHA and binary path, and the same failure is no longer logged three times. 1.4.0 release builds still run the old reader, so release users need the next release (or a one-time CLI/hot-deploy) before commit upgrades succeed on their panel.
+
 ## [1.4.0] - 09/10/2026
 ### Added
 
