@@ -1,6 +1,7 @@
 //! Markup helpers for the Plugins hub (tabs, installed cards, store catalog).
 
 use crate::panel_admin::is_panel_admin;
+use crate::panel_plugin_icons::{card_head, plugin_thumb_small, plugin_thumb_styles};
 use crate::panel_plugins_spa::plugins_hub_styles;
 use crate::plugin_activation::is_host_owned_install;
 use crate::plugins::InstalledPlugin;
@@ -184,11 +185,13 @@ pub(crate) fn view_tabs(active: &str, domain: &str) -> String {
           background:#0b1220; border-color:#60a5fa; color:#e2e8f0;
         }}
         [data-color-mode="dark"] .plugin-card {{ color:#f1f5f9; }}
+        {thumb_styles}
         {hub_styles}
       </style>"#,
         installed = installed,
         store = store,
         domain_q = domain_q,
+        thumb_styles = plugin_thumb_styles(),
         hub_styles = plugins_hub_styles(),
     )
 }
@@ -502,6 +505,7 @@ pub(crate) fn installed_one_card(
     domain: &str,
     username: &str,
     update_available: bool,
+    icon_url: &str,
 ) -> String {
     let html = installed_cards(
         std::slice::from_ref(item),
@@ -509,30 +513,35 @@ pub(crate) fn installed_one_card(
         domain,
         username,
         &[update_available],
+        &[icon_url.to_string()],
     );
     html.replace(r#"<div class="plugin-grid">"#, "")
         .replacen("</div>", "", 1)
 }
 
+/// `icons[idx]` is the optional catalog icon URL for `plugins[idx]` (empty = none).
 pub(crate) fn installed_cards(
     plugins: &[InstalledPlugin],
     layout: &str,
     domain: &str,
     username: &str,
     updates: &[bool],
+    icons: &[String],
 ) -> String {
     if plugins.is_empty() {
         return r#"<p class="empty-state">No plugins installed for this site yet. Open the Store to install from the community catalog.</p>"#
             .into();
     }
     if layout == "table" {
-        return installed_table(plugins, domain, username, updates);
+        return installed_table(plugins, domain, username, updates, icons);
     }
     let admin = is_panel_admin(username);
     let mut cards = String::from(r#"<div class="plugin-grid">"#);
     for (idx, item) in plugins.iter().enumerate() {
         let m = &item.manifest;
         let update_available = updates.get(idx).copied().unwrap_or(false);
+        let icon_url = icons.get(idx).map(String::as_str).unwrap_or("");
+        let head = card_head(&m.id, &m.name, &m.category, Some(icon_url));
         let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
         let active = if m.enabled { "Yes" } else { "No" };
         let status = if host_owned {
@@ -589,7 +598,7 @@ pub(crate) fn installed_cards(
         };
         cards.push_str(&format!(
             r#"<article class="plugin-card">
-          <h3>{name}</h3>
+          {head}
           <div class="plugin-badges">
             {scope}
             <span class="plugin-badge cat">{cat}</span>
@@ -611,7 +620,7 @@ pub(crate) fn installed_cards(
             <a href="/plugins?view=installed&amp;domain={domain_q}&amp;notice={about}">About</a>
           </div>
         </article>"#,
-            name = html_escape(&m.name),
+            head = head,
             id = html_escape(&m.id),
             cat = html_escape(&m.category),
             ver = html_escape(&m.version),
@@ -673,6 +682,7 @@ fn installed_table(
     domain: &str,
     username: &str,
     updates: &[bool],
+    icons: &[String],
 ) -> String {
     let admin = is_panel_admin(username);
     let mut rows = String::from(
@@ -682,6 +692,8 @@ fn installed_table(
     for (idx, item) in plugins.iter().enumerate() {
         let m = &item.manifest;
         let update_available = updates.get(idx).copied().unwrap_or(false);
+        let icon_url = icons.get(idx).map(String::as_str).unwrap_or("");
+        let thumb = plugin_thumb_small(&m.id, &m.name, &m.category, Some(icon_url));
         let host_owned = is_host_owned_install(domain, &m.id) || m.source == "host-activation";
         let active = if m.enabled {
             if host_owned {
@@ -733,7 +745,7 @@ fn installed_table(
         };
         rows.push_str(&format!(
             r#"<tr>
-            <td><strong>{name}</strong><div class="muted">{id}</div></td>
+            <td><span class="plugin-thumb-cell">{thumb}<span><strong>{name}</strong><div class="muted">{id}</div></span></span></td>
             <td>{cat}</td>
             <td>v{ver}</td>
             <td>{status}</td>
@@ -743,6 +755,7 @@ fn installed_table(
               {uninstall}
             </td>
           </tr>"#,
+            thumb = thumb,
             name = html_escape(&m.name),
             status = html_escape(&status_cell),
             id = html_escape(&m.id),
