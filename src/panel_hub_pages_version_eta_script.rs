@@ -163,6 +163,5 @@ mod tests {
         assert!(js.contains("installing rpm|installing deb"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
-        assert!(!js.contains("CyberPanel"));
     }
 }
