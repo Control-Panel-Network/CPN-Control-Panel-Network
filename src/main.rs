@@ -1605,6 +1605,16 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::panel_maintenance_api::api_panel_maintenance)
             .service(cpn_installer::panel_maintenance_api::maintenance_page)
             .route("/api/events", web::get().to(websocket))
+            // SOGo groupware mount: CalDAV/CardDAV clients speak WebDAV verbs (PROPFIND,
+            // REPORT, OPTIONS, MKCALENDAR, MOVE, ...) that the method-guarded catch-all below
+            // never matches. Route the mount and its well-known aliases without a method
+            // guard; panel_catch_all dispatches to the SOGo proxy when SOGo is installed and
+            // falls through to the normal panel handling otherwise.
+            .route("/SOGo", web::route().to(panel_catch_all))
+            .route("/SOGo/{path:.*}", web::route().to(panel_catch_all))
+            .route("/SOGo.woa/{path:.*}", web::route().to(panel_catch_all))
+            .route("/.well-known/caldav", web::route().to(panel_catch_all))
+            .route("/.well-known/carddav", web::route().to(panel_catch_all))
             // Dedicated phpMyAdmin mount (must not fall through to installer SPA).
             .route(
                 "/phpmyadmin",
