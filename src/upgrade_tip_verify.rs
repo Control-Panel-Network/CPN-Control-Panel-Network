@@ -57,11 +57,16 @@ pub fn inject_keep_module(root: &Path, git_sha: &str) -> Result<(), String> {
         return Ok(());
     }
     let keep_path = src.join("cpn_build_sha_keep.rs");
+    // Build the marker prefix at runtime: a literal `CPN_BUILD_SHA=` inside this
+    // format string ends up in .rodata of the *built* panel as a decoy prefix
+    // (followed by fmt boundary bytes), which older readers mistook for the marker.
+    let prefix = String::from_utf8(crate::build_meta::marker_needle())
+        .map_err(|_| "Marker prefix is not valid UTF-8".to_string())?;
     let body = format!(
         "//! SHA keep-static for commit upgrades.\n\
 #[used]\n\
 #[allow(dead_code)]\n\
-static CPN_BUILD_SHA_KEEP: &[u8] = b\"CPN_BUILD_SHA={sha}\\0\";\n"
+static CPN_BUILD_SHA_KEEP: &[u8] = b\"{prefix}{sha}\\0\";\n"
     );
     std::fs::write(&keep_path, body)
         .map_err(|error| format!("Could not write SHA keep module: {error}"))?;
@@ -108,7 +113,7 @@ pub fn require_built_sha(path: &Path, expected_sha: &str) -> Result<(), String> 
     let found = build_meta::sha_embedded_in_binary(path).unwrap_or_default();
     if found.is_empty() {
         let msg = format!(
-            "Commit build at {} has no CPN_BUILD_SHA marker. Refusing to install a binary that cannot prove it is {}.",
+            "Commit build at {} has no readable CPN_BUILD_SHA marker. Refusing to install a binary that cannot prove it is {}. Retry the commit upgrade; if it repeats, report the panel log.",
             path.display(),
             short_sha(expected_sha)
         );
