@@ -189,6 +189,7 @@ pub mod panel_hub_pages_system_repair;
 pub mod panel_hub_pages_users_list;
 pub mod panel_hub_pages_users_manage;
 pub mod panel_hub_pages_version;
+pub mod panel_hub_pages_version_eta_script;
 pub mod panel_hub_pages_version_poll_script;
 pub mod panel_hub_pages_version_script;
 pub mod panel_hub_pages_version_source_script;

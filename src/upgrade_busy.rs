@@ -31,6 +31,9 @@ const WORKER_NAMES: &[&str] = &[
 
 static JOB_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 static LAST_HEARTBEAT_UNIX: AtomicU64 = AtomicU64::new(0);
+/// Unix seconds when the current (or most recent) maintenance job started.
+/// Drives the "time remaining" estimate on Version Management.
+static JOB_STARTED_UNIX: AtomicU64 = AtomicU64::new(0);
 
 /// RAII flag: the maintenance tokio/CLI task is still running (even with no cargo).
 pub struct JobGuard;
@@ -56,7 +59,13 @@ fn now_unix() -> u64 {
 }
 
 pub fn mark_job_started() {
-    JOB_IN_FLIGHT.store(true, Ordering::SeqCst);
+    // The HTTP handler marks the job first; `JobGuard::enter` in the worker
+    // calls this again. Only the first call stamps the start time so the ETA
+    // elapsed clock is not reset when the worker task picks the job up.
+    let already_running = JOB_IN_FLIGHT.swap(true, Ordering::SeqCst);
+    if !already_running {
+        JOB_STARTED_UNIX.store(now_unix(), Ordering::SeqCst);
+    }
     touch_job_heartbeat();
 }
 
@@ -66,6 +75,32 @@ pub fn mark_job_finished() {
 
 pub fn job_in_flight() -> bool {
     JOB_IN_FLIGHT.load(Ordering::SeqCst)
+}
+
+/// Unix seconds when the current maintenance job was started (0 = never).
+pub fn job_started_unix() -> u64 {
+    JOB_STARTED_UNIX.load(Ordering::SeqCst)
+}
+
+/// Seconds since the current maintenance job started, or `None` when no job
+/// has been started in this process (or the clock reads before the start).
+pub fn job_elapsed_secs() -> Option<u64> {
+    let started = job_started_unix();
+    if started == 0 {
+        return None;
+    }
+    Some(now_unix().saturating_sub(started))
+}
+
+/// Pure helper for the status API: elapsed seconds only make sense while the
+/// job is still in a busy phase (download, install, verify). After completion
+/// or failure the UI clears the estimate, so report `None`.
+pub fn elapsed_for_status(busy: bool, elapsed: Option<u64>) -> Option<u64> {
+    if busy {
+        elapsed
+    } else {
+        None
+    }
 }
 
 pub fn touch_job_heartbeat() {
@@ -269,6 +304,26 @@ mod tests {
         assert!(worker_comm_is_live("cargo"));
         assert!(!worker_comm_is_live("sshd"));
         assert!(!worker_comm_is_live("chrome"));
+    }
+
+    #[test]
+    fn job_start_stamp_survives_worker_reentry() {
+        mark_job_finished();
+        mark_job_started();
+        let first = job_started_unix();
+        assert!(first > 0, "handler start must stamp a start time");
+        // Worker JobGuard::enter calls mark_job_started again; stamp must hold.
+        mark_job_started();
+        assert_eq!(job_started_unix(), first);
+        assert!(job_elapsed_secs().is_some());
+        mark_job_finished();
+    }
+
+    #[test]
+    fn elapsed_only_reported_while_busy() {
+        assert_eq!(elapsed_for_status(true, Some(42)), Some(42));
+        assert_eq!(elapsed_for_status(false, Some(42)), None);
+        assert_eq!(elapsed_for_status(true, None), None);
     }
 
     #[test]

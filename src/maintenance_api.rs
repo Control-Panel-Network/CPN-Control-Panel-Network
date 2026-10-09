@@ -254,6 +254,13 @@ pub async fn api_maintenance_status(
     let status = state.status.read().unwrap_or_else(|e| e.into_inner());
     let busy = busy_phase(status.phase);
     let log = crate::upgrade_session_log::tail_session();
+    // Server-side elapsed time feeds the Version Management ETA so a page
+    // reload mid-upgrade does not restart the estimate from zero.
+    let elapsed = crate::upgrade_busy::elapsed_for_status(
+        busy,
+        crate::upgrade_busy::job_elapsed_secs(),
+    );
+    let started = crate::upgrade_busy::job_started_unix();
     HttpResponse::Ok().json(serde_json::json!({
         "phase": status.phase,
         "progress": status.progress,
@@ -262,6 +269,8 @@ pub async fn api_maintenance_status(
         "error": status.error,
         "version": status.version,
         "restart_scheduled": status.restart_scheduled,
+        "job_elapsed_secs": elapsed,
+        "job_started_unix": if busy && started > 0 { Some(started) } else { None },
         "log": log,
     }))
 }
