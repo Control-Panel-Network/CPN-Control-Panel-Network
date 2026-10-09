@@ -307,15 +307,15 @@ fn run_mr_agent_bridge(
     let output = child
         .wait_with_output()
         .map_err(|e| format!("PHP bridge failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "PHP bridge exited {}: {}",
-            output.status.code().unwrap_or(-1),
-            err.chars().take(240).collect::<String>()
+        return Err(bridge_failure_message(
+            output.status.code(),
+            &stdout,
+            &stderr,
         ));
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let trimmed = stdout.trim();
     serde_json::from_str(trimmed).map_err(|e| {
         format!(
@@ -323,6 +323,59 @@ fn run_mr_agent_bridge(
             trimmed.chars().take(160).collect::<String>()
         )
     })
+}
+
+/// Normalize the float provider for the PHP bridge.
+///
+/// Older mrAgent builds (1.4.0 "compat" site installs) only accept
+/// `free|openai|anthropic|custom|local`; they return "Unknown provider." for
+/// `auto`. Newer builds treat `auto` and `free` identically (smart free path:
+/// local LLM when configured, CPN help otherwise), so sending `free` is safe for
+/// every shipped version.
+fn normalize_bridge_provider(raw: &str) -> String {
+    let p = raw.trim().to_ascii_lowercase();
+    match p.as_str() {
+        "" | "auto" | "free" => "free".into(),
+        "openai" | "anthropic" | "custom" | "local" => p,
+        _ => "free".into(),
+    }
+}
+
+/// Build a non-empty, user-facing error when the PHP bridge exits non-zero.
+///
+/// `panel_bridge.php` writes `{"ok":false,"error":"..."}` to **stdout** and exits 1
+/// on application errors (unknown provider, ACL, rate limit). Prefer that JSON
+/// error, then stderr (PHP fatals), and never return an empty message.
+fn bridge_failure_message(code: Option<i32>, stdout: &str, stderr: &str) -> String {
+    let code = code.unwrap_or(-1);
+    let trimmed = stdout.trim();
+    if !trimmed.is_empty()
+        && let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed)
+        && let Some(err) = value.get("error").and_then(|v| v.as_str())
+        && !err.trim().is_empty()
+    {
+        return err.trim().chars().take(400).collect();
+    }
+    let stderr_line = stderr
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    if !stderr_line.is_empty() {
+        return format!(
+            "PHP bridge exited {code}: {}",
+            stderr_line.chars().take(240).collect::<String>()
+        );
+    }
+    if !trimmed.is_empty() {
+        return format!(
+            "PHP bridge exited {code}: {}",
+            trimmed.chars().take(240).collect::<String>()
+        );
+    }
+    format!(
+        "PHP bridge exited {code} with no output. Check that php is installed on this server and that the Mr Agent plugin files are readable (update the plugin from Plugins > Store if it is outdated)."
+    )
 }
 
 #[post("/plugins/float-chat")]
@@ -398,11 +451,9 @@ pub async fn plugins_float_chat(
         }));
     }
     let domain = query.domain.trim().to_string();
-    // auto/free: PHP bridge prefers local LLM for general chat; CPN help for navigation.
-    let mut provider = body.provider.trim().to_ascii_lowercase();
-    if provider.is_empty() || provider == "free" {
-        provider = "auto".into();
-    }
+    // free (= auto): PHP bridge prefers local LLM for general chat; CPN help for navigation.
+    // Normalized so older plugin builds that do not know "auto" still answer.
+    let provider = normalize_bridge_provider(&body.provider);
     let model = body.model.clone();
     let user_clone = user.clone();
     let result =
@@ -438,5 +489,44 @@ mod tests {
     #[test]
     fn json_escape_quotes() {
         assert!(json_escape("a\"b").contains("\\\""));
+    }
+
+    #[test]
+    fn bridge_failure_prefers_stdout_json_error() {
+        let msg = bridge_failure_message(
+            Some(1),
+            "{\n  \"ok\": false,\n  \"error\": \"Unknown provider.\"\n}\n",
+            "",
+        );
+        assert_eq!(msg, "Unknown provider.");
+    }
+
+    #[test]
+    fn bridge_failure_uses_stderr_when_no_json() {
+        let msg = bridge_failure_message(
+            Some(255),
+            "",
+            "PHP Fatal error:  Uncaught Error: Call to undefined function x()\nStack trace:\n",
+        );
+        assert!(msg.starts_with("PHP bridge exited 255: PHP Fatal error"));
+    }
+
+    #[test]
+    fn bridge_failure_never_empty() {
+        let msg = bridge_failure_message(Some(1), "", "   \n");
+        assert!(msg.contains("exited 1 with no output"));
+        assert!(msg.contains("php is installed"));
+        let msg2 = bridge_failure_message(None, "not json", "");
+        assert!(msg2.contains("exited -1: not json"));
+    }
+
+    #[test]
+    fn provider_normalizes_auto_to_free() {
+        assert_eq!(normalize_bridge_provider("auto"), "free");
+        assert_eq!(normalize_bridge_provider(""), "free");
+        assert_eq!(normalize_bridge_provider("Free"), "free");
+        assert_eq!(normalize_bridge_provider("LOCAL"), "local");
+        assert_eq!(normalize_bridge_provider("openai"), "openai");
+        assert_eq!(normalize_bridge_provider("bogus"), "free");
     }
 }
