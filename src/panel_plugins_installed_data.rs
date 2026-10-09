@@ -6,6 +6,7 @@ use crate::backups::is_subdomain_site;
 use crate::host_packages_catalog::meta_for;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_apps::{host_action_buttons, host_nav_links};
+use crate::panel_plugin_icons::card_head;
 use crate::panel_plugins_markup::{html_escape, installed_one_card, update_available_badge};
 use crate::plugin_activation::{is_host_owned_install, list_host_installed_plugins};
 use crate::plugin_cpn_scope::list_cpn_installed_plugins;
@@ -46,14 +47,30 @@ fn status_filter_ok(active: bool, status: &str, update_available: bool) -> bool 
     }
 }
 
-fn catalog_version_map() -> HashMap<String, String> {
+/// `(id -> catalog version, id -> catalog icon URL)` from the cached catalog (one read).
+fn catalog_maps() -> (HashMap<String, String>, HashMap<String, String>) {
     match fetch_catalog(false) {
-        Ok((entries, _)) => entries
-            .into_iter()
-            .map(|e| (e.id.to_ascii_lowercase(), e.version))
-            .collect(),
-        Err(_) => HashMap::new(),
+        Ok((entries, _)) => {
+            let mut versions = HashMap::with_capacity(entries.len());
+            let mut icons = HashMap::new();
+            for e in entries {
+                let key = e.id.to_ascii_lowercase();
+                if !e.icon.is_empty() {
+                    icons.insert(key.clone(), e.icon);
+                }
+                versions.insert(key, e.version);
+            }
+            (versions, icons)
+        }
+        Err(_) => (HashMap::new(), HashMap::new()),
     }
+}
+
+fn catalog_icon<'a>(icons: &'a HashMap<String, String>, plugin_id: &str) -> &'a str {
+    icons
+        .get(&plugin_id.trim().to_ascii_lowercase())
+        .map(String::as_str)
+        .unwrap_or("")
 }
 
 /// True when the catalog version is newer than the installed version.
@@ -129,7 +146,7 @@ fn host_card_html(status: &crate::apps::AppStatus, is_admin: bool) -> String {
     actions.push_str(&host_action_buttons(status, "", is_admin, "installed"));
     format!(
         r#"<article class="plugin-card">
-          <h3>{label}</h3>
+          {head}
           <div class="plugin-badges">
             <span class="plugin-badge">Host</span>
             <span class="plugin-badge cat">{cat}</span>
@@ -140,7 +157,7 @@ fn host_card_html(status: &crate::apps::AppStatus, is_admin: bool) -> String {
           <p class="plugin-meta">{detail}</p>
           <div class="plugin-actions">{actions}</div>
         </article>"#,
-        label = html_escape(status.id.label()),
+        head = card_head(status.id.as_str(), status.id.label(), meta.category, None),
         cat = html_escape(meta.category),
         active = active_badge,
         state = html_escape(status.state.label()),
@@ -175,7 +192,12 @@ fn host_scoped_nav_links(id: &str) -> String {
     String::new()
 }
 
-fn host_scoped_card(item: &InstalledPlugin, is_admin: bool, update_available: bool) -> String {
+fn host_scoped_card(
+    item: &InstalledPlugin,
+    is_admin: bool,
+    update_available: bool,
+    icon_url: &str,
+) -> String {
     let m = &item.manifest;
     let active_badge = if m.enabled {
         r#"<span class="plugin-badge installed">Active</span>"#
@@ -203,7 +225,7 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool, update_available: bo
     }
     format!(
         r#"<article class="plugin-card">
-          <h3>{name}</h3>
+          {head}
           <div class="plugin-badges">
             <span class="plugin-badge">Host</span>
             <span class="plugin-badge cat">{cat}</span>
@@ -215,7 +237,7 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool, update_available: bo
           <p class="plugin-meta">Id: <code>{id}</code> · path: <code>{path}</code></p>
           <div class="plugin-actions">{actions}</div>
         </article>"#,
-        name = html_escape(&m.name),
+        head = card_head(&m.id, &m.name, &m.category, Some(icon_url)),
         cat = html_escape(&m.category),
         ver = html_escape(&m.version),
         active = active_badge,
@@ -227,7 +249,7 @@ fn host_scoped_card(item: &InstalledPlugin, is_admin: bool, update_available: bo
     )
 }
 
-fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool) -> String {
+fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool, icon_url: &str) -> String {
     let m = &item.manifest;
     let active_badge = if m.enabled {
         r#"<span class="plugin-badge installed">Active</span>"#
@@ -248,7 +270,7 @@ fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool) -> String {
     let form_attrs = uninstall_form_attrs(&m.name, &impacts);
     format!(
         r#"<article class="plugin-card">
-          <h3>{name}</h3>
+          {head}
           <div class="plugin-badges">
             <span class="plugin-badge cat">CPN</span>
             <span class="plugin-badge cat">{cat}</span>
@@ -272,7 +294,7 @@ fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool) -> String {
             </form>
           </div>
         </article>"#,
-        name = html_escape(&m.name),
+        head = card_head(&m.id, &m.name, &m.category, Some(icon_url)),
         cat = html_escape(&m.category),
         ver = html_escape(&m.version),
         active = active_badge,
@@ -306,7 +328,7 @@ pub(crate) fn collect_installed_flat(
     status: &str,
 ) -> Vec<FlatItem> {
     let is_admin = is_panel_admin(username);
-    let catalog = catalog_version_map();
+    let (catalog, icons) = catalog_maps();
     let mut out = Vec::new();
     for status_app in list_apps() {
         if !matches!(
@@ -362,7 +384,12 @@ pub(crate) fn collect_installed_flat(
             id: m.id.clone(),
             category: m.category.clone(),
             active: m.enabled,
-            card_html: host_scoped_card(&item, is_admin, update_available),
+            card_html: host_scoped_card(
+                &item,
+                is_admin,
+                update_available,
+                catalog_icon(&icons, &m.id),
+            ),
         });
     }
     for item in list_cpn_installed_plugins(username) {
@@ -384,7 +411,7 @@ pub(crate) fn collect_installed_flat(
             id: m.id.clone(),
             category: m.category.clone(),
             active: m.enabled,
-            card_html: cpn_scoped_card(&item, update_available),
+            card_html: cpn_scoped_card(&item, update_available, catalog_icon(&icons, &m.id)),
         });
     }
     for site in sites {
@@ -418,7 +445,13 @@ pub(crate) fn collect_installed_flat(
                 id: m.id.clone(),
                 category: m.category.clone(),
                 active: m.enabled,
-                card_html: installed_one_card(&p, &site.domain, username, update_available),
+                card_html: installed_one_card(
+                    &p,
+                    &site.domain,
+                    username,
+                    update_available,
+                    catalog_icon(&icons, &m.id),
+                ),
             });
         }
     }

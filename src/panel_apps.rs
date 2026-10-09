@@ -7,6 +7,7 @@ use crate::host_packages_catalog::{
     HostInstallStatus, filter_host_packages, format_host_dates, host_categories,
     host_package_is_featured, meta_for,
 };
+use crate::panel_plugin_icons::card_head;
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
@@ -406,7 +407,7 @@ pub(crate) fn host_card(
     };
     format!(
         r#"<article class="plugin-card">
-          <h3>{label}</h3>
+          {head}
           <div class="plugin-badges">
             <span class="plugin-badge">Host</span>
             <span class="plugin-badge cat">{cat}</span>
@@ -425,7 +426,7 @@ pub(crate) fn host_card(
           {warn}
           <div class="plugin-actions">{actions}</div>
         </article>"#,
-        label = html_escape(status.id.label()),
+        head = card_head(status.id.as_str(), status.id.label(), meta.category, None),
         cat = html_escape(meta.category),
         ver = html_escape(meta.version),
         pricing = pricing,
