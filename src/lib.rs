@@ -401,6 +401,7 @@ pub mod panel_websites_list_pager;
 pub mod panel_websites_list_ui;
 pub mod panel_wordpress_routes;
 pub mod panel_wordpress_ui;
+pub mod path_lookup;
 pub mod paths;
 pub mod php_defaults;
 pub mod php_lifecycle;
