@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Version Management estimated time remaining**: `/settings/version` shows an ETA next to the percent and status message while Upgrade to latest release, Upgrade to latest commits, Apply selected version, and Repair selected run (for example `About 4 min left`, `About 45 sec left`, `Almost done`). The estimate is a hybrid: each known stage (download, RPM/DEB install, npm, cargo build, verify) carries a typical time-left hint that is blended with the measured progress rate (hints dominate early, rate dominates late), then smoothed and rounded so it does not fake precision. It shows `Estimating time left...` for the first seconds and clears on completion, failure, or panel restart. `/api/maintenance/status` now includes `job_elapsed_secs` and `job_started_unix` while a job is busy so a page reload keeps the same clock.
+
 ### Changed
 
 ### Fixed
