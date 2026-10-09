@@ -125,6 +125,7 @@ fn host_active(status: &crate::apps::AppStatus) -> bool {
             | crate::apps::AppId::Tachyon
             | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
+            | crate::apps::AppId::Sogo
     ) {
         return is_active_webmail(status.id);
     }

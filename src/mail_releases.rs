@@ -31,7 +31,7 @@ fn curated_fallbacks() -> Vec<MailReleaseInfo> {
         MailReleaseInfo {
             id: "sogo".into(),
             label: "SOGo".into(),
-            version: "scaffold".into(),
+            version: "5.12".into(),
             released_on: "2025-01-01".into(),
         },
         MailReleaseInfo {

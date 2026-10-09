@@ -768,6 +768,11 @@ async fn panel_catch_all(
     path: web::Path<String>,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
+    // SOGo owns /SOGo, /SOGo.woa, and the CalDAV/CardDAV well-known paths whenever it is
+    // installed (independent of the PHP webmail mount, which may still serve Tachyon).
+    if cpn_installer::panel_sogo_proxy::path_should_proxy_sogo(req.path()) {
+        return cpn_installer::panel_sogo_proxy::sogo_panel_proxy(req, payload).await;
+    }
     if cpn_installer::panel_webmail::webmail_ready()
         && cpn_installer::panel_webmail::path_should_proxy_webmail(req.path())
     {

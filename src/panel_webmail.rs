@@ -102,6 +102,17 @@ pub fn webmail_ready() -> bool {
     webmail_installed() && detect_webmail_client().is_some()
 }
 
+/// True when the operator chose SOGo as the active panel webmail and it is installed.
+/// SOGo is served by `panel_sogo_proxy` at `/SOGo`; the PHP webmail mount is unaffected.
+pub fn sogo_is_active_webmail() -> bool {
+    crate::active_webmail::load_active_pref() == Some(MailSystem::Sogo)
+        && crate::apps_sogo::sogo_installed()
+}
+
+fn sogo_open_path() -> String {
+    format!("{}/", crate::panel_sogo_proxy::SOGO_MOUNT)
+}
+
 fn normalize_public_path(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed == "/" || trimmed.chars().all(|ch| ch == '/') {
@@ -218,6 +229,10 @@ pub fn webmail_backend_docroot() -> Option<&'static str> {
 
 /// Absolute Open Webmail URL. Unauthenticated clients get the login UI (not an inbox hash).
 pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<String> {
+    if sogo_is_active_webmail() {
+        let base = panel_base_for_links(listen_port, host_hint);
+        return Some(format!("{base}{}", sogo_open_path()));
+    }
     if !webmail_ready() {
         return None;
     }
@@ -251,6 +266,9 @@ pub fn webmail_open_url(listen_port: u16, host_hint: Option<&str>) -> Option<Str
 
 /// Relative open path for same-origin links and iframes (login UI when not authenticated).
 pub fn webmail_open_path() -> Option<String> {
+    if sogo_is_active_webmail() {
+        return Some(sogo_open_path());
+    }
     if !webmail_ready() {
         return None;
     }
@@ -282,7 +300,8 @@ pub fn webmail_open_path() -> Option<String> {
 }
 
 pub fn webmail_admin_path() -> Option<String> {
-    if !webmail_ready() {
+    // SOGo has no in-browser admin console; configuration is /etc/sogo/sogo.conf (CPN-managed).
+    if sogo_is_active_webmail() || !webmail_ready() {
         return None;
     }
     let cfg = load_webmail_config();
@@ -295,6 +314,9 @@ pub fn webmail_admin_path() -> Option<String> {
 }
 
 pub fn webmail_label() -> &'static str {
+    if sogo_is_active_webmail() {
+        return "SOGo";
+    }
     match detect_webmail_client() {
         Some(MailSystem::Roundcube) => "Roundcube",
         Some(MailSystem::Snappymail) => "SnappyMail",

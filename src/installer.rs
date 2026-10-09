@@ -573,13 +573,10 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 "Mail / webmail install",
             ));
         }
-        if matches!(
-            mail,
-            MailSystem::Thunderbird | MailSystem::Nextsnapmail | MailSystem::Sogo
-        ) {
-            if matches!(mail, MailSystem::Nextsnapmail | MailSystem::Sogo) {
+        if matches!(mail, MailSystem::Thunderbird | MailSystem::Nextsnapmail) {
+            if mail == MailSystem::Nextsnapmail {
                 return Err(format!(
-                    "{} is not a LIVE installer webmail path yet. Use Host packages for status details, or choose SnappyMail / Tachyon / Roundcube.",
+                    "{} is not a LIVE installer webmail path yet. Use Host packages for status details, or choose SnappyMail / Tachyon / Roundcube / SOGo.",
                     mail.label()
                 ));
             }

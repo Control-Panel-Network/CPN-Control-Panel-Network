@@ -174,6 +174,7 @@ pub fn email_accounts_main(
         "Postfix not detected"
     };
     let webmail = if crate::panel_webmail::webmail_ready()
+        || crate::panel_webmail::sogo_is_active_webmail()
         || (mail_client_ready
             && matches!(
                 selected_mail,
@@ -197,14 +198,14 @@ pub fn email_accounts_main(
     } else if matches!(selected_mail, Some(crate::model::MailSystem::Thunderbird)) {
         "<p class=\"muted\">Thunderbird is a desktop client only. No local webmail URL is provisioned.</p>"
             .into()
-    } else if matches!(
-        selected_mail,
-        Some(crate::model::MailSystem::Nextsnapmail | crate::model::MailSystem::Sogo)
-    ) {
-        "<p class=\"muted\">Selected webmail is gated or SCAFFOLD (NextSnapMail needs Nextcloud files; SOGo is not LIVE yet). Prefer Tachyon (default) or SnappyMail for panel webmail.</p>"
+    } else if matches!(selected_mail, Some(crate::model::MailSystem::Nextsnapmail)) {
+        "<p class=\"muted\">NextSnapMail runs inside Nextcloud (needs Nextcloud files). Prefer Tachyon (default), SnappyMail, Roundcube, or SOGo for panel webmail.</p>"
+            .into()
+    } else if matches!(selected_mail, Some(crate::model::MailSystem::Sogo)) {
+        "<p class=\"muted\">SOGo is selected but not installed yet. Install the SOGo host package from <a href=\"/plugins?tab=store&amp;q=sogo\">Plugins &gt; Store (Host)</a>; it then opens at <code>/SOGo/</code> with CalDAV/CardDAV at <code>/SOGo/dav/</code>.</p>"
             .into()
     } else {
-        "<p class=\"muted\">Install Tachyon (default), SnappyMail, or Roundcube (installer mail stage or Host packages) to enable Open Webmail. Use Set as active to switch clients without orphaning mailboxes.</p>"
+        "<p class=\"muted\">Install Tachyon (default), SnappyMail, Roundcube, or SOGo (installer mail stage or Host packages) to enable Open Webmail. Use Set as active to switch clients without orphaning mailboxes.</p>"
             .into()
     };
 

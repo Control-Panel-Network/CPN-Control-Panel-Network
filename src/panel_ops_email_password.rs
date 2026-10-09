@@ -88,6 +88,8 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     let provisioned = provision_local_mailbox(&address, new_password);
     // The system user may have just been created; refresh hosted-domain routing.
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mailbox password");
+    // SOGo authenticates against the shadow hash mirrored in its SQL user source.
+    crate::apps_sogo_config::sync_users_if_installed();
     match provisioned {
         Ok(_provision) => Ok(format!(
             "Password updated for `{address}`. Local mailbox ready."
