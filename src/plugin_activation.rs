@@ -564,6 +564,7 @@ mod tests {
                 site_installable: false,
                 cpn_installable: false,
                 keywords: vec![],
+                icon: String::new(),
             };
             write_host_manifest("clamav", &entry).unwrap();
             assert!(host_plugin_installed("clamav"));

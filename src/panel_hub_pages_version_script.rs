@@ -1,5 +1,6 @@
 //! Client script for Version Management (live retry countdown + release picker).
 
+use crate::panel_hub_pages_version_eta_script::version_page_eta_script;
 use crate::panel_hub_pages_version_poll_script::version_page_poll_script;
 use crate::panel_hub_pages_version_source_script::version_fetch_helpers_script;
 use crate::panel_hub_pages_version_ui_script::version_page_ui_script;
@@ -351,6 +352,7 @@ pub fn version_page_script(can_manage: bool) -> String {
   }}
 {ui}
   window.cpnVersionRecheck = check;
+{eta}
 {poll}
   if (btn) btn.addEventListener("click", function () {{ check(true); }});
   if (canManage) {{
@@ -431,6 +433,7 @@ pub fn version_page_script(can_manage: bool) -> String {
         helpers = version_fetch_helpers_script(),
         can_manage_js = can_manage_js,
         ui = version_page_ui_script(),
+        eta = version_page_eta_script(),
         poll = version_page_poll_script()
     )
 }
@@ -465,6 +468,8 @@ mod tests {
         assert!(js.contains("resumeIfBusy"));
         assert!(js.contains("Running binary is ahead of packaged"));
         assert!(js.contains("Refreshing (keeping current values)"));
+        assert!(js.contains("etaPaint"));
+        assert!(js.contains("Estimating time left..."));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

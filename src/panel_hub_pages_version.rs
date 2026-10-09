@@ -99,7 +99,10 @@ pub fn version_management_page(can_manage: bool) -> String {
     <div style="height:10px;background:rgba(148,163,184,0.25);border-radius:999px;overflow:hidden;">
       <div id="cpn-version-progress-bar" style="height:100%;width:0%;background:var(--cpn-accent, #2563eb);transition:width 0.2s ease;"></div>
     </div>
-    <p id="cpn-version-progress-label" class="muted" style="margin-top:8px;" role="status"></p>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+      <p id="cpn-version-progress-label" class="muted" style="margin-top:8px;flex:1 1 auto;" role="status"></p>
+      <p id="cpn-version-progress-eta" class="muted" style="margin-top:8px;white-space:nowrap;display:none;" aria-live="polite" title="Estimated time remaining"></p>
+    </div>
   </div>
   <details id="cpn-version-log" class="cpn-ssh-log">
     <summary>Installer log</summary>

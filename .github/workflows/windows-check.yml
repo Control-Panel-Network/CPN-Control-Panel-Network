@@ -1,0 +1,61 @@
+name: Windows check
+
+# Windows Server is a Phase A target (installer UI, Windows service, account
+# bootstrap). Pull-request CI stays Linux-only for speed, so this workflow runs
+# on demand and weekly to catch a Windows build or test break before a tagged
+# release builds the Phase A zip in release.yml.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 05:00 UTC
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Rust (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        # Pin to commit SHA (actions/unpinned-tag). Tag: stable.
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: installer-ui/package-lock.json
+
+      - name: Install OpenSSL SDK
+        shell: pwsh
+        run: choco install openssl -y --no-progress
+
+      - name: Resolve OPENSSL_DIR / OPENSSL_LIB_DIR
+        shell: pwsh
+        run: |
+          . .\scripts\windows-dev-env.ps1
+          if (-not $env:OPENSSL_LIB_DIR) { throw "OpenSSL SDK not found after install" }
+          "OPENSSL_DIR=$env:OPENSSL_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "OPENSSL_LIB_DIR=$env:OPENSSL_LIB_DIR" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build embedded installer UI
+        working-directory: installer-ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: cargo check (locked)
+        run: cargo check --locked --target x86_64-pc-windows-msvc
+
+      - name: cargo test (locked)
+        run: cargo test --locked --target x86_64-pc-windows-msvc

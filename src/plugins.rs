@@ -80,6 +80,10 @@ pub struct CatalogEntry {
     /// Search aliases from catalog meta (`<keywords>` / `<keyword>`).
     #[serde(default)]
     pub keywords: Vec<String>,
+    /// Resolved `https://` thumbnail URL from catalog meta `<icon>` or a bundled `icon.*` file.
+    /// Empty when the catalog ships no icon (panel falls back to brand marks / lettermarks).
+    #[serde(default)]
+    pub icon: String,
 }
 
 fn default_site_installable() -> bool {

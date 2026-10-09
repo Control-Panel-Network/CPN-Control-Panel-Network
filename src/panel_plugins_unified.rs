@@ -442,6 +442,7 @@ mod tests {
             site_installable: true,
             cpn_installable: false,
             keywords: vec![],
+            icon: String::new(),
         }
     }
 
