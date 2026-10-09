@@ -285,10 +285,10 @@ async fn install_built_bins(root: &Path, tools: &Toolchain, git_sha: &str) -> Re
             None,
         ));
     };
-    crate::upgrade_tip_verify::stamp_built_installer(&built_installer, git_sha)
-        .map_err(|error| fail(error, None))?;
-    crate::upgrade_tip_verify::require_built_sha(&built_installer, git_sha)
-        .map_err(|error| fail(error, None))?;
+    // Both helpers already log their failure once; do not wrap them in `fail()`
+    // (that produced the same error line three times in the panel log).
+    crate::upgrade_tip_verify::stamp_built_installer(&built_installer, git_sha)?;
+    crate::upgrade_tip_verify::require_built_sha(&built_installer, git_sha)?;
     let cli = built_installer.with_file_name("cpn");
     install_from_paths(&built_installer, &cli).await
 }
