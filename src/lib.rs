@@ -22,6 +22,9 @@ pub mod apps_pkg;
 pub mod apps_postgresql;
 pub mod apps_redis;
 pub mod apps_site;
+pub mod apps_sogo;
+pub mod apps_sogo_config;
+pub mod apps_sogo_repo;
 pub mod apps_webmail;
 pub mod auth_api;
 #[cfg(test)]
@@ -364,6 +367,7 @@ pub mod panel_site_terminal;
 pub mod panel_site_tools_routes;
 pub mod panel_site_tools_security;
 pub mod panel_site_vhost_wire;
+pub mod panel_sogo_proxy;
 pub mod panel_storage_fmt;
 pub mod panel_theme;
 pub mod panel_theme_chrome;

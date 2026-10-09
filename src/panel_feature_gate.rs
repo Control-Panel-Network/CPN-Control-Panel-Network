@@ -210,6 +210,7 @@ pub fn webmail_installed() -> bool {
         || Path::new("/opt/cpn-webmail/roundcube").is_dir()
         || Path::new("/opt/cpn-webmail/current").exists()
         || crate::apps_nextcloud::nextsnapmail_app_present()
+        || crate::apps_sogo::sogo_installed()
 }
 
 pub fn mta_sts_unlocked() -> bool {

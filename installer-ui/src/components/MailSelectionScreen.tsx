@@ -84,7 +84,7 @@ export function MailSelectionScreen({
       id: "sogo",
       name: "SOGo",
       description: "Groupware webmail with CalDAV and CardDAV.",
-      note: "SCAFFOLD: full Inverse package install is not LIVE yet.",
+      note: "Inverse packages on EL8/EL9 and Ubuntu/Debian; opens at /SOGo/. Not available on EL10 yet.",
     },
     {
       id: "thunderbird",

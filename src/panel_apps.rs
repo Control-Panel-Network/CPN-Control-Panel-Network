@@ -115,7 +115,9 @@ pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
         }
         crate::apps::AppId::Nextcloud => String::new(),
         crate::apps::AppId::Sogo => {
-            r#"<a class="btn-secondary" href="/email">Manage</a>"#.into()
+            r#"<a class="btn-primary" href="/SOGo/" target="_blank" rel="noopener noreferrer">Open</a>
+            <a class="btn-secondary" href="/email">Manage</a>"#
+                .into()
         }
     }
 }
@@ -141,6 +143,7 @@ pub(crate) fn host_action_buttons(
             | crate::apps::AppId::Tachyon
             | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
+            | crate::apps::AppId::Sogo
     );
     let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
     let on_installed_hub = return_view.trim().eq_ignore_ascii_case("installed");
@@ -352,6 +355,7 @@ pub(crate) fn host_card(
             | crate::apps::AppId::Tachyon
             | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
+            | crate::apps::AppId::Sogo
     ) && crate::apps_webmail::is_active_webmail(status.id)
     {
         r#"<span class="plugin-badge featured">Active</span>"#

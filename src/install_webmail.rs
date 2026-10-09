@@ -383,10 +383,15 @@ pub(crate) async fn install_webmail(
             );
         }
         MailSystem::Sogo => {
-            return Err(
-                "SOGo groupware install is not LIVE yet (SCAFFOLD). Inverse SOGo packages are not auto-provisioned by CPN in this release."
-                    .into(),
-            );
+            // Native sogod service (no PHP docroot): packages, /etc/sogo/sogo.conf, MariaDB,
+            // mailbox user sync, memcached, and the /SOGo panel proxy.
+            let message = tokio::task::spawn_blocking(crate::apps_sogo::install_sogo)
+                .await
+                .map_err(|e| format!("SOGo install task failed: {e}"))??;
+            crate::active_webmail::save_active_pref(MailSystem::Sogo)?;
+            crate::panel_feature_gate::invalidate_feature_cache();
+            state.log(format!("SOGo: {message}"), "success");
+            return Ok(());
         }
         MailSystem::Thunderbird => unreachable!(),
     }

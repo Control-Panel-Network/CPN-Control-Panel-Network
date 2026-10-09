@@ -99,6 +99,7 @@ impl AppId {
                 | Self::Rabbitmq
                 | Self::Redis
                 | Self::Docker
+                | Self::Sogo
         )
     }
 

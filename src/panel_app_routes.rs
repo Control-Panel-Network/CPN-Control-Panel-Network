@@ -197,7 +197,7 @@ pub async fn apps_activate(
     };
     let is_webmail = matches!(
         parsed,
-        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail
+        AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail | AppId::Sogo
     );
     if is_webmail {
         return match crate::apps_webmail::activate_webmail_app(parsed) {

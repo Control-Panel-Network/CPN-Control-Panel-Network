@@ -1,4 +1,4 @@
-//! Webmail host packages: SnappyMail, Tachyon, Roundcube (LIVE), NextSnapMail (Nextcloud chain), SOGo gate.
+//! Webmail host packages: SnappyMail, Tachyon, Roundcube, SOGo (LIVE), NextSnapMail (Nextcloud chain).
 
 use crate::active_webmail::{
     client_files_present, default_webmail_client, docroot_for, load_active_pref, mail_to_id,
@@ -48,7 +48,8 @@ fn app_id_for_mail(mail: MailSystem) -> Option<AppId> {
         MailSystem::Tachyon => Some(AppId::Tachyon),
         MailSystem::Roundcube => Some(AppId::Roundcube),
         MailSystem::Nextsnapmail => Some(AppId::Nextsnapmail),
-        MailSystem::Sogo | MailSystem::Thunderbird => None,
+        MailSystem::Sogo => Some(AppId::Sogo),
+        MailSystem::Thunderbird => None,
     }
 }
 
@@ -200,34 +201,11 @@ pub fn detect_webmail_app(id: AppId) -> AppStatus {
             }
         }
         AppId::Sogo => {
-            let pkgs = crate::apps_pkg::rpm_or_dpkg_installed(&["sogo", "sogo-activesync"]);
-            let running = crate::service_detect::systemd_unit_active("sogo");
-            let (state, detail) = if running {
-                (
-                    AppStateKind::Running,
-                    "SOGo unit active (operator-installed packages).".into(),
-                )
-            } else if pkgs {
-                (
-                    AppStateKind::Installed,
-                    "SOGo packages present but unit not running.".into(),
-                )
-            } else {
-                (
-                    AppStateKind::NotInstalled,
-                    "SOGo host install is SCAFFOLD: Inverse packages are not auto-provisioned yet."
-                        .into(),
-                )
-            };
-            AppStatus {
-                id,
-                state,
-                detail,
-                warning: Some(
-                    "Full SOGo (groupware + CalDAV/CardDAV) packaging is not LIVE in CPN yet. Card is registry/UI only until Inverse recipes ship."
-                        .into(),
-                ),
+            let mut status = crate::apps_sogo::detect_sogo();
+            if status.state != AppStateKind::NotInstalled {
+                status.detail.push_str(&active_suffix(id));
             }
+            status
         }
         _ => AppStatus {
             id,
@@ -306,10 +284,17 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
             // Do not auto-steal active panel proxy; operator uses Set as active.
             Ok(msg)
         }
-        AppId::Sogo => Err(
-            "SOGo install is SCAFFOLD (not LIVE). Use Inverse SOGo packages manually for now; CPN will wire a full recipe in a later release."
-                .into(),
-        ),
+        AppId::Sogo => {
+            let msg = crate::apps_sogo::install_sogo()?;
+            // Become the active panel webmail only when no PHP client already owns it.
+            if crate::panel_webmail::detect_webmail_client().is_none() {
+                save_active_pref(MailSystem::Sogo)?;
+                return Ok(format!("{msg} SOGo is now the active panel webmail."));
+            }
+            Ok(format!(
+                "{msg} Active panel webmail is unchanged (use Set as active to open SOGo from Email > Webmail)."
+            ))
+        }
         AppId::Snappymail | AppId::Tachyon | AppId::Roundcube => {
             let mail = mail_for_app(id)?;
             let engine = detect_server_engine().ok_or_else(|| {
@@ -362,6 +347,14 @@ pub fn activate_webmail_app(id: AppId) -> Result<String, String> {
         ));
     }
     save_active_pref(mail)?;
+    if mail == MailSystem::Sogo {
+        // SOGo is proxied at /SOGo by its own handler; the PHP webmail mount stays untouched
+        // so Tachyon/SnappyMail/Roundcube keep answering on their path.
+        return Ok(
+            "Active panel webmail is now SOGo (Open Webmail goes to /SOGo/; CalDAV/CardDAV at /SOGo/dav/). Mailboxes on Postfix/Dovecot are unchanged and the previous PHP webmail mount still answers."
+                .into(),
+        );
+    }
     let mut cfg = load_webmail_config();
     cfg.public_path = public_path_for(mail).to_string();
     save_webmail_config(&cfg)?;
@@ -423,9 +416,7 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
                     .into(),
             );
         }
-        AppId::Sogo => {
-            return Err("SOGo was not installed by CPN (scaffold only).".into());
-        }
+        AppId::Sogo => crate::apps_sogo::uninstall_sogo()?,
         _ => return Err("Not a webmail host package.".into()),
     };
     if was_active {
@@ -434,6 +425,7 @@ pub fn uninstall_webmail_app(id: AppId) -> Result<String, String> {
             AppId::Tachyon,
             AppId::Snappymail,
             AppId::Roundcube,
+            AppId::Sogo,
             AppId::Nextsnapmail,
         ]
         .into_iter()

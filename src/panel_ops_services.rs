@@ -20,10 +20,15 @@ const KNOWN_UNITS: &[&str] = &[
     "named",
     "php-fpm",
     "firewalld",
+    "sogo",
+    "memcached",
 ];
 
 /// Units that may back the logical `docker` Services row (Docker Engine or Podman).
 const CONTAINER_BACKEND_UNITS: &[&str] = &["docker", "podman.socket", "podman"];
+
+/// Units that may back the logical `sogo` Services row (`sogod` on RPM hosts, `sogo` on deb).
+const SOGO_BACKEND_UNITS: &[&str] = crate::apps_sogo::SOGO_UNITS;
 
 #[derive(Debug, Clone)]
 pub struct ServiceRow {
@@ -55,6 +60,7 @@ pub fn store_install_href(unit: &str) -> String {
         "nginx" | "httpd" => "nginx",
         "lsws" | "lshttpd" | "openlitespeed" => "litespeed",
         "firewalld" => "firewall",
+        "sogo" | "sogod" | "memcached" => "sogo",
         other => other,
     };
     format!("/plugins?view=store&target=host&q={q}")
@@ -226,9 +232,44 @@ fn container_engine_status() -> ServiceRow {
     }
 }
 
+/// Logical `sogo` row: resolves to whichever SOGo unit name the package shipped.
+fn resolve_sogo_backend() -> Option<&'static str> {
+    SOGO_BACKEND_UNITS
+        .iter()
+        .copied()
+        .find(|unit| unit_is_present(unit))
+}
+
+fn sogo_status() -> ServiceRow {
+    let Some(backend) = resolve_sogo_backend() else {
+        return ServiceRow {
+            unit: "sogo".into(),
+            active: "Not installed".into(),
+            enabled: "Not installed".into(),
+            present: false,
+            via: None,
+            install_href: Some(store_install_href("sogo")),
+        };
+    };
+    let active_raw = systemctl_token(&["is-active", backend]).unwrap_or_else(|| "inactive".into());
+    let enabled_raw =
+        systemctl_token(&["is-enabled", backend]).unwrap_or_else(|| "disabled".into());
+    ServiceRow {
+        unit: "sogo".into(),
+        active: map_active_label(&active_raw, true),
+        enabled: map_enabled_label(&enabled_raw, true),
+        present: true,
+        via: (backend != "sogo").then(|| backend.to_string()),
+        install_href: None,
+    }
+}
+
 fn unit_status(unit: &str) -> ServiceRow {
     if unit == "docker" {
         return container_engine_status();
+    }
+    if unit == "sogo" {
+        return sogo_status();
     }
 
     if !systemctl_available() {
@@ -281,6 +322,10 @@ fn resolve_control_unit(unit: &str) -> Result<String, String> {
             Some(backend) => Ok(backend.to_string()),
             None => Err("Unit `docker` is not installed on this host".into()),
         }
+    } else if unit == "sogo" {
+        resolve_sogo_backend()
+            .map(str::to_string)
+            .ok_or_else(|| "Unit `sogo` is not installed on this host".to_string())
     } else if unit_is_present(unit) {
         Ok(unit.to_string())
     } else {

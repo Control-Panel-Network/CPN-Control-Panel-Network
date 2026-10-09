@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SOGo host package is LIVE** (Email > Host packages, Plugin Store `sogo`): Install provisions SOGo groupware (webmail, calendars, contacts, CalDAV/CardDAV) from Inverse packages on AlmaLinux/RHEL 8 and 9 (`packages.sogo.nu` nightly repo via `/etc/yum.repos.d/cpn-sogo.repo`) and on Ubuntu/Debian (distro `sogo` first, Inverse `jammy`/`noble`/`bookworm` suite fallback with a signed-by keyring). CPN writes `/etc/sogo/sogo.conf` (loopback `127.0.0.1:20000`, IMAP `127.0.0.1:143`, Sieve `4190`, submission `587`, memcached), creates MariaDB database `cpn_sogo` (secret at `/var/lib/cpn/sogo/db.json`, mode 600), and mirrors Postfix/Dovecot mailboxes into a SQL user source (`sogo_users`, crypt hashes) so mailbox passwords from Change Password sign in to SOGo without a second account. The panel reverse-proxies `/SOGo/` (webmail), `/SOGo/dav/` (CalDAV/CardDAV), `.well-known/caldav|carddav`, and serves `WebServerResources` and product `Resources` from disk with real JS/CSS/font MIME types. Start/Stop/Install/Uninstall/Set as active have parity with Tachyon/SnappyMail/Roundcube (Uninstall keeps `cpn_sogo` and the secret for reinstall); `/server/services` gains a logical `sogo` row (resolves `sogod` on RPM hosts or `sogo` on deb) plus `memcached`. Installer CLI/UI SOGo option now installs instead of returning a SCAFFOLD error. Details, paths, and the OS matrix: `docs/SOGO-HOST-PACKAGE.md`.
+
 ### Changed
+
+- **SOGo platform honesty**: On EL10 (AlmaLinux 10) and Windows the SOGo card shows Not installed with a clear warning and Install fails fast with the reason (Inverse publishes no EL10 packages yet); an operator override file `/var/lib/cpn/sogo/repo-override.json` (`baseurl`/`gpgkey` or `apt_line`/`keyring_url`) lets sites point CPN at their own SOGo repository. Tachyon, SnappyMail, and Roundcube remain LIVE on every supported OS.
 
 ### Fixed
 
