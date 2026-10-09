@@ -125,7 +125,7 @@ pub fn compat_note(guest: &GuestOs) -> Option<String> {
     }
     match (guest.family, inverse_dnf_channel(guest.major)) {
         (PackageFamily::Dnf, Some((channel, true))) => Some(format!(
-            "Inverse publishes no EL{} channel yet; CPN installs the Inverse EL{channel} build on {} (SOPE/GNUstep stack from the Inverse repo, memcached from AppStream, libsodium runtime from a scoped EPEL {channel} section). Override the source any time via {REPO_OVERRIDE}.",
+            "Inverse publishes no EL{} channel yet; CPN installs the Inverse EL{channel} build on {} (SOPE/GNUstep stack from the Inverse repo, memcached from AppStream, plus a signature-verified libsodium.so.23 runtime from EPEL {channel} in a private library directory). Override the source any time via {REPO_OVERRIDE}.",
             guest.major, guest.label
         )),
         _ => None,
@@ -141,8 +141,9 @@ pub fn unsupported_message(guest: &GuestOs) -> String {
 }
 
 /// Runtime libraries the Inverse EL9 build links that EL10 no longer ships with the same
-/// soname (`libsodium.so.23`). Pulled from the signed EPEL 9 repository, restricted with
-/// `includepkgs` so nothing else from EPEL 9 can leak onto an EL10 host.
+/// soname (`libsodium.so.23`). Exposed through a scoped EPEL 9 repo section (`includepkgs`)
+/// so `dnf repoquery --location` can find the signed RPM; the library itself is extracted
+/// by `apps_sogo_compat` because dnf would otherwise resolve the newer EL10 package.
 pub const EL9_COMPAT_PKGS: &[&str] = &["libsodium"];
 const EPEL9_BASEURL: &str = "https://dl.fedoraproject.org/pub/epel/9/Everything/$basearch/";
 const EPEL9_GPGKEY: &str = "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9";
@@ -201,16 +202,21 @@ fn ensure_dnf_packages(guest: &GuestOs) -> Result<String, String> {
     let _ = run_quiet("dnf", &["install", "-y", "-q", "epel-release"]);
     let mut args = vec!["install", "-y", "-q"];
     args.extend_from_slice(DNF_PKGS);
-    if compat {
-        // The EL9 build needs libsodium.so.23, which EL10 no longer ships (scoped EPEL 9 section).
-        args.extend_from_slice(EL9_COMPAT_PKGS);
-    }
     run_quiet("dnf", &args).map_err(|e| {
         format!(
             "{e}. Source: {label}. Check that the host can reach packages.sogo.nu over HTTPS, then retry Install."
         )
     })?;
-    Ok(format!("Installed SOGo packages from {label}."))
+    let mut msg = format!("Installed SOGo packages from {label}.");
+    if compat {
+        // The EL9 build needs libsodium.so.23; EL10 ships .so.26 under the same package name,
+        // so dnf cannot pull the older build. Fetch the signed EPEL 9 RPM and extract only the
+        // shared library into a CPN-owned loader path (see apps_sogo_compat).
+        if let Some(note) = crate::apps_sogo_compat::ensure_runtime_libs()? {
+            msg.push_str(&format!(" Runtime: {note}."));
+        }
+    }
+    Ok(msg)
 }
 
 fn apt_install(pkgs: &[&str]) -> Result<(), String> {
@@ -315,6 +321,7 @@ pub fn remove_packages(guest: &GuestOs) -> Result<(), String> {
                 ],
             )?;
             let _ = std::fs::remove_file(DNF_REPO_FILE);
+            crate::apps_sogo_compat::remove_runtime_libs();
             Ok(())
         }
         PackageFamily::Apt => {
