@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **SOGo platform honesty**: On EL10 (AlmaLinux 10) and Windows the SOGo card shows Not installed with a clear warning and Install fails fast with the reason (Inverse publishes no EL10 packages yet); an operator override file `/var/lib/cpn/sogo/repo-override.json` (`baseurl`/`gpgkey` or `apt_line`/`keyring_url`) lets sites point CPN at their own SOGo repository. Tachyon, SnappyMail, and Roundcube remain LIVE on every supported OS.
+- **SOGo on EL10**: AlmaLinux 10, Rocky 10, and RHEL 10 install the Inverse nightly EL9 build (Inverse publishes no `rhel/10` channel yet). The build resolves cleanly on EL10 and is verified on the CPN AlmaLinux 10 lab; the card names the source and shows a short compatibility note instead of a dead-end warning. EL8/EL9 keep their own Inverse channels; Ubuntu/Debian use distro `sogo` first with Inverse `jammy`/`noble`/`bookworm` as fallback. The operator override `/var/lib/cpn/sogo/repo-override.json` (`baseurl`/`gpgkey` or `apt_line`/`keyring_url`) is honored on every OS and always wins over the built-in selection. Only Windows and EL7-or-older fail fast with a clear message. See `docs/SOGO-HOST-PACKAGE.md`.
 
 ### Fixed
 

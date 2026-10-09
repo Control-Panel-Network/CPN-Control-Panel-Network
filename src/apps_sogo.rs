@@ -48,7 +48,10 @@ pub fn detect_sogo() -> AppStatus {
         return AppStatus {
             id,
             state: AppStateKind::NotInstalled,
-            detail: "SOGo is not installed on this host. Install provisions Inverse/distro packages, MariaDB storage, memcached, and the /SOGo panel proxy.".into(),
+            detail: format!(
+                "SOGo is not installed on this host. Install provisions Inverse/distro packages, MariaDB storage, memcached, and the /SOGo panel proxy.{}",
+                source_detail()
+            ),
             warning: platform_warning(),
         };
     }
@@ -89,11 +92,15 @@ pub fn detect_sogo() -> AppStatus {
     }
 }
 
-/// Honest note for guests without an upstream SOGo package source.
+/// Honest note for guests without an upstream SOGo package source (Windows, EL older than 8).
+/// EL10+ is not an error: it installs the Inverse EL9 build (see `compat_note`).
 fn platform_warning() -> Option<String> {
     let guest = detect_guest_os().ok()?;
     match guest.family {
-        PackageFamily::Dnf if !matches!(guest.major, 8 | 9) => {
+        PackageFamily::Dnf
+            if crate::apps_sogo_repo::inverse_dnf_channel(guest.major).is_none()
+                && !crate::apps_sogo_repo::override_present(&guest) =>
+        {
             Some(crate::apps_sogo_repo::unsupported_message(&guest))
         }
         PackageFamily::Windows => Some(crate::os_support::windows_linux_recipe_blocked_message(
@@ -101,6 +108,22 @@ fn platform_warning() -> Option<String> {
         )),
         _ => None,
     }
+}
+
+/// Detail suffix naming the package source for this guest (card copy, not an error).
+fn source_detail() -> String {
+    let Ok(guest) = detect_guest_os() else {
+        return String::new();
+    };
+    if guest.is_windows() {
+        return String::new();
+    }
+    let mut out = format!(" Source: {}.", crate::apps_sogo_repo::source_label(&guest));
+    if let Some(note) = crate::apps_sogo_repo::compat_note(&guest) {
+        out.push(' ');
+        out.push_str(&note);
+    }
+    out
 }
 
 fn require_dependencies() -> Result<(), String> {

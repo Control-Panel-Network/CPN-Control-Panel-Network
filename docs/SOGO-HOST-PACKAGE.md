@@ -51,7 +51,8 @@ Sign in with the full mailbox address and the mailbox password set under Email >
 |---|---|---|
 | AlmaLinux / Rocky / RHEL 8 | Supported | Inverse nightly `rhel/8` |
 | AlmaLinux / Rocky / RHEL 9 | Supported | Inverse nightly `rhel/9` |
-| AlmaLinux / Rocky / RHEL 10 | Not available yet | Inverse publishes no `rhel/10` packages. The card stays Not installed with a clear warning; Install fails fast with the reason. Use the override below when a third-party EL10 build exists. |
+| AlmaLinux / Rocky / RHEL 10 | Supported (EL9 build) | Inverse publishes no `rhel/10` channel yet, so CPN installs the Inverse nightly `rhel/9` build. It resolves cleanly on EL10 (SOPE 4.9, `gnustep-base` and `sogo` from the Inverse repo, `memcached` from AppStream) and is what CPN verifies on its AlmaLinux 10 lab. The card shows the source and a short note; set the override below to use another repository (for example an Inverse subscription channel). |
+| EL7 and older | Not available | No Inverse channel; Install fails fast with the reason unless an override is configured. |
 | Ubuntu 22.04 / 24.04 | Supported | distro or Inverse `jammy` / `noble` |
 | Ubuntu 26.04 | Supported | universe ships `sogo 5.12.x` (Inverse has no `resolute` suite yet) |
 | Debian 12 | Supported | distro or Inverse `bookworm` |
@@ -59,7 +60,7 @@ Sign in with the full mailbox address and the mailbox password set under Email >
 
 ### Repository override
 
-Create `/var/lib/cpn/sogo/repo-override.json` (mode 600) to point CPN at your own SOGo repository:
+Create `/var/lib/cpn/sogo/repo-override.json` (mode 600) to point CPN at your own SOGo repository. The override is honored on every OS and always wins over the built-in Inverse/distro selection (dnf hosts use `baseurl`/`gpgkey`; apt hosts use `apt_line`/`keyring_url`). Package selection order per family: dnf = override, else Inverse `rhel/8`, `rhel/9`, or `rhel/9` on EL10+; apt = override, else distro `sogo`, else Inverse `jammy` / `noble` / `bookworm`.
 
 ```json
 { "baseurl": "https://mirror.example/sogo/el10/$basearch/", "gpgkey": "https://mirror.example/sogo/RPM-GPG-KEY" }

@@ -196,7 +196,7 @@ fn prompt_mail() -> Result<Option<MailSystem>, String> {
     println!("  3) SnappyMail (optional panel webmail)");
     println!("  4) Roundcube");
     println!("  5) NextSnapMail (installs Nextcloud files if missing, then the Nextcloud app)");
-    println!("  6) SOGo (groupware: webmail + CalDAV/CardDAV; EL8/EL9 and Ubuntu/Debian)");
+    println!("  6) SOGo (groupware: webmail + CalDAV/CardDAV; EL8/EL9/EL10 and Ubuntu/Debian)");
     println!("  7) Thunderbird (desktop client package only)");
     println!("Enter a menu number 1-7 (not an email address). Empty uses 1 (Skip).");
     prompt_menu("Enter 1-7 for mail option", "1", parse_mail_option)

@@ -1,12 +1,15 @@
 //! SOGo package sources per guest OS.
 //!
-//! * RHEL family (EL8 / EL9): Inverse nightly repository (`packages.sogo.nu`). Inverse does not
-//!   publish EL10 builds yet, so AlmaLinux 10 / Rocky 10 / RHEL 10 fail with a clear message
-//!   unless the operator supplies a repository override.
+//! * RHEL family: Inverse nightly repository (`packages.sogo.nu`). EL8 and EL9 use their own
+//!   channel. Inverse publishes no EL10 channel yet; EL10 (AlmaLinux 10, Rocky 10, RHEL 10)
+//!   installs the EL9 build, which resolves cleanly on EL10 (gnustep-base and the SOPE stack
+//!   come from the same repo, memcached from AppStream) and is what CPN verifies on its
+//!   AlmaLinux 10 lab. Older EL releases are refused with a clear message.
 //! * Debian / Ubuntu: distro `sogo` packages first (signed, stable), Inverse nightly as a
 //!   fallback for suites Inverse publishes (jammy, noble, bookworm).
 //!
-//! Optional operator override (for example a paid Inverse subscription repository):
+//! Optional operator override (for example a paid Inverse subscription repository), honored on
+//! every OS before any built-in source:
 //! `/var/lib/cpn/sogo/repo-override.json` with `{"baseurl": "...", "gpgkey": "..."}` on dnf
 //! hosts or `{"apt_line": "deb [...] https://... suite comp", "keyring_url": "..."}` on apt hosts.
 
@@ -74,22 +77,65 @@ fn run_quiet(program: &str, args: &[&str]) -> Result<(), String> {
     ))
 }
 
+/// Inverse RPM channel for an EL major: `(channel major, compat)`.
+///
+/// `compat` is true when the guest is newer than the newest Inverse channel (EL10+), in which
+/// case the EL9 build is used. Returns `None` for EL releases older than 8.
+pub fn inverse_dnf_channel(major: u32) -> Option<(u32, bool)> {
+    match major {
+        8 => Some((8, false)),
+        9 => Some((9, false)),
+        m if m >= 10 => Some((9, true)),
+        _ => None,
+    }
+}
+
+/// True when the operator override file provides a source for this package family.
+pub fn override_present(guest: &GuestOs) -> bool {
+    match (load_override(), guest.family) {
+        (Some(o), PackageFamily::Dnf) => !o.baseurl.trim().is_empty(),
+        (Some(o), PackageFamily::Apt) => !o.apt_line.trim().is_empty(),
+        _ => false,
+    }
+}
+
 /// Human-readable description of where SOGo packages come from on this guest.
 pub fn source_label(guest: &GuestOs) -> String {
+    if override_present(guest) {
+        return "operator repository override".into();
+    }
     match guest.family {
-        PackageFamily::Dnf if matches!(guest.major, 8 | 9) => {
-            format!("Inverse nightly repository (EL{})", guest.major)
-        }
-        PackageFamily::Dnf => "operator repository override".into(),
+        PackageFamily::Dnf => match inverse_dnf_channel(guest.major) {
+            Some((channel, false)) => format!("Inverse nightly repository (EL{channel})"),
+            Some((channel, true)) => format!(
+                "Inverse nightly repository (EL{channel} build, compatible with {})",
+                guest.label
+            ),
+            None => "not available".into(),
+        },
         PackageFamily::Apt => format!("{} packages (Inverse nightly fallback)", guest.label),
         PackageFamily::Windows => "not available".into(),
     }
 }
 
-/// Clear, honest message for guests Inverse does not publish packages for.
+/// Short operator note for EL10+ guests (shown on the card; not an error).
+pub fn compat_note(guest: &GuestOs) -> Option<String> {
+    if override_present(guest) {
+        return None;
+    }
+    match (guest.family, inverse_dnf_channel(guest.major)) {
+        (PackageFamily::Dnf, Some((channel, true))) => Some(format!(
+            "Inverse publishes no EL{} channel yet; CPN installs the Inverse EL{channel} build on {} (same SOPE/GNUstep stack from the Inverse repo, memcached from AppStream). Override the source any time via {REPO_OVERRIDE}.",
+            guest.major, guest.label
+        )),
+        _ => None,
+    }
+}
+
+/// Clear, honest message for guests without any SOGo package source.
 pub fn unsupported_message(guest: &GuestOs) -> String {
     format!(
-        "SOGo packages are not published for {} yet. Inverse ships SOGo builds for EL8 and EL9 (RHEL, AlmaLinux, Rocky) and for Debian/Ubuntu. On {} you can point CPN at your own SOGo repository (for example an Inverse subscription mirror) via {REPO_OVERRIDE} and retry Install. Tachyon (default), SnappyMail, and Roundcube remain LIVE webmail options on this host.",
+        "SOGo packages are not available for {}. Inverse ships SOGo builds for EL8 and EL9 (used on EL10 too) and for Debian/Ubuntu. On {} you can point CPN at your own SOGo repository via {REPO_OVERRIDE} and retry Install. Tachyon (default), SnappyMail, and Roundcube remain LIVE webmail options on this host.",
         guest.label, guest.label
     )
 }
@@ -114,15 +160,14 @@ fn ensure_dnf_packages(guest: &GuestOs) -> Result<String, String> {
             o.gpgkey,
             "operator override repository".to_string(),
         ),
-        _ if matches!(guest.major, 8 | 9) => (
-            format!(
-                "https://packages.sogo.nu/nightly/5/rhel/{}/$basearch/",
-                guest.major
+        _ => match inverse_dnf_channel(guest.major) {
+            Some((channel, _compat)) => (
+                format!("https://packages.sogo.nu/nightly/5/rhel/{channel}/$basearch/"),
+                String::new(),
+                source_label(guest),
             ),
-            String::new(),
-            format!("Inverse nightly repository (EL{})", guest.major),
-        ),
-        _ => return Err(unsupported_message(guest)),
+            None => return Err(unsupported_message(guest)),
+        },
     };
     if !baseurl.starts_with("https://") {
         return Err("SOGo repository baseurl must use https://".into());
@@ -296,18 +341,39 @@ mod tests {
     use crate::os_support::detect_from_os_release;
 
     #[test]
-    fn el10_is_honestly_unsupported_without_override() {
+    fn el10_uses_el9_compat_channel_with_note() {
         let ten = detect_from_os_release("ID=almalinux\nVERSION_ID=\"10.2\"\n").unwrap();
-        let msg = unsupported_message(&ten);
-        assert!(msg.contains("AlmaLinux 10"));
-        assert!(msg.contains("repo-override.json"));
-        assert_eq!(source_label(&ten), "operator repository override");
+        assert_eq!(inverse_dnf_channel(ten.major), Some((9, true)));
+        let label = source_label(&ten);
+        assert!(label.contains("EL9 build"), "{label}");
+        assert!(label.contains("AlmaLinux 10"), "{label}");
+        let note = compat_note(&ten).expect("compat note on EL10");
+        assert!(note.contains("repo-override.json"));
+        assert!(
+            !note
+                .to_lowercase()
+                .contains("not published for almalinux 10 yet")
+        );
     }
 
     #[test]
-    fn el9_uses_inverse_nightly_label() {
+    fn el8_and_el9_use_their_own_channels() {
         let nine = detect_from_os_release("ID=almalinux\nVERSION_ID=\"9.8\"\n").unwrap();
+        assert_eq!(inverse_dnf_channel(nine.major), Some((9, false)));
         assert!(source_label(&nine).contains("EL9"));
+        assert!(compat_note(&nine).is_none());
+        let eight = detect_from_os_release("ID=rocky\nVERSION_ID=\"8.10\"\n").unwrap();
+        assert_eq!(inverse_dnf_channel(eight.major), Some((8, false)));
+        assert!(source_label(&eight).contains("EL8"));
+    }
+
+    #[test]
+    fn el7_is_honestly_unsupported() {
+        assert_eq!(inverse_dnf_channel(7), None);
+        let seven = detect_from_os_release("ID=centos\nVERSION_ID=\"7\"\n").unwrap();
+        let msg = unsupported_message(&seven);
+        assert!(msg.contains("repo-override.json"));
+        assert_eq!(source_label(&seven), "not available");
     }
 
     #[test]

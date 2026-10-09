@@ -241,7 +241,7 @@ pub fn meta_for(id: AppId) -> HostPackageMeta {
             updated_on: "2026-10-09",
             install_count: 5,
             featured: false,
-            description: "SOGo groupware (webmail, calendars, contacts, CalDAV/CardDAV) from Inverse packages (EL8/EL9 and Ubuntu/Debian) with config under /etc/sogo (CPN-managed), MariaDB database cpn_sogo, panel proxy at /SOGo/, and mailbox users synced from Postfix/Dovecot. Not available for EL10 yet (no Inverse packages).",
+            description: "SOGo groupware (webmail, calendars, contacts, CalDAV/CardDAV) from Inverse packages (EL8, EL9, and EL10 via the EL9 build) or distro/Inverse packages on Ubuntu/Debian, with config under /etc/sogo (CPN-managed), MariaDB database cpn_sogo, panel proxy at /SOGo/, and mailbox users synced from Postfix/Dovecot.",
             install_status: HostInstallStatus::Live,
             uninstall_impacts: &[
                 "Stops sogod and removes the SOGo packages and CPN repo file (memcached stays)",
