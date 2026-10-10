@@ -8,6 +8,7 @@ use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html, decode_notic
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_reseller::users_reseller_page;
 use crate::panel_hub_pages_reseller_tabs::normalize_reseller_tab;
+use crate::panel_hub_pages_reseller_users::reseller_users_opts;
 use crate::panel_pages::panel_shell;
 use crate::panel_reseller::{
     ResellerBranding, assign_user_to_reseller, can_access_reseller_center, demote_reseller,
@@ -123,11 +124,25 @@ pub async fn users_reseller_route(
     let notice = query.get("notice").map(|s| decode_notice_code(s));
     let error = query.get("error").map(|s| decode_notice_code(s));
     let tab = query.get("tab").map(|s| s.as_str()).unwrap_or("overview");
+    let users_opts = reseller_users_opts(
+        query.get("q").map(|s| s.as_str()),
+        query.get("role").map(|s| s.as_str()),
+        query.get("parent").map(|s| s.as_str()),
+        query.get("status").map(|s| s.as_str()),
+        query.get("page").map(|s| s.as_str()),
+        query.get("per_page").map(|s| s.as_str()),
+    );
     html_ok(panel_shell(
         &user,
         "users",
         "Reseller Center",
-        &users_reseller_page(&user, notice.as_deref(), error.as_deref(), tab),
+        &users_reseller_page(
+            &user,
+            notice.as_deref(),
+            error.as_deref(),
+            tab,
+            &users_opts,
+        ),
     ))
 }
 
@@ -177,14 +192,14 @@ pub async fn users_reseller_demote_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("users", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller("resellers", None, Some(&err));
+        return redirect_reseller("users", None, Some(&err));
     }
     match demote_reseller(&form.username) {
-        Ok(()) => redirect_reseller("resellers", Some("Reseller demoted"), None),
-        Err(err) => redirect_reseller("resellers", None, Some(&err)),
+        Ok(()) => redirect_reseller("users", Some("Reseller demoted"), None),
+        Err(err) => redirect_reseller("users", None, Some(&err)),
     }
 }
 
@@ -282,14 +297,14 @@ pub async fn users_reseller_unassign_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("users", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller("resellers", None, Some(&err));
+        return redirect_reseller("users", None, Some(&err));
     }
     match unassign_user(&form.child) {
-        Ok(()) => redirect_reseller("resellers", Some("User unassigned from reseller"), None),
-        Err(err) => redirect_reseller("resellers", None, Some(&err)),
+        Ok(()) => redirect_reseller("users", Some("User unassigned from reseller"), None),
+        Err(err) => redirect_reseller("users", None, Some(&err)),
     }
 }
 
@@ -306,7 +321,7 @@ pub async fn users_reseller_create_user_post(
         return forbid_reseller(&user);
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller("resellers", None, Some(&err));
+        return redirect_reseller("users", None, Some(&err));
     }
     let parent = if is_panel_admin(&user) {
         form.reseller.trim().to_string()
@@ -350,5 +365,5 @@ pub async fn users_reseller_create_user_post(
     if let Some(pw) = created.generated_password {
         notice.push_str(&format!(". Generated password: {pw}"));
     }
-    redirect_reseller("resellers", Some(&notice), None)
+    redirect_reseller("users", Some(&notice), None)
 }
