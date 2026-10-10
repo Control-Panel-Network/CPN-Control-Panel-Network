@@ -25,28 +25,6 @@ pub fn version_page_poll_script() -> &'static str {
     pollBackoffMs = 500;
     etaClear();
   }
-  function paintInstallerLog(text, forceOpen) {
-    var box = document.getElementById("cpn-version-log");
-    var pre = document.getElementById("cpn-version-log-pre");
-    if (!pre) return;
-    var raw = String(text || "");
-    pre.innerHTML = "";
-    if (!raw) {
-      pre.textContent = "";
-      return;
-    }
-    raw.split("\n").forEach(function (line) {
-      var span = document.createElement("span");
-      var low = line.toLowerCase();
-      if (line.indexOf("FAILED ") === 0 || low.indexOf("error") !== -1 || low.indexOf("failed") !== -1) {
-        span.className = "ssh-fail";
-      }
-      span.textContent = line + "\n";
-      pre.appendChild(span);
-    });
-    pre.scrollTop = pre.scrollHeight;
-    if (box && forceOpen) box.open = true;
-  }
   function versionReloadTarget() {
     var path = window.location.pathname || "/settings/version";
     if (path.indexOf("/settings/version") !== 0) {
@@ -123,7 +101,7 @@ pub fn version_page_poll_script() -> &'static str {
       }
       var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
       if (progressBar) progressBar.style.width = pct + "%";
-      paintInstallerLog(st.log, !!st.busy || st.phase === "failed");
+      paintInstallerLog(st.log, !!st.busy || st.phase === "failed", st);
       if (progressLabel) {
         var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
         progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
@@ -235,7 +213,7 @@ pub fn version_page_poll_script() -> &'static str {
     if (progressLabel) progressLabel.textContent = "1% Starting...";
     etaReset(Date.now());
     etaSetText("Estimating time left...", null);
-    paintInstallerLog("Starting maintenance...", true);
+    paintInstallerLog("Starting maintenance...", true, { busy: true });
     var installed = infoCache && infoCache.installed_version ? infoCache.installed_version : "";
     var isDown = action === "downgrade" || (version && installed && cmp(version, installed) < 0);
     var body = {
@@ -284,7 +262,7 @@ pub fn version_page_poll_script() -> &'static str {
       return res.json();
     }).then(function (st) {
       if (!st) return;
-      paintInstallerLog(st.log, !!st.busy);
+      paintInstallerLog(st.log, !!st.busy, st);
       if (!st.busy) return;
       busy = true;
       setActionsEnabled(false);

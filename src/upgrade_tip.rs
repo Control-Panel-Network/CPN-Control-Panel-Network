@@ -5,11 +5,11 @@ use crate::manifest::{self, ManifestSource, cli_bin, installer_bin};
 use crate::releases_cache;
 use crate::releases_stable_tip::{self, StableTipInfo};
 use crate::upgrade_pkg::install_binary;
+use crate::upgrade_staging::StagingDir;
 use crate::upgrade_tip_artifacts;
 use crate::upgrade_tip_cmd;
 use crate::upgrade_tip_log;
 use crate::upgrade_tip_toolchain::{self, Toolchain};
-use rand::{Rng, distr::Alphanumeric};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
@@ -22,22 +22,6 @@ pub struct TipApplyResult {
     pub source: ManifestSource,
     /// True when the on-disk installer already matched the tip SHA (no rebuild).
     pub skipped_rebuild: bool,
-}
-
-fn ephemeral_dir(prefix: &str) -> Result<PathBuf, String> {
-    let suffix: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(12)
-        .map(char::from)
-        .collect();
-    let dir = PathBuf::from(format!("/var/tmp/{prefix}-{suffix}"));
-    std::fs::create_dir_all(&dir).map_err(|error| format!("Could not create temp dir: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-    }
-    Ok(dir)
 }
 
 fn fail(message: impl Into<String>, retry: Option<u32>) -> String {
@@ -359,7 +343,11 @@ pub async fn apply_tip_ref(
         });
     }
 
-    let work = ephemeral_dir("cpn-tip")?;
+    // RAII: the staging dir is removed when this function returns, on success
+    // and on every `?` error path, so no `/var/tmp/cpn-tip-*` tree is left behind.
+    let staging = StagingDir::create("cpn-tip").map_err(|error| fail(error, None))?;
+    let work = staging.path().to_path_buf();
+    upgrade_tip_log::log_info(format!("Tip staging dir {}", work.display()));
     state
         .progress("downloading", 15, "Checking GitHub Actions commit binaries")
         .await;
@@ -372,7 +360,6 @@ pub async fn apply_tip_ref(
             .is_ok()
             {
                 upgrade_tip_log::log_info(format!("Installed prebuilt tip binaries for {label}"));
-                let _ = std::fs::remove_dir_all(&work);
                 return Ok(TipApplyResult {
                     sha,
                     short_sha: short,
@@ -421,7 +408,6 @@ pub async fn apply_tip_ref(
         .await
         .map_err(|error| fail(format!("tar extract failed: {error}"), None))?;
     if !extract_status.success() {
-        let _ = std::fs::remove_dir_all(&work);
         return Err(fail("tar extract of tip archive failed", None));
     }
     let root = find_extracted_root(&work)?;
@@ -432,10 +418,21 @@ pub async fn apply_tip_ref(
     cargo_build_release(state, &root, &sha, &tools).await?;
     install_built_bins(&root, &tools, &sha).await?;
 
-    let _ = std::fs::remove_dir_all(&work);
     upgrade_tip_log::log_info(format!(
         "Installed {package_version} from source tip {label}"
     ));
+    // Earlier commit builds (`cpn-cargo-target/tip-<sha>`) are ~700 MB each
+    // and never reused for another SHA; keep only the one just built.
+    let pruned = crate::upgrade_staging::prune_tip_cargo_targets(
+        Some(&sha),
+        std::time::Duration::from_secs(0),
+    );
+    for path in &pruned.removed {
+        upgrade_tip_log::log_info(format!("removed old commit build dir {path}"));
+    }
+    for path in &pruned.kept_in_use {
+        upgrade_tip_log::log_info(format!("kept commit build dir in use by a process {path}"));
+    }
     Ok(TipApplyResult {
         sha,
         short_sha: short,
