@@ -2,7 +2,6 @@
 
 use crate::packages::is_panel_admin;
 use crate::panel_hub_defs::users_plans_hub_sections;
-use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
 use crate::panel_password_gen::{
     generated_password_notice_html, password_field_and_gen_html, password_gen_script,
@@ -44,7 +43,12 @@ pub fn users_plans_hub_main_for(viewer: &str, notice: Option<&str>, error: Optio
     for (title, tiles) in users_plans_hub_sections() {
         let tiles: Vec<_> = tiles
             .into_iter()
-            .filter(|t| admin || !crate::panel_hub_admin_gate::is_admin_only_href(t.href))
+            .filter(|t| {
+                if crate::panel_reseller::is_reseller_center_href(t.href) {
+                    return crate::panel_reseller::can_access_reseller_center(viewer);
+                }
+                admin || !crate::panel_hub_admin_gate::is_admin_only_href(t.href)
+            })
             .collect();
         if tiles.is_empty() {
             continue;
@@ -163,15 +167,7 @@ pub fn users_password_success_page(username: &str, generated_password: Option<&s
     )
 }
 
-pub fn users_reseller_page() -> String {
-    scaffold_feature(
-        "Users & Plans",
-        "/account/users",
-        "Reseller Center",
-        "Reseller settings",
-        "CPN does not ship a reseller hierarchy yet. This tile is reserved for future multi-tenant reseller quotas and branding.",
-    )
-}
+pub use crate::panel_hub_pages_reseller::users_reseller_page;
 
 pub fn api_access_page(
     tokens: &[crate::panel_api_tokens::ApiTokenPublic],
@@ -411,6 +407,7 @@ mod tests {
         assert!(!html.contains("/account/acl/modify"));
         assert!(!html.contains("/account/acl/create"));
         assert!(!html.contains("/account/users/create"));
+        assert!(!html.contains("/account/users/reseller"));
         assert!(html.contains("/account/users/list"));
         assert!(html.contains("Only the panel admin can manage users and ACL"));
         assert!(!html.contains("error=admin-only"));

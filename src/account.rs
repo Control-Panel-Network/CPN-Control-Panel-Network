@@ -32,6 +32,13 @@ pub struct PanelBootstrap {
     /// When true, the account cannot sign in (sessions are rejected).
     #[serde(default)]
     pub disabled: bool,
+    /// Account role: empty/`user` for normal users, `reseller` for resellers.
+    /// The bootstrap owner remains admin via `is_panel_admin` (not this field).
+    #[serde(default)]
+    pub role: String,
+    /// Parent reseller username when this account is jailed under a reseller.
+    #[serde(default)]
+    pub parent_reseller: String,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +128,8 @@ pub fn to_account_public(boot: &PanelBootstrap) -> AccountPublic {
         recovery_email: boot.recovery_email.clone(),
         configured: true,
         disabled: boot.disabled,
+        role: boot.role.clone(),
+        parent_reseller: boot.parent_reseller.clone(),
     }
 }
 
@@ -502,6 +511,8 @@ pub fn setup_account(
         must_change_password: generated_password.is_some(),
         totp_required: true,
         disabled: false,
+        role: String::new(),
+        parent_reseller: String::new(),
     };
     persist_bootstrap(&boot)?;
     // OLS WebAdmin uses htpasswd (apr1/bcrypt), not CPN PBKDF2. Align while plaintext
@@ -511,12 +522,7 @@ pub fn setup_account(
     );
     let _ = crate::install_snappymail_prefs::sync_snappymail_admin_password(&password);
     Ok(AccountSetupResult {
-        public: AccountPublic {
-            username,
-            recovery_email,
-            configured: true,
-            disabled: false,
-        },
+        public: to_account_public(&boot),
         generated_password,
     })
 }

@@ -71,6 +71,8 @@ pub fn users_list_opts(
 fn role_label(username: &str) -> &'static str {
     if is_panel_admin(username) {
         "Admin"
+    } else if crate::panel_reseller::account_is_reseller(username) {
+        "Reseller"
     } else {
         "User"
     }
@@ -224,9 +226,17 @@ pub fn users_list_page(
     per_page: Option<&str>,
 ) -> String {
     let admin = is_panel_admin(viewer);
+    let reseller = crate::panel_reseller::account_is_reseller(viewer);
     let opts = users_list_opts(q, sort, order, page, per_page);
     let mut accounts = list_accounts().unwrap_or_default();
-    if !admin {
+    if admin {
+        // full list
+    } else if reseller {
+        accounts.retain(|a| {
+            a.username.eq_ignore_ascii_case(viewer)
+                || a.parent_reseller.eq_ignore_ascii_case(viewer)
+        });
+    } else {
         accounts.retain(|a| a.username.eq_ignore_ascii_case(viewer));
     }
     let total = accounts.len();
@@ -244,7 +254,13 @@ pub fn users_list_page(
     };
 
     let mut body = String::new();
-    if !admin {
+    if admin {
+        // no jail notice
+    } else if reseller {
+        body.push_str(
+            r#"<p class="muted">Showing your account and child users under your reseller. Panel admin can list every user.</p>"#,
+        );
+    } else {
         body.push_str(
             r#"<p class="muted">Showing your account only. Panel admin can list every user.</p>"#,
         );
