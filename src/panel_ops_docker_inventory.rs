@@ -57,10 +57,11 @@ pub fn split_image_tag(image: &str) -> (String, String) {
             let tag = after[colon + 1..].to_string();
             return (repo, if tag.is_empty() { "latest".into() } else { tag });
         }
-    } else if let Some(colon) = image.rfind(':') {
-        if !image[..colon].contains('@') && !image.starts_with("sha256:") {
-            return (image[..colon].to_string(), image[colon + 1..].to_string());
-        }
+    } else if let Some(colon) = image.rfind(':')
+        && !image[..colon].contains('@')
+        && !image.starts_with("sha256:")
+    {
+        return (image[..colon].to_string(), image[colon + 1..].to_string());
     }
     (image.to_string(), "latest".into())
 }
@@ -174,16 +175,16 @@ fn inspect_image_ref(bin: &str, id_or_name: &str) -> Option<String> {
 
 fn resolve_image_tag(bin: &str, container_id: &str, raw_image: &str) -> (String, String) {
     let mut candidate = raw_image.trim().to_string();
-    if image_ref_looks_incomplete(&candidate) {
-        if let Some(resolved) = inspect_image_ref(bin, container_id) {
-            candidate = resolved;
-        }
+    if image_ref_looks_incomplete(&candidate)
+        && let Some(resolved) = inspect_image_ref(bin, container_id)
+    {
+        candidate = resolved;
     }
     let (image, tag) = split_image_tag(&candidate);
-    if image.eq_ignore_ascii_case("unknown") {
-        if let Some(resolved) = inspect_image_ref(bin, container_id) {
-            return split_image_tag(&resolved);
-        }
+    if image.eq_ignore_ascii_case("unknown")
+        && let Some(resolved) = inspect_image_ref(bin, container_id)
+    {
+        return split_image_tag(&resolved);
     }
     (image, tag)
 }
