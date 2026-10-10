@@ -53,7 +53,7 @@ impl DockerListQuery {
     }
 }
 
-pub fn paginate_slice<'a, T>(items: &'a [T], page: usize, per_page: usize) -> (&'a [T], usize) {
+pub fn paginate_slice<T>(items: &[T], page: usize, per_page: usize) -> (&[T], usize) {
     let total = items.len();
     let total_pages = total.div_ceil(per_page).max(1);
     let page = page.min(total_pages).max(1);
@@ -65,6 +65,7 @@ pub fn paginate_slice<'a, T>(items: &'a [T], page: usize, per_page: usize) -> (&
     (&items[start..end], total_pages)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn docker_list_toolbar(
     action: &str,
     search_name: &str,
