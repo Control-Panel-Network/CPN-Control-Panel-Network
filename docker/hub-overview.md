@@ -28,6 +28,8 @@ docker pull master3395/cpn-installer:1.4.2    # semver on the AlmaLinux 9 image
 
 **Ubuntu container tag:** the Docker Ubuntu image is **26.04 only**. The `ubuntu22.04` and `ubuntu24.04` tags were retired from Docker Hub because Docker Scout reports Medium/Low findings in base-distro packages that Canonical has not fixed yet. On Ubuntu 22.04 or 24.04 hosts, use the native **DEB/apt** install from GitHub Releases (`docs/INSTALL.md`), not these container tags. Tracking: issue #353.
 
+**Ubuntu 26.04 Scout note:** the rockcraft `ubuntu:26.04` base includes Canonical Pebble (`/usr/bin/pebble`, Go stdlib). CPN runtime images remove Pebble (systemd only) so Hub Scout Critical/High Go findings do not appear on `ubuntu26.04`. Rebuild via workflow_dispatch after merge; no v1.4.2 re-cut required for this image-only change.
+
 On each `v*` Git release tag, the semver (without leading `v`) is also pushed on the `almalinux9` image.
 
 **Rocky Linux** and other EL guests: use native **RPM** installs from GitHub Releases (`docs/INSTALL.md`). There is no separate `rocky9` Hub tag; EL smoke may use the AlmaLinux runtime images.
