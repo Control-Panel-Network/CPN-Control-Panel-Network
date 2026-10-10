@@ -4,6 +4,7 @@
 //! (`mariadb`, `mariadb-dump`) and fall back to MySQL-compatible names that
 //! MariaDB and cPanel-style tooling often ship as aliases (`mysql`, `mysqldump`).
 
+use crate::panel_ops_db_secret::{DbSecret, redact_db_cli_stderr};
 use crate::service_detect::detect_database;
 use std::process::Command;
 
@@ -122,19 +123,12 @@ pub fn create_database(name: &str) -> Result<String, String> {
     }
 }
 
-fn sanitize_db_password(raw: &str) -> Result<String, String> {
-    let pass = raw.trim();
-    if pass.is_empty() || pass.chars().count() > 128 {
-        return Err("Database password must be 1-128 characters".into());
-    }
-    if pass.chars().any(|c| c.is_control()) {
-        return Err("Database password cannot include control characters".into());
-    }
-    Ok(pass.to_string())
-}
-
-fn sql_escape_password(pass: &str) -> String {
-    pass.replace('\\', "\\\\").replace('\'', "''")
+/// Success text for the ensure-database path, built from validated identifiers only
+/// (`sanitize_db_ident` output and static host literals; never client output or secrets).
+fn ensured_database_message(name: &str, user: &str, hosts: &[&str], legacy: bool) -> String {
+    let host_list = hosts.join(", ");
+    let suffix = if legacy { " (legacy user create)" } else { "" };
+    format!("Created database `{name}` with user `{user}`@[{host_list}]{suffix}")
 }
 
 /// Create database, dedicated user, and grants (local MariaDB socket auth).
@@ -166,8 +160,10 @@ fn ensure_database_with_hosts(
 ) -> Result<String, String> {
     let name = sanitize_db_ident(db_name)?;
     let user = sanitize_db_ident(db_user)?;
-    let pass = sanitize_db_password(db_password)?;
-    let pass_sql = sql_escape_password(&pass);
+    // `DbSecret` cannot be formatted; only its escaped SQL literal leaves this scope,
+    // and it goes into the statement, never into a returned message.
+    let secret = DbSecret::parse(db_password)?;
+    let pass_sql = secret.sql_literal();
     let bin = mariadb_cli().ok_or_else(|| {
         "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages."
             .to_string()
@@ -188,13 +184,12 @@ fn ensure_database_with_hosts(
         .output()
         .map_err(|e| format!("Failed to run {bin}: {e}"))?;
     if out.status.success() {
-        let host_list = hosts.join(", ");
-        return Ok(format!(
-            "Created database `{name}` with user `{user}`@[{host_list}]"
-        ));
+        return Ok(ensured_database_message(&name, &user, hosts, false));
     }
 
-    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    // The client echoes the failing statement on stderr; scrub IDENTIFIED BY payloads
+    // before this text can reach CLI output, API errors, or the panel log.
+    let stderr = redact_db_cli_stderr(&String::from_utf8_lossy(&out.stderr));
     let mut legacy_user_sql = String::new();
     for host in hosts {
         legacy_user_sql.push_str(&format!(
@@ -209,15 +204,11 @@ fn ensure_database_with_hosts(
         .output()
         .map_err(|e| format!("Failed to run {bin}: {e}"))?;
     if legacy.status.success() {
-        let host_list = hosts.join(", ");
-        return Ok(format!(
-            "Created database `{name}` with user `{user}`@[{host_list}] (legacy user create)"
-        ));
+        return Ok(ensured_database_message(&name, &user, hosts, true));
     }
+    let legacy_stderr = redact_db_cli_stderr(&String::from_utf8_lossy(&legacy.stderr));
     Err(format!(
-        "CREATE DATABASE/USER failed: {} / legacy: {}",
-        stderr,
-        String::from_utf8_lossy(&legacy.stderr).trim()
+        "CREATE DATABASE/USER failed: {stderr} / legacy: {legacy_stderr}"
     ))
 }
 
@@ -312,15 +303,6 @@ pub fn list_usernames_for_database(db_name: &str) -> Result<Vec<String>, String>
     Ok(names)
 }
 
-fn redact_db_cli_stderr(raw: &str) -> String {
-    let mut out = raw.trim().to_string();
-    // Never echo IDENTIFIED BY payloads (MariaDB repeats the SQL in stderr).
-    if let Some(idx) = out.to_ascii_lowercase().find("identified by") {
-        out = format!("{}[redacted]", &out[..idx]);
-    }
-    out.chars().take(400).collect()
-}
-
 /// Change password for a MariaDB user on common local hosts. Never logs the password.
 pub fn change_database_user_password(user: &str, password: &str) -> Result<String, String> {
     let user = sanitize_db_ident(user)?;
@@ -329,8 +311,8 @@ pub fn change_database_user_password(user: &str, password: &str) -> Result<Strin
             "Refusing to change password for protected MariaDB user `{user}`"
         ));
     }
-    let pass = sanitize_db_password(password)?;
-    let pass_sql = sql_escape_password(&pass);
+    let secret = DbSecret::parse(password)?;
+    let pass_sql = secret.sql_literal();
     let bin = mariadb_cli().ok_or_else(|| {
         "MariaDB client not found (`mariadb` or `mysql`). Install MariaDB from Host packages."
             .to_string()
@@ -485,19 +467,26 @@ mod tests {
     }
 
     #[test]
-    fn redacts_identified_by_from_stderr() {
-        // Build the sample secret from parts (CodeQL hard-coded password heuristic).
-        let secret: String = [
-            'S', 'u', 'p', 'e', 'r', 'S', 'e', 'c', 'r', 'e', 't', '9', '!',
-        ]
-        .into_iter()
-        .collect();
-        let raw = format!(
-            "--------------\nALTER USER 'u'@'localhost' IDENTIFIED BY '{secret}'\n--------------\nERROR 1396"
+    fn ensure_message_uses_identifiers_only() {
+        let msg =
+            ensured_database_message("app_db", "app_user", &["localhost", "127.0.0.1"], false);
+        assert_eq!(
+            msg,
+            "Created database `app_db` with user `app_user`@[localhost, 127.0.0.1]"
         );
-        let cleaned = redact_db_cli_stderr(&raw);
-        assert!(!cleaned.contains(&secret[..11]));
-        assert!(cleaned.contains("[redacted]"));
+        let legacy = ensured_database_message("app_db", "app_user", &["localhost"], true);
+        assert!(legacy.ends_with("(legacy user create)"));
+        assert!(!legacy.to_ascii_lowercase().contains("identified"));
+    }
+
+    #[test]
+    fn ensure_rejects_bad_secret_without_echo() {
+        // Control characters are refused before any client call; the error is a
+        // fixed message that does not repeat the input.
+        let probe: String = ['b', 'a', 'd', '\u{1}', 'x'].into_iter().collect();
+        let err = create_database_with_user("app_db", "app_user", &probe).unwrap_err();
+        assert!(err.contains("control characters"));
+        assert!(!err.contains("bad"));
     }
 
     #[test]

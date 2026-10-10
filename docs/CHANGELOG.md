@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **MariaDB CLI helpers never echo account passwords (CodeQL `rust/cleartext-logging`)**: The database ensure path used by host packages (SOGo, SnappyMail-family contacts, phpMyAdmin defaults) and the `cpn apps install` / `--ensure-database-defaults` CLI now wraps the account password in a `DbSecret` type that cannot be formatted (no `Display`, redacting `Debug`); the only output is the escaped SQL literal placed in the statement. `mariadb` / `mysql` client stderr is scrubbed before it is embedded in any error (`IDENTIFIED BY '...'`, `PASSWORD('...')`, `USING '...'` payloads become `'[redacted]'`, error codes and messages are kept, 400 character cap), and success messages are built from the validated database name, user, and host list only. Resolves the three open high alerts on `src/cli_apps.rs` and `src/cli_maintenance.rs`. New module `panel_ops_db_secret.rs` with unit tests for the redaction and the secret wrapper. No behavior change for successful installs.
+
 ## [1.4.1] - 10/10/2026
 
 Patch release after v1.4.0. SOGo groupware host package goes LIVE (with an EL10 runtime shim and CalDAV/CardDAV through the panel), upgrade jobs clean their staging leftovers, the Version installer log gains timestamps, a Done state, Copy log, and a Main Log link, Version Management adds a branch picker and estimated time remaining, every plugin card gets a thumbnail, Mr Agent surfaces PHP bridge errors, and Windows developer builds pass again.

@@ -267,6 +267,7 @@ pub mod panel_ops_cloudflare_oauth;
 pub mod panel_ops_cloudflare_verify;
 pub mod panel_ops_db;
 pub mod panel_ops_db_disk;
+pub mod panel_ops_db_secret;
 pub mod panel_ops_dkim_keys;
 pub mod panel_ops_dns;
 pub mod panel_ops_dns_ns;
