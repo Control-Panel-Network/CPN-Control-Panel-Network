@@ -1,8 +1,6 @@
 //! Docker Host package manage UI: containers, images search/pull, create container.
 
-use crate::panel_hub_pages_docker_list::{
-    DockerListQuery, docker_list_toolbar, paginate_slice,
-};
+use crate::panel_hub_pages_docker_list::{DockerListQuery, docker_list_toolbar, paginate_slice};
 use crate::panel_hubs::{feature_shell, not_configured_body};
 use crate::panel_ops_docker::{
     DockerContainerRow, docker_status, list_containers_detailed, list_images_detailed,
@@ -131,7 +129,10 @@ fn container_actions(row: &DockerContainerRow) -> String {
 
 fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String {
     if rows.is_empty() {
-        return format!(r#"<p class="empty-state">{}</p>"#, html_escape(empty_message));
+        return format!(
+            r#"<p class="empty-state">{}</p>"#,
+            html_escape(empty_message)
+        );
     }
     let mut body = String::from(
         r#"<div class="table-wrap docker-list-wrap"><table class="data-table docker-containers-table docker-card-list">
@@ -431,7 +432,9 @@ pub fn docker_logs_page(name: &str, notice: Option<&str>, error: Option<&str>) -
 /// Legacy Server hub tiles still call this with a kind label.
 pub fn docker_page(kind: &str) -> String {
     match kind {
-        "Docker Images" => crate::panel_hub_pages_docker_images_ui::docker_images_page(None, None, None, &[], None),
+        "Docker Images" => {
+            crate::panel_hub_pages_docker_images_ui::docker_images_page(None, None, None, &[], None)
+        }
         _ => docker_manage_page(None, None, None),
     }
 }

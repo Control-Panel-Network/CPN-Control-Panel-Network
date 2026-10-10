@@ -1,9 +1,7 @@
 //! Docker Images page UI (Hub search, local image table, prune).
 
 use crate::panel_hub_pages_docker::{html_escape, toolbar, urlencoding_simple};
-use crate::panel_hub_pages_docker_list::{
-    DockerListQuery, docker_list_toolbar, paginate_slice,
-};
+use crate::panel_hub_pages_docker_list::{DockerListQuery, docker_list_toolbar, paginate_slice};
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_docker::{DockerImageRow, docker_status, list_images_detailed};
 use crate::panel_ops_docker_images::{DockerHubSearchHit, image_in_use};
@@ -56,7 +54,10 @@ fn search_results_html(hits: &[DockerHubSearchHit]) -> String {
 
 fn images_table(rows: &[&DockerImageRow], empty_message: &str) -> String {
     if rows.is_empty() {
-        return format!(r#"<p class="empty-state">{}</p>"#, html_escape(empty_message));
+        return format!(
+            r#"<p class="empty-state">{}</p>"#,
+            html_escape(empty_message)
+        );
     }
     let mut body = String::from(
         r#"<div class="table-wrap docker-list-wrap"><table class="data-table docker-images-table docker-card-list">
@@ -141,7 +142,6 @@ fn search_pull_card(query: &str, hits: &[DockerHubSearchHit]) -> String {
         results = search_results_html(hits),
     )
 }
-
 
 pub fn docker_images_page(
     notice: Option<&str>,
@@ -253,5 +253,3 @@ pub fn docker_images_page(
         error,
     )
 }
-
-
