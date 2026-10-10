@@ -7,6 +7,7 @@ use crate::packages::is_panel_admin;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html, decode_notice_code};
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_reseller::users_reseller_page;
+use crate::panel_hub_pages_reseller_tabs::normalize_reseller_tab;
 use crate::panel_pages::panel_shell;
 use crate::panel_reseller::{
     ResellerBranding, assign_user_to_reseller, can_access_reseller_center, demote_reseller,
@@ -32,8 +33,13 @@ fn require_reseller_csrf(http: &HttpRequest, user: &str, token: &str) -> Result<
     Ok(())
 }
 
-fn redirect_reseller(notice: Option<&str>, error: Option<&str>) -> HttpResponse {
-    redirect_notice("/account/users/reseller", notice, error)
+fn redirect_reseller(tab: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
+    let tab = normalize_reseller_tab(tab);
+    redirect_notice(
+        &format!("/account/users/reseller?tab={tab}"),
+        notice,
+        error,
+    )
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -120,11 +126,15 @@ pub async fn users_reseller_route(
     }
     let notice = query.get("notice").map(|s| decode_notice_code(s));
     let error = query.get("error").map(|s| decode_notice_code(s));
+    let tab = query
+        .get("tab")
+        .map(|s| s.as_str())
+        .unwrap_or("overview");
     html_ok(panel_shell(
         &user,
         "users",
         "Reseller Center",
-        &users_reseller_page(&user, notice.as_deref(), error.as_deref()),
+        &users_reseller_page(&user, notice.as_deref(), error.as_deref(), tab),
     ))
 }
 
@@ -138,10 +148,10 @@ pub async fn users_reseller_promote_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     let quotas = match quotas_from_fields(
         &form.q_websites,
@@ -152,14 +162,15 @@ pub async fn users_reseller_promote_post(
         &form.q_bandwidth,
     ) {
         Ok(q) => q,
-        Err(err) => return redirect_reseller(None, Some(&err)),
+        Err(err) => return redirect_reseller("resellers", None, Some(&err)),
     };
     match promote_reseller(&form.username, quotas) {
         Ok(row) => redirect_reseller(
+            "resellers",
             Some(&format!("Promoted {} to reseller", row.username)),
             None,
         ),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Err(err) => redirect_reseller("resellers", None, Some(&err)),
     }
 }
 
@@ -173,14 +184,14 @@ pub async fn users_reseller_demote_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     match demote_reseller(&form.username) {
-        Ok(()) => redirect_reseller(Some("Reseller demoted"), None),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Ok(()) => redirect_reseller("resellers", Some("Reseller demoted"), None),
+        Err(err) => redirect_reseller("resellers", None, Some(&err)),
     }
 }
 
@@ -194,10 +205,10 @@ pub async fn users_reseller_quotas_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("quotas", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("quotas", None, Some(&err));
     }
     let quotas = match quotas_from_fields(
         &form.q_websites,
@@ -208,11 +219,11 @@ pub async fn users_reseller_quotas_post(
         &form.q_bandwidth,
     ) {
         Ok(q) => q,
-        Err(err) => return redirect_reseller(None, Some(&err)),
+        Err(err) => return redirect_reseller("quotas", None, Some(&err)),
     };
     match update_reseller_quotas(&form.username, quotas) {
-        Ok(()) => redirect_reseller(Some("Reseller quotas updated"), None),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Ok(()) => redirect_reseller("quotas", Some("Reseller quotas updated"), None),
+        Err(err) => redirect_reseller("quotas", None, Some(&err)),
     }
 }
 
@@ -229,11 +240,11 @@ pub async fn users_reseller_branding_post(
         return forbid_reseller(&user);
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("branding", None, Some(&err));
     }
     let target = form.username.trim();
     if !is_panel_admin(&user) && !target.eq_ignore_ascii_case(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("branding", None, Some(ADMIN_ONLY_CODE));
     }
     let branding = ResellerBranding {
         display_name: form.display_name.clone(),
@@ -242,8 +253,8 @@ pub async fn users_reseller_branding_post(
         primary_color: form.primary_color.clone(),
     };
     match update_reseller_branding(target, branding) {
-        Ok(()) => redirect_reseller(Some("Branding saved"), None),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Ok(()) => redirect_reseller("branding", Some("Branding saved"), None),
+        Err(err) => redirect_reseller("branding", None, Some(&err)),
     }
 }
 
@@ -257,14 +268,14 @@ pub async fn users_reseller_assign_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     match assign_user_to_reseller(&form.child, &form.reseller) {
-        Ok(()) => redirect_reseller(Some("User assigned under reseller"), None),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Ok(()) => redirect_reseller("resellers", Some("User assigned under reseller"), None),
+        Err(err) => redirect_reseller("resellers", None, Some(&err)),
     }
 }
 
@@ -278,14 +289,14 @@ pub async fn users_reseller_unassign_post(
         return login_redirect(&http);
     };
     if !is_panel_admin(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     match unassign_user(&form.child) {
-        Ok(()) => redirect_reseller(Some("User unassigned from reseller"), None),
-        Err(err) => redirect_reseller(None, Some(&err)),
+        Ok(()) => redirect_reseller("resellers", Some("User unassigned from reseller"), None),
+        Err(err) => redirect_reseller("resellers", None, Some(&err)),
     }
 }
 
@@ -302,7 +313,7 @@ pub async fn users_reseller_create_user_post(
         return forbid_reseller(&user);
     }
     if let Err(err) = require_reseller_csrf(&http, &user, &form.csrf) {
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     let parent = if is_panel_admin(&user) {
         form.reseller.trim().to_string()
@@ -310,10 +321,10 @@ pub async fn users_reseller_create_user_post(
         user.clone()
     };
     if parent.is_empty() {
-        return redirect_reseller(None, Some("Parent reseller is required"));
+        return redirect_reseller("resellers", None, Some("Parent reseller is required"));
     }
     if !is_panel_admin(&user) && !parent.eq_ignore_ascii_case(&user) {
-        return redirect_reseller(None, Some(ADMIN_ONLY_CODE));
+        return redirect_reseller("resellers", None, Some(ADMIN_ONLY_CODE));
     }
     let generate = matches!(
         form.generate.trim().to_ascii_lowercase().as_str(),
@@ -333,11 +344,11 @@ pub async fn users_reseller_create_user_post(
         "en",
     ) {
         Ok(r) => r,
-        Err(err) => return redirect_reseller(None, Some(&err)),
+        Err(err) => return redirect_reseller("resellers", None, Some(&err)),
     };
     if let Err(err) = assign_user_to_reseller(&created.public.username, &parent) {
         let _ = crate::account_mgmt::delete_account(&created.public.username);
-        return redirect_reseller(None, Some(&err));
+        return redirect_reseller("resellers", None, Some(&err));
     }
     let mut notice = format!(
         "Created child user {} under {}",
@@ -346,5 +357,5 @@ pub async fn users_reseller_create_user_post(
     if let Some(pw) = created.generated_password {
         notice.push_str(&format!(". Generated password: {pw}"));
     }
-    redirect_reseller(Some(&notice), None)
+    redirect_reseller("resellers", Some(&notice), None)
 }

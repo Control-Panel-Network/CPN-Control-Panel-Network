@@ -1,8 +1,9 @@
-//! Reseller Center LIVE page (hierarchy, pool quotas, branding).
+//! Reseller Center LIVE page (hierarchy, pool quotas, branding) with tabbed UI.
 
 use crate::account_mgmt::list_accounts;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_pages_reseller_stats::reseller_stats_cards_html;
+use crate::panel_hub_pages_reseller_tabs::{normalize_reseller_tab, reseller_tab_bar};
 use crate::panel_hubs::feature_shell;
 use crate::panel_reseller::{
     ResellerBranding, ResellerQuotas, ResellerRecord, account_is_reseller, child_usernames,
@@ -87,9 +88,9 @@ fn quota_table(q: &ResellerQuotas, committed_label: &str, committed: Option<&str
     )
 }
 
-fn branding_form(csrf: &str, username: &str, branding: &ResellerBranding, action: &str) -> String {
+fn branding_form(csrf: &str, username: &str, branding: &ResellerBranding) -> String {
     format!(
-        r##"<form method="post" action="{action}" class="stack-form" style="max-width:560px;display:grid;gap:12px;">
+        r##"<form method="post" action="/account/users/reseller/branding" class="stack-form" style="max-width:560px;display:grid;gap:12px;">
   <input type="hidden" name="csrf" value="{csrf}">
   <input type="hidden" name="username" value="{user}">
   <label>Display name<input name="display_name" type="text" maxlength="80" value="{name}" placeholder="Acme Hosting"></label>
@@ -98,7 +99,6 @@ fn branding_form(csrf: &str, username: &str, branding: &ResellerBranding, action
   <label>Primary color<input name="primary_color" type="text" maxlength="32" value="{color}" placeholder="#006CFA"></label>
   <button type="submit" class="btn-primary">Save branding</button>
 </form>"##,
-        action = html_escape(action),
         csrf = html_escape(csrf),
         user = html_escape(username),
         name = html_escape(&branding.display_name),
@@ -108,100 +108,37 @@ fn branding_form(csrf: &str, username: &str, branding: &ResellerBranding, action
     )
 }
 
-fn reseller_card(admin: bool, csrf: &str, row: &ResellerRecord) -> String {
-    let children = child_usernames(&row.username).unwrap_or_default();
-    let committed = pool_committed(&row.username).ok();
-    let committed_txt = committed.as_ref().map(|c| {
-        format!(
-            "websites {}, mailboxes {}, DBs {}, FTP {}, storage {}, bandwidth {}",
-            format_quota_cell(c.websites, ""),
-            format_quota_cell(c.mailboxes, ""),
-            format_quota_cell(c.databases, ""),
-            format_quota_cell(c.ftp_accounts, ""),
-            format_quota_cell(c.storage_mb, "MB"),
-            format_quota_cell(c.bandwidth_mb, "MB"),
-        )
-    });
-    let brand_preview = if row.branding.display_name.trim().is_empty() {
-        String::new()
-    } else {
-        format!(
-            r#"<p style="margin:8px 0;"><strong>{}</strong> <span class="muted">{}</span></p>"#,
-            html_escape(&row.branding.display_name),
-            html_escape(&row.branding.tagline)
-        )
-    };
-    let children_list = if children.is_empty() {
-        r#"<p class="muted">No child users yet.</p>"#.to_string()
-    } else {
-        let items: Vec<String> = children
-            .iter()
-            .map(|u| format!("<li><code>{}</code></li>", html_escape(u)))
-            .collect();
-        format!("<ul>{}</ul>", items.join(""))
-    };
-    let mut admin_tools = String::new();
+fn committed_txt(username: &str) -> Option<String> {
+    let committed = pool_committed(username).ok()?;
+    Some(format!(
+        "websites {}, mailboxes {}, DBs {}, FTP {}, storage {}, bandwidth {}",
+        format_quota_cell(committed.websites, ""),
+        format_quota_cell(committed.mailboxes, ""),
+        format_quota_cell(committed.databases, ""),
+        format_quota_cell(committed.ftp_accounts, ""),
+        format_quota_cell(committed.storage_mb, "MB"),
+        format_quota_cell(committed.bandwidth_mb, "MB"),
+    ))
+}
+
+fn visible_resellers(viewer: &str, admin: bool) -> Vec<ResellerRecord> {
     if admin {
-        admin_tools.push_str(&format!(
-            r#"<h4 style="margin:16px 0 8px;">Update pool quotas</h4>
-<form method="post" action="/account/users/reseller/quotas" class="stack-form" style="display:grid;gap:12px;">
-  <input type="hidden" name="csrf" value="{csrf}">
-  <input type="hidden" name="username" value="{user}">
-  {quota_inputs}
-  <button type="submit" class="btn-primary">Save quotas</button>
-</form>
-<form method="post" action="/account/users/reseller/demote" class="stack-form" style="margin-top:12px;"
-      onsubmit="return confirm('Demote this reseller?');">
-  <input type="hidden" name="csrf" value="{csrf}">
-  <input type="hidden" name="username" value="{user}">
-  <button type="submit" class="btn-secondary">Demote reseller</button>
-</form>"#,
-            csrf = html_escape(csrf),
-            user = html_escape(&row.username),
-            quota_inputs = quota_inputs("q", &row.quotas),
-        ));
+        list_resellers().unwrap_or_default()
+    } else {
+        get_reseller(viewer).ok().flatten().into_iter().collect()
     }
+}
+
+fn overview_panel(viewer: &str) -> String {
     format!(
-        r#"<article class="section-card" style="margin-top:16px;">
-  <h3 style="margin:0 0 8px;">Reseller <code>{user}</code></h3>
-  {brand_preview}
-  <h4 style="margin:12px 0 8px;">Pool quotas</h4>
-  {quota_table}
-  <h4 style="margin:16px 0 8px;">Child users ({n})</h4>
-  {children_list}
-  <h4 style="margin:16px 0 8px;">Branding</h4>
-  {branding}
-  {admin_tools}
-</article>"#,
-        user = html_escape(&row.username),
-        brand_preview = brand_preview,
-        quota_table = quota_table(
-            &row.quotas,
-            "Committed child package caps",
-            committed_txt.as_deref()
-        ),
-        n = children.len(),
-        children_list = children_list,
-        branding = branding_form(
-            csrf,
-            &row.username,
-            &row.branding,
-            "/account/users/reseller/branding"
-        ),
-        admin_tools = admin_tools,
+        r#"{stats}
+<p class="muted">Manage reseller hierarchy, multi-tenant pool quotas (websites, mailboxes, databases, FTP, storage, bandwidth), and per-reseller branding. Child users are ACL-jailed to their parent reseller. Use the tabs above for Resellers, Quotas, and Branding.</p>"#,
+        stats = reseller_stats_cards_html(viewer),
     )
 }
 
-/// LIVE Reseller Center body for the signed-in viewer.
-pub fn users_reseller_page(viewer: &str, notice: Option<&str>, error: Option<&str>) -> String {
-    let admin = is_panel_admin(viewer);
-    let csrf = reseller_csrf_token(viewer);
-    let mut body = notice_block(notice, error);
-    body.push_str(&reseller_stats_cards_html(viewer));
-    body.push_str(
-        r#"<p class="muted">Manage reseller hierarchy, multi-tenant pool quotas (websites, mailboxes, databases, FTP, storage, bandwidth), and per-reseller branding. Child users are ACL-jailed to their parent reseller.</p>"#,
-    );
-
+fn resellers_panel(viewer: &str, admin: bool, csrf: &str) -> String {
+    let mut body = String::new();
     if admin {
         let candidates: Vec<String> = list_accounts()
             .unwrap_or_default()
@@ -248,7 +185,7 @@ pub fn users_reseller_page(viewer: &str, notice: Option<&str>, error: Option<&st
     <button type="submit" class="btn-secondary">Unassign</button>
   </form>
 </article>"#,
-            csrf = html_escape(&csrf),
+            csrf = html_escape(csrf),
             opts = opts,
             quota_inputs = quota_inputs("q", &default_q),
         ));
@@ -268,7 +205,7 @@ pub fn users_reseller_page(viewer: &str, notice: Option<&str>, error: Option<&st
     <button type="submit" class="btn-primary">Create child user</button>
   </form>
 </article>"#,
-        csrf = html_escape(&csrf),
+        csrf = html_escape(csrf),
         parent_field = if admin {
             r#"<label>Parent reseller<input name="reseller" type="text" required maxlength="128" placeholder="reseller username"></label>"#.to_string()
         } else {
@@ -279,19 +216,148 @@ pub fn users_reseller_page(viewer: &str, notice: Option<&str>, error: Option<&st
         },
     ));
 
-    let rows: Vec<ResellerRecord> = if admin {
-        list_resellers().unwrap_or_default()
-    } else {
-        get_reseller(viewer).ok().flatten().into_iter().collect()
-    };
+    let rows = visible_resellers(viewer, admin);
     if rows.is_empty() {
         body.push_str(
             r#"<article class="section-card" style="margin-top:16px;"><p class="empty-state">No resellers configured yet.</p></article>"#,
         );
-    } else {
-        for row in &rows {
-            body.push_str(&reseller_card(admin, &csrf, row));
-        }
+        return body;
+    }
+    for row in &rows {
+        let children = child_usernames(&row.username).unwrap_or_default();
+        let children_list = if children.is_empty() {
+            r#"<p class="muted">No child users yet.</p>"#.to_string()
+        } else {
+            let items: Vec<String> = children
+                .iter()
+                .map(|u| format!("<li><code>{}</code></li>", html_escape(u)))
+                .collect();
+            format!("<ul>{}</ul>", items.join(""))
+        };
+        let brand_preview = if row.branding.display_name.trim().is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<p style="margin:8px 0;"><strong>{}</strong> <span class="muted">{}</span></p>"#,
+                html_escape(&row.branding.display_name),
+                html_escape(&row.branding.tagline)
+            )
+        };
+        let demote = if admin {
+            format!(
+                r#"<form method="post" action="/account/users/reseller/demote" class="stack-form" style="margin-top:12px;"
+      onsubmit="return confirm('Demote this reseller?');">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="username" value="{user}">
+  <button type="submit" class="btn-secondary">Demote reseller</button>
+</form>"#,
+                csrf = html_escape(csrf),
+                user = html_escape(&row.username),
+            )
+        } else {
+            String::new()
+        };
+        body.push_str(&format!(
+            r#"<article class="section-card" style="margin-top:16px;">
+  <h3 style="margin:0 0 8px;">Reseller <code>{user}</code></h3>
+  {brand_preview}
+  <h4 style="margin:16px 0 8px;">Child users ({n})</h4>
+  {children_list}
+  <p class="muted" style="margin-top:12px;">Pool limits and branding are edited on the Quotas and Branding tabs.</p>
+  {demote}
+</article>"#,
+            user = html_escape(&row.username),
+            brand_preview = brand_preview,
+            n = children.len(),
+            children_list = children_list,
+            demote = demote,
+        ));
+    }
+    body
+}
+
+fn quotas_panel(viewer: &str, admin: bool, csrf: &str) -> String {
+    let rows = visible_resellers(viewer, admin);
+    if rows.is_empty() {
+        return r#"<article class="section-card"><p class="empty-state">No reseller pools yet. Promote a reseller on the Resellers tab first.</p></article>"#.to_string();
+    }
+    let mut body = String::from(
+        r#"<p class="muted" style="margin:0 0 12px;">Pool limits for each reseller. Child package caps must fit inside the pool.</p>"#,
+    );
+    for row in &rows {
+        let committed = committed_txt(&row.username);
+        let edit = if admin {
+            format!(
+                r#"<h4 style="margin:16px 0 8px;">Update pool quotas</h4>
+<form method="post" action="/account/users/reseller/quotas" class="stack-form" style="display:grid;gap:12px;">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="username" value="{user}">
+  {quota_inputs}
+  <button type="submit" class="btn-primary">Save quotas</button>
+</form>"#,
+                csrf = html_escape(csrf),
+                user = html_escape(&row.username),
+                quota_inputs = quota_inputs("q", &row.quotas),
+            )
+        } else {
+            String::new()
+        };
+        body.push_str(&format!(
+            r#"<article class="section-card" style="margin-top:16px;">
+  <h3 style="margin:0 0 8px;">Pool for <code>{user}</code></h3>
+  {quota_table}
+  {edit}
+</article>"#,
+            user = html_escape(&row.username),
+            quota_table = quota_table(
+                &row.quotas,
+                "Committed child package caps",
+                committed.as_deref()
+            ),
+            edit = edit,
+        ));
+    }
+    body
+}
+
+fn branding_panel(viewer: &str, admin: bool, csrf: &str) -> String {
+    let rows = visible_resellers(viewer, admin);
+    if rows.is_empty() {
+        return r#"<article class="section-card"><p class="empty-state">No resellers to brand yet. Promote a reseller on the Resellers tab first.</p></article>"#.to_string();
+    }
+    let mut body = String::from(
+        r#"<p class="muted" style="margin:0 0 12px;">Display name, logo URL, tagline, and primary color for each reseller.</p>"#,
+    );
+    for row in &rows {
+        body.push_str(&format!(
+            r#"<article class="section-card" style="margin-top:16px;">
+  <h3 style="margin:0 0 8px;">Branding for <code>{user}</code></h3>
+  {form}
+</article>"#,
+            user = html_escape(&row.username),
+            form = branding_form(csrf, &row.username, &row.branding),
+        ));
+    }
+    body
+}
+
+/// LIVE Reseller Center body for the signed-in viewer.
+pub fn users_reseller_page(
+    viewer: &str,
+    notice: Option<&str>,
+    error: Option<&str>,
+    tab: &str,
+) -> String {
+    let admin = is_panel_admin(viewer);
+    let csrf = reseller_csrf_token(viewer);
+    let tab = normalize_reseller_tab(tab);
+    let mut body = notice_block(notice, error);
+    body.push_str(&reseller_tab_bar(tab));
+    match tab {
+        "resellers" => body.push_str(&resellers_panel(viewer, admin, &csrf)),
+        "quotas" => body.push_str(&quotas_panel(viewer, admin, &csrf)),
+        "branding" => body.push_str(&branding_panel(viewer, admin, &csrf)),
+        _ => body.push_str(&overview_panel(viewer)),
     }
 
     feature_shell(
@@ -314,14 +380,30 @@ mod tests {
 
     #[test]
     fn page_is_live_not_scaffold() {
-        let html = users_reseller_page("cpnowner", None, None);
+        let html = users_reseller_page("cpnowner", None, None, "overview");
         assert!(!html.contains("Not configured yet"));
         assert!(!html.contains("scaffolded honestly"));
         assert!(html.contains("Reseller Center"));
-        assert!(html.contains("multi-tenant") || html.contains("Create child user"));
         assert!(html.contains("Total Users"));
         assert!(html.contains("Total Websites"));
         assert!(html.contains("Resellers"));
+        assert!(html.contains("?tab=resellers"));
+        assert!(html.contains("?tab=quotas"));
+        assert!(html.contains("?tab=branding"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn resellers_tab_keeps_promote_and_create() {
+        let html = users_reseller_page("cpnowner", None, None, "resellers");
+        assert!(html.contains("Create child user") || html.contains("Promote reseller"));
+        assert!(!html.contains("Total Users"));
+    }
+
+    #[test]
+    fn overview_hides_manage_forms() {
+        let html = users_reseller_page("cpnowner", None, None, "overview");
+        assert!(html.contains("Total Users"));
+        assert!(!html.contains("action=\"/account/users/reseller/promote\""));
     }
 }
