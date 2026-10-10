@@ -114,9 +114,9 @@ pub fn users_plans_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> 
                 },
                 HubTile {
                     title: "Reseller Center",
-                    subtitle: "Reseller settings",
+                    subtitle: "Hierarchy, quotas, and branding",
                     href: "/account/users/reseller",
-                    live: false,
+                    live: true,
                 },
             ],
         ),

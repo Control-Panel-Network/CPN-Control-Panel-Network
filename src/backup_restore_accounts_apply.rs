@@ -108,6 +108,8 @@ pub(crate) fn ensure_imported_account(
         must_change_password: true,
         totp_required: true,
         disabled,
+        role: String::new(),
+        parent_reseller: String::new(),
     };
     let path = if load_bootstrap().is_none() {
         bootstrap_path()

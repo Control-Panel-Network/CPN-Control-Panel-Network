@@ -10,7 +10,7 @@ use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html};
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_account::{
     api_access_page, users_create_page, users_create_success_page, users_list_page,
-    users_password_success_page, users_plans_hub_main_for, users_reseller_page,
+    users_password_success_page, users_plans_hub_main_for,
 };
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -303,22 +303,6 @@ pub async fn users_status_post(
         }
         Err(error) => redirect_notice("/account/users/modify?tab=other", None, Some(&error)),
     }
-}
-
-#[get("/account/users/reseller")]
-pub async fn users_reseller_route(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(
-        &user,
-        "users",
-        "Reseller Center",
-        &users_reseller_page(),
-    ))
 }
 
 #[get("/account/api-access")]

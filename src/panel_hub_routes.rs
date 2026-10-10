@@ -19,6 +19,7 @@ pub use crate::panel_hub_routes_firewall::*;
 pub use crate::panel_hub_routes_passkeys::*;
 pub use crate::panel_hub_routes_php::*;
 pub use crate::panel_hub_routes_profile::*;
+pub use crate::panel_hub_routes_reseller::*;
 pub use crate::panel_hub_routes_security::*;
 pub use crate::panel_hub_routes_server::*;
 pub use crate::panel_hub_routes_server_logs::*;

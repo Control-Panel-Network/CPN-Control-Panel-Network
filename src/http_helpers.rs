@@ -279,6 +279,8 @@ mod tests {
             recovery_email: "admin@example.com".into(),
             configured: true,
             disabled: false,
+            role: String::new(),
+            parent_reseller: String::new(),
         });
         assert!(panel_account_ready(&status));
         assert!(!install_finished(&status));
