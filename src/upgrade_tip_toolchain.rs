@@ -88,6 +88,34 @@ fn prepend_path(dir: &Path, env: &mut Vec<(String, String)>) {
     env.push(("PATH".into(), value));
 }
 
+/// Cap parallel rustc jobs from free RAM so tip builds on 4 to 8 GB labs
+/// are less likely to hit the OOM killer (SIGKILL / exit 137).
+pub fn cargo_build_jobs() -> u32 {
+    let nproc = std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(2)
+        .max(1);
+    let mem_mb = mem_available_mb().unwrap_or(2048);
+    // Roughly 1.5 GiB per parallel rustc; leave headroom for the panel and linker.
+    let by_ram = (mem_mb / 1536).max(1);
+    nproc.min(by_ram).min(4).max(1)
+}
+
+fn mem_available_mb() -> Option<u64> {
+    let text = std::fs::read_to_string("/proc/meminfo").ok()?;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("MemAvailable:") {
+            let kb: u64 = rest
+                .split_whitespace()
+                .next()?
+                .parse()
+                .ok()?;
+            return Some(kb / 1024);
+        }
+    }
+    None
+}
+
 fn env_for_cargo(cargo: &Path) -> Vec<(String, String)> {
     let mut env = vec![("CARGO_TERM_COLOR".into(), "never".into())];
     if let Some(bin) = cargo.parent() {
@@ -110,6 +138,9 @@ fn env_for_cargo(cargo: &Path) -> Vec<(String, String)> {
     if Path::new("/home/cpn").is_dir() {
         env.push(("CARGO_TARGET_DIR".into(), target.display().to_string()));
     }
+    let jobs = cargo_build_jobs();
+    env.retain(|(k, _)| k != "CARGO_BUILD_JOBS");
+    env.push(("CARGO_BUILD_JOBS".into(), jobs.to_string()));
     env
 }
 
@@ -153,5 +184,13 @@ mod tests {
         let msg = missing_cargo_message();
         assert!(msg.contains("cargo"));
         assert!(!msg.contains("Use a published Release"));
+    }
+
+    #[test]
+    fn cargo_jobs_at_least_one_and_capped() {
+        let jobs = cargo_build_jobs();
+        assert!(jobs >= 1);
+        assert!(jobs <= 4);
+        assert!(!format!("{jobs}").contains('\u{2014}'));
     }
 }

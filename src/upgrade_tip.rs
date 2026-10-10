@@ -180,6 +180,10 @@ async fn cargo_build_release(
     env.retain(|(k, _)| k != "CPN_GIT_SHA" && k != "CPN_BUILD_SHA");
     env.push(("CPN_GIT_SHA".into(), git_sha.to_string()));
     env.push(("CPN_BUILD_SHA".into(), git_sha.to_string()));
+    let jobs = upgrade_tip_toolchain::cargo_build_jobs();
+    env.retain(|(k, _)| k != "CARGO_BUILD_JOBS");
+    env.push(("CARGO_BUILD_JOBS".into(), jobs.to_string()));
+    upgrade_tip_log::log_info(format!("CARGO_BUILD_JOBS={jobs} for tip cargo build"));
     upgrade_tip_cmd::run_checked(&cargo, &["build", "--release", "--locked"], root, &env).await?;
     Ok(())
 }
