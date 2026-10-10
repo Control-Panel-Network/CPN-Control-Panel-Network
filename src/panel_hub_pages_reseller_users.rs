@@ -461,17 +461,17 @@ pub fn reseller_users_panel(
             let email_show = truncate_email(email_full, 28);
             body.push_str(&format!(
                 r#"<tr>
-  <td data-label="Username"><strong>{}</strong></td>
+  <td data-label="Username"><strong>{user}</strong></td>
   <td data-label="Email" title="{email_title}">{email}</td>
   <td data-label="Role / parent">{parent}</td>
-  <td data-label="Status">{}</td>
+  <td data-label="Status">{status}</td>
   <td data-label="Actions">{actions}</td>
 </tr>"#,
-                html_escape(&acct.username),
+                user = html_escape(&acct.username),
                 email_title = html_escape(email_full),
                 email = html_escape(&email_show),
                 parent = parent_cell,
-                status_label(acct.disabled),
+                status = status_label(acct.disabled),
                 actions = row_actions(viewer, admin, csrf, acct),
             ));
         }
