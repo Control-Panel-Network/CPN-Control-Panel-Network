@@ -7,6 +7,7 @@ use crate::host_packages_catalog::{
     HostInstallStatus, filter_host_packages, format_host_dates, host_categories,
     host_package_is_featured, meta_for,
 };
+use crate::panel_plugin_icons::card_head;
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
@@ -115,7 +116,9 @@ pub(crate) fn host_nav_links(id: crate::apps::AppId) -> String {
         }
         crate::apps::AppId::Nextcloud => String::new(),
         crate::apps::AppId::Sogo => {
-            r#"<a class="btn-secondary" href="/email">Manage</a>"#.into()
+            r#"<a class="btn-primary" href="/SOGo/" target="_blank" rel="noopener noreferrer">Open</a>
+            <a class="btn-secondary" href="/email">Manage</a>"#
+                .into()
         }
     }
 }
@@ -141,6 +144,7 @@ pub(crate) fn host_action_buttons(
             | crate::apps::AppId::Tachyon
             | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
+            | crate::apps::AppId::Sogo
     );
     let active = is_webmail && crate::apps_webmail::is_active_webmail(status.id);
     let on_installed_hub = return_view.trim().eq_ignore_ascii_case("installed");
@@ -352,6 +356,7 @@ pub(crate) fn host_card(
             | crate::apps::AppId::Tachyon
             | crate::apps::AppId::Roundcube
             | crate::apps::AppId::Nextsnapmail
+            | crate::apps::AppId::Sogo
     ) && crate::apps_webmail::is_active_webmail(status.id)
     {
         r#"<span class="plugin-badge featured">Active</span>"#
@@ -406,7 +411,7 @@ pub(crate) fn host_card(
     };
     format!(
         r#"<article class="plugin-card">
-          <h3>{label}</h3>
+          {head}
           <div class="plugin-badges">
             <span class="plugin-badge">Host</span>
             <span class="plugin-badge cat">{cat}</span>
@@ -425,7 +430,7 @@ pub(crate) fn host_card(
           {warn}
           <div class="plugin-actions">{actions}</div>
         </article>"#,
-        label = html_escape(status.id.label()),
+        head = card_head(status.id.as_str(), status.id.label(), meta.category, None),
         cat = html_escape(meta.category),
         ver = html_escape(meta.version),
         pricing = pricing,

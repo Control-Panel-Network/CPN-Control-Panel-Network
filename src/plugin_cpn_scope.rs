@@ -404,6 +404,7 @@ mod tests {
             site_installable: false,
             cpn_installable: true,
             keywords: vec![],
+            icon: String::new(),
         };
         assert_eq!(store_target_attr(&entry), "host,cpn");
         entry.host_scoped = false;

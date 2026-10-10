@@ -62,6 +62,40 @@ cargo test --locked
 cargo clippy --locked -- -D warnings
 ```
 
+### Rust on Windows (developer builds)
+
+Linux is the production panel runtime; Windows Server 2016+ is a limited **Phase A** target (installer UI, Windows service, account bootstrap; no web/mail package recipes). You can still develop and run the Rust test suite on a Windows machine.
+
+`webauthn-rs` (passkeys) links OpenSSL through `openssl-sys`, so a Windows build needs an OpenSSL SDK or the vendored feature:
+
+```powershell
+# Option 1: system OpenSSL SDK (the "Light" installer has no SDK; install the full package)
+winget install --id ShiningLight.OpenSSL --exact   # or: choco install openssl -y
+
+# Set OPENSSL_DIR and OPENSSL_LIB_DIR for this session (add -Persist for new terminals)
+. .\scripts\windows-dev-env.ps1
+
+cargo check --locked
+cargo test --locked
+```
+
+`OPENSSL_DIR` alone is not enough for the common `OpenSSL-Win64` layout; `OPENSSL_LIB_DIR` must point at `lib\VC\x64\MD`, which the script resolves for you (same discovery as `release.yml`).
+
+```powershell
+# Option 2: build OpenSSL from source (no SDK needed; requires Perl on PATH, several minutes)
+cargo build --features vendored-openssl
+```
+
+The vendored feature is opt-in and also works on Linux (for example a static developer build); it needs a C compiler and a full Perl (`dnf install perl-core` on EL, `apt install perl` on Debian/Ubuntu, Strawberry Perl on Windows). Release packages keep linking the system OpenSSL.
+
+Notes:
+
+- The embedded installer UI must exist before a Rust build: `cd installer-ui; npm ci; npm run build`.
+- `cargo clippy -- -D warnings` is a Linux CI gate. On Windows, `cfg(unix)` helpers show up as dead-code warnings; run clippy in WSL or on a Linux guest when you need the exact CI result.
+- The test suite is expected to pass on Windows (helpers probe `PATH` and `.exe` where Linux uses `which`). Report a Windows-only failure as a bug rather than skipping it.
+- WSL (AlmaLinux or Ubuntu) is the quickest way to get the exact Linux CI behaviour, including `clippy` and OS-specific paths. Use a target dir inside the WSL filesystem (for example `CARGO_TARGET_DIR=~/cpn-target`) for speed.
+- Pull-request CI stays Linux-only for speed. The manual/weekly `Windows check` workflow (`.github/workflows/windows-check.yml`) runs `cargo check` and `cargo test` on `windows-latest` so a Windows build break is caught before a tagged release builds the Phase A zip.
+
 ### Installer UI
 
 ```bash

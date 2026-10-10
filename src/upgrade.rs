@@ -8,11 +8,10 @@ use crate::manifest::{
 use crate::model::{MaintenanceAction, MaintenancePlan, MaintenanceRequest};
 use crate::releases::{self, CpnRelease, compare_versions, is_retag_migration, normalize_version};
 use crate::upgrade_reload::{schedule_apply_reload, will_schedule_reload};
+use crate::upgrade_tip_run::{apply_migrations, post_install_cleanup, verify_installer_binary};
 use std::cmp::Ordering;
 use std::path::Path;
-use std::process::Stdio;
 use std::sync::Arc;
-use tokio::process::Command;
 
 pub fn build_plan(
     action: MaintenanceAction,
@@ -108,15 +107,17 @@ async fn finish_already_up_to_date(state: Arc<AppState>, installed: &str) -> Res
     status.phase = "completed";
     status.progress = 100;
     status.error = None;
-    status.message = message;
+    status.message = message.clone();
     status.restart_scheduled = false;
     let _ = state.events.send(crate::model::InstallerEvent::Completed {
         status: status.clone(),
     });
+    drop(status);
+    crate::upgrade_session_log::finish_session_ok(&message, false);
     Ok(())
 }
 
-fn maybe_reset_data(reset_data: bool) -> Result<(), String> {
+pub(crate) fn maybe_reset_data(reset_data: bool) -> Result<(), String> {
     if !reset_data {
         return Ok(());
     }
@@ -150,6 +151,18 @@ pub async fn run_maintenance(
         Ok(()) => Ok(()),
         Err(error) => {
             let _ = crate::panel_maintenance_mode::clear_with_reason("failed");
+            // Best-effort: a failed job must not leave download/source trees behind.
+            // The job's own staging dir was removed by its guard; this sweeps older
+            // orphans (grace period, skip anything a live process still uses).
+            for line in crate::upgrade_staging::sweep_orphaned_staging(
+                crate::upgrade_staging::grace_period(),
+                None,
+            )
+            .summary_lines()
+            {
+                crate::upgrade_tip_log::log_info(line);
+            }
+            crate::upgrade_session_log::finish_session_failed(&error);
             Err(error)
         }
     }
@@ -192,189 +205,16 @@ async fn run_maintenance_inner(
         return Err("Downgrade requires confirm_downgrade=true (or CLI --yes)".into());
     }
 
-    // Commit / stable tip path: version like `stable`, `stable@abc1234`, or a git SHA.
+    // Commit / branch tip path: version like `stable`, `dev`, `branch:<name>`,
+    // `<branch>@abc1234`, or a git SHA (branch default comes from Version Management).
     if matches!(
         request.action,
         MaintenanceAction::Upgrade | MaintenanceAction::Repair
     ) && let Some(raw) = request.version.as_deref()
         && let Some(tip_ref) = crate::releases_stable_tip::parse_tip_upgrade_target(raw)
     {
-        let repo = releases::github_repo();
-        state.log(
-            format!(
-                "Maintenance {:?}: tip/commit target {tip_ref} from {repo}",
-                request.action
-            ),
-            "info",
-        );
-        let source_label = if crate::panel_service::running_under_systemd() {
-            "ui"
-        } else {
-            "cli"
-        };
-        if let Err(error) = crate::panel_maintenance_mode::begin(
-            source_label,
-            "Updating CPN Panel",
-            &format!("Installing stable commits {tip_ref}"),
-            Some(tip_ref.as_str()),
-        ) {
-            state.log(
-                format!("Warning: could not set panel maintenance flag: {error}"),
-                "error",
-            );
-        }
-        maybe_reset_data(request.reset_data)?;
-        let docker_before = if matches!(
-            request.action,
-            MaintenanceAction::Upgrade | MaintenanceAction::Repair
-        ) {
-            crate::upgrade_verify::snapshot_cpn_docker_running()
-        } else {
-            Vec::new()
-        };
-        let tip = match crate::upgrade_tip::apply_tip_ref(&state, &repo, &tip_ref).await {
-            Ok(tip) => tip,
-            Err(error) => {
-                crate::upgrade_tip_log::log_failure(&error, None);
-                state.log(error.clone(), "error");
-                return Err(error);
-            }
-        };
-        let status_snapshot = state
-            .status
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        crate::upgrade_tip::record_tip_install(
-            &tip,
-            status_snapshot.selected_server.or(existing.selected_server),
-            status_snapshot.selected_mail.or(existing.selected_mail),
-        )?;
-        state.log(
-            format!(
-                "Installed {} ({}) from source tip {}",
-                tip.package_version, tip.branch_label, tip.short_sha
-            ),
-            "info",
-        );
-
-        state
-            .progress("testing", 86, "Cleaning stale CPN packaging/staging")
+        return crate::upgrade_tip_run::run_tip_maintenance(state, &request, &tip_ref, &existing)
             .await;
-        let cleanup = crate::upgrade_cleanup::cleanup_stale_packaging();
-        for path in &cleanup.removed {
-            state.log(format!("cleanup removed: {path}"), "info");
-        }
-        for note in cleanup.notes.iter().chain(cleanup.skipped_preserved.iter()) {
-            state.log(note.clone(), "info");
-        }
-
-        if matches!(request.action, MaintenanceAction::Upgrade) && request.bypass_docker {
-            state
-                .progress("installing", 90, "Refreshing CPN-managed Docker (--bypass)")
-                .await;
-            for note in crate::upgrade_verify::maybe_refresh_cpn_docker(true) {
-                state.log(note, "info");
-            }
-        }
-
-        state
-            .progress("testing", 92, "Verifying installer binary")
-            .await;
-        let version_ok = Command::new(installer_bin())
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .map(|status| status.success())
-            .unwrap_or(false);
-        if !version_ok {
-            return Err("Post-maintenance version check failed".into());
-        }
-
-        if matches!(
-            request.action,
-            MaintenanceAction::Upgrade | MaintenanceAction::Repair
-        ) {
-            state
-                .progress("verifying", 96, "Verifying services after upgrade")
-                .await;
-            let binary_replaced = !tip.skipped_rebuild;
-            if tip.skipped_rebuild {
-                state.log(
-                    "Skip-rebuild tip: verifying /login without restarting the panel".to_string(),
-                    "info",
-                );
-            }
-            match crate::upgrade_verify::verify_after_upgrade(
-                request.bypass_docker,
-                &docker_before,
-                binary_replaced,
-            ) {
-                Ok(report) => {
-                    for line in report.summary_lines() {
-                        state.log(line, "info");
-                    }
-                }
-                Err(error) => {
-                    state.log(error.clone(), "error");
-                    return Err(error);
-                }
-            }
-        }
-
-        state
-            .progress("verifying", 98, "Applying panel data migrations")
-            .await;
-        match crate::panel_migrate::run_pending_migrations() {
-            Ok(applied) => {
-                for id in applied {
-                    state.log(format!("migration applied: {id}"), "info");
-                }
-            }
-            Err(error) => {
-                state.log(format!("Warning: panel migrations: {error}"), "error");
-            }
-        }
-
-        let message = format!("Updated to {} ({})", tip.branch_label, tip.package_version);
-        state.progress("completed", 100, message.clone()).await;
-        {
-            let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
-            status.phase = "completed";
-            status.progress = 100;
-            status.error = None;
-            status.message = message;
-            // Skip-rebuild: binary unchanged; do not bounce MainPID or leave UI
-            // waiting on a detached reload that never needed to run.
-            status.restart_scheduled = if tip.skipped_rebuild {
-                false
-            } else {
-                will_schedule_reload(request.action, "tip")
-            };
-            if let Some(info) = status.maintenance.as_mut() {
-                info.installed_version = tip.package_version.clone();
-                info.running_sha = Some(tip.sha.clone());
-                info.stable_tip_label = Some(tip.branch_label.clone());
-                info.stable_update_available = false;
-                info.update_available = false;
-            }
-            let _ = state.events.send(crate::model::InstallerEvent::Completed {
-                status: status.clone(),
-            });
-        }
-
-        if tip.skipped_rebuild {
-            let _ = crate::panel_maintenance_mode::clear_with_reason("completed");
-            state.log(
-                "Skip-rebuild tip complete; panel reload not scheduled".to_string(),
-                "info",
-            );
-        } else {
-            schedule_apply_reload(&state, request.action, "tip");
-        }
-        return Ok(());
     }
 
     let release =
@@ -503,16 +343,7 @@ async fn run_maintenance_inner(
         );
     }
 
-    state
-        .progress("testing", 86, "Cleaning stale CPN packaging/staging")
-        .await;
-    let cleanup = crate::upgrade_cleanup::cleanup_stale_packaging();
-    for path in &cleanup.removed {
-        state.log(format!("cleanup removed: {path}"), "info");
-    }
-    for note in cleanup.notes.iter().chain(cleanup.skipped_preserved.iter()) {
-        state.log(note.clone(), "info");
-    }
+    post_install_cleanup(&state).await;
 
     if matches!(
         request.action,
@@ -543,20 +374,7 @@ async fn run_maintenance_inner(
         }
     }
 
-    state
-        .progress("testing", 92, "Verifying installer binary")
-        .await;
-    let version_ok = Command::new(installer_bin())
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .map(|status| status.success())
-        .unwrap_or(false);
-    if !version_ok {
-        return Err("Post-maintenance version check failed".into());
-    }
+    verify_installer_binary(&state).await?;
 
     if matches!(
         request.action,
@@ -582,19 +400,7 @@ async fn run_maintenance_inner(
         }
     }
 
-    state
-        .progress("verifying", 98, "Applying panel data migrations")
-        .await;
-    match crate::panel_migrate::run_pending_migrations() {
-        Ok(applied) => {
-            for id in applied {
-                state.log(format!("migration applied: {id}"), "info");
-            }
-        }
-        Err(error) => {
-            state.log(format!("Warning: panel migrations: {error}"), "error");
-        }
-    }
+    apply_migrations(&state).await;
 
     let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
     status.phase = "completed";
@@ -621,12 +427,19 @@ async fn run_maintenance_inner(
             request.reset_data,
         ));
     }
+    let done_message = status.message.clone();
     let _ = state.events.send(crate::model::InstallerEvent::Completed {
         status: status.clone(),
     });
     drop(status);
 
     schedule_apply_reload(&state, request.action, "package");
+    let restart_scheduled = state
+        .status
+        .read()
+        .map(|s| s.restart_scheduled)
+        .unwrap_or(false);
+    crate::upgrade_session_log::finish_session_ok(&done_message, restart_scheduled);
 
     Ok(())
 }
@@ -640,7 +453,7 @@ pub async fn spawn_maintenance(state: Arc<AppState>, request: MaintenanceRequest
         status.phase = "failed";
         status.error = Some(error.clone());
         status.message = format!("Maintenance {label} stopped safely");
-        state.log(error, "error");
+        state.log(error.clone(), "error");
         let _ = state.events.send(crate::model::InstallerEvent::Error {
             status: status.clone(),
         });

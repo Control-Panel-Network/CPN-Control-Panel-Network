@@ -26,14 +26,23 @@ fn now_unix() -> u64 {
 }
 
 pub fn email_csrf_token(username: &str) -> String {
-    let secret = session_secret(None);
-    let hour = now_unix() / 3600;
-    let payload = format!("email-tools|{username}|{hour}");
-    format!("{hour}.{}", hmac_hex(&secret, &payload))
+    email_csrf_token_with_secret(&session_secret(None), username)
 }
 
 pub fn verify_email_csrf(username: &str, token: &str) -> bool {
-    let secret = session_secret(None);
+    verify_email_csrf_with_secret(&session_secret(None), username, token)
+}
+
+/// Token for an explicit secret (tests and callers that already resolved the
+/// session secret once; avoids re-reading the data dir on every call).
+pub fn email_csrf_token_with_secret(secret: &str, username: &str) -> String {
+    let hour = now_unix() / 3600;
+    let payload = format!("email-tools|{username}|{hour}");
+    format!("{hour}.{}", hmac_hex(secret, &payload))
+}
+
+/// Verify against an explicit secret (see `email_csrf_token_with_secret`).
+pub fn verify_email_csrf_with_secret(secret: &str, username: &str, token: &str) -> bool {
     let Some((hour_s, sig)) = token.split_once('.') else {
         return false;
     };
@@ -45,7 +54,7 @@ pub fn verify_email_csrf(username: &str, token: &str) -> bool {
         return false;
     }
     let payload = format!("email-tools|{username}|{hour}");
-    let expected = hmac_hex(&secret, &payload);
+    let expected = hmac_hex(secret, &payload);
     expected == sig
 }
 
@@ -55,8 +64,27 @@ mod tests {
 
     #[test]
     fn csrf_roundtrip() {
-        let t = email_csrf_token("Admin");
-        assert!(verify_email_csrf("Admin", &t));
-        assert!(!verify_email_csrf("other", &t));
+        // Explicit secret: `session_secret(None)` resolves the data dir on each call, and
+        // other tests swap `CPN_DATA_DIR` concurrently (`with_test_data_dir`). On hosts where
+        // the default data dir is writable (Windows dev builds) the two resolutions could
+        // return different persisted secrets and make this test flaky.
+        let secret = format!("test-secret-{}", std::process::id());
+        let t = email_csrf_token_with_secret(&secret, "Admin");
+        assert!(verify_email_csrf_with_secret(&secret, "Admin", &t));
+        assert!(!verify_email_csrf_with_secret(&secret, "other", &t));
+        // Per-run mismatch secret (no hard-coded key literals for CodeQL).
+        let other = format!("{secret}-mismatch");
+        assert!(!verify_email_csrf_with_secret(&other, "Admin", &t));
+    }
+
+    #[test]
+    fn csrf_rejects_malformed_tokens() {
+        // Per-run secret (no hard-coded key literals for CodeQL).
+        let secret = format!("malformed-{}", std::process::id());
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", ""));
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "no-dot"));
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "abc.def"));
+        // Hour bucket far in the past is rejected even with a valid signature shape.
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "1.00"));
     }
 }

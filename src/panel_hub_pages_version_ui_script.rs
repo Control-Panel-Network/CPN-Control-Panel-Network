@@ -144,10 +144,11 @@ pub fn version_page_ui_script() -> &'static str {
     }
     var tipShort = info.stable_tip_short || (info.stable_tip_sha
       ? String(info.stable_tip_sha).substring(0, 7) : "");
+    var branchName = info.stable_branch ? String(info.stable_branch) : "stable";
     var tipLine = "";
     if (info.stable_update_available || (tipShort && info.running_sha
       && String(info.running_sha).substring(0, 7) !== tipShort)) {
-      tipLine = "Stable commits: " + (info.stable_branch || "stable")
+      tipLine = "Latest commits: " + branchName
         + (tipShort ? (" @ " + tipShort) : "");
     }
     var stableTipEl = document.getElementById("cpn-version-stable-tip");
@@ -157,6 +158,7 @@ pub fn version_page_ui_script() -> &'static str {
       if (info.using_fork) srcBits.push("fork");
       else srcBits.push("official");
       if (info.repo) srcBits.push(info.repo);
+      srcBits.push("branch " + branchName + (branchName === "stable" ? "" : " (lab)"));
       sourceTipEl.textContent = srcBits.join(" · ") || "-";
     }
     if (upstreamTipEl) {
@@ -185,9 +187,9 @@ pub fn version_page_ui_script() -> &'static str {
         statusEl.textContent = info.cache_note;
       } else if (info.update_available) {
         if (info.stable_update_available && !info.release_update_available) {
-          statusEl.textContent = "Update available: stable commits are ahead of this build.";
+          statusEl.textContent = "Update available: " + branchName + " commits are ahead of this build.";
         } else if (info.stable_update_available && info.release_update_available) {
-          statusEl.textContent = "Update available: newer release and stable commits.";
+          statusEl.textContent = "Update available: newer release and " + branchName + " commits.";
         } else {
           statusEl.textContent = "Update available: newer release listed above.";
         }
@@ -252,6 +254,10 @@ mod tests {
         assert!(js.contains("function render"));
         assert!(js.contains("function check"));
         assert!(js.contains("fillPicker"));
+        assert!(js.contains("\"Latest commits: \" + branchName"));
+        assert!(js.contains("branchName + \" commits are ahead of this build.\""));
+        assert!(js.contains("\"branch \" + branchName"));
+        assert!(!js.contains("Stable commits:"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }

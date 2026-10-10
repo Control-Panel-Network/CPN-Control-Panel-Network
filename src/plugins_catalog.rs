@@ -4,6 +4,7 @@
 
 use crate::account::{data_dir, now_unix};
 use crate::plugins::{CatalogEntry, catalog_repo_slug, normalize_plugin_id, sanitize_user_text};
+use crate::plugins_catalog_icon::{detect_bundled_icon, resolve_catalog_icon_url};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -154,6 +155,12 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         .unwrap_or_default()
         .to_ascii_lowercase();
     let (host_scoped, cpn_installable, site_installable) = parse_install_scopes(&scope, plugin_id);
+    let icon = xml_tag(body, "icon")
+        .or_else(|| xml_tag(body, "icon_url"))
+        .or_else(|| xml_tag(body, "logo"))
+        .or_else(|| xml_tag(body, "thumbnail"))
+        .and_then(|raw| resolve_catalog_icon_url(plugin_id, &raw))
+        .unwrap_or_default();
     Ok(CatalogEntry {
         id: plugin_id.to_string(),
         name: sanitize_user_text(&name),
@@ -171,6 +178,7 @@ pub fn parse_meta_xml(plugin_id: &str, body: &str) -> Result<CatalogEntry, Strin
         site_installable,
         cpn_installable,
         keywords: keywords_from_meta(body),
+        icon,
     })
 }
 
@@ -330,8 +338,13 @@ fn extract_catalog_entries(tarball: &Path) -> Result<Vec<CatalogEntry>, String> 
                 continue;
             }
             if let Ok(body) = fs::read_to_string(&meta)
-                && let Ok(entry) = parse_meta_xml(id, &body)
+                && let Ok(mut entry) = parse_meta_xml(id, &body)
             {
+                if entry.icon.is_empty()
+                    && let Some(url) = detect_bundled_icon(id, &plugin_path)
+                {
+                    entry.icon = url;
+                }
                 entries.push(entry);
             }
         }

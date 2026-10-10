@@ -86,7 +86,8 @@ pub fn client_files_present(mail: MailSystem) -> bool {
                 || Path::new("/opt/cpn-webmail/roundcube/index.php").is_file()
         }
         MailSystem::Nextsnapmail => crate::apps_nextcloud::nextsnapmail_app_present(),
-        MailSystem::Sogo | MailSystem::Thunderbird => false,
+        MailSystem::Sogo => crate::apps_sogo::sogo_installed(),
+        MailSystem::Thunderbird => false,
     }
 }
 
@@ -95,8 +96,10 @@ pub fn public_path_for(mail: MailSystem) -> &'static str {
         MailSystem::Tachyon => "/tachyon",
         MailSystem::Roundcube => "/roundcube",
         MailSystem::Snappymail => "/snappymail",
+        // SOGo has a fixed panel mount served by panel_sogo_proxy (not the PHP webmail mount).
+        MailSystem::Sogo => crate::panel_sogo_proxy::SOGO_MOUNT,
         // NextSnapMail is opened via Nextcloud; panel mount stays unused.
-        MailSystem::Nextsnapmail | MailSystem::Sogo | MailSystem::Thunderbird => "/snappymail",
+        MailSystem::Nextsnapmail | MailSystem::Thunderbird => "/snappymail",
     }
 }
 
