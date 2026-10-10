@@ -245,39 +245,70 @@ button { font:inherit; cursor:pointer; }
 .docker-list-wrap.table-wrap {
   overflow-x:hidden; overflow-y:visible; overscroll-behavior-x:none;
 }
+.docker-list-toolbar {
+  display:flex; flex-wrap:wrap; gap:10px 12px; align-items:end; margin:0 0 14px;
+}
+.docker-list-toolbar label { font-size:13px; font-weight:600; display:grid; gap:4px; }
+.docker-list-toolbar input[type=search],
+.docker-list-toolbar input[type=number],
+.docker-list-toolbar select {
+  min-height:40px; padding:0 10px; border:1px solid var(--hairline); border-radius:10px;
+  background:var(--canvas); color:var(--ink);
+}
+.docker-list-toolbar .docker-list-search { flex:1 1 220px; min-width:180px; }
+.docker-list-toolbar .docker-list-count,
+.docker-list-toolbar .page-status { align-self:center; }
+.docker-list-toolbar a.is-disabled { opacity:.45; pointer-events:none; }
 .docker-card-list.data-table {
-  width:100%; min-width:0; max-width:100%;
+  width:100%; min-width:0; max-width:100%; border-collapse:collapse;
 }
-.docker-card-list thead { display:none; }
-.docker-card-list tbody tr {
-  display:block; margin:0 0 14px; padding:14px;
-  border:1px solid var(--hairline); border-radius:14px; background:var(--canvas);
+@media (min-width:900px) {
+  .docker-card-list thead { display:table-header-group; }
+  .docker-card-list tbody tr {
+    display:table-row; margin:0; padding:0; border:0; border-radius:0; background:transparent;
+  }
+  .docker-card-list tbody tr td {
+    display:table-cell; padding:12px 10px; border-top:1px solid var(--hairline);
+    vertical-align:top; white-space:normal;
+  }
+  .docker-card-list tbody tr td::before { content:none; }
+  .docker-card-list th {
+    text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--hairline);
+  }
 }
-.docker-card-list tbody tr td {
-  display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
-  gap:8px 12px; padding:10px 0; border-top:1px solid var(--hairline); white-space:normal;
-}
-.docker-card-list tbody tr td:first-child { border-top:0; padding-top:0; }
-.docker-card-list tbody tr td::before {
-  content:attr(data-label); flex:0 0 38%; max-width:42%;
-  font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
-  letter-spacing:.03em;
-}
-.docker-card-list tbody tr td[data-label="Container"],
-.docker-card-list tbody tr td[data-label="Stack"],
-.docker-card-list tbody tr td[data-label="Image name"] {
-  display:block;
-}
-.docker-card-list tbody tr td[data-label="Container"]::before,
-.docker-card-list tbody tr td[data-label="Stack"]::before,
-.docker-card-list tbody tr td[data-label="Image name"]::before {
-  display:none;
-}
-.docker-card-list tbody tr td[data-label="Actions"] {
-  display:block; padding-bottom:0;
-}
-.docker-card-list tbody tr td[data-label="Actions"]::before {
-  display:block; margin-bottom:8px; flex:none; max-width:none;
+@media (max-width:899px) {
+  .docker-card-list thead { display:none; }
+  .docker-card-list tbody tr {
+    display:block; margin:0 0 14px; padding:14px;
+    border:1px solid var(--hairline); border-radius:14px; background:var(--canvas);
+  }
+  .docker-card-list tbody tr td {
+    display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+    gap:8px 12px; padding:10px 0; border-top:1px solid var(--hairline); white-space:normal;
+  }
+  .docker-card-list tbody tr td:first-child { border-top:0; padding-top:0; }
+  .docker-card-list tbody tr td::before {
+    content:attr(data-label); flex:0 0 38%; max-width:42%;
+    font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  .docker-card-list tbody tr td[data-label="Container"],
+  .docker-card-list tbody tr td[data-label="Stack"],
+  .docker-card-list tbody tr td[data-label="Image name"] {
+    display:block;
+  }
+  .docker-card-list tbody tr td[data-label="Container"]::before,
+  .docker-card-list tbody tr td[data-label="Stack"]::before,
+  .docker-card-list tbody tr td[data-label="Image name"]::before {
+    display:none;
+  }
+  .docker-card-list tbody tr td[data-label="Actions"] {
+    display:block; padding-bottom:0;
+  }
+  .docker-card-list tbody tr td[data-label="Actions"]::before {
+    display:block; margin-bottom:8px; flex:none; max-width:none;
+  }
 }
 .docker-card-list td.docker-actions { white-space:normal; }
 .btn-primary {
@@ -520,8 +551,12 @@ mod tests {
             "docker lists must not use horizontal scroll wrappers"
         );
         assert!(
-            css.contains(".docker-card-list"),
-            "docker container/image/stack lists use stacked cards at all widths"
+            css.contains(".docker-card-list") && css.contains("@media (max-width:899px)"),
+            "docker lists use desktop tables and stacked cards on small screens"
+        );
+        assert!(
+            css.contains(".docker-list-toolbar"),
+            "docker lists expose search and pagination toolbar styles"
         );
         assert!(
             css.contains("z-index:100")
