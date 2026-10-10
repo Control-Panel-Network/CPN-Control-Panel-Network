@@ -1,10 +1,18 @@
 //! Docker / Podman detection, listing, and container lifecycle for Server + Host package.
 
 use crate::panel_ops_docker_cli::with_listed_container_id;
+use crate::panel_ops_docker_inventory::{
+    list_containers_detailed as inventory_list_containers,
+    list_images_detailed as inventory_list_images,
+};
 use crate::panel_ops_docker_probe::{
     COMPOSE_TIMEOUT, INFO_TIMEOUT, LIST_TIMEOUT, VERSION_TIMEOUT, output_with_timeout, probe_ok,
 };
 use std::process::Command;
+
+pub use crate::panel_ops_docker_inventory::{
+    DockerContainerRow, DockerImageRow, owner_from_labels, split_image_tag,
+};
 
 const CPN_MANAGED_LABEL: &str = "com.cpn.managed";
 
@@ -18,27 +26,6 @@ pub struct DockerStatus {
     pub images: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct DockerContainerRow {
-    pub id: String,
-    pub name: String,
-    pub image: String,
-    pub tag: String,
-    pub status: String,
-    pub owner: String,
-    pub cpn_managed: bool,
-    pub running: bool,
-    pub restarting: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct DockerImageRow {
-    pub repository: String,
-    pub tag: String,
-    pub id: String,
-    pub size: String,
-}
-
 pub fn docker_bin() -> Option<&'static str> {
     ["docker", "podman"]
         .into_iter()
@@ -50,201 +37,12 @@ pub fn docker_daemon_ok(bin: &str) -> bool {
     probe_ok(bin, &["info"], INFO_TIMEOUT)
 }
 
-pub(crate) fn split_image_tag(image: &str) -> (String, String) {
-    let image = image.trim();
-    if image.is_empty() {
-        return ("Unknown".into(), "Unknown".into());
-    }
-    // Digest or last colon after last slash is usually the tag.
-    if let Some(slash) = image.rfind('/') {
-        let after = &image[slash + 1..];
-        if let Some(colon) = after.rfind(':') {
-            let repo = format!("{}{}", &image[..=slash], &after[..colon]);
-            let tag = after[colon + 1..].to_string();
-            return (repo, if tag.is_empty() { "latest".into() } else { tag });
-        }
-    } else if let Some(colon) = image.rfind(':') {
-        // Avoid splitting digests like sha256:...
-        if !image[..colon].contains('@') && !image.starts_with("sha256:") {
-            return (image[..colon].to_string(), image[colon + 1..].to_string());
-        }
-    }
-    (image.to_string(), "latest".into())
-}
-
-fn label_map(raw: &str) -> Vec<(String, String)> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Vec::new();
-    }
-    // Podman ps --format {{.Labels}} uses Go map syntax: map[key:value key2:value2]
-    if raw.starts_with("map[") && raw.ends_with(']') {
-        let inner = raw[4..raw.len() - 1].trim();
-        return inner
-            .split_whitespace()
-            .filter_map(|pair| {
-                let pair = pair.trim();
-                if pair.is_empty() {
-                    return None;
-                }
-                let (k, v) = pair.split_once(':')?;
-                Some((k.trim().to_string(), v.trim().to_string()))
-            })
-            .collect();
-    }
-    raw.split(',')
-        .filter_map(|pair| {
-            let pair = pair.trim();
-            if pair.is_empty() {
-                return None;
-            }
-            let (k, v) = pair.split_once('=')?;
-            Some((k.trim().to_string(), v.trim().to_string()))
-        })
-        .collect()
-}
-
-fn is_cpn_managed(labels: &[(String, String)]) -> bool {
-    labels.iter().any(|(k, v)| {
-        k.eq_ignore_ascii_case(CPN_MANAGED_LABEL) && (v == "1" || v.eq_ignore_ascii_case("true"))
-    })
-}
-
-pub fn owner_from_labels(labels: &[(String, String)], cpn_managed: bool) -> String {
-    if let Some((_, v)) = labels
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("com.cpn.owner") || k.eq_ignore_ascii_case("owner"))
-    {
-        let v = v.trim();
-        if !v.is_empty() && !v.eq_ignore_ascii_case("unknown") {
-            return v.to_string();
-        }
-    }
-    if labels.iter().any(|(k, v)| {
-        k.eq_ignore_ascii_case("com.cpn.system") && (v == "1" || v.eq_ignore_ascii_case("true"))
-    }) {
-        return "System".into();
-    }
-    if cpn_managed {
-        "CPN".into()
-    } else {
-        "Unassigned".into()
-    }
-}
-
 pub fn list_containers_detailed() -> Result<Vec<DockerContainerRow>, String> {
-    let Some(bin) = docker_bin() else {
-        return Err("Docker/Podman CLI not found.".into());
-    };
-    if !docker_daemon_ok(bin) {
-        return Err(format!(
-            "`{bin}` CLI found but the container engine is not running."
-        ));
-    }
-    let output = output_with_timeout(
-        bin,
-        &[
-            "ps",
-            "-a",
-            "--format",
-            "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}\t{{.State}}",
-        ],
-        LIST_TIMEOUT,
-    )
-    .map_err(|e| format!("Could not list containers: {e}"))?;
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "Could not list containers: {}",
-            err.trim().chars().take(200).collect::<String>()
-        ));
-    }
-    let mut rows = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 4 {
-            continue;
-        }
-        let id = parts[0].trim().to_string();
-        let name = parts[1].trim().to_string();
-        let (image, tag) = split_image_tag(parts[2].trim());
-        let status = parts[3].trim().to_string();
-        let labels = if parts.len() > 4 {
-            label_map(parts[4])
-        } else {
-            Vec::new()
-        };
-        let state = parts
-            .get(5)
-            .map(|s| s.trim().to_ascii_lowercase())
-            .unwrap_or_default();
-        let cpn_managed = is_cpn_managed(&labels);
-        let status_lower = status.to_ascii_lowercase();
-        let restarting = state == "restarting" || status_lower.contains("restarting");
-        let running = !restarting
-            && (state == "running"
-                || status_lower.starts_with("up ")
-                || status_lower.contains("(healthy)"));
-        rows.push(DockerContainerRow {
-            id,
-            name: if name.is_empty() {
-                "(unnamed)".into()
-            } else {
-                name
-            },
-            image,
-            tag,
-            status,
-            owner: owner_from_labels(&labels, cpn_managed),
-            cpn_managed,
-            running,
-            restarting,
-        });
-        if rows.len() >= 200 {
-            break;
-        }
-    }
-    Ok(rows)
+    inventory_list_containers()
 }
 
 pub fn list_images_detailed() -> Result<Vec<DockerImageRow>, String> {
-    let Some(bin) = docker_bin() else {
-        return Err("Docker/Podman CLI not found.".into());
-    };
-    let output = output_with_timeout(
-        bin,
-        &[
-            "images",
-            "--format",
-            "{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}",
-        ],
-        LIST_TIMEOUT,
-    )
-    .map_err(|e| format!("Could not list images: {e}"))?;
-    if !output.status.success() {
-        return Err("Could not list images.".into());
-    }
-    let mut rows = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 4 {
-            continue;
-        }
-        rows.push(DockerImageRow {
-            repository: parts[0].trim().to_string(),
-            tag: parts[1].trim().to_string(),
-            id: parts[2].trim().to_string(),
-            size: parts[3].trim().to_string(),
-        });
-        if rows.len() >= 200 {
-            break;
-        }
-    }
-    Ok(rows)
+    inventory_list_images()
 }
 
 /// Map user input to a container ID returned by the local engine (not passed through verbatim).
@@ -621,15 +419,8 @@ mod tests {
             owner_from_labels(&[("com.cpn.owner".into(), "Admin".into())], false),
             "Admin"
         );
-        assert_eq!(owner_from_labels(&[], true), "CPN");
+        assert_eq!(owner_from_labels(&[], true), "Host");
         assert_eq!(owner_from_labels(&[], false), "Unassigned");
-    }
-
-    #[test]
-    fn label_map_podman_ps_format() {
-        let raw = "map[com.cpn.owner:cpnowner org.opencontainers.image.name:filebrowser]";
-        let labels = label_map(raw);
-        assert_eq!(owner_from_labels(&labels, false), "cpnowner");
     }
 
     #[test]

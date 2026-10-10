@@ -6,9 +6,9 @@ use crate::panel_hub_http::{
     html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
     require_panel_user, urlencoding_simple,
 };
-use crate::panel_hub_pages_docker::{
-    docker_create_page, docker_images_page, docker_logs_page, docker_manage_page,
-};
+use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
+use crate::panel_hub_pages_docker_images_ui::docker_images_page;
+use crate::panel_hub_pages_docker_list::DockerListQuery;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
@@ -445,7 +445,7 @@ pub async fn server_docker_containers(
         &user,
         "server",
         "Containers",
-        &docker_manage_page(None, None),
+        &docker_manage_page(None, None, None),
     ))
 }
 
@@ -461,7 +461,7 @@ pub async fn server_docker_images(
         &user,
         "server",
         "Docker Images",
-        &docker_images_page(None, None, None, &[]),
+        &docker_images_page(None, None, None, &[], None),
     ))
 }
 
@@ -513,12 +513,13 @@ pub async fn docker_list_route(
     };
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
+    let list_query = DockerListQuery::from_map(&query);
     html_blocking(move || {
         panel_shell(
             &user,
             "server",
             "Active Containers",
-            &docker_manage_page(notice.as_deref(), error.as_deref()),
+            &docker_manage_page(notice.as_deref(), error.as_deref(), Some(&list_query)),
         )
     })
     .await
@@ -563,6 +564,7 @@ pub async fn docker_images_route(
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
     let q = query.get("q").map(|s| s.as_str()).unwrap_or("");
+    let list_query = DockerListQuery::local_filter_from_map(&query);
     let hits = if q.is_empty() {
         Vec::new()
     } else {
@@ -573,7 +575,7 @@ pub async fn docker_images_route(
                     &user,
                     "server",
                     "Docker Images",
-                    &docker_images_page(notice, Some(&e), Some(q), &[]),
+                    &docker_images_page(notice, Some(&e), Some(q), &[], Some(&list_query)),
                 ));
             }
         }
@@ -582,7 +584,13 @@ pub async fn docker_images_route(
         &user,
         "server",
         "Docker Images",
-        &docker_images_page(notice, error, Some(q).filter(|s| !s.is_empty()), &hits),
+        &docker_images_page(
+            notice,
+            error,
+            Some(q).filter(|s| !s.is_empty()),
+            &hits,
+            Some(&list_query),
+        ),
     ))
 }
 
