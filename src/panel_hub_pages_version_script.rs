@@ -179,6 +179,9 @@ pub fn version_page_script(can_manage: bool) -> String {
     setDetailRow("cpn-version-row-source", "cpn-version-pkg-source", info && info.source);
     var notes = [];
     if (info && info.using_fork) notes.push("Using fork source for upgrades");
+    if (info && info.stable_branch && String(info.stable_branch) !== "stable") {{
+      notes.push("Commit branch " + info.stable_branch + " (lab / pre-release testing; production should use stable)");
+    }}
     if (info && info.token_configured) notes.push("GitHub token configured");
     if (info && info.from_cache) {{
       notes.push("Release list cached"
@@ -339,11 +342,16 @@ pub fn version_page_script(can_manage: bool) -> String {
     pending = null;
     if (confirmBox) confirmBox.style.display = "none";
   }}
-  function armConfirm(action, version, label) {{
+  function isCommitToken(version) {{
+    var v = String(version || ""); return v.indexOf("@") >= 0 || v.indexOf("branch:") === 0 || /^[0-9a-f]{{7,40}}$/i.test(v);
+  }}
+  function armConfirm(action, version, label, note) {{
     if (!canManage || busy) return;
     pending = {{ action: action, version: version || null }};
     var extra = "";
-    if (version && isOutsideSupport(version)) {{
+    if (version && isCommitToken(version)) {{
+      extra = " Commit builds are outside CPN release support" + (note ? (";" + note) : ".");
+    }} else if (version && isOutsideSupport(version)) {{
       extra = " Warning: this tag is outside CPN support (only the latest two releases are supported).";
     }}
     if (confirmText) confirmText.textContent = "About to " + label + "." + extra + " Click Confirm to start, or Cancel.";
@@ -394,14 +402,17 @@ pub fn version_page_script(can_manage: bool) -> String {
     }});
     var upStable = document.getElementById("cpn-version-upgrade-stable");
     if (upStable) upStable.addEventListener("click", function () {{
+      // Branch comes from the saved update source (stable default, dev for labs).
+      var branch = (infoCache && infoCache.stable_branch) ? String(infoCache.stable_branch) : "stable";
       var tipToken = null;
       if (infoCache && infoCache.stable_tip_short) {{
-        tipToken = "stable@" + infoCache.stable_tip_short;
+        tipToken = branch + "@" + infoCache.stable_tip_short;
       }} else {{
-        tipToken = "stable";
+        tipToken = "branch:" + branch;
       }}
-      var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : "stable commits";
-      armConfirm("upgrade", tipToken, "upgrade to " + label + " (latest commits)");
+      var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : (branch + " commits");
+      var note = branch === "stable" ? "" : " branch " + branch + " is for lab / pre-release testing and production servers should stay on stable.";
+      armConfirm("upgrade", tipToken, "upgrade to " + label + " (latest commits on " + branch + ")", note);
     }});
     if (applyBtn) applyBtn.addEventListener("click", function () {{
       var tag = selectedTag || (searchEl && searchEl.value);
@@ -462,7 +473,12 @@ mod tests {
         assert!(js.contains("cpn-version-stable-tip"));
         assert!(js.contains("stable_update_available"));
         assert!(js.contains("cpn-version-upgrade-stable"));
-        assert!(js.contains("stable@"));
+        assert!(js.contains("branch + \"@\" + infoCache.stable_tip_short"));
+        assert!(js.contains("\"branch:\" + branch"));
+        assert!(js.contains("infoCache.stable_branch"));
+        assert!(js.contains("function isCommitToken"));
+        assert!(js.contains("Commit builds are outside CPN release support"));
+        assert!(!js.contains("\"stable@\""));
         assert!(js.contains("stale_behind"));
         assert!(js.contains("resolveInstalledColor"));
         assert!(js.contains("isPrereleaseLabel"));

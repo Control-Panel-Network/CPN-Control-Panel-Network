@@ -1,4 +1,5 @@
-//! Maintenance job for a commit / stable-tip target (`stable`, `stable@sha`, SHA).
+//! Maintenance job for a commit / branch-tip target (`stable`, `dev`,
+//! `branch:<name>`, `<branch>@<sha>`, SHA).
 //!
 //! Split out of `upgrade.rs`. Shares the post-install cleanup, binary check, and
 //! session finish markers with the release-package path.
@@ -69,9 +70,10 @@ pub(crate) async fn run_tip_maintenance(
     existing: &ExistingInstall,
 ) -> Result<(), String> {
     let repo = crate::releases::github_repo();
+    let branch = crate::releases_stable_tip::branch_label_for_ref(tip_ref);
     state.log(
         format!(
-            "Maintenance {:?}: tip/commit target {tip_ref} from {repo}",
+            "Maintenance {:?}: commit target {tip_ref} from {repo} (branch {branch})",
             request.action
         ),
         "info",
@@ -84,7 +86,7 @@ pub(crate) async fn run_tip_maintenance(
     if let Err(error) = crate::panel_maintenance_mode::begin(
         source_label,
         "Updating CPN Panel",
-        &format!("Installing stable commits {tip_ref}"),
+        &format!("Installing {branch} commits {tip_ref}"),
         Some(tip_ref),
     ) {
         state.log(

@@ -1620,6 +1620,7 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_version_check)
             .service(cpn_installer::maintenance_api::api_version_source_get)
             .service(cpn_installer::maintenance_api::api_version_source_post)
+            .service(cpn_installer::maintenance_api_branches::api_version_branches)
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)

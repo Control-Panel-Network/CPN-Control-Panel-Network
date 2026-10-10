@@ -55,6 +55,7 @@ fn path_is_exempt(path: &str) -> bool {
             | "/api/maintenance/status"
             | "/api/version-check"
             | "/api/version-source"
+            | "/api/version-branches"
             | "/api/releases"
     )
 }

@@ -54,6 +54,20 @@ pub fn version_management_page(can_manage: bool) -> String {
       placeholder="Control-Panel-Network/CPN-Control-Panel-Network"
       style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
   </label>
+  <label for="cpn-source-branch" style="margin-top:12px;display:block;">Branch for latest commits
+    <select id="cpn-source-branch" data-default-branch="stable"
+      style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;">
+      <option value="stable" selected>stable (production: releases and stable commits)</option>
+      <option value="dev">dev (pre-release testing, lab only)</option>
+    </select>
+  </label>
+  <p id="cpn-source-branch-help" class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.45;">
+    Production servers should stay on <code>stable</code> (published releases and stable commits).
+    Pick <code>dev</code> only on lab or pre-release hosts: dev commits can break, be rebased, or lag a hotfix.
+    <strong>Upgrade to latest commits</strong>, the Update source row, and CLI <code>--to tip</code> follow the saved branch.
+    Other branches of the configured repo are listed when GitHub answers; they are lab only.
+  </p>
+  <p id="cpn-source-branch-warning" class="muted" role="status" style="display:none;margin:8px 0 0;padding:8px 10px;border:1px solid #fb923c;border-radius:8px;color:#fb923c;font-size:13px;"></p>
   <label for="cpn-source-token" style="margin-top:12px;display:block;">GitHub token (optional)
     <input id="cpn-source-token" type="password" autocomplete="new-password"
       placeholder="Leave blank to keep existing token"
@@ -279,11 +293,13 @@ pub fn version_management_page(can_manage: bool) -> String {
   CPN supports the <strong>latest two published releases</strong> only (current release plus the previous release).
   The searchable picker lists <strong>all GitHub Releases with installable assets</strong> so you can upgrade or downgrade later.
   Older tags remain selectable for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
-  When <code>stable</code> advances without a new tag, use <strong>Upgrade to latest commits</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to the installer log below, Main Log, and Error logs.
+  When the saved branch (default <code>stable</code>) advances without a new tag, use <strong>Upgrade to latest commits</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to the installer log below, Main Log, and Error logs.
+  Choose the branch under <strong>Update source</strong>: <code>stable</code> for production, <code>dev</code> for lab and pre-release testing.
 </p>
 <p class="muted" style="margin-top:18px;">
   Package ops can run from this page when you are the panel admin and the installer service runs as root.
   CLI remains available: <code>sudo cpn-installer --upgrade</code> / <code>--repair</code> / <code>--downgrade --to X.Y.Z --yes</code>.
+  Commit targets: <code>--to stable</code>, <code>--to dev</code>, <code>--to branch:&lt;name&gt;</code>, <code>--to &lt;branch&gt;@&lt;sha&gt;</code>, or <code>--to tip</code> for the saved branch.
   Release assets: <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a>.
 </p>
 {script}"#,
@@ -331,6 +347,14 @@ mod tests {
         let html = version_management_page(true);
         assert!(html.contains("cpn-version-source-tip"));
         assert!(html.contains("cpn-source-repo"));
+        assert!(html.contains("id=\"cpn-source-branch\""));
+        assert!(html.contains("<option value=\"stable\" selected>"));
+        assert!(html.contains("<option value=\"dev\">"));
+        assert!(html.contains("pre-release testing, lab only"));
+        assert!(html.contains("cpn-source-branch-warning"));
+        assert!(html.contains("Production servers should stay on <code>stable</code>"));
+        assert!(html.contains("--to dev"));
+        assert!(html.contains("/api/version-branches"));
         assert!(html.contains("cpn-version-search"));
         assert!(html.contains("Type to search tags"));
         assert!(!html.contains("id=\"cpn-version-select\""));
@@ -366,5 +390,14 @@ mod tests {
         assert!(!html.contains('\u{2014}'));
         assert!(!html.contains('\u{2013}'));
         assert!(!html.to_lowercase().contains("cyberpanel"));
+    }
+
+    #[test]
+    fn read_only_users_get_no_branch_picker() {
+        let html = version_management_page(false);
+        assert!(!html.contains("id=\"cpn-source-branch\""));
+        assert!(!html.contains("id=\"cpn-source-repo\""));
+        assert!(html.contains("Only the panel admin can upgrade"));
+        assert!(!html.contains('\u{2014}'));
     }
 }
