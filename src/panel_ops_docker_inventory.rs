@@ -41,7 +41,7 @@ pub struct DockerImageRow {
     pub size: String,
 }
 
-pub(crate) fn split_image_tag(image: &str) -> (String, String) {
+pub fn split_image_tag(image: &str) -> (String, String) {
     let image = image.trim();
     if image.is_empty()
         || image.eq_ignore_ascii_case("<none>")
