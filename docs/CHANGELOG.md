@@ -9,8 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.2] - 10/10/2026
+
+Patch release after v1.4.1. Reseller Center goes LIVE (hierarchy, quotas, branding, stats, and a Users list tab), tip-upgrade no longer false-fails on Compiling thiserror, source tip builds cap CARGO_BUILD_JOBS from free RAM, and MariaDB CLI helpers redact account passwords for CodeQL cleartext-logging.
+
+### Added
+
 - **Reseller Center LIVE (`/account/users/reseller`)**: Replaces the scaffold tile with v1 multi-tenant reseller hierarchy. Owner/admin can promote/demote resellers, set pool quotas (websites, mailboxes, databases, FTP, storage MB, bandwidth MB; `0` = none, `-1` = unlimited), assign/unassign child users, and manage branding (display name, tagline, logo URL, primary color). Resellers see only their own pool and children, create child users under themselves, and edit their branding. List Users is ACL-jailed to self + children for resellers. Hub tile and Users sidebar entry are LIVE and hidden from plain users. POSTs require CSRF (HMAC hour token) plus same-origin checks. Store: `/var/lib/cpn/resellers.json` (mode 600); account fields `role` / `parent_reseller` (serde defaults). Migration `0008_reseller_center`. Modules: `panel_reseller.rs`, `panel_reseller_quota.rs`, `panel_reseller_csrf.rs`, `panel_hub_pages_reseller.rs`, `panel_hub_routes_reseller.rs`.
-- **Reseller Center tabs**: `/account/users/reseller` uses Overview / Resellers / Quotas / Branding pill tabs (Plugins/Design Store style, readable dark and light) with `?tab=` deep links. Overview keeps the Total Users / Total Websites / Resellers stats cards; manage forms, pool edits, and branding each live on their own tab. PRG redirects return to the matching tab. New module `panel_hub_pages_reseller_tabs.rs`.
+- **Reseller Center tabs**: `/account/users/reseller` uses Overview / Resellers / Users / Quotas / Branding pill tabs (Plugins/Design Store style, readable dark and light) with `?tab=` deep links. Overview keeps the Total Users / Total Websites / Resellers stats cards; the Users tab lists ACL-scoped reseller/child accounts with search, role/parent/status filters, and pagination (default 5); manage forms, pool edits, and branding each live on their own tab. PRG redirects return to the matching tab. New module `panel_hub_pages_reseller_tabs.rs`.
 
 ### Changed
 
