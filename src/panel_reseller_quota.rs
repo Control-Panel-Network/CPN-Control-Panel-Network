@@ -4,7 +4,7 @@ use crate::package_limits::{UNLIMITED, format_limit_display, is_unlimited, norma
 use crate::packages::{DEFAULT_PACKAGE_ID, Package, package_for_account};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResellerQuotas {
     /// Websites / domains.
     pub websites: i64,
@@ -16,19 +16,6 @@ pub struct ResellerQuotas {
     pub storage_mb: i64,
     /// Bandwidth in MB.
     pub bandwidth_mb: i64,
-}
-
-impl Default for ResellerQuotas {
-    fn default() -> Self {
-        Self {
-            websites: 0,
-            mailboxes: 0,
-            databases: 0,
-            ftp_accounts: 0,
-            storage_mb: 0,
-            bandwidth_mb: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
