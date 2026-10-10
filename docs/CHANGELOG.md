@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Docker Hub `ubuntu26.04` Scout Critical/High (Go stdlib)**: Hub Scout on digest `ba4691ca03a6` reported 2 Critical / 8 High / 3 Other against `golang/stdlib` `go1.26.7` embedded in Canonical Pebble (`/usr/bin/pebble`) from the rockcraft `ubuntu:26.04` base (layer 0). Alma tags stay clean because they do not ship Pebble. `docker/Dockerfile.ubuntu` now purges Pebble (apt package when present, plus binary/paths) before installing systemd; Hub smoke asserts `/usr/bin/pebble` is absent. Fix version for those CVEs is Go 1.26.9 if a future base still needs Pebble. Optional rebuild: Actions `Docker Hub publish` workflow_dispatch with `os_tag=ubuntu26.04`. No v1.4.2 re-cut.
+
 ## [1.4.2] - 10/10/2026
 
 Patch release after v1.4.1. Reseller Center goes LIVE (hierarchy, quotas, branding, stats, and a Users list tab), tip-upgrade no longer false-fails on Compiling thiserror, source tip builds cap CARGO_BUILD_JOBS from free RAM, and MariaDB CLI helpers redact account passwords for CodeQL cleartext-logging.

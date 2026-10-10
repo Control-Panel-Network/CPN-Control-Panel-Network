@@ -50,9 +50,20 @@ COPY --from=stubs /out/libcryptsetup12-stub.deb /tmp/libcryptsetup12-stub.deb
 
 # Full distro security upgrade before app deps (reduces Docker Scout OS CVEs).
 # The placeholder goes in first so systemd never pulls the real libcryptsetup12 stack.
+#
+# Ubuntu 26.04 rockcraft base ships Canonical Pebble at /usr/bin/pebble (Go
+# stdlib go1.26.7). Docker Scout reports Critical/High CVEs against that binary
+# (fix version Go 1.26.9). CPN uses systemd, not Pebble, so purge it (and the
+# apt package when present) so Hub Scout matches Alma "None found".
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
+  && if dpkg-query -W -f='${Status}' pebble 2>/dev/null | grep -q 'install ok installed'; then \
+       DEBIAN_FRONTEND=noninteractive apt-get purge -y pebble; \
+     fi \
+  && rm -f /usr/bin/pebble \
+  && rm -rf /var/lib/pebble /etc/pebble \
+  && test ! -e /usr/bin/pebble \
   && apt-get install -y --no-install-recommends /tmp/libcryptsetup12-stub.deb \
   && apt-get install -y --no-install-recommends \
     systemd curl ca-certificates hostname \
