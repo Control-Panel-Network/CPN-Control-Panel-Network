@@ -1,7 +1,8 @@
-//! Optional prebuilt binaries from GitHub Actions for a tip commit SHA.
+//! Optional prebuilt binaries / packages from GitHub Actions for a tip commit SHA.
 
+use crate::os_support::{self, PackageFamily};
 use crate::releases_cache;
-use crate::upgrade_pkg::install_binary;
+use crate::upgrade_pkg::{self, install_binary};
 use crate::upgrade_tip_log;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -51,6 +52,7 @@ async fn curl_github_json(url: &str) -> Result<(u16, String), String> {
     Ok((status, body))
 }
 
+/// Raw Linux tip binaries (zip containing `cpn-installer`).
 fn artifact_looks_like_linux_bins(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     if lower.contains("windows") || lower.contains("win64") {
@@ -60,6 +62,27 @@ fn artifact_looks_like_linux_bins(name: &str) -> bool {
         || lower.contains("tip-bin")
         || lower.contains("linux-tip")
         || (lower.contains("cpn-installer") && lower.contains("linux"))
+}
+
+/// Guest-matching Release workflow packages (`cpn-rpm-el9`, `cpn-rpm-el10`, `cpn-deb-release`).
+fn artifact_looks_like_guest_package(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("windows") {
+        return false;
+    }
+    let Ok(guest) = os_support::detect_guest_os() else {
+        return false;
+    };
+    match guest.family {
+        PackageFamily::Dnf => {
+            lower == format!("cpn-rpm-el{}", guest.major)
+                || lower.contains(&format!("rpm-el{}", guest.major))
+        }
+        PackageFamily::Apt => {
+            lower.contains("cpn-deb") || lower.contains("deb-release") || lower.ends_with("-deb")
+        }
+        PackageFamily::Windows => false,
+    }
 }
 
 fn find_built_installer(root: &Path) -> Option<PathBuf> {
@@ -82,6 +105,28 @@ fn find_built_installer(root: &Path) -> Option<PathBuf> {
             return Some(found);
         }
         if path.file_name().and_then(|n| n.to_str()) == Some("cpn-installer") && path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn find_package_file(root: &Path, ext: &str) -> Option<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir()
+            && let Some(found) = find_package_file(&path, ext)
+        {
+            return Some(found);
+        }
+        if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case(ext))
+        {
             return Some(path);
         }
     }
@@ -115,7 +160,14 @@ pub async fn try_apply_actions_artifacts(
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
-    for run in runs {
+    if runs.is_empty() {
+        upgrade_tip_log::log_info(format!(
+            "No GitHub Actions runs for {repo}@{sha}; building from source"
+        ));
+        return Ok(false);
+    }
+    let mut seen_names: Vec<String> = Vec::new();
+    for run in &runs {
         let Some(run_id) = run.get("id").and_then(|v| v.as_u64()) else {
             continue;
         };
@@ -132,7 +184,21 @@ pub async fn try_apply_actions_artifacts(
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
-        for artifact in artifacts {
+        // Prefer raw tip binaries, then guest-matching RPM/DEB packages.
+        let mut ordered: Vec<serde_json::Value> = Vec::new();
+        for artifact in &artifacts {
+            let name = artifact.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if artifact_looks_like_linux_bins(name) {
+                ordered.push(artifact.clone());
+            }
+        }
+        for artifact in &artifacts {
+            let name = artifact.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if artifact_looks_like_guest_package(name) {
+                ordered.push(artifact.clone());
+            }
+        }
+        for artifact in ordered {
             let name = artifact.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let expired = artifact
                 .get("expired")
@@ -144,19 +210,30 @@ pub async fn try_apply_actions_artifacts(
             else {
                 continue;
             };
-            if expired || !artifact_looks_like_linux_bins(name) {
+            if expired {
                 continue;
             }
+            seen_names.push(name.to_string());
             upgrade_tip_log::log_info(format!("Downloading GitHub Actions artifact {name}"));
-            if install_from_zip(dl, work).await? {
+            if install_from_zip(dl, work, name).await? {
                 return Ok(true);
             }
         }
     }
+    if seen_names.is_empty() {
+        upgrade_tip_log::log_info(format!(
+            "GitHub Actions runs for {repo}@{sha} had no guest-matching tip binary or package artifact; building from source"
+        ));
+    } else {
+        upgrade_tip_log::log_info(format!(
+            "GitHub Actions artifacts tried ({}) but none installed; building from source",
+            seen_names.join(", ")
+        ));
+    }
     Ok(false)
 }
 
-async fn install_from_zip(url: &str, work: &Path) -> Result<bool, String> {
+async fn install_from_zip(url: &str, work: &Path, artifact_name: &str) -> Result<bool, String> {
     let zip_path = work.join("tip-artifact.zip");
     let extract = work.join("artifact");
     let _ = std::fs::create_dir_all(&extract);
@@ -212,10 +289,34 @@ async fn install_from_zip(url: &str, work: &Path) -> Result<bool, String> {
             .status()
             .await;
     }
-    let Some(installer) = find_built_installer(&extract) else {
-        upgrade_tip_log::log_info("Actions artifact zip had no cpn-installer binary");
-        return Ok(false);
-    };
+    if let Some(installer) = find_built_installer(&extract) {
+        return install_bins(&installer).await.map(|_| true);
+    }
+    if artifact_looks_like_guest_package(artifact_name) {
+        if let Some(rpm) = find_package_file(&extract, "rpm") {
+            upgrade_tip_log::log_info(format!(
+                "Installing tip package {}",
+                rpm.file_name().and_then(|n| n.to_str()).unwrap_or("rpm")
+            ));
+            upgrade_pkg::install_rpm(rpm.to_str().unwrap_or(""), false, false).await?;
+            return Ok(true);
+        }
+        if let Some(deb) = find_package_file(&extract, "deb") {
+            upgrade_tip_log::log_info(format!(
+                "Installing tip package {}",
+                deb.file_name().and_then(|n| n.to_str()).unwrap_or("deb")
+            ));
+            upgrade_pkg::install_deb(deb.to_str().unwrap_or(""), false, false).await?;
+            return Ok(true);
+        }
+    }
+    upgrade_tip_log::log_info(format!(
+        "Actions artifact {artifact_name} had no cpn-installer binary or guest package"
+    ));
+    Ok(false)
+}
+
+async fn install_bins(installer: &Path) -> Result<(), String> {
     install_binary(
         installer.to_str().unwrap_or(""),
         crate::manifest::installer_bin(),
@@ -237,7 +338,7 @@ async fn install_from_zip(url: &str, work: &Path) -> Result<bool, String> {
         )
         .await;
     }
-    Ok(true)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -249,5 +350,6 @@ mod tests {
         assert!(artifact_looks_like_linux_bins("cpn-linux-tip-bins"));
         assert!(artifact_looks_like_linux_bins("cpn-installer-linux"));
         assert!(!artifact_looks_like_linux_bins("cpn-windows-release"));
+        assert!(!artifact_looks_like_linux_bins("cpn-rpm-el10"));
     }
 }
