@@ -4,6 +4,7 @@ use crate::account_mgmt::list_accounts;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_pages_reseller_stats::reseller_stats_cards_html;
 use crate::panel_hub_pages_reseller_tabs::{normalize_reseller_tab, reseller_tab_bar};
+use crate::panel_hub_pages_reseller_users::{ResellerUsersOpts, reseller_users_panel};
 use crate::panel_hubs::feature_shell;
 use crate::panel_reseller::{
     ResellerBranding, ResellerQuotas, ResellerRecord, account_is_reseller, child_usernames,
@@ -132,7 +133,7 @@ fn visible_resellers(viewer: &str, admin: bool) -> Vec<ResellerRecord> {
 fn overview_panel(viewer: &str) -> String {
     format!(
         r#"{stats}
-<p class="muted">Manage reseller hierarchy, multi-tenant pool quotas (websites, mailboxes, databases, FTP, storage, bandwidth), and per-reseller branding. Child users are ACL-jailed to their parent reseller. Use the tabs above for Resellers, Quotas, and Branding.</p>"#,
+<p class="muted">Manage reseller hierarchy, multi-tenant pool quotas (websites, mailboxes, databases, FTP, storage, bandwidth), and per-reseller branding. Child users are ACL-jailed to their parent reseller. Use the tabs above for Resellers, Users, Quotas, and Branding.</p>"#,
         stats = reseller_stats_cards_html(viewer),
     )
 }
@@ -225,15 +226,6 @@ fn resellers_panel(viewer: &str, admin: bool, csrf: &str) -> String {
     }
     for row in &rows {
         let children = child_usernames(&row.username).unwrap_or_default();
-        let children_list = if children.is_empty() {
-            r#"<p class="muted">No child users yet.</p>"#.to_string()
-        } else {
-            let items: Vec<String> = children
-                .iter()
-                .map(|u| format!("<li><code>{}</code></li>", html_escape(u)))
-                .collect();
-            format!("<ul>{}</ul>", items.join(""))
-        };
         let brand_preview = if row.branding.display_name.trim().is_empty() {
             String::new()
         } else {
@@ -261,15 +253,13 @@ fn resellers_panel(viewer: &str, admin: bool, csrf: &str) -> String {
             r#"<article class="section-card" style="margin-top:16px;">
   <h3 style="margin:0 0 8px;">Reseller <code>{user}</code></h3>
   {brand_preview}
-  <h4 style="margin:16px 0 8px;">Child users ({n})</h4>
-  {children_list}
-  <p class="muted" style="margin-top:12px;">Pool limits and branding are edited on the Quotas and Branding tabs.</p>
+  <p class="muted" style="margin-top:12px;">{n} child user(s). Open the <a href="/account/users/reseller?tab=users&amp;parent={user_q}">Users</a> tab to search, filter, and manage them. Pool limits and branding are edited on the Quotas and Branding tabs.</p>
   {demote}
 </article>"#,
             user = html_escape(&row.username),
+            user_q = html_escape(&row.username),
             brand_preview = brand_preview,
             n = children.len(),
-            children_list = children_list,
             demote = demote,
         ));
     }
@@ -347,6 +337,7 @@ pub fn users_reseller_page(
     notice: Option<&str>,
     error: Option<&str>,
     tab: &str,
+    users_opts: &ResellerUsersOpts,
 ) -> String {
     let admin = is_panel_admin(viewer);
     let csrf = reseller_csrf_token(viewer);
@@ -355,6 +346,7 @@ pub fn users_reseller_page(
     body.push_str(&reseller_tab_bar(tab));
     match tab {
         "resellers" => body.push_str(&resellers_panel(viewer, admin, &csrf)),
+        "users" => body.push_str(&reseller_users_panel(viewer, admin, &csrf, users_opts)),
         "quotas" => body.push_str(&quotas_panel(viewer, admin, &csrf)),
         "branding" => body.push_str(&branding_panel(viewer, admin, &csrf)),
         _ => body.push_str(&overview_panel(viewer)),
@@ -380,7 +372,8 @@ mod tests {
 
     #[test]
     fn page_is_live_not_scaffold() {
-        let html = users_reseller_page("cpnowner", None, None, "overview");
+        let opts = ResellerUsersOpts::default();
+        let html = users_reseller_page("cpnowner", None, None, "overview", &opts);
         assert!(!html.contains("Not configured yet"));
         assert!(!html.contains("scaffolded honestly"));
         assert!(html.contains("Reseller Center"));
@@ -388,6 +381,7 @@ mod tests {
         assert!(html.contains("Total Websites"));
         assert!(html.contains("Resellers"));
         assert!(html.contains("?tab=resellers"));
+        assert!(html.contains("?tab=users"));
         assert!(html.contains("?tab=quotas"));
         assert!(html.contains("?tab=branding"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
@@ -395,14 +389,31 @@ mod tests {
 
     #[test]
     fn resellers_tab_keeps_promote_and_create() {
-        let html = users_reseller_page("cpnowner", None, None, "resellers");
+        let opts = ResellerUsersOpts::default();
+        let html = users_reseller_page("cpnowner", None, None, "resellers", &opts);
         assert!(html.contains("Create child user") || html.contains("Promote reseller"));
         assert!(!html.contains("Total Users"));
+        assert!(!html.contains("Child users ("));
+    }
+
+    #[test]
+    fn users_tab_has_search_and_pager() {
+        let opts = ResellerUsersOpts::default();
+        let html = users_reseller_page("cpnowner", None, None, "users", &opts);
+        assert!(html.contains("name=\"q\""));
+        assert!(
+            html.contains("Go to page")
+                || html.contains("per_page")
+                || html.contains("empty-state")
+        );
+        assert!(html.contains("aria-selected=\"true\""));
+        assert!(!html.contains("action=\"/account/users/reseller/promote\""));
     }
 
     #[test]
     fn overview_hides_manage_forms() {
-        let html = users_reseller_page("cpnowner", None, None, "overview");
+        let opts = ResellerUsersOpts::default();
+        let html = users_reseller_page("cpnowner", None, None, "overview", &opts);
         assert!(html.contains("Total Users"));
         assert!(!html.contains("action=\"/account/users/reseller/promote\""));
     }

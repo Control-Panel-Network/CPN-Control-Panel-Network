@@ -1,4 +1,4 @@
-//! Reseller Center tab chrome (Overview / Resellers / Quotas / Branding).
+//! Reseller Center tab chrome (Overview / Resellers / Users / Quotas / Branding).
 
 fn html_escape(value: &str) -> String {
     value
@@ -12,6 +12,7 @@ fn html_escape(value: &str) -> String {
 pub fn normalize_reseller_tab(raw: &str) -> &'static str {
     match raw.trim().to_ascii_lowercase().as_str() {
         "resellers" | "reseller" | "manage" | "hierarchy" => "resellers",
+        "users" | "user" | "children" | "child" => "users",
         "quotas" | "quota" | "limits" | "pool" => "quotas",
         "branding" | "brand" | "logo" => "branding",
         _ => "overview",
@@ -58,11 +59,13 @@ pub fn reseller_tab_bar(active: &str) -> String {
 <nav class="plugin-tabs reseller-tabs" role="tablist" aria-label="Reseller Center sections">
   {overview}
   {resellers}
+  {users}
   {quotas}
   {branding}
 </nav>"#,
         overview = link("overview", "Overview"),
         resellers = link("resellers", "Resellers"),
+        users = link("users", "Users"),
         quotas = link("quotas", "Quotas"),
         branding = link("branding", "Branding"),
     )
@@ -76,6 +79,7 @@ mod tests {
     fn normalize_maps_aliases() {
         assert_eq!(normalize_reseller_tab("overview"), "overview");
         assert_eq!(normalize_reseller_tab("hierarchy"), "resellers");
+        assert_eq!(normalize_reseller_tab("children"), "users");
         assert_eq!(normalize_reseller_tab("pool"), "quotas");
         assert_eq!(normalize_reseller_tab("logo"), "branding");
         assert_eq!(normalize_reseller_tab(""), "overview");
@@ -83,11 +87,12 @@ mod tests {
 
     #[test]
     fn tab_bar_marks_active_and_avoids_scaffold_brand() {
-        let html = reseller_tab_bar("quotas");
+        let html = reseller_tab_bar("users");
         assert!(html.contains("aria-selected=\"true\""));
-        assert!(html.contains("?tab=quotas"));
+        assert!(html.contains("?tab=users"));
         assert!(html.contains("Overview"));
         assert!(html.contains("Resellers"));
+        assert!(html.contains("Users"));
         assert!(html.contains("Quotas"));
         assert!(html.contains("Branding"));
         assert!(!html.to_lowercase().contains("cyberpanel"));
