@@ -23,6 +23,7 @@ pub mod apps_postgresql;
 pub mod apps_redis;
 pub mod apps_site;
 pub mod apps_sogo;
+pub mod apps_sogo_compat;
 pub mod apps_sogo_config;
 pub mod apps_sogo_repo;
 pub mod apps_webmail;

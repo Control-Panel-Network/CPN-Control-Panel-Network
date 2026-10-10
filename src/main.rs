@@ -762,6 +762,19 @@ async fn phpmyadmin_mount_proxy(
     cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await
 }
 
+/// SOGo mount entry without a method guard and without the `{path}` extractor, so WebDAV
+/// verbs (PROPFIND, REPORT, OPTIONS, MKCALENDAR, MOVE) on `/SOGo`, `/SOGo/...`, `/SOGo.woa/...`,
+/// and `/.well-known/caldav|carddav` reach the proxy. Delegates to `panel_catch_all`, which
+/// only proxies when SOGo is installed and otherwise serves the normal panel response.
+async fn sogo_mount_route(
+    req: HttpRequest,
+    payload: web::Payload,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let rel = req.path().trim_start_matches('/').to_string();
+    panel_catch_all(req, payload, web::Path::from(rel), state).await
+}
+
 async fn panel_catch_all(
     req: HttpRequest,
     payload: web::Payload,
@@ -1605,6 +1618,16 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::panel_maintenance_api::api_panel_maintenance)
             .service(cpn_installer::panel_maintenance_api::maintenance_page)
             .route("/api/events", web::get().to(websocket))
+            // SOGo groupware mount: CalDAV/CardDAV clients speak WebDAV verbs (PROPFIND,
+            // REPORT, OPTIONS, MKCALENDAR, MOVE, ...) that the method-guarded catch-all below
+            // never matches. Route the mount and its well-known aliases without a method
+            // guard; panel_catch_all dispatches to the SOGo proxy when SOGo is installed and
+            // falls through to the normal panel handling otherwise.
+            .route("/SOGo", web::route().to(sogo_mount_route))
+            .route("/SOGo/{path:.*}", web::route().to(sogo_mount_route))
+            .route("/SOGo.woa/{path:.*}", web::route().to(sogo_mount_route))
+            .route("/.well-known/caldav", web::route().to(sogo_mount_route))
+            .route("/.well-known/carddav", web::route().to(sogo_mount_route))
             // Dedicated phpMyAdmin mount (must not fall through to installer SPA).
             .route(
                 "/phpmyadmin",

@@ -190,6 +190,9 @@ fn apply_config_and_start() -> Result<String, String> {
     ensure_database(&secret)?;
     write_sogo_conf(&secret)?;
     let synced = sync_users(&secret).unwrap_or(0);
+    // Heal path (packages already present, e.g. Start after an OS upgrade): make sure the
+    // EL9-build runtime libraries still resolve before asking systemd to start sogod.
+    crate::apps_sogo_compat::ensure_runtime_libs()?;
     let _ = enable_now(&["memcached"]);
     let unit = sogo_unit();
     if !systemd_unit_file_exists(unit) {
@@ -249,6 +252,7 @@ pub fn start_sogo() -> Result<String, String> {
     require_dependencies()?;
     if !secret_exists() || !conf_is_cpn_managed() {
         // Operator-managed config: only start units, never overwrite their sogo.conf.
+        crate::apps_sogo_compat::ensure_runtime_libs()?;
         let _ = enable_now(&["memcached"]);
         enable_now(&[sogo_unit()])?;
         if !wait_for_loopback(Duration::from_secs(20)) {

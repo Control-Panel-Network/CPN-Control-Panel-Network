@@ -125,7 +125,7 @@ pub fn compat_note(guest: &GuestOs) -> Option<String> {
     }
     match (guest.family, inverse_dnf_channel(guest.major)) {
         (PackageFamily::Dnf, Some((channel, true))) => Some(format!(
-            "Inverse publishes no EL{} channel yet; CPN installs the Inverse EL{channel} build on {} (same SOPE/GNUstep stack from the Inverse repo, memcached from AppStream). Override the source any time via {REPO_OVERRIDE}.",
+            "Inverse publishes no EL{} channel yet; CPN installs the Inverse EL{channel} build on {} (SOPE/GNUstep stack from the Inverse repo, memcached from AppStream, plus a signature-verified libsodium.so.23 runtime from EPEL {channel} in a private library directory). Override the source any time via {REPO_OVERRIDE}.",
             guest.major, guest.label
         )),
         _ => None,
@@ -140,31 +140,56 @@ pub fn unsupported_message(guest: &GuestOs) -> String {
     )
 }
 
-fn write_dnf_repo(baseurl: &str, gpgkey: &str, major: u32) -> Result<(), String> {
+/// Runtime libraries the Inverse EL9 build links that EL10 no longer ships with the same
+/// soname (`libsodium.so.23`). Exposed through a scoped EPEL 9 repo section (`includepkgs`)
+/// so `dnf repoquery --location` can find the signed RPM; the library itself is extracted
+/// by `apps_sogo_compat` because dnf would otherwise resolve the newer EL10 package.
+pub const EL9_COMPAT_PKGS: &[&str] = &["libsodium"];
+const EPEL9_BASEURL: &str = "https://dl.fedoraproject.org/pub/epel/9/Everything/$basearch/";
+const EPEL9_GPGKEY: &str = "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9";
+
+/// Render the CPN-managed dnf repo file. `compat` appends the scoped EPEL 9 runtime section.
+pub fn render_dnf_repo(baseurl: &str, gpgkey: &str, major: u32, compat: bool) -> String {
     let (gpgcheck, key_line) = if gpgkey.trim().is_empty() {
         ("0", String::new())
     } else {
         ("1", format!("gpgkey={}\n", gpgkey.trim()))
     };
-    let body = format!(
+    let mut body = format!(
         "# Managed by CPN (SOGo host package). Edit {REPO_OVERRIDE} to change the source.\n[cpn-sogo]\nname=SOGo for Enterprise Linux {major} (CPN managed)\nbaseurl={baseurl}\nenabled=1\ngpgcheck={gpgcheck}\nrepo_gpgcheck=0\n{key_line}"
     );
-    std::fs::write(DNF_REPO_FILE, body).map_err(|e| format!("Could not write {DNF_REPO_FILE}: {e}"))
+    if compat {
+        body.push_str(&format!(
+            "\n# EL9 build runtime on EL{major}: only the packages listed in includepkgs are visible.\n[cpn-sogo-el9-compat]\nname=SOGo EL9 runtime libraries from EPEL 9 (CPN managed, scoped)\nbaseurl={EPEL9_BASEURL}\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=0\ngpgkey={EPEL9_GPGKEY}\nincludepkgs={}\n",
+            EL9_COMPAT_PKGS.join(",")
+        ));
+    }
+    body
+}
+
+fn write_dnf_repo(baseurl: &str, gpgkey: &str, major: u32, compat: bool) -> Result<(), String> {
+    std::fs::write(
+        DNF_REPO_FILE,
+        render_dnf_repo(baseurl, gpgkey, major, compat),
+    )
+    .map_err(|e| format!("Could not write {DNF_REPO_FILE}: {e}"))
 }
 
 fn ensure_dnf_packages(guest: &GuestOs) -> Result<String, String> {
     let overr = load_override();
-    let (baseurl, gpgkey, label) = match overr {
+    let (baseurl, gpgkey, label, compat) = match overr {
         Some(o) if !o.baseurl.trim().is_empty() => (
             o.baseurl.trim().to_string(),
             o.gpgkey,
             "operator override repository".to_string(),
+            false,
         ),
         _ => match inverse_dnf_channel(guest.major) {
-            Some((channel, _compat)) => (
+            Some((channel, compat)) => (
                 format!("https://packages.sogo.nu/nightly/5/rhel/{channel}/$basearch/"),
                 String::new(),
                 source_label(guest),
+                compat,
             ),
             None => return Err(unsupported_message(guest)),
         },
@@ -172,7 +197,7 @@ fn ensure_dnf_packages(guest: &GuestOs) -> Result<String, String> {
     if !baseurl.starts_with("https://") {
         return Err("SOGo repository baseurl must use https://".into());
     }
-    write_dnf_repo(&baseurl, &gpgkey, guest.major)?;
+    write_dnf_repo(&baseurl, &gpgkey, guest.major, compat)?;
     // EPEL provides libmemcached / liboath style dependencies on EL hosts; best effort.
     let _ = run_quiet("dnf", &["install", "-y", "-q", "epel-release"]);
     let mut args = vec!["install", "-y", "-q"];
@@ -182,7 +207,16 @@ fn ensure_dnf_packages(guest: &GuestOs) -> Result<String, String> {
             "{e}. Source: {label}. Check that the host can reach packages.sogo.nu over HTTPS, then retry Install."
         )
     })?;
-    Ok(format!("Installed SOGo packages from {label}."))
+    let mut msg = format!("Installed SOGo packages from {label}.");
+    if compat {
+        // The EL9 build needs libsodium.so.23; EL10 ships .so.26 under the same package name,
+        // so dnf cannot pull the older build. Fetch the signed EPEL 9 RPM and extract only the
+        // shared library into a CPN-owned loader path (see apps_sogo_compat).
+        if let Some(note) = crate::apps_sogo_compat::ensure_runtime_libs()? {
+            msg.push_str(&format!(" Runtime: {note}."));
+        }
+    }
+    Ok(msg)
 }
 
 fn apt_install(pkgs: &[&str]) -> Result<(), String> {
@@ -287,6 +321,7 @@ pub fn remove_packages(guest: &GuestOs) -> Result<(), String> {
                 ],
             )?;
             let _ = std::fs::remove_file(DNF_REPO_FILE);
+            crate::apps_sogo_compat::remove_runtime_libs();
             Ok(())
         }
         PackageFamily::Apt => {
@@ -354,6 +389,37 @@ mod tests {
                 .to_lowercase()
                 .contains("not published for almalinux 10 yet")
         );
+    }
+
+    #[test]
+    fn dnf_repo_file_scopes_epel9_compat_to_runtime_libs() {
+        let plain = render_dnf_repo(
+            "https://packages.sogo.nu/nightly/5/rhel/9/$basearch/",
+            "",
+            9,
+            false,
+        );
+        assert!(plain.contains("[cpn-sogo]"));
+        assert!(plain.contains("gpgcheck=0"));
+        assert!(!plain.contains("cpn-sogo-el9-compat"));
+        let compat = render_dnf_repo(
+            "https://packages.sogo.nu/nightly/5/rhel/9/$basearch/",
+            "",
+            10,
+            true,
+        );
+        assert!(compat.contains("[cpn-sogo-el9-compat]"));
+        assert!(compat.contains("includepkgs=libsodium"));
+        assert!(compat.contains("epel/9/Everything"));
+        assert!(compat.contains("RPM-GPG-KEY-EPEL-9"));
+        let signed = render_dnf_repo(
+            "https://mirror.example/sogo/",
+            "https://mirror.example/key",
+            10,
+            false,
+        );
+        assert!(signed.contains("gpgcheck=1"));
+        assert!(signed.contains("gpgkey=https://mirror.example/key"));
     }
 
     #[test]
