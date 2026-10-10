@@ -9,11 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docker Active Containers search and pagination**: `/docker/list` and local images on `/docker/images` support search, per-page size (default 10; 5/10/25/50), and go-to-page controls so large host inventories stay usable on desktop and mobile.
+
 ### Changed
+
+- **Docker Owner column**: Host-managed or system containers show **Host** (not `CPN` / `System`). Account-owned rows keep the account name; unlabeled CLI containers stay **Unassigned**.
 
 ### Fixed
 
 - **Docker Hub `ubuntu26.04` Scout Critical/High (Go stdlib)**: Hub Scout on digest `ba4691ca03a6` reported 2 Critical / 8 High / 3 Other against `golang/stdlib` `go1.26.7` embedded in Canonical Pebble (`/usr/bin/pebble`) from the rockcraft `ubuntu:26.04` base (layer 0). Alma tags stay clean because they do not ship Pebble. `docker/Dockerfile.ubuntu` now purges Pebble (apt package when present, plus binary/paths) before installing systemd; Hub smoke asserts `/usr/bin/pebble` is absent. Fix version for those CVEs is Go 1.26.9 if a future base still needs Pebble. Optional rebuild: Actions `Docker Hub publish` workflow_dispatch with `os_tag=ubuntu26.04`. No v1.4.2 re-cut.
+- **Docker list image/tag accuracy**: When Docker/Podman `ps` returns an empty, `<none>`, or ID-only image field, `/docker/list` resolves the real image reference via bounded `inspect` so rows no longer show Unknown for local containers. Local image listing also requires a live engine and surfaces stderr on failure. Manage Images stays on `/docker/images` with a count link from the containers page.
 
 ## [1.4.2] - 10/10/2026
 

@@ -153,6 +153,8 @@ pub fn docker_container_view_page(
     let owner_cell = if row.owner == "Unassigned" {
         r#"<span title="No com.cpn.owner label; created outside the panel.">Unassigned</span>"#
             .to_string()
+    } else if row.owner == "Host" {
+        r#"<span title="Host-managed or system container.">Host</span>"#.to_string()
     } else {
         html_escape(&row.owner)
     };
