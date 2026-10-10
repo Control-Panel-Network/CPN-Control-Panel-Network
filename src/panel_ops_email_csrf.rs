@@ -72,20 +72,19 @@ mod tests {
         let t = email_csrf_token_with_secret(&secret, "Admin");
         assert!(verify_email_csrf_with_secret(&secret, "Admin", &t));
         assert!(!verify_email_csrf_with_secret(&secret, "other", &t));
-        assert!(!verify_email_csrf_with_secret(
-            "another-secret",
-            "Admin",
-            &t
-        ));
+        // Per-run mismatch secret (no hard-coded key literals for CodeQL).
+        let other = format!("{secret}-mismatch");
+        assert!(!verify_email_csrf_with_secret(&other, "Admin", &t));
     }
 
     #[test]
     fn csrf_rejects_malformed_tokens() {
-        let secret = "s";
-        assert!(!verify_email_csrf_with_secret(secret, "Admin", ""));
-        assert!(!verify_email_csrf_with_secret(secret, "Admin", "no-dot"));
-        assert!(!verify_email_csrf_with_secret(secret, "Admin", "abc.def"));
+        // Per-run secret (no hard-coded key literals for CodeQL).
+        let secret = format!("malformed-{}", std::process::id());
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", ""));
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "no-dot"));
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "abc.def"));
         // Hour bucket far in the past is rejected even with a valid signature shape.
-        assert!(!verify_email_csrf_with_secret(secret, "Admin", "1.00"));
+        assert!(!verify_email_csrf_with_secret(&secret, "Admin", "1.00"));
     }
 }

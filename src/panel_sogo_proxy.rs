@@ -180,12 +180,68 @@ async fn collect_body(mut payload: web::Payload) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// Longest header value the proxy will copy into an `x-webobjects-*` / `X-Forwarded-*`
+/// header. Keeps hostile `Host` / `X-Forwarded-*` values from driving allocations.
+const MAX_FORWARD_HEADER: usize = 255;
+
+/// Short, printable header value (length-capped; no control characters), or `None`.
+fn short_header(req: &HttpRequest, name: &str) -> Option<String> {
+    let raw = req.headers().get(name)?;
+    if raw.as_bytes().len() > MAX_FORWARD_HEADER {
+        return None;
+    }
+    let value = raw.to_str().ok()?.trim();
+    if value.is_empty() || value.chars().any(|c| c.is_control()) {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+/// `host[:port]` made only of characters valid in an HTTP authority.
+fn host_is_sane(host: &str) -> bool {
+    !host.is_empty()
+        && host.len() <= MAX_FORWARD_HEADER
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']'))
+}
+
 /// Public scheme + host[:port] as the browser sees the panel (for x-webobjects-server-url).
+///
+/// Resolved from the request headers with strict length / character caps instead of
+/// `connection_info()` (same approach as `panel_session::request_https_from_headers`):
+/// scheme from `X-Forwarded-Proto` (allowlisted) or the listener's own TLS state; host
+/// from the first `X-Forwarded-Host` entry, then `Host`, then the bound socket address.
 fn public_scheme_host(req: &HttpRequest) -> (String, String) {
-    let info = req.connection_info();
-    let scheme = info.scheme().to_string();
-    let host = info.host().to_string();
+    let scheme = if crate::panel_session::request_https_from_headers(req)
+        || (req.headers().get("X-Forwarded-Proto").is_none() && req.app_config().secure())
+    {
+        "https"
+    } else {
+        "http"
+    }
+    .to_string();
+    let host = short_header(req, "X-Forwarded-Host")
+        .and_then(|v| v.split(',').next().map(|s| s.trim().to_string()))
+        .filter(|h| host_is_sane(h))
+        .or_else(|| short_header(req, "Host").filter(|h| host_is_sane(h)))
+        .unwrap_or_else(|| req.app_config().local_addr().to_string());
     (scheme, host)
+}
+
+/// Client IP for `X-Forwarded-For` / `x-webobjects-remote-host`: the first parseable
+/// `X-Forwarded-For` entry (IPv4 or IPv6, so a `[v6]:port` form is never split on `:`),
+/// otherwise the TCP peer. Only a parsed `IpAddr` is ever rendered, never raw header text.
+fn remote_ip(req: &HttpRequest) -> String {
+    let forwarded = short_header(req, "X-Forwarded-For").and_then(|v| {
+        v.split(',')
+            .next()
+            .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
+    });
+    forwarded
+        .or_else(|| req.peer_addr().map(|addr| addr.ip()))
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "127.0.0.1".into())
 }
 
 fn forward(
@@ -235,11 +291,7 @@ fn forward(
         }
     }
     let (host_only, port) = split_host_port(host, scheme);
-    let remote = req
-        .connection_info()
-        .realip_remote_addr()
-        .map(|s| s.split(':').next().unwrap_or(s).to_string())
-        .unwrap_or_else(|| "127.0.0.1".into());
+    let remote = remote_ip(req);
     cmd.args(["-H", &format!("Host: {host}")]);
     cmd.args(["-H", "Accept-Encoding: identity"]);
     cmd.args(["-H", "x-webobjects-server-protocol: HTTP/1.0"]);
@@ -393,6 +445,43 @@ mod tests {
             rewrite_location("http://localhost:2087/SOGo/"),
             "http://localhost:2087/SOGo/"
         );
+    }
+
+    #[test]
+    fn public_scheme_host_and_remote_ip_come_from_capped_headers() {
+        let req = actix_web::test::TestRequest::default()
+            .insert_header(("Host", "panel.example.com:2087"))
+            .insert_header(("X-Forwarded-Proto", "https"))
+            .insert_header(("X-Forwarded-For", "203.0.113.9, 10.0.0.1"))
+            .to_http_request();
+        assert_eq!(
+            public_scheme_host(&req),
+            ("https".to_string(), "panel.example.com:2087".to_string())
+        );
+        assert_eq!(remote_ip(&req), "203.0.113.9");
+
+        // X-Forwarded-Host wins over Host; IPv6 forwarded addresses are kept whole.
+        let req = actix_web::test::TestRequest::default()
+            .insert_header(("Host", "127.0.0.1:2087"))
+            .insert_header(("X-Forwarded-Host", "mail.example.org, inner"))
+            .insert_header(("X-Forwarded-For", "2001:db8::10"))
+            .to_http_request();
+        assert_eq!(public_scheme_host(&req).1, "mail.example.org");
+        assert_eq!(remote_ip(&req), "2001:db8::10");
+
+        // Hostile values are ignored: oversized / shell-looking Host, non-IP forwarded-for.
+        let long = "a".repeat(MAX_FORWARD_HEADER + 1);
+        let req = actix_web::test::TestRequest::default()
+            .insert_header(("Host", long.as_str()))
+            .insert_header(("X-Forwarded-For", "not-an-ip"))
+            .to_http_request();
+        let (scheme, host) = public_scheme_host(&req);
+        assert_eq!(scheme, "http");
+        assert!(host_is_sane(&host), "fallback host must be sane: {host}");
+        assert_ne!(host, long);
+        assert!(remote_ip(&req).parse::<std::net::IpAddr>().is_ok());
+        assert!(!host_is_sane("evil.example.com; rm -rf /"));
+        assert!(!host_is_sane(""));
     }
 
     #[test]

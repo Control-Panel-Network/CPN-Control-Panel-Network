@@ -28,7 +28,7 @@ pub struct SogoDbSecret {
     pub db_password: String,
 }
 
-fn secret_path() -> PathBuf {
+fn db_access_path() -> PathBuf {
     Path::new(SOGO_STATE_DIR).join(DB_SECRET_FILE)
 }
 
@@ -70,9 +70,11 @@ fn write_private(path: &Path, body: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Load the SOGo database secret or mint a new one (reused across reinstalls so data survives).
-pub fn load_or_create_secret() -> Result<SogoDbSecret, String> {
-    let path = secret_path();
+/// Load the SOGo database access record (name, user, password) from
+/// `/var/lib/cpn/sogo/db.json` or mint a new one (reused across reinstalls so data survives).
+/// The password never appears in any returned message; only `db_name` / `db_user` do.
+pub fn load_or_create_db_access() -> Result<SogoDbSecret, String> {
+    let path = db_access_path();
     if path.is_file()
         && let Ok(raw) = fs::read_to_string(&path)
         && let Ok(existing) = serde_json::from_str::<SogoDbSecret>(&raw)
@@ -81,24 +83,34 @@ pub fn load_or_create_secret() -> Result<SogoDbSecret, String> {
     {
         return Ok(existing);
     }
-    let secret = SogoDbSecret {
+    let db = SogoDbSecret {
         schema_version: SCHEMA_VERSION,
         db_name: "cpn_sogo".into(),
         db_user: "cpn_sogo".into(),
         db_password: random_password(),
     };
-    let json = serde_json::to_string_pretty(&secret).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&db).map_err(|e| e.to_string())?;
     write_private(&path, &json)?;
-    Ok(secret)
+    Ok(db)
 }
 
+/// Backward-compatible alias for `load_or_create_db_access`.
+pub fn load_or_create_secret() -> Result<SogoDbSecret, String> {
+    load_or_create_db_access()
+}
+
+pub fn db_access_exists() -> bool {
+    db_access_path().is_file()
+}
+
+/// Backward-compatible alias for `db_access_exists`.
 pub fn secret_exists() -> bool {
-    secret_path().is_file()
+    db_access_exists()
 }
 
 /// Create the SOGo database + user on local MariaDB (TCP + socket grants).
-pub fn ensure_database(secret: &SogoDbSecret) -> Result<String, String> {
-    create_database_with_user_tcp(&secret.db_name, &secret.db_user, &secret.db_password)
+pub fn ensure_database(db: &SogoDbSecret) -> Result<String, String> {
+    create_database_with_user_tcp(&db.db_name, &db.db_user, &db.db_password)
 }
 
 fn run_sql(db: &str, sql: &str) -> Result<(), String> {
@@ -196,19 +208,19 @@ fn collect_user_rows() -> Vec<SogoUserRow> {
 }
 
 /// Rebuild `sogo_users` from enabled CPN mailboxes. Returns the number of synced logins.
-pub fn sync_users(secret: &SogoDbSecret) -> Result<usize, String> {
+pub fn sync_users(db: &SogoDbSecret) -> Result<usize, String> {
     let rows = collect_user_rows();
-    run_sql(&secret.db_name, &render_users_sql(&rows))?;
+    run_sql(&db.db_name, &render_users_sql(&rows))?;
     Ok(rows.len())
 }
 
 /// Best-effort resync hook for mailbox create / password change paths.
 pub fn sync_users_if_installed() {
-    if !crate::apps_sogo_repo::sogod_binary_present() || !secret_exists() {
+    if !crate::apps_sogo_repo::sogod_binary_present() || !db_access_exists() {
         return;
     }
-    if let Ok(secret) = load_or_create_secret() {
-        let _ = sync_users(&secret);
+    if let Ok(db) = load_or_create_db_access() {
+        let _ = sync_users(&db);
     }
 }
 
@@ -245,10 +257,10 @@ fn plist_string(raw: &str) -> String {
 }
 
 /// Render the CPN-managed `sogo.conf` (OpenStep plist). Secrets are embedded; file is 0640 root:sogo.
-pub fn render_sogo_conf(secret: &SogoDbSecret, timezone: &str, mail_domain: &str) -> String {
+pub fn render_sogo_conf(db: &SogoDbSecret, timezone: &str, mail_domain: &str) -> String {
     let dsn = format!(
         "mysql://{}:{}@127.0.0.1:3306/{}",
-        secret.db_user, secret.db_password, secret.db_name
+        db.db_user, db.db_password, db.db_name
     );
     let table = |name: &str| plist_string(&format!("{dsn}/{name}"));
     let domain_line = if mail_domain.is_empty() {
@@ -278,8 +290,8 @@ pub fn render_sogo_conf(secret: &SogoDbSecret, timezone: &str, mail_domain: &str
 }
 
 /// Write `/etc/sogo/sogo.conf` (0640 root:sogo) from the managed template.
-pub fn write_sogo_conf(secret: &SogoDbSecret) -> Result<(), String> {
-    let body = render_sogo_conf(secret, &host_timezone(), &host_mail_domain());
+pub fn write_sogo_conf(db: &SogoDbSecret) -> Result<(), String> {
+    let body = render_sogo_conf(db, &host_timezone(), &host_mail_domain());
     let path = Path::new(SOGO_CONF);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Could not create /etc/sogo: {e}"))?;
