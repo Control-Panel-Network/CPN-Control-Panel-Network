@@ -14,7 +14,7 @@ curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash
 
 # Pin Release / tracking ref; optional Docker bypass
-curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.4.0
+curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v1.4.1
 curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- --bypass
 ```
 
@@ -54,8 +54,8 @@ If a release does not contain an asset for your target OS and architecture, trea
 CPN also publishes **maintainer/smoke** AlmaLinux and Ubuntu + systemd container images (not a replacement for the native RPM/DEB install path):
 
 - Repository: [master3395/cpn-installer](https://hub.docker.com/r/master3395/cpn-installer)
-- Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`), plus the release semver (current **1.4.0** on the AlmaLinux 9 image). The Docker Ubuntu image is 26.04 only; `ubuntu22.04` and `ubuntu24.04` container tags are retired (vendor CVE fixes pending, issue #353). Ubuntu 22.04 and 24.04 hosts use the native DEB install. On each `v*` Git tag, the semver (no leading `v`) is also pushed on the `almalinux9` image only (points at the primary EL runtime).
-- Images track GitHub Releases on `stable`. Current published tip is **v1.4.0**.
+- Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest` (same baseline as `almalinux9`), plus the release semver (current **1.4.1** on the AlmaLinux 9 image). The Docker Ubuntu image is 26.04 only; `ubuntu22.04` and `ubuntu24.04` container tags are retired (vendor CVE fixes pending, issue #353). Ubuntu 22.04 and 24.04 hosts use the native DEB install. On each `v*` Git tag, the semver (no leading `v`) is also pushed on the `almalinux9` image only (points at the primary EL runtime).
+- Images track GitHub Releases on `stable`. Current published tip is **v1.4.1**.
 
 Images are built and pushed automatically when a `v*` tag is pushed to `stable` (`.github/workflows/docker-hub.yml`). Requires **repository** secrets on `Control-Panel-Network/CPN-Control-Panel-Network`: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Docker Hub access token). Without them, CI does not push to Hub. Re-run **Docker Hub publish** from Actions (`workflow_dispatch`, `os_tag=all`) after secrets are set.
 

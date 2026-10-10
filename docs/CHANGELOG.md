@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.1] - 10/10/2026
+
+Patch release after v1.4.0. SOGo groupware host package goes LIVE (with an EL10 runtime shim and CalDAV/CardDAV through the panel), upgrade jobs clean their staging leftovers, the Version installer log gains timestamps, a Done state, Copy log, and a Main Log link, Version Management adds a branch picker and estimated time remaining, every plugin card gets a thumbnail, Mr Agent surfaces PHP bridge errors, and Windows developer builds pass again.
+
+### Added
+
 - **Version Management branch picker (`stable` or `dev` for latest commits)**: `/settings/version` > Update source gains a **Branch for latest commits** select. `stable` (default; production: published releases and stable commits) and `dev` (pre-release testing, lab only) are always offered; other branches of the configured repo (or fork) are appended from the GitHub Branches API with a lab-only label when GitHub answers. The choice is saved beside the repo in `/var/lib/cpn/update-source.json` (mode 600, new `branch` field; files without it keep `stable`) and drives **Upgrade to latest commits**, the Update source row (`official · owner/repo · branch dev (lab)`), the `Latest commits: <branch> @ <sha>` line, the `Update available: <branch> commits are ahead` status, the installer log and maintenance page copy (`Installing dev commits ...`, `Building panel from dev commits (cargo)`), and the recorded install tag (`dev@<sha>` instead of always `stable@<sha>`). A non-stable choice shows an orange warning before and after save, and the Details row names the branch. Env override: `CPN_UPDATE_BRANCH` (legacy `CPN_STABLE_BRANCH` still honored). CLI commit targets now accept `--to stable`, `--to dev`, `--to branch:<name>`, `--to <branch>@<sha>`, a bare SHA, or `--to tip` for the saved branch; release tags are unaffected. New read-only `GET /api/version-branches` (any signed-in user; saving stays admin-only through `POST /api/version-source`, which accepts an optional `branch`). The official upstream tip comparison for forks is unchanged. New modules `releases_branches.rs` and `maintenance_api_branches.rs`.
 
 - **Version Management installer log: timestamps, Done state, Copy log, Main Log link**: Every line of the `/settings/version` installer log now starts with a `dd/mm/yyyy HH:MM:SS` stamp (24h; stored as server UTC in `/var/lib/cpn/upgrade-session.log`, rendered in the browser's local time with the server time on hover). The log header shows a `running` / `done` / `failed` state, and each job ends with an explicit final line (`DONE Updated to ...` in green, or `FAILED (job) ...`) that names the persistent log so the transcript never trails off in the middle of a build. New **Copy log** button (clipboard API with a textarea fallback for non-secure origins) and **Open Main Log** link to `/server/logs/panel`; the toolbar names `/var/log/cpn/panel.log` as the full persistent copy. New module `panel_hub_pages_version_log_script.rs`.
