@@ -6,13 +6,17 @@
 //!   come from the same repo, memcached from AppStream) and is what CPN verifies on its
 //!   AlmaLinux 10 lab. Older EL releases are refused with a clear message.
 //! * Debian / Ubuntu: distro `sogo` packages first (signed, stable), Inverse nightly as a
-//!   fallback for suites Inverse publishes (jammy, noble, bookworm).
+//!   fallback for suites Inverse publishes (jammy, noble, bookworm). The SOPE MySQL adaptor
+//!   package (`sope4.9-gdl1-mysql`) is optional: Ubuntu 26.04 (resolute) ships the adaptor
+//!   inside `libsope1`, so it is installed only when the apt cache offers a candidate
+//!   (selection logic in `apps_sogo_apt`).
 //!
 //! Optional operator override (for example a paid Inverse subscription repository), honored on
 //! every OS before any built-in source:
 //! `/var/lib/cpn/sogo/repo-override.json` with `{"baseurl": "...", "gpgkey": "..."}` on dnf
 //! hosts or `{"apt_line": "deb [...] https://... suite comp", "keyring_url": "..."}` on apt hosts.
 
+use crate::apps_sogo_apt;
 use crate::os_support::{GuestOs, PackageFamily};
 use serde::Deserialize;
 use std::path::Path;
@@ -28,7 +32,9 @@ const INVERSE_KEY_URL: &str =
 
 /// RPM package set (Inverse naming).
 pub const DNF_PKGS: &[&str] = &["sogo", "sogo-tool", "sope49-gdl1-mysql", "memcached"];
-/// Debian / Ubuntu package set (distro and Inverse share these names).
+/// Full Debian / Ubuntu package set (distro and Inverse share these names). Kept for
+/// reference and docs; the live install set is resolved by `apps_sogo_apt::live_apt_selection`
+/// because `sope4.9-gdl1-mysql` does not exist on every release.
 pub const APT_PKGS: &[&str] = &["sogo", "sope4.9-gdl1-mysql", "memcached"];
 
 #[derive(Debug, Default, Deserialize)]
@@ -252,12 +258,29 @@ fn shell_quote(raw: &str) -> String {
     format!("'{}'", raw.replace('\'', "'\\''"))
 }
 
+/// Install message with the adaptor note (skipped optional package or missing bundle).
+fn apt_install_message(label: &str, selection: &apps_sogo_apt::AptSelection) -> String {
+    let mut msg = format!("Installed SOGo packages from {label}.");
+    let note = selection.skipped_note();
+    if !note.is_empty() {
+        msg.push(' ');
+        msg.push_str(&note);
+    }
+    if !apps_sogo_apt::mysql_adaptor_present() {
+        msg.push(' ');
+        msg.push_str(apps_sogo_apt::missing_adaptor_warning());
+    }
+    msg
+}
+
 fn ensure_apt_packages(guest: &GuestOs) -> Result<String, String> {
     let _ = run_quiet("apt-get", &["update", "-q"]);
-    if apt_install(APT_PKGS).is_ok() {
-        return Ok(format!(
-            "Installed SOGo packages from the {} repositories.",
-            guest.label
+    // Required packages (sogo, memcached) plus optional ones that have an apt candidate.
+    let selection = apps_sogo_apt::live_apt_selection();
+    if apt_install(&selection.install).is_ok() {
+        return Ok(apt_install_message(
+            &format!("the {} repositories", guest.label),
+            &selection,
         ));
     }
     // Fallback: Inverse nightly (or operator override) for suites Inverse publishes.
@@ -290,8 +313,10 @@ fn ensure_apt_packages(guest: &GuestOs) -> Result<String, String> {
     std::fs::write(APT_LIST_FILE, format!("{apt_line}\n"))
         .map_err(|e| format!("Could not write {APT_LIST_FILE}: {e}"))?;
     run_quiet("apt-get", &["update", "-q"])?;
-    apt_install(APT_PKGS).map_err(|e| format!("{e}. Source: {label}."))?;
-    Ok(format!("Installed SOGo packages from {label}."))
+    // Re-resolve: the new source may provide sope4.9-gdl1-mysql as a separate package.
+    let selection = apps_sogo_apt::live_apt_selection();
+    apt_install(&selection.install).map_err(|e| format!("{e}. Source: {label}."))?;
+    Ok(apt_install_message(&label, &selection))
 }
 
 /// Install SOGo, the SOPE MariaDB adaptor, and memcached for the detected guest.
@@ -325,17 +350,14 @@ pub fn remove_packages(guest: &GuestOs) -> Result<(), String> {
             Ok(())
         }
         PackageFamily::Apt => {
-            run_quiet(
-                "apt-get",
-                &[
-                    "remove",
-                    "-y",
-                    "-q",
-                    "sogo",
-                    "sogo-common",
-                    "sope4.9-gdl1-mysql",
-                ],
-            )?;
+            // Only name packages dpkg knows as installed: apt-get remove fails on unknown
+            // names (sope4.9-gdl1-mysql does not exist on Ubuntu 26.04).
+            let installed = apps_sogo_apt::live_apt_remove_selection();
+            if !installed.is_empty() {
+                let mut args = vec!["remove", "-y", "-q"];
+                args.extend_from_slice(&installed);
+                run_quiet("apt-get", &args)?;
+            }
             if Path::new(APT_LIST_FILE).is_file() {
                 let _ = std::fs::remove_file(APT_LIST_FILE);
                 let _ = run_quiet("apt-get", &["update", "-q"]);
