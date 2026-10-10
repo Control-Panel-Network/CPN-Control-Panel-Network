@@ -35,11 +35,7 @@ fn require_reseller_csrf(http: &HttpRequest, user: &str, token: &str) -> Result<
 
 fn redirect_reseller(tab: &str, notice: Option<&str>, error: Option<&str>) -> HttpResponse {
     let tab = normalize_reseller_tab(tab);
-    redirect_notice(
-        &format!("/account/users/reseller?tab={tab}"),
-        notice,
-        error,
-    )
+    redirect_notice(&format!("/account/users/reseller?tab={tab}"), notice, error)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -126,10 +122,7 @@ pub async fn users_reseller_route(
     }
     let notice = query.get("notice").map(|s| decode_notice_code(s));
     let error = query.get("error").map(|s| decode_notice_code(s));
-    let tab = query
-        .get("tab")
-        .map(|s| s.as_str())
-        .unwrap_or("overview");
+    let tab = query.get("tab").map(|s| s.as_str()).unwrap_or("overview");
     html_ok(panel_shell(
         &user,
         "users",
