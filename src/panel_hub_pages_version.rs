@@ -105,7 +105,14 @@ pub fn version_management_page(can_manage: bool) -> String {
     </div>
   </div>
   <details id="cpn-version-log" class="cpn-ssh-log">
-    <summary>Installer log</summary>
+    <summary>Installer log <span id="cpn-version-log-state" class="cpn-ssh-log-state" aria-live="polite"></span></summary>
+    <div class="cpn-ssh-log-toolbar">
+      <span class="cpn-ssh-log-hint">Times shown in your local time (dd/mm/yyyy, 24h). This tail is the current or last job; the full persistent log is <code>/var/log/cpn/panel.log</code>.</span>
+      <span class="cpn-ssh-log-actions">
+        <button type="button" id="cpn-version-log-copy" class="cpn-ssh-log-btn" title="Copy the installer log to the clipboard">Copy log</button>
+        <a href="/server/logs/panel" class="cpn-ssh-log-btn" title="Open the persistent Main Log (Server &gt; Logs &gt; Panel)">Open Main Log</a>
+      </span>
+    </div>
     <pre id="cpn-version-log-pre" class="cpn-ssh-log-pre" aria-live="polite"></pre>
   </details>
   <p id="cpn-version-op-error" class="muted" style="margin-top:10px;color:#f87171;" role="alert"></p>
@@ -169,6 +176,27 @@ pub fn version_management_page(can_manage: bool) -> String {
   line-height:1.45; white-space:pre-wrap; word-break:break-word; color:#d1fae5;
 }}
 .cpn-ssh-log-pre .ssh-fail {{ color:#fca5a5; }}
+.cpn-ssh-log-pre .ssh-note {{ color:#94a3b8; font-style:italic; }}
+.cpn-ssh-log-pre .ssh-done {{ color:#4ade80; font-weight:700; }}
+.cpn-ssh-log-pre .ssh-time {{ color:#64748b; }}
+.cpn-ssh-log-state {{ font-weight:400; font-size:12px; margin-left:8px; color:#94a3b8; }}
+.cpn-ssh-log-state[data-state="done"] {{ color:#4ade80; }}
+.cpn-ssh-log-state[data-state="failed"] {{ color:#fca5a5; }}
+.cpn-ssh-log-state[data-state="running"] {{ color:#fbbf24; }}
+.cpn-ssh-log-toolbar {{
+  display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; justify-content:space-between;
+  padding:0 12px 8px; border-bottom:1px solid #1f2937;
+}}
+.cpn-ssh-log-hint {{ color:#94a3b8; font-size:12px; line-height:1.4; flex:1 1 260px; }}
+.cpn-ssh-log-hint code {{ color:#cbd5e1; font-size:12px; }}
+.cpn-ssh-log-actions {{ display:flex; gap:8px; flex:0 0 auto; }}
+.cpn-ssh-log-btn {{
+  display:inline-block; padding:5px 10px; border-radius:6px; border:1px solid #334155;
+  background:#111827; color:#e2e8f0; font-size:12px; text-decoration:none; cursor:pointer;
+  font-family:inherit; line-height:1.2;
+}}
+.cpn-ssh-log-btn:hover {{ background:#1f2937; }}
+.cpn-ssh-log-btn[data-copied="1"] {{ border-color:#4ade80; color:#4ade80; }}
 @media (max-width:640px) {{
   .version-kv > li {{ grid-template-columns:1fr; gap:4px; }}
   .version-kv .kv-value {{ text-align:left; }}
@@ -324,6 +352,11 @@ mod tests {
         assert!(html.contains("li[hidden]"));
         assert!(html.contains("cpn-version-log-pre"));
         assert!(html.contains("Installer log"));
+        assert!(html.contains("id=\"cpn-version-log-copy\""));
+        assert!(html.contains("href=\"/server/logs/panel\""));
+        assert!(html.contains("/var/log/cpn/panel.log"));
+        assert!(html.contains("cpn-version-log-state"));
+        assert!(html.contains("dd/mm/yyyy, 24h"));
         assert!(html.contains("data-update-state=\"stale\""));
         assert!(html.contains("startRetryCountdown"));
         assert!(html.contains("data-retry-after"));

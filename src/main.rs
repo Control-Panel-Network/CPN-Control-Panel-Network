@@ -957,6 +957,14 @@ async fn main() -> std::io::Result<()> {
     cpn_installer::motd::ensure_motd_installed();
     // Clear restarting / expired upgrade maintenance flags after a healthy boot.
     cpn_installer::panel_maintenance_mode::heal_on_startup();
+    // Sweep staging left by an upgrade job that died with the previous process
+    // (for example a commit build cut short by the upgrade restart). Age and
+    // in-use checks keep a CLI job that runs beside the panel safe.
+    std::thread::spawn(|| {
+        for line in cpn_installer::upgrade_staging::sweep_on_startup() {
+            cpn_installer::upgrade_tip_log::log_tagged_main_only("upgrade", "info", &line);
+        }
+    });
     // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
     std::thread::spawn(|| {
         cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");

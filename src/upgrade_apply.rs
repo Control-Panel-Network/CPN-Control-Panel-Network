@@ -7,26 +7,10 @@ use crate::release_verify::{
     verify_sha256_file,
 };
 use crate::releases::{self, CpnRelease, NativePackageKind};
-use rand::{Rng, distr::Alphanumeric};
+use crate::upgrade_staging::StagingDir;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
-
-fn ephemeral_path(filename: &str) -> Result<String, String> {
-    let suffix: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(12)
-        .map(char::from)
-        .collect();
-    let dir = format!("/var/tmp/cpn-upgrade-{suffix}");
-    std::fs::create_dir_all(&dir).map_err(|error| format!("Could not create temp dir: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-    }
-    Ok(format!("{dir}/{filename}"))
-}
 
 async fn download_file(url: &str, destination: &str) -> Result<(), String> {
     let status = Command::new("curl")
@@ -65,6 +49,7 @@ fn bundled_gpg_keyring() -> Option<PathBuf> {
 async fn verify_downloaded_artifact(
     state: &AppState,
     release: &CpnRelease,
+    staging: &StagingDir,
     artifact_path: &str,
 ) -> Result<(), String> {
     if !verify_release_enabled() {
@@ -83,7 +68,7 @@ async fn verify_downloaded_artifact(
     state
         .progress("verifying", 35, "Downloading SHA256SUMS")
         .await;
-    let sums_path = ephemeral_path("SHA256SUMS")?;
+    let sums_path = staging.file_string("SHA256SUMS");
     download_file(&sums_asset.browser_download_url, &sums_path).await?;
     let sums_body = std::fs::read_to_string(&sums_path)
         .map_err(|error| format!("Could not read SHA256SUMS: {error}"))?;
@@ -100,7 +85,7 @@ async fn verify_downloaded_artifact(
         let asc = release.checksums_asc_asset.as_ref().ok_or_else(|| {
             "Release is missing SHA256SUMS.asc while CPN_VERIFY_GPG=1".to_string()
         })?;
-        let asc_path = ephemeral_path("SHA256SUMS.asc")?;
+        let asc_path = staging.file_string("SHA256SUMS.asc");
         download_file(&asc.browser_download_url, &asc_path).await?;
         let keyring = bundled_gpg_keyring();
         verify_gpg_sums(
@@ -128,6 +113,13 @@ pub async fn apply_release(
     force: bool,
     allow_oldpackage: bool,
 ) -> Result<ManifestSource, String> {
+    // One staging dir per job; removed on drop (success or any `?` error), so
+    // downloaded RPM/DEB/SHA256SUMS files never linger under /var/tmp.
+    let staging = StagingDir::create("cpn-upgrade")?;
+    state.log(
+        format!("Package staging dir {}", staging.path().display()),
+        "info",
+    );
     let guest = crate::os_support::detect_guest_os().ok();
     if let Some(guest) = guest.as_ref()
         && let Some((asset, kind)) = releases::compatible_package_asset(release, guest)
@@ -137,9 +129,9 @@ pub async fn apply_release(
                 state
                     .progress("downloading", 20, format!("Downloading {}", asset.name))
                     .await;
-                let path = ephemeral_path(&asset.name)?;
+                let path = staging.file_string(&asset.name);
                 download_file(&asset.browser_download_url, &path).await?;
-                verify_downloaded_artifact(state, release, &path).await?;
+                verify_downloaded_artifact(state, release, &staging, &path).await?;
                 state
                     .progress("installing", 60, format!("Installing RPM ({})", asset.name))
                     .await;
@@ -151,9 +143,9 @@ pub async fn apply_release(
                 state
                     .progress("downloading", 20, format!("Downloading {}", asset.name))
                     .await;
-                let path = ephemeral_path(&asset.name)?;
+                let path = staging.file_string(&asset.name);
                 download_file(&asset.browser_download_url, &path).await?;
-                verify_downloaded_artifact(state, release, &path).await?;
+                verify_downloaded_artifact(state, release, &staging, &path).await?;
                 state
                     .progress("installing", 60, format!("Installing DEB ({})", asset.name))
                     .await;
@@ -167,9 +159,9 @@ pub async fn apply_release(
         state
             .progress("downloading", 20, format!("Downloading {}", bin.name))
             .await;
-        let path = ephemeral_path("cpn-installer.bin")?;
+        let path = staging.file_string("cpn-installer.bin");
         download_file(&bin.browser_download_url, &path).await?;
-        verify_downloaded_artifact(state, release, &path).await?;
+        verify_downloaded_artifact(state, release, &staging, &path).await?;
         state
             .progress("installing", 60, "Replacing cpn-installer binary")
             .await;
