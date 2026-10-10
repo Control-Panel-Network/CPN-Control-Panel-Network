@@ -7,6 +7,7 @@ use crate::panel_reseller::{
     ResellerBranding, ResellerQuotas, ResellerRecord, account_is_reseller, child_usernames,
     format_quota_cell, get_reseller, list_resellers, pool_committed,
 };
+use crate::panel_hub_pages_reseller_stats::reseller_stats_cards_html;
 use crate::panel_reseller_csrf::reseller_csrf_token;
 
 fn html_escape(value: &str) -> String {
@@ -196,6 +197,7 @@ pub fn users_reseller_page(viewer: &str, notice: Option<&str>, error: Option<&st
     let admin = is_panel_admin(viewer);
     let csrf = reseller_csrf_token(viewer);
     let mut body = notice_block(notice, error);
+    body.push_str(&reseller_stats_cards_html(viewer));
     body.push_str(
         r#"<p class="muted">Manage reseller hierarchy, multi-tenant pool quotas (websites, mailboxes, databases, FTP, storage, bandwidth), and per-reseller branding. Child users are ACL-jailed to their parent reseller.</p>"#,
     );
@@ -317,5 +319,9 @@ mod tests {
         assert!(!html.contains("scaffolded honestly"));
         assert!(html.contains("Reseller Center"));
         assert!(html.contains("multi-tenant") || html.contains("Create child user"));
+        assert!(html.contains("Total Users"));
+        assert!(html.contains("Total Websites"));
+        assert!(html.contains("Resellers"));
+        assert!(!html.to_lowercase().contains("cyberpanel"));
     }
 }

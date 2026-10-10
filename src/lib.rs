@@ -183,6 +183,7 @@ pub mod panel_hub_pages_profile_account;
 pub mod panel_hub_pages_profile_tabs;
 pub mod panel_hub_pages_proton_mail;
 pub mod panel_hub_pages_reseller;
+pub mod panel_hub_pages_reseller_stats;
 pub mod panel_hub_pages_security;
 pub mod panel_hub_pages_server;
 pub mod panel_hub_pages_server_log_view;
