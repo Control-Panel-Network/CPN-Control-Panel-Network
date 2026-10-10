@@ -17,6 +17,8 @@ use tokio::process::Command;
 pub struct TipApplyResult {
     pub sha: String,
     pub short_sha: String,
+    /// Branch the commit came from (`stable`, `dev`, or another lab branch).
+    pub branch: String,
     pub branch_label: String,
     pub package_version: String,
     pub source: ManifestSource,
@@ -162,6 +164,7 @@ async fn cargo_build_release(
     state: &AppState,
     root: &Path,
     git_sha: &str,
+    branch: &str,
     tools: &Toolchain,
 ) -> Result<(), String> {
     build_installer_ui(state, root, tools).await?;
@@ -169,7 +172,7 @@ async fn cargo_build_release(
         .progress(
             "installing",
             45,
-            "Building panel from stable commits (cargo)",
+            format!("Building panel from {branch} commits (cargo)"),
         )
         .await;
     let cargo = tools.cargo.to_string_lossy().into_owned();
@@ -318,13 +321,20 @@ pub async fn apply_tip_ref(
         .await
         .map_err(|error| fail(error, None))?;
     let short = crate::build_meta::short_sha(&sha);
-    let branch = releases_stable_tip::stable_branch();
-    let label = if git_ref == branch || git_ref.eq_ignore_ascii_case("stable") {
+    // Branch refs (`stable`, `dev`, `feat/x`) name themselves; a pinned SHA
+    // (UI sends `<branch>@<sha>`) is labelled with the configured branch.
+    let branch = releases_stable_tip::branch_label_for_ref(git_ref);
+    let label = if !crate::build_meta::looks_like_git_sha(git_ref) {
         format!("{branch} @ {short}")
     } else {
-        format!("commit @ {short}")
+        format!("{branch} commit @ {short}")
     };
     upgrade_tip_log::log_info(format!("Resolved tip {label} sha={short}"));
+    if !crate::releases_source::is_production_branch(&branch) {
+        upgrade_tip_log::log_info(format!(
+            "Branch {branch} is for lab / pre-release testing; production hosts should follow stable"
+        ));
+    }
 
     if let Some(on_disk) =
         crate::build_meta::sha_embedded_in_binary(std::path::Path::new(installer_bin()))
@@ -336,6 +346,7 @@ pub async fn apply_tip_ref(
         return Ok(TipApplyResult {
             sha,
             short_sha: short,
+            branch,
             branch_label: label,
             package_version: env!("CARGO_PKG_VERSION").to_string(),
             source: ManifestSource::Local,
@@ -363,6 +374,7 @@ pub async fn apply_tip_ref(
                 return Ok(TipApplyResult {
                     sha,
                     short_sha: short,
+                    branch,
                     branch_label: label,
                     package_version: env!("CARGO_PKG_VERSION").to_string(),
                     source: ManifestSource::Local,
@@ -415,7 +427,7 @@ pub async fn apply_tip_ref(
     crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
     crate::upgrade_tip_verify::inject_keep_module(&root, &sha)?;
     let package_version = read_cargo_version(&root);
-    cargo_build_release(state, &root, &sha, &tools).await?;
+    cargo_build_release(state, &root, &sha, &branch, &tools).await?;
     install_built_bins(&root, &tools, &sha).await?;
 
     upgrade_tip_log::log_info(format!(
@@ -436,6 +448,7 @@ pub async fn apply_tip_ref(
     Ok(TipApplyResult {
         sha,
         short_sha: short,
+        branch,
         branch_label: label,
         package_version,
         source: ManifestSource::Local,
@@ -452,7 +465,14 @@ pub fn record_tip_install(
     selected_server: Option<crate::model::ServerEngine>,
     selected_mail: Option<crate::model::MailSystem>,
 ) -> Result<(), String> {
-    let tag = format!("stable@{}", result.short_sha);
+    // `<branch>@<short>` (for example `stable@1b2b709` or `dev@9a11b4e`);
+    // `parse_tip_upgrade_target` accepts the same form for repair/redo.
+    let branch = if result.branch.trim().is_empty() {
+        releases_stable_tip::stable_branch()
+    } else {
+        result.branch.clone()
+    };
+    let tag = format!("{branch}@{}", result.short_sha);
     manifest::record_install_with_commit(
         &result.package_version,
         &tag,

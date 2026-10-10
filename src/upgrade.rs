@@ -205,7 +205,8 @@ async fn run_maintenance_inner(
         return Err("Downgrade requires confirm_downgrade=true (or CLI --yes)".into());
     }
 
-    // Commit / stable tip path: version like `stable`, `stable@abc1234`, or a git SHA.
+    // Commit / branch tip path: version like `stable`, `dev`, `branch:<name>`,
+    // `<branch>@abc1234`, or a git SHA (branch default comes from Version Management).
     if matches!(
         request.action,
         MaintenanceAction::Upgrade | MaintenanceAction::Repair

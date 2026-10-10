@@ -10,7 +10,7 @@ use crate::releases;
 use crate::releases_installed_color::{InstalledPackageColor, installed_package_color};
 use crate::releases_source::{
     self, UpdateSourceConfig, github_token_configured, load_update_source, save_github_token,
-    save_update_source_repo,
+    save_update_source,
 };
 use crate::upgrade::{build_plan, spawn_maintenance};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
@@ -42,7 +42,11 @@ fn maintenance_authorized(state: &AppState, query: &TokenQuery, http: &HttpReque
 }
 
 /// Installer token/session, or any signed-in panel user (read-only version info).
-fn version_read_authorized(state: &AppState, query: &TokenQuery, http: &HttpRequest) -> bool {
+pub(crate) fn version_read_authorized(
+    state: &AppState,
+    query: &TokenQuery,
+    http: &HttpRequest,
+) -> bool {
     if authorized_request(state, query, http) {
         return true;
     }
@@ -134,25 +138,37 @@ pub struct VersionSourcePublic {
     pub using_fork: bool,
     pub token_configured: bool,
     pub updated_at_unix: u64,
+    /// Branch followed by "Upgrade to latest commits" (`stable` default, `dev` for labs).
+    pub branch: String,
+    pub default_branch: String,
+    pub branch_is_production: bool,
+    pub branch_label: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct VersionSourceRequest {
     #[serde(default)]
     pub repo: String,
+    /// Missing => keep the stored branch; empty string => `stable`.
+    #[serde(default)]
+    pub branch: Option<String>,
     #[serde(default)]
     pub github_token: String,
     #[serde(default)]
     pub clear_token: bool,
 }
 
-fn version_source_public(cfg: &UpdateSourceConfig) -> VersionSourcePublic {
+pub(crate) fn version_source_public(cfg: &UpdateSourceConfig) -> VersionSourcePublic {
     VersionSourcePublic {
         repo: cfg.repo.clone(),
         official_repo: releases::OFFICIAL_GITHUB_REPO.to_string(),
         using_fork: !releases_source::is_official_repo(&cfg.repo),
         token_configured: github_token_configured(),
         updated_at_unix: cfg.updated_at_unix,
+        branch: cfg.branch.clone(),
+        default_branch: releases_source::DEFAULT_UPDATE_BRANCH.to_string(),
+        branch_is_production: releases_source::is_production_branch(&cfg.branch),
+        branch_label: releases_source::branch_label(&cfg.branch),
     }
 }
 
@@ -180,7 +196,7 @@ pub async fn api_version_source_post(
         return HttpResponse::Unauthorized().finish();
     }
     let request = body.into_inner();
-    let cfg = match save_update_source_repo(&request.repo) {
+    let cfg = match save_update_source(&request.repo, request.branch.as_deref()) {
         Ok(cfg) => cfg,
         Err(error) => {
             return HttpResponse::BadRequest().json(serde_json::json!({ "error": error }));
@@ -352,7 +368,7 @@ pub async fn start_maintenance(
             running_sha_source: None,
             stable_tip_sha: None,
             stable_tip_short: None,
-            stable_branch: None,
+            stable_branch: Some(crate::releases_stable_tip::stable_branch()),
             stable_tip_label: None,
             stable_update_available: false,
             release_update_available: false,
