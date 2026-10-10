@@ -150,12 +150,9 @@ fn inspect_image_ref(bin: &str, id_or_name: &str) -> Option<String> {
         "{{.Image}}",
     ];
     for fmt in formats {
-        let output = output_with_timeout(
-            bin,
-            &["inspect", "--format", fmt, id_or_name],
-            LIST_TIMEOUT,
-        )
-        .ok()?;
+        let output =
+            output_with_timeout(bin, &["inspect", "--format", fmt, id_or_name], LIST_TIMEOUT)
+                .ok()?;
         if !output.status.success() {
             continue;
         }
@@ -315,11 +312,7 @@ pub fn list_images_detailed() -> Result<Vec<DockerImageRow>, String> {
             } else {
                 repository
             },
-            tag: if tag.is_empty() {
-                "<none>".into()
-            } else {
-                tag
-            },
+            tag: if tag.is_empty() { "<none>".into() } else { tag },
             id,
             size,
         });
@@ -444,7 +437,9 @@ mod tests {
         assert!(image_ref_looks_incomplete("<none>"));
         assert!(image_ref_looks_incomplete("a1b2c3d4e5f67890"));
         assert!(!image_ref_looks_incomplete("nginx:alpine"));
-        assert!(!image_ref_looks_incomplete("docker.io/library/nginx:latest"));
+        assert!(!image_ref_looks_incomplete(
+            "docker.io/library/nginx:latest"
+        ));
     }
 
     #[test]
