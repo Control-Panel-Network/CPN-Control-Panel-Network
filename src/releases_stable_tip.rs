@@ -1,13 +1,17 @@
 //! Fetch configured-repo branch tip (default `stable`) for commit-aware updates.
+//!
+//! The branch comes from the saved update source (`/var/lib/cpn/update-source.json`,
+//! Version Management > Update source > Branch), env `CPN_UPDATE_BRANCH` /
+//! `CPN_STABLE_BRANCH` override it. `stable` is production; `dev` is lab only.
 
 use crate::build_meta::{self, sha_equal, short_sha};
 use crate::releases::github_repo;
 use crate::releases_cache;
+use crate::releases_source::{DEV_UPDATE_BRANCH, normalize_branch};
 use std::process::Stdio;
 use tokio::process::Command;
 
 const GITHUB_API_VERSION: &str = "2022-11-28";
-const DEFAULT_STABLE_BRANCH: &str = "stable";
 
 #[derive(Debug, Clone, Default)]
 pub struct StableTipInfo {
@@ -18,19 +22,32 @@ pub struct StableTipInfo {
     pub error: Option<String>,
 }
 
+/// Branch followed by "Upgrade to latest commits" (saved setting or env override).
+/// Name kept for existing callers; it is the configured update branch, not always `stable`.
 pub fn stable_branch() -> String {
-    std::env::var("CPN_STABLE_BRANCH")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_STABLE_BRANCH.to_string())
+    crate::releases_source::configured_update_branch()
+}
+
+/// Alias with the newer name.
+pub fn update_branch() -> String {
+    stable_branch()
+}
+
+/// Branch name to show for a commit target: a branch ref is shown as-is, a
+/// pinned SHA falls back to the configured update branch.
+pub fn branch_label_for_ref(git_ref: &str) -> String {
+    let trimmed = git_ref.trim();
+    if trimmed.is_empty() || build_meta::looks_like_git_sha(trimmed) {
+        return stable_branch();
+    }
+    trimmed.to_string()
 }
 
 fn installer_user_agent() -> String {
     format!("CPN-Installer/{}", env!("CARGO_PKG_VERSION"))
 }
 
-async fn curl_github_json(url: &str) -> Result<(u16, String), String> {
+pub(crate) async fn curl_github_json(url: &str) -> Result<(u16, String), String> {
     let tmp = std::env::temp_dir();
     let body_path = tmp.join(format!("cpn-gh-tip-{}.json", std::process::id()));
     let _ = std::fs::remove_file(&body_path);
@@ -119,8 +136,14 @@ pub async fn resolve_ref_sha(repo: &str, git_ref: &str) -> Result<String, String
     Ok(sha.to_string())
 }
 
+/// Tip of the configured update branch (`stable` unless the operator picked another).
 pub async fn fetch_stable_tip(repo: &str) -> StableTipInfo {
-    let branch = stable_branch();
+    fetch_branch_tip(repo, &stable_branch()).await
+}
+
+/// Tip of an explicit branch.
+pub async fn fetch_branch_tip(repo: &str, branch: &str) -> StableTipInfo {
+    let branch = branch.trim().to_string();
     match resolve_ref_sha(repo, &branch).await {
         Ok(sha) => {
             let short = short_sha(&sha);
@@ -184,23 +207,48 @@ pub fn tip_update_available(running_sha: Option<&str>, tip_sha: &str) -> bool {
     }
 }
 
+/// Map a commit-style target to a git ref for `apply_tip_ref`.
+///
+/// Accepted forms (release tags such as `v1.4.0` return `None`):
+/// - `tip` / `commits`: the configured update branch (saved on Version Management)
+/// - `stable` / `dev`: that branch literally
+/// - `branch:<name>` or `branch=<name>`: any valid branch name
+/// - `<branch>@<sha>`: pinned commit (the UI sends this after a tip check);
+///   an invalid SHA part falls back to `<branch>`
+/// - a bare git SHA (7 to 40 hex chars)
 pub fn parse_tip_upgrade_target(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
     }
-    if trimmed.eq_ignore_ascii_case("stable") || trimmed.eq_ignore_ascii_case("tip") {
+    if trimmed.eq_ignore_ascii_case("tip") || trimmed.eq_ignore_ascii_case("commits") {
         return Some(stable_branch());
     }
+    if trimmed.eq_ignore_ascii_case("stable") {
+        return Some(crate::releases_source::DEFAULT_UPDATE_BRANCH.to_string());
+    }
+    if trimmed.eq_ignore_ascii_case(DEV_UPDATE_BRANCH) {
+        return Some(DEV_UPDATE_BRANCH.to_string());
+    }
     if let Some(rest) = trimmed
-        .strip_prefix("stable@")
-        .or_else(|| trimmed.strip_prefix("STABLE@"))
+        .strip_prefix("branch:")
+        .or_else(|| trimmed.strip_prefix("branch="))
     {
-        let sha = rest.trim();
+        if rest.trim().is_empty() {
+            return None;
+        }
+        return normalize_branch(rest).ok();
+    }
+    if let Some((branch_part, sha_part)) = trimmed.split_once('@') {
+        let branch = normalize_branch(branch_part).ok()?;
+        if branch_part.trim().is_empty() {
+            return None;
+        }
+        let sha = sha_part.trim();
         if build_meta::looks_like_git_sha(sha) {
             return Some(sha.to_string());
         }
-        return Some(stable_branch());
+        return Some(branch);
     }
     if build_meta::looks_like_git_sha(trimmed) {
         return Some(trimmed.to_string());
@@ -227,6 +275,49 @@ mod tests {
             Some("a7dc8f9")
         );
         assert!(parse_tip_upgrade_target("v1.0.0").is_none());
+        assert!(parse_tip_upgrade_target("1.4.0").is_none());
+        assert!(parse_tip_upgrade_target("").is_none());
+    }
+
+    #[test]
+    fn parses_dev_and_named_branch_targets() {
+        assert_eq!(parse_tip_upgrade_target("dev").as_deref(), Some("dev"));
+        assert_eq!(parse_tip_upgrade_target("DEV").as_deref(), Some("dev"));
+        assert_eq!(
+            parse_tip_upgrade_target("dev@1b2b7090").as_deref(),
+            Some("1b2b7090")
+        );
+        assert_eq!(
+            parse_tip_upgrade_target("dev@not-a-sha").as_deref(),
+            Some("dev"),
+            "invalid sha part falls back to the branch"
+        );
+        assert_eq!(
+            parse_tip_upgrade_target("branch:feat/x-1").as_deref(),
+            Some("feat/x-1")
+        );
+        assert_eq!(
+            parse_tip_upgrade_target("branch=release/2.0").as_deref(),
+            Some("release/2.0")
+        );
+        assert!(parse_tip_upgrade_target("branch:").is_none());
+        assert!(parse_tip_upgrade_target("branch:a..b").is_none());
+        assert!(parse_tip_upgrade_target("@abc1234").is_none());
+        assert!(parse_tip_upgrade_target("bad name@abc1234").is_none());
+        assert_eq!(
+            parse_tip_upgrade_target("a7dc8f9638b262f7a9bef691da2e6f5ead8186bb").as_deref(),
+            Some("a7dc8f9638b262f7a9bef691da2e6f5ead8186bb")
+        );
+    }
+
+    #[test]
+    fn branch_label_for_ref_prefers_branch_names() {
+        assert_eq!(branch_label_for_ref("dev"), "dev");
+        assert_eq!(branch_label_for_ref("feat/x"), "feat/x");
+        // A pinned SHA cannot name its branch; the configured branch is used.
+        let configured = stable_branch();
+        assert_eq!(branch_label_for_ref("a7dc8f9"), configured);
+        assert_eq!(branch_label_for_ref(""), configured);
     }
 
     #[test]

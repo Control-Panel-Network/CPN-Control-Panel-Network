@@ -23,28 +23,7 @@ pub fn version_page_poll_script() -> &'static str {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     pollFailCount = 0;
     pollBackoffMs = 500;
-  }
-  function paintInstallerLog(text, forceOpen) {
-    var box = document.getElementById("cpn-version-log");
-    var pre = document.getElementById("cpn-version-log-pre");
-    if (!pre) return;
-    var raw = String(text || "");
-    pre.innerHTML = "";
-    if (!raw) {
-      pre.textContent = "";
-      return;
-    }
-    raw.split("\n").forEach(function (line) {
-      var span = document.createElement("span");
-      var low = line.toLowerCase();
-      if (line.indexOf("FAILED ") === 0 || low.indexOf("error") !== -1 || low.indexOf("failed") !== -1) {
-        span.className = "ssh-fail";
-      }
-      span.textContent = line + "\n";
-      pre.appendChild(span);
-    });
-    pre.scrollTop = pre.scrollHeight;
-    if (box && forceOpen) box.open = true;
+    etaClear();
   }
   function versionReloadTarget() {
     var path = window.location.pathname || "/settings/version";
@@ -64,6 +43,7 @@ pub fn version_page_poll_script() -> &'static str {
   function reloadWhenHealthy() {
     if (reloadStarted) return;
     reloadStarted = true;
+    etaClear();
     if (progressLabel) {
       progressLabel.textContent = "100% Completed. Reloading panel...";
     }
@@ -121,11 +101,12 @@ pub fn version_page_poll_script() -> &'static str {
       }
       var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
       if (progressBar) progressBar.style.width = pct + "%";
-      paintInstallerLog(st.log, !!st.busy || st.phase === "failed");
+      paintInstallerLog(st.log, !!st.busy || st.phase === "failed", st);
       if (progressLabel) {
         var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
         progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
       }
+      etaPaint(st, pct);
       if (st.phase === "completed") {
         sawCompletedBeforeDisconnect = true;
         if (!completedAt) completedAt = Date.now();
@@ -176,6 +157,7 @@ pub fn version_page_poll_script() -> &'static str {
       pollFailCount += 1;
       awaitingReconnect = true;
       sawDisconnect = true;
+      etaClear();
       pollBackoffMs = Math.min(4000, Math.round(pollBackoffMs * 1.35));
       if (progressLabel) {
         progressLabel.textContent = "Waiting for panel after restart (" + pollFailCount + ")...";
@@ -229,7 +211,9 @@ pub fn version_page_poll_script() -> &'static str {
     if (progressWrap) progressWrap.style.display = "block";
     if (progressBar) progressBar.style.width = "1%";
     if (progressLabel) progressLabel.textContent = "1% Starting...";
-    paintInstallerLog("Starting maintenance...", true);
+    etaReset(Date.now());
+    etaSetText("Estimating time left...", null);
+    paintInstallerLog("Starting maintenance...", true, { busy: true });
     var installed = infoCache && infoCache.installed_version ? infoCache.installed_version : "";
     var isDown = action === "downgrade" || (version && installed && cmp(version, installed) < 0);
     var body = {
@@ -278,16 +262,18 @@ pub fn version_page_poll_script() -> &'static str {
       return res.json();
     }).then(function (st) {
       if (!st) return;
-      paintInstallerLog(st.log, !!st.busy);
+      paintInstallerLog(st.log, !!st.busy, st);
       if (!st.busy) return;
       busy = true;
       setActionsEnabled(false);
       if (progressWrap) progressWrap.style.display = "block";
+      var resumePct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
       if (progressLabel) {
-        var pct = Math.max(0, Math.min(100, Math.round(Number(st.progress) || 0)));
         var body = (st.phase || "") + (st.message ? (": " + st.message) : "");
-        progressLabel.textContent = pct + "%" + (body ? (" " + body) : "");
+        progressLabel.textContent = resumePct + "%" + (body ? (" " + body) : "");
       }
+      etaResume(st);
+      etaPaint(st, resumePct);
       schedulePoll(300);
     }).catch(function () {});
   }
@@ -313,6 +299,10 @@ mod tests {
         assert!(js.contains("paintInstallerLog"));
         assert!(js.contains("st.log"));
         assert!(js.contains("Resuming in-progress operation"));
+        assert!(js.contains("etaPaint(st, pct)"));
+        assert!(js.contains("etaResume(st)"));
+        assert!(js.contains("etaReset(Date.now())"));
+        assert!(js.contains("etaClear()"));
         assert!(js.contains("Repair") || js.contains("repair") || js.contains("action"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));

@@ -38,12 +38,12 @@ pub fn start_app(id: AppId) -> Result<String, String> {
             Ok(format!("Started Docker engine. {msg}"))
         }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
+        AppId::Sogo => crate::apps_sogo::start_sogo(),
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
         | AppId::Nextcloud
-        | AppId::Nextsnapmail
-        | AppId::Sogo => Err(format!(
+        | AppId::Nextsnapmail => Err(format!(
             "{} does not support Start/Stop from Apps.",
             id.label()
         )),
@@ -81,12 +81,12 @@ pub fn stop_app(id: AppId) -> Result<String, String> {
             Ok("Stopped Docker/Podman engine units when present.".into())
         }
         AppId::Phpmyadmin => Err("phpMyAdmin does not support Start/Stop from Apps.".into()),
+        AppId::Sogo => crate::apps_sogo::stop_sogo(),
         AppId::Snappymail
         | AppId::Tachyon
         | AppId::Roundcube
         | AppId::Nextcloud
-        | AppId::Nextsnapmail
-        | AppId::Sogo => Err(format!(
+        | AppId::Nextsnapmail => Err(format!(
             "{} does not support Start/Stop from Apps.",
             id.label()
         )),

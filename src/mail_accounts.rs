@@ -249,6 +249,8 @@ pub fn create_account(input: MailAccountInput) -> Result<MailAccount, String> {
     if account.smtp_mode == MailSmtpMode::PostfixLocal {
         // Route mail for this hosted domain to the local mailbox instead of the public MX.
         crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("create mailbox");
+        // Keep the SOGo SQL user source in step with the registry (no-op without SOGo).
+        crate::apps_sogo_config::sync_users_if_installed();
     }
     Ok(account)
 }
@@ -267,6 +269,7 @@ pub fn set_account_enabled(id: &str, enabled: bool) -> Result<MailAccount, Strin
     save_file(&file)?;
     if out.smtp_mode == MailSmtpMode::PostfixLocal {
         crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("toggle mailbox");
+        crate::apps_sogo_config::sync_users_if_installed();
     }
     Ok(out)
 }

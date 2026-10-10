@@ -17,7 +17,9 @@ const OLS_ERROR_LOG: &str = "/usr/local/lsws/logs/error.log";
 
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
-fn now_stamp() -> String {
+/// Server clock as `dd/mm/yyyy HH:MM:SS` (UTC, 24 hour). Shared with the
+/// Version page session transcript so both logs carry the same stamps.
+pub fn now_stamp() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -104,6 +106,20 @@ pub fn log_info(message: impl AsRef<str>) {
 
 pub fn log_failure(message: impl AsRef<str>, retry: Option<u32>) {
     log_event("error", message.as_ref(), retry);
+}
+
+/// Main Log only (no Version page session line). Used by housekeeping that runs
+/// outside a maintenance job, such as the panel-start staging sweep, so the
+/// finished session transcript keeps its `DONE` line last.
+pub fn log_tagged_main_only(module: &str, level: &str, message: &str) {
+    let Ok(_guard) = WRITE_LOCK.lock() else {
+        return;
+    };
+    let line = format_line_for(module, level, message, None);
+    write_main(&line);
+    if level.eq_ignore_ascii_case("error") || level.eq_ignore_ascii_case("err") {
+        write_error(&line);
+    }
 }
 
 /// Main Log line with `[upgrade]`, `[repair]`, or `[upgrade_tip]`.

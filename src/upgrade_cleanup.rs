@@ -102,11 +102,6 @@ pub fn remove_local_bin_overrides() -> Vec<String> {
     notes
 }
 
-/// Allowlisted directory name prefixes under `/var/tmp` (CPN staging only).
-fn removable_var_tmp_prefixes() -> Vec<&'static str> {
-    vec!["cpn-upgrade-", "cpn-gpg-", "cpn-install-", "cpn-release-"]
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct CleanupReport {
     pub removed: Vec<String>,
@@ -144,22 +139,32 @@ fn remove_path(path: &Path, report: &mut CleanupReport) {
     }
 }
 
+/// Orphaned `/var/tmp/cpn-tip-*`, `cpn-upgrade-*`, `cpn-gpg-*`, ... from earlier
+/// jobs. The current job's own dir is removed by its [`crate::upgrade_staging::StagingDir`]
+/// guard; everything else must be older than the grace period and not in use by
+/// a live process (a CLI `cpn-installer --upgrade` may run beside the panel).
+/// Old per-commit cargo build dirs are pruned the same way, keeping the one that
+/// matches the installed binary.
 fn clean_var_tmp_staging(report: &mut CleanupReport) {
-    let root = Path::new("/var/tmp");
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if !removable_var_tmp_prefixes()
-            .iter()
-            .any(|prefix| name.starts_with(prefix))
-        {
-            continue;
-        }
-        remove_path(&entry.path(), report);
+    let grace = crate::upgrade_staging::grace_period();
+    let sweep = crate::upgrade_staging::sweep_orphaned_staging(grace, None);
+    report.removed.extend(sweep.removed.iter().cloned());
+    for path in &sweep.kept_in_use {
+        report
+            .skipped_preserved
+            .push(format!("kept staging dir in use by a process: {path}"));
     }
+    report.notes.extend(sweep.errors.iter().cloned());
+    let running_sha =
+        crate::build_meta::sha_embedded_in_binary(Path::new(crate::manifest::installer_bin()));
+    let targets = crate::upgrade_staging::prune_tip_cargo_targets(running_sha.as_deref(), grace);
+    report.removed.extend(targets.removed.iter().cloned());
+    for path in &targets.kept_in_use {
+        report
+            .skipped_preserved
+            .push(format!("kept commit build dir in use by a process: {path}"));
+    }
+    report.notes.extend(targets.errors.iter().cloned());
 }
 
 fn clean_var_cache_cpn_staging(report: &mut CleanupReport) {
@@ -219,9 +224,10 @@ fn clean_obsolete_webmail_code_trees(report: &mut CleanupReport) {
 pub fn cleanup_stale_packaging() -> CleanupReport {
     let mut report = CleanupReport::default();
     if cfg!(windows) {
-        report
-            .notes
-            .push("cleanup skipped on Windows (packaging paths are Linux)".into());
+        report.notes.push(
+            "cleanup skipped on Windows (packaging paths are Linux); nothing removed, MFA and data dir preserved"
+                .into(),
+        );
         return report;
     }
 
@@ -267,7 +273,20 @@ mod tests {
         assert!(is_preserved(Path::new("/home/example.com/public_html")));
         assert!(is_preserved(Path::new("/var/lib/cpn-webmail/snappymail")));
         assert!(!is_preserved(Path::new("/var/tmp/cpn-upgrade-abc")));
+        assert!(!is_preserved(Path::new("/var/tmp/cpn-tip-abc")));
         assert!(!is_preserved(Path::new("/tmp/cpn-installer-status.json")));
+    }
+
+    #[test]
+    fn staging_sweep_covers_tip_dirs() {
+        assert!(
+            crate::upgrade_staging::STAGING_DIR_PREFIXES.contains(&"cpn-tip-"),
+            "orphaned commit-build staging dirs must be swept"
+        );
+        assert!(
+            crate::upgrade_staging::STAGING_DIR_PREFIXES.contains(&"cpn-upgrade-"),
+            "orphaned package staging dirs must be swept"
+        );
     }
 
     #[test]

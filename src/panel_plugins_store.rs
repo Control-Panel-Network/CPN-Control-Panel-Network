@@ -1,6 +1,7 @@
 //! Plugin Store catalog list: cards, Featured/Paid filters, release/updated dates.
 
 use crate::panel_admin::is_panel_admin;
+use crate::panel_plugin_icons::card_head;
 use crate::panel_plugins_markup::{html_escape, urlencoding_simple};
 use crate::panel_plugins_search::{entry_matches_store_query, store_match_score};
 use crate::panel_plugins_spa::{
@@ -197,9 +198,15 @@ pub(crate) fn render_catalog_card(
         activated,
         admin,
     );
+    let head = card_head(
+        &entry.id,
+        &entry.name,
+        &entry.category,
+        Some(entry.icon.as_str()),
+    );
     format!(
         r#"<article class="plugin-card">
-          <h3>{name}</h3>
+          {head}
           <div class="plugin-badges">
             {scopes}
             <span class="plugin-badge cat">{cat}</span>
@@ -212,7 +219,7 @@ pub(crate) fn render_catalog_card(
           {dates}
           <div class="plugin-actions">{action}</div>
         </article>"#,
-        name = html_escape(&entry.name),
+        head = head,
         desc = html_escape(&entry.description),
         cat = html_escape(&entry.category),
         ver = html_escape(&entry.version),
@@ -574,6 +581,7 @@ mod tests {
             site_installable: true,
             cpn_installable: false,
             keywords: vec![],
+            icon: String::new(),
         }
     }
 

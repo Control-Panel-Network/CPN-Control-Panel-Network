@@ -762,12 +762,30 @@ async fn phpmyadmin_mount_proxy(
     cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await
 }
 
+/// SOGo mount entry without a method guard and without the `{path}` extractor, so WebDAV
+/// verbs (PROPFIND, REPORT, OPTIONS, MKCALENDAR, MOVE) on `/SOGo`, `/SOGo/...`, `/SOGo.woa/...`,
+/// and `/.well-known/caldav|carddav` reach the proxy. Delegates to `panel_catch_all`, which
+/// only proxies when SOGo is installed and otherwise serves the normal panel response.
+async fn sogo_mount_route(
+    req: HttpRequest,
+    payload: web::Payload,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let rel = req.path().trim_start_matches('/').to_string();
+    panel_catch_all(req, payload, web::Path::from(rel), state).await
+}
+
 async fn panel_catch_all(
     req: HttpRequest,
     payload: web::Payload,
     path: web::Path<String>,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
+    // SOGo owns /SOGo, /SOGo.woa, and the CalDAV/CardDAV well-known paths whenever it is
+    // installed (independent of the PHP webmail mount, which may still serve Tachyon).
+    if cpn_installer::panel_sogo_proxy::path_should_proxy_sogo(req.path()) {
+        return cpn_installer::panel_sogo_proxy::sogo_panel_proxy(req, payload).await;
+    }
     if cpn_installer::panel_webmail::webmail_ready()
         && cpn_installer::panel_webmail::path_should_proxy_webmail(req.path())
     {
@@ -939,6 +957,14 @@ async fn main() -> std::io::Result<()> {
     cpn_installer::motd::ensure_motd_installed();
     // Clear restarting / expired upgrade maintenance flags after a healthy boot.
     cpn_installer::panel_maintenance_mode::heal_on_startup();
+    // Sweep staging left by an upgrade job that died with the previous process
+    // (for example a commit build cut short by the upgrade restart). Age and
+    // in-use checks keep a CLI job that runs beside the panel safe.
+    std::thread::spawn(|| {
+        for line in cpn_installer::upgrade_staging::sweep_on_startup() {
+            cpn_installer::upgrade_tip_log::log_tagged_main_only("upgrade", "info", &line);
+        }
+    });
     // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
     std::thread::spawn(|| {
         cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
@@ -1594,12 +1620,23 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_version_check)
             .service(cpn_installer::maintenance_api::api_version_source_get)
             .service(cpn_installer::maintenance_api::api_version_source_post)
+            .service(cpn_installer::maintenance_api_branches::api_version_branches)
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
             .service(cpn_installer::panel_maintenance_api::api_panel_maintenance)
             .service(cpn_installer::panel_maintenance_api::maintenance_page)
             .route("/api/events", web::get().to(websocket))
+            // SOGo groupware mount: CalDAV/CardDAV clients speak WebDAV verbs (PROPFIND,
+            // REPORT, OPTIONS, MKCALENDAR, MOVE, ...) that the method-guarded catch-all below
+            // never matches. Route the mount and its well-known aliases without a method
+            // guard; panel_catch_all dispatches to the SOGo proxy when SOGo is installed and
+            // falls through to the normal panel handling otherwise.
+            .route("/SOGo", web::route().to(sogo_mount_route))
+            .route("/SOGo/{path:.*}", web::route().to(sogo_mount_route))
+            .route("/SOGo.woa/{path:.*}", web::route().to(sogo_mount_route))
+            .route("/.well-known/caldav", web::route().to(sogo_mount_route))
+            .route("/.well-known/carddav", web::route().to(sogo_mount_route))
             // Dedicated phpMyAdmin mount (must not fall through to installer SPA).
             .route(
                 "/phpmyadmin",

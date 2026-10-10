@@ -180,6 +180,7 @@ mod tests {
             site_installable: true,
             cpn_installable: false,
             keywords: keywords.iter().map(|s| (*s).to_string()).collect(),
+            icon: String::new(),
         }
     }
 

@@ -15,6 +15,15 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $repoRoot
 
+# openssl-sys (via webauthn-rs) needs OPENSSL_DIR / OPENSSL_LIB_DIR on MSVC.
+# Reuse the developer discovery script when the caller did not set them.
+if (-not $env:OPENSSL_LIB_DIR) {
+    . (Join-Path $repoRoot 'scripts\windows-dev-env.ps1')
+    if (-not $env:OPENSSL_LIB_DIR) {
+        throw 'OpenSSL SDK not found. Install OpenSSL (see scripts/windows-dev-env.ps1) or set OPENSSL_DIR and OPENSSL_LIB_DIR.'
+    }
+}
+
 if (-not $SkipUi) {
     Push-Location (Join-Path $repoRoot 'installer-ui')
     try {

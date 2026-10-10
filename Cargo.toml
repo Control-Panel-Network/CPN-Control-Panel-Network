@@ -42,6 +42,18 @@ tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-
 url = "2"
 uuid = { version = "1", features = ["serde", "v4", "v5"] }
 webauthn-rs = { version = "0.5", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
+# `webauthn-rs` (passkeys) links OpenSSL through `openssl-sys`. This optional direct
+# dependency only exists so the `vendored-openssl` feature can build OpenSSL from
+# source (needs a C compiler plus Perl; NASM is optional on Windows MSVC). Default
+# builds keep linking the system OpenSSL exactly as before.
+openssl-sys = { version = "0.9", optional = true }
+
+[features]
+default = []
+# Build and statically link OpenSSL instead of requiring OPENSSL_DIR / system libs.
+# Opt-in for developer builds (for example Windows without an OpenSSL SDK);
+# release packages keep the system OpenSSL. See CONTRIBUTING.md.
+vendored-openssl = ["dep:openssl-sys", "openssl-sys/vendored"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -126,7 +126,7 @@ Usage:
   cpn-installer --old-port-policy <MODE>  redirect_1m | redirect_3m | deny (with --port)
   cpn-installer --version
   cpn-installer --version-check
-  cpn-installer --upgrade [--to X.Y.Z] [--bypass]
+  cpn-installer --upgrade [--to X.Y.Z | --to stable | --to dev | --to branch:<name> | --to <sha>] [--bypass]
   cpn-installer --repair [--to X.Y.Z] [--reset-data]
   cpn-installer --downgrade --to X.Y.Z --yes [--reset-data]
   cpn-installer --uninstall [--yes] [--keep-data] [--purge-all] [--purge-sites] [--purge-stack] [--dry-run]
@@ -151,6 +151,7 @@ Notes:
   Recommended fix flow when the panel is unhealthy: hash -r; sudo cpn doctor --heal; sudo cpn-installer --upgrade; sudo cpn-installer --repair; cpn doctor.
   Use --version-check before upgrade/downgrade when you need to inspect the latest published release.
   Upgrade without --to targets the newest publishable GitHub release for the configured source (not a stale selected UI tag).
+  Commit targets: --to stable (production branch), --to dev (lab / pre-release testing only), --to branch:<name>, --to <branch>@<sha>, a bare git SHA, or --to tip for the branch saved on Version Management (Update source > Branch; stored in /var/lib/cpn/update-source.json, default stable). Production hosts should stay on stable or published releases.
   When that tip equals the installed package (or is older after a cache refresh), upgrade exits 0 with: Already up to date (X.Y.Z).
   Downgrade messaging appears only for an explicit older --to / --downgrade request.
   Upgrade cleans only stale CPN packaging/staging (never websites, apps, user docker, or configs).
