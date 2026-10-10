@@ -189,7 +189,12 @@ fn list_href(opts: &ResellerUsersOpts, page: usize) -> String {
     )
 }
 
-fn pager_html(opts: &ResellerUsersOpts, page: usize, total_pages: usize, filtered: usize) -> String {
+fn pager_html(
+    opts: &ResellerUsersOpts,
+    page: usize,
+    total_pages: usize,
+    filtered: usize,
+) -> String {
     let prev = if page > 1 {
         format!(
             r#"<a class="btn-secondary" href="{}">Prev</a>"#,
@@ -442,10 +447,7 @@ pub fn reseller_users_panel(
         for acct in page_rows {
             let role = hierarchy_role(acct);
             let parent_cell = if is_reseller_row(acct) {
-                format!(
-                    r#"{} <span class="muted">(self)</span>"#,
-                    html_escape(role)
-                )
+                format!(r#"{} <span class="muted">(self)</span>"#, html_escape(role))
             } else if acct.parent_reseller.trim().is_empty() {
                 html_escape(role)
             } else {

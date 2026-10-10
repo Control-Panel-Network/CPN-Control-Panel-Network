@@ -136,13 +136,7 @@ pub async fn users_reseller_route(
         &user,
         "users",
         "Reseller Center",
-        &users_reseller_page(
-            &user,
-            notice.as_deref(),
-            error.as_deref(),
-            tab,
-            &users_opts,
-        ),
+        &users_reseller_page(&user, notice.as_deref(), error.as_deref(), tab, &users_opts),
     ))
 }
 

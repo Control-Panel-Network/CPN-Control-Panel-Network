@@ -401,7 +401,11 @@ mod tests {
         let opts = ResellerUsersOpts::default();
         let html = users_reseller_page("cpnowner", None, None, "users", &opts);
         assert!(html.contains("name=\"q\""));
-        assert!(html.contains("Go to page") || html.contains("per_page") || html.contains("empty-state"));
+        assert!(
+            html.contains("Go to page")
+                || html.contains("per_page")
+                || html.contains("empty-state")
+        );
         assert!(html.contains("aria-selected=\"true\""));
         assert!(!html.contains("action=\"/account/users/reseller/promote\""));
     }
