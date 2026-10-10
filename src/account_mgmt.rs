@@ -133,6 +133,8 @@ fn build_bootstrap(
         must_change_password,
         totp_required,
         disabled: false,
+        role: String::new(),
+        parent_reseller: String::new(),
     }
 }
 

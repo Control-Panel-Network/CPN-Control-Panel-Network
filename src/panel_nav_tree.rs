@@ -167,7 +167,12 @@ fn render_section(
                 let kids: Vec<NavChild> = children
                     .iter()
                     .copied()
-                    .filter(|c| admin || !crate::panel_hub_admin_gate::is_admin_only_href(c.href))
+                    .filter(|c| {
+                        if crate::panel_reseller::is_reseller_center_href(c.href) {
+                            return crate::panel_reseller::can_access_reseller_center(username);
+                        }
+                        admin || !crate::panel_hub_admin_gate::is_admin_only_href(c.href)
+                    })
                     .collect();
                 let block = group_block(id, href, label, &kids, active, feats, extras);
                 if !block.is_empty() {
@@ -445,6 +450,8 @@ mod tests {
                 must_change_password: false,
                 totp_required: false,
                 disabled: false,
+                role: String::new(),
+                parent_reseller: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let admin = nav_links_html("users", "owner");
@@ -479,6 +486,8 @@ mod tests {
                 must_change_password: false,
                 totp_required: false,
                 disabled: false,
+                role: String::new(),
+                parent_reseller: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let html = nav_links_html("root-files", "admin");
@@ -626,6 +635,8 @@ mod tests {
                 must_change_password: false,
                 totp_required: false,
                 disabled: false,
+                role: String::new(),
+                parent_reseller: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let admin = nav_links_html("logs", "owner");

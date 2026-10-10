@@ -99,6 +99,8 @@ mod tests {
             must_change_password: false,
             totp_required: true,
             disabled: false,
+            role: String::new(),
+            parent_reseller: String::new(),
         };
         persist_bootstrap(&boot).expect("bootstrap");
     }

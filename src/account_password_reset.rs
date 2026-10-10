@@ -308,6 +308,8 @@ mod tests {
             must_change_password: false,
             totp_required: false,
             disabled: false,
+            role: String::new(),
+            parent_reseller: String::new(),
         };
         write_account_file(&crate::account::bootstrap_path(), &boot).expect("write");
     }
