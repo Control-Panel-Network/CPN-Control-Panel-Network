@@ -98,7 +98,7 @@ pub fn cargo_build_jobs() -> u32 {
     let mem_mb = mem_available_mb().unwrap_or(2048);
     // Roughly 1.5 GiB per parallel rustc; leave headroom for the panel and linker.
     let by_ram = ((mem_mb / 1536).max(1)).min(u64::from(u32::MAX)) as u32;
-    nproc.min(by_ram).min(4).max(1)
+    nproc.min(by_ram).clamp(1, 4)
 }
 
 fn mem_available_mb() -> Option<u64> {
