@@ -5,8 +5,8 @@
 use crate::apps::{AppId, AppStateKind, AppStatus};
 use crate::apps_pkg::{disable_now, enable_now, stop_units};
 use crate::apps_sogo_config::{
-    SOGO_CONF, SOGO_LOOPBACK, conf_is_cpn_managed, ensure_database, load_or_create_secret,
-    secret_exists, sync_users, write_sogo_conf,
+    SOGO_CONF, SOGO_LOOPBACK, conf_is_cpn_managed, db_access_exists, ensure_database,
+    load_or_create_db_access, sync_users, write_sogo_conf,
 };
 use crate::apps_sogo_repo::{ensure_packages, remove_packages, sogod_binary_present};
 use crate::os_support::{GuestOs, PackageFamily, detect_guest_os};
@@ -186,10 +186,10 @@ fn loopback_http_ok() -> bool {
 }
 
 fn apply_config_and_start() -> Result<String, String> {
-    let secret = load_or_create_secret()?;
-    ensure_database(&secret)?;
-    write_sogo_conf(&secret)?;
-    let synced = sync_users(&secret).unwrap_or(0);
+    let db = load_or_create_db_access()?;
+    ensure_database(&db)?;
+    write_sogo_conf(&db)?;
+    let synced = sync_users(&db).unwrap_or(0);
     // Heal path (packages already present, e.g. Start after an OS upgrade): make sure the
     // EL9-build runtime libraries still resolve before asking systemd to start sogod.
     crate::apps_sogo_compat::ensure_runtime_libs()?;
@@ -250,7 +250,7 @@ pub fn start_sogo() -> Result<String, String> {
         return Err("SOGo is not installed. Use Install first.".into());
     }
     require_dependencies()?;
-    if !secret_exists() || !conf_is_cpn_managed() {
+    if !db_access_exists() || !conf_is_cpn_managed() {
         // Operator-managed config: only start units, never overwrite their sogo.conf.
         crate::apps_sogo_compat::ensure_runtime_libs()?;
         let _ = enable_now(&["memcached"]);
