@@ -105,11 +105,7 @@ fn mem_available_mb() -> Option<u64> {
     let text = std::fs::read_to_string("/proc/meminfo").ok()?;
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("MemAvailable:") {
-            let kb: u64 = rest
-                .split_whitespace()
-                .next()?
-                .parse()
-                .ok()?;
+            let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
             return Some(kb / 1024);
         }
     }

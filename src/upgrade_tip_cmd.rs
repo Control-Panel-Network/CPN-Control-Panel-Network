@@ -196,7 +196,9 @@ mod tests {
         assert!(stderr_looks_like_failure(
             "  process didn't exit successfully: signal: 9 (SIGKILL)"
         ));
-        assert!(stderr_looks_like_failure("failed to run custom build command"));
+        assert!(stderr_looks_like_failure(
+            "failed to run custom build command"
+        ));
     }
 
     #[test]
