@@ -342,11 +342,16 @@ pub fn version_page_script(can_manage: bool) -> String {
     pending = null;
     if (confirmBox) confirmBox.style.display = "none";
   }}
-  function armConfirm(action, version, label) {{
+  function isCommitToken(version) {{
+    var v = String(version || ""); return v.indexOf("@") >= 0 || v.indexOf("branch:") === 0 || /^[0-9a-f]{{7,40}}$/i.test(v);
+  }}
+  function armConfirm(action, version, label, note) {{
     if (!canManage || busy) return;
     pending = {{ action: action, version: version || null }};
     var extra = "";
-    if (version && isOutsideSupport(version)) {{
+    if (version && isCommitToken(version)) {{
+      extra = " Commit builds are outside CPN release support" + (note ? (";" + note) : ".");
+    }} else if (version && isOutsideSupport(version)) {{
       extra = " Warning: this tag is outside CPN support (only the latest two releases are supported).";
     }}
     if (confirmText) confirmText.textContent = "About to " + label + "." + extra + " Click Confirm to start, or Cancel.";
@@ -406,8 +411,8 @@ pub fn version_page_script(can_manage: bool) -> String {
         tipToken = "branch:" + branch;
       }}
       var label = (infoCache && infoCache.stable_tip_label) ? infoCache.stable_tip_label : (branch + " commits");
-      var note = branch === "stable" ? "" : " Branch " + branch + " is for lab / pre-release testing.";
-      armConfirm("upgrade", tipToken, "upgrade to " + label + " (latest commits on " + branch + ")." + note);
+      var note = branch === "stable" ? "" : " branch " + branch + " is for lab / pre-release testing and production servers should stay on stable.";
+      armConfirm("upgrade", tipToken, "upgrade to " + label + " (latest commits on " + branch + ")", note);
     }});
     if (applyBtn) applyBtn.addEventListener("click", function () {{
       var tag = selectedTag || (searchEl && searchEl.value);
@@ -471,6 +476,8 @@ mod tests {
         assert!(js.contains("branch + \"@\" + infoCache.stable_tip_short"));
         assert!(js.contains("\"branch:\" + branch"));
         assert!(js.contains("infoCache.stable_branch"));
+        assert!(js.contains("function isCommitToken"));
+        assert!(js.contains("Commit builds are outside CPN release support"));
         assert!(!js.contains("\"stable@\""));
         assert!(js.contains("stale_behind"));
         assert!(js.contains("resolveInstalledColor"));
