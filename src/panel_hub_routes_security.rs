@@ -7,6 +7,7 @@ use crate::panel_hub_pages_security::{
     fail2ban_page, hostname_ssl_page, mail_ssl_page, malware_scan_page, modsec_page,
     modsec_rules_page, rule_packs_page, run_sshd_toggle, secure_ssh_page, security_hub_main,
 };
+use crate::panel_hub_pages_security_csf::{csf_page, run_csf_enable, run_csf_install};
 use crate::panel_hub_pages_ssl_le::manage_ssl_page as manage_ssl_providers_page;
 use crate::panel_pages::panel_shell;
 use crate::panel_user_prefs::clear_ssh_security_review_snooze;
@@ -160,6 +161,95 @@ pub async fn security_malware(http: HttpRequest, state: web::Data<Arc<AppState>>
         "Malware scan",
         &malware_scan_page(),
     ))
+}
+
+#[post("/security/malware-scan/run")]
+pub async fn security_malware_run(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !crate::panel_admin::is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/malware-scan",
+            None,
+            Some("Only panel admins can start malware scans."),
+        );
+    }
+    let result = web::block(|| crate::panel_ops_malware_scan::run_docroot_scan(None))
+        .await
+        .unwrap_or_else(|e| Err(format!("Scan task failed: {e}")));
+    match result {
+        Ok(entry) => redirect_notice("/security/malware-scan", Some(&entry.summary), None),
+        Err(err) => redirect_notice("/security/malware-scan", None, Some(&err)),
+    }
+}
+
+#[get("/security/csf")]
+pub async fn security_csf(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "security",
+        "CSF",
+        &csf_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[post("/security/csf/install")]
+pub async fn security_csf_install(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/csf",
+            None,
+            Some("Only panel admins can install CSF."),
+        );
+    }
+    let result = web::block(run_csf_install)
+        .await
+        .unwrap_or_else(|e| Err(format!("CSF install task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/security/csf", Some(&msg), None),
+        Err(err) => redirect_notice("/security/csf", None, Some(&err)),
+    }
+}
+
+#[post("/security/csf/enable")]
+pub async fn security_csf_enable(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/csf",
+            None,
+            Some("Only panel admins can enable CSF."),
+        );
+    }
+    match run_csf_enable() {
+        Ok(msg) => redirect_notice("/security/csf", Some(&msg), None),
+        Err(err) => redirect_notice("/security/csf", None, Some(&err)),
+    }
 }
 
 #[get("/security/ssl")]

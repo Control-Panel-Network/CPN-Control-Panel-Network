@@ -235,6 +235,10 @@ const BACKUPS_CHILDREN: &[NavChild] = &[
         label: "Destinations",
         href: "/backups/destinations",
     },
+    NavChild {
+        label: "Incremental",
+        href: "/backups/incremental",
+    },
 ];
 
 const SSL_CHILDREN: &[NavChild] = &[
@@ -358,6 +362,10 @@ const SECURITY_CHILDREN: &[NavChild] = &[
     NavChild {
         label: "Malware scan",
         href: "/security/malware-scan",
+    },
+    NavChild {
+        label: "CSF",
+        href: "/security/csf",
     },
 ];
 

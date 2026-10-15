@@ -90,7 +90,11 @@ fn lifecycle_controls(
             .available_versions
             .iter()
             .any(|version| version_cmp(version, &state.installed_version).is_lt());
-    let lifecycle_install = !is_installed && matches!(app, SiteAppId::Node | SiteAppId::Python);
+    let lifecycle_install = !is_installed
+        && matches!(
+            app,
+            SiteAppId::Node | SiteAppId::Python | SiteAppId::Mautic | SiteAppId::Joomla
+        );
     if can_mutate
         && (lifecycle_install || has_update(&state) || has_older)
         && (!is_installed || !state.available_versions.is_empty())
@@ -276,15 +280,96 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     let node_card = runtime_card(site, &domain, &csrf, &snap.node, admin);
     let python_card = runtime_card(site, &domain, &csrf, &snap.python, admin);
 
+    let mautic_lifecycle = lifecycle_controls(site, SiteAppId::Mautic, &domain, &csrf, admin);
+    let joomla_lifecycle = lifecycle_controls(site, SiteAppId::Joomla, &domain, &csrf, admin);
+    let mautic_card = php_cms_card(PhpCmsCardArgs {
+        title: "Mautic",
+        action_prefix: "mautic",
+        installed: snap.mautic.installed,
+        detail: &snap.mautic.detail,
+        domain: &domain,
+        csrf: &csrf,
+        wordpress: snap.wordpress_in_docroot,
+        lifecycle: &mautic_lifecycle,
+    });
+    let joomla_card = php_cms_card(PhpCmsCardArgs {
+        title: "Joomla",
+        action_prefix: "joomla",
+        installed: snap.joomla.installed,
+        detail: &snap.joomla.detail,
+        domain: &domain,
+        csrf: &csrf,
+        wordpress: snap.wordpress_in_docroot,
+        lifecycle: &joomla_lifecycle,
+    });
+
+    let apache = crate::panel_ops_apache_handler::apache_toggle_html(site, &csrf);
     let grid = format!(
-        r#"<div class="manage-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">{cmsms}{redis}{node}{python}</div>
+        r#"<div class="manage-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">{cmsms}{mautic}{joomla}{redis}{node}{python}</div>
+{apache}
 <p class="manage-muted">Host engines install once. Site Apps Activate or attach when the host is already running. Site users cannot uninstall host packages. WordPress stays under WordPress.</p>"#,
         cmsms = cmsms_card,
+        mautic = mautic_card,
+        joomla = joomla_card,
         redis = redis_card,
         node = node_card,
         python = python_card,
+        apache = apache,
     );
     section("Apps", &grid)
+}
+
+struct PhpCmsCardArgs<'a> {
+    title: &'a str,
+    action_prefix: &'a str,
+    installed: bool,
+    detail: &'a str,
+    domain: &'a str,
+    csrf: &'a str,
+    wordpress: bool,
+    lifecycle: &'a str,
+}
+
+fn php_cms_card(args: PhpCmsCardArgs<'_>) -> String {
+    let mut actions = String::new();
+    if args.wordpress && !args.installed {
+        actions.push_str(
+            r#"<p class="manage-muted">WordPress detected here. Use a dedicated site or subdomain for this app.</p>"#,
+        );
+    } else if args.installed {
+        actions.push_str(r#"<span class="manage-badge active">Installed</span>"#);
+    } else {
+        actions.push_str(&format!(
+            r#"<form method="post" action="/websites/apps" class="inline-form">
+  <input type="hidden" name="domain" value="{domain}">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="action" value="{prefix}_install">
+  <button type="submit" class="btn-primary">Install {title}</button>
+</form>"#,
+            domain = html_escape(args.domain),
+            csrf = html_escape(args.csrf),
+            prefix = html_escape(args.action_prefix),
+            title = html_escape(args.title),
+        ));
+    }
+    format!(
+        r#"<article class="manage-stat" id="{prefix}">
+  <span>{title}</span>
+  <strong>{status}</strong>
+  <p class="manage-muted">{detail}</p>
+  <div class="manage-actions-row">{actions}</div>{lifecycle}
+</article>"#,
+        prefix = html_escape(args.action_prefix),
+        title = html_escape(args.title),
+        status = html_escape(if args.installed {
+            "Installed"
+        } else {
+            "Not installed"
+        }),
+        detail = html_escape(args.detail),
+        actions = actions,
+        lifecycle = args.lifecycle,
+    )
 }
 
 fn runtime_card(

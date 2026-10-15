@@ -9,6 +9,8 @@ use crate::panel_hub_http::{
 };
 use crate::panel_pages::panel_shell;
 use crate::panel_site_apps_cmsms::{install_cmsms, remove_cmsms_installer};
+use crate::panel_site_apps_joomla::install_joomla;
+use crate::panel_site_apps_mautic::install_mautic;
 use crate::panel_site_apps_runtime::{
     RuntimeKind, ensure_python_venv, save_runtime, start_runtime, stop_runtime,
 };
@@ -88,6 +90,8 @@ pub struct SiteAppsForm {
     version: String,
     #[serde(default)]
     backup: String,
+    #[serde(default)]
+    enabled: String,
 }
 
 #[post("/websites/apps")]
@@ -128,10 +132,17 @@ pub async fn websites_apps_post(
     let app = form.app.clone();
     let version = form.version.clone();
     let backup = form.backup.clone();
+    let enabled_flag = form.enabled.clone();
 
     let result = tokio::task::spawn_blocking(move || match action.as_str() {
         "cmsms_install" => install_cmsms(&site),
         "cmsms_remove_installer" => remove_cmsms_installer(&site),
+        "mautic_install" => install_mautic(&site),
+        "joomla_install" => install_joomla(&site),
+        "apache_handler_toggle" => {
+            let enabled = matches!(enabled_flag.trim(), "1" | "true" | "on" | "yes");
+            crate::panel_ops_apache_handler::set_apache_handler(&site.domain, enabled)
+        }
         "redis_activate" => {
             let st = detect_app(AppId::Redis);
             if st.state == AppStateKind::NotInstalled {

@@ -3,6 +3,8 @@
 use crate::apps::{AppId, AppStateKind, detect_app};
 use crate::apps_site::bindings_for_domain;
 use crate::panel_site_apps_cmsms::CmsmsStatus;
+use crate::panel_site_apps_joomla::JoomlaStatus;
+use crate::panel_site_apps_mautic::MauticStatus;
 use crate::panel_site_apps_runtime::{RuntimeKind, RuntimeStatus, load_runtime};
 use crate::sites::SiteRecord;
 use crate::wordpress_wpcli::is_wordpress_docroot;
@@ -10,6 +12,8 @@ use crate::wordpress_wpcli::is_wordpress_docroot;
 #[derive(Debug, Clone)]
 pub struct SiteAppsSnapshot {
     pub cmsms: CmsmsStatus,
+    pub mautic: MauticStatus,
+    pub joomla: JoomlaStatus,
     pub wordpress_in_docroot: bool,
     pub redis_host: AppStateKind,
     pub redis_detail: String,
@@ -25,6 +29,8 @@ pub fn snapshot_site_apps(site: &SiteRecord) -> SiteAppsSnapshot {
         .any(|b| b.app == AppId::Redis.as_str());
     SiteAppsSnapshot {
         cmsms: crate::panel_site_apps_cmsms::detect_cmsms(site),
+        mautic: crate::panel_site_apps_mautic::detect_mautic(site),
+        joomla: crate::panel_site_apps_joomla::detect_joomla(site),
         wordpress_in_docroot: is_wordpress_docroot(std::path::Path::new(&site.docroot)),
         redis_host: redis.state,
         redis_detail: redis.detail,

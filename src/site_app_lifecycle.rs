@@ -5,6 +5,8 @@ use crate::apps_pkg::{package_manager, run_pkg};
 use crate::panel_site_apps_cmsms::{
     CMSMS_INSTALLER_URL, CMSMS_TARGET, detect_cmsms, install_cmsms_version,
 };
+use crate::panel_site_apps_joomla::{JOOMLA_TARGET, detect_joomla, install_joomla_version};
+use crate::panel_site_apps_mautic::{MAUTIC_TARGET, detect_mautic, install_mautic_version};
 use crate::panel_site_apps_runtime::{RuntimeKind, load_runtime, runtime_app_dir};
 use crate::site_app_backups::{
     AppBackup, create_app_backup, create_host_app_backup, list_app_backups, list_host_app_backups,
@@ -21,6 +23,8 @@ type VersionCache =
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SiteAppId {
     Cmsms,
+    Mautic,
+    Joomla,
     Redis,
     Node,
     Python,
@@ -30,16 +34,20 @@ impl SiteAppId {
     pub fn parse(raw: &str) -> Result<Self, String> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "cmsms" | "cms-made-simple" => Ok(Self::Cmsms),
+            "mautic" => Ok(Self::Mautic),
+            "joomla" => Ok(Self::Joomla),
             "redis" => Ok(Self::Redis),
             "node" | "nodejs" => Ok(Self::Node),
             "python" | "python3" => Ok(Self::Python),
-            _ => Err("Unknown site app. Use: cmsms, redis, node, python".into()),
+            _ => Err("Unknown site app. Use: cmsms, mautic, joomla, redis, node, python".into()),
         }
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Cmsms => "cmsms",
+            Self::Mautic => "mautic",
+            Self::Joomla => "joomla",
             Self::Redis => "redis",
             Self::Node => "node",
             Self::Python => "python",
@@ -51,7 +59,7 @@ impl SiteAppId {
             Self::Redis => Some("redis"),
             Self::Node => Some("nodejs"),
             Self::Python => Some("python3"),
-            Self::Cmsms => None,
+            Self::Cmsms | Self::Mautic | Self::Joomla => None,
         }
     }
 }
@@ -188,6 +196,28 @@ pub fn status(site: &SiteRecord, app: SiteAppId) -> LifecycleStatus {
                 source: "Official CMS Made Simple installer".into(),
             }
         }
+        SiteAppId::Mautic => {
+            let st = detect_mautic(site);
+            LifecycleStatus {
+                app,
+                installed_version: st.version,
+                latest_version: MAUTIC_TARGET.into(),
+                available_versions: vec![MAUTIC_TARGET.into()],
+                backups: list_app_backups(site, app.as_str()).unwrap_or_default(),
+                source: "Official Mautic GitHub release zip".into(),
+            }
+        }
+        SiteAppId::Joomla => {
+            let st = detect_joomla(site);
+            LifecycleStatus {
+                app,
+                installed_version: st.version,
+                latest_version: JOOMLA_TARGET.into(),
+                available_versions: vec![JOOMLA_TARGET.into()],
+                backups: list_app_backups(site, app.as_str()).unwrap_or_default(),
+                source: "Official Joomla full package".into(),
+            }
+        }
         SiteAppId::Redis | SiteAppId::Node | SiteAppId::Python => {
             let package = app.package().unwrap_or_default();
             let versions = package_versions(package);
@@ -207,7 +237,9 @@ fn runtime_source(site: &SiteRecord, app: SiteAppId) -> Result<std::path::PathBu
     match app {
         SiteAppId::Node => runtime_app_dir(site, RuntimeKind::Node),
         SiteAppId::Python => runtime_app_dir(site, RuntimeKind::Python),
-        SiteAppId::Cmsms => Ok(Path::new(&site.docroot).to_path_buf()),
+        SiteAppId::Cmsms | SiteAppId::Mautic | SiteAppId::Joomla => {
+            Ok(Path::new(&site.docroot).to_path_buf())
+        }
         SiteAppId::Redis => Err("Redis uses host-level backups".into()),
     }
 }
@@ -236,7 +268,7 @@ fn backup_before_change(site: &SiteRecord, app: SiteAppId) -> Result<AppBackup, 
             }
             create_app_backup(site, app.as_str(), &state.installed_version, &source)
         }
-        SiteAppId::Cmsms => create_app_backup(
+        SiteAppId::Cmsms | SiteAppId::Mautic | SiteAppId::Joomla => create_app_backup(
             site,
             app.as_str(),
             &state.installed_version,
@@ -290,6 +322,8 @@ pub fn install(site: &SiteRecord, app: SiteAppId, version: Option<&str>) -> Resu
             verify_cmsms_source()?;
             install_cmsms_version(site, version.unwrap_or(CMSMS_TARGET))
         }
+        SiteAppId::Mautic => install_mautic_version(site, version.unwrap_or(MAUTIC_TARGET)),
+        SiteAppId::Joomla => install_joomla_version(site, version.unwrap_or(JOOMLA_TARGET)),
         SiteAppId::Redis if version.map(str::trim).filter(|v| !v.is_empty()).is_some() => {
             install_package_version(app, version, false)?;
             let _ = crate::apps_redis::start_redis();
@@ -334,6 +368,8 @@ fn change_version(
             verify_cmsms_source()?;
             install_cmsms_version(site, target)?
         }
+        SiteAppId::Mautic => install_mautic_version(site, target)?,
+        SiteAppId::Joomla => install_joomla_version(site, target)?,
         SiteAppId::Redis | SiteAppId::Node | SiteAppId::Python => {
             install_package_version(app, Some(target), downgrade)?;
             format!("Installed {} {target}.", app.as_str())
@@ -351,7 +387,11 @@ pub fn restore(site: &SiteRecord, app: SiteAppId, backup: Option<&str>) -> Resul
                 .status();
             Ok(format!("Restored Redis backup {}.", restored.id))
         }
-        SiteAppId::Cmsms | SiteAppId::Node | SiteAppId::Python => {
+        SiteAppId::Cmsms
+        | SiteAppId::Mautic
+        | SiteAppId::Joomla
+        | SiteAppId::Node
+        | SiteAppId::Python => {
             let target = runtime_source(site, app)?;
             let was_running = match app {
                 SiteAppId::Node => load_runtime(site, RuntimeKind::Node).running,
@@ -389,6 +429,8 @@ pub fn has_update(value: &LifecycleStatus) -> bool {
 pub fn installed(site: &SiteRecord, app: SiteAppId) -> bool {
     match app {
         SiteAppId::Cmsms => detect_cmsms(site).installed,
+        SiteAppId::Mautic => detect_mautic(site).installed,
+        SiteAppId::Joomla => detect_joomla(site).installed,
         SiteAppId::Redis => detect_app(AppId::Redis).state != AppStateKind::NotInstalled,
         SiteAppId::Node => !load_runtime(site, RuntimeKind::Node).versions.is_empty(),
         SiteAppId::Python => !load_runtime(site, RuntimeKind::Python).versions.is_empty(),

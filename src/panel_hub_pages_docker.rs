@@ -196,6 +196,7 @@ pub(crate) fn toolbar(active: &str) -> String {
     format!(
         r#"<p class="stack-actions docker-tabs" style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
       <a class="{c}" href="/docker/list">Active Containers</a>
+      <a class="{a}" href="/docker/apps">Docker Apps</a>
       <a class="{s}" href="/docker/stacks">Compose Stacks</a>
       <a class="{i}" href="/docker/images">Manage Images</a>
       <a class="{h}" href="/plugins?view=store&amp;target=host&amp;q=docker">Host package</a>
@@ -203,6 +204,7 @@ pub(crate) fn toolbar(active: &str) -> String {
     <p class="muted">Prefer official or maintainer-published images from Docker Hub. CPN-managed stacks (label <code>com.cpn.managed=1</code>) keep data on the host under the CPN docker-data path; use Compose Stacks <strong>Pull &amp; Recreate</strong> or upgrade <code>--bypass</code> to refresh images without deleting volumes.</p>
     <p class="muted"><strong>Owner:</strong> panel-created containers use your account name; compose stacks use the owner you set on the stack. Host-managed stacks show <strong>Host</strong>. CLI or third-party containers show <strong>Unassigned</strong> until label <code>com.cpn.owner=username</code> is set. Image and tag come from the engine (<code>ps</code> plus <code>inspect</code> when needed).</p>"#,
         c = tab_class(active, "containers"),
+        a = tab_class(active, "apps"),
         s = tab_class(active, "stacks"),
         i = tab_class(active, "images"),
         h = tab_class(active, "host"),

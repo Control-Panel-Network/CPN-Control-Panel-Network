@@ -197,8 +197,8 @@ pub fn container_processes(name: &str) -> Result<String, String> {
     })
 }
 
-pub fn container_exec_command(name: &str, command: &str) -> Result<String, String> {
-    let _name = validate_container_ref(name)?;
+/// Parse and validate an exec command before invoking the engine.
+pub fn parse_exec_argv(command: &str) -> Result<Vec<String>, String> {
     let cmd = command.trim();
     if cmd.is_empty() || cmd.len() > 200 {
         return Err("Command must be 1 to 200 characters.".into());
@@ -222,13 +222,19 @@ pub fn container_exec_command(name: &str, command: &str) -> Result<String, Strin
             return Err("Command contains disallowed characters.".into());
         }
     }
+    Ok(parts.into_iter().map(str::to_string).collect())
+}
+
+pub fn container_exec_command(name: &str, command: &str) -> Result<String, String> {
+    let _name = validate_container_ref(name)?;
+    let parts = parse_exec_argv(command)?;
     let Some(bin) = docker_bin() else {
         return Err("Docker/Podman CLI not found.".into());
     };
     with_listed_container_id(name, |row| {
         let mut command = Command::new(bin);
         command.arg("exec").arg(&row.id);
-        for part in parts {
+        for part in &parts {
             command.arg(part);
         }
         let output = command.output().map_err(|e| format!("Exec failed: {e}"))?;
@@ -286,5 +292,20 @@ mod tests {
     fn memory_limit_format() {
         assert_eq!(format_memory_limit("0"), "Unlimited");
         assert_eq!(format_memory_limit("1048576"), "1 MB");
+    }
+
+    #[test]
+    fn exec_allowlist_accepts_ls() {
+        let parts = parse_exec_argv("ls -la /").unwrap();
+        assert_eq!(parts[0], "ls");
+        assert_eq!(parts.len(), 3);
+    }
+
+    #[test]
+    fn exec_allowlist_rejects_shell_and_rm() {
+        assert!(parse_exec_argv("rm -rf /").is_err());
+        assert!(parse_exec_argv("ls; id").is_err());
+        assert!(parse_exec_argv("cat /etc/passwd | head").is_err());
+        assert!(parse_exec_argv("").is_err());
     }
 }

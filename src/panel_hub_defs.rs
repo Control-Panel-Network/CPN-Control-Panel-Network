@@ -49,6 +49,12 @@ pub fn security_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     href: "/security/malware-scan",
                     live: true,
                 },
+                HubTile {
+                    title: "CSF",
+                    subtitle: "Optional host firewall",
+                    href: "/security/csf",
+                    live: true,
+                },
             ],
         ),
         (
@@ -494,13 +500,19 @@ pub fn backups_hub_tiles() -> Vec<HubTile<'static>> {
             title: "Google Drive",
             subtitle: "Backup to Drive",
             href: "/backups/google-drive",
-            live: false,
+            live: true,
         },
         HubTile {
             title: "Remote Backups",
             subtitle: "Transfer to another server",
             href: "/backups/remote",
-            live: false,
+            live: true,
+        },
+        HubTile {
+            title: "Incremental",
+            subtitle: "restic / borg jobs",
+            href: "/backups/incremental",
+            live: true,
         },
     ]
 }

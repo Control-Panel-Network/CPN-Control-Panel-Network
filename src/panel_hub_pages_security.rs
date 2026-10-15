@@ -287,17 +287,48 @@ pub fn malware_scan_page() -> String {
         ("Engine", &st.engine),
         ("Installed", if st.installed { "yes" } else { "no" }),
     ]);
-    let extra = if st.installed {
+    let history = crate::panel_ops_malware_scan::load_history();
+    let mut hist_html =
+        String::from("<h2 style=\"font-size:16px;margin:18px 0 8px;\">Recent scans</h2>");
+    if history.is_empty() {
+        hist_html.push_str("<p class=\"muted\">No on-demand scans yet.</p>");
+    } else {
+        hist_html.push_str("<ul class=\"muted\">");
+        for row in history.iter().take(8) {
+            hist_html.push_str(&format!(
+                "<li><code>{}</code> · infected {} · {}</li>",
+                html_escape(&row.id),
+                row.infected,
+                html_escape(&row.summary)
+            ));
+        }
+        hist_html.push_str("</ul>");
+    }
+    let scan_form = r#"<form method="post" action="/security/malware-scan/run" style="margin:14px 0;">
+      <button type="submit" class="btn-primary">Scan all site document roots (ClamAV)</button>
+      <p class="muted" style="margin:8px 0 0;">No LLM API key required. Quarantine/allowlist live under the CPN data directory.</p>
+    </form>"#;
+    let extra = if st.installed || which_clam() {
         let engine_note = if st.engine == "nt-api" {
             "<p class=\"muted\">Paid path uses News Targeted API (<code>api.newstargeted.com</code>). Token lives in <code>/var/lib/cpn/malware.json</code> (mode 600).</p>"
         } else {
-            "<p class=\"muted\">Free path: ClamAV binaries on this host. Install via Plugins / packages when missing.</p>"
+            "<p class=\"muted\">Free path: ClamAV binaries on this host. On-demand and scheduled docroot scans do not need an API key.</p>"
         };
-        format!("{}{engine_note}", pre_block(&st.detail))
+        format!(
+            "{detail}{engine_note}{scan_form}{hist}",
+            detail = pre_block(&st.detail),
+            engine_note = engine_note,
+            scan_form = scan_form,
+            hist = hist_html
+        )
     } else {
-        not_configured_body(
-            &st.detail,
-            "CPN Malware scan never claims third-party product brands as CPN itself. Free: install ClamAV. Paid: configure api.newstargeted.com token in /var/lib/cpn/malware.json.",
+        format!(
+            "{body}{hist}",
+            body = not_configured_body(
+                &st.detail,
+                "CPN Malware scan never claims third-party product brands as CPN itself. Free: install ClamAV. Paid: configure api.newstargeted.com token in /var/lib/cpn/malware.json.",
+            ),
+            hist = hist_html
         )
     };
     feature_shell(
@@ -312,6 +343,11 @@ pub fn malware_scan_page() -> String {
         None,
         None,
     )
+}
+
+fn which_clam() -> bool {
+    crate::panel_ops_security::which_exists("clamscan")
+        || crate::panel_ops_security::which_exists("clamdscan")
 }
 
 pub fn manage_ssl_page() -> String {
