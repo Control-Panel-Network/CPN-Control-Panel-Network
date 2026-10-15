@@ -283,27 +283,28 @@ async fn install_built_bins(root: &Path, tools: &Toolchain, git_sha: &str) -> Re
     install_from_paths(&built_installer, &cli).await
 }
 
+fn log_pruned_tip_cargo(keep_sha: Option<&str>) {
+    let pruned = crate::upgrade_staging::prune_tip_cargo_targets(
+        keep_sha,
+        std::time::Duration::from_secs(0),
+    );
+    for path in &pruned.removed {
+        upgrade_tip_log::log_info(format!("removed old commit build dir {path}"));
+    }
+    for path in &pruned.kept_in_use {
+        upgrade_tip_log::log_info(format!("kept commit build dir in use by a process {path}"));
+    }
+}
+
 async fn install_from_paths(installer: &Path, cli: &Path) -> Result<(), String> {
+    // Install only via installer_bin()/cli_bin() (/usr/bin). Never write local
+    // PATH overrides (they leak on failed tip jobs). Legacy overrides are
+    // removed by upgrade_cleanup::remove_local_bin_overrides and doctor --heal.
     install_binary(installer.to_str().unwrap_or(""), installer_bin())
         .await
         .map_err(|error| fail(error, None))?;
     if cli.is_file() {
         let _ = install_binary(cli.to_str().unwrap_or(""), cli_bin()).await;
-    }
-    let local_installer = PathBuf::from("/usr/local/bin/cpn-installer");
-    if local_installer
-        .parent()
-        .map(|p| p.is_dir())
-        .unwrap_or(false)
-    {
-        let _ = install_binary(
-            installer.to_str().unwrap_or(""),
-            local_installer.to_str().unwrap_or(""),
-        )
-        .await;
-        if cli.is_file() {
-            let _ = install_binary(cli.to_str().unwrap_or(""), "/usr/local/bin/cpn").await;
-        }
     }
     Ok(())
 }
@@ -373,6 +374,8 @@ pub async fn apply_tip_ref(
         upgrade_tip_log::log_info(format!(
             "Installed {package_version} from prebuilt path for tip {label}"
         ));
+        // Drop older tip cargo trees left by prior source builds on this host.
+        log_pruned_tip_cargo(Some(&sha));
         return Ok(TipApplyResult {
             sha,
             short_sha: short,
@@ -425,16 +428,7 @@ pub async fn apply_tip_ref(
     ));
     // Earlier commit builds (`cpn-cargo-target/tip-<sha>`) are ~700 MB each
     // and never reused for another SHA; keep only the one just built.
-    let pruned = crate::upgrade_staging::prune_tip_cargo_targets(
-        Some(&sha),
-        std::time::Duration::from_secs(0),
-    );
-    for path in &pruned.removed {
-        upgrade_tip_log::log_info(format!("removed old commit build dir {path}"));
-    }
-    for path in &pruned.kept_in_use {
-        upgrade_tip_log::log_info(format!("kept commit build dir in use by a process {path}"));
-    }
+    log_pruned_tip_cargo(Some(&sha));
     Ok(TipApplyResult {
         sha,
         short_sha: short,
@@ -481,5 +475,16 @@ mod tests {
         let msg = crate::upgrade_tip_toolchain::missing_cargo_message();
         assert!(msg.contains("retry"));
         assert!(!msg.to_ascii_lowercase().contains("use a published release"));
+    }
+
+    #[test]
+    fn tip_install_production_code_has_no_local_bin_paths() {
+        let src = include_str!("upgrade_tip.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let needle = ["/usr/", "local/bin"].concat();
+        assert!(
+            !prod.contains(&needle),
+            "production tip install must not reference local bin override paths"
+        );
     }
 }
