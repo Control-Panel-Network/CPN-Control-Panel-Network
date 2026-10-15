@@ -10,10 +10,14 @@ use crate::panel_hub_http::{
 };
 use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
-    save_backup_destinations, save_backup_schedule,
+    save_backup_schedule,
+};
+use crate::panel_hub_pages_backups_dest::{
+    backups_gdrive_page, backups_remote_page, backups_s3_page, parse_flag, run_gdrive_test,
+    run_remote_test, run_s3_test, save_backup_destinations_toggles, save_gdrive_form,
+    save_remote_form, save_s3_form,
 };
 use crate::panel_hub_pages_backups_plan::backups_restore_plan_page;
-use crate::panel_hub_pages_hosting::scaffold_feature;
 use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -325,9 +329,11 @@ pub struct DestinationsForm {
     #[serde(default)]
     local_enabled: String,
     #[serde(default)]
-    google_drive_note: String,
+    gdrive_enabled: String,
     #[serde(default)]
-    remote_note: String,
+    remote_enabled: String,
+    #[serde(default)]
+    s3_enabled: String,
 }
 
 #[post("/backups/destinations/save")]
@@ -339,8 +345,12 @@ pub async fn backups_destinations_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    let local = matches!(form.local_enabled.trim(), "1" | "true" | "on" | "yes");
-    match save_backup_destinations(local, &form.google_drive_note, &form.remote_note) {
+    match save_backup_destinations_toggles(
+        parse_flag(&form.local_enabled),
+        parse_flag(&form.gdrive_enabled),
+        parse_flag(&form.remote_enabled),
+        parse_flag(&form.s3_enabled),
+    ) {
         Ok(msg) => redirect_notice("/backups/destinations", Some(&msg), None),
         Err(err) => redirect_notice("/backups/destinations", None, Some(&err)),
     }
@@ -350,6 +360,7 @@ pub async fn backups_destinations_save(
 pub async fn backups_gdrive_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -358,20 +369,70 @@ pub async fn backups_gdrive_route(
         &user,
         "backups",
         "Google Drive",
-        &scaffold_feature(
-            "Backups",
-            "/backups",
-            "Google Drive",
-            "Backup to Drive",
-            "Google Drive OAuth and sync are not configured yet.",
+        &backups_gdrive_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
         ),
     ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct GdriveSaveForm {
+    #[serde(default)]
+    enabled: String,
+    #[serde(default)]
+    client_id: String,
+    #[serde(default)]
+    client_secret: String,
+    #[serde(default)]
+    refresh_token: String,
+    #[serde(default)]
+    folder_id: String,
+    #[serde(default)]
+    note: String,
+}
+
+#[post("/backups/google-drive/save")]
+pub async fn backups_gdrive_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<GdriveSaveForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match save_gdrive_form(
+        parse_flag(&form.enabled),
+        &form.client_id,
+        &form.client_secret,
+        &form.refresh_token,
+        &form.folder_id,
+        &form.note,
+    ) {
+        Ok(msg) => redirect_notice("/backups/google-drive", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/google-drive", None, Some(&err)),
+    }
+}
+
+#[post("/backups/google-drive/test")]
+pub async fn backups_gdrive_test(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match run_gdrive_test() {
+        Ok(msg) => redirect_notice("/backups/google-drive", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/google-drive", None, Some(&err)),
+    }
 }
 
 #[get("/backups/remote")]
 pub async fn backups_remote_route(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -380,14 +441,147 @@ pub async fn backups_remote_route(
         &user,
         "backups",
         "Remote Backups",
-        &scaffold_feature(
-            "Backups",
-            "/backups",
-            "Remote Backups",
-            "Transfer to another server",
-            "Remote transfer targets are not configured yet.",
+        &backups_remote_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
         ),
     ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RemoteSaveForm {
+    #[serde(default)]
+    enabled: String,
+    #[serde(default)]
+    protocol: String,
+    #[serde(default)]
+    host: String,
+    #[serde(default)]
+    port: u16,
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    auth_mode: String,
+    #[serde(default)]
+    key_path: String,
+    #[serde(default)]
+    password: String,
+    #[serde(default)]
+    remote_path: String,
+    #[serde(default)]
+    note: String,
+}
+
+#[post("/backups/remote/save")]
+pub async fn backups_remote_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<RemoteSaveForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match save_remote_form(
+        parse_flag(&form.enabled),
+        &form.protocol,
+        &form.host,
+        form.port,
+        &form.username,
+        &form.auth_mode,
+        &form.key_path,
+        &form.password,
+        &form.remote_path,
+        &form.note,
+    ) {
+        Ok(msg) => redirect_notice("/backups/remote", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/remote", None, Some(&err)),
+    }
+}
+
+#[post("/backups/remote/test")]
+pub async fn backups_remote_test(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match run_remote_test() {
+        Ok(msg) => redirect_notice("/backups/remote", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/remote", None, Some(&err)),
+    }
+}
+
+#[get("/backups/s3")]
+pub async fn backups_s3_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    html_ok(panel_shell(
+        &user,
+        "backups",
+        "S3",
+        &backups_s3_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
+    ))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct S3SaveForm {
+    #[serde(default)]
+    enabled: String,
+    #[serde(default)]
+    endpoint: String,
+    #[serde(default)]
+    region: String,
+    #[serde(default)]
+    bucket: String,
+    #[serde(default)]
+    prefix: String,
+    #[serde(default)]
+    access_key: String,
+    #[serde(default)]
+    secret_key: String,
+}
+
+#[post("/backups/s3/save")]
+pub async fn backups_s3_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<S3SaveForm>,
+) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match save_s3_form(
+        parse_flag(&form.enabled),
+        &form.endpoint,
+        &form.region,
+        &form.bucket,
+        &form.prefix,
+        &form.access_key,
+        &form.secret_key,
+    ) {
+        Ok(msg) => redirect_notice("/backups/s3", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/s3", None, Some(&err)),
+    }
+}
+
+#[post("/backups/s3/test")]
+pub async fn backups_s3_test(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    match run_s3_test() {
+        Ok(msg) => redirect_notice("/backups/s3", Some(&msg), None),
+        Err(err) => redirect_notice("/backups/s3", None, Some(&err)),
+    }
 }
 
 #[cfg(test)]

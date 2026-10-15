@@ -129,6 +129,13 @@ enum Commands {
         #[arg(long, global = true)]
         id: Option<String>,
     },
+    /// Reset monthly site bandwidth ledgers (calendar month; cron `0 0 1 * *`)
+    #[command(name = "bandwidth-reset")]
+    BandwidthReset {
+        /// Force even when this calendar month was already recorded
+        #[arg(long)]
+        force: bool,
+    },
     /// Uninstall CPN from this host (same as `cpn-installer --uninstall`)
     Uninstall {
         /// Skip confirmation prompts
@@ -361,10 +368,22 @@ fn run() -> Result<(), String> {
             println!(
                 "doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)"
             );
+            println!(
+                "bandwidth-reset  Reset monthly site bandwidth ledgers (timer: 0 0 1 * *)"
+            );
             println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");
             Ok(())
+        }
+        Commands::BandwidthReset { force } => {
+            match cpn_installer::panel_ops_bandwidth_reset::reset_monthly_counters(force) {
+                Ok(msg) => {
+                    println!("{msg}");
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            }
         }
         Commands::Doctor {
             command,

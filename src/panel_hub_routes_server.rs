@@ -6,7 +6,9 @@ use crate::panel_hub_http::{
     html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
     require_panel_user, urlencoding_simple,
 };
+use crate::panel_ops_docker_csrf::{user_can_manage_container, verify_docker_csrf};
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
+use crate::panel_hub_pages_docker_apps::docker_apps_page;
 use crate::panel_hub_pages_docker_images_ui::docker_images_page;
 use crate::panel_hub_pages_docker_list::DockerListQuery;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
@@ -422,6 +424,20 @@ pub async fn server_docker_apps(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
 ) -> HttpResponse {
+    let Some(_user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    HttpResponse::SeeOther()
+        .append_header(("Location", "/docker/apps"))
+        .finish()
+}
+
+#[actix_web::route("/docker/apps", method = "GET", method = "HEAD")]
+pub async fn docker_apps_route(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
@@ -429,8 +445,113 @@ pub async fn server_docker_apps(
         &user,
         "server",
         "Docker Apps",
-        &docker_page("Docker Apps"),
+        &docker_apps_page(
+            &user,
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerAppsDeployForm {
+    pub template: String,
+    pub stack: String,
+    #[serde(default)]
+    pub fqdn: String,
+    #[serde(default)]
+    pub csrf: String,
+}
+
+#[post("/docker/apps/deploy")]
+pub async fn docker_apps_deploy(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerAppsDeployForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !verify_docker_csrf(&user, &form.csrf) {
+        return redirect_notice(
+            "/docker/apps",
+            None,
+            Some("Invalid or expired security token. Reload and try again."),
+        );
+    }
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker/apps",
+            None,
+            Some("Only panel admins can deploy one-click Docker apps."),
+        );
+    }
+    let template = form.template.clone();
+    let stack = form.stack.clone();
+    let fqdn = form.fqdn.clone();
+    let owner = user.clone();
+    let result = web::block(move || {
+        let _ = crate::panel_ops_docker_oneclick::ensure_docker_host_ready();
+        let tpl = crate::panel_ops_docker_compose::OfficialStackTemplate::from_form(&template);
+        crate::panel_ops_docker_oneclick::deploy_oneclick_app(
+            crate::panel_ops_docker_oneclick::OneclickDeployRequest {
+                template: tpl,
+                stack_id: &stack,
+                fqdn: &fqdn,
+                owner: &owner,
+            },
+        )
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Deploy task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/apps", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/apps", None, Some(&err)),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DockerAppsActionForm {
+    pub stack: String,
+    pub action: String,
+    #[serde(default)]
+    pub csrf: String,
+}
+
+#[post("/docker/apps/action")]
+pub async fn docker_apps_action(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<DockerAppsActionForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !verify_docker_csrf(&user, &form.csrf) {
+        return redirect_notice(
+            "/docker/apps",
+            None,
+            Some("Invalid or expired security token. Reload and try again."),
+        );
+    }
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/docker/apps",
+            None,
+            Some("Only panel admins can control one-click Docker apps."),
+        );
+    }
+    let stack = form.stack.clone();
+    let action = form.action.clone();
+    let result = web::block(move || {
+        crate::panel_ops_docker_oneclick::oneclick_stack_action(&stack, &action)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Action task failed: {e}")));
+    match result {
+        Ok(msg) => redirect_notice("/docker/apps", Some(&msg), None),
+        Err(err) => redirect_notice("/docker/apps", None, Some(&err)),
+    }
 }
 
 #[actix_web::route("/server/docker/containers", method = "GET", method = "HEAD")]
@@ -680,13 +801,15 @@ pub async fn docker_view_route(
         &user,
         "server",
         "Container",
-        &docker_container_view_page(&name, notice, error, None, tail),
+        &docker_container_view_page(&name, notice, error, None, tail, &user),
     ))
 }
 
 #[derive(serde::Deserialize)]
 pub struct DockerExecForm {
     pub command: String,
+    #[serde(default)]
+    pub csrf: String,
 }
 
 #[post("/docker/view/{name}/exec")]
@@ -699,15 +822,28 @@ pub async fn docker_view_exec(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    if !is_panel_admin(&user) {
+    let back = format!("/docker/view/{}", urlencoding_simple(name.as_str()));
+    if !verify_docker_csrf(&user, &form.csrf) {
+        return redirect_notice(&back, None, Some("Invalid or expired security token. Reload and try again."));
+    }
+    let admin = is_panel_admin(&user);
+    let cname = name.to_string();
+    let owner_probe = cname.clone();
+    let owner = web::block(move || {
+        crate::panel_ops_docker_detail::load_container_detail(&owner_probe)
+            .map(|d| d.row.owner)
+            .unwrap_or_else(|_| "Unassigned".into())
+    })
+    .await
+    .unwrap_or_else(|_| "Unassigned".into());
+    if !user_can_manage_container(&user, admin, &owner) {
         return redirect_notice(
-            &format!("/docker/view/{}", urlencoding_simple(name.as_str())),
+            &back,
             None,
-            Some("Only panel admins can run commands in containers."),
+            Some("Only panel admins or the container owner can run commands in this container."),
         );
     }
     let cmd = form.command.clone();
-    let cname = name.to_string();
     let output =
         web::block(move || crate::panel_ops_docker_detail::container_exec_command(&cname, &cmd))
             .await
@@ -720,7 +856,7 @@ pub async fn docker_view_exec(
         &user,
         "server",
         "Container",
-        &docker_container_view_page(name.as_str(), None, None, exec_out, 200),
+        &docker_container_view_page(name.as_str(), None, None, exec_out, 200, &user),
     ))
 }
 

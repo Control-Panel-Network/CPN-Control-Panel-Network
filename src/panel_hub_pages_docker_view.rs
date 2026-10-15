@@ -3,6 +3,7 @@
 use crate::panel_hub_pages_docker::{html_escape, toolbar, urlencoding_simple};
 use crate::panel_hubs::feature_shell;
 use crate::panel_ops_docker::container_logs;
+use crate::panel_ops_docker_csrf::docker_csrf_hidden;
 use crate::panel_ops_docker_detail::{
     DockerContainerDetail, container_processes, load_container_detail,
 };
@@ -118,6 +119,7 @@ pub fn docker_container_view_page(
     error: Option<&str>,
     exec_output: Option<&str>,
     log_lines: usize,
+    username: &str,
 ) -> String {
     let detail = match load_container_detail(name) {
         Ok(d) => d,
@@ -217,8 +219,9 @@ pub fn docker_container_view_page(
       </div>
       <div class="panel-card" style="margin-bottom:18px;" id="container-exec">
         <h2 style="margin:0 0 10px;font-size:18px;">Run Command</h2>
-        <p class="muted" style="margin:0 0 10px;">Runs inside the container via <code>sh -c</code> (admin only). Avoid shell metacharacters.</p>
+        <p class="muted" style="margin:0 0 10px;">Runs allowlisted read-only utilities inside the container (admin or container owner). Avoid shell metacharacters.</p>
         <form method="post" action="/docker/view/{enc}/exec" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+          {csrf}
           <label style="flex:1;min-width:220px;">Command
             <input type="text" name="command" maxlength="200" placeholder="ls -la /" style="width:100%;" autocomplete="off">
           </label>
@@ -246,6 +249,7 @@ pub fn docker_container_view_page(
         logs = html_escape(&logs),
         processes = html_escape(&processes),
         exec_block = exec_block,
+        csrf = docker_csrf_hidden(username),
     );
 
     feature_shell(

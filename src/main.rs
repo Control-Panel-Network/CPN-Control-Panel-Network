@@ -37,8 +37,11 @@ use cpn_installer::panel_hub_routes::{
     account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
     acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
     api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
-    backups_destinations_save, backups_gdrive_route, backups_remote_route,
-    backups_restore_plan_route, backups_restore_route, backups_restore_run, backups_schedule_route,
+    backups_destinations_save, backups_gdrive_route, backups_gdrive_save, backups_gdrive_test,
+    backups_incremental_route, backups_incremental_run, backups_incremental_save,
+    backups_remote_route, backups_remote_save, backups_remote_test, backups_s3_route,
+    backups_s3_save, backups_s3_test, backups_restore_plan_route, backups_restore_route,
+    backups_restore_run, backups_schedule_route,
     backups_schedule_save, cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get,
     cloudflare_oauth_callback_get, cloudflare_oauth_client_post, cloudflare_oauth_connect_post,
     cloudflare_oauth_disconnect_post, cloudflare_proxy_post, cloudflare_settings_post,
@@ -49,8 +52,9 @@ use cpn_installer::panel_hub_routes::{
     databases_phpmyadmin_open, databases_phpmyadmin_route, docker_container_action,
     docker_create_container, docker_create_route, docker_export_route, docker_home,
     docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
-    docker_list_route, docker_logs_route, docker_stack_create, docker_stack_refresh,
-    docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
+    docker_apps_action, docker_apps_deploy, docker_apps_route, docker_list_route, docker_logs_route,
+    docker_stack_create, docker_stack_refresh, docker_stacks_route, docker_view_exec,
+    docker_view_route, email_accounts_route,
     email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
     email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
     email_catchall_save, email_create_route, email_debugger, email_delivery_route,
@@ -75,7 +79,8 @@ use cpn_installer::panel_hub_routes::{
     security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
     security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
     security_firewall_rules_import, security_firewall_start, security_firewall_stop,
-    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
+    security_firewall_trusted_add, security_firewall_trusted_delete, security_csf,
+    security_csf_enable, security_csf_install, security_malware, security_malware_run,
     security_modsec, security_modsec_rules, security_page, security_rule_packs, security_ssh,
     security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
     security_ssl_hostname, security_ssl_issue, security_ssl_issue_all, security_ssl_mail,
@@ -1295,7 +1300,17 @@ async fn main() -> std::io::Result<()> {
             .service(backups_destinations_route)
             .service(backups_destinations_save)
             .service(backups_gdrive_route)
+            .service(backups_gdrive_save)
+            .service(backups_gdrive_test)
             .service(backups_remote_route)
+            .service(backups_remote_save)
+            .service(backups_remote_test)
+            .service(backups_s3_route)
+            .service(backups_s3_save)
+            .service(backups_s3_test)
+            .service(backups_incremental_route)
+            .service(backups_incremental_save)
+            .service(backups_incremental_run)
             .service(server_page)
             .service(server_logs_route)
             .service(server_log_view_route)
@@ -1351,6 +1366,9 @@ async fn main() -> std::io::Result<()> {
             .service(server_docker_images)
             .service(docker_home)
             .service(docker_list_route)
+            .service(docker_apps_route)
+            .service(docker_apps_deploy)
+            .service(docker_apps_action)
             .service(docker_images_route)
             .service(docker_logs_route)
             .service(docker_view_route)
@@ -1449,6 +1467,10 @@ async fn main() -> std::io::Result<()> {
             .service(security_modsec_rules)
             .service(security_rule_packs)
             .service(security_malware)
+            .service(security_malware_run)
+            .service(security_csf)
+            .service(security_csf_install)
+            .service(security_csf_enable)
             .service(security_ssl)
             .service(security_ssl_manage)
             .service(security_ssl_hostname)

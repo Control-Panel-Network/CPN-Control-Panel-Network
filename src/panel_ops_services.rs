@@ -308,8 +308,40 @@ fn unit_status(unit: &str) -> ServiceRow {
     }
 }
 
+fn csf_service_row() -> ServiceRow {
+    let st = crate::panel_ops_csf::csf_status();
+    if !st.installed {
+        return ServiceRow {
+            unit: "csf".into(),
+            active: "Not installed".into(),
+            enabled: "Not installed".into(),
+            present: false,
+            via: None,
+            install_href: Some("/plugins?view=store&target=host&q=csf".into()),
+        };
+    }
+    ServiceRow {
+        unit: "csf".into(),
+        active: if st.enabled {
+            "Active".into()
+        } else {
+            "Inactive".into()
+        },
+        enabled: if st.enabled {
+            "Enabled".into()
+        } else {
+            "Deactivated".into()
+        },
+        present: true,
+        via: None,
+        install_href: None,
+    }
+}
+
 pub fn list_known_services() -> Vec<ServiceRow> {
-    KNOWN_UNITS.iter().map(|u| unit_status(u)).collect()
+    let mut rows: Vec<ServiceRow> = KNOWN_UNITS.iter().map(|u| unit_status(u)).collect();
+    rows.push(csf_service_row());
+    rows
 }
 
 fn resolve_control_unit(unit: &str) -> Result<String, String> {

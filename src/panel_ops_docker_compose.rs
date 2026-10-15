@@ -27,6 +27,8 @@ pub enum OfficialStackTemplate {
     Nginx,
     MariaDb,
     Redis,
+    N8n,
+    HermesAgent,
 }
 
 impl OfficialStackTemplate {
@@ -35,6 +37,8 @@ impl OfficialStackTemplate {
             "nginx" => Self::Nginx,
             "mariadb" => Self::MariaDb,
             "redis" => Self::Redis,
+            "n8n" => Self::N8n,
+            "hermes" | "hermes-agent" | "hermesagent" => Self::HermesAgent,
             _ => Self::Custom,
         }
     }
@@ -45,6 +49,8 @@ impl OfficialStackTemplate {
             Self::Nginx => "Nginx (Docker Official Image)",
             Self::MariaDb => "MariaDB (maintainer image on Docker Hub)",
             Self::Redis => "Redis (Docker Official Image)",
+            Self::N8n => "n8n (workflow automation)",
+            Self::HermesAgent => "Hermes Agent (CPN one-click agent stack)",
         }
     }
 
@@ -54,6 +60,9 @@ impl OfficialStackTemplate {
             Self::Nginx => Some("nginx:alpine"),
             Self::MariaDb => Some("mariadb:11"),
             Self::Redis => Some("redis:7-alpine"),
+            Self::N8n => Some("docker.n8n.io/n8nio/n8n:latest"),
+            // Official/verified Hermes Agent image on Docker Hub.
+            Self::HermesAgent => Some("nousresearch/hermes-agent:latest"),
         }
     }
 
@@ -62,8 +71,25 @@ impl OfficialStackTemplate {
             Self::Nginx => "/usr/share/nginx/html",
             Self::MariaDb => "/var/lib/mysql",
             Self::Redis => "/data",
+            Self::N8n => "/home/node/.n8n",
+            Self::HermesAgent => "/data",
             Self::Custom => "/data",
         }
+    }
+
+    pub fn default_ports(self) -> &'static str {
+        match self {
+            Self::Nginx => "8080:80",
+            Self::MariaDb => "3306:3306",
+            Self::Redis => "6379:6379",
+            Self::N8n => "5678:5678",
+            Self::HermesAgent => "8780:8780",
+            Self::Custom => "",
+        }
+    }
+
+    pub fn is_oneclick_app(self) -> bool {
+        matches!(self, Self::N8n | Self::HermesAgent)
     }
 }
 
@@ -445,5 +471,9 @@ mod tests {
                 .unwrap()
                 .starts_with("mariadb:")
         );
+        assert!(OfficialStackTemplate::N8n.default_image().is_some());
+        assert!(OfficialStackTemplate::HermesAgent.default_image().is_some());
+        assert!(OfficialStackTemplate::from_form("n8n").is_oneclick_app());
+        assert!(OfficialStackTemplate::from_form("hermes-agent").is_oneclick_app());
     }
 }

@@ -9,9 +9,9 @@ use crate::panel_dashboard_activity_list::{activity_list_script, wrap_activity_t
 use crate::panel_hub_defs::backups_hub_tiles;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
 use crate::panel_ops_activity_host::format_bytes_eu;
-use crate::panel_ops_backup_extra::{
-    BackupDestinations, BackupSchedule, load_destinations, load_schedule, save_destinations,
-    save_schedule,
+use crate::panel_ops_backup_extra::{BackupSchedule, load_schedule, save_schedule};
+pub use crate::panel_hub_pages_backups_dest::{
+    backups_destinations_page, save_backup_destinations_toggles as save_backup_destinations_legacy,
 };
 use crate::sites::{SiteRecord, list_sites};
 
@@ -340,56 +340,16 @@ pub fn save_backup_schedule(
     scope: &str,
     domain: &str,
 ) -> Result<String, String> {
-    save_schedule(&BackupSchedule {
-        enabled,
-        cron: cron.trim().to_string(),
-        scope: scope.trim().to_string(),
-        domain: domain.trim().to_string(),
-    })?;
+    let mut existing = load_schedule();
+    existing.enabled = enabled;
+    existing.cron = cron.trim().to_string();
+    existing.scope = scope.trim().to_string();
+    existing.domain = domain.trim().to_string();
+    if existing.destination.is_empty() {
+        existing.destination = "local".into();
+    }
+    save_schedule(&existing)?;
     Ok("Schedule saved".into())
-}
-
-pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> String {
-    let d = load_destinations();
-    let checked = if d.local_enabled { " checked" } else { "" };
-    let form = format!(
-        r#"<form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:560px;">
-      <label><input type="checkbox" name="local_enabled" value="1"{checked}> Local archives enabled</label>
-      <label for="gdrive">Google Drive note</label>
-      <input id="gdrive" name="google_drive_note" type="text" value="{gdrive}">
-      <label for="remote">Remote note</label>
-      <input id="remote" name="remote_note" type="text" value="{remote}">
-      <button type="submit" class="btn-primary">Save destinations</button>
-    </form>"#,
-        checked = checked,
-        gdrive = html_escape(&d.google_drive_note),
-        remote = html_escape(&d.remote_note),
-    );
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Backups", Some("/backups")),
-            ("Destinations", None),
-        ],
-        "Destinations",
-        "Backup destinations.",
-        &form,
-        notice,
-        error,
-    )
-}
-
-pub fn save_backup_destinations(
-    local_enabled: bool,
-    google_drive_note: &str,
-    remote_note: &str,
-) -> Result<String, String> {
-    save_destinations(&BackupDestinations {
-        local_enabled,
-        google_drive_note: google_drive_note.trim().to_string(),
-        remote_note: remote_note.trim().to_string(),
-    })?;
-    Ok("Destinations saved".into())
 }
 
 /// Deprecated name: Settings hub lives in `panel_hub_pages_settings`.

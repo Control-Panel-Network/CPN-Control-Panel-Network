@@ -90,7 +90,11 @@ fn lifecycle_controls(
             .available_versions
             .iter()
             .any(|version| version_cmp(version, &state.installed_version).is_lt());
-    let lifecycle_install = !is_installed && matches!(app, SiteAppId::Node | SiteAppId::Python);
+    let lifecycle_install = !is_installed
+        && matches!(
+            app,
+            SiteAppId::Node | SiteAppId::Python | SiteAppId::Mautic | SiteAppId::Joomla
+        );
     if can_mutate
         && (lifecycle_install || has_update(&state) || has_older)
         && (!is_installed || !state.available_versions.is_empty())
@@ -276,15 +280,94 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     let node_card = runtime_card(site, &domain, &csrf, &snap.node, admin);
     let python_card = runtime_card(site, &domain, &csrf, &snap.python, admin);
 
+    let mautic_lifecycle = lifecycle_controls(site, SiteAppId::Mautic, &domain, &csrf, admin);
+    let joomla_lifecycle = lifecycle_controls(site, SiteAppId::Joomla, &domain, &csrf, admin);
+    let mautic_card = php_cms_card(
+        "Mautic",
+        "mautic",
+        snap.mautic.installed,
+        &snap.mautic.detail,
+        &domain,
+        &csrf,
+        snap.wordpress_in_docroot,
+        &mautic_lifecycle,
+    );
+    let joomla_card = php_cms_card(
+        "Joomla",
+        "joomla",
+        snap.joomla.installed,
+        &snap.joomla.detail,
+        &domain,
+        &csrf,
+        snap.wordpress_in_docroot,
+        &joomla_lifecycle,
+    );
+
+    let apache = crate::panel_ops_apache_handler::apache_toggle_html(site, &csrf);
     let grid = format!(
-        r#"<div class="manage-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">{cmsms}{redis}{node}{python}</div>
+        r#"<div class="manage-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">{cmsms}{mautic}{joomla}{redis}{node}{python}</div>
+{apache}
 <p class="manage-muted">Host engines install once. Site Apps Activate or attach when the host is already running. Site users cannot uninstall host packages. WordPress stays under WordPress.</p>"#,
         cmsms = cmsms_card,
+        mautic = mautic_card,
+        joomla = joomla_card,
         redis = redis_card,
         node = node_card,
         python = python_card,
+        apache = apache,
     );
     section("Apps", &grid)
+}
+
+fn php_cms_card(
+    title: &str,
+    action_prefix: &str,
+    installed: bool,
+    detail: &str,
+    domain: &str,
+    csrf: &str,
+    wordpress: bool,
+    lifecycle: &str,
+) -> String {
+    let mut actions = String::new();
+    if wordpress && !installed {
+        actions.push_str(
+            r#"<p class="manage-muted">WordPress detected here. Use a dedicated site or subdomain for this app.</p>"#,
+        );
+    } else if installed {
+        actions.push_str(r#"<span class="manage-badge active">Installed</span>"#);
+    } else {
+        actions.push_str(&format!(
+            r#"<form method="post" action="/websites/apps" class="inline-form">
+  <input type="hidden" name="domain" value="{domain}">
+  <input type="hidden" name="csrf" value="{csrf}">
+  <input type="hidden" name="action" value="{prefix}_install">
+  <button type="submit" class="btn-primary">Install {title}</button>
+</form>"#,
+            domain = html_escape(domain),
+            csrf = html_escape(csrf),
+            prefix = html_escape(action_prefix),
+            title = html_escape(title),
+        ));
+    }
+    format!(
+        r#"<article class="manage-stat" id="{prefix}">
+  <span>{title}</span>
+  <strong>{status}</strong>
+  <p class="manage-muted">{detail}</p>
+  <div class="manage-actions-row">{actions}</div>{lifecycle}
+</article>"#,
+        prefix = html_escape(action_prefix),
+        title = html_escape(title),
+        status = html_escape(if installed {
+            "Installed"
+        } else {
+            "Not installed"
+        }),
+        detail = html_escape(detail),
+        actions = actions,
+        lifecycle = lifecycle,
+    )
 }
 
 fn runtime_card(

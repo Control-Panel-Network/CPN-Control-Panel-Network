@@ -4,6 +4,7 @@ pub use crate::panel_dashboard_activity_routes::*;
 pub use crate::panel_hub_routes_account::*;
 pub use crate::panel_hub_routes_account_security::*;
 pub use crate::panel_hub_routes_backups::*;
+pub use crate::panel_hub_routes_backups_incremental::*;
 pub use crate::panel_hub_routes_cloudflare::*;
 pub use crate::panel_hub_routes_db::*;
 pub use crate::panel_hub_routes_dns::*;

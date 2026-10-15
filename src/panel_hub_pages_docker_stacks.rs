@@ -53,6 +53,8 @@ fn template_options(selected: OfficialStackTemplate) -> String {
         (OfficialStackTemplate::Nginx, "nginx"),
         (OfficialStackTemplate::MariaDb, "mariadb"),
         (OfficialStackTemplate::Redis, "redis"),
+        (OfficialStackTemplate::N8n, "n8n"),
+        (OfficialStackTemplate::HermesAgent, "hermes-agent"),
     ];
     let mut out = String::new();
     for (tpl, value) in choices {
@@ -75,12 +77,7 @@ fn create_stack_form(prefill_image: Option<&str>, prefill_template: Option<&str>
         .or_else(|| tpl.default_image().map(|s| s.to_string()))
         .unwrap_or_else(|| "nginx:alpine".into());
     let data_path = tpl.default_container_data_path();
-    let ports = match tpl {
-        OfficialStackTemplate::Nginx => "8080:80",
-        OfficialStackTemplate::MariaDb => "3306:3306",
-        OfficialStackTemplate::Redis => "6379:6379",
-        OfficialStackTemplate::Custom => "",
-    };
+    let ports = tpl.default_ports();
     format!(
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Create Compose Stack</h2>
