@@ -46,6 +46,31 @@ fn badge_pricing(pricing: &str) -> String {
     }
 }
 
+/// Canonical store category label (aliases `Backups` → `Backup`).
+pub(crate) fn canonical_store_category(category: &str) -> String {
+    let t = category.trim();
+    if t.eq_ignore_ascii_case("backups") {
+        "Backup".into()
+    } else {
+        t.to_string()
+    }
+}
+
+/// True when filter chip `want` matches catalog/host category `have` (Backup ↔ Backups).
+pub(crate) fn store_categories_match(want: &str, have: &str) -> bool {
+    let w = want.trim().to_ascii_lowercase();
+    let h = have.trim().to_ascii_lowercase();
+    if w.is_empty() || w == "all" {
+        return true;
+    }
+    if w == h {
+        return true;
+    }
+    let w_norm = if w == "backups" { "backup" } else { w.as_str() };
+    let h_norm = if h == "backups" { "backup" } else { h.as_str() };
+    w_norm == h_norm
+}
+
 pub(crate) fn filter_store_entries<'a>(
     entries: &'a [CatalogEntry],
     query: &str,
@@ -66,7 +91,7 @@ pub(crate) fn filter_store_entries<'a>(
             } else if cat == "free" {
                 !pricing_is_paid(&entry.pricing)
             } else {
-                entry.category.to_ascii_lowercase() == cat
+                store_categories_match(category, &entry.category)
             };
             if !cat_ok {
                 return false;
@@ -642,5 +667,18 @@ mod tests {
         assert!(html.contains("category=Paid"));
         assert!(html.contains(">Paid</a>"));
         assert!(html.contains(r#"class="active""#) || html.contains("class=\"active\""));
+    }
+
+    #[test]
+    fn backup_and_backups_categories_alias() {
+        assert!(store_categories_match("Backup", "Backups"));
+        assert!(store_categories_match("backups", "Backup"));
+        assert_eq!(canonical_store_category("Backups"), "Backup");
+        let mut e = entry("backupDestinations", "free", "remote destinations");
+        e.category = "Backups".into();
+        let binding = [e];
+        let hits = filter_store_entries(&binding, "", "Backup");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "backupDestinations");
     }
 }
