@@ -1,4 +1,4 @@
-//! CPN-only plugin installs: account-scoped under `$CPN_DATA_DIR/user-plugins/<user>/<id>/`.
+//! User Panel (cpn-only) plugin installs: account-scoped under `$CPN_DATA_DIR/user-plugins/<user>/<id>/`.
 //! Not a public site app (outside `public_html`; data dir is not web-served).
 
 use crate::account::{data_dir, now_unix};
@@ -106,7 +106,7 @@ pub fn scope_badges_html(entry: &CatalogEntry) -> String {
         out.push_str(r#"<span class="plugin-badge">Host</span>"#);
     }
     if cpn {
-        out.push_str(r#"<span class="plugin-badge cat">CPN</span>"#);
+        out.push_str(r#"<span class="plugin-badge cat">User Panel</span>"#);
     }
     if site {
         out.push_str(r#"<span class="plugin-badge cat">Site</span>"#);
@@ -136,7 +136,7 @@ fn ensure_private_dir(path: &Path) -> Result<(), String> {
     if !note.is_file() {
         let _ = fs::write(
             &note,
-            "CPN-only plugin install. Account-scoped under /var/lib/cpn/user-plugins/. Not a public site app.\n",
+            "User Panel (cpn-only) plugin install. Account-scoped under /var/lib/cpn/user-plugins/. Not a public site app.\n",
         );
     }
     Ok(())
@@ -282,7 +282,7 @@ pub fn install_cpn_plugin(username: &str, plugin_id: &str) -> Result<CpnPluginMa
     if !catalog_entry_is_cpn_installable(&entry) && !is_cpn_scoped_plugin(&id) {
         let _ = fs::remove_dir_all(&extract);
         return Err(format!(
-            "Plugin `{id}` does not support CPN-only install. Use Site or Host instead."
+            "Plugin `{id}` does not support User Panel install. Use Site or Host instead."
         ));
     }
     let dest = cpn_plugin_path(&user, &id);

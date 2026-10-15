@@ -109,7 +109,14 @@ fn category_match(want: &str, category: &str, scope_kind: &str) -> bool {
     if want == "host" {
         return scope_kind == "host";
     }
-    if want == "cpn" || want == "cpn only" || want == "cpn_only" {
+    if want == "cpn"
+        || want == "cpn only"
+        || want == "cpn_only"
+        || want == "cpn-only"
+        || want == "user panel"
+        || want == "user_panel"
+        || want == "user-panel"
+    {
         return scope_kind == "cpn";
     }
     if want == "site" {
@@ -273,7 +280,7 @@ fn cpn_scoped_card(item: &InstalledPlugin, update_available: bool, icon_url: &st
         r#"<article class="plugin-card">
           {head}
           <div class="plugin-badges">
-            <span class="plugin-badge cat">CPN</span>
+            <span class="plugin-badge cat">User Panel</span>
             <span class="plugin-badge cat">{cat}</span>
             <span class="plugin-badge">v{ver}</span>
             {active}

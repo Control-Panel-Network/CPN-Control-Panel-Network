@@ -1335,7 +1335,7 @@ pub async fn plugins_install_cpn(
                 plugins_redirect(
                     "",
                     "installed",
-                    Some(&format!("Installed {} for CPN only", manifest.name)),
+                    Some(&format!("Installed {} for User Panel", manifest.name)),
                     None,
                 ),
             ))
@@ -1367,7 +1367,7 @@ pub async fn plugins_uninstall_cpn(
         Ok(()) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
-                plugins_redirect("", view, Some("Uninstalled CPN-only plugin"), None),
+                plugins_redirect("", view, Some("Uninstalled User Panel plugin"), None),
             ))
             .finish(),
         Err(error) => HttpResponse::SeeOther()
@@ -1833,7 +1833,7 @@ fn plugins_settings_authz(user: &str, domain: &str) -> Result<(), String> {
         if is_panel_admin(user) || owner.eq_ignore_ascii_case(user) {
             return Ok(());
         }
-        return Err("You can only manage your own CPN-only plugins".into());
+        return Err("You can only manage your own User Panel plugins".into());
     }
     require_manage_site(user, domain, SitePerm::Enable).map(|_| ())
 }

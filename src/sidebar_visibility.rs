@@ -228,7 +228,8 @@ fn nav_id_hidden(username: &str, nav_id: &str) -> bool {
 
 /// Whether this user may see the given top-level nav entry id in the sidebar.
 pub fn can_see_nav_id(username: &str, nav_id: &str) -> bool {
-    if nav_id == "dashboard" || nav_id.is_empty() {
+    // Documentation is available to every signed-in panel user.
+    if nav_id == "dashboard" || nav_id == "docs" || nav_id.is_empty() {
         return true;
     }
     // Sub-domain / WordPress sub-site sections follow their parent section ACL.
@@ -311,6 +312,9 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
     }
     if path.starts_with("/packages") {
         return Some("packages");
+    }
+    if path.starts_with("/docs") || path.starts_with("/documentation") {
+        return Some("docs");
     }
     if path.starts_with("/dns") {
         return Some("dns");

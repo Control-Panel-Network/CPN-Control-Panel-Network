@@ -30,6 +30,7 @@ use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
     panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
 };
+use cpn_installer::panel_docs_routes::{docs_image, docs_page, documentation_alias};
 use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
@@ -1270,6 +1271,9 @@ async fn main() -> std::io::Result<()> {
             .service(databases_install_mariadb)
             .service(databases_create)
             .service(databases_ftp_create)
+            .service(docs_page)
+            .service(documentation_alias)
+            .service(docs_image)
             .service(packages_page)
             .service(packages_new_page)
             .service(packages_edit_page)

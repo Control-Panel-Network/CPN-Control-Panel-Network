@@ -621,7 +621,7 @@ pub fn default_show_in_sidebar(domain: &str, plugin_id: &str) -> bool {
 fn resolve_settings_domain(domain_raw: &str) -> Result<String, String> {
     if crate::plugin_cpn_scope::is_cpn_domain(domain_raw) {
         let owner = crate::plugin_cpn_scope::parse_cpn_owner(domain_raw)
-            .ok_or_else(|| "Invalid CPN-only domain token".to_string())?;
+            .ok_or_else(|| "Invalid User Panel domain token".to_string())?;
         return Ok(crate::plugin_cpn_scope::cpn_domain_for_user(&owner));
     }
     Ok(load_site(domain_raw)?.domain)

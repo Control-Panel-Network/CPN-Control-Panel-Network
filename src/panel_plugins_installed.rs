@@ -45,7 +45,7 @@ fn installed_pills(opts: &InstalledPageOpts<'_>, cats: &[String], domain: &str) 
     for (label, cat) in [
         ("All", ""),
         ("Host", "Host"),
-        ("CPN", "CPN"),
+        ("User Panel", "CPN"),
         ("Site", "Site"),
     ] {
         let cls = if cat.is_empty() {
@@ -271,7 +271,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       {tabs}
       <article class="section-card">
         <h2>Installed</h2>
-        <p class="muted">Host is server-wide. CPN only is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / CPN / Site plus Active, Deactivated, or Update available. Use the Updates filter for packages with a newer catalog version.</p>
+        <p class="muted">Host is server-wide. User Panel is your signed-in account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public site app). Site plugins live under <code>/home/&lt;domain&gt;/plugins/&lt;plugin-id&gt;/</code> (nested for subdomains). Badges show Host / User Panel / Site plus Active, Deactivated, or Update available. Use the Updates filter for packages with a newer catalog version.</p>
         {picker}
         <form method="get" action="/plugins" class="plugin-search-row">
           <input type="hidden" name="view" value="installed">
@@ -303,7 +303,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
       </article>"#,
         heading = section_heading(
             "Plugins",
-            "Installed host packages, CPN-only tools, and site plugins, plus the CPN Store.",
+            "Installed host packages, User Panel tools, and site plugins, plus the CPN Store.",
         ),
         ok = notice_block("ok", opts.notice),
         err = notice_block("error", opts.error),
@@ -333,7 +333,7 @@ pub(crate) fn render_installed(opts: InstalledPageOpts<'_>) -> String {
             &host_items,
         ),
         cpn_sec = render_scope_group(
-            "CPN only",
+            "User Panel",
             "Account-scoped panel tools for your signed-in CPN user (not exposed as a public site feature).",
             &cpn_items,
         ),
@@ -380,8 +380,8 @@ mod tests {
         assert!(html.contains("Update available"));
         // With no catalog plugins needing updates, the Updates filter is empty.
         assert!(html.contains("No installed plugins have updates available."));
-        // Scope copy from Host | CPN only | Site work stays present.
-        assert!(html.contains("CPN only"));
+        // Scope copy from Host | User Panel | Site work stays present.
+        assert!(html.contains("User Panel"));
         assert!(html.contains("Host is server-wide"));
     }
 }

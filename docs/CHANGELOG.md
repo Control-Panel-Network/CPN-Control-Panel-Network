@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **In-panel Documentation**: Sidebar **Documentation** (`/docs`, alias `/documentation`) for all signed-in users. Browse and search Markdown manuals bundled from repo `docs/` (INSTALL, CLI, SUPPORT, Host/Site, User Panel plugin scope, RELEASES, OS matrix, upgrade maintenance, and related). Images under `docs/images` serve at `/docs/images/...`. Policy lists (`blocked-passwords.txt`, `reserved-usernames.txt`) stay out of the browser.
+
 ### Changed
+
+- **Plugin Store install target label**: Operator-facing **CPN only** is renamed to **User Panel** (pills, help text, Installed section, badges, action-log labels). Internal ids and URLs stay `target=cpn` / `cpn-only` / category `CPN` so existing bookmarks and install routes keep working.
 
 ### Fixed
 

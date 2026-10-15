@@ -22,7 +22,7 @@ Homepage `/` is HTML. Script URLs must keep returning shell source (not HTML) so
 
 ## Live docroot
 
-CyberPanel / LiteSpeed:
+LiteSpeed (typical production path):
 
 `/home/newstargeted.com/public_html/cpn.newstargeted.com`
 
