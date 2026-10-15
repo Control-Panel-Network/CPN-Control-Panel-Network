@@ -79,7 +79,7 @@ pub(crate) fn path_is_binary_neutral(path: &str) -> bool {
         return true;
     }
     matches!(
-        trimmed.as_str(),
+        trimmed,
         "readme.md"
             | "changelog.md"
             | "license"
