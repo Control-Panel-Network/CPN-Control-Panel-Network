@@ -164,18 +164,30 @@ pub fn panel_login_html_with_gate(
   }
   var pollFails=0;
   var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.';
+  function resetSignInButton(){
+    if(!submit || !form) return;
+    form.removeAttribute('data-cpn-submitting');
+    submit.disabled=false;
+    submit.textContent=submit.getAttribute('data-cpn-label')||'Sign in';
+  }
   async function poll(){
     try{
       var ctrl=new AbortController();
-      var t=setTimeout(function(){ctrl.abort();},5000);
+      var t=setTimeout(function(){ctrl.abort();},6000);
       var res=await fetch('/api/login/services',{credentials:'same-origin',headers:{'Accept':'application/json'},signal:ctrl.signal});
       clearTimeout(t);
       if(!res.ok){ throw new Error('http '+res.status); }
       var data=await res.json().catch(function(){return {};});
       pollFails=0;
       var ready=!!data.ready;
-      var msg=ready ? ((data.warnings&&data.warnings[0])||'') : (data.message||'');
-      applyReady(ready,msg);
+      var warn0=(data.warnings&&data.warnings[0])||'';
+      var msg=ready ? warn0 : (data.message||'');
+      // Ready with no warnings: clear the notice (hide banner).
+      if(ready && !msg){
+        applyReady(true, '');
+      } else {
+        applyReady(ready, msg);
+      }
       if(ready && notice && notice.getAttribute('data-was-blocked')==='1'){
         location.reload();
         return;
@@ -183,12 +195,11 @@ pub fn panel_login_html_with_gate(
       if(!ready && notice) notice.setAttribute('data-was-blocked','1');
     }catch(e){
       pollFails++;
-      // Fail-open: keep the form usable when the probe is slow or the lab is busy.
-      applyReady(true, defaultTimeoutMsg);
-      if(pollFails>=2 && notice){
-        notice.hidden=false;
-        notice.setAttribute('data-ready','1');
-        notice.textContent=defaultTimeoutMsg;
+      // Fail-open: keep the form usable; only show the timeout banner after repeated failures.
+      if(pollFails>=2){
+        applyReady(true, defaultTimeoutMsg);
+      } else {
+        applyReady(true, '');
       }
     }
     setTimeout(poll, 4000);
@@ -197,6 +208,12 @@ pub fn panel_login_html_with_gate(
     notice.setAttribute('data-was-blocked','1');
   }
   setTimeout(poll, 4000);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) resetSignInButton();
+  });
+  window.addEventListener('pageshow', function(){
+    resetSignInButton();
+  });
   if(form && submit){
     form.addEventListener('submit', function(ev){
       if(form.getAttribute('data-cpn-native')==='1') return;
@@ -247,6 +264,8 @@ pub fn panel_login_html_with_gate(
           clearTimeout(safety);
           var loc=res.headers.get('Location')||'/dashboard';
           location.href=loc;
+          // If navigation is delayed or blocked, do not leave Signing in... stuck.
+          setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
           return null;
         }
         if(res.type==='opaqueredirect'){
@@ -257,6 +276,7 @@ pub fn panel_login_html_with_gate(
           settled=true;
           clearTimeout(safety);
           location.href='/login/2fa';
+          setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
           return null;
         }
         return res.text().then(function(html){

@@ -265,7 +265,7 @@ pub async fn login_services_status() -> HttpResponse {
     // Off the Actix worker so a slow gate cannot starve other /login requests.
     // Short timeout + fail-open: labs under restore/rsync must still reach the form.
     match tokio::time::timeout(
-        std::time::Duration::from_millis(2200),
+        std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(evaluate_login_services),
     )
     .await
@@ -352,7 +352,7 @@ pub async fn login_submit(
     let next = resolve_next_from_request(&http, Some(form.next.as_str()), query.next.as_deref());
     // Bound the gate on POST the same way as GET/API: never pin the worker forever.
     let gate_ready = match tokio::time::timeout(
-        std::time::Duration::from_millis(2200),
+        std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(login_services_ready),
     )
     .await
