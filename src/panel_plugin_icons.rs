@@ -1,4 +1,4 @@
-//! Visual thumbnails for plugin cards (Store and Installed, Host / CPN-only / Site).
+//! Visual thumbnails for plugin cards (Store and Installed, Host / User Panel / Site).
 //!
 //! Resolution order per card:
 //! 1. Catalog icon URL (`<icon>` in `meta.xml` or bundled `icon.*`), layered over a fallback tile.

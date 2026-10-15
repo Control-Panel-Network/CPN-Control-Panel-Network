@@ -308,7 +308,7 @@ pub(crate) fn store_install_target_picker(
         r#"<div class="store-scope-toggle" role="group" aria-label="Install target">
         <span class="store-scope-label">Install target</span>
         {host_btn}
-        <a class="store-scope-btn{cpn_active}" href="{cpn_href}" data-store-target-btn="cpn">CPN only</a>
+        <a class="store-scope-btn{cpn_active}" href="{cpn_href}" data-store-target-btn="cpn">User Panel</a>
         <a class="store-scope-btn{site_active}" href="{site_href}" data-store-target-btn="site">Site</a>
       </div>"#,
         host_btn = host_btn,
@@ -326,7 +326,7 @@ pub(crate) fn store_install_target_picker(
         String::new()
     };
     let cpn_hint = format!(
-        r#"<p id="store-cpn-hint" class="muted store-scope-hint"{hidden}>CPN only installs for your signed-in CPN account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public website feature). Use this for panel tools such as Auto Ban Security Alerts. Host stays owner/admin only.</p>"#,
+        r#"<p id="store-cpn-hint" class="muted store-scope-hint"{hidden}>User Panel installs for your signed-in CPN account under <code>/var/lib/cpn/user-plugins/&lt;user&gt;/</code> (not a public website feature). Use this for panel tools such as Auto Ban Security Alerts. Host stays owner/admin only.</p>"#,
         hidden = if target == "cpn" { "" } else { " hidden" },
     );
     if sites.is_empty() {
@@ -334,7 +334,7 @@ pub(crate) fn store_install_target_picker(
             r#"{toggle}
         {host_hint}
         {cpn_hint}
-        <p class="muted">No websites yet. CPN-only plugins still install for your account. Create a site to install domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
+        <p class="muted">No websites yet. User Panel plugins still install for your account. Create a site to install domain plugins under <code>/home/&lt;domain&gt;/plugins/</code>.</p>"#,
             toggle = toggle,
             host_hint = host_hint,
             cpn_hint = cpn_hint,
@@ -372,7 +372,7 @@ pub(crate) fn store_install_target_picker(
         </div>
         <button type="submit" class="btn-secondary">Apply</button>
       </form>
-      <p class="muted store-scope-hint">Site installs live under the selected domain or sub-domain (<code>/home/&lt;domain&gt;/plugins/</code>) for public site features (BIMI, MTA-STS). CPN only is for your panel account, not a random subdomain.</p>
+      <p class="muted store-scope-hint">Site installs live under the selected domain or sub-domain (<code>/home/&lt;domain&gt;/plugins/</code>) for public site features (BIMI, MTA-STS). User Panel is for your panel account, not a random subdomain.</p>
       </div>"#,
         toggle = toggle,
         host_hint = host_hint,
@@ -457,7 +457,8 @@ mod store_target_tests {
         assert!(!no_host.contains("data-store-target-btn=\"host\""));
         assert!(no_host.contains("data-store-target-btn=\"cpn\""));
         assert!(no_host.contains("data-store-target-btn=\"site\""));
-        assert!(no_host.contains("CPN only installs for your signed-in CPN account"));
+        assert!(no_host.contains("User Panel installs for your signed-in CPN account"));
+        assert!(no_host.contains(">User Panel</a>"));
     }
 }
 

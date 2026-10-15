@@ -147,7 +147,7 @@ fn containers_table(rows: &[&DockerContainerRow], empty_message: &str) -> String
     );
     for row in rows {
         let managed = if row.cpn_managed {
-            r#" <span class="plugin-badge">CPN</span>"#
+            r#" <span class="plugin-badge">User Panel</span>"#
         } else {
             ""
         };
