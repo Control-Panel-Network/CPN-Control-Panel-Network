@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.4] - 16/10/2026
+
+Patch release after v1.4.3. In-panel Documentation and User Panel Store wording, Plugin Store Backup/Host empty-state clarity, tip-upgrade release-package fallback, tip installs without `/usr/local/bin` shadows, and non-blocking Docker Hub overview sync.
+
+### Added
+
 - **In-panel Documentation**: Sidebar **Documentation** (`/docs`, alias `/documentation`) for all signed-in users. Browse and search Markdown manuals bundled from repo `docs/` (INSTALL, CLI, SUPPORT, Host/Site, User Panel plugin scope, RELEASES, OS matrix, upgrade maintenance, and related). Images under `docs/images` serve at `/docs/images/...`. Policy lists (`blocked-passwords.txt`, `reserved-usernames.txt`) stay out of the browser.
 
 ### Changed
@@ -18,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Plugin Store Backup / Backups empty grid**: `backupDestinations` is Host-scoped, so Install target Site + category Backup(s) correctly shows zero site packages. Store now aliases Backup ↔ Backups (one category chip), and the Site empty state hints to switch Install target to Host for Backup Destinations.
+- **Tip upgrade release-package fallback**: When a tip SHA has no guest-matching GitHub Actions binary, tip upgrade can install the newest matching Release RPM/DEB when Cargo version matches and the tip is binary-neutral (docs/CI-only) over the tag, instead of always building from source.
+- **Tip upgrade no `/usr/local/bin` shadows**: Tip and Actions installs write only to `/usr/bin`; legacy local overrides remain removable via post-upgrade cleanup and `cpn doctor --heal`. Staging cleanup is documented in `docs/PANEL-UPGRADE-MAINTENANCE.md`.
 - **Docker Hub publish overview sync non-blocking**: The `Sync Docker Hub repository overview` step in `.github/workflows/docker-hub.yml` warns and continues on Hub API login/PATCH failures (including HTTP 403) so a description-only sync cannot red-X a job after `almalinux9` / `almalinux10` / `ubuntu26.04` images are already live. No v1.4.3 re-cut.
 
 ## [1.4.3] - 15/10/2026
