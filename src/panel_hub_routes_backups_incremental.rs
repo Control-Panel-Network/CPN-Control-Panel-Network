@@ -18,6 +18,16 @@ pub async fn backups_incremental_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "backups",
+            "Incremental backups",
+            &crate::panel_feature_gate::backup_destinations_plugin_required_page(
+                "Incremental backups",
+            ),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "backups",
@@ -54,6 +64,13 @@ pub async fn backups_incremental_save(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/incremental",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     if !crate::panel_admin::is_panel_admin(&user) {
         return redirect_notice(
             "/backups/incremental",
@@ -90,6 +107,13 @@ pub async fn backups_incremental_run(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/incremental",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     if !crate::panel_admin::is_panel_admin(&user) {
         return redirect_notice(
             "/backups/incremental",

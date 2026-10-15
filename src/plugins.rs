@@ -424,6 +424,15 @@ fn sync_email_auth_feature_flags(plugin_id: &str) {
                 crate::panel_feature_flags::clear_host_feature_flag("proton-mail");
             }
         }
+        "backupDestinations" => {
+            if plugin_id_enabled_anywhere("backupDestinations")
+                || crate::plugin_activation::host_plugin_installed("backupDestinations")
+            {
+                let _ = crate::panel_feature_flags::write_host_feature_flag("backup-destinations");
+            } else {
+                crate::panel_feature_flags::clear_host_feature_flag("backup-destinations");
+            }
+        }
         _ => {}
     }
 }

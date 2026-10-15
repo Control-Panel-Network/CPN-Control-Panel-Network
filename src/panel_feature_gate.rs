@@ -3,8 +3,8 @@
 //! Panel-native tools (MariaDB Manager, SFTP jail UI, scaffold stubs) stay visible.
 //! Optional host packages such as phpMyAdmin, webmail, fail2ban, and malware scanners
 //! appear only when installed or configured.
-//! Email MTA-STS / BIMI / Proton Mail appear only when their catalog plugins (or host
-//! feature flags) are installed.
+//! Email MTA-STS / BIMI / Proton Mail and Backup Destinations appear only when their
+//! catalog plugins (or host feature flags) are installed.
 
 use crate::litespeed_stack::{
     any_litespeed_installed, litespeed_enterprise_installed, openlitespeed_installed,
@@ -80,6 +80,7 @@ pub struct InstalledOptionalFeatures {
     pub mta_sts: bool,
     pub bimi: bool,
     pub proton_mail: bool,
+    pub backup_destinations: bool,
     pub docker: bool,
 }
 
@@ -142,6 +143,7 @@ impl InstalledOptionalFeatures {
             mta_sts: mta_sts_unlocked(),
             bimi: bimi_unlocked(),
             proton_mail: proton_mail_unlocked(),
+            backup_destinations: backup_destinations_unlocked(),
             docker: docker_installed(),
         }
     }
@@ -154,6 +156,10 @@ impl InstalledOptionalFeatures {
             "/email/mta-sts" => self.mta_sts,
             "/email/bimi" => self.bimi,
             "/email/proton" => self.proton_mail,
+            "/backups/google-drive" => self.backup_destinations,
+            "/backups/remote" => self.backup_destinations,
+            "/backups/s3" => self.backup_destinations,
+            "/backups/incremental" => self.backup_destinations,
             "/server/openlitespeed" => self.openlitespeed,
             "/server/litespeed-enterprise" => self.litespeed_enterprise,
             "/server/litespeed" => self.litespeed_any,
@@ -245,11 +251,26 @@ pub fn proton_mail_unlocked() -> bool {
     plugin_id_enabled_anywhere("protonMail")
 }
 
-/// Soft-gate body when MTA-STS / BIMI / Proton Mail plugins are not installed.
-pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> String {
+pub fn backup_destinations_unlocked() -> bool {
+    if host_feature_enabled("backup-destinations") {
+        return true;
+    }
+    if crate::plugin_activation::host_plugin_installed("backupDestinations") {
+        return true;
+    }
+    plugin_id_enabled_anywhere("backupDestinations")
+}
+
+/// Soft-gate body when an optional Host plugin is not installed.
+pub fn plugin_required_page(
+    section_label: &str,
+    section_href: &str,
+    feature_label: &str,
+    plugin_id: &str,
+) -> String {
     let body = format!(
         r#"<p><strong>{label} is available as a free Plugin Store package.</strong></p>
-        <p>Install <code>{id}</code> from the Plugin Store (Host scope). After install, this page and the Email sidebar entry unlock automatically.</p>
+        <p>Install <code>{id}</code> from the Plugin Store (Host scope). After install, this page and the matching sidebar entry unlock automatically.</p>
         <p style="margin-top:16px;">
           <a class="btn primary" href="/plugins?view=store&amp;target=host">Open Plugin Store</a>
           <a class="btn" href="/plugins?view=store&amp;q={id_q}" style="margin-left:8px;">Search for {id}</a>
@@ -260,13 +281,23 @@ pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> 
         id_q = urlencoding_attr(plugin_id),
     );
     feature_shell(
-        &[("Email", Some("/email")), (feature_label, None)],
+        &[(section_label, Some(section_href)), (feature_label, None)],
         feature_label,
-        "Optional email authentication plugin (not installed yet).",
+        "Optional Host plugin (not installed yet).",
         &body,
         None,
         None,
     )
+}
+
+/// Soft-gate body when MTA-STS / BIMI / Proton Mail plugins are not installed.
+pub fn email_auth_plugin_required_page(feature_label: &str, plugin_id: &str) -> String {
+    plugin_required_page("Email", "/email", feature_label, plugin_id)
+}
+
+/// Soft-gate body when Backup Destinations Host plugin is not installed.
+pub fn backup_destinations_plugin_required_page(feature_label: &str) -> String {
+    plugin_required_page("Backups", "/backups", feature_label, "backupDestinations")
 }
 
 fn html_escape(value: &str) -> String {
@@ -325,6 +356,7 @@ mod tests {
             mta_sts,
             bimi,
             proton_mail: false,
+            backup_destinations: false,
             docker: false,
         }
     }
@@ -385,6 +417,30 @@ mod tests {
         let mut with_proton = both;
         with_proton.proton_mail = true;
         assert!(with_proton.allows_href("/email/proton"));
+    }
+
+    #[test]
+    fn gates_backup_destinations_until_plugin() {
+        let none = feats(
+            false, false, false, false, false, false, false, false, false,
+        );
+        assert!(!none.allows_href("/backups/google-drive"));
+        assert!(!none.allows_href("/backups/remote"));
+        assert!(!none.allows_href("/backups/s3"));
+        assert!(!none.allows_href("/backups/incremental"));
+        assert!(none.allows_href("/backups"));
+        assert!(none.allows_href("/backups/create"));
+        assert!(none.allows_href("/backups/restore"));
+        assert!(none.allows_href("/backups/schedule"));
+        assert!(none.allows_href("/backups/destinations"));
+
+        let mut unlocked = none;
+        unlocked.backup_destinations = true;
+        assert!(unlocked.allows_href("/backups/google-drive"));
+        assert!(unlocked.allows_href("/backups/remote"));
+        assert!(unlocked.allows_href("/backups/s3"));
+        assert!(unlocked.allows_href("/backups/incremental"));
+        assert!(unlocked.allows_href("/backups/create"));
     }
 
     #[test]

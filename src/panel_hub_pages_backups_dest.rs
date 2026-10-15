@@ -21,8 +21,10 @@ fn checked(on: bool) -> &'static str {
 
 pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> String {
     let d = load_destinations();
-    let body = format!(
-        r#"<p class="muted" style="margin:0 0 14px;">Secrets are stored under the CPN data directory (mode 600) and never written into destination JSON or logs. <a href="/backups/google-drive">Google Drive</a> · <a href="/backups/remote">Remote SFTP</a> · <a href="/backups/s3">S3-compatible</a></p>
+    let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
+    let body = if unlocked {
+        format!(
+            r#"<p class="muted" style="margin:0 0 14px;">Secrets are stored under the CPN data directory (mode 600) and never written into destination JSON or logs. <a href="/backups/google-drive">Google Drive</a> · <a href="/backups/remote">Remote SFTP</a> · <a href="/backups/s3">S3-compatible</a></p>
     <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
       <label><input type="checkbox" name="local_enabled" value="1"{local}> Local archives enabled</label>
       <label><input type="checkbox" name="gdrive_enabled" value="1"{gdrive}> Google Drive enabled</label>
@@ -30,11 +32,31 @@ pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> S
       <label><input type="checkbox" name="s3_enabled" value="1"{s3}> S3-compatible enabled</label>
       <button type="submit" class="btn-primary">Save destination toggles</button>
     </form>"#,
-        local = checked(d.local_enabled),
-        gdrive = checked(d.google_drive.enabled),
-        remote = checked(d.remote.enabled),
-        s3 = checked(d.s3.enabled),
-    );
+            local = checked(d.local_enabled),
+            gdrive = checked(d.google_drive.enabled),
+            remote = checked(d.remote.enabled),
+            s3 = checked(d.s3.enabled),
+        )
+    } else {
+        format!(
+            r#"<p class="muted" style="margin:0 0 14px;">Local archives stay available in core. Remote destinations (Google Drive, SFTP/SCP, S3-compatible) and Incremental jobs unlock with the free Host plugin <code>backupDestinations</code> from the Plugin Store.</p>
+    <p style="margin:0 0 14px;">
+      <a class="btn primary" href="/plugins?view=store&amp;q=backupDestinations">Install Backup Destinations</a>
+      <a class="btn" href="/plugins?view=store&amp;target=host" style="margin-left:8px;">Open Plugin Store</a>
+    </p>
+    <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
+      <label><input type="checkbox" name="local_enabled" value="1"{local}> Local archives enabled</label>
+      <p class="muted" style="margin:0;">Google Drive, Remote SFTP/SCP, and S3 toggles appear after the Host plugin is installed.</p>
+      <button type="submit" class="btn-primary">Save destination toggles</button>
+    </form>"#,
+            local = checked(d.local_enabled),
+        )
+    };
+    let subtitle = if unlocked {
+        "Local, Google Drive, remote SFTP, and S3-compatible backup targets."
+    } else {
+        "Local archives (core). Install backupDestinations for remote targets."
+    };
     feature_shell(
         &[
             ("Dashboard", Some("/dashboard")),
@@ -42,7 +64,7 @@ pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> S
             ("Destinations", None),
         ],
         "Destinations",
-        "Local, Google Drive, remote SFTP, and S3-compatible backup targets.",
+        subtitle,
         &body,
         notice,
         error,

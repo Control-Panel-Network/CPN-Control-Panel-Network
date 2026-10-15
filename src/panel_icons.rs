@@ -101,6 +101,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/backups/destinations", "folder", IconTone::Cyan),
         ("/backups/google-drive", "cloud", IconTone::Violet),
         ("/backups/remote", "network", IconTone::Slate),
+        ("/backups/s3", "database", IconTone::Amber),
         ("/backups/incremental", "clock", IconTone::Cyan),
         ("/backups", "hard-drive", IconTone::Blue),
         ("/server/services", "activity", IconTone::Green),
