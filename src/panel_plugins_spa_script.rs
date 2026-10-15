@@ -310,7 +310,7 @@ pub fn plugins_hub_script() -> String {
       }
       u.searchParams.set('page', '1');
       u.searchParams.delete('partial');
-      // Reload hub on Install target change so Install/Uninstall actions match Host / CPN / Site.
+      // Reload hub on Install target change so Install/Uninstall actions match Host / User Panel / Site.
       if (a.hasAttribute('data-store-target-btn')) {
         loadHub(u.pathname + u.search, { replace: false });
         return;
