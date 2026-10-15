@@ -90,9 +90,7 @@ pub(crate) fn path_is_binary_neutral(path: &str) -> bool {
             | "code_of_conduct.md"
             | "contributing.md"
             | "security.md"
-    ) || trimmed.ends_with(".md")
-        && !trimmed.starts_with("src/")
-        && !trimmed.starts_with("panel/")
+    ) || trimmed.ends_with(".md") && !trimmed.starts_with("src/") && !trimmed.starts_with("panel/")
 }
 
 pub(crate) fn tip_delta_allows_release_package(status: &str, files: &[String]) -> bool {
@@ -108,9 +106,8 @@ async fn compare_tag_to_tip(
     tag_name: &str,
     tip_sha: &str,
 ) -> Result<(String, Vec<String>), String> {
-    let url = format!(
-        "https://api.github.com/repos/{repo}/compare/{tag_name}...{tip_sha}?per_page=100"
-    );
+    let url =
+        format!("https://api.github.com/repos/{repo}/compare/{tag_name}...{tip_sha}?per_page=100");
     let (status, body) = curl_github_json(&url).await?;
     if status != 200 {
         return Err(format!(
@@ -142,10 +139,15 @@ async fn compare_tag_to_tip(
         .unwrap_or(0);
     // Refuse when the file list is truncated or empty while commits exist.
     if compare_status == "ahead" && files.is_empty() && total > 0 {
-        return Err("GitHub compare returned commits but no file list; refusing package fallback".into());
+        return Err(
+            "GitHub compare returned commits but no file list; refusing package fallback".into(),
+        );
     }
     if compare_status == "ahead" && total > 100 {
-        return Err("Tip is more than 100 commits ahead of the release tag; refusing package fallback".into());
+        return Err(
+            "Tip is more than 100 commits ahead of the release tag; refusing package fallback"
+                .into(),
+        );
     }
     Ok((compare_status, files))
 }
@@ -160,10 +162,7 @@ async fn fetch_tip_cargo_version(repo: &str, tip_sha: &str) -> Result<String, St
         ));
     }
     let value: serde_json::Value = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
-    let encoding = value
-        .get("encoding")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let encoding = value.get("encoding").and_then(|v| v.as_str()).unwrap_or("");
     let content = value
         .get("content")
         .and_then(|v| v.as_str())
@@ -217,20 +216,14 @@ pub async fn try_apply_matching_release_package(
     let tip_version = match fetch_tip_cargo_version(repo, tip_sha).await {
         Ok(v) => v,
         Err(error) => {
-            upgrade_tip_log::log_info(format!(
-                "Release package fallback skipped ({error})"
-            ));
+            upgrade_tip_log::log_info(format!("Release package fallback skipped ({error})"));
             return Ok(None);
         }
     };
-    let fetched = crate::releases_fetch::list_releases_for_repo_opts(
-        repo,
-        RELEASE_LIST_LIMIT,
-        true,
-        true,
-    )
-    .await
-    .map_err(|error| format!("Could not list releases for tip fallback: {error}"))?;
+    let fetched =
+        crate::releases_fetch::list_releases_for_repo_opts(repo, RELEASE_LIST_LIMIT, true, true)
+            .await
+            .map_err(|error| format!("Could not list releases for tip fallback: {error}"))?;
     let Some(release) = releases::pick_newest_publishable_release(&fetched.releases)
         .cloned()
         .filter(|item| release_matches_tip_version(item, &tip_version))
@@ -260,9 +253,7 @@ pub async fn try_apply_matching_release_package(
     let (compare_status, files) = match compare_tag_to_tip(repo, &release.tag_name, tip_sha).await {
         Ok(pair) => pair,
         Err(error) => {
-            upgrade_tip_log::log_info(format!(
-                "Release package fallback skipped ({error})"
-            ));
+            upgrade_tip_log::log_info(format!("Release package fallback skipped ({error})"));
             return Ok(None);
         }
     };
@@ -341,9 +332,6 @@ mod tests {
     #[test]
     fn parses_cargo_version() {
         let toml = "[package]\nname = \"cpn-installer\"\nversion = \"1.4.3\"\n";
-        assert_eq!(
-            parse_cargo_package_version(toml).as_deref(),
-            Some("1.4.3")
-        );
+        assert_eq!(parse_cargo_package_version(toml).as_deref(), Some("1.4.3"));
     }
 }

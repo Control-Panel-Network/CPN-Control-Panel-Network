@@ -176,9 +176,10 @@ pub fn overwrite_embedded_sha(path: &Path, expected_sha: &str) -> Result<(), Str
         }
         let len = end - start;
         let nul_terminated = matches!(bytes.get(end).copied(), Some(0) | None);
-        if nul_terminated && len == expected.len() && looks_like_git_sha(
-            std::str::from_utf8(&bytes[start..end]).unwrap_or(""),
-        ) {
+        if nul_terminated
+            && len == expected.len()
+            && looks_like_git_sha(std::str::from_utf8(&bytes[start..end]).unwrap_or(""))
+        {
             bytes[start..end].copy_from_slice(expected.as_bytes());
             replaced += 1;
         }
@@ -301,22 +302,13 @@ mod tests {
     #[test]
     fn overwrites_existing_marker_in_place() {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!(
-            "cpn-sha-overwrite-{}.bin",
-            std::process::id()
-        ));
+        let path = dir.join(format!("cpn-sha-overwrite-{}.bin", std::process::id()));
         let old = b"pad CPN_BUILD_SHA=101d6600123456789abcdef0123456789abcdef0\0more";
         std::fs::write(&path, old).expect("write");
-        overwrite_embedded_sha(
-            &path,
-            "c7a349a69aff6993ae7fd6f046a157d5e064ce45",
-        )
-        .expect("overwrite");
+        overwrite_embedded_sha(&path, "c7a349a69aff6993ae7fd6f046a157d5e064ce45")
+            .expect("overwrite");
         let got = sha_embedded_in_binary(&path).expect("sha");
-        assert!(sha_equal(
-            &got,
-            "c7a349a69aff6993ae7fd6f046a157d5e064ce45"
-        ));
+        assert!(sha_equal(&got, "c7a349a69aff6993ae7fd6f046a157d5e064ce45"));
         let _ = std::fs::remove_file(&path);
     }
 
