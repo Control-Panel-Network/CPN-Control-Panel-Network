@@ -153,8 +153,10 @@ pub fn plugins_hub_script() -> String {
         if (el.getAttribute('data-paid') === '1') return false;
       } else if (cat === 'host') {
         if (!targetAttrMatches(t, 'host')) return false;
-      } else if (itemCat !== cat) {
-        return false;
+      } else {
+        var catNorm = cat === 'backups' ? 'backup' : cat;
+        var itemNorm = itemCat === 'backups' ? 'backup' : itemCat;
+        if (itemNorm !== catNorm) return false;
       }
     }
     var q = (st.q || '').trim().toLowerCase();
