@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Plugin Store Backup / Backups empty grid**: `backupDestinations` is Host-scoped, so Install target Site + category Backup(s) correctly shows zero site packages. Store now aliases Backup ↔ Backups (one category chip), and the Site empty state hints to switch Install target to Host for Backup Destinations.
 - **Docker Hub publish overview sync non-blocking**: The `Sync Docker Hub repository overview` step in `.github/workflows/docker-hub.yml` warns and continues on Hub API login/PATCH failures (including HTTP 403) so a description-only sync cannot red-X a job after `almalinux9` / `almalinux10` / `ubuntu26.04` images are already live. No v1.4.3 re-cut.
 
 ## [1.4.3] - 15/10/2026

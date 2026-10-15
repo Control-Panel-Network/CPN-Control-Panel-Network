@@ -11,7 +11,10 @@ use crate::panel_plugins_search::{store_match_score, store_search_blob};
 use crate::panel_plugins_spa::{
     list_mode_from_query, page_from_query, per_page_from_query, store_list_toolbar,
 };
-use crate::panel_plugins_store::{StoreListOpts, filter_store_entries, render_catalog_card};
+use crate::panel_plugins_store::{
+    StoreListOpts, canonical_store_category, filter_store_entries, render_catalog_card,
+    store_categories_match,
+};
 use crate::plugin_activation::catalog_entry_is_host_scoped;
 use crate::plugin_cpn_scope::store_target_attr;
 use crate::plugins::{CatalogEntry, catalog_entry_is_featured};
@@ -58,7 +61,7 @@ fn include_host_for_category(apps: &[AppStatus], category: &str) -> bool {
         || cat == "free"
         || host_categories(apps)
             .iter()
-            .any(|c| c.eq_ignore_ascii_case(category.trim()))
+            .any(|c| store_categories_match(category, c))
 }
 
 fn collect_unified<'a>(
@@ -222,16 +225,16 @@ pub(crate) fn unified_category_pills(
 ) -> String {
     let mut cats: Vec<String> = host_categories(apps)
         .iter()
-        .map(|c| (*c).to_string())
+        .map(|c| canonical_store_category(c))
         .collect();
     for e in entries {
         if skip_catalog_duplicate(e) {
             continue;
         }
-        cats.push(e.category.clone());
+        cats.push(canonical_store_category(&e.category));
     }
     cats.sort_by_key(|c| c.to_ascii_lowercase());
-    cats.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    cats.dedup_by(|a, b| store_categories_match(a, b));
 
     let domain_q = store_scope_query_suffix(domain, store_target, mode, per_page, q);
     let mut out = String::from(
@@ -399,15 +402,36 @@ pub(crate) fn unified_store_catalog(
     };
     let empty_hidden = if total == 0 { "" } else { " hidden" };
     let grid_hidden = if total == 0 { " hidden" } else { "" };
+    let empty_msg = store_empty_hint(target, opts.category);
     format!(
-        r#"{toolbar}<div id="plugin-store-live"><p id="plugin-store-empty" class="empty-state"{empty_hidden}>No packages match this search or install target.</p><div class="{scroll_cls}{grid_hidden}">{cards}</div></div><div id="plugin-store-source" hidden>{source}</div>"#,
+        r#"{toolbar}<div id="plugin-store-live"><p id="plugin-store-empty" class="empty-state"{empty_hidden}>{empty}</p><div class="{scroll_cls}{grid_hidden}">{cards}</div></div><div id="plugin-store-source" hidden>{source}</div>"#,
         toolbar = toolbar,
         empty_hidden = empty_hidden,
+        empty = empty_msg,
         scroll_cls = scroll_cls,
         grid_hidden = grid_hidden,
         cards = cards,
         source = source_html,
     )
+}
+
+fn store_empty_hint(target: &str, category: &str) -> String {
+    let cat = category.trim();
+    let backupish = store_categories_match(cat, "Backup") || cat.eq_ignore_ascii_case("backups");
+    match target {
+        "site" if backupish => {
+            "No site packages match. Backup Destinations is a Host package: switch Install target to Host, then open Backup."
+                .into()
+        }
+        "site" => {
+            "No packages match this search or install target. Host-only packages appear when Install target is Host."
+                .into()
+        }
+        "cpn" => {
+            "No CPN-only packages match this search or filter.".into()
+        }
+        _ => "No packages match this search or install target.".into(),
+    }
 }
 
 #[cfg(test)]
@@ -527,5 +551,42 @@ mod tests {
         )));
         assert!(skip_catalog_duplicate(&site_entry("tachyon", "Email")));
         assert!(!skip_catalog_duplicate(&site_entry("bimi", "Email")));
+    }
+
+    #[test]
+    fn site_target_hides_host_scoped_backup_plugin() {
+        let mut host_entry = site_entry("backupDestinations", "Backups");
+        host_entry.host_scoped = true;
+        host_entry.site_installable = false;
+        let entries = vec![host_entry];
+        let site_items = collect_unified(&[], &entries, "", "Backups", "site");
+        assert!(site_items.is_empty());
+        let host_items = collect_unified(&[], &entries, "", "Backup", "host");
+        assert_eq!(host_items.len(), 1);
+        assert!(matches!(
+            host_items[0],
+            UnifiedItem::Catalog(e) if e.id == "backupDestinations"
+        ));
+    }
+
+    #[test]
+    fn category_pills_collapse_backup_aliases() {
+        let entries = vec![site_entry("contaboAutoSnapshot", "Backup"), {
+            let mut e = site_entry("backupDestinations", "Backups");
+            e.host_scoped = true;
+            e.site_installable = false;
+            e
+        }];
+        let html = unified_category_pills(&[], &entries, "", "", "host", "page", 4, "");
+        let backup_pills = html.matches("data-store-cat=\"Backup\"").count();
+        assert_eq!(backup_pills, 1);
+        assert!(!html.contains("data-store-cat=\"Backups\""));
+    }
+
+    #[test]
+    fn empty_hint_mentions_host_for_site_backup() {
+        let msg = store_empty_hint("site", "Backups");
+        assert!(msg.contains("Host"));
+        assert!(msg.contains("Backup Destinations"));
     }
 }
