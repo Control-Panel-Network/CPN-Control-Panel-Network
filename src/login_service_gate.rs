@@ -10,8 +10,9 @@
 //!
 //! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
 //!
-//! Results are cached briefly so `/login` and `/api/login/services` never spam
+//! Results are cached (30s TTL) so `/login` and `/api/login/services` never spam
 //! `systemctl` on every poll (worker starvation → browser `408` blank page).
+//! On eval timeout, a prior ready status is reused (stale-while-revalidate).
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
@@ -23,16 +24,19 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Reuse the last evaluation for a few seconds (login poll interval is 4s).
-const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(3);
+/// Reuse the last evaluation long enough to outlive the 4s login poll interval.
+const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(30);
 
 /// Hard wall clock for a fresh gate evaluation (many `systemctl` probes).
-const LOGIN_GATE_EVAL_BUDGET: Duration = Duration::from_millis(1800);
+const LOGIN_GATE_EVAL_BUDGET: Duration = Duration::from_millis(4000);
 
 /// Operator-facing text when probes exceed the budget (fail-open).
 pub const LOGIN_SERVICE_TIMEOUT_WARNING: &str = "Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.";
 
 static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::new(None);
+
+/// Last ready status without a probe-timeout warning (stale-while-revalidate on budget expiry).
+static LOGIN_GATE_LAST_GOOD: Mutex<Option<LoginServiceStatus>> = Mutex::new(None);
 
 /// Serializes tests that mutate `CPN_LOGIN_SERVICE_GATE` (process-wide env).
 #[cfg(test)]
@@ -129,6 +133,49 @@ fn timed_out_fail_open_status() -> LoginServiceStatus {
     }
 }
 
+fn is_usable_last_good(status: &LoginServiceStatus) -> bool {
+    status.ready
+        && status.blocking.is_empty()
+        && !status
+            .warnings
+            .iter()
+            .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
+}
+
+fn remember_last_good(status: &LoginServiceStatus) {
+    if !is_usable_last_good(status) {
+        return;
+    }
+    if let Ok(mut guard) = LOGIN_GATE_LAST_GOOD.lock() {
+        *guard = Some(status.clone());
+    }
+}
+
+fn peek_usable_last_good() -> Option<LoginServiceStatus> {
+    if let Ok(guard) = LOGIN_GATE_LAST_GOOD.lock()
+        && let Some(ref status) = *guard
+        && is_usable_last_good(status)
+    {
+        return Some(status.clone());
+    }
+    // Cache may still hold a good status after TTL expiry (before overwrite).
+    if let Ok(guard) = LOGIN_GATE_CACHE.lock()
+        && let Some((_, ref status)) = *guard
+        && is_usable_last_good(status)
+    {
+        return Some(status.clone());
+    }
+    None
+}
+
+/// Prefer a prior ready status over the timeout warning banner (stale-while-revalidate).
+pub(crate) fn fail_open_or_stale() -> LoginServiceStatus {
+    if let Some(status) = peek_usable_last_good() {
+        return status;
+    }
+    timed_out_fail_open_status()
+}
+
 fn log_gate_timeout(where_: &str) {
     // Main Log + Error logs; no credentials or usernames.
     crate::upgrade_tip_log::log_failure(
@@ -147,10 +194,13 @@ fn evaluate_login_services_budgeted() -> LoginServiceStatus {
         })
         .ok();
     match rx.recv_timeout(LOGIN_GATE_EVAL_BUDGET) {
-        Ok(status) => status,
+        Ok(status) => {
+            remember_last_good(&status);
+            status
+        }
         Err(_) => {
             log_gate_timeout("evaluate");
-            timed_out_fail_open_status()
+            fail_open_or_stale()
         }
     }
 }
@@ -320,6 +370,9 @@ pub fn invalidate_login_services_cache() {
     if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
         *guard = None;
     }
+    if let Ok(mut guard) = LOGIN_GATE_LAST_GOOD.lock() {
+        *guard = None;
+    }
 }
 
 /// True when password/passkey POST handlers may proceed.
@@ -463,5 +516,64 @@ mod tests {
                 .any(|w| w.contains("MariaDB/web health"))
         );
         assert!(status.message.contains("still sign in"));
+    }
+
+    #[test]
+    fn timeout_prefers_last_ready_cache_over_timeout_warning() {
+        let _env = lock_login_service_gate_env();
+        invalidate_login_services_cache();
+        let good = LoginServiceStatus {
+            ready: true,
+            message: String::new(),
+            web: ServiceSlice {
+                expected: true,
+                running: true,
+                label: "Running".into(),
+            },
+            database: ServiceSlice {
+                expected: true,
+                running: true,
+                label: "Running".into(),
+            },
+            mail: ServiceSlice {
+                expected: false,
+                running: true,
+                label: "n/a".into(),
+            },
+            blocking: Vec::new(),
+            warnings: Vec::new(),
+        };
+        // Seed a stale cache entry (past TTL) that is still a usable last-good.
+        if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
+            *guard = Some((
+                Instant::now()
+                    .checked_sub(Duration::from_secs(120))
+                    .unwrap_or_else(Instant::now),
+                good.clone(),
+            ));
+        }
+        let status = fail_open_or_stale();
+        invalidate_login_services_cache();
+        assert_eq!(status, good);
+        assert!(
+            !status
+                .warnings
+                .iter()
+                .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
+        );
+    }
+
+    #[test]
+    fn timeout_without_last_good_uses_fail_open_warning() {
+        let _env = lock_login_service_gate_env();
+        invalidate_login_services_cache();
+        let status = fail_open_or_stale();
+        assert!(status.ready);
+        assert!(
+            status
+                .warnings
+                .iter()
+                .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
+        );
     }
 }
