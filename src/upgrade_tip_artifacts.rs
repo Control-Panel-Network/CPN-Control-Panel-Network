@@ -317,7 +317,7 @@ async fn install_from_zip(url: &str, work: &Path, artifact_name: &str) -> Result
 }
 
 async fn install_bins(installer: &Path) -> Result<(), String> {
-    // `/usr/bin` only. Tip must not create `/usr/local/bin/cpn*` shadows.
+    // installer_bin()/cli_bin() only (/usr/bin). No local PATH overrides.
     install_binary(
         installer.to_str().unwrap_or(""),
         crate::manifest::installer_bin(),
@@ -343,17 +343,13 @@ mod tests {
     }
 
     #[test]
-    fn actions_install_does_not_write_usr_local_bin_shadows() {
+    fn actions_install_production_code_has_no_local_bin_paths() {
         let src = include_str!("upgrade_tip_artifacts.rs");
-        let local_cpn = ["/usr/local/bin/", "cpn\""].concat();
-        let local_installer = ["/usr/local/bin/", "cpn-installer\""].concat();
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let needle = ["/usr/", "local/bin"].concat();
         assert!(
-            !src.contains(&local_installer),
-            "Actions tip install must not write /usr/local/bin/cpn-installer"
-        );
-        assert!(
-            !src.contains(&local_cpn),
-            "Actions tip install must not write /usr/local/bin/cpn"
+            !prod.contains(&needle),
+            "production Actions tip install must not reference local bin override paths"
         );
     }
 }
