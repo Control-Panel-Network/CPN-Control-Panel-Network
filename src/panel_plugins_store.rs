@@ -281,9 +281,9 @@ fn store_action_html(
         if on_cpn {
             let cpn_domain = crate::plugin_cpn_scope::cpn_domain_for_user(username);
             return format!(
-                r#"<span class="plugin-badge installed">Installed (CPN)</span>
+                r#"<span class="plugin-badge installed">Installed (User Panel)</span>
             <a class="btn-secondary" href="/plugins/settings?domain={dom}&amp;id={id}">Settings</a>
-            <form method="post" action="/plugins/uninstall-cpn" class="inline-form" onsubmit="return confirm('Uninstall CPN-only plugin {name}?');">
+            <form method="post" action="/plugins/uninstall-cpn" class="inline-form" onsubmit="return confirm('Uninstall User Panel plugin {name}?');">
               <input type="hidden" name="id" value="{id}">
               <button type="submit" class="btn-danger">Uninstall from CPN</button>
             </form>"#,

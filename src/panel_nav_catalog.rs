@@ -524,6 +524,11 @@ pub(crate) const MAIN: &[NavEntry] = &[
         label: "Docker",
         children: DOCKER_CHILDREN,
     },
+    NavEntry::Link {
+        id: "docs",
+        href: "/docs",
+        label: "Documentation",
+    },
 ];
 
 /// Server tools promoted out of a single nested Server tree.

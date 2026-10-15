@@ -46,6 +46,8 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/security/ssh", "terminal", IconTone::Amber),
         ("/security/firewall", "shield", IconTone::Rose),
         ("/security", "shield", IconTone::Rose),
+        ("/docs", "file", IconTone::Blue),
+        ("/documentation", "file", IconTone::Blue),
         ("/settings/version", "rocket", IconTone::Blue),
         ("/settings/design", "palette", IconTone::Violet),
         ("/settings/setup", "wand", IconTone::Amber),
@@ -204,6 +206,7 @@ pub fn resolve_nav(id: &str) -> (&'static str, IconTone) {
         "security" => ("shield", IconTone::Rose),
         "settings" => ("settings", IconTone::Slate),
         "plugins" => ("puzzle", IconTone::Violet),
+        "docs" => ("file", IconTone::Blue),
         _ => ("layout-dashboard", IconTone::Slate),
     }
 }
