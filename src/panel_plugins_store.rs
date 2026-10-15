@@ -676,7 +676,8 @@ mod tests {
         assert_eq!(canonical_store_category("Backups"), "Backup");
         let mut e = entry("backupDestinations", "free", "remote destinations");
         e.category = "Backups".into();
-        let hits = filter_store_entries(&[e], "", "Backup");
+        let binding = [e];
+        let hits = filter_store_entries(&binding, "", "Backup");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].id, "backupDestinations");
     }
