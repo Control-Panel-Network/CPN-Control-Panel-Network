@@ -122,9 +122,9 @@ pub fn docs_main(page: &str, q: &str) -> String {
     let filtered = search_docs(q);
     let active = {
         let want = page.trim().to_ascii_lowercase();
-        if !want.is_empty() && filtered.iter().any(|d| d.id == want) {
-            want
-        } else if !want.is_empty() && all.iter().any(|d| d.id == want) {
+        if !want.is_empty()
+            && (filtered.iter().any(|d| d.id == want) || all.iter().any(|d| d.id == want))
+        {
             want
         } else {
             default_page_id(&filtered)
