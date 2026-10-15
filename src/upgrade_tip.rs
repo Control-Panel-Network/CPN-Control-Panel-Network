@@ -297,10 +297,9 @@ fn log_pruned_tip_cargo(keep_sha: Option<&str>) {
 }
 
 async fn install_from_paths(installer: &Path, cli: &Path) -> Result<(), String> {
-    // Install only to `/usr/bin`. Do not write `/usr/local/bin/cpn*` shadows
-    // (PATH often prefers them and they leak on failed tip jobs). Legacy
-    // shadows are removed by `upgrade_cleanup::remove_local_bin_overrides`
-    // and `cpn doctor --heal`.
+    // Install only via installer_bin()/cli_bin() (/usr/bin). Never write local
+    // PATH overrides (they leak on failed tip jobs). Legacy overrides are
+    // removed by upgrade_cleanup::remove_local_bin_overrides and doctor --heal.
     install_binary(installer.to_str().unwrap_or(""), installer_bin())
         .await
         .map_err(|error| fail(error, None))?;
@@ -479,18 +478,13 @@ mod tests {
     }
 
     #[test]
-    fn tip_install_does_not_write_usr_local_bin_shadows() {
+    fn tip_install_production_code_has_no_local_bin_paths() {
         let src = include_str!("upgrade_tip.rs");
-        // Split path so this test body cannot match itself via include_str.
-        let local_cpn = ["/usr/local/bin/", "cpn\""].concat();
-        let local_installer = ["/usr/local/bin/", "cpn-installer\""].concat();
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(src);
+        let needle = ["/usr/", "local/bin"].concat();
         assert!(
-            !src.contains(&local_cpn),
-            "tip install must not write /usr/local/bin/cpn"
-        );
-        assert!(
-            !src.contains(&local_installer),
-            "tip install must not write /usr/local/bin/cpn-installer"
+            !prod.contains(&needle),
+            "production tip install must not reference local bin override paths"
         );
     }
 }
