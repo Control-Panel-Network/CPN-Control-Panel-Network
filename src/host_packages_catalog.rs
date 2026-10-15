@@ -324,7 +324,7 @@ pub fn filter_host_packages<'a>(
             } else if cat == "free" {
                 !host_pricing_is_paid(meta.pricing)
             } else {
-                meta.category.eq_ignore_ascii_case(category.trim())
+                crate::panel_plugins_store::store_categories_match(category, meta.category)
             };
             if !cat_ok {
                 return false;
