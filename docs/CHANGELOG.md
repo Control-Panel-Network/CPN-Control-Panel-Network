@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.3] - 15/10/2026
+
+Patch release after v1.4.2. Feature gap slice (Docker apps, LIVE backups, site Apps, CSF/malware, incremental/Apache/bandwidth), remote backup destinations gated behind Host plugin `backupDestinations`, and login MariaDB/web health gate no longer flaps under lab load.
+
+### Added
+
 - **Feature gap slice**: Docker exec CSRF + owner ACL; one-click n8n/Hermes Agent on `/docker/apps`; LIVE Google Drive / remote SFTP / S3 backup destinations (secrets mode 600); Mautic and Joomla site Apps; optional CSF Services status; ClamAV docroot malware scan without LLM keys; restic incremental jobs; optional Apache handler toggle; `cpn bandwidth-reset` (`0 0 1 * *`) and `sql/0009_backup_incremental_meta.sql`.
 - **Docker Active Containers search and pagination**: `/docker/list` and local images on `/docker/images` support search, per-page size (default 10; 5/10/25/50), and go-to-page controls so large host inventories stay usable on desktop and mobile.
 

@@ -1,5 +1,5 @@
 Name:           cpn-installer
-Version:        1.4.2
+Version:        1.4.3
 Release:        1%{?dist}
 Summary:        Instalador de CPN Server Panel
 License:        GPL-3.0-only
@@ -17,7 +17,7 @@ Requires:       ca-certificates
 
 %description
 Instalador local con interfaz web para preparar CPN Server Panel en sistemas Linux de la familia Enterprise Linux compatibles con CPN.
-Incluye la CLI de operador cpn para administraciÃƒÆ’Ã‚Â³n desde SSH.
+Incluye la CLI de operador cpn para administraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n desde SSH.
 
 %prep
 
@@ -61,4 +61,4 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 - Soporte de empaquetado para AlmaLinux 9 y AlmaLinux 10 (%{dist} el9/el10)
 
 * Tue Aug 11 2026 CPN <dev@cpn.invalid> - 0.1.0-1
-- Primera versiÃƒÆ’Ã‚Â³n del instalador para AlmaLinux
+- Primera versiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n del instalador para AlmaLinux
