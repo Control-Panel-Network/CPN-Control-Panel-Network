@@ -571,15 +571,12 @@ mod tests {
 
     #[test]
     fn category_pills_collapse_backup_aliases() {
-        let entries = vec![
-            site_entry("contaboAutoSnapshot", "Backup"),
-            {
-                let mut e = site_entry("backupDestinations", "Backups");
-                e.host_scoped = true;
-                e.site_installable = false;
-                e
-            },
-        ];
+        let entries = vec![site_entry("contaboAutoSnapshot", "Backup"), {
+            let mut e = site_entry("backupDestinations", "Backups");
+            e.host_scoped = true;
+            e.site_installable = false;
+            e
+        }];
         let html = unified_category_pills(&[], &entries, "", "", "host", "page", 4, "");
         let backup_pills = html.matches("data-store-cat=\"Backup\"").count();
         assert_eq!(backup_pills, 1);
