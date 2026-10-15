@@ -90,11 +90,13 @@ fn html_escape(value: &str) -> String {
 }
 
 pub fn backups_hub_main() -> String {
+    let feats = crate::panel_feature_gate::InstalledOptionalFeatures::detect();
     let mut body = section_heading(
         "Backups",
         "Create, restore, schedule, and configure destinations. Paths stay concrete for the selected scope.",
     );
-    body.push_str(&hub_tiles_grid("Backups", &backups_hub_tiles()));
+    let filtered = crate::panel_feature_gate::filter_hub_tiles(backups_hub_tiles(), feats);
+    body.push_str(&hub_tiles_grid("Backups", &filtered));
     body
 }
 

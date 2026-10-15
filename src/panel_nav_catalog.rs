@@ -236,6 +236,18 @@ const BACKUPS_CHILDREN: &[NavChild] = &[
         href: "/backups/destinations",
     },
     NavChild {
+        label: "Google Drive",
+        href: "/backups/google-drive",
+    },
+    NavChild {
+        label: "Remote Backups",
+        href: "/backups/remote",
+    },
+    NavChild {
+        label: "S3",
+        href: "/backups/s3",
+    },
+    NavChild {
         label: "Incremental",
         href: "/backups/incremental",
     },

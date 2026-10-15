@@ -509,6 +509,12 @@ pub fn backups_hub_tiles() -> Vec<HubTile<'static>> {
             live: true,
         },
         HubTile {
+            title: "S3",
+            subtitle: "S3-compatible object storage",
+            href: "/backups/s3",
+            live: true,
+        },
+        HubTile {
             title: "Incremental",
             subtitle: "restic / borg jobs",
             href: "/backups/incremental",

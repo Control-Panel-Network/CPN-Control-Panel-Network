@@ -345,12 +345,17 @@ pub async fn backups_destinations_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match save_backup_destinations_toggles(
-        parse_flag(&form.local_enabled),
-        parse_flag(&form.gdrive_enabled),
-        parse_flag(&form.remote_enabled),
-        parse_flag(&form.s3_enabled),
-    ) {
+    let unlocked = crate::panel_feature_gate::backup_destinations_unlocked();
+    let (gdrive, remote, s3) = if unlocked {
+        (
+            parse_flag(&form.gdrive_enabled),
+            parse_flag(&form.remote_enabled),
+            parse_flag(&form.s3_enabled),
+        )
+    } else {
+        (false, false, false)
+    };
+    match save_backup_destinations_toggles(parse_flag(&form.local_enabled), gdrive, remote, s3) {
         Ok(msg) => redirect_notice("/backups/destinations", Some(&msg), None),
         Err(err) => redirect_notice("/backups/destinations", None, Some(&err)),
     }
@@ -365,6 +370,14 @@ pub async fn backups_gdrive_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "backups",
+            "Google Drive",
+            &crate::panel_feature_gate::backup_destinations_plugin_required_page("Google Drive"),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "backups",
@@ -401,6 +414,13 @@ pub async fn backups_gdrive_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/google-drive",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match save_gdrive_form(
         parse_flag(&form.enabled),
         &form.client_id,
@@ -422,6 +442,13 @@ pub async fn backups_gdrive_test(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/google-drive",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match run_gdrive_test() {
         Ok(msg) => redirect_notice("/backups/google-drive", Some(&msg), None),
         Err(err) => redirect_notice("/backups/google-drive", None, Some(&err)),
@@ -437,6 +464,14 @@ pub async fn backups_remote_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "backups",
+            "Remote Backups",
+            &crate::panel_feature_gate::backup_destinations_plugin_required_page("Remote Backups"),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "backups",
@@ -481,6 +516,13 @@ pub async fn backups_remote_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/remote",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match save_remote_form(RemoteSaveInput {
         enabled: parse_flag(&form.enabled),
         protocol: &form.protocol,
@@ -506,6 +548,13 @@ pub async fn backups_remote_test(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/remote",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match run_remote_test() {
         Ok(msg) => redirect_notice("/backups/remote", Some(&msg), None),
         Err(err) => redirect_notice("/backups/remote", None, Some(&err)),
@@ -521,6 +570,14 @@ pub async fn backups_s3_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return html_ok(panel_shell(
+            &user,
+            "backups",
+            "S3",
+            &crate::panel_feature_gate::backup_destinations_plugin_required_page("S3"),
+        ));
+    }
     html_ok(panel_shell(
         &user,
         "backups",
@@ -559,6 +616,13 @@ pub async fn backups_s3_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/s3",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match save_s3_form(
         parse_flag(&form.enabled),
         &form.endpoint,
@@ -578,6 +642,13 @@ pub async fn backups_s3_test(http: HttpRequest, state: web::Data<Arc<AppState>>)
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
+    if !crate::panel_feature_gate::backup_destinations_unlocked() {
+        return redirect_notice(
+            "/backups/s3",
+            None,
+            Some("Install the free backupDestinations plugin from the Plugin Store first."),
+        );
+    }
     match run_s3_test() {
         Ok(msg) => redirect_notice("/backups/s3", Some(&msg), None),
         Err(err) => redirect_notice("/backups/s3", None, Some(&err)),

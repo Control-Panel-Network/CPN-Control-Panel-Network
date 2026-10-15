@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Backup destinations Host plugin**: Google Drive, Remote SFTP/SCP, S3-compatible, and Incremental UIs require the free Host plugin `backupDestinations` from the Plugin Store (feature flag `backup-destinations`). Create, Restore, Schedule, and local Destinations remain core and always LIVE.
 - **Docker Owner column**: Host-managed or system containers show **Host** (not `CPN` / `System`). Account-owned rows keep the account name; unlabeled CLI containers stay **Unassigned**.
 
 ### Fixed
