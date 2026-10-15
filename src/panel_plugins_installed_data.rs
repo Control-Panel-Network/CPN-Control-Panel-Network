@@ -115,7 +115,7 @@ fn category_match(want: &str, category: &str, scope_kind: &str) -> bool {
     if want == "site" {
         return scope_kind == "site";
     }
-    crate::panel_plugins_store::store_categories_match(want, category)
+    crate::panel_plugins_store::store_categories_match(&want, category)
 }
 
 fn host_active(status: &crate::apps::AppStatus) -> bool {
