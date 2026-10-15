@@ -288,7 +288,8 @@ pub fn malware_scan_page() -> String {
         ("Installed", if st.installed { "yes" } else { "no" }),
     ]);
     let history = crate::panel_ops_malware_scan::load_history();
-    let mut hist_html = String::from("<h2 style=\"font-size:16px;margin:18px 0 8px;\">Recent scans</h2>");
+    let mut hist_html =
+        String::from("<h2 style=\"font-size:16px;margin:18px 0 8px;\">Recent scans</h2>");
     if history.is_empty() {
         hist_html.push_str("<p class=\"muted\">No on-demand scans yet.</p>");
     } else {

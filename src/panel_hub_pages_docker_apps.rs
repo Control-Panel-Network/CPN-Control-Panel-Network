@@ -7,13 +7,7 @@ use crate::panel_ops_docker_oneclick::{
     compose_provider_hint, list_oneclick_with_live, open_url_for_stack,
 };
 
-fn app_card(
-    title: &str,
-    template: &str,
-    blurb: &str,
-    default_stack: &str,
-    csrf: &str,
-) -> String {
+fn app_card(title: &str, template: &str, blurb: &str, default_stack: &str, csrf: &str) -> String {
     format!(
         r#"<div class="panel-card" style="flex:1;min-width:260px;">
       <h2 style="margin:0 0 8px;font-size:18px;">{title}</h2>

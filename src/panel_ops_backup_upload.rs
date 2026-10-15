@@ -1,6 +1,6 @@
 //! Best-effort upload of local backup archives to configured remotes.
 
-use crate::panel_ops_backup_extra::{load_destinations, read_secret, RemoteDest, S3Dest};
+use crate::panel_ops_backup_extra::{RemoteDest, S3Dest, load_destinations, read_secret};
 use std::path::PathBuf;
 use std::process::Command;
 

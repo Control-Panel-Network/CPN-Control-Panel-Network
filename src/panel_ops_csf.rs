@@ -104,8 +104,12 @@ pub fn install_csf() -> Result<String, String> {
     if !install.success() {
         return Err("CSF install.sh exited with an error.".into());
     }
-    let _ = Command::new("systemctl").args(["enable", "--now", "csf"]).status();
-    let _ = Command::new("systemctl").args(["enable", "--now", "lfd"]).status();
+    let _ = Command::new("systemctl")
+        .args(["enable", "--now", "csf"])
+        .status();
+    let _ = Command::new("systemctl")
+        .args(["enable", "--now", "lfd"])
+        .status();
     Ok("CSF installed. Review /etc/csf/csf.conf and whitelist panel IPs before enabling TESTING=0.".into())
 }
 

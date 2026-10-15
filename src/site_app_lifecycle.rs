@@ -387,7 +387,11 @@ pub fn restore(site: &SiteRecord, app: SiteAppId, backup: Option<&str>) -> Resul
                 .status();
             Ok(format!("Restored Redis backup {}.", restored.id))
         }
-        SiteAppId::Cmsms | SiteAppId::Mautic | SiteAppId::Joomla | SiteAppId::Node | SiteAppId::Python => {
+        SiteAppId::Cmsms
+        | SiteAppId::Mautic
+        | SiteAppId::Joomla
+        | SiteAppId::Node
+        | SiteAppId::Python => {
             let target = runtime_source(site, app)?;
             let was_running = match app {
                 SiteAppId::Node => load_runtime(site, RuntimeKind::Node).running,

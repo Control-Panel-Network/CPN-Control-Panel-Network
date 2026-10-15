@@ -23,7 +23,14 @@ pub fn csf_page(notice: Option<&str>, error: Option<&str>) -> String {
     let kv = status_kv(&[
         ("Installed", if st.installed { "yes" } else { "no" }),
         ("Enabled", if st.enabled { "yes" } else { "no" }),
-        ("Version", if st.version.is_empty() { "n/a" } else { &st.version }),
+        (
+            "Version",
+            if st.version.is_empty() {
+                "n/a"
+            } else {
+                &st.version
+            },
+        ),
     ]);
     let mut flash = String::new();
     if let Some(n) = notice.filter(|s| !s.is_empty()) {

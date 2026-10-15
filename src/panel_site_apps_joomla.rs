@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const JOOMLA_TARGET: &str = "5.2.3";
-const JOOMLA_ZIP_URL: &str =
-    "https://downloads.joomla.org/cms/joomla5/5-2-3/Joomla_5.2.3-Stable-Full_Package.zip?format=zip";
+const JOOMLA_ZIP_URL: &str = "https://downloads.joomla.org/cms/joomla5/5-2-3/Joomla_5.2.3-Stable-Full_Package.zip?format=zip";
 
 #[derive(Debug, Clone)]
 pub struct JoomlaStatus {

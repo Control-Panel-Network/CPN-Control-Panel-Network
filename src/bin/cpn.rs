@@ -368,9 +368,7 @@ fn run() -> Result<(), String> {
             println!(
                 "doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)"
             );
-            println!(
-                "bandwidth-reset  Reset monthly site bandwidth ledgers (timer: 0 0 1 * *)"
-            );
+            println!("bandwidth-reset  Reset monthly site bandwidth ledgers (timer: 0 0 1 * *)");
             println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
             println!("list     List command groups (this output)");

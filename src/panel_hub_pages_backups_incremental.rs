@@ -1,9 +1,9 @@
 //! Incremental (restic/borg) backup jobs UI.
 
+use crate::panel_hubs::feature_shell;
 use crate::panel_ops_backup_incremental::{
     list_restic_snapshots, load_jobs, run_incremental_job, upsert_job,
 };
-use crate::panel_hubs::feature_shell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn html_escape(value: &str) -> String {

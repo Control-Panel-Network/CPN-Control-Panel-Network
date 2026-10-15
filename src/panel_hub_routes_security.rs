@@ -182,11 +182,7 @@ pub async fn security_malware_run(
         .await
         .unwrap_or_else(|e| Err(format!("Scan task failed: {e}")));
     match result {
-        Ok(entry) => redirect_notice(
-            "/security/malware-scan",
-            Some(&entry.summary),
-            None,
-        ),
+        Ok(entry) => redirect_notice("/security/malware-scan", Some(&entry.summary), None),
         Err(err) => redirect_notice("/security/malware-scan", None, Some(&err)),
     }
 }

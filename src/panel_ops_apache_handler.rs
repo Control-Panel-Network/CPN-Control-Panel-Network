@@ -1,10 +1,10 @@
 //! Optional per-site Apache handler toggle beside OpenLiteSpeed (OLS remains default).
 
+use crate::paths::join_data;
 use crate::sites::{SiteModify, SiteRecord, load_site, modify_site};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use crate::paths::join_data;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ApacheHandlerState {

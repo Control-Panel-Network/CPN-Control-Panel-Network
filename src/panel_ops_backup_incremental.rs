@@ -135,7 +135,9 @@ fn restic_repo_for_destination(dest: &str) -> Result<(String, Vec<(String, Strin
             let path = d.remote.remote_path.trim().trim_end_matches('/');
             Ok((format!("sftp:{user}@{host}:{path}"), Vec::new()))
         }
-        other => Err(format!("Unknown destination `{other}` (use local, s3, or sftp).")),
+        other => Err(format!(
+            "Unknown destination `{other}` (use local, s3, or sftp)."
+        )),
     }
 }
 
@@ -156,7 +158,10 @@ pub fn run_incremental_job(job_id: &str) -> Result<String, String> {
         let password = secrets::read("restic_password").unwrap_or_else(|| {
             let generated = format!("cpn-{}", now_unix());
             let _ = fs::create_dir_all(join_data("backup-secrets"));
-            let _ = fs::write(join_data("backup-secrets").join("restic_password"), &generated);
+            let _ = fs::write(
+                join_data("backup-secrets").join("restic_password"),
+                &generated,
+            );
             generated
         });
         let mut init = Command::new("restic");

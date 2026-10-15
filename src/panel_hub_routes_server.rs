@@ -6,7 +6,6 @@ use crate::panel_hub_http::{
     html_blocking, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice,
     require_panel_user, urlencoding_simple,
 };
-use crate::panel_ops_docker_csrf::{user_can_manage_container, verify_docker_csrf};
 use crate::panel_hub_pages_docker::{docker_create_page, docker_logs_page, docker_manage_page};
 use crate::panel_hub_pages_docker_apps::docker_apps_page;
 use crate::panel_hub_pages_docker_images_ui::docker_images_page;
@@ -27,6 +26,7 @@ use crate::panel_hub_pages_settings::{
     setup_wizard_page_with, version_management_page,
 };
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
+use crate::panel_ops_docker_csrf::{user_can_manage_container, verify_docker_csrf};
 use crate::panel_pages::panel_shell;
 use crate::site_messages::{
     SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
@@ -824,7 +824,11 @@ pub async fn docker_view_exec(
     };
     let back = format!("/docker/view/{}", urlencoding_simple(name.as_str()));
     if !verify_docker_csrf(&user, &form.csrf) {
-        return redirect_notice(&back, None, Some("Invalid or expired security token. Reload and try again."));
+        return redirect_notice(
+            &back,
+            None,
+            Some("Invalid or expired security token. Reload and try again."),
+        );
     }
     let admin = is_panel_admin(&user);
     let cname = name.to_string();

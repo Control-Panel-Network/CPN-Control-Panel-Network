@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const MAUTIC_TARGET: &str = "5.2.1";
-const MAUTIC_ZIP_URL: &str =
-    "https://github.com/mautic/mautic/releases/download/5.2.1/5.2.1.zip";
+const MAUTIC_ZIP_URL: &str = "https://github.com/mautic/mautic/releases/download/5.2.1/5.2.1.zip";
 
 #[derive(Debug, Clone)]
 pub struct MauticStatus {
@@ -100,11 +99,21 @@ fn download_zip(dest: &Path) -> Result<(), String> {
 fn extract_zip(zip: &Path, doc: &Path) -> Result<(), String> {
     fs::create_dir_all(doc).map_err(|e| format!("Could not create document root: {e}"))?;
     let status = Command::new("unzip")
-        .args(["-qo", &zip.display().to_string(), "-d", &doc.display().to_string()])
+        .args([
+            "-qo",
+            &zip.display().to_string(),
+            "-d",
+            &doc.display().to_string(),
+        ])
         .status()
         .or_else(|_| {
             Command::new("bsdtar")
-                .args(["-xf", &zip.display().to_string(), "-C", &doc.display().to_string()])
+                .args([
+                    "-xf",
+                    &zip.display().to_string(),
+                    "-C",
+                    &doc.display().to_string(),
+                ])
                 .status()
         })
         .map_err(|e| format!("unzip/bsdtar failed: {e}"))?;

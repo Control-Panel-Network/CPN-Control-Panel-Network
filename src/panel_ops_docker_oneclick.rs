@@ -199,7 +199,9 @@ pub fn oneclick_stack_action(stack_id: &str, action: &str) -> Result<String, Str
     match action.trim().to_ascii_lowercase().as_str() {
         "start" | "up" => run_compose(&project_dir, &["up", "-d", "--remove-orphans"])
             .map(|_| format!("Stack `{id}` started.")),
-        "stop" | "down" => run_compose(&project_dir, &["stop"]).map(|_| format!("Stack `{id}` stopped.")),
+        "stop" | "down" => {
+            run_compose(&project_dir, &["stop"]).map(|_| format!("Stack `{id}` stopped."))
+        }
         "refresh" => refresh_compose_stack(&id),
         _ => Err("Unknown action. Use start, stop, or refresh.".into()),
     }
@@ -248,10 +250,7 @@ pub fn compose_provider_hint() -> String {
     let candidates = ["docker", "podman"];
     for bin in candidates {
         if which(bin) {
-            let out = Command::new(bin)
-                .args(["compose", "version"])
-                .output()
-                .ok();
+            let out = Command::new(bin).args(["compose", "version"]).output().ok();
             if out.as_ref().map(|o| o.status.success()).unwrap_or(false) {
                 return format!("{bin} compose available");
             }
