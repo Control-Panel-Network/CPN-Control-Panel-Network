@@ -148,6 +148,70 @@ fn parse_marker_from_bytes(bytes: &[u8]) -> Option<String> {
     best.map(|(_, sha)| sha)
 }
 
+/// Overwrite an existing `CPN_BUILD_SHA=` marker (same length) or append one.
+///
+/// Used when a matching release package is installed for a docs/CI-only tip so
+/// Version Management treats the host as being on the tip SHA without a cargo rebuild.
+pub fn overwrite_embedded_sha(path: &Path, expected_sha: &str) -> Result<(), String> {
+    let expected = expected_sha.trim();
+    if !looks_like_git_sha(expected) {
+        return Err("Cannot overwrite CPN_BUILD_SHA: value is not a git SHA".into());
+    }
+    if let Some(found) = sha_embedded_in_binary(path)
+        && sha_equal(&found, expected)
+    {
+        return Ok(());
+    }
+    let mut bytes = std::fs::read(path)
+        .map_err(|error| format!("Could not read installer for SHA stamp: {error}"))?;
+    let needle = marker_needle();
+    let mut replaced = 0usize;
+    let mut cursor = 0usize;
+    while let Some(pos) = find_from(&bytes, &needle, cursor) {
+        let start = pos + needle.len();
+        cursor = start;
+        let mut end = start;
+        while end < bytes.len() && bytes[end].is_ascii_hexdigit() {
+            end += 1;
+        }
+        let len = end - start;
+        let nul_terminated = matches!(bytes.get(end).copied(), Some(0) | None);
+        if nul_terminated && len == expected.len() && looks_like_git_sha(
+            std::str::from_utf8(&bytes[start..end]).unwrap_or(""),
+        ) {
+            bytes[start..end].copy_from_slice(expected.as_bytes());
+            replaced += 1;
+        }
+    }
+    if replaced == 0 {
+        bytes.push(0);
+        bytes.extend_from_slice(&needle);
+        bytes.extend_from_slice(expected.as_bytes());
+        bytes.push(0);
+    }
+    std::fs::write(path, &bytes)
+        .map_err(|error| format!("Could not write CPN_BUILD_SHA marker: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
+    }
+    match sha_embedded_in_binary(path) {
+        Some(got) if sha_equal(&got, expected) => Ok(()),
+        Some(got) => Err(format!(
+            "Overwrote CPN_BUILD_SHA for {} but {} reads back as {}",
+            short_sha(expected),
+            path.display(),
+            short_sha(&got)
+        )),
+        None => Err(format!(
+            "Overwrote CPN_BUILD_SHA for {} but it was not readable from {}",
+            short_sha(expected),
+            path.display()
+        )),
+    }
+}
+
 /// After a source cargo build of `expected_sha`, stamp the marker when LTO dropped it
 /// or the extracted tree predates the keep-static. Does not rewrite a mismatched SHA.
 pub fn stamp_sha_marker_if_missing(path: &Path, expected_sha: &str) -> Result<(), String> {
@@ -232,6 +296,28 @@ mod tests {
         assert!(build_sha_marker().starts_with("CPN_BUILD_SHA="));
         assert!(CPN_BUILD_SHA_MARKER.starts_with(b"CPN_BUILD_SHA="));
         let _ = std::hint::black_box(CPN_BUILD_SHA_MARKER);
+    }
+
+    #[test]
+    fn overwrites_existing_marker_in_place() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "cpn-sha-overwrite-{}.bin",
+            std::process::id()
+        ));
+        let old = b"pad CPN_BUILD_SHA=101d6600123456789abcdef0123456789abcdef0\0more";
+        std::fs::write(&path, old).expect("write");
+        overwrite_embedded_sha(
+            &path,
+            "c7a349a69aff6993ae7fd6f046a157d5e064ce45",
+        )
+        .expect("overwrite");
+        let got = sha_embedded_in_binary(&path).expect("sha");
+        assert!(sha_equal(
+            &got,
+            "c7a349a69aff6993ae7fd6f046a157d5e064ce45"
+        ));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

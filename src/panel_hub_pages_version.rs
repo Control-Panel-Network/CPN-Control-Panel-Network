@@ -293,7 +293,7 @@ pub fn version_management_page(can_manage: bool) -> String {
   CPN supports the <strong>latest two published releases</strong> only (current release plus the previous release).
   The searchable picker lists <strong>all GitHub Releases with installable assets</strong> so you can upgrade or downgrade later.
   Older tags remain selectable for lab use, but they are outside support. Prefer upgrade to the newest release when one exists.
-  When the saved branch (default <code>stable</code>) advances without a new tag, use <strong>Upgrade to latest commits</strong> (commit path: GitHub Actions binaries when present, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to the installer log below, Main Log, and Error logs.
+  When the saved branch (default <code>stable</code>) advances without a new tag, use <strong>Upgrade to latest commits</strong> (commit path: GitHub Actions binaries when present, else a matching release package when tip changes are docs/CI/packaging-only at the same Cargo version, otherwise a source build using cargo from PATH, rustup, or /home/cpn). Failures are written to the installer log below, Main Log, and Error logs.
   Choose the branch under <strong>Update source</strong>: <code>stable</code> for production, <code>dev</code> for lab and pre-release testing.
 </p>
 <p class="muted" style="margin-top:18px;">

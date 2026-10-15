@@ -6,7 +6,6 @@ use crate::releases_cache;
 use crate::releases_stable_tip::{self, StableTipInfo};
 use crate::upgrade_pkg::install_binary;
 use crate::upgrade_staging::StagingDir;
-use crate::upgrade_tip_artifacts;
 use crate::upgrade_tip_cmd;
 use crate::upgrade_tip_log;
 use crate::upgrade_tip_toolchain::{self, Toolchain};
@@ -366,36 +365,23 @@ pub async fn apply_tip_ref(
     state
         .progress("downloading", 15, "Checking GitHub Actions commit binaries")
         .await;
-    match upgrade_tip_artifacts::try_apply_actions_artifacts(repo, &sha, &work).await {
-        Ok(true) => {
-            if crate::upgrade_tip_verify::require_built_sha(
-                std::path::Path::new(installer_bin()),
-                &sha,
-            )
-            .is_ok()
-            {
-                upgrade_tip_log::log_info(format!("Installed prebuilt tip binaries for {label}"));
-                return Ok(TipApplyResult {
-                    sha,
-                    short_sha: short,
-                    branch,
-                    branch_label: label,
-                    package_version: env!("CARGO_PKG_VERSION").to_string(),
-                    source: ManifestSource::Local,
-                    skipped_rebuild: false,
-                });
-            }
-            upgrade_tip_log::log_info(
-                "Prebuilt tip SHA did not match; building from source instead",
-            );
-        }
-        Ok(false) => {
-            upgrade_tip_log::log_info("No GitHub Actions tip binaries; building from source");
-        }
-        Err(error) => {
-            upgrade_tip_log::log_failure(&error, None);
-            state.log(error.clone(), "error");
-        }
+    if let Some((source, package_version)) =
+        crate::upgrade_tip_prebuilt::try_actions_or_release_package(state, repo, &sha, &work)
+            .await
+            .map_err(|error| fail(error, None))?
+    {
+        upgrade_tip_log::log_info(format!(
+            "Installed {package_version} from prebuilt path for tip {label}"
+        ));
+        return Ok(TipApplyResult {
+            sha,
+            short_sha: short,
+            branch,
+            branch_label: label,
+            package_version,
+            source,
+            skipped_rebuild: false,
+        });
     }
 
     let mut tools = ensure_toolchain(state).await?;
