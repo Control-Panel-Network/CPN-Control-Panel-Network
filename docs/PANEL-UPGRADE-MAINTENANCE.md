@@ -59,4 +59,16 @@ Direct binds on `:2087` (default lab) still show connection refused until the un
 | `cpn-installer --upgrade` / `--repair` / `--downgrade` | yes | success (CLI) / failure / TTL |
 | `cpn doctor --heal` | no | clears stuck flag |
 
+## Staging and leftover cleanup
+
+Release (RPM/DEB) and tip/commit upgrades download into one `/var/tmp/cpn-<kind>-<random>` directory per job. That directory is removed when the job ends (success or error). Orphans left by a killed process are swept at panel start and after the next maintenance job, once older than the grace period (`CPN_STAGING_GRACE_HOURS`, default 2 hours) and not in use by a live process.
+
+| Cleaned | Not cleaned (preserved) |
+|---------|-------------------------|
+| `/var/tmp/cpn-tip-*`, `cpn-upgrade-*`, `cpn-gpg-*`, `cpn-install-*`, `cpn-release-*` | `/var/lib/cpn` (MFA, accounts, sites, prefs) |
+| Old `/home/cpn/cpn-cargo-target/tip-*` and `/var/tmp/cpn-cargo-target/tip-*` (keeps the current tip SHA only) | `/etc/cpn`, site homes under `/home/`, Docker volumes |
+| `/usr/local/bin/cpn*` shadows (tip installs only to `/usr/bin`) | Live `/opt/cpn-webmail/{snappymail,roundcube,tachyon,current}` |
+
+Panel UI assets are embedded in the installer binary (`rust_embed`); there are no leftover npm files under `/usr` after upgrade. `sudo cpn doctor --heal` also removes legacy `/usr/local/bin/cpn*` overrides.
+
 No CyberPanel strings in the UI page or this doc's product copy.

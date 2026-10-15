@@ -317,6 +317,7 @@ async fn install_from_zip(url: &str, work: &Path, artifact_name: &str) -> Result
 }
 
 async fn install_bins(installer: &Path) -> Result<(), String> {
+    // `/usr/bin` only. Tip must not create `/usr/local/bin/cpn*` shadows.
     install_binary(
         installer.to_str().unwrap_or(""),
         crate::manifest::installer_bin(),
@@ -325,18 +326,6 @@ async fn install_bins(installer: &Path) -> Result<(), String> {
     let cli = installer.with_file_name("cpn");
     if cli.is_file() {
         let _ = install_binary(cli.to_str().unwrap_or(""), crate::manifest::cli_bin()).await;
-    }
-    let local_installer = PathBuf::from("/usr/local/bin/cpn-installer");
-    if local_installer
-        .parent()
-        .map(|p| p.is_dir())
-        .unwrap_or(false)
-    {
-        let _ = install_binary(
-            installer.to_str().unwrap_or(""),
-            local_installer.to_str().unwrap_or(""),
-        )
-        .await;
     }
     Ok(())
 }
@@ -351,5 +340,20 @@ mod tests {
         assert!(artifact_looks_like_linux_bins("cpn-installer-linux"));
         assert!(!artifact_looks_like_linux_bins("cpn-windows-release"));
         assert!(!artifact_looks_like_linux_bins("cpn-rpm-el10"));
+    }
+
+    #[test]
+    fn actions_install_does_not_write_usr_local_bin_shadows() {
+        let src = include_str!("upgrade_tip_artifacts.rs");
+        let local_cpn = ["/usr/local/bin/", "cpn\""].concat();
+        let local_installer = ["/usr/local/bin/", "cpn-installer\""].concat();
+        assert!(
+            !src.contains(&local_installer),
+            "Actions tip install must not write /usr/local/bin/cpn-installer"
+        );
+        assert!(
+            !src.contains(&local_cpn),
+            "Actions tip install must not write /usr/local/bin/cpn"
+        );
     }
 }
