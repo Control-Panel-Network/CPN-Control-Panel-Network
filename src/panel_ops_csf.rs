@@ -51,12 +51,8 @@ pub fn install_csf() -> Result<String, String> {
         return Ok("CSF is already installed.".into());
     }
     // Ensure perl (CSF dependency) via package manager when available.
-    if let Ok(pm) = package_manager() {
-        let _ = if pm == "dnf" || pm == "yum" {
-            run_pkg(&["install", "-y", "perl", "wget", "tar"])
-        } else {
-            run_pkg(&["install", "-y", "perl", "wget", "tar"])
-        };
+    if package_manager().is_ok() {
+        let _ = run_pkg(&["install", "-y", "perl", "wget", "tar"]);
     }
     let cache = Path::new("/var/lib/cpn/cache/csf");
     fs::create_dir_all(cache).map_err(|e| format!("Cannot create CSF cache: {e}"))?;

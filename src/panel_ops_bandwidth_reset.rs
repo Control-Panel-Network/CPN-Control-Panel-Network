@@ -1,6 +1,6 @@
 //! Monthly bandwidth counter reset helper and systemd timer unit templates.
 
-use crate::package_bandwidth::{MeterPeriod, current_period, period_from_year_month};
+use crate::package_bandwidth::{MeterPeriod, current_period};
 use crate::paths::join_data;
 use crate::sites::list_sites;
 use serde::{Deserialize, Serialize};
@@ -132,6 +132,7 @@ pub fn cron_line() -> &'static str {
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
+    use crate::package_bandwidth::period_from_year_month;
 
     #[test]
     fn reset_log_roundtrip() {

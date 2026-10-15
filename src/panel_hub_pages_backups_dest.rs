@@ -293,31 +293,34 @@ pub fn save_gdrive_form(
     Ok("Google Drive destination saved.".into())
 }
 
-pub fn save_remote_form(
-    enabled: bool,
-    protocol: &str,
-    host: &str,
-    port: u16,
-    username: &str,
-    auth_mode: &str,
-    key_path: &str,
-    password: &str,
-    remote_path: &str,
-    note: &str,
-) -> Result<String, String> {
-    set_remote_password(password)?;
+/// Form fields for saving a remote SFTP/SCP backup destination.
+pub struct RemoteSaveInput<'a> {
+    pub enabled: bool,
+    pub protocol: &'a str,
+    pub host: &'a str,
+    pub port: u16,
+    pub username: &'a str,
+    pub auth_mode: &'a str,
+    pub key_path: &'a str,
+    pub password: &'a str,
+    pub remote_path: &'a str,
+    pub note: &'a str,
+}
+
+pub fn save_remote_form(input: RemoteSaveInput<'_>) -> Result<String, String> {
+    set_remote_password(input.password)?;
     let mut d = load_destinations();
     d.remote = RemoteDest {
-        enabled,
-        protocol: protocol.trim().to_ascii_lowercase(),
-        host: host.trim().to_string(),
-        port: if port == 0 { 22 } else { port },
-        username: username.trim().to_string(),
-        auth_mode: auth_mode.trim().to_ascii_lowercase(),
+        enabled: input.enabled,
+        protocol: input.protocol.trim().to_ascii_lowercase(),
+        host: input.host.trim().to_string(),
+        port: if input.port == 0 { 22 } else { input.port },
+        username: input.username.trim().to_string(),
+        auth_mode: input.auth_mode.trim().to_ascii_lowercase(),
         password_set: false,
-        key_path: key_path.trim().to_string(),
-        remote_path: remote_path.trim().to_string(),
-        note: note.trim().to_string(),
+        key_path: input.key_path.trim().to_string(),
+        remote_path: input.remote_path.trim().to_string(),
+        note: input.note.trim().to_string(),
     };
     save_destinations(&d)?;
     Ok("Remote destination saved.".into())

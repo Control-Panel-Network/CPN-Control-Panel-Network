@@ -12,7 +12,7 @@ pub use crate::panel_hub_pages_backups_dest::{
 };
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, not_configured_body, section_heading};
 use crate::panel_ops_activity_host::format_bytes_eu;
-use crate::panel_ops_backup_extra::{BackupSchedule, load_schedule, save_schedule};
+use crate::panel_ops_backup_extra::{load_schedule, save_schedule};
 use crate::sites::{SiteRecord, list_sites};
 
 /// Default page size for the Restore archive list (matches Server > Logs density).

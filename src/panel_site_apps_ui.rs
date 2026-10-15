@@ -282,26 +282,26 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
 
     let mautic_lifecycle = lifecycle_controls(site, SiteAppId::Mautic, &domain, &csrf, admin);
     let joomla_lifecycle = lifecycle_controls(site, SiteAppId::Joomla, &domain, &csrf, admin);
-    let mautic_card = php_cms_card(
-        "Mautic",
-        "mautic",
-        snap.mautic.installed,
-        &snap.mautic.detail,
-        &domain,
-        &csrf,
-        snap.wordpress_in_docroot,
-        &mautic_lifecycle,
-    );
-    let joomla_card = php_cms_card(
-        "Joomla",
-        "joomla",
-        snap.joomla.installed,
-        &snap.joomla.detail,
-        &domain,
-        &csrf,
-        snap.wordpress_in_docroot,
-        &joomla_lifecycle,
-    );
+    let mautic_card = php_cms_card(PhpCmsCardArgs {
+        title: "Mautic",
+        action_prefix: "mautic",
+        installed: snap.mautic.installed,
+        detail: &snap.mautic.detail,
+        domain: &domain,
+        csrf: &csrf,
+        wordpress: snap.wordpress_in_docroot,
+        lifecycle: &mautic_lifecycle,
+    });
+    let joomla_card = php_cms_card(PhpCmsCardArgs {
+        title: "Joomla",
+        action_prefix: "joomla",
+        installed: snap.joomla.installed,
+        detail: &snap.joomla.detail,
+        domain: &domain,
+        csrf: &csrf,
+        wordpress: snap.wordpress_in_docroot,
+        lifecycle: &joomla_lifecycle,
+    });
 
     let apache = crate::panel_ops_apache_handler::apache_toggle_html(site, &csrf);
     let grid = format!(
@@ -319,22 +319,24 @@ pub fn tab_apps(site: &SiteRecord, username: &str) -> String {
     section("Apps", &grid)
 }
 
-fn php_cms_card(
-    title: &str,
-    action_prefix: &str,
+struct PhpCmsCardArgs<'a> {
+    title: &'a str,
+    action_prefix: &'a str,
     installed: bool,
-    detail: &str,
-    domain: &str,
-    csrf: &str,
+    detail: &'a str,
+    domain: &'a str,
+    csrf: &'a str,
     wordpress: bool,
-    lifecycle: &str,
-) -> String {
+    lifecycle: &'a str,
+}
+
+fn php_cms_card(args: PhpCmsCardArgs<'_>) -> String {
     let mut actions = String::new();
-    if wordpress && !installed {
+    if args.wordpress && !args.installed {
         actions.push_str(
             r#"<p class="manage-muted">WordPress detected here. Use a dedicated site or subdomain for this app.</p>"#,
         );
-    } else if installed {
+    } else if args.installed {
         actions.push_str(r#"<span class="manage-badge active">Installed</span>"#);
     } else {
         actions.push_str(&format!(
@@ -344,10 +346,10 @@ fn php_cms_card(
   <input type="hidden" name="action" value="{prefix}_install">
   <button type="submit" class="btn-primary">Install {title}</button>
 </form>"#,
-            domain = html_escape(domain),
-            csrf = html_escape(csrf),
-            prefix = html_escape(action_prefix),
-            title = html_escape(title),
+            domain = html_escape(args.domain),
+            csrf = html_escape(args.csrf),
+            prefix = html_escape(args.action_prefix),
+            title = html_escape(args.title),
         ));
     }
     format!(
@@ -357,16 +359,16 @@ fn php_cms_card(
   <p class="manage-muted">{detail}</p>
   <div class="manage-actions-row">{actions}</div>{lifecycle}
 </article>"#,
-        prefix = html_escape(action_prefix),
-        title = html_escape(title),
-        status = html_escape(if installed {
+        prefix = html_escape(args.action_prefix),
+        title = html_escape(args.title),
+        status = html_escape(if args.installed {
             "Installed"
         } else {
             "Not installed"
         }),
-        detail = html_escape(detail),
+        detail = html_escape(args.detail),
         actions = actions,
-        lifecycle = lifecycle,
+        lifecycle = args.lifecycle,
     )
 }
 

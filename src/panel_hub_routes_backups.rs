@@ -13,9 +13,9 @@ use crate::panel_hub_pages_backups::{
     save_backup_schedule,
 };
 use crate::panel_hub_pages_backups_dest::{
-    backups_gdrive_page, backups_remote_page, backups_s3_page, parse_flag, run_gdrive_test,
-    run_remote_test, run_s3_test, save_backup_destinations_toggles, save_gdrive_form,
-    save_remote_form, save_s3_form,
+    RemoteSaveInput, backups_gdrive_page, backups_remote_page, backups_s3_page, parse_flag,
+    run_gdrive_test, run_remote_test, run_s3_test, save_backup_destinations_toggles,
+    save_gdrive_form, save_remote_form, save_s3_form,
 };
 use crate::panel_hub_pages_backups_plan::backups_restore_plan_page;
 use crate::panel_pages::panel_shell;
@@ -481,18 +481,18 @@ pub async fn backups_remote_save(
     let Some(_user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    match save_remote_form(
-        parse_flag(&form.enabled),
-        &form.protocol,
-        &form.host,
-        form.port,
-        &form.username,
-        &form.auth_mode,
-        &form.key_path,
-        &form.password,
-        &form.remote_path,
-        &form.note,
-    ) {
+    match save_remote_form(RemoteSaveInput {
+        enabled: parse_flag(&form.enabled),
+        protocol: &form.protocol,
+        host: &form.host,
+        port: form.port,
+        username: &form.username,
+        auth_mode: &form.auth_mode,
+        key_path: &form.key_path,
+        password: &form.password,
+        remote_path: &form.remote_path,
+        note: &form.note,
+    }) {
         Ok(msg) => redirect_notice("/backups/remote", Some(&msg), None),
         Err(err) => redirect_notice("/backups/remote", None, Some(&err)),
     }

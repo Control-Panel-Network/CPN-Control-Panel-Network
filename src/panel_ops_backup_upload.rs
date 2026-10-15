@@ -1,7 +1,7 @@
 //! Best-effort upload of local backup archives to configured remotes.
 
 use crate::panel_ops_backup_extra::{RemoteDest, S3Dest, load_destinations, read_secret};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Best-effort upload hook for scheduled jobs (copies a local file path to configured remotes).
@@ -37,7 +37,7 @@ pub fn upload_backup_artifact(local_path: &str) -> Vec<String> {
     notes
 }
 
-fn upload_to_s3_best_effort(path: &PathBuf, s3: &S3Dest) -> Result<String, String> {
+fn upload_to_s3_best_effort(path: &Path, s3: &S3Dest) -> Result<String, String> {
     let access = read_secret("s3_access_key").ok_or_else(|| "S3 access key missing".to_string())?;
     let secret = read_secret("s3_secret_key").ok_or_else(|| "S3 secret key missing".to_string())?;
     let endpoint = s3.endpoint.trim();
@@ -77,7 +77,7 @@ fn upload_to_s3_best_effort(path: &PathBuf, s3: &S3Dest) -> Result<String, Strin
     Err("aws CLI not found; install AWS CLI for S3-compatible uploads.".into())
 }
 
-fn upload_to_remote_best_effort(path: &PathBuf, remote: &RemoteDest) -> Result<String, String> {
+fn upload_to_remote_best_effort(path: &Path, remote: &RemoteDest) -> Result<String, String> {
     let host = remote.host.trim();
     let user = remote.username.trim();
     let port = if remote.port == 0 { 22 } else { remote.port };
@@ -96,7 +96,7 @@ fn upload_to_remote_best_effort(path: &PathBuf, remote: &RemoteDest) -> Result<S
         "-o",
         "ConnectTimeout=12",
     ]);
-    if remote.auth_mode.to_ascii_lowercase() != "password" && !remote.key_path.trim().is_empty() {
+    if !remote.auth_mode.eq_ignore_ascii_case("password") && !remote.key_path.trim().is_empty() {
         cmd.args(["-i", remote.key_path.trim()]);
     }
     cmd.arg(path.as_os_str());
