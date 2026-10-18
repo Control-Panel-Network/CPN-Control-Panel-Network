@@ -107,6 +107,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/backups/incremental", "clock", IconTone::Cyan),
         ("/backups", "hard-drive", IconTone::Blue),
         ("/server/services", "activity", IconTone::Green),
+        ("/server/panel-migrate", "folder-sync", IconTone::Blue),
         ("/server/system-repair", "refresh-cw", IconTone::Amber),
         ("/settings/system-repair", "refresh-cw", IconTone::Amber),
         ("/server/openlitespeed", "external-link", IconTone::Cyan),

@@ -114,6 +114,12 @@ enum Commands {
         #[command(subcommand)]
         command: PackageCommands,
     },
+    /// Copy another hosting panel into CPN, then remove it
+    #[command(name = "panel-migrate")]
+    PanelMigrate {
+        #[command(subcommand)]
+        command: cpn_installer::cli_panel_migrate::PanelMigrateCommands,
+    },
     /// System Repair diagnostics (aliases: troubleshoot, repair, system-repair)
     #[command(visible_aliases = ["troubleshoot", "repair"], alias = "system-repair")]
     Doctor {
@@ -368,6 +374,7 @@ fn run() -> Result<(), String> {
             println!(
                 "doctor   System Repair checks (aliases: troubleshoot, repair, system-repair)"
             );
+            println!("panel-migrate  Detect, copy, and remove another hosting panel");
             println!("bandwidth-reset  Reset monthly site bandwidth ledgers (timer: 0 0 1 * *)");
             println!("uninstall Remove CPN from this host (see cpn-installer --uninstall)");
             println!("version  Print CLI version");
@@ -383,6 +390,7 @@ fn run() -> Result<(), String> {
                 Err(err) => Err(err),
             }
         }
+        Commands::PanelMigrate { command } => cpn_installer::cli_panel_migrate::run(command),
         Commands::Doctor {
             command,
             heal,

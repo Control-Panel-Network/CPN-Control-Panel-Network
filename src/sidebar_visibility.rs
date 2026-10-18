@@ -337,6 +337,9 @@ pub fn nav_id_for_path(path: &str) -> Option<&'static str> {
     if path.starts_with("/server/services") {
         return Some("services");
     }
+    if path.starts_with("/server/panel-migrate") {
+        return Some("panel-migrate");
+    }
     if path.starts_with("/server/system-repair") {
         return Some("system-repair");
     }

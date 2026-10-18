@@ -73,7 +73,8 @@ use cpn_installer::panel_hub_routes::{
     ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
     ftp_reset_password_post, ftp_reset_post, login_mfa_session, passkey_delete_post,
     passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
-    passkey_register_finish, passkey_register_start, passkey_rename_post, security_csf,
+    passkey_register_finish, passkey_register_start, passkey_rename_post, panel_migrate_apply,
+    panel_migrate_route, panel_migrate_wipe, security_csf,
     security_csf_enable, security_csf_install, security_fail2ban, security_firewall,
     security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
     security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
@@ -1314,6 +1315,9 @@ async fn main() -> std::io::Result<()> {
             .service(backups_incremental_save)
             .service(backups_incremental_run)
             .service(server_page)
+            .service(panel_migrate_route)
+            .service(panel_migrate_apply)
+            .service(panel_migrate_wipe)
             .service(server_logs_route)
             .service(server_log_view_route)
             .service(server_services_page)
