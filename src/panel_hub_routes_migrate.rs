@@ -4,16 +4,20 @@ use crate::foreign_panel::apply::ApplyOptions;
 use crate::foreign_panel::{apply_panel, host_root, wipe_panel};
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_csrf::require_panel_csrf;
 use crate::panel_hub_http::{
     html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_migrate::panel_migrate_page;
 use crate::panel_pages::panel_shell;
+use crate::panel_session::session_secret;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
+use sha2::Sha256;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+type HmacSha256 = Hmac<Sha256>;
 
 const MIGRATE_BUDGET: Duration = Duration::from_secs(3600);
 
@@ -51,7 +55,11 @@ pub async fn panel_migrate_route(
         &user,
         "server",
         "Migrate another panel",
-        &panel_migrate_page(notice.as_deref(), error.as_deref()),
+        &panel_migrate_page(
+            &migrate_csrf_token(&user),
+            notice.as_deref(),
+            error.as_deref(),
+        ),
     ))
 }
 
@@ -66,8 +74,12 @@ pub async fn panel_migrate_apply(
         Err(response) => return response,
     };
     let token = form.csrf.clone().unwrap_or_default();
-    if let Err(error) = require_panel_csrf(&http, &user, &token) {
-        return redirect_notice("/server/panel-migrate", None, Some(&error));
+    if !verify_migrate_csrf(&user, &token) {
+        return redirect_notice(
+            "/server/panel-migrate",
+            None,
+            Some("Reload the page and try again."),
+        );
     }
     if form.confirm.as_deref().unwrap_or("").trim() != "MIGRATE" {
         return redirect_notice(
@@ -127,8 +139,12 @@ pub async fn panel_migrate_wipe(
         Err(response) => return response,
     };
     let token = form.csrf.clone().unwrap_or_default();
-    if let Err(error) = require_panel_csrf(&http, &user, &token) {
-        return redirect_notice("/server/panel-migrate", None, Some(&error));
+    if !verify_migrate_csrf(&user, &token) {
+        return redirect_notice(
+            "/server/panel-migrate",
+            None,
+            Some("Reload the page and try again."),
+        );
     }
     if form.confirm.as_deref().unwrap_or("").trim() != "REMOVE" {
         return redirect_notice(
@@ -154,6 +170,53 @@ pub async fn panel_migrate_wipe(
             Some("Remove did not finish. Run cpn panel-migrate wipe on the server."),
         ),
     }
+}
+
+fn hmac_hex(secret: &str, payload: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+    mac.update(payload.as_bytes());
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn now_unix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0)
+}
+
+pub fn migrate_csrf_token(username: &str) -> String {
+    migrate_csrf_token_with_secret(&session_secret(None), username)
+}
+
+pub fn verify_migrate_csrf(username: &str, token: &str) -> bool {
+    verify_migrate_csrf_with_secret(&session_secret(None), username, token)
+}
+
+fn migrate_csrf_token_with_secret(secret: &str, username: &str) -> String {
+    let hour = now_unix() / 3600;
+    let payload = format!("panel-migrate|{username}|{hour}");
+    format!("{hour}.{}", hmac_hex(secret, &payload))
+}
+
+fn verify_migrate_csrf_with_secret(secret: &str, username: &str, token: &str) -> bool {
+    let Some((hour_s, sig)) = token.split_once('.') else {
+        return false;
+    };
+    let Ok(hour) = hour_s.parse::<u64>() else {
+        return false;
+    };
+    let current = now_unix() / 3600;
+    if hour + 2 < current || hour > current + 1 {
+        return false;
+    }
+    let payload = format!("panel-migrate|{username}|{hour}");
+    hmac_hex(secret, &payload) == sig
 }
 
 fn truncate(value: &str) -> String {

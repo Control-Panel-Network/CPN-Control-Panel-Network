@@ -11,7 +11,8 @@ fn esc(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-pub fn panel_migrate_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn panel_migrate_page(csrf: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    let csrf = esc(csrf);
     let root = host_root();
     let found = detect_at(&root);
     let mut body = String::from(
@@ -66,21 +67,25 @@ pub fn panel_migrate_page(notice: Option<&str>, error: Option<&str>) -> String {
         if row.inventory.mapped && !row.inventory.sites.is_empty() {
             body.push_str(&format!(
                 r#"<form method="post" action="/server/panel-migrate/apply" class="inline-form">
+<input type="hidden" name="csrf" value="{csrf}">
 <input type="hidden" name="id" value="{id}">
 <label><input type="checkbox" name="port_ok" value="1"> Port OK</label>
 <label>Type MIGRATE <input name="confirm" required autocomplete="off"></label>
 <button type="submit">Copy into CPN</button>
 </form>"#,
-                id = esc(&row.id)
+                id = esc(&row.id),
+                csrf = csrf
             ));
             if verified {
                 body.push_str(&format!(
                     r#"<form method="post" action="/server/panel-migrate/wipe" class="inline-form">
+<input type="hidden" name="csrf" value="{csrf}">
 <input type="hidden" name="id" value="{id}">
 <label>Type REMOVE <input name="confirm" required autocomplete="off"></label>
 <button type="submit">Remove panel</button>
 </form>"#,
-                    id = esc(&row.id)
+                    id = esc(&row.id),
+                    csrf = csrf
                 ));
             }
         }
