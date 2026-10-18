@@ -17,6 +17,7 @@ pub use crate::panel_hub_routes_error_messages::*;
 pub use crate::panel_hub_routes_files::*;
 pub use crate::panel_hub_routes_files_list::*;
 pub use crate::panel_hub_routes_firewall::*;
+pub use crate::panel_hub_routes_migrate::*;
 pub use crate::panel_hub_routes_passkeys::*;
 pub use crate::panel_hub_routes_php::*;
 pub use crate::panel_hub_routes_profile::*;

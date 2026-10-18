@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Migrate another panel**: Server page `/server/panel-migrate` and `cpn panel-migrate detect|plan|apply|wipe` find a hosting panel already on this machine, copy websites into CPN docroots, import databases when the MariaDB client is present, and copy mail and DNS zones on a best-effort basis. Panel users are listed in the verify report and are not created as CPN accounts. After a verified copy, wipe removes that panel's install prefix and the duplicate files named in the report. Shared MariaDB, the web server, and mail stay. A site that already uses the CPN docroot is kept in place. Ajenti, and Webmin when Virtualmin is absent, stay "detected, inventory not mapped yet" until a site layout is present.
+
 ### Changed
 
 ### Fixed
