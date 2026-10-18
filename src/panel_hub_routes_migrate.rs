@@ -29,12 +29,16 @@ pub struct MigrateForm {
     pub csrf: Option<String>,
 }
 
-fn gate(http: &HttpRequest, state: &AppState) -> Result<String, HttpResponse> {
+fn gate(http: &HttpRequest, state: &AppState) -> Result<String, Box<HttpResponse>> {
     let Some(user) = require_panel_user(state, http) else {
-        return Err(login_redirect(http));
+        return Err(Box::new(login_redirect(http)));
     };
     if !is_panel_admin(&user) {
-        return Err(owner_only_html(&user, "server", "Migrate another panel"));
+        return Err(Box::new(owner_only_html(
+            &user,
+            "server",
+            "Migrate another panel",
+        )));
     }
     Ok(user)
 }
@@ -47,7 +51,7 @@ pub async fn panel_migrate_route(
 ) -> HttpResponse {
     let user = match gate(&http, &state) {
         Ok(user) => user,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
@@ -71,7 +75,7 @@ pub async fn panel_migrate_apply(
 ) -> HttpResponse {
     let user = match gate(&http, &state) {
         Ok(user) => user,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let token = form.csrf.clone().unwrap_or_default();
     if !verify_migrate_csrf(&user, &token) {
@@ -136,7 +140,7 @@ pub async fn panel_migrate_wipe(
 ) -> HttpResponse {
     let user = match gate(&http, &state) {
         Ok(user) => user,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let token = form.csrf.clone().unwrap_or_default();
     if !verify_migrate_csrf(&user, &token) {

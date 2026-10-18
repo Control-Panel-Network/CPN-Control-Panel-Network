@@ -231,10 +231,8 @@ fn scan_virtualmin(root: &Path) -> Vec<SiteHit> {
         push_site(&mut out, &domain, docroot, &user);
         if let Some(site) = out.last_mut() {
             for key in ["mysql", "mysql_db", "db"] {
-                if let Some(name) = kv(&text, key) {
-                    if valid_db(&name) {
-                        site.databases.push(name);
-                    }
+                if let Some(name) = kv(&text, key).filter(|name| valid_db(name)) {
+                    site.databases.push(name);
                 }
             }
         }
