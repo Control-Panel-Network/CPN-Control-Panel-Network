@@ -113,11 +113,13 @@ fn anchored(root: &Path, path: &Path) -> Option<PathBuf> {
 fn remove_path(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if meta.file_type().is_symlink() {
-        fs::remove_file(path).map_err(|error| format!("Could not unlink {}: {error}", path.display()))
+        fs::remove_file(path)
+            .map_err(|error| format!("Could not unlink {}: {error}", path.display()))
     } else if meta.is_dir() {
         fs::remove_dir_all(path)
             .map_err(|error| format!("Could not remove {}: {error}", path.display()))
     } else {
-        fs::remove_file(path).map_err(|error| format!("Could not remove {}: {error}", path.display()))
+        fs::remove_file(path)
+            .map_err(|error| format!("Could not remove {}: {error}", path.display()))
     }
 }

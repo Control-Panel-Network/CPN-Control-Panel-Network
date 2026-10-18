@@ -1,4 +1,4 @@
-﻿//! Read-only site inventory for a detected panel under a filesystem root.
+//! Read-only site inventory for a detected panel under a filesystem root.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -115,8 +115,10 @@ fn scan_userdomains(root: &Path) -> Vec<SiteHit> {
             let docroot = rel(root, &format!("home/{user}/public_html"));
             push_site(&mut out, domain.trim(), docroot, user);
             if let Some(site) = out.last_mut() {
-                site.databases
-                    .extend(db_keys_in_file(&rel(root, &format!("var/cpanel/users/{user}"))));
+                site.databases.extend(db_keys_in_file(&rel(
+                    root,
+                    &format!("var/cpanel/users/{user}"),
+                )));
             }
         }
     }
@@ -251,7 +253,10 @@ fn scan_wwwroot(root: &Path) -> Vec<SiteHit> {
                 continue;
             };
             let docroot = rel(root, &format!("www/wwwroot/{domain}"));
-            if !out.iter().any(|site| site.domain == domain.to_ascii_lowercase()) {
+            if !out
+                .iter()
+                .any(|site| site.domain == domain.to_ascii_lowercase())
+            {
                 push_site(&mut out, domain, docroot, "");
             }
         }
@@ -291,7 +296,6 @@ fn scan_ispconfig(root: &Path) -> Vec<SiteHit> {
     out
 }
 
-
 pub(super) fn collect_domain_dirs(dir: &Path, out: &mut Vec<SiteHit>, owner: &str) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -303,7 +307,6 @@ pub(super) fn collect_domain_dirs(dir: &Path, out: &mut Vec<SiteHit>, owner: &st
         }
     }
 }
-
 
 fn enrich(root: &Path, site: &mut SiteHit) {
     let docroot = PathBuf::from(&site.docroot);
@@ -414,9 +417,5 @@ fn map_path(root: &Path, raw: &str) -> PathBuf {
         return mapped;
     }
     let absolute = PathBuf::from(raw);
-    if absolute.exists() {
-        absolute
-    } else {
-        mapped
-    }
+    if absolute.exists() { absolute } else { mapped }
 }

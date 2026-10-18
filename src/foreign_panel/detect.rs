@@ -114,7 +114,11 @@ mod tests {
             assert!(report.verified);
             assert_eq!(report.sites.len(), 1);
             assert!(!report.sites[0].adopt_in_place);
-            assert!(Path::new(&report.sites[0].dest).join("index.html").is_file());
+            assert!(
+                Path::new(&report.sites[0].dest)
+                    .join("index.html")
+                    .is_file()
+            );
             assert!(report.zones_copied.iter().any(|z| z.ends_with(".zone")));
             assert!(report.users.iter().any(|u| u == "alice"));
             assert!(root.join("usr/local/cpanel").exists());
@@ -123,7 +127,11 @@ mod tests {
             assert!(removed.iter().any(|p| p.contains("cpanel")));
             assert!(!root.join("usr/local/cpanel").exists());
             assert!(!root.join("home/alice/public_html").exists());
-            assert!(Path::new(&report.sites[0].dest).join("index.html").is_file());
+            assert!(
+                Path::new(&report.sites[0].dest)
+                    .join("index.html")
+                    .is_file()
+            );
             let _ = fs::remove_dir_all(&root);
         });
     }
@@ -168,16 +176,18 @@ mod tests {
         let found = detect_at(&root);
         assert_eq!(found[0].id, "ajenti");
         assert!(!found[0].inventory.mapped);
-        assert!(apply_panel(
-            &root,
-            "ajenti",
-            &ApplyOptions {
-                port_ok: true,
-                register_sites: false,
-            },
-        )
-        .unwrap_err()
-        .contains("not mapped"));
+        assert!(
+            apply_panel(
+                &root,
+                "ajenti",
+                &ApplyOptions {
+                    port_ok: true,
+                    register_sites: false,
+                },
+            )
+            .unwrap_err()
+            .contains("not mapped")
+        );
         let _ = fs::remove_dir_all(&root);
     }
 

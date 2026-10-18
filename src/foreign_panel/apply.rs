@@ -67,10 +67,18 @@ pub fn save_report(report: &VerifyReport) -> Result<(), String> {
     fs::write(&path, body).map_err(|error| format!("Could not write {}: {error}", path.display()))
 }
 
-pub fn apply_panel(root: &Path, panel_id: &str, options: &ApplyOptions) -> Result<VerifyReport, String> {
+pub fn apply_panel(
+    root: &Path,
+    panel_id: &str,
+    options: &ApplyOptions,
+) -> Result<VerifyReport, String> {
     let spec = spec_by_id(panel_id).ok_or_else(|| format!("Unknown panel `{panel_id}`"))?;
     if !super::detect::marker_present(root, spec) {
-        return Err(format!("{} is not installed under {}", spec.name, root.display()));
+        return Err(format!(
+            "{} is not installed under {}",
+            spec.name,
+            root.display()
+        ));
     }
     let port = load_preferred_listen_port().unwrap_or(DEFAULT_PORT);
     if spec.listen_port != 0 && spec.listen_port == port && !options.port_ok {
@@ -81,10 +89,7 @@ pub fn apply_panel(root: &Path, panel_id: &str, options: &ApplyOptions) -> Resul
     }
     let inventory = inventory_for(root, spec);
     if !inventory.mapped && inventory.sites.is_empty() {
-        return Err(format!(
-            "{}: detected, inventory not mapped yet",
-            spec.name
-        ));
+        return Err(format!("{}: detected, inventory not mapped yet", spec.name));
     }
     if inventory.sites.is_empty() {
         return Err(format!("No websites found for {}", spec.name));
@@ -116,7 +121,9 @@ pub fn apply_panel(root: &Path, panel_id: &str, options: &ApplyOptions) -> Resul
     for rel_path in spec.wipe_rel {
         let path = rel(root, rel_path);
         if path.exists() {
-            report.delete_paths.push(path.to_string_lossy().into_owned());
+            report
+                .delete_paths
+                .push(path.to_string_lossy().into_owned());
         }
     }
     save_report(&report)?;
@@ -133,7 +140,10 @@ fn copy_one(
     let domain = normalize_domain(&site.domain)?;
     let source = PathBuf::from(&site.docroot);
     if !source.is_dir() {
-        return Err(format!("{domain}: source docroot missing ({})", source.display()));
+        return Err(format!(
+            "{domain}: source docroot missing ({})",
+            source.display()
+        ));
     }
     let parent = resolve_parent_domain(&domain).ok().flatten();
     let dest_text = default_docroot(&domain, parent.as_deref());
@@ -291,9 +301,7 @@ fn copy_mail(domain: &str, site: &SiteHit, report: &mut VerifyReport) {
         }
         match copy_tree(&source_path, &dest) {
             Ok(files) if files > 0 => {
-                report
-                    .mail_copied
-                    .push(dest.to_string_lossy().into_owned());
+                report.mail_copied.push(dest.to_string_lossy().into_owned());
                 report
                     .delete_paths
                     .push(source_path.to_string_lossy().into_owned());

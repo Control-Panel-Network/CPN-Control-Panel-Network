@@ -62,10 +62,7 @@ fn detect() -> Result<(), String> {
         } else {
             row.inventory.note.clone()
         };
-        println!(
-            "{:<16} {:<28} {}  {}",
-            row.id, row.name, row.tier, detail
-        );
+        println!("{:<16} {:<28} {}  {}", row.id, row.name, row.tier, detail);
         for site in &row.inventory.sites {
             println!(
                 "  {}  {}  dbs={} mail={} dns={}",

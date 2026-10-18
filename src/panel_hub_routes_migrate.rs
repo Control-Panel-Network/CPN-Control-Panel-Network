@@ -105,7 +105,9 @@ pub async fn panel_migrate_apply(
             };
             redirect_notice("/server/panel-migrate", Some(&notice), error.as_deref())
         }
-        Ok(Ok(Err(error))) => redirect_notice("/server/panel-migrate", None, Some(&truncate(&error))),
+        Ok(Ok(Err(error))) => {
+            redirect_notice("/server/panel-migrate", None, Some(&truncate(&error)))
+        }
         _ => redirect_notice(
             "/server/panel-migrate",
             None,
@@ -143,7 +145,9 @@ pub async fn panel_migrate_wipe(
             Some(&format!("Removed {} path(s).", paths.len())),
             None,
         ),
-        Ok(Ok(Err(error))) => redirect_notice("/server/panel-migrate", None, Some(&truncate(&error))),
+        Ok(Ok(Err(error))) => {
+            redirect_notice("/server/panel-migrate", None, Some(&truncate(&error)))
+        }
         _ => redirect_notice(
             "/server/panel-migrate",
             None,
