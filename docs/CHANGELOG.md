@@ -9,9 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [1.4.5] - 19/10/2026
+
+Patch release after v1.4.4. Panel migrate from `dev` is on `stable`, the default install download size is documented, and Rust plus Panel dependencies are refreshed.
+
+### Added
+
+- **Default install download size**: `docs/INSTALL-FOOTPRINT.md` records the measured package size from the v1.4.4 GitHub Release assets (about 7.3 MiB for the Enterprise Linux RPM, about 6.8 MiB for the deb). README and INSTALL link to it.
 - **Migrate another panel**: Server page `/server/panel-migrate` and `cpn panel-migrate detect|plan|apply|wipe` find a hosting panel already on this machine, copy websites into CPN docroots, import databases when the MariaDB client is present, and copy mail and DNS zones on a best-effort basis. Panel users are listed in the verify report and are not created as CPN accounts. After a verified copy, wipe removes that panel's install prefix and the duplicate files named in the report. Shared MariaDB, the web server, and mail stay. A site that already uses the CPN docroot is kept in place. Ajenti, and Webmin when Virtualmin is absent, stay "detected, inventory not mapped yet" until a site layout is present.
 
 ### Changed
+
+- **Dependency refresh**: actix-web 4.17.0, tokio 1.53.3, sha2 0.11.1, serde_json 1.0.154. Panel: next 16.4.2, eslint-config-next 16.4.2, react 19.3.1, react-dom 19.3.1 (peer aligned), lucide-react 1.58.0, eslint 10.13.0, @typescript-eslint/parser 8.71.2. Installer UI: react 19.3.1, react-dom 19.3.1, lucide-react 1.58.0, motion 14.3.0, simple-icons 16.35.0.
 
 ### Fixed
 
