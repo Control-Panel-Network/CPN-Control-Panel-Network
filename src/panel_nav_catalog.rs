@@ -560,6 +560,11 @@ pub(crate) const SERVER: &[NavEntry] = &[
         label: "Manage Services",
     },
     NavEntry::Link {
+        id: "panel-migrate",
+        href: "/server/panel-migrate",
+        label: "Migrate panel",
+    },
+    NavEntry::Link {
         id: "system-repair",
         href: "/server/system-repair",
         label: "System Repair",

@@ -193,6 +193,12 @@ pub fn server_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> {
                     live: true,
                 },
                 HubTile {
+                    title: "Migrate panel",
+                    subtitle: "Copy another panel into CPN, then remove it",
+                    href: "/server/panel-migrate",
+                    live: true,
+                },
+                HubTile {
                     title: "System Repair",
                     subtitle: "Diagnose and heal install issues",
                     href: "/server/system-repair",

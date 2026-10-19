@@ -71,16 +71,17 @@ use cpn_installer::panel_hub_routes::{
     email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
     email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
     ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
-    ftp_reset_password_post, ftp_reset_post, login_mfa_session, passkey_delete_post,
-    passkey_login_finish, passkey_login_start, passkey_mfa_finish, passkey_mfa_start,
-    passkey_register_finish, passkey_register_start, passkey_rename_post, security_csf,
-    security_csf_enable, security_csf_install, security_fail2ban, security_firewall,
-    security_firewall_ban_add, security_firewall_ban_delete, security_firewall_ban_unban,
-    security_firewall_banned_import, security_firewall_enable, security_firewall_export_banned,
-    security_firewall_export_rules, security_firewall_reload, security_firewall_rule_add,
-    security_firewall_rule_delete, security_firewall_rules_import, security_firewall_start,
-    security_firewall_stop, security_firewall_trusted_add, security_firewall_trusted_delete,
-    security_malware, security_malware_run, security_modsec, security_modsec_rules, security_page,
+    ftp_reset_password_post, ftp_reset_post, login_mfa_session, panel_migrate_apply,
+    panel_migrate_route, panel_migrate_wipe, passkey_delete_post, passkey_login_finish,
+    passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
+    passkey_register_start, passkey_rename_post, security_csf, security_csf_enable,
+    security_csf_install, security_fail2ban, security_firewall, security_firewall_ban_add,
+    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
+    security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
+    security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
+    security_firewall_rules_import, security_firewall_start, security_firewall_stop,
+    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
+    security_malware_run, security_modsec, security_modsec_rules, security_page,
     security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
     security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
     security_ssl_mail, security_ssl_manage, security_ssl_mark_custom, security_ssl_origin_backup,
@@ -1314,6 +1315,9 @@ async fn main() -> std::io::Result<()> {
             .service(backups_incremental_save)
             .service(backups_incremental_run)
             .service(server_page)
+            .service(panel_migrate_route)
+            .service(panel_migrate_apply)
+            .service(panel_migrate_wipe)
             .service(server_logs_route)
             .service(server_log_view_route)
             .service(server_services_page)
