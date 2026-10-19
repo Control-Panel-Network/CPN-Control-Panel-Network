@@ -27,6 +27,8 @@ On a supported Linux guest (the script requests `sudo` automatically when needed
 curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 ```
 
+Download size of that default package: [docs/INSTALL-FOOTPRINT.md](docs/INSTALL-FOOTPRINT.md).
+
 If the host is down, use GitHub raw:
 
 ```bash
@@ -99,6 +101,7 @@ All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel
 | Doc | Topic |
 | --- | --- |
 | [INSTALL.md](docs/INSTALL.md) | One-liners, Docker Hub images, pins, fallbacks, `--bypass` |
+| [INSTALL-FOOTPRINT.md](docs/INSTALL-FOOTPRINT.md) | Measured download size of the default install |
 | [SUPPORT.md](docs/SUPPORT.md) | Supported / partial / refused OS |
 | [CLI.md](docs/CLI.md) | `cpn` and `cpn-installer` flags |
 | [RELEASES.md](docs/RELEASES.md) | Packages, checksums, GPG |

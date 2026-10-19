@@ -12,6 +12,8 @@ Short pipes against `cpn.newstargeted.com` are the default. GitHub raw is only f
 curl -fsSL https://cpn.newstargeted.com/install.sh | bash
 ```
 
+Download size of that default package: [INSTALL-FOOTPRINT.md](INSTALL-FOOTPRINT.md).
+
 ### Upgrade (existing `cpn-installer`)
 
 ```bash
