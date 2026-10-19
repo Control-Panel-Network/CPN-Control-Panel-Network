@@ -14,7 +14,7 @@
     "auth-selftest": "node scripts/auth-selftest.mjs"
   },
   "dependencies": {
-    "lucide-react": "^1.55.0",
+    "lucide-react": "^1.58.0",
     "next": "16.4.0",
     "react": "19.3.1",
     "react-dom": "19.3.0"
