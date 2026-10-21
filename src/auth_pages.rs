@@ -246,12 +246,16 @@ pub fn panel_login_html_with_gate(
         showErr('Sign-in timed out. The panel may be busy with background work; wait a moment and try again.');
         resetSubmit();
       },13000);
+      // Follow redirects so we land on the real post-login URL (dashboard,
+      // enroll-2fa, or /login/2fa). redirect:'manual' often yields opaqueredirect
+      // with a hidden Location, which forced a slow bounce via /login/2fa and
+      // left the button stuck on "Signing in..." in Cursor/Chromium.
       fetch(form.getAttribute('action')||'/login',{
         method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
         body:body,
         credentials:'same-origin',
-        redirect:'manual',
+        redirect:'follow',
         signal:ctrl.signal
       }).then(function(res){
         clearTimeout(timer);
@@ -269,16 +273,23 @@ pub fn panel_login_html_with_gate(
           return null;
         }
         if(res.type==='opaqueredirect'){
-          // Browsers (and Cursor browser) often hide Location for redirect:'manual'.
-          // MFA-pending password login 303s to /login/2fa. Successful non-MFA login
-          // sets a session cookie and may 303 to enroll-2fa/dashboard; /login/2fa
-          // detects that session and continues there (never traps on empty passkeys).
+          // Fallback when a browser still hides redirect details.
           settled=true;
           clearTimeout(safety);
           location.href='/login/2fa';
           setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
           return null;
         }
+        try{
+          var finalPath=new URL(res.url, location.origin).pathname;
+          if(finalPath!=='/login'){
+            settled=true;
+            clearTimeout(safety);
+            location.href=res.url;
+            setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
+            return null;
+          }
+        }catch(_e){}
         return res.text().then(function(html){
           if(res.status===401 || res.status===503 || res.ok){
             settled=true;
@@ -768,6 +779,7 @@ mod tests {
         assert!(html.contains("/api/login/services"));
         assert!(html.contains("Signing in..."));
         assert!(html.contains("data-cpn-submitting"));
+        assert!(html.contains("redirect:'follow'"));
         assert!(html.contains("MariaDB/web health"));
         assert!(html.contains("12000"));
     }
