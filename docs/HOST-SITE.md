@@ -22,7 +22,7 @@ Homepage `/` is HTML. Script URLs must keep returning shell source (not HTML) so
 
 ## Live docroot
 
-LiteSpeed (typical production path):
+CyberPanel / LiteSpeed:
 
 `/home/newstargeted.com/public_html/cpn.newstargeted.com`
 
@@ -39,3 +39,11 @@ curl -fsSL https://cpn.newstargeted.com/install.sh | head -5
 ```
 
 Expect `/` as `text/html` and `/install.sh` as script text (`text/plain` or `application/x-sh`) starting with `#!/usr/bin/env bash`.
+
+## GitHub Pages (secondary mirror)
+
+Workflow: `.github/workflows/pages.yml` publishes `site/` from `stable` to:
+
+`https://control-panel-network.github.io/CPN-Control-Panel-Network/`
+
+Pages is **HTML and assets only**. Install scripts, `.htaccess`, and one-liner pipes stay on `cpn.newstargeted.com` (and GitHub raw as fallback). Canonical / Open Graph / JSON-LD in `site/index.html` keep pointing at the CyberPanel host so Pages is not the SEO primary.
