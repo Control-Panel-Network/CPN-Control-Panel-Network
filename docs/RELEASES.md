@@ -59,7 +59,7 @@ CPN also publishes **maintainer/smoke** AlmaLinux and Ubuntu + systemd container
 
 Images are built and pushed automatically when a `v*` tag is pushed to `stable` (`.github/workflows/docker-hub.yml`). Requires **repository** secrets on `Control-Panel-Network/CPN-Control-Panel-Network`: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Docker Hub access token). Without them, CI does not push to Hub. Re-run **Docker Hub publish** from Actions (`workflow_dispatch`, `os_tag=all`) after secrets are set.
 
-Privileged mode and cgroup mounts are required at run time; see `scripts/docker-run.sh`, `docker/Dockerfile.almalinux`, and `docker/Dockerfile.ubuntu`.
+Host cgroup mounts and a reduced capability set (or privileged fallback) are required at run time; see `scripts/docker-run.sh`, `docs/DOCKER-DATA-LAYOUT.md`, `docker/Dockerfile.almalinux`, and `docker/Dockerfile.ubuntu`.
 
 ## Release verification
 

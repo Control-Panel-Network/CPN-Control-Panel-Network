@@ -1,4 +1,4 @@
-# CPN installer via Docker (privileged AlmaLinux + systemd).
+# CPN installer via Docker (AlmaLinux + systemd).
 # Usage:
 #   ./scripts/docker-build-rpm.sh          # if you do not already have an RPM
 #   ./scripts/docker-run.sh                # preferred helper
@@ -6,8 +6,14 @@
 #   docker compose build
 #   docker compose up -d
 #
-# Security: privileged mode is required for systemd and package installs.
-# Use only on dedicated lab/test hosts. Do not expose 2087 to the public internet.
+# Security: systemd as PID 1 needs host cgroup access (cgroupns + rw /sys/fs/cgroup).
+# Prefer the reduced capability set below when verified; fall back to privileged: true
+# only if the reduced set fails on your engine. Use dedicated lab/test hosts.
+# Do not expose 2087 to the public internet.
+#
+# Persistence: bind mounts under CPN_DOCKER_DATA_ROOT (default /var/lib/cpn-docker-host)
+# so pull and recreate keeps panel settings, websites, databases, and certificates.
+# See docs/DOCKER-DATA-LAYOUT.md.
 
 services:
   cpn-installer:
@@ -19,7 +25,28 @@ services:
     image: "cpn-installer:el${CPN_ALMA_VERSION:-9}"
     container_name: cpn-installer
     hostname: cpn-installer
-    privileged: true
+    # Reduced capabilities (not full --privileged). Override with privileged: true if needed.
+    privileged: false
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_RESOURCE
+      - SYS_NICE
+      - SYS_PTRACE
+      - AUDIT_WRITE
+      - AUDIT_CONTROL
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - MKNOD
+      - NET_BIND_SERVICE
+      - NET_RAW
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
     cgroupns_mode: host
     environment:
       container: docker
@@ -30,5 +57,11 @@ services:
       - /run/lock
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # :Z relabels for SELinux Enforcing (AlmaLinux/RHEL); ignored where SELinux is off.
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-data:/var/lib/cpn:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-home:/home:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-mysql:/var/lib/mysql:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-letsencrypt:/etc/letsencrypt:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-webmail:/var/lib/cpn-webmail:Z
     stop_signal: SIGRTMIN+3
     restart: unless-stopped

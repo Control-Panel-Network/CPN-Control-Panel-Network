@@ -80,9 +80,25 @@ start_container() {
     )
   fi
 
-  "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
+  # Prefer reduced capabilities over full --privileged (see docs/DOCKER-DATA-LAYOUT.md).
+  # Fall back to privileged if systemd does not come up (some engines / hosts).
+  local run_ok=0
+  if "$engine" run -d --cgroupns=host --name "$name" --hostname "$name" \
+    --cap-add=SYS_ADMIN --cap-add=NET_ADMIN --cap-add=SYS_RESOURCE --cap-add=SYS_NICE \
+    --cap-add=SYS_PTRACE --cap-add=AUDIT_WRITE --cap-add=AUDIT_CONTROL \
+    --cap-add=SETUID --cap-add=SETGID --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
+    --cap-add=FOWNER --cap-add=KILL --cap-add=MKNOD --cap-add=NET_BIND_SERVICE \
+    --cap-add=NET_RAW --security-opt=apparmor:unconfined --security-opt=seccomp:unconfined \
     --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    -e container=docker "$image" "${entry[@]}" >/dev/null
+    -e container=docker "$image" "${entry[@]}" >/dev/null 2>&1; then
+    run_ok=1
+  fi
+  if [[ "$run_ok" != "1" ]]; then
+    "$engine" rm -f "$name" >/dev/null 2>&1 || true
+    "$engine" run -d --privileged --cgroupns=host --name "$name" --hostname "$name" \
+      --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+      -e container=docker "$image" "${entry[@]}" >/dev/null
+  fi
   # Rocky minimal may dnf-install systemd first; mirrors on GHA can be slow (BaseOS
   # metadata alone took about 6 minutes in one run), so allow up to 15 minutes.
   for _ in {1..900}; do

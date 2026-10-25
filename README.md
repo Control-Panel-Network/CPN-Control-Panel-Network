@@ -59,7 +59,7 @@ docker pull master3395/cpn-installer:latest
 docker pull master3395/cpn-installer:1.4.5
 ```
 
-Privileged systemd run, `scripts/docker-run.sh` (local build), and native install vs containers: **[docs/INSTALL.md](docs/INSTALL.md)**. Prefer RPM/DEB on production hosts.
+Data layout, pull/recreate binds, and systemd guest security: **[docs/DOCKER-DATA-LAYOUT.md](docs/DOCKER-DATA-LAYOUT.md)**. Run helper and native install vs containers: **[docs/INSTALL.md](docs/INSTALL.md)**. Prefer RPM/DEB on production hosts.
 
 ## Upgrade
 
@@ -101,6 +101,7 @@ All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel
 | Doc | Topic |
 | --- | --- |
 | [INSTALL.md](docs/INSTALL.md) | One-liners, Docker Hub images, pins, fallbacks, `--bypass` |
+| [DOCKER-DATA-LAYOUT.md](docs/DOCKER-DATA-LAYOUT.md) | Hub persistence binds, path map, systemd guest security |
 | [INSTALL-FOOTPRINT.md](docs/INSTALL-FOOTPRINT.md) | Measured download size of the default install |
 | [SUPPORT.md](docs/SUPPORT.md) | Supported / partial / refused OS |
 | [CLI.md](docs/CLI.md) | `cpn` and `cpn-installer` flags |

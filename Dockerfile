@@ -1,5 +1,6 @@
-# Backward compatibility: AlmaLinux runtime (default EL smoke path).
+# Backward compatibility: AlmaLinux runtime (default EL lab path).
 # Prefer docker/Dockerfile.almalinux or docker/Dockerfile.ubuntu for Hub builds.
+# Runtime: see scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
 
 ARG ALMA_VERSION=9
 FROM almalinux:${ALMA_VERSION}
