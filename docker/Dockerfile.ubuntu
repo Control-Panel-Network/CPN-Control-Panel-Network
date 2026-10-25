@@ -1,5 +1,5 @@
-# CPN installer runtime image (Ubuntu + systemd) for development/smoke testing.
-# Privileged mode and cgroup mounts are required at run time; see scripts/docker-run.sh.
+# CPN installer runtime image (Ubuntu + systemd) for development and lab installs.
+# Host cgroup mounts + reduced capabilities (or privileged fallback) at run time; see scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
 
 ARG UBUNTU_VERSION=26.04
 

@@ -216,20 +216,22 @@ fn create_container_form(prefill_image: &str) -> String {
     format!(
         r#"<div class="panel-card" style="margin:18px 0;">
       <h2 style="margin:0 0 8px;font-size:18px;">Create Container</h2>
-      <p class="muted" style="margin:0 0 14px;">Run a local or pulled upstream image. For production data, prefer <a href="/docker/stacks">Compose Stacks</a> (host bind mounts). User containers are not labeled as CPN-managed.</p>
-      <form method="post" action="/docker/create" class="docker-create-form">
+      <p class="muted" style="margin:0 0 14px;">Run a local or pulled upstream image. For lasting data, prefer <a href="/docker/stacks">Compose Stacks</a> (host bind mounts under <code>/var/lib/cpn/docker-data</code>). User containers are not labeled as CPN-managed.</p>
+      <p class="muted" style="margin:0 0 14px;">Volumes are optional (throwaway containers allowed). Without a host bind, remove/recreate loses container filesystem data. Suggested bind: <code>/var/lib/cpn/docker-data/&lt;name&gt;/data:/data</code>.</p>
+      <form method="post" action="/docker/create" class="docker-create-form" id="docker-create-form">
         <label>Image <span class="muted">(required)</span>
           <input type="text" name="image" required maxlength="255" placeholder="nginx:alpine" value="{img}" autocomplete="off">
         </label>
         <label>Container name <span class="muted">(optional)</span>
-          <input type="text" name="name" maxlength="64" placeholder="my-nginx" autocomplete="off">
+          <input type="text" name="name" id="docker-create-name" maxlength="64" placeholder="my-nginx" autocomplete="off">
         </label>
         <label>Ports <span class="muted">(host:container, comma or newline)</span>
           <input type="text" name="ports" maxlength="200" placeholder="8080:80" autocomplete="off">
         </label>
         <label>Volumes <span class="muted">(host_path:container_path, optional)</span>
-          <input type="text" name="volumes" maxlength="400" placeholder="/var/lib/cpn/docker-data/myapp/data:/data" autocomplete="off">
+          <input type="text" name="volumes" id="docker-create-volumes" maxlength="400" placeholder="/var/lib/cpn/docker-data/myapp/data:/data" value="/var/lib/cpn/docker-data/myapp/data:/data" autocomplete="off">
         </label>
+        <p class="muted" style="margin:0 0 12px;">Clear the Volumes field for an ephemeral container. Leaving the suggested bind keeps data under the CPN docker-data tree across recreate.</p>
         <label>Environment <span class="muted">(KEY=value, one per line)</span>
           <textarea name="env" rows="3" maxlength="4000" placeholder="TZ=UTC"></textarea>
         </label>
@@ -247,6 +249,24 @@ fn create_container_form(prefill_image: &str) -> String {
         </label>
         <p class="docker-form-actions"><button type="submit" class="btn-primary">Create Container</button></p>
       </form>
+      <script>
+      (function () {
+        var nameEl = document.getElementById('docker-create-name');
+        var volEl = document.getElementById('docker-create-volumes');
+        if (!nameEl || !volEl) return;
+        var suggestedPrefix = '/var/lib/cpn/docker-data/';
+        var suggestedSuffix = '/data:/data';
+        function syncVol() {
+          var cur = (volEl.value || '').trim();
+          var isSuggested = !cur || cur.indexOf(suggestedPrefix) === 0;
+          if (!isSuggested) return;
+          var n = (nameEl.value || '').trim().replace(/[^a-zA-Z0-9_.-]/g, '') || 'myapp';
+          volEl.value = suggestedPrefix + n + suggestedSuffix;
+        }
+        nameEl.addEventListener('input', syncVol);
+        nameEl.addEventListener('change', syncVol);
+      })();
+      </script>
     </div>"#,
         img = img,
     )

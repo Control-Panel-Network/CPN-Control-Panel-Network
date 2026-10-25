@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build and run the CPN installer in a privileged AlmaLinux + systemd container.
-# This is a maintainer/smoke-test path, not the normal end-user installer.
+# Build and run the CPN installer in an AlmaLinux + systemd container.
+# Maintainer / lab path (not the normal end-user native installer).
+# Persistence and security: docs/DOCKER-DATA-LAYOUT.md
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,6 +12,9 @@ image_tag="cpn-installer:el${alma_version}"
 container_engine="${CPN_CONTAINER_ENGINE:-}"
 rpm_path="${CPN_RPM_PATH:-}"
 skip_build_rpm="${CPN_SKIP_BUILD_RPM:-0}"
+data_root="${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}"
+# CPN_DOCKER_PRIVILEGED=1 forces full --privileged (fallback). Default: reduced caps.
+force_privileged="${CPN_DOCKER_PRIVILEGED:-0}"
 
 if [[ "$alma_version" != "8" && "$alma_version" != "9" && "$alma_version" != "10" ]]; then
   echo "CPN_ALMA_VERSION must be 8, 9, or 10 (got: ${alma_version})." >&2
@@ -67,6 +71,44 @@ resolve_rpm() {
   echo "$newest"
 }
 
+ensure_data_dirs() {
+  mkdir -p \
+    "$data_root/cpn-data" \
+    "$data_root/cpn-home" \
+    "$data_root/cpn-mysql" \
+    "$data_root/cpn-letsencrypt" \
+    "$data_root/cpn-webmail"
+  # Writable for rootful Docker and rootless Podman UID mapping into the guest.
+  chmod 777 \
+    "$data_root/cpn-data" \
+    "$data_root/cpn-home" \
+    "$data_root/cpn-mysql" \
+    "$data_root/cpn-letsencrypt" \
+    "$data_root/cpn-webmail" 2>/dev/null || true
+}
+
+# Reduced capability set (narrower than --privileged). Still needs host cgroup access.
+cap_args=(
+  --cap-add=SYS_ADMIN
+  --cap-add=NET_ADMIN
+  --cap-add=SYS_RESOURCE
+  --cap-add=SYS_NICE
+  --cap-add=SYS_PTRACE
+  --cap-add=AUDIT_WRITE
+  --cap-add=AUDIT_CONTROL
+  --cap-add=SETUID
+  --cap-add=SETGID
+  --cap-add=CHOWN
+  --cap-add=DAC_OVERRIDE
+  --cap-add=FOWNER
+  --cap-add=KILL
+  --cap-add=MKNOD
+  --cap-add=NET_BIND_SERVICE
+  --cap-add=NET_RAW
+  --security-opt=apparmor:unconfined
+  --security-opt=seccomp:unconfined
+)
+
 engine="$(detect_engine)"
 cd "$project_dir"
 
@@ -94,11 +136,20 @@ echo "[cpn] Building image ${image_tag} (AlmaLinux ${alma_version})..."
   -f "$project_dir/Dockerfile" \
   "$project_dir"
 
+ensure_data_dirs
 "$engine" rm -f "$name" >/dev/null 2>&1 || true
 
-echo "[cpn] Starting privileged systemd container ${name} on port ${port}..."
+security_mode="reduced-capabilities"
+run_security=( "${cap_args[@]}" )
+if [[ "$force_privileged" == "1" ]]; then
+  security_mode="privileged"
+  run_security=( --privileged )
+fi
+
+echo "[cpn] Starting systemd container ${name} on port ${port} (${security_mode})..."
+echo "[cpn] Data root: ${data_root} (survives pull/recreate when binds are kept)"
 "$engine" run -d \
-  --privileged \
+  "${run_security[@]}" \
   --cgroupns=host \
   --name "$name" \
   --hostname "$name" \
@@ -106,19 +157,57 @@ echo "[cpn] Starting privileged systemd container ${name} on port ${port}..."
   --tmpfs /run \
   --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -v "${data_root}/cpn-data:/var/lib/cpn:Z" \
+  -v "${data_root}/cpn-home:/home:Z" \
+  -v "${data_root}/cpn-mysql:/var/lib/mysql:Z" \
+  -v "${data_root}/cpn-letsencrypt:/etc/letsencrypt:Z" \
+  -v "${data_root}/cpn-webmail:/var/lib/cpn-webmail:Z" \
   -e container=docker \
   --stop-signal SIGRTMIN+3 \
   "$image_tag" \
   /usr/lib/systemd/systemd >/dev/null
 
 echo "[cpn] Waiting for systemd..."
+systemd_ok=0
 for _ in {1..45}; do
   if "$engine" exec "$name" systemctl is-system-running --quiet 2>/dev/null \
     || "$engine" exec "$name" systemctl is-system-running 2>/dev/null | grep -Eq 'running|degraded'; then
+    systemd_ok=1
     break
   fi
   sleep 1
 done
+
+if [[ "$systemd_ok" != "1" && "$force_privileged" != "1" ]]; then
+  echo "[cpn] Reduced capabilities did not bring systemd up; retrying with --privileged..." >&2
+  "$engine" rm -f "$name" >/dev/null 2>&1 || true
+  security_mode="privileged (auto-fallback)"
+  "$engine" run -d \
+    --privileged \
+    --cgroupns=host \
+    --name "$name" \
+    --hostname "$name" \
+    -p "${port}:2087" \
+    --tmpfs /run \
+    --tmpfs /run/lock \
+    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+    -v "${data_root}/cpn-data:/var/lib/cpn:Z" \
+    -v "${data_root}/cpn-home:/home:Z" \
+    -v "${data_root}/cpn-mysql:/var/lib/mysql:Z" \
+    -v "${data_root}/cpn-letsencrypt:/etc/letsencrypt:Z" \
+    -v "${data_root}/cpn-webmail:/var/lib/cpn-webmail:Z" \
+    -e container=docker \
+    --stop-signal SIGRTMIN+3 \
+    "$image_tag" \
+    /usr/lib/systemd/systemd >/dev/null
+  for _ in {1..45}; do
+    if "$engine" exec "$name" systemctl is-system-running --quiet 2>/dev/null \
+      || "$engine" exec "$name" systemctl is-system-running 2>/dev/null | grep -Eq 'running|degraded'; then
+      break
+    fi
+    sleep 1
+  done
+fi
 
 "$engine" exec "$name" systemctl restart cpn-installer.service >/dev/null 2>&1 || true
 sleep 2
@@ -134,7 +223,7 @@ for _ in {1..30}; do
 done
 
 echo
-echo "[cpn] Container ${name} is running (${image_tag})."
+echo "[cpn] Container ${name} is running (${image_tag}, ${security_mode})."
 echo "[cpn] Installer UI: http://127.0.0.1:${port}/"
 if [[ -n "$token" ]]; then
   echo "[cpn] Open with token: http://127.0.0.1:${port}/?token=${token}"
@@ -145,6 +234,8 @@ else
   echo "       ${engine} exec ${name} journalctl -u cpn-installer -f"
 fi
 echo
-echo "[cpn] Security: this container runs privileged and can change the guest OS."
+echo "[cpn] Security: ${security_mode}; host cgroup mount required for systemd."
+echo "[cpn] Broader host access than an ordinary app container. Lab/test hosts only."
 echo "[cpn] Do not publish port ${port} on untrusted networks."
+echo "[cpn] Data binds under ${data_root} survive recreate (see docs/DOCKER-DATA-LAYOUT.md)."
 echo "[cpn] Stop: ${engine} rm -f ${name}"
