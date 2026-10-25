@@ -22,7 +22,7 @@ Defaults from panel paths (`CPN_DATA_DIR` overrides the data root):
 | Panel settings, site registry, MFA, CPN SSL, plugins, Docker metadata | `/var/lib/cpn` | Yes (`cpn-data`) |
 | MFA / passkeys | `/var/lib/cpn/mfa/` | Yes (under `cpn-data`) |
 | CPN SSL material | `/var/lib/cpn/ssl/<domain>/` | Yes (under `cpn-data`) |
-| Website docroots and mailbox homes under `/home` | `/home/<domain>/...` | Yes (`cpn-home`) |
+| Website docroots and mailbox homes under `/home` | `/home/<domain>/...` (site home stays `root:root` `0755` for OpenSSH SFTP chroot; `public_html` is chowned to the web runtime user such as `nobody` so PHP can write; never `chmod 777`) | Yes (`cpn-home`) |
 | Host MariaDB (when installed in the guest) | `/var/lib/mysql` | Yes (`cpn-mysql`) |
 | Let's Encrypt | `/etc/letsencrypt` | Yes (`cpn-letsencrypt`) |
 | Webmail app data | `/var/lib/cpn-webmail` | Yes (`cpn-webmail`) |

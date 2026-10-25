@@ -21,7 +21,12 @@ pub const DEFAULT_PACKAGE_ID: &str = "pkg-default";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuotaResource {
+    /// Apex / main websites only (not nested sub-domain sites).
     Domains,
+    /// Nested sub-domain sites under an owned parent.
+    Subdomains,
+    /// Parked / ServerAlias hostnames on owned sites.
+    AliasDomains,
     Emails,
     Databases,
     DatabaseDiskMb,
@@ -612,7 +617,9 @@ pub fn package_for_account(username: &str) -> Result<Package, String> {
     get_package(DEFAULT_PACKAGE_ID)
 }
 
-pub use crate::package_quota::{require_quota, require_site_create_allowed, usage_for_account};
+pub use crate::package_quota::{
+    require_alias_create_allowed, require_quota, require_site_create_allowed, usage_for_account,
+};
 
 #[cfg(test)]
 #[path = "packages_tests.rs"]

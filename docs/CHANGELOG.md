@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Site docroot ownership on create**: New website and sub-domain document roots (`public_html`) are chowned to the preferred web runtime user (`nobody` / `apache` / `nginx` / `www-data`) so PHP can write uploads. Site home and parent directories stay `root:root` mode `0755` for OpenSSH SFTP chroot. Never uses world-writable modes.
+- **Package website vs sub-domain counting**: Dashboard and quota usage treat **Websites** as apex/main sites only. Nested FQDN sites count under **Sub-domains**. Alias hostnames count under **Alias domains**.
 - **Docker Hub guest hardening docs**: `docs/DOCKER-DATA-LAYOUT.md` documents that `/usr/local/lsws`, mail config/queues, and OS account files are outside the default binds; security section states remaining systemd trade-offs (`SYS_ADMIN`, unconfined AppArmor/seccomp, rw cgroups) without claiming app-container isolation.
 
 ### Fixed
 
+- **Sub-domain and alias package quotas on create**: Creating a nested site now enforces the package `subdomains` limit (and FQDN flag). Adding a domain alias enforces `alias_domains`. Previously those fields were shown on the dashboard but not checked at create time.
 - **No world-writable Docker data dirs**: `scripts/docker-run.sh` and install examples use mode `0755` only (never `chmod 777`). Privileged mode is explicit opt-in via `CPN_DOCKER_PRIVILEGED=1` with no automatic privileged retry.
 - **Docker matrix and OS docs match Hub hardening**: `tests/docker-matrix.sh` no longer auto-falls back to `--privileged` (same `CPN_DOCKER_PRIVILEGED=1` opt-in). AlmaLinux 8/9/10 local path and Ubuntu 26.04 Hub Compose share 0755 / reduced-caps guidance in `docs/OS-SUPPORT-MATRIX.md`, INSTALL, hub-overview, and Dockerfiles.
 

@@ -335,6 +335,7 @@ pub fn add_site_alias(
         return Err("Alias cannot match the primary domain".into());
     }
     let site = load_site(&domain)?;
+    crate::packages::require_alias_create_allowed(&site.owner)?;
     if site.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
         return Err(format!("Alias `{alias}` is already listed"));
     }
