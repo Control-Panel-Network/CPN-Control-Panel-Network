@@ -13,8 +13,10 @@ container_engine="${CPN_CONTAINER_ENGINE:-}"
 rpm_path="${CPN_RPM_PATH:-}"
 skip_build_rpm="${CPN_SKIP_BUILD_RPM:-0}"
 data_root="${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}"
-# CPN_DOCKER_PRIVILEGED=1 forces full --privileged (fallback). Default: reduced caps.
+# CPN_DOCKER_PRIVILEGED=1 forces full --privileged (explicit opt-in only; no auto-fallback).
 force_privileged="${CPN_DOCKER_PRIVILEGED:-0}"
+# CPN_DOCKER_BIND_LSWS=1 also bind-mounts /usr/local/lsws for OLS/LiteSpeed persistence.
+bind_lsws="${CPN_DOCKER_BIND_LSWS:-0}"
 
 if [[ "$alma_version" != "8" && "$alma_version" != "9" && "$alma_version" != "10" ]]; then
   echo "CPN_ALMA_VERSION must be 8, 9, or 10 (got: ${alma_version})." >&2
@@ -78,13 +80,32 @@ ensure_data_dirs() {
     "$data_root/cpn-mysql" \
     "$data_root/cpn-letsencrypt" \
     "$data_root/cpn-webmail"
-  # Writable for rootful Docker and rootless Podman UID mapping into the guest.
-  chmod 777 \
+  # Never world-writable (no 777). Rootful Docker: root-owned 0755 is enough.
+  # Rootless Podman: dirs owned by the invoking user after mkdir; keep 0755.
+  chmod 0755 \
     "$data_root/cpn-data" \
     "$data_root/cpn-home" \
     "$data_root/cpn-mysql" \
     "$data_root/cpn-letsencrypt" \
     "$data_root/cpn-webmail" 2>/dev/null || true
+  if [[ "$bind_lsws" == "1" ]]; then
+    mkdir -p "$data_root/cpn-lsws"
+    chmod 0755 "$data_root/cpn-lsws" 2>/dev/null || true
+  fi
+}
+
+# Shared -v lines for docker/podman run.
+build_vol_args() {
+  vol_args=(
+    -v "${data_root}/cpn-data:/var/lib/cpn:Z"
+    -v "${data_root}/cpn-home:/home:Z"
+    -v "${data_root}/cpn-mysql:/var/lib/mysql:Z"
+    -v "${data_root}/cpn-letsencrypt:/etc/letsencrypt:Z"
+    -v "${data_root}/cpn-webmail:/var/lib/cpn-webmail:Z"
+  )
+  if [[ "$bind_lsws" == "1" ]]; then
+    vol_args+=( -v "${data_root}/cpn-lsws:/usr/local/lsws:Z" )
+  fi
 }
 
 # Reduced capability set (narrower than --privileged). Still needs host cgroup access.
@@ -146,8 +167,13 @@ if [[ "$force_privileged" == "1" ]]; then
   run_security=( --privileged )
 fi
 
+build_vol_args
+
 echo "[cpn] Starting systemd container ${name} on port ${port} (${security_mode})..."
 echo "[cpn] Data root: ${data_root} (survives pull/recreate when binds are kept)"
+if [[ "$bind_lsws" == "1" ]]; then
+  echo "[cpn] Extra bind: ${data_root}/cpn-lsws -> /usr/local/lsws"
+fi
 "$engine" run -d \
   "${run_security[@]}" \
   --cgroupns=host \
@@ -157,11 +183,7 @@ echo "[cpn] Data root: ${data_root} (survives pull/recreate when binds are kept)
   --tmpfs /run \
   --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  -v "${data_root}/cpn-data:/var/lib/cpn:Z" \
-  -v "${data_root}/cpn-home:/home:Z" \
-  -v "${data_root}/cpn-mysql:/var/lib/mysql:Z" \
-  -v "${data_root}/cpn-letsencrypt:/etc/letsencrypt:Z" \
-  -v "${data_root}/cpn-webmail:/var/lib/cpn-webmail:Z" \
+  "${vol_args[@]}" \
   -e container=docker \
   --stop-signal SIGRTMIN+3 \
   "$image_tag" \
@@ -178,35 +200,13 @@ for _ in {1..45}; do
   sleep 1
 done
 
-if [[ "$systemd_ok" != "1" && "$force_privileged" != "1" ]]; then
-  echo "[cpn] Reduced capabilities did not bring systemd up; retrying with --privileged..." >&2
-  "$engine" rm -f "$name" >/dev/null 2>&1 || true
-  security_mode="privileged (auto-fallback)"
-  "$engine" run -d \
-    --privileged \
-    --cgroupns=host \
-    --name "$name" \
-    --hostname "$name" \
-    -p "${port}:2087" \
-    --tmpfs /run \
-    --tmpfs /run/lock \
-    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    -v "${data_root}/cpn-data:/var/lib/cpn:Z" \
-    -v "${data_root}/cpn-home:/home:Z" \
-    -v "${data_root}/cpn-mysql:/var/lib/mysql:Z" \
-    -v "${data_root}/cpn-letsencrypt:/etc/letsencrypt:Z" \
-    -v "${data_root}/cpn-webmail:/var/lib/cpn-webmail:Z" \
-    -e container=docker \
-    --stop-signal SIGRTMIN+3 \
-    "$image_tag" \
-    /usr/lib/systemd/systemd >/dev/null
-  for _ in {1..45}; do
-    if "$engine" exec "$name" systemctl is-system-running --quiet 2>/dev/null \
-      || "$engine" exec "$name" systemctl is-system-running 2>/dev/null | grep -Eq 'running|degraded'; then
-      break
-    fi
-    sleep 1
-  done
+if [[ "$systemd_ok" != "1" ]]; then
+  echo "[cpn] systemd did not become ready with ${security_mode}." >&2
+  if [[ "$force_privileged" != "1" ]]; then
+    echo "[cpn] No automatic --privileged retry. Re-run with CPN_DOCKER_PRIVILEGED=1 only on a dedicated lab host if you accept that risk." >&2
+  fi
+  echo "[cpn] Check: ${engine} logs ${name}; ${engine} exec ${name} systemctl status" >&2
+  exit 1
 fi
 
 "$engine" exec "$name" systemctl restart cpn-installer.service >/dev/null 2>&1 || true
@@ -235,7 +235,9 @@ else
 fi
 echo
 echo "[cpn] Security: ${security_mode}; host cgroup mount required for systemd."
+echo "[cpn] SYS_ADMIN, unconfined AppArmor/seccomp, and rw cgroups remain (systemd guest trade-off)."
 echo "[cpn] Broader host access than an ordinary app container. Lab/test hosts only."
 echo "[cpn] Do not publish port ${port} on untrusted networks."
 echo "[cpn] Data binds under ${data_root} survive recreate (see docs/DOCKER-DATA-LAYOUT.md)."
+echo "[cpn] Host dirs use mode 0755 (never 777). Privileged only via CPN_DOCKER_PRIVILEGED=1."
 echo "[cpn] Stop: ${engine} rm -f ${name}"

@@ -1,0 +1,9 @@
+# Overlay: persist OLS/LiteSpeed under /usr/local/lsws.
+# Usage:
+#   mkdir -p /var/lib/cpn-docker-host/cpn-lsws && chmod 0755 /var/lib/cpn-docker-host/cpn-lsws
+#   docker compose -f docker-compose.hub.yml -f docker-compose.hub.lsws.yml up -d
+
+services:
+  cpn-installer:
+    volumes:
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-lsws:/usr/local/lsws:Z

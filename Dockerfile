@@ -1,6 +1,6 @@
-# Backward compatibility: AlmaLinux runtime (default EL lab path).
+# Backward compatibility: AlmaLinux runtime (default EL lab path; CPN_ALMA_VERSION 8/9/10).
 # Prefer docker/Dockerfile.almalinux or docker/Dockerfile.ubuntu for Hub builds.
-# Runtime: see scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
+# Runtime: reduced capabilities by default (CPN_DOCKER_PRIVILEGED=1 opt-in). See scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
 
 ARG ALMA_VERSION=9
 FROM almalinux:${ALMA_VERSION}

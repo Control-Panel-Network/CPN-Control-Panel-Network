@@ -16,7 +16,7 @@ Keep this table aligned with [SUPPORT.md](SUPPORT.md) and the root [README](../R
 | Debian 12 / 13 | Partial | DEB | n/a | apt path; expanding matrix |
 | Windows Server 2016+ | Partial | ZIP | n/a | Phase A only |
 
-Hub images are optional installer runtimes (systemd, privileged). End users should still prefer [INSTALL.md](INSTALL.md) native packages from GitHub Releases.
+Hub images are optional installer runtimes (systemd guest, reduced capabilities by default; `CPN_DOCKER_PRIVILEGED=1` opt-in only). Host data dirs use mode 0755 (never 777). Same security path for AlmaLinux 9/10 and Ubuntu 26.04 Hub tags via `docker-compose.hub.yml` (`CPN_HUB_IMAGE`). AlmaLinux 8 has no Hub tag; use `CPN_ALMA_VERSION=8 ./scripts/docker-run.sh` for a local build. End users should still prefer [INSTALL.md](INSTALL.md) native packages from GitHub Releases.
 
 ## Ubuntu 26.04 OpenLiteSpeed
 

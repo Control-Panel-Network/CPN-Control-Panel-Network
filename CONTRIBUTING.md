@@ -19,7 +19,7 @@ Please also read:
 - Rust stable with `cargo`, `rustfmt`, and `clippy`.
 - Node.js 22 and npm for `installer-ui` and `Panel`.
 - Git.
-- For package/matrix work: a supported Linux guest or Docker/Podman capable of privileged systemd containers.
+- For package/matrix work: a supported Linux guest or Docker/Podman capable of systemd guests (reduced capabilities by default; `CPN_DOCKER_PRIVILEGED=1` opt-in only).
 
 ## Clone and setup
 
@@ -139,7 +139,7 @@ Official tagged releases are built by `.github/workflows/release.yml`; users sho
 
 ### OS matrix
 
-The functional matrix requires privileged containers and systemd. It is deliberately kept out of untrusted pull-request execution.
+The functional matrix requires systemd guests (reduced capabilities by default; no automatic `--privileged` fallback). It is deliberately kept out of untrusted pull-request execution.
 
 ```bash
 ./tests/docker-matrix.sh

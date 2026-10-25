@@ -4,7 +4,7 @@
 
 **Docker Hub:** https://hub.docker.com/r/master3395/cpn-installer
 
-AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
+AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. AlmaLinux 8 has no Hub tag; local build uses `CPN_ALMA_VERSION=8 ./scripts/docker-run.sh`. Built for maintainer and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
 
 ## Status: stable (v1.4.5)
 
@@ -36,11 +36,12 @@ On each `v*` Git release tag, the semver (without leading `v`) is also pushed on
 
 Without host bind mounts, recreating this container **loses** panel settings, websites, databases, certificates, MFA, and webmail stored inside the container filesystem. Published examples that only mount cgroups are **not** persistence-safe.
 
-Use binds (same layout as `scripts/docker-run.sh` / `docker-compose.yml`):
+Use binds (same layout as `scripts/docker-run.sh` / `docker-compose.hub.yml`). Host dirs: **0755 only** (never `chmod 777`).
 
 ```bash
 DATA_ROOT=/var/lib/cpn-docker-host
 mkdir -p "$DATA_ROOT"/{cpn-data,cpn-home,cpn-mysql,cpn-letsencrypt,cpn-webmail}
+chmod 0755 "$DATA_ROOT"/cpn-{data,home,mysql,letsencrypt,webmail}
 
 docker run -d --name cpn-installer \
   --cgroupns=host \
@@ -63,14 +64,22 @@ docker run -d --name cpn-installer \
   master3395/cpn-installer:almalinux9
 ```
 
-Full path map and marker check: repository `docs/DOCKER-DATA-LAYOUT.md`.
+Compose without a local build (AlmaLinux or Ubuntu Hub tags):
+
+```bash
+docker compose -f docker-compose.hub.yml up -d
+CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04 \
+  docker compose -f docker-compose.hub.yml up -d
+```
+
+`/usr/local/lsws`, mail config/queues, and OS account files are **not** in the default binds; see repository `docs/DOCKER-DATA-LAYOUT.md`.
 
 ## Security (systemd guest)
 
-This image runs **systemd as PID 1** and is not an ordinary single-process app container. It needs host cgroup namespace access (`--cgroupns=host` and a writable `/sys/fs/cgroup` mount). The default run path uses a **reduced capability set** instead of full `--privileged` (narrower than privileged, still broader host access than a typical app container). Set `CPN_DOCKER_PRIVILEGED=1` with `scripts/docker-run.sh`, or pass `--privileged`, if your engine cannot boot systemd with the reduced set.
+This image runs **systemd as PID 1** and is not an ordinary single-process app container. It needs host cgroup namespace access (`--cgroupns=host` and a writable `/sys/fs/cgroup` mount). The default run path uses a **reduced capability set** instead of full `--privileged` (narrower than privileged; still includes `SYS_ADMIN`, unconfined AppArmor/seccomp, and rw cgroups). Set `CPN_DOCKER_PRIVILEGED=1` with `scripts/docker-run.sh`, or pass `--privileged`, only if the reduced set fails; there is **no automatic privileged retry**.
 
 Use dedicated lab or test hosts only. Do not expose port 2087 on untrusted networks.
 
 Prefer native RPM/DEB installs for production hosts (`docs/INSTALL.md`).
 
-See `scripts/docker-run.sh` in the repository for the preferred helper (creates data dirs, binds, and optional privileged fallback).
+See `scripts/docker-run.sh` and `docker-compose.hub.yml` in the repository.
