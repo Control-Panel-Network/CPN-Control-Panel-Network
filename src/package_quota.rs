@@ -105,8 +105,6 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 
     let owned = owned_site_domains(username)?;
 
-    let domains_used = owned.len() as u64;
-
     let emails_used = mail_accounts::list_accounts()
         .into_iter()
         .filter(|m| {
@@ -126,6 +124,12 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         .into_iter()
         .filter(|s| names_equal(&s.owner, username))
         .collect();
+    // Domains = apex/main websites only; Subdomains = nested FQDN sites; AliasDomains = aliases.
+    // Nested sites must not consume the Websites (domains) quota.
+    let domains_used = owned_sites
+        .iter()
+        .filter(|s| !is_subdomain_site(&s.domain))
+        .count() as u64;
     let alias_domains_used = owned_sites.iter().map(|s| s.aliases.len() as u64).sum();
     let subdomains_used = owned_sites
         .iter()
@@ -228,6 +232,14 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
     let (label, used, limit) = match resource {
         QuotaResource::Domains => ("Websites", usage.domains_used, usage.domains_limit),
 
+        QuotaResource::Subdomains => ("Sub-domains", usage.subdomains_used, usage.subdomains_limit),
+
+        QuotaResource::AliasDomains => (
+            "Alias domains",
+            usage.alias_domains_used,
+            usage.alias_domains_limit,
+        ),
+
         QuotaResource::Emails => ("Mailboxes", usage.emails_used, usage.emails_limit),
 
         QuotaResource::Databases => ("Databases", usage.databases_used, usage.databases_limit),
@@ -280,30 +292,35 @@ pub fn require_quota(username: &str, resource: QuotaResource) -> Result<(), Stri
     Ok(())
 }
 
-/// Enforce domain + FQDN + soft disk checks before creating a website or subdomain.
+/// Enforce website or sub-domain quota, FQDN flag, and soft disk/bandwidth checks
+/// before creating a site. Apex sites consume `Domains`; nested FQDNs consume
+/// `Subdomains` (not the Websites counter). Alias hostnames use
+/// [`require_alias_create_allowed`].
 pub fn require_site_create_allowed(owner: &str, domain_raw: &str) -> Result<(), String> {
-    require_quota(owner, QuotaResource::Domains)?;
-
-    require_quota(owner, QuotaResource::DiskMb)?;
-
-    require_quota(owner, QuotaResource::BandwidthMb)?;
-
     let domain = domain_raw.trim().to_ascii_lowercase();
-
     let is_subdomain = !parent_domain_candidates(&domain).is_empty();
 
     if is_subdomain {
+        require_quota(owner, QuotaResource::Subdomains)?;
         let package = package_for_account(owner)?;
-
         if !package.fqdn_enabled {
             return Err(format!(
                 "Package `{}` does not allow FQDN / subdomain creation",
                 package.name
             ));
         }
+    } else {
+        require_quota(owner, QuotaResource::Domains)?;
     }
 
+    require_quota(owner, QuotaResource::DiskMb)?;
+    require_quota(owner, QuotaResource::BandwidthMb)?;
     Ok(())
+}
+
+/// Enforce alias-domain package quota before adding a ServerAlias / parked hostname.
+pub fn require_alias_create_allowed(owner: &str) -> Result<(), String> {
+    require_quota(owner, QuotaResource::AliasDomains)
 }
 
 #[cfg(test)]
@@ -439,6 +456,77 @@ mod tests {
             let err = require_site_create_allowed("ops", "blog.example.com").unwrap_err();
 
             assert!(err.contains("FQDN"));
+
+            update_package(
+                &tight.id,
+                PackageInput {
+                    name: "Tiny".into(),
+                    disk_mb: UNLIMITED,
+                    bandwidth_mb: UNLIMITED,
+                    domains: 5,
+                    emails: 0,
+                    databases: 0,
+                    ftp_accounts: 0,
+                    fqdn_enabled: true,
+                    subdomains: 0,
+                    notes: String::new(),
+                    sidebar_hidden_nav_ids: Vec::new(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            let err = require_site_create_allowed("ops", "blog.example.com").unwrap_err();
+            assert!(
+                err.contains("Sub-domains") || err.contains("quota exceeded"),
+                "expected sub-domain quota error, got: {err}"
+            );
+
+            update_package(
+                &tight.id,
+                PackageInput {
+                    name: "Tiny".into(),
+                    disk_mb: UNLIMITED,
+                    bandwidth_mb: UNLIMITED,
+                    domains: 1,
+                    emails: 0,
+                    databases: 0,
+                    ftp_accounts: 0,
+                    fqdn_enabled: true,
+                    subdomains: 5,
+                    alias_domains: 0,
+                    notes: String::new(),
+                    sidebar_hidden_nav_ids: Vec::new(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            create_site("blog.example.com", "ops", None, None, None).unwrap();
+            let usage = usage_for_account("ops").unwrap();
+            assert_eq!(
+                usage.domains_used, 1,
+                "apex sites only count toward Websites"
+            );
+            assert_eq!(usage.subdomains_used, 1);
+
+            let err = require_alias_create_allowed("ops").unwrap_err();
+            assert!(
+                err.contains("Alias domains") || err.contains("quota exceeded"),
+                "expected alias quota error, got: {err}"
+            );
+
+            let err = require_site_create_allowed("ops", "another.example.com").ok();
+            assert!(
+                err.is_some(),
+                "sub-domain create should be allowed when subdomains quota remains"
+            );
+            // Second apex must still hit Websites limit (domains=1).
+            let err = require_site_create_allowed("ops", "other.com").unwrap_err();
+            assert!(
+                err.contains("Websites") || err.contains("quota exceeded"),
+                "expected websites quota error, got: {err}"
+            );
 
             unsafe {
                 std::env::remove_var("CPN_SITES_HOME");

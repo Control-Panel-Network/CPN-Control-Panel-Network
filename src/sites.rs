@@ -9,6 +9,14 @@
 //!   - Home: `/home/example.com/blog.example.com/`
 //!   - Docroot: `/home/example.com/blog.example.com/public_html/`
 //!
+//! # Ownership (OpenSSH SFTP chroot + PHP write)
+//!
+//! Site home and parent chain stay `root:root` mode `0755` so jailed SFTP remains
+//! valid (parents must not be group-writable). The document root (`public_html`
+//! and its contents) is chowned to the preferred web runtime user (`nobody`,
+//! `apache`, `nginx`, or `www-data` when present) so PHP and the web server can
+//! write uploads without `chmod 777`. Never world-writable modes.
+//!
 //! Machine-readable records stay under `/var/lib/cpn/sites/<domain>.json` (or
 //! `$CPN_DATA_DIR/sites/`) and point at `docroot`. Override the hosting home root
 //! with `CPN_SITES_HOME` (labs and unit tests).
@@ -290,13 +298,15 @@ fn try_chown_root(path: &Path) {
 }
 
 /// Create home + `public_html`, set safe modes, and write a placeholder index if missing.
+///
+/// Home / chroot parents stay `root:root` `0755`. Docroot is best-effort chowned to
+/// the web runtime user so PHP can write (see module ownership notes).
 pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
     validate_docroot(docroot)?;
     let docroot_path = Path::new(docroot);
     fs::create_dir_all(docroot_path)
         .map_err(|error| format!("Could not create {}: {error}", docroot_path.display()))?;
     set_dir_mode(docroot_path, 0o755);
-    try_chown_root(docroot_path);
     if let Some(home) = docroot_path.parent() {
         set_dir_mode(home, 0o755);
         try_chown_root(home);
@@ -325,7 +335,12 @@ pub fn ensure_site_directories(docroot: &str) -> Result<(), String> {
         fs::write(&index, html.as_bytes())
             .map_err(|error| format!("Could not write {}: {error}", index.display()))?;
         set_dir_mode(&index, 0o644);
-        try_chown_root(&index);
+    }
+    // Docroot (not site home): preferred web user so PHP/OLS can write uploads.
+    // Best-effort; labs without getent/chown keep the create success path.
+    #[cfg(unix)]
+    {
+        let _ = crate::wordpress_wpcli::chown_docroot_to_web_user(docroot_path);
     }
     Ok(())
 }

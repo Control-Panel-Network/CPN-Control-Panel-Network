@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Site docroot ownership on create**: New website and sub-domain document roots (`public_html`) are chowned to the preferred web runtime user (`nobody` / `apache` / `nginx` / `www-data`) so PHP can write uploads. Site home and parent directories stay `root:root` mode `0755` for OpenSSH SFTP chroot. Never uses world-writable modes.
+- **Package website vs sub-domain counting**: Dashboard and quota usage treat **Websites** as apex/main sites only. Nested FQDN sites count under **Sub-domains**. Alias hostnames count under **Alias domains**.
+
 ### Fixed
+
+- **Sub-domain and alias package quotas on create**: Creating a nested site now enforces the package `subdomains` limit (and FQDN flag). Adding a domain alias enforces `alias_domains`. Previously those fields were shown on the dashboard but not checked at create time.
 
 ## [1.4.5] - 19/10/2026
 
