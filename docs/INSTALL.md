@@ -73,14 +73,16 @@ Tags: `almalinux9`, `almalinux10`, `ubuntu26.04`, `latest`, plus the release sem
 
 **Persistence:** without host bind mounts for `/var/lib/cpn`, `/home`, `/var/lib/mysql`, `/etc/letsencrypt`, and `/var/lib/cpn-webmail`, pull and recreate **does not** keep panel settings, websites, databases, or certificates. Layout and recipe: [`docs/DOCKER-DATA-LAYOUT.md`](DOCKER-DATA-LAYOUT.md).
 
-**Security:** needs `--cgroupns=host` and a writable `/sys/fs/cgroup` mount. Default helper uses a reduced `--cap-add` set (not full `--privileged`); still broader host access than an ordinary app container. Lab/test hosts only; do not expose port 2087 on untrusted networks. Fallback: `CPN_DOCKER_PRIVILEGED=1` with `scripts/docker-run.sh`.
+**Security:** needs `--cgroupns=host` and a writable `/sys/fs/cgroup` mount. Default helper uses a reduced `--cap-add` set (not full `--privileged`); still broader host access than an ordinary app container (`SYS_ADMIN`, unconfined AppArmor/seccomp, rw cgroups). Lab/test hosts only; do not expose port 2087 on untrusted networks. Explicit privileged only: `CPN_DOCKER_PRIVILEGED=1` (no automatic retry).
 
-Example with persistence binds and reduced capabilities (prefer [`scripts/docker-run.sh`](../scripts/docker-run.sh)):
+**Hub Compose (no local build):** `docker compose -f docker-compose.hub.yml up -d` (set `CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04` for Ubuntu). Layout, LSWS/mail gaps, and permissions: [`docs/DOCKER-DATA-LAYOUT.md`](DOCKER-DATA-LAYOUT.md).
+
+Example with persistence binds and reduced capabilities (prefer [`scripts/docker-run.sh`](../scripts/docker-run.sh) or Hub Compose). Swap the image tag for `almalinux10` or `ubuntu26.04`; do not drop the capability flags:
 
 ```bash
 DATA_ROOT=/var/lib/cpn-docker-host
 mkdir -p "$DATA_ROOT"/{cpn-data,cpn-home,cpn-mysql,cpn-letsencrypt,cpn-webmail}
-chmod 777 "$DATA_ROOT"/cpn-{data,home,mysql,letsencrypt,webmail}
+chmod 0755 "$DATA_ROOT"/cpn-{data,home,mysql,letsencrypt,webmail}
 docker run -d --name cpn-installer --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock \
   -v "$DATA_ROOT/cpn-data:/var/lib/cpn:Z" -v "$DATA_ROOT/cpn-home:/home:Z" \
@@ -92,9 +94,12 @@ docker run -d --name cpn-installer --cgroupns=host \
   --cap-add=AUDIT_CONTROL --cap-add=SETUID --cap-add=SETGID \
   --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER \
   --cap-add=KILL --cap-add=MKNOD --cap-add=NET_BIND_SERVICE --cap-add=NET_RAW \
+  --security-opt apparmor:unconfined --security-opt seccomp:unconfined \
   -p 2087:2087 --stop-signal SIGRTMIN+3 \
   master3395/cpn-installer:almalinux9
 ```
+
+Use the same flags with `master3395/cpn-installer:almalinux10` or `:ubuntu26.04`. Prefer Hub Compose above when you do not need a custom `docker run` line. AlmaLinux 8: `CPN_ALMA_VERSION=8 ./scripts/docker-run.sh` (no Hub tag).
 
 To **build and run from this checkout** (local RPM into a container, not a Hub pull), use [`scripts/docker-run.sh`](../scripts/docker-run.sh). Hub overview source is [`docker/hub-overview.md`](../docker/hub-overview.md) (synced by `.github/workflows/docker-hub.yml` on image publish).
 

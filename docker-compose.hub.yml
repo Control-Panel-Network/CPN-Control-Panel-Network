@@ -1,0 +1,68 @@
+# CPN installer from a pre-built Docker Hub image (no local build).
+# Usage:
+#   mkdir -p /var/lib/cpn-docker-host/{cpn-data,cpn-home,cpn-mysql,cpn-letsencrypt,cpn-webmail}
+#   chmod 0755 /var/lib/cpn-docker-host/cpn-*
+#   docker compose -f docker-compose.hub.yml up -d
+#
+# Ubuntu Hub tag:
+#   CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04 \
+#     docker compose -f docker-compose.hub.yml up -d
+#
+# AlmaLinux 10:
+#   CPN_HUB_IMAGE=master3395/cpn-installer:almalinux10 \
+#     docker compose -f docker-compose.hub.yml up -d
+#
+# Optional OLS/LiteSpeed persistence (overlay):
+#   mkdir -p /var/lib/cpn-docker-host/cpn-lsws && chmod 0755 /var/lib/cpn-docker-host/cpn-lsws
+#   docker compose -f docker-compose.hub.yml -f docker-compose.hub.lsws.yml up -d
+#
+# AlmaLinux 8: no Hub tag. Local build: CPN_ALMA_VERSION=8 ./scripts/docker-run.sh
+# For a local RPM build into AlmaLinux 8/9/10, use docker-compose.yml + scripts/docker-run.sh.
+# Persistence and security details: docs/DOCKER-DATA-LAYOUT.md
+# Lab/test hosts only. Do not expose 2087 on untrusted networks.
+# Never chmod 777 on data dirs (use 0755).
+# Full --privileged is opt-in only (set privileged: true); there is no auto-fallback.
+
+services:
+  cpn-installer:
+    image: "${CPN_HUB_IMAGE:-master3395/cpn-installer:almalinux9}"
+    container_name: cpn-installer
+    hostname: cpn-installer
+    privileged: false
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_RESOURCE
+      - SYS_NICE
+      - SYS_PTRACE
+      - AUDIT_WRITE
+      - AUDIT_CONTROL
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - MKNOD
+      - NET_BIND_SERVICE
+      - NET_RAW
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    cgroupns_mode: host
+    environment:
+      container: docker
+    ports:
+      - "${CPN_PORT:-2087}:2087"
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-data:/var/lib/cpn:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-home:/home:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-mysql:/var/lib/mysql:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-letsencrypt:/etc/letsencrypt:Z
+      - ${CPN_DOCKER_DATA_ROOT:-/var/lib/cpn-docker-host}/cpn-webmail:/var/lib/cpn-webmail:Z
+    stop_signal: SIGRTMIN+3
+    restart: unless-stopped

@@ -59,7 +59,7 @@ docker pull master3395/cpn-installer:latest
 docker pull master3395/cpn-installer:1.4.5
 ```
 
-Data layout, pull/recreate binds, and systemd guest security: **[docs/DOCKER-DATA-LAYOUT.md](docs/DOCKER-DATA-LAYOUT.md)**. Run helper and native install vs containers: **[docs/INSTALL.md](docs/INSTALL.md)**. Prefer RPM/DEB on production hosts.
+Data layout, pull/recreate binds, and systemd guest security: **[docs/DOCKER-DATA-LAYOUT.md](docs/DOCKER-DATA-LAYOUT.md)**. Pre-built Hub Compose (AlmaLinux or Ubuntu tags, no local build): `docker-compose.hub.yml`. Run helper and native install vs containers: **[docs/INSTALL.md](docs/INSTALL.md)**. Prefer RPM/DEB on production hosts. Host data dirs use mode 0755 (never 777).
 
 ## Upgrade
 
