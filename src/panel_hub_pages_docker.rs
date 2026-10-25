@@ -250,22 +250,22 @@ fn create_container_form(prefill_image: &str) -> String {
         <p class="docker-form-actions"><button type="submit" class="btn-primary">Create Container</button></p>
       </form>
       <script>
-      (function () {
+      (function () {{
         var nameEl = document.getElementById('docker-create-name');
         var volEl = document.getElementById('docker-create-volumes');
         if (!nameEl || !volEl) return;
         var suggestedPrefix = '/var/lib/cpn/docker-data/';
         var suggestedSuffix = '/data:/data';
-        function syncVol() {
+        function syncVol() {{
           var cur = (volEl.value || '').trim();
           var isSuggested = !cur || cur.indexOf(suggestedPrefix) === 0;
           if (!isSuggested) return;
           var n = (nameEl.value || '').trim().replace(/[^a-zA-Z0-9_.-]/g, '') || 'myapp';
           volEl.value = suggestedPrefix + n + suggestedSuffix;
-        }
+        }}
         nameEl.addEventListener('input', syncVol);
         nameEl.addEventListener('change', syncVol);
-      })();
+      }})();
       </script>
     </div>"#,
         img = img,
