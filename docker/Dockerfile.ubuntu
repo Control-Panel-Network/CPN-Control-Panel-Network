@@ -1,5 +1,5 @@
 # CPN installer runtime image (Ubuntu + systemd) for development and lab installs.
-# Host cgroup mounts + reduced capabilities (or privileged fallback) at run time; see scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
+# Host cgroup mounts + reduced capabilities at run time (CPN_DOCKER_PRIVILEGED=1 opt-in only; no auto fallback). See scripts/docker-run.sh and docs/DOCKER-DATA-LAYOUT.md.
 
 ARG UBUNTU_VERSION=26.04
 

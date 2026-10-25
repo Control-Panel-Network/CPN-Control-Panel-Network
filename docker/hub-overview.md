@@ -4,7 +4,7 @@
 
 **Docker Hub:** https://hub.docker.com/r/master3395/cpn-installer
 
-AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. Built for maintainer and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
+AlmaLinux (9, 10) and Ubuntu 26.04 runtime images with **systemd** and the **CPN** (`cpn-installer`) package preinstalled. AlmaLinux 8 has no Hub tag; local build uses `CPN_ALMA_VERSION=8 ./scripts/docker-run.sh`. Built for maintainer and lab installs of [CPN Control Panel Network](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network).
 
 ## Status: stable (v1.4.5)
 

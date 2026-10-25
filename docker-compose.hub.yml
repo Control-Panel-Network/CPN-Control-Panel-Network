@@ -16,7 +16,8 @@
 #   mkdir -p /var/lib/cpn-docker-host/cpn-lsws && chmod 0755 /var/lib/cpn-docker-host/cpn-lsws
 #   docker compose -f docker-compose.hub.yml -f docker-compose.hub.lsws.yml up -d
 #
-# For a local RPM build into AlmaLinux, use docker-compose.yml + scripts/docker-run.sh instead.
+# AlmaLinux 8: no Hub tag. Local build: CPN_ALMA_VERSION=8 ./scripts/docker-run.sh
+# For a local RPM build into AlmaLinux 8/9/10, use docker-compose.yml + scripts/docker-run.sh.
 # Persistence and security details: docs/DOCKER-DATA-LAYOUT.md
 # Lab/test hosts only. Do not expose 2087 on untrusted networks.
 # Never chmod 777 on data dirs (use 0755).

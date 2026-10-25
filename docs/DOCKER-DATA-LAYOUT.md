@@ -74,7 +74,11 @@ Host data root used by `scripts/docker-run.sh`, `docker-compose.yml`, and `docke
 # AlmaLinux 9 (default image in the file)
 docker compose -f docker-compose.hub.yml up -d
 
-# Ubuntu 26.04 Hub tag
+# AlmaLinux 10 Hub tag
+CPN_HUB_IMAGE=master3395/cpn-installer:almalinux10 \
+  docker compose -f docker-compose.hub.yml up -d
+
+# Ubuntu 26.04 Hub tag (same binds, 0755, reduced caps; no weaker defaults)
 CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04 \
   docker compose -f docker-compose.hub.yml up -d
 
@@ -82,7 +86,7 @@ CPN_HUB_IMAGE=master3395/cpn-installer:ubuntu26.04 \
 docker compose -f docker-compose.hub.yml -f docker-compose.hub.lsws.yml up -d
 ```
 
-Local RPM build path remains [`docker-compose.yml`](../docker-compose.yml) + [`scripts/docker-run.sh`](../scripts/docker-run.sh).
+Local RPM build path (AlmaLinux 8/9/10): [`docker-compose.yml`](../docker-compose.yml) + [`scripts/docker-run.sh`](../scripts/docker-run.sh) (`CPN_ALMA_VERSION=8|9|10`). There is no Hub `almalinux8` tag.
 
 ### Manual `docker run` example
 
@@ -91,6 +95,7 @@ DATA_ROOT=/var/lib/cpn-docker-host
 mkdir -p "$DATA_ROOT"/{cpn-data,cpn-home,cpn-mysql,cpn-letsencrypt,cpn-webmail}
 chmod 0755 "$DATA_ROOT"/cpn-{data,home,mysql,letsencrypt,webmail}
 
+# Swap tag for almalinux10 or ubuntu26.04; security flags stay the same.
 docker pull master3395/cpn-installer:almalinux9
 docker rm -f cpn-installer 2>/dev/null || true
 
