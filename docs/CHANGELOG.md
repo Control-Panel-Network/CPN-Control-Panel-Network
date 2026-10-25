@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.6] - 25/10/2026
+
+Patch release after v1.4.5. Docker Hub guest hardening (no world-writable data dirs, Hub Compose, explicit privileged opt-in) and site package quota plus docroot ownership fixes from #595 and #596.
+
 ### Added
 
 - **Hub Compose without local build**: `docker-compose.hub.yml` runs pre-built `master3395/cpn-installer` tags (set `CPN_HUB_IMAGE` for Ubuntu or AlmaLinux 10). Optional OLS bind overlay: `docker-compose.hub.lsws.yml`.
