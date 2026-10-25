@@ -7,13 +7,14 @@
 #   docker compose up -d
 #
 # Security: systemd as PID 1 needs host cgroup access (cgroupns + rw /sys/fs/cgroup).
-# Prefer the reduced capability set below when verified; fall back to privileged: true
-# only if the reduced set fails on your engine. Use dedicated lab/test hosts.
+# Prefer the reduced capability set below. Set privileged: true only if that fails and
+# you accept the risk on a dedicated lab host (no automatic privileged fallback).
 # Do not expose 2087 to the public internet.
 #
 # Persistence: bind mounts under CPN_DOCKER_DATA_ROOT (default /var/lib/cpn-docker-host)
 # so pull and recreate keeps panel settings, websites, databases, and certificates.
-# See docs/DOCKER-DATA-LAYOUT.md.
+# Host data dirs: chmod 0755 only (never 777). See docs/DOCKER-DATA-LAYOUT.md.
+# Pre-built Hub image (including Ubuntu): docker-compose.hub.yml
 
 services:
   cpn-installer:

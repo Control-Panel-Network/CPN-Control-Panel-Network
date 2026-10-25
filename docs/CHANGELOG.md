@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hub Compose without local build**: `docker-compose.hub.yml` runs pre-built `master3395/cpn-installer` tags (set `CPN_HUB_IMAGE` for Ubuntu or AlmaLinux 10). Optional OLS bind overlay: `docker-compose.hub.lsws.yml`.
+
 ### Changed
 
+- **Docker Hub guest hardening docs**: `docs/DOCKER-DATA-LAYOUT.md` documents that `/usr/local/lsws`, mail config/queues, and OS account files are outside the default binds; security section states remaining systemd trade-offs (`SYS_ADMIN`, unconfined AppArmor/seccomp, rw cgroups) without claiming app-container isolation.
+
 ### Fixed
+
+- **No world-writable Docker data dirs**: `scripts/docker-run.sh` and install examples use mode `0755` only (never `chmod 777`). Privileged mode is explicit opt-in via `CPN_DOCKER_PRIVILEGED=1` with no automatic privileged retry.
 
 ## [1.4.5] - 19/10/2026
 

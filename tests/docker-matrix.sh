@@ -81,7 +81,8 @@ start_container() {
   fi
 
   # Prefer reduced capabilities over full --privileged (see docs/DOCKER-DATA-LAYOUT.md).
-  # Fall back to privileged if systemd does not come up (some engines / hosts).
+  # Matrix-only privileged fallback for CI host variance. Operator helper scripts/docker-run.sh
+  # does not auto-escalate; lab operators must set CPN_DOCKER_PRIVILEGED=1 explicitly.
   local run_ok=0
   if "$engine" run -d --cgroupns=host --name "$name" --hostname "$name" \
     --cap-add=SYS_ADMIN --cap-add=NET_ADMIN --cap-add=SYS_RESOURCE --cap-add=SYS_NICE \
