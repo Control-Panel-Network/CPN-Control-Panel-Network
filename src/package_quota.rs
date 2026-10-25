@@ -479,7 +479,7 @@ mod tests {
             let err = require_site_create_allowed("ops", "blog.example.com").unwrap_err();
             assert!(
                 err.contains("Sub-domains") || err.contains("quota exceeded"),
-                "expected sub-domain quota error, got: {err}"
+                "expected sub-domain quota error"
             );
 
             update_package(
@@ -513,7 +513,7 @@ mod tests {
             let err = require_alias_create_allowed("ops").unwrap_err();
             assert!(
                 err.contains("Alias domains") || err.contains("quota exceeded"),
-                "expected alias quota error, got: {err}"
+                "expected alias quota error"
             );
 
             let err = require_site_create_allowed("ops", "another.example.com").ok();
@@ -525,7 +525,7 @@ mod tests {
             let err = require_site_create_allowed("ops", "other.com").unwrap_err();
             assert!(
                 err.contains("Websites") || err.contains("quota exceeded"),
-                "expected websites quota error, got: {err}"
+                "expected websites quota error"
             );
 
             unsafe {
