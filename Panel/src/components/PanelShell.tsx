@@ -410,9 +410,7 @@ export function PanelShell({
 
   const dismissNotice = (id: string) => {
     writeNotices(
-      notices.map((item) =>
-        item.id === id ? { ...item, read: true } : item,
-      ),
+      notices.map((item) => (item.id === id ? { ...item, read: true } : item)),
     );
   };
 

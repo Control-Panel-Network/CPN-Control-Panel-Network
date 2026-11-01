@@ -387,7 +387,10 @@ mod tests {
         );
         assert_eq!(infer_severity("ssl", "SSL renewed", ""), "success");
         assert_eq!(infer_severity("plugin", "Plugin installed", ""), "success");
-        assert_eq!(infer_severity("upgrade", "Upgrade completed", ""), "success");
+        assert_eq!(
+            infer_severity("upgrade", "Upgrade completed", ""),
+            "success"
+        );
         assert_eq!(infer_severity("site", "Site created", ""), "success");
         assert_eq!(infer_severity("panel", "Hello", "neutral note"), "info");
         assert_eq!(normalize_severity("WARN"), Some("warning"));

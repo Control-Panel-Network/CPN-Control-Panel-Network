@@ -91,7 +91,8 @@ function normalizeSeverity(raw: string | undefined): NotifySeverity | "" {
 }
 
 function inferSeverity(item: PanelNotice): NotifySeverity {
-  const blob = `${item.category || ""} ${item.title} ${item.body}`.toLowerCase();
+  const blob =
+    `${item.category || ""} ${item.title} ${item.body}`.toLowerCase();
   if (/fail|error|denied|critical|unable|could not/.test(blob)) {
     return "error";
   }
