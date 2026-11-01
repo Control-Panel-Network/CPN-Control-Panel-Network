@@ -124,6 +124,8 @@ use cpn_installer::panel_hub_routes::{
     users_reseller_assign_post, users_reseller_branding_post, users_reseller_create_user_post,
     users_reseller_demote_post, users_reseller_promote_post, users_reseller_quotas_post,
     users_reseller_route, users_reseller_unassign_post, users_status_post,
+    users_subusers_capabilities_post, users_subusers_create_post, users_subusers_delete_post,
+    users_subusers_get,
 };
 use cpn_installer::panel_mr_agent::{
     plugins_mr_agent_host_policy, plugins_mr_agent_page, plugins_mr_agent_prune,
@@ -1526,6 +1528,10 @@ async fn main() -> std::io::Result<()> {
             .service(users_reseller_assign_post)
             .service(users_reseller_unassign_post)
             .service(users_reseller_create_user_post)
+            .service(users_subusers_get)
+            .service(users_subusers_create_post)
+            .service(users_subusers_capabilities_post)
+            .service(users_subusers_delete_post)
             .service(api_access_route)
             .service(api_access_create_post)
             .service(api_access_revoke_post)

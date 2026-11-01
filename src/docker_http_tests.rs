@@ -29,6 +29,7 @@ fn test_state(phase: &'static str) -> web::Data<Arc<AppState>> {
         disabled: false,
         role: String::new(),
         parent_reseller: String::new(),
+    parent_owner: String::new(),
     });
     web::Data::new(Arc::new(AppState {
         status: std::sync::RwLock::new(status),
@@ -60,6 +61,7 @@ fn write_admin_account(password: &str) {
         disabled: false,
         role: String::new(),
         parent_reseller: String::new(),
+    parent_owner: String::new(),
     };
     let path = crate::account::bootstrap_path();
     write_account_file(&path, &boot).expect("write bootstrap");

@@ -135,6 +135,7 @@ fn build_bootstrap(
         disabled: false,
         role: String::new(),
         parent_reseller: String::new(),
+        parent_owner: String::new(),
     }
 }
 

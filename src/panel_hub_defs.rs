@@ -124,6 +124,12 @@ pub fn users_plans_hub_sections() -> Vec<(&'static str, Vec<HubTile<'static>>)> 
                     href: "/account/users/reseller",
                     live: true,
                 },
+                HubTile {
+                    title: "Sub-users",
+                    subtitle: "ACL secondary logins for your panel",
+                    href: "/account/users/sub-users",
+                    live: true,
+                },
             ],
         ),
         (

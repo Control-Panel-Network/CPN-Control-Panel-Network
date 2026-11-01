@@ -13,6 +13,7 @@ pub const ADMIN_ONLY_CODE: &str = "admin-only";
 /// Account and ACL pages only the bootstrap panel admin may open.
 const ADMIN_ONLY_HREFS: &[&str] = &[
     "/account/users/create",
+    "/account/users/sub-users",
     "/account/acl/create",
     "/account/acl/modify",
     "/account/acl/sidebar",

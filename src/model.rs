@@ -133,12 +133,15 @@ pub struct AccountPublic {
     /// True when the account is deactivated and cannot sign in.
     #[serde(default)]
     pub disabled: bool,
-    /// empty/`user` or `reseller` (owner/admin is not stored here).
+    /// empty/`user`, `reseller`, or `subuser` (owner/admin is not stored here).
     #[serde(default)]
     pub role: String,
     /// Parent reseller username when jailed under a reseller hierarchy.
     #[serde(default)]
     pub parent_reseller: String,
+    /// Parent panel owner when this account is a sub-user.
+    #[serde(default)]
+    pub parent_owner: String,
 }
 
 /// Safe SMTP summary for `/api/status` (no passwords or SMTP usernames).

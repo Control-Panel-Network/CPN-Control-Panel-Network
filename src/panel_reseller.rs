@@ -207,6 +207,13 @@ fn set_account_fields(username: &str, role: &str, parent_reseller: &str) -> Resu
     if is_panel_admin(&boot.username) {
         return Err("The panel owner account cannot become a reseller or child user".into());
     }
+    if !boot.parent_owner.trim().is_empty()
+        || boot.role.trim().eq_ignore_ascii_case(crate::panel_subusers::ROLE_SUBUSER)
+    {
+        return Err(
+            "Sub-users cannot join the reseller hierarchy; delete the sub-user link first".into(),
+        );
+    }
     boot.role = normalize_role(role);
     boot.parent_reseller = parent_reseller.trim().to_string();
     write_account_file(&path, &boot)
@@ -219,6 +226,11 @@ pub fn promote_reseller(
     let (boot, _) = find_account(username_raw)?;
     if is_panel_admin(&boot.username) {
         return Err("The panel owner cannot be promoted to reseller".into());
+    }
+    if !boot.parent_owner.trim().is_empty()
+        || boot.role.trim().eq_ignore_ascii_case(crate::panel_subusers::ROLE_SUBUSER)
+    {
+        return Err("Sub-users cannot be promoted to reseller".into());
     }
     if !boot.parent_reseller.trim().is_empty() {
         return Err("Unassign this user from their parent reseller before promoting".into());

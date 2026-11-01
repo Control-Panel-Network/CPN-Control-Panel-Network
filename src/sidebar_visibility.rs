@@ -423,6 +423,7 @@ mod tests {
             disabled: false,
             role: String::new(),
             parent_reseller: String::new(),
+        parent_owner: String::new(),
         };
         write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
     }

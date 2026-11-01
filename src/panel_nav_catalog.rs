@@ -286,6 +286,10 @@ const USERS_CHILDREN: &[NavChild] = &[
         href: "/account/users/reseller",
     },
     NavChild {
+        label: "Sub-users",
+        href: "/account/users/sub-users",
+    },
+    NavChild {
         label: "Create ACL",
         href: "/account/acl/create",
     },

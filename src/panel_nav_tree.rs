@@ -452,6 +452,7 @@ mod tests {
                 disabled: false,
                 role: String::new(),
                 parent_reseller: String::new(),
+            parent_owner: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let admin = nav_links_html("users", "owner");
@@ -488,6 +489,7 @@ mod tests {
                 disabled: false,
                 role: String::new(),
                 parent_reseller: String::new(),
+            parent_owner: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let html = nav_links_html("root-files", "admin");
@@ -637,6 +639,7 @@ mod tests {
                 disabled: false,
                 role: String::new(),
                 parent_reseller: String::new(),
+            parent_owner: String::new(),
             };
             write_account_file(&crate::account::bootstrap_path(), &boot).expect("bootstrap");
             let admin = nav_links_html("logs", "owner");
