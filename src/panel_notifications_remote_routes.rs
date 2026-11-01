@@ -34,12 +34,11 @@ fn peer_ip(req: &HttpRequest) -> String {
         .headers()
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok())
+        && let Some(first) = fwd.split(',').next()
     {
-        if let Some(first) = fwd.split(',').next() {
-            let trimmed = first.trim();
-            if !trimmed.is_empty() {
-                return trimmed.to_string();
-            }
+        let trimmed = first.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
         }
     }
     req.connection_info()
