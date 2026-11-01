@@ -81,22 +81,59 @@ pub fn sidebar_footer_styles() -> &'static str {
   font-size:12px; font-weight:600; padding:4px 6px; cursor:pointer; white-space:nowrap;
 }
 .notify-list {
-  list-style:none; margin:0; padding:0; overflow-y:auto; flex:1 1 auto; min-height:0;
+  list-style:none; margin:0; padding:10px; overflow-y:auto; flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column; gap:8px;
 }
 .notify-list li {
-  padding:10px 14px; border-bottom:1px solid var(--hairline); font-size:13px;
+  margin:0; padding:0; border:0; list-style:none; background:transparent;
 }
-.notify-list li:last-child { border-bottom:0; }
-.notify-list li.unread { background:rgba(0,102,204,.06); }
-.notify-list strong { display:block; font-size:13px; margin-bottom:2px; }
-.notify-list span { color:var(--muted); font-size:12px; line-height:1.4; }
+.notify-toast {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 8px 10px 10px; border-radius:6px;
+  color:#fff; font-size:13px; line-height:1.35;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.notify-toast.is-read { opacity:.78; }
+.notify-toast-icon {
+  width:28px; height:28px; flex:0 0 auto; border-radius:4px;
+  display:inline-grid; place-items:center; color:#fff;
+}
+.notify-toast-icon svg { display:block; }
+.notify-toast-text { flex:1 1 auto; min-width:0; }
+.notify-toast-text strong {
+  display:block; font-size:13px; font-weight:600; margin-bottom:2px; color:#fff;
+}
+.notify-toast-text span {
+  display:block; font-size:12px; line-height:1.4; color:rgba(255,255,255,.88);
+}
+.notify-toast-dismiss {
+  flex:0 0 auto; width:28px; height:28px; border:0; border-radius:4px;
+  background:transparent; color:rgba(255,255,255,.45); padding:0; cursor:pointer;
+  display:inline-grid; place-items:center;
+}
+.notify-toast-dismiss:hover,
+.notify-toast-dismiss:focus-visible {
+  background:rgba(255,255,255,.12); color:rgba(255,255,255,.92);
+  outline:none;
+}
+.notify-toast--error { background:#4a1c1c; }
+.notify-toast--error .notify-toast-icon { background:#e53935; }
+.notify-toast--warning { background:#3d3420; }
+.notify-toast--warning .notify-toast-icon { background:#f5a623; }
+.notify-toast--success { background:#1a3a2a; }
+.notify-toast--success .notify-toast-icon { background:#2ecc71; }
+.notify-toast--info { background:#1a2744; }
+.notify-toast--info .notify-toast-icon { background:#3498db; }
 .notify-empty {
   margin:0; padding:20px 14px; color:var(--muted); font-size:13px; text-align:center;
 }
 [data-color-mode="dark"] .footer-icon-btn:hover { background:rgba(255,255,255,.08); }
-[data-color-mode="dark"] .notify-list li.unread { background:rgba(59,130,246,.12); }
 [data-color-mode="dark"] .notify-popover {
   box-shadow:0 12px 32px rgba(0,0,0,.45);
+  background:#12151c; color:#e8edf5; border-color:rgba(255,255,255,.1);
+}
+[data-color-mode="dark"] .notify-popover header {
+  border-bottom-color:rgba(255,255,255,.1);
 }
 "#
 }
@@ -228,6 +265,54 @@ pub fn notifications_popover_script() -> &'static str {
       .replace(/"/g, "&quot;");
   }
 
+  function normalizeSeverity(raw) {
+    var v = String(raw || "").toLowerCase().trim();
+    if (v === "error" || v === "err" || v === "danger" || v === "critical" || v === "fail" || v === "failed") return "error";
+    if (v === "warning" || v === "warn" || v === "caution") return "warning";
+    if (v === "success" || v === "ok" || v === "done") return "success";
+    if (v === "info" || v === "information" || v === "neutral" || v === "notice") return "info";
+    return "";
+  }
+
+  function inferSeverity(item) {
+    var cat = String((item && item.category) || "").toLowerCase();
+    var title = String((item && item.title) || "").toLowerCase();
+    var body = String((item && item.body) || "").toLowerCase();
+    var blob = cat + " " + title + " " + body;
+    if (/fail|error|denied|critical|unable|could not/.test(blob)) return "error";
+    if (/expir|warn|attention|soon|degrad/.test(blob) && !/renew|success|installed|completed|created|ready/.test(blob)) return "warning";
+    if (/renew|success|installed|completed|created|ready/.test(blob)) return "success";
+    return "info";
+  }
+
+  function itemSeverity(item) {
+    return normalizeSeverity((item && (item.severity || item.level)) || "") || inferSeverity(item);
+  }
+
+  function severityIcon(sev) {
+    if (sev === "error") {
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M7.5 7.5l9 9"/></svg>';
+    }
+    if (sev === "warning") {
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5"/><path d="M12 18h.01"/></svg>';
+    }
+    if (sev === "success") {
+      return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+    }
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>';
+  }
+
+  function markRead(ids, all) {
+    return fetch("/api/panel/notifications/mark-read", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(all ? { all: true } : { ids: ids || [] })
+    }).then(function (res) { return res.json(); })
+      .then(function (data) { if (data && data.ok) renderItems(data); })
+      .catch(function () {});
+  }
+
   function renderItems(payload) {
     var items = (payload && payload.items) || [];
     updateBadge((payload && payload.unread_count) || 0);
@@ -238,10 +323,27 @@ pub fn notifications_popover_script() -> &'static str {
     }
     empty.hidden = true;
     items.forEach(function (item) {
+      var sev = itemSeverity(item);
       var li = document.createElement("li");
-      if (!item.read) li.className = "unread";
-      li.innerHTML = "<strong>" + escapeHtml(item.title) + "</strong>"
-        + (item.body ? "<span>" + escapeHtml(item.body) + "</span>" : "");
+      var toast = document.createElement("div");
+      toast.className = "notify-toast notify-toast--" + sev + (item.read ? " is-read" : "");
+      toast.setAttribute("data-severity", sev);
+      toast.innerHTML =
+        '<span class="notify-toast-icon" aria-hidden="true">' + severityIcon(sev) + "</span>"
+        + '<div class="notify-toast-text"><strong>' + escapeHtml(item.title) + "</strong>"
+        + (item.body ? "<span>" + escapeHtml(item.body) + "</span>" : "")
+        + "</div>"
+        + '<button type="button" class="notify-toast-dismiss" aria-label="Dismiss" title="Dismiss">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+        + "</button>";
+      var dismiss = toast.querySelector(".notify-toast-dismiss");
+      if (dismiss && item.id) {
+        dismiss.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          markRead([String(item.id)], false);
+        });
+      }
+      li.appendChild(toast);
       list.appendChild(li);
     });
   }
@@ -293,14 +395,7 @@ pub fn notifications_popover_script() -> &'static str {
   if (markAll) {
     markAll.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      fetch("/api/panel/notifications/mark-read", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ all: true })
-      }).then(function (res) { return res.json(); })
-        .then(function (data) { if (data && data.ok) renderItems(data); })
-        .catch(function () {});
+      markRead([], true);
     });
   }
 })();
@@ -341,6 +436,12 @@ mod tests {
         assert!(css.contains("z-index:120"));
         assert!(css.contains("white-space:nowrap"));
         assert!(css.contains("width:340px"));
+        assert!(css.contains("notify-toast--error"));
+        assert!(css.contains("notify-toast--warning"));
+        assert!(css.contains("notify-toast--success"));
+        assert!(css.contains("notify-toast--info"));
+        assert!(css.contains("#4a1c1c"));
+        assert!(css.contains("#1a2744"));
     }
 
     #[test]
@@ -349,5 +450,8 @@ mod tests {
         assert!(js.contains("document.body.appendChild(panel)"));
         assert!(js.contains("placePanel"));
         assert!(js.contains("POPOVER_WIDTH = 340"));
+        assert!(js.contains("itemSeverity"));
+        assert!(js.contains("notify-toast-dismiss"));
+        assert!(!js.contains("CyberPanel"));
     }
 }

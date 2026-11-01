@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Sub-users (ACL secondary logins)**: Panel owner manages `/account/users/sub-users` to create secondary accounts with selected section capabilities. Sub-users reuse sidebar visibility ACL and site ACL (`all_owned_by` parent). They manage the owner's panel within that scope; Reseller Center stays the separate multi-tenant hierarchy. Website/sub-domain create and WordPress create-if-missing assign sites to the parent owner via `resource_owner_for()`.
+- **Remote notification broadcast**: `POST /api/nt/notifications/broadcast` accepts HMAC-SHA256 signed JSON from News Targeted (`api.newstargeted.com`) to push inbox items to all panel accounts or a username list. Config at `<data dir>/notifications/remote-push.json` (disabled by default). Replay nonces, timestamp skew, per-minute rate limit, optional AES-256-GCM body, and `panel.notifications.remote` action-log rows. Existing GET / mark-read / session self-push routes are unchanged. See `docs/REMOTE-NOTIFICATIONS.md`.
 
 ### Changed
 
 - **Login health gate fails closed when probes are unconfirmed**: `/login` and `/api/login/services` still block when MariaDB or the web stack are known unhealthy. On probe timeout they reuse a recent confirmed-ready cache (stale-while-revalidate); without that cache, sign-in stays disabled with a clear "wait and try again" banner instead of inviting login. Recovery remains `CPN_LOGIN_SERVICE_GATE=0`. TCP-first MariaDB/OLS checks cut false timeouts on reverse-proxy hosts where the panel listens on loopback.
 - **Panel HTTPS on first install**: When a panel hostname is set at install (CLI prompt, `--panel-hostname`, or `cpn network set-hostname`), CPN configures the selected web server (OpenLiteSpeed, nginx, or Caddy) as a reverse proxy from `https://hostname` on port 443 to the plain-HTTP listen port (default 2087), issues Let's Encrypt when public DNS is ready, and sets `panel_public_url` to `https://hostname`. Operators can also run `cpn network enable-https` or Security > Hostname SSL > Enable HTTPS hostname. The listen port never speaks TLS; `https://IP:2087` is unsupported and no longer implied.
 - **Domain-only vs Domain + IP backup**: After HTTPS proxy setup, CPN defaults to Domain-only (loopback bind). Owners can enable Domain + IP backup (`cpn network set-ip-backup --on` or Settings > Change Port) to keep plain HTTP on `SERVER_IP:listen_port` as emergency access when DNS fails. MOTD and `cpn panel url` show the HTTP backup URL only when enabled; never `https://IP:port`.
+- **Notification toast severity**: Panel inbox items expose optional `severity` (alias `level`: `error` | `warning` | `success` | `info`). Missing values are inferred from category and title keywords. Bell popover renders dark tinted toast bars with icon tiles and dismiss (mark read). `POST /api/panel/notifications` accepts `severity` / `level`.
 
 ### Fixed
 
@@ -23,11 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Notifications inbox auto-fill**: high-value panel events push into the existing per-account store (`/var/lib/cpn/notifications/<user>.json`) with short title/body and categories `ssl`, `plugins`, `panel`, and `generic`. Wired for SSL renew/fail/expiring, plugin install/uninstall, panel upgrade/version completion, and site create/delete.
 - **Manage user modal contrast**: List Users manage dialog uses theme `--canvas` / `--ink` tokens (not undefined `--panel`) with readable dark and light label, muted, and form control colors on Account / Security / Other tabs.
 - **Edit user without target 2FA**: mandatory MFA enroll remains for the bootstrap panel owner’s dashboard use only. Secondary accounts are created without `totp_required`, and owners can Save details for users who have not enrolled 2FA.
-
-### Added
-
-- **Remote notification broadcast**: `POST /api/nt/notifications/broadcast` accepts HMAC-SHA256 signed JSON from News Targeted (`api.newstargeted.com`) to push inbox items to all panel accounts or a username list. Config at `<data dir>/notifications/remote-push.json` (disabled by default). Replay nonces, timestamp skew, per-minute rate limit, optional AES-256-GCM body, and `panel.notifications.remote` action-log rows. Existing GET / mark-read / session self-push routes are unchanged. See `docs/REMOTE-NOTIFICATIONS.md`.
-
 
 ## [1.4.6] - 25/10/2026
 

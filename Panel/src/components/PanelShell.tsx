@@ -408,6 +408,12 @@ export function PanelShell({
     writeNotices(notices.map((item) => ({ ...item, read: true })));
   };
 
+  const dismissNotice = (id: string) => {
+    writeNotices(
+      notices.map((item) => (item.id === id ? { ...item, read: true } : item)),
+    );
+  };
+
   return (
     <div className="panel-layout">
       <button
@@ -478,6 +484,7 @@ export function PanelShell({
             <NotificationsPopover
               notices={notices}
               onMarkAllRead={markAllRead}
+              onDismiss={dismissNotice}
             />
             <Link
               href="/account/users/profile"
