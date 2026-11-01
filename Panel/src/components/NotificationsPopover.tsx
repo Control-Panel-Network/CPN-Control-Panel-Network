@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Ban, Bell, Check, Info, TriangleAlert, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,11 +10,16 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+export type NotifySeverity = "error" | "warning" | "success" | "info";
+
 export type PanelNotice = {
   id: string;
   title: string;
   body: string;
   read: boolean;
+  category?: string;
+  severity?: string;
+  level?: string;
 };
 
 type NotifyPos = {
@@ -30,6 +35,7 @@ const VIEWPORT_PAD = 12;
 type NotificationsPopoverProps = {
   notices: PanelNotice[];
   onMarkAllRead: () => void;
+  onDismiss?: (id: string) => void;
 };
 
 function computeNotifyPos(btn: HTMLElement): NotifyPos {
@@ -53,9 +59,79 @@ function subscribeMounted() {
   return () => {};
 }
 
+function normalizeSeverity(raw: string | undefined): NotifySeverity | "" {
+  const v = String(raw || "")
+    .toLowerCase()
+    .trim();
+  if (
+    v === "error" ||
+    v === "err" ||
+    v === "danger" ||
+    v === "critical" ||
+    v === "fail" ||
+    v === "failed"
+  ) {
+    return "error";
+  }
+  if (v === "warning" || v === "warn" || v === "caution") {
+    return "warning";
+  }
+  if (v === "success" || v === "ok" || v === "done") {
+    return "success";
+  }
+  if (
+    v === "info" ||
+    v === "information" ||
+    v === "neutral" ||
+    v === "notice"
+  ) {
+    return "info";
+  }
+  return "";
+}
+
+function inferSeverity(item: PanelNotice): NotifySeverity {
+  const blob = `${item.category || ""} ${item.title} ${item.body}`.toLowerCase();
+  if (/fail|error|denied|critical|unable|could not/.test(blob)) {
+    return "error";
+  }
+  if (
+    /expir|warn|attention|soon|degrad/.test(blob) &&
+    !/renew|success|installed|completed|created|ready/.test(blob)
+  ) {
+    return "warning";
+  }
+  if (/renew|success|installed|completed|created|ready/.test(blob)) {
+    return "success";
+  }
+  return "info";
+}
+
+export function resolveNoticeSeverity(item: PanelNotice): NotifySeverity {
+  return (
+    normalizeSeverity(item.severity) ||
+    normalizeSeverity(item.level) ||
+    inferSeverity(item)
+  );
+}
+
+function SeverityIcon({ severity }: { severity: NotifySeverity }) {
+  if (severity === "error") {
+    return <Ban size={14} strokeWidth={2.4} aria-hidden />;
+  }
+  if (severity === "warning") {
+    return <TriangleAlert size={14} strokeWidth={2.2} aria-hidden />;
+  }
+  if (severity === "success") {
+    return <Check size={14} strokeWidth={2.6} aria-hidden />;
+  }
+  return <Info size={14} strokeWidth={2.2} aria-hidden />;
+}
+
 export function NotificationsPopover({
   notices,
   onMarkAllRead,
+  onDismiss,
 }: NotificationsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<NotifyPos | null>(null);
@@ -136,15 +212,36 @@ export function NotificationsPopover({
               <p className="notify-empty">No notifications yet.</p>
             ) : (
               <ul className="notify-list">
-                {notices.map((item) => (
-                  <li
-                    key={item.id}
-                    className={item.read ? undefined : "unread"}
-                  >
-                    <strong>{item.title}</strong>
-                    {item.body ? <span>{item.body}</span> : null}
-                  </li>
-                ))}
+                {notices.map((item) => {
+                  const severity = resolveNoticeSeverity(item);
+                  return (
+                    <li key={item.id}>
+                      <div
+                        className={`notify-toast notify-toast--${severity}${
+                          item.read ? " is-read" : ""
+                        }`}
+                        data-severity={severity}
+                      >
+                        <span className="notify-toast-icon" aria-hidden>
+                          <SeverityIcon severity={severity} />
+                        </span>
+                        <div className="notify-toast-text">
+                          <strong>{item.title}</strong>
+                          {item.body ? <span>{item.body}</span> : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="notify-toast-dismiss"
+                          aria-label="Dismiss"
+                          title="Dismiss"
+                          onClick={() => onDismiss?.(item.id)}
+                        >
+                          <X size={12} strokeWidth={2.4} aria-hidden />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>,

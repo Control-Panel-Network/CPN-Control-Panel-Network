@@ -3,7 +3,7 @@
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
 use crate::panel_notifications::{
-    load_notifications, mark_read, notifications_public_json, push_notification,
+    load_notifications, mark_read, notifications_public_json, push_notification_with_severity,
 };
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
@@ -77,6 +77,11 @@ pub struct PushBody {
     body: String,
     #[serde(default)]
     category: String,
+    /// Optional: `error` | `warning` | `success` | `info` (alias: `level`).
+    #[serde(default)]
+    severity: String,
+    #[serde(default)]
+    level: String,
 }
 
 /// Authenticated self-service push (smoke / operator tooling). Category defaults to `panel`.
@@ -94,7 +99,19 @@ pub async fn panel_notifications_push(
     } else {
         body.category.trim()
     };
-    match push_notification(&user, &body.title, &body.body, category) {
+    let severity_raw = if !body.severity.trim().is_empty() {
+        body.severity.trim()
+    } else if !body.level.trim().is_empty() {
+        body.level.trim()
+    } else {
+        ""
+    };
+    let severity = if severity_raw.is_empty() {
+        None
+    } else {
+        Some(severity_raw)
+    };
+    match push_notification_with_severity(&user, &body.title, &body.body, category, severity) {
         Ok(item) => {
             let store = load_notifications(&user);
             let mut payload = notifications_public_json(&store);

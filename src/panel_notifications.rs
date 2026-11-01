@@ -20,6 +20,8 @@ pub const CATEGORY_PLUGINS: &str = "plugins";
 pub const CATEGORY_PANEL: &str = "panel";
 /// Site create/delete and other panel events.
 pub const CATEGORY_GENERIC: &str = "generic";
+/// Toast / inbox severity: `error`, `warning`, `success`, or `info`.
+pub const SEVERITIES: &[&str] = &["error", "warning", "success", "info"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelNotification {
@@ -29,6 +31,9 @@ pub struct PanelNotification {
     pub body: String,
     #[serde(default)]
     pub category: String,
+    /// Optional explicit level. Empty on older JSON; resolved at read time.
+    #[serde(default, alias = "level")]
+    pub severity: String,
     pub created_at: u64,
     #[serde(default)]
     pub read: bool,
@@ -86,6 +91,66 @@ fn write_store(path: &PathBuf, store: &NotificationStore) -> Result<(), String> 
     Ok(())
 }
 
+/// Normalize a caller-supplied severity / level string.
+pub fn normalize_severity(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "error" | "err" | "danger" | "critical" | "fail" | "failed" => Some("error"),
+        "warning" | "warn" | "caution" => Some("warning"),
+        "success" | "ok" | "done" => Some("success"),
+        "info" | "information" | "neutral" | "notice" => Some("info"),
+        _ => None,
+    }
+}
+
+/// Infer toast type from category + title/body keywords (backward compatible).
+pub fn infer_severity(category: &str, title: &str, body: &str) -> &'static str {
+    let cat = category.trim().to_ascii_lowercase();
+    let title_l = title.to_ascii_lowercase();
+    let body_l = body.to_ascii_lowercase();
+    let blob = format!("{cat} {title_l} {body_l}");
+
+    let has_fail = blob.contains("fail")
+        || blob.contains("error")
+        || blob.contains("denied")
+        || blob.contains("critical")
+        || blob.contains("unable")
+        || blob.contains("could not");
+    let has_warn = blob.contains("expir")
+        || blob.contains("warn")
+        || blob.contains("attention")
+        || blob.contains("soon")
+        || blob.contains("degrad");
+    let has_success = blob.contains("renew")
+        || blob.contains("success")
+        || blob.contains("installed")
+        || blob.contains("completed")
+        || blob.contains("created")
+        || blob.contains("ready");
+
+    if has_fail {
+        return "error";
+    }
+    if has_warn && !has_success {
+        return "warning";
+    }
+    if has_success {
+        return "success";
+    }
+
+    match cat.as_str() {
+        "ssl" | "plugin" | "upgrade" | "site" | "ops" | "panel" | "" => "info",
+        _ => "info",
+    }
+}
+
+/// Resolve stored or inferred severity for display / API.
+pub fn resolve_severity(item: &PanelNotification) -> &'static str {
+    if let Some(s) = normalize_severity(&item.severity) {
+        return s;
+    }
+    infer_severity(&item.category, &item.title, &item.body)
+}
+
 pub fn load_notifications(username: &str) -> NotificationStore {
     let path = store_path(username);
     let Ok(raw) = fs::read_to_string(&path) else {
@@ -105,19 +170,38 @@ pub fn push_notification(
     body: &str,
     category: &str,
 ) -> Result<PanelNotification, String> {
+    push_notification_with_severity(username, title, body, category, None)
+}
+
+/// Push with an optional explicit severity (`error`|`warning`|`success`|`info`).
+pub fn push_notification_with_severity(
+    username: &str,
+    title: &str,
+    body: &str,
+    category: &str,
+    severity: Option<&str>,
+) -> Result<PanelNotification, String> {
     let path = store_path(username);
     let mut store = load_notifications(username);
+    let category = category.trim().to_string();
+    let title = title.trim().to_string();
+    let body = body.trim().to_string();
+    if title.is_empty() {
+        return Err("title is required".into());
+    }
+    let severity = severity
+        .and_then(normalize_severity)
+        .unwrap_or_else(|| infer_severity(&category, &title, &body))
+        .to_string();
     let item = PanelNotification {
         id: format!("n-{}-{}", now_unix(), store.items.len() + 1),
-        title: title.trim().to_string(),
-        body: body.trim().to_string(),
-        category: category.trim().to_string(),
+        title,
+        body,
+        category,
+        severity,
         created_at: now_unix(),
         read: false,
     };
-    if item.title.is_empty() {
-        return Err("title is required".into());
-    }
     store.items.insert(0, item.clone());
     // Cap growth so the file stays small.
     if store.items.len() > 100 {
@@ -139,11 +223,26 @@ pub fn mark_read(username: &str, ids: &[String], all: bool) -> Result<Notificati
     Ok(store)
 }
 
+fn item_public_json(item: &PanelNotification) -> serde_json::Value {
+    let severity = resolve_severity(item);
+    serde_json::json!({
+        "id": item.id,
+        "title": item.title,
+        "body": item.body,
+        "category": item.category,
+        "severity": severity,
+        "level": severity,
+        "created_at": item.created_at,
+        "read": item.read,
+    })
+}
+
 pub fn notifications_public_json(store: &NotificationStore) -> serde_json::Value {
+    let items: Vec<serde_json::Value> = store.items.iter().map(item_public_json).collect();
     serde_json::json!({
         "ok": true,
         "unread_count": unread_count(store),
-        "items": store.items,
+        "items": items,
     })
 }
 
@@ -226,6 +325,7 @@ mod tests {
             assert_eq!(unread_count(&store), 1);
             assert_eq!(store.items[0].id, item.id);
             assert_eq!(store.items[0].category, CATEGORY_SSL);
+            assert_eq!(resolve_severity(&store.items[0]), "success");
 
             let updated = mark_read("Admin", std::slice::from_ref(&item.id), false).expect("mark");
             assert_eq!(unread_count(&updated), 0);
@@ -270,6 +370,86 @@ mod tests {
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
             }
+        });
+    }
+
+    #[test]
+    fn severity_inference_maps_keywords() {
+        assert_eq!(infer_severity("ssl", "SSL failure", ""), "error");
+        assert_eq!(
+            infer_severity("plugin", "Plugin failure", "install failed"),
+            "error"
+        );
+        assert_eq!(infer_severity("upgrade", "Upgrade failed", ""), "error");
+        assert_eq!(
+            infer_severity("ssl", "SSL expiring", "expires soon"),
+            "warning"
+        );
+        assert_eq!(infer_severity("ssl", "SSL renewed", ""), "success");
+        assert_eq!(infer_severity("plugin", "Plugin installed", ""), "success");
+        assert_eq!(infer_severity("upgrade", "Upgrade completed", ""), "success");
+        assert_eq!(infer_severity("site", "Site created", ""), "success");
+        assert_eq!(infer_severity("panel", "Hello", "neutral note"), "info");
+        assert_eq!(normalize_severity("WARN"), Some("warning"));
+        assert_eq!(normalize_severity("nope"), None);
+    }
+
+    #[test]
+    fn explicit_severity_wins_over_keywords() {
+        with_test_data_dir(|| {
+            let item = push_notification_with_severity(
+                "Admin",
+                "Upgrade failed",
+                "details",
+                "upgrade",
+                Some("info"),
+            )
+            .expect("push");
+            assert_eq!(item.severity, "info");
+            assert_eq!(resolve_severity(&item), "info");
+        });
+    }
+
+    #[test]
+    fn public_json_includes_severity_and_level() {
+        with_test_data_dir(|| {
+            let _ = push_notification("Admin", "SSL failure", "x", "ssl").expect("push");
+            let store = load_notifications("Admin");
+            let json = notifications_public_json(&store);
+            let sev = json["items"][0]["severity"].as_str().unwrap_or("");
+            let level = json["items"][0]["level"].as_str().unwrap_or("");
+            assert_eq!(sev, "error");
+            assert_eq!(level, "error");
+        });
+    }
+
+    #[test]
+    fn legacy_json_without_severity_still_loads() {
+        with_test_data_dir(|| {
+            let path = store_path("Legacy");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("dir");
+            }
+            fs::write(
+                &path,
+                r#"{
+  "items": [
+    {
+      "id": "n-1",
+      "title": "SSL expiring",
+      "body": "example.com",
+      "category": "ssl",
+      "created_at": 1,
+      "read": false
+    }
+  ]
+}"#,
+            )
+            .expect("write");
+            let store = load_notifications("Legacy");
+            assert_eq!(store.items.len(), 1);
+            assert!(store.items[0].severity.is_empty());
+            assert_eq!(resolve_severity(&store.items[0]), "warning");
         });
     }
 }
