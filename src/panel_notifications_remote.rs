@@ -231,7 +231,9 @@ pub fn consume_nonce(nonce: &str, ttl_secs: u64) -> Result<(), String> {
     if store.entries.contains_key(nonce) {
         return Err("replayed nonce".into());
     }
-    store.entries.insert(nonce.to_string(), now.saturating_add(ttl_secs));
+    store
+        .entries
+        .insert(nonce.to_string(), now.saturating_add(ttl_secs));
     write_json(&nonce_path(), &store)?;
     Ok(())
 }
@@ -246,11 +248,9 @@ fn check_rate_limit(limit_per_minute: u32) -> Result<(), String> {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default();
-    store.buckets.retain(|k, _| {
-        k.parse::<u64>()
-            .map(|b| b + 2 >= now / 60)
-            .unwrap_or(false)
-    });
+    store
+        .buckets
+        .retain(|k, _| k.parse::<u64>().map(|b| b + 2 >= now / 60).unwrap_or(false));
     let count = store.buckets.entry(bucket).or_insert(0);
     if *count >= limit_per_minute {
         return Err("rate limit exceeded".into());
@@ -438,7 +438,12 @@ pub fn process_remote_broadcast(
     let body = decrypt_optional_body(cfg, &req.body, &req.body_enc, &req.body_nonce)?;
     validate_fields(&req.title, &body, &req.category)?;
     let targets = resolve_targets(req.all_users, &req.usernames)?;
-    Ok(deliver_broadcast(&req.title, &body, &req.category, &targets))
+    Ok(deliver_broadcast(
+        &req.title,
+        &body,
+        &req.category,
+        &targets,
+    ))
 }
 
 #[cfg(test)]
@@ -455,7 +460,9 @@ mod tests {
         let nonce = "nonce-1";
         let sig = hmac_hex(secret, &signing_payload(ts, nonce, body));
         assert!(verify_remote_signature(secret, ts, nonce, body, &sig));
-        assert!(!verify_remote_signature(secret, ts, nonce, body, "deadbeef"));
+        assert!(!verify_remote_signature(
+            secret, ts, nonce, body, "deadbeef"
+        ));
     }
 
     #[test]

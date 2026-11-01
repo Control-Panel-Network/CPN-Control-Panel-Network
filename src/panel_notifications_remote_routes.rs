@@ -2,7 +2,7 @@
 
 use crate::panel_action_log;
 use crate::panel_notifications_remote::{
-    load_remote_push_config, process_remote_broadcast, RemoteBroadcastRequest,
+    RemoteBroadcastRequest, load_remote_push_config, process_remote_broadcast,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 
@@ -128,10 +128,7 @@ pub async fn panel_notifications_remote_broadcast(
                 false,
                 &err,
             );
-            json_body(
-                status,
-                serde_json::json!({ "ok": false, "error": err }),
-            )
+            json_body(status, serde_json::json!({ "ok": false, "error": err }))
         }
     }
 }
