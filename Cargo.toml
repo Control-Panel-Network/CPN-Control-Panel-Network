@@ -63,3 +63,6 @@ lto = "thin"
 strip = true
 codegen-units = 1
 panic = "abort"
+
+# Self-contained workspace so a broken parent `../Cargo.toml` cannot block builds.
+[workspace]

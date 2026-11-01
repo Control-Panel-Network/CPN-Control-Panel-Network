@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Manage user modal contrast**: List Users manage dialog uses theme `--canvas` / `--ink` tokens (not undefined `--panel`) with readable dark and light label, muted, and form control colors on Account / Security / Other tabs.
 - **Edit user without target 2FA**: mandatory MFA enroll remains for the bootstrap panel owner’s dashboard use only. Secondary accounts are created without `totp_required`, and owners can Save details for users who have not enrolled 2FA.
 
+### Added
+
+- **Remote notification broadcast**: `POST /api/nt/notifications/broadcast` accepts HMAC-SHA256 signed JSON from News Targeted (`api.newstargeted.com`) to push inbox items to all panel accounts or a username list. Config at `<data dir>/notifications/remote-push.json` (disabled by default). Replay nonces, timestamp skew, per-minute rate limit, optional AES-256-GCM body, and `panel.notifications.remote` action-log rows. Existing GET / mark-read / session self-push routes are unchanged. See `docs/REMOTE-NOTIFICATIONS.md`.
+
+
 ## [1.4.6] - 25/10/2026
 
 Patch release after v1.4.5. Docker Hub guest hardening (no world-writable data dirs, Hub Compose, explicit privileged opt-in) and site package quota plus docroot ownership fixes from #595 and #596.
