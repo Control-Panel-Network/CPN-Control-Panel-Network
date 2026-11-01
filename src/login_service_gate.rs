@@ -5,19 +5,23 @@
 //! Mail is informational only (never blocks login). Installer/bootstrap token
 //! routes stay reachable outside this gate.
 //!
-//! When host probes are slow (heavy disk I/O, restore, wedged systemd), the gate
-//! fails open after a short budget so `/login` POST cannot hang forever.
+//! Policy:
+//! - Known unhealthy critical services: block sign-in.
+//! - Probe timeout with a recent confirmed-ready cache: reuse that status
+//!   (stale-while-revalidate) so a brief systemd stall does not lock owners out.
+//! - Probe timeout with no recent ready status: **fail closed** (do not invite
+//!   sign-in). Operators recover with `CPN_LOGIN_SERVICE_GATE=0` or by waiting
+//!   until probes succeed.
 //!
 //! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
 //!
 //! Results are cached (30s TTL) so `/login` and `/api/login/services` never spam
 //! `systemctl` on every poll (worker starvation → browser `408` blank page).
-//! On eval timeout, a prior ready status is reused (stale-while-revalidate).
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
     database_health_label, detect_database, detect_mail_service_label, detect_web_server_label,
-    openlitespeed_tree_present, systemd_unit_enabled,
+    openlitespeed_tree_present, port_open, systemd_unit_enabled,
 };
 use serde::Serialize;
 use std::path::Path;
@@ -30,12 +34,15 @@ const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(30);
 /// Hard wall clock for a fresh gate evaluation (many `systemctl` probes).
 const LOGIN_GATE_EVAL_BUDGET: Duration = Duration::from_millis(4000);
 
-/// Operator-facing text when probes exceed the budget (fail-open).
-pub const LOGIN_SERVICE_TIMEOUT_WARNING: &str = "Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.";
+/// Operator-facing text when probes exceed the budget and no recent ready cache exists.
+pub const LOGIN_SERVICE_TIMEOUT_MESSAGE: &str = "Could not confirm MariaDB/web health in time. Sign-in is disabled until panel services are confirmed running. Wait a few seconds and try again.";
+
+/// Alias kept for older call sites and session-log filters.
+pub const LOGIN_SERVICE_TIMEOUT_WARNING: &str = LOGIN_SERVICE_TIMEOUT_MESSAGE;
 
 static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::new(None);
 
-/// Last ready status without a probe-timeout warning (stale-while-revalidate on budget expiry).
+/// Last ready status without a probe-timeout block (stale-while-revalidate on budget expiry).
 static LOGIN_GATE_LAST_GOOD: Mutex<Option<LoginServiceStatus>> = Mutex::new(None);
 
 /// Serializes tests that mutate `CPN_LOGIN_SERVICE_GATE` (process-wide env).
@@ -109,18 +116,18 @@ fn ready_status_unrestricted(message: &str) -> LoginServiceStatus {
     }
 }
 
-fn timed_out_fail_open_status() -> LoginServiceStatus {
+fn timed_out_fail_closed_status() -> LoginServiceStatus {
     LoginServiceStatus {
-        ready: true,
-        message: LOGIN_SERVICE_TIMEOUT_WARNING.to_string(),
+        ready: false,
+        message: LOGIN_SERVICE_TIMEOUT_MESSAGE.to_string(),
         web: ServiceSlice {
             expected: true,
-            running: true,
+            running: false,
             label: "check timed out".into(),
         },
         database: ServiceSlice {
             expected: true,
-            running: true,
+            running: false,
             label: "check timed out".into(),
         },
         mail: ServiceSlice {
@@ -129,17 +136,18 @@ fn timed_out_fail_open_status() -> LoginServiceStatus {
             label: "n/a".into(),
         },
         blocking: Vec::new(),
-        warnings: vec![LOGIN_SERVICE_TIMEOUT_WARNING.to_string()],
+        warnings: Vec::new(),
     }
 }
 
 fn is_usable_last_good(status: &LoginServiceStatus) -> bool {
     status.ready
         && status.blocking.is_empty()
+        && status.message.as_str() != LOGIN_SERVICE_TIMEOUT_MESSAGE
         && !status
             .warnings
             .iter()
-            .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
+            .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_MESSAGE)
 }
 
 fn remember_last_good(status: &LoginServiceStatus) {
@@ -168,18 +176,18 @@ fn peek_usable_last_good() -> Option<LoginServiceStatus> {
     None
 }
 
-/// Prefer a prior ready status over the timeout warning banner (stale-while-revalidate).
-pub(crate) fn fail_open_or_stale() -> LoginServiceStatus {
+/// Prefer a prior ready status; otherwise fail closed (do not invite sign-in).
+pub(crate) fn fail_closed_or_stale() -> LoginServiceStatus {
     if let Some(status) = peek_usable_last_good() {
         return status;
     }
-    timed_out_fail_open_status()
+    timed_out_fail_closed_status()
 }
 
 fn log_gate_timeout(where_: &str) {
     // Main Log + Error logs; no credentials or usernames.
     crate::upgrade_tip_log::log_failure(
-        format!("login_service_gate: {where_} timed out; sign-in left open (fail-open)"),
+        format!("login_service_gate: {where_} timed out; sign-in blocked until health is confirmed (fail-closed)"),
         None,
     );
 }
@@ -200,7 +208,7 @@ fn evaluate_login_services_budgeted() -> LoginServiceStatus {
         }
         Err(_) => {
             log_gate_timeout("evaluate");
-            fail_open_or_stale()
+            fail_closed_or_stale()
         }
     }
 }
@@ -239,14 +247,34 @@ fn database_stack_installed() -> bool {
 }
 
 fn mail_stack_expected() -> bool {
+    // Manifest only on the login path: avoid extra systemd probes for a
+    // non-blocking warning when CPN never selected mail.
     load_manifest().and_then(|m| m.selected_mail).is_some()
-        || ["postfix", "exim4", "exim", "dovecot"]
-            .iter()
-            .any(|unit| systemd_unit_enabled(unit))
 }
 
 fn is_running_label(label: &str) -> bool {
     label == "Running"
+}
+
+/// Fast path for OLS reverse-proxy hosts: TCP proves the web stack without systemd.
+fn web_running_label_fast() -> String {
+    if openlitespeed_tree_present()
+        && (port_open("127.0.0.1:80", 200)
+            || port_open("127.0.0.1:443", 200)
+            || port_open("127.0.0.1:8088", 200))
+    {
+        return "Running".into();
+    }
+    detect_web_server_label()
+}
+
+/// Fast path: :3306 accepting connections is enough for login health.
+fn database_running_label_fast() -> String {
+    if port_open("127.0.0.1:3306", 200) {
+        return "Running".into();
+    }
+    let db = detect_database();
+    database_health_label(&db)
 }
 
 fn evaluate_login_services_fresh() -> LoginServiceStatus {
@@ -261,18 +289,31 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 
     #[cfg(unix)]
     {
-        let web_label = detect_web_server_label();
-        let db = detect_database();
-        let db_label = database_health_label(&db);
-        let mail_label = detect_mail_service_label();
-
+        // Expected stacks first (path/manifest short-circuits before systemd).
         let web_expected = web_stack_installed();
         let db_expected = database_stack_installed();
         let mail_expected = mail_stack_expected();
 
-        let web_running = is_running_label(&web_label);
-        let db_running = is_running_label(&db_label);
-        let mail_running = is_running_label(&mail_label);
+        // TCP-first running checks; fall back to systemd-aware detectors only when needed.
+        let web_label = if web_expected {
+            web_running_label_fast()
+        } else {
+            "n/a".into()
+        };
+        let db_label = if db_expected {
+            database_running_label_fast()
+        } else {
+            "n/a".into()
+        };
+        let mail_label = if mail_expected {
+            detect_mail_service_label()
+        } else {
+            "n/a".into()
+        };
+
+        let web_running = !web_expected || is_running_label(&web_label);
+        let db_running = !db_expected || is_running_label(&db_label);
+        let mail_running = !mail_expected || is_running_label(&mail_label);
 
         let mut blocking: Vec<&'static str> = Vec::new();
         if web_expected && !web_running {
@@ -505,21 +546,16 @@ mod tests {
     }
 
     #[test]
-    fn timeout_fail_open_status_is_ready_with_clear_warning() {
-        let status = timed_out_fail_open_status();
-        assert!(status.ready);
-        assert!(status.blocking.is_empty());
-        assert!(
-            status
-                .warnings
-                .iter()
-                .any(|w| w.contains("MariaDB/web health"))
-        );
-        assert!(status.message.contains("still sign in"));
+    fn timeout_fail_closed_status_blocks_sign_in() {
+        let status = timed_out_fail_closed_status();
+        assert!(!status.ready);
+        assert!(status.message.contains("Sign-in is disabled"));
+        assert!(!status.message.contains("still sign in"));
+        assert_eq!(status.message, LOGIN_SERVICE_TIMEOUT_MESSAGE);
     }
 
     #[test]
-    fn timeout_prefers_last_ready_cache_over_timeout_warning() {
+    fn timeout_prefers_last_ready_cache_over_fail_closed() {
         let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
         let good = LoginServiceStatus {
@@ -552,28 +588,18 @@ mod tests {
                 good.clone(),
             ));
         }
-        let status = fail_open_or_stale();
+        let status = fail_closed_or_stale();
         invalidate_login_services_cache();
         assert_eq!(status, good);
-        assert!(
-            !status
-                .warnings
-                .iter()
-                .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
-        );
+        assert!(status.ready);
     }
 
     #[test]
-    fn timeout_without_last_good_uses_fail_open_warning() {
+    fn timeout_without_last_good_fails_closed() {
         let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
-        let status = fail_open_or_stale();
-        assert!(status.ready);
-        assert!(
-            status
-                .warnings
-                .iter()
-                .any(|w| w.as_str() == LOGIN_SERVICE_TIMEOUT_WARNING)
-        );
+        let status = fail_closed_or_stale();
+        assert!(!status.ready);
+        assert_eq!(status.message, LOGIN_SERVICE_TIMEOUT_MESSAGE);
     }
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Login health gate fails closed when probes are unconfirmed**: `/login` and `/api/login/services` still block when MariaDB or the web stack are known unhealthy. On probe timeout they reuse a recent confirmed-ready cache (stale-while-revalidate); without that cache, sign-in stays disabled with a clear "wait and try again" banner instead of inviting login. Recovery remains `CPN_LOGIN_SERVICE_GATE=0`. TCP-first MariaDB/OLS checks cut false timeouts on reverse-proxy hosts where the panel listens on loopback.
+
 ### Fixed
 
 - **`cpn password` names the account it resets**: Before prompting and after success the CLI prints the target username (`password updated ok for user '...'`). With no `--username`, a single configured account (normally the bootstrap primary administrator) is still the default; when more than one account exists, `--username` is required so the wrong login is not reset silently. Same confirmation on `cpn account passwd`.

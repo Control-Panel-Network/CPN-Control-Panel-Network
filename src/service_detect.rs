@@ -117,33 +117,31 @@ pub fn port_open(addr: &str, timeout_ms: u64) -> bool {
 }
 
 /// Same MariaDB/MySQL detection used by `/databases` and Dashboard System Health.
+///
+/// TCP `:3306` is checked first so login/dashboard health does not wait on a slow
+/// `systemctl` when the daemon is already accepting connections.
 pub fn detect_database() -> DatabaseStatus {
+    let listening = port_open("127.0.0.1:3306", 250);
+    if listening {
+        return DatabaseStatus {
+            service_label: "Listener on :3306".into(),
+            listening_3306: true,
+            detail: "A database daemon is accepting connections on 127.0.0.1:3306.".into(),
+        };
+    }
     let service = first_active_service(&[
         ("mariadb", "MariaDB (active)"),
         ("mysql", "MySQL (active)"),
         ("mysqld", "mysqld (active)"),
     ]);
-    let listening = port_open("127.0.0.1:3306", 250);
-    match (service, listening) {
-        (Some(label), true) => DatabaseStatus {
-            service_label: label,
-            listening_3306: true,
-            detail: "A database daemon is active and accepting connections on 127.0.0.1:3306."
-                .into(),
-        },
-        (Some(label), false) => DatabaseStatus {
+    match service {
+        Some(label) => DatabaseStatus {
             service_label: label,
             listening_3306: false,
             detail: "The service unit is active, but TCP :3306 did not accept a quick probe."
                 .into(),
         },
-        (None, true) => DatabaseStatus {
-            service_label: "Listener on :3306".into(),
-            listening_3306: true,
-            detail: "Something accepts connections on 127.0.0.1:3306, but no MariaDB/MySQL systemd unit was active."
-                .into(),
-        },
-        (None, false) => DatabaseStatus {
+        None => DatabaseStatus {
             service_label: "Not detected".into(),
             listening_3306: false,
             detail: "No local MariaDB/MySQL detected. Fresh installs default to MariaDB + phpMyAdmin; install from Apps or Databases if this host was set up without them."
@@ -177,7 +175,17 @@ pub fn openlitespeed_tree_present() -> bool {
 
 /// OpenLiteSpeed vendor units differ by package generation (`lsws`, `lshttpd`,
 /// and sometimes an `openlitespeed` alias). Install uses whichever unit exists.
+///
+/// TCP/OLS tree is checked before `systemctl` so OLS reverse-proxy hosts (panel
+/// on loopback, HTTPS on :443) stay fast when systemd is busy.
 pub fn detect_web_server_label() -> String {
+    if openlitespeed_tree_present()
+        && (port_open("127.0.0.1:80", 200)
+            || port_open("127.0.0.1:443", 200)
+            || port_open("127.0.0.1:8088", 200))
+    {
+        return "Running".into();
+    }
     if let Some(label) = first_active_service(&[
         ("nginx", "Running"),
         ("lsws", "Running"),
@@ -188,10 +196,8 @@ pub fn detect_web_server_label() -> String {
     ]) {
         return label;
     }
-    // Fallback when the unit name is unexpected but OLS is up on :80/:443.
-    if openlitespeed_tree_present()
-        && (port_open("127.0.0.1:80", 250) || port_open("127.0.0.1:443", 250))
-    {
+    // Fallback when the unit name is unexpected but a common HTTP port answers.
+    if port_open("127.0.0.1:80", 200) || port_open("127.0.0.1:443", 200) {
         return "Running".into();
     }
     "Not detected".into()

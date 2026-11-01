@@ -6,7 +6,9 @@ use crate::account_passkeys::{
     rename_passkey,
 };
 use crate::installer::AppState;
-use crate::login_service_gate::{evaluate_login_services, login_services_ready};
+use crate::login_service_gate::{
+    evaluate_login_services, fail_closed_or_stale, login_services_ready,
+};
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
 use crate::panel_session::{
     create_session_token, read_mfa_pending_cookie, request_https_from_headers, session_secret,
@@ -297,7 +299,7 @@ pub async fn passkey_login_start(
 ) -> HttpResponse {
     let _ = &body.username; // Accepted for backward compatibility; login is RP-wide.
     let gate_ready = match tokio::time::timeout(
-        std::time::Duration::from_millis(2200),
+        std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(login_services_ready),
     )
     .await
@@ -305,10 +307,10 @@ pub async fn passkey_login_start(
         Ok(Ok(ready)) => ready,
         Ok(Err(_)) | Err(_) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: passkey start gate timed out; sign-in left open",
+                "login_service_gate: passkey start gate timed out; sign-in blocked until health is confirmed",
                 None,
             );
-            true
+            fail_closed_or_stale().ready
         }
     };
     if !gate_ready {
@@ -352,7 +354,7 @@ pub async fn passkey_login_finish(
     body: web::Json<PasskeyLoginFinishBody>,
 ) -> HttpResponse {
     let gate_ready = match tokio::time::timeout(
-        std::time::Duration::from_millis(2200),
+        std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(login_services_ready),
     )
     .await
@@ -360,10 +362,10 @@ pub async fn passkey_login_finish(
         Ok(Ok(ready)) => ready,
         Ok(Err(_)) | Err(_) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: passkey finish gate timed out; sign-in left open",
+                "login_service_gate: passkey finish gate timed out; sign-in blocked until health is confirmed",
                 None,
             );
-            true
+            fail_closed_or_stale().ready
         }
     };
     if !gate_ready {
