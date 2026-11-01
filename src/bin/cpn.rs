@@ -362,8 +362,7 @@ fn resolve_password_target_username(username: Option<String>) -> Result<String, 
     let accounts = list_accounts()?;
     match accounts.as_slice() {
         [] => Err(
-            "No primary account exists yet; finish installation before resetting a password"
-                .into(),
+            "No primary account exists yet; finish installation before resetting a password".into(),
         ),
         [only] => Ok(only.username.clone()),
         many => Err(format!(
@@ -387,7 +386,9 @@ fn run() -> Result<(), String> {
             println!("passkey  List, remove, or clear WebAuthn passkeys for an account");
             println!("totp     Show or clear TOTP authenticator for an account");
             println!("mfa      Clear all MFA (TOTP + passkeys) for an account");
-            println!("password Reset a panel password (prints username; sole/bootstrap by default)");
+            println!(
+                "password Reset a panel password (prints username; sole/bootstrap by default)"
+            );
             println!(
                 "site     Manage website records under {}/sites",
                 paths::platform_data_dir()
