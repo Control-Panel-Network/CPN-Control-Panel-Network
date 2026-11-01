@@ -207,9 +207,9 @@ pub fn notify_owner_and_admins(owner: &str, title: &str, body: &str, category: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::default_password_policy;
     use crate::account::with_test_data_dir;
     use crate::account_mgmt::create_account;
-    use crate::account::default_password_policy;
 
     #[test]
     fn push_and_mark_read_round_trip() {

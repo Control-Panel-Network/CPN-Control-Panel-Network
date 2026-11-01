@@ -628,9 +628,7 @@ pub fn delete_site(domain_raw: &str) -> Result<(), String> {
     if !path.is_file() {
         return Err(format!("Site `{domain}` not found"));
     }
-    let owner = load_site_at(&path)
-        .map(|s| s.owner)
-        .unwrap_or_default();
+    let owner = load_site_at(&path).map(|s| s.owner).unwrap_or_default();
     // Best-effort DNS cleanup; never block registry delete when Cloudflare is down.
     let _ = crate::panel_ops_site_dns::remove_site_cloudflare_dns(&domain);
     fs::remove_file(&path)
@@ -651,9 +649,7 @@ pub fn delete_site_with_dns_report(domain_raw: &str) -> Result<String, String> {
     if !path.is_file() {
         return Err(format!("Site `{domain}` not found"));
     }
-    let owner = load_site_at(&path)
-        .map(|s| s.owner)
-        .unwrap_or_default();
+    let owner = load_site_at(&path).map(|s| s.owner).unwrap_or_default();
     let dns_note = crate::panel_ops_site_dns::remove_site_cloudflare_dns(&domain)
         .unwrap_or_else(|e| format!("Cloudflare site DNS remove: {e}"));
     fs::remove_file(&path)

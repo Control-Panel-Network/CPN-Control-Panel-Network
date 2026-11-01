@@ -354,7 +354,10 @@ mod tests {
             assert_eq!(updated.recovery_email, "new@example.com");
             let frag = users_manage_fragment("panelowner", "siteuser").expect("fragment");
             assert!(frag.contains("Save details"), "{frag}");
-            assert!(frag.contains("new@example.com") || frag.contains("old@example.com"), "{frag}");
+            assert!(
+                frag.contains("new@example.com") || frag.contains("old@example.com"),
+                "{frag}"
+            );
             assert!(!frag.contains("Enable two-factor"), "{frag}");
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
