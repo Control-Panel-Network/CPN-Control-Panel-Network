@@ -220,13 +220,13 @@ fn configure_nginx(
     let changed = write_file(Path::new(NGINX_CONF), &body)?;
     if changed {
         let test = Command::new("nginx").arg("-t").output();
-        if let Ok(out) = test {
-            if !out.status.success() {
-                return Err(format!(
-                    "nginx -t failed after writing {NGINX_CONF}: {}",
-                    String::from_utf8_lossy(&out.stderr)
-                ));
-            }
+        if let Ok(out) = test
+            && !out.status.success()
+        {
+            return Err(format!(
+                "nginx -t failed after writing {NGINX_CONF}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
         }
         let _ = Command::new("systemctl").args(["reload", "nginx"]).status();
         notes.push("nginx panel reverse proxy reloaded".into());
