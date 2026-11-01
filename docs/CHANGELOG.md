@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cpn password` names the account it resets**: Before prompting and after success the CLI prints the target username (`password updated ok for user '...'`). With no `--username`, a single configured account (normally the bootstrap primary administrator) is still the default; when more than one account exists, `--username` is required so the wrong login is not reset silently. Same confirmation on `cpn account passwd`.
+
 ## [1.4.6] - 25/10/2026
 
 Patch release after v1.4.5. Docker Hub guest hardening (no world-writable data dirs, Hub Compose, explicit privileged opt-in) and site package quota plus docroot ownership fixes from #595 and #596.
