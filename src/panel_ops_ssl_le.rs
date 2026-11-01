@@ -347,9 +347,59 @@ pub fn renew_auto_providers() -> Result<String, String> {
             String::from_utf8_lossy(&output.stderr)
         );
         let short: String = combined.chars().take(400).collect();
-        return Err(format!("certbot renew failed: {short}"));
+        let err = format!("certbot renew failed: {short}");
+        crate::panel_notifications::notify_panel_admins(
+            "SSL renew failed",
+            &err.chars().take(220).collect::<String>(),
+            crate::panel_notifications::CATEGORY_SSL,
+        );
+        return Err(err);
     }
+    crate::panel_notifications::notify_panel_admins(
+        "SSL renew completed",
+        "certbot renew finished. Checking certificates that expire soon.",
+        crate::panel_notifications::CATEGORY_SSL,
+    );
+    notify_expiring_ssl_certs();
     Ok("certbot renew completed (None/Custom domains were not forced)".into())
+}
+
+/// Push inbox items for origin certs that are expiring soon or already expired.
+pub fn notify_expiring_ssl_certs() {
+    use crate::panel_ops_ssl_inspect::SslValidityKind;
+    for row in ssl_status_all_sites() {
+        let (title, body) = match row.validity {
+            SslValidityKind::ExpiringSoon => (
+                "SSL certificate expiring soon",
+                format!(
+                    "{} expires {} ({} days left).",
+                    row.domain,
+                    row.expires_display.as_deref().unwrap_or("soon"),
+                    row.days_remaining
+                        .map(|d| d.to_string())
+                        .unwrap_or_else(|| "?".into())
+                ),
+            ),
+            SslValidityKind::Expired => (
+                "SSL certificate expired",
+                format!(
+                    "{} expired on {}.",
+                    row.domain,
+                    row.expires_display.as_deref().unwrap_or("unknown")
+                ),
+            ),
+            _ => continue,
+        };
+        let owner = crate::sites::load_site(&row.domain)
+            .map(|s| s.owner)
+            .unwrap_or_default();
+        crate::panel_notifications::notify_owner_and_admins(
+            &owner,
+            title,
+            &body.chars().take(220).collect::<String>(),
+            crate::panel_notifications::CATEGORY_SSL,
+        );
+    }
 }
 
 pub fn issue_all_needing_auto() -> Result<String, String> {

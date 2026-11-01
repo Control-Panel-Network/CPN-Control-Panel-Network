@@ -13,7 +13,8 @@ use std::path::Path;
 pub fn issue_or_renew(domain: &str) -> Result<String, String> {
     let domain = normalize_domain(domain)?;
     let site = load_site(&domain)?;
-    match site.ssl.provider {
+    let owner = site.owner.clone();
+    let result = match site.ssl.provider {
         SslProvider::None => Err(format!(
             "`{domain}` SSL provider is None: CPN will not issue, install, or auto-renew"
         )),
@@ -23,7 +24,28 @@ pub fn issue_or_renew(domain: &str) -> Result<String, String> {
         SslProvider::LetsEncrypt => issue_acme(&site, "letsencrypt"),
         SslProvider::ZeroSsl => issue_acme(&site, "zerossl"),
         SslProvider::CloudflareCa => issue_cloudflare_ca(&site),
+    };
+    match &result {
+        Ok(msg) => {
+            let body: String = msg.chars().take(220).collect();
+            crate::panel_notifications::notify_owner_and_admins(
+                &owner,
+                "SSL certificate renewed",
+                &body,
+                crate::panel_notifications::CATEGORY_SSL,
+            );
+        }
+        Err(err) => {
+            let body: String = format!("{domain}: {err}").chars().take(220).collect();
+            crate::panel_notifications::notify_owner_and_admins(
+                &owner,
+                "SSL certificate failed",
+                &body,
+                crate::panel_notifications::CATEGORY_SSL,
+            );
+        }
     }
+    result
 }
 
 /// Let's Encrypt on the origin as backup when Cloudflare is public TLS.

@@ -101,6 +101,11 @@ pub(crate) async fn run_tip_maintenance(
         Err(error) => {
             crate::upgrade_tip_log::log_failure(&error, None);
             state.log(error.clone(), "error");
+            crate::panel_notifications::notify_panel_admins(
+                "Panel upgrade failed",
+                &error.chars().take(220).collect::<String>(),
+                crate::panel_notifications::CATEGORY_PANEL,
+            );
             return Err(error);
         }
     };
@@ -164,6 +169,11 @@ pub(crate) async fn run_tip_maintenance(
     apply_migrations(&state).await;
 
     let message = format!("Updated to {} ({})", tip.branch_label, tip.package_version);
+    crate::panel_notifications::notify_panel_admins(
+        "Panel upgrade completed",
+        &message,
+        crate::panel_notifications::CATEGORY_PANEL,
+    );
     state.progress("completed", 100, message.clone()).await;
     let restart_scheduled;
     {

@@ -181,6 +181,9 @@ pub fn create_account(
     })?;
     let (password, generated_password) = resolve_password(password_raw, generate, &policy)?;
     let is_bootstrap = load_bootstrap().is_none();
+    // Mandatory MFA enroll is for the bootstrap panel owner only. Other accounts stay
+    // editable by the owner without requiring that user to enroll 2FA first.
+    let totp_required = is_bootstrap;
     let boot = build_bootstrap(
         username.clone(),
         recovery_email.clone(),
@@ -188,7 +191,7 @@ pub fn create_account(
         policy,
         language,
         generated_password.is_some(),
-        true,
+        totp_required,
     );
     let path = if is_bootstrap {
         bootstrap_path()

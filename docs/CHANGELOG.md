@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`cpn password` names the account it resets**: Before prompting and after success the CLI prints the target username (`password updated ok for user '...'`). With no `--username`, a single configured account (normally the bootstrap primary administrator) is still the default; when more than one account exists, `--username` is required so the wrong login is not reset silently. Same confirmation on `cpn account passwd`.
+- **Notifications inbox auto-fill**: high-value panel events push into the existing per-account store (`/var/lib/cpn/notifications/<user>.json`) with short title/body and categories `ssl`, `plugins`, `panel`, and `generic`. Wired for SSL renew/fail/expiring, plugin install/uninstall, panel upgrade/version completion, and site create/delete.
+- **Manage user modal contrast**: List Users manage dialog uses theme `--canvas` / `--ink` tokens (not undefined `--panel`) with readable dark and light label, muted, and form control colors on Account / Security / Other tabs.
+- **Edit user without target 2FA**: mandatory MFA enroll remains for the bootstrap panel owner’s dashboard use only. Secondary accounts are created without `totp_required`, and owners can Save details for users who have not enrolled 2FA.
 
 ## [1.4.6] - 25/10/2026
 

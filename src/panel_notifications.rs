@@ -1,10 +1,25 @@
 //! Panel notification store under `/var/lib/cpn/notifications/<user>.json`.
+//!
+//! Categories: `ssl`, `plugins`, `panel`, `generic`. Prefer
+//! [`notify_best_effort`] / [`notify_panel_admins`] from event sites so the inbox
+//! fills automatically without a parallel system.
 
-use crate::account::data_dir;
+use crate::account::{data_dir, load_bootstrap};
+use crate::account_mgmt::list_accounts;
+use crate::packages::is_panel_admin;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// SSL certificate events (issue, renew, expiry).
+pub const CATEGORY_SSL: &str = "ssl";
+/// Plugin install / update / failure.
+pub const CATEGORY_PLUGINS: &str = "plugins";
+/// Panel install / upgrade / version events.
+pub const CATEGORY_PANEL: &str = "panel";
+/// Site create/delete and other panel events.
+pub const CATEGORY_GENERIC: &str = "generic";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PanelNotification {
@@ -132,10 +147,69 @@ pub fn notifications_public_json(store: &NotificationStore) -> serde_json::Value
     })
 }
 
+/// Push without failing the caller (event hooks must stay best-effort).
+pub fn notify_best_effort(username: &str, title: &str, body: &str, category: &str) {
+    let _ = push_notification(username, title, body, category);
+}
+
+fn unique_usernames(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut out = Vec::new();
+    for name in names {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if out
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(trimmed))
+        {
+            continue;
+        }
+        out.push(trimmed.to_string());
+    }
+    out
+}
+
+/// Bootstrap owner plus any account that counts as panel admin.
+pub fn panel_admin_usernames() -> Vec<String> {
+    let mut names = Vec::new();
+    if let Some(boot) = load_bootstrap() {
+        names.push(boot.username);
+    }
+    if let Ok(accounts) = list_accounts() {
+        for acct in accounts {
+            if is_panel_admin(&acct.username) {
+                names.push(acct.username);
+            }
+        }
+    }
+    unique_usernames(names)
+}
+
+/// Notify every panel admin (install events, SSL, plugins, version).
+pub fn notify_panel_admins(title: &str, body: &str, category: &str) {
+    for user in panel_admin_usernames() {
+        notify_best_effort(&user, title, body, category);
+    }
+}
+
+/// Notify a site owner and panel admins (deduped).
+pub fn notify_owner_and_admins(owner: &str, title: &str, body: &str, category: &str) {
+    let mut names = panel_admin_usernames();
+    if !owner.trim().is_empty() {
+        names.push(owner.trim().to_string());
+    }
+    for user in unique_usernames(names) {
+        notify_best_effort(&user, title, body, category);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
+    use crate::account_mgmt::create_account;
+    use crate::account::default_password_policy;
 
     #[test]
     fn push_and_mark_read_round_trip() {
@@ -144,13 +218,14 @@ mod tests {
                 "Admin",
                 "SSL renewed",
                 "Certificate for example.com was renewed.",
-                "ssl",
+                CATEGORY_SSL,
             )
             .expect("push");
             let store = load_notifications("Admin");
             assert_eq!(store.items.len(), 1);
             assert_eq!(unread_count(&store), 1);
             assert_eq!(store.items[0].id, item.id);
+            assert_eq!(store.items[0].category, CATEGORY_SSL);
 
             let updated = mark_read("Admin", std::slice::from_ref(&item.id), false).expect("mark");
             assert_eq!(unread_count(&updated), 0);
@@ -164,6 +239,37 @@ mod tests {
             let store = load_notifications("nobody");
             assert!(store.items.is_empty());
             assert_eq!(unread_count(&store), 0);
+        });
+    }
+
+    #[test]
+    fn notify_admins_reaches_bootstrap_owner() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            let created = create_account(
+                "panelowner",
+                None,
+                true,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create");
+            assert!(created.generated_password.is_some());
+            notify_panel_admins(
+                "Plugin installed",
+                "demoPlugin is ready on the host.",
+                CATEGORY_PLUGINS,
+            );
+            let store = load_notifications("panelowner");
+            assert_eq!(store.items.len(), 1);
+            assert_eq!(store.items[0].category, CATEGORY_PLUGINS);
+            assert!(store.items[0].title.contains("Plugin"));
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
         });
     }
 }
