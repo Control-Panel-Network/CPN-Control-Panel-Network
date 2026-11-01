@@ -574,8 +574,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     );
     if !hostname.is_empty() {
         println!("\nConfiguring panel HTTPS reverse proxy for {hostname}...");
-        let report =
-            crate::panel_https_front::enable_panel_https_best_effort(&hostname, port);
+        let report = crate::panel_https_front::enable_panel_https_best_effort(&hostname, port);
         println!("{}", report.summary_line());
         for note in &report.notes {
             println!("  {note}");

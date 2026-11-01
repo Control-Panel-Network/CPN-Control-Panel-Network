@@ -10,11 +10,11 @@
 use crate::panel_host_info::host_sidebar_info;
 use crate::panel_network::load_panel_hostname;
 use crate::panel_ops_firewall::{ensure_panel_port_open, panel_listen_port};
+use crate::panel_public_url::local_listen_base_url;
 use crate::panel_service::{
     load_allow_remote_preference, save_allow_remote_preference, schedule_detached_panel_restart,
     set_allow_remote_dropin,
 };
-use crate::panel_public_url::local_listen_base_url;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelAccessMode {
@@ -119,9 +119,7 @@ pub fn set_panel_access_mode(mode: PanelAccessMode, restart: bool) -> Result<Vec
     }
     if restart {
         match schedule_detached_panel_restart("access-mode") {
-            Ok(()) => notes.push(
-                "Panel restart scheduled so the new bind address applies".into(),
-            ),
+            Ok(()) => notes.push("Panel restart scheduled so the new bind address applies".into()),
             Err(err) => notes.push(format!(
                 "Restart manually: systemctl restart cpn-installer.service ({err})"
             )),
@@ -133,9 +131,7 @@ pub fn set_panel_access_mode(mode: PanelAccessMode, restart: bool) -> Result<Vec
 /// After a successful hostname reverse proxy, default to domain-only unless owner kept IP backup.
 pub fn apply_domain_only_after_https_proxy(keep_ip_backup: bool) -> Vec<String> {
     if keep_ip_backup {
-        return vec![
-            "Kept Domain + IP backup (0.0.0.0 bind) per operator request".into(),
-        ];
+        return vec!["Kept Domain + IP backup (0.0.0.0 bind) per operator request".into()];
     }
     match set_panel_access_mode(PanelAccessMode::DomainOnly, true) {
         Ok(notes) => {
@@ -186,6 +182,10 @@ mod tests {
     #[test]
     fn labels_have_no_em_dash() {
         assert!(!PanelAccessMode::DomainOnly.label().contains('\u{2014}'));
-        assert!(!PanelAccessMode::DomainPlusIpBackup.label().contains('\u{2014}'));
+        assert!(
+            !PanelAccessMode::DomainPlusIpBackup
+                .label()
+                .contains('\u{2014}')
+        );
     }
 }

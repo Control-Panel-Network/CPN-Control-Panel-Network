@@ -134,7 +134,11 @@ fn write_file(path: &Path, body: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-fn configure_ols(hostname: &str, listen_port: u16, notes: &mut Vec<String>) -> Result<bool, String> {
+fn configure_ols(
+    hostname: &str,
+    listen_port: u16,
+    notes: &mut Vec<String>,
+) -> Result<bool, String> {
     ensure_acme_webroot()?;
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{OLS_VH_NAME}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("OLS vhost dir: {e}"))?;
@@ -142,8 +146,8 @@ fn configure_ols(hostname: &str, listen_port: u16, notes: &mut Vec<String>) -> R
     let body = ols_panel_proxy_vhconf(listen_port, ACME_WEBROOT);
     let mut changed = write_file(&vhconf, &body)?;
 
-    let mut conf = fs::read_to_string(HTTPD_CONF)
-        .map_err(|e| format!("Could not read {HTTPD_CONF}: {e}"))?;
+    let mut conf =
+        fs::read_to_string(HTTPD_CONF).map_err(|e| format!("Could not read {HTTPD_CONF}: {e}"))?;
     let vh_block = format!(
         "\nvirtualHost {OLS_VH_NAME} {{\n\
            vhRoot                  {ACME_WEBROOT}/\n\
@@ -409,9 +413,7 @@ pub fn enable_panel_https_with(
             certificate_present || matches!(engine, Some(PanelHttpsEngine::Caddy)),
             &mut notes,
         );
-        notes.extend(crate::panel_access_mode::apply_domain_only_after_https_proxy(
-            keep_ip_backup,
-        ));
+        notes.extend(crate::panel_access_mode::apply_domain_only_after_https_proxy(keep_ip_backup));
     }
 
     let public_url = crate::panel_public_url::load_panel_public_url();

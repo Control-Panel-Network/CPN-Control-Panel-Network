@@ -1,9 +1,7 @@
 //! `cpn panel` subcommands: live login URL and panel status (no secrets).
 
 use crate::motd::ensure_motd_installed;
-use crate::panel_access_mode::{
-    PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode,
-};
+use crate::panel_access_mode::{PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode};
 use crate::panel_login_facts::{
     load_display_listen_port, load_display_panel_hostname, load_display_panel_public_url,
     sync_public_login_facts,

@@ -1,8 +1,6 @@
 //! Server hub: Change Port page (DNS lives in panel_hub_pages_dns*).
 
-use crate::panel_access_mode::{
-    PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode,
-};
+use crate::panel_access_mode::{PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode};
 use crate::panel_hubs::feature_shell;
 use crate::panel_network::{network_public, preferred_listen_port_or_default};
 

@@ -150,8 +150,7 @@ pub fn run_network(
                     "note: skipped HTTPS setup; later run: cpn network enable-https (DNS A/AAAA must point here; never use https://IP:2087)"
                 );
             } else {
-                let report =
-                    enable_panel_https_with(Some(&hostname), None, true, keep_ip_backup)?;
+                let report = enable_panel_https_with(Some(&hostname), None, true, keep_ip_backup)?;
                 println!("{}", report.summary_line());
                 for note in report.notes {
                     println!("note: {note}");

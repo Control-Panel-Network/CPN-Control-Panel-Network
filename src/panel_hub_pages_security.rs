@@ -446,7 +446,10 @@ pub fn hostname_ssl_page(notice: Option<&str>, error: Option<&str>) -> String {
         ],
         "Hostname SSL",
         "Panel hostname HTTPS reverse proxy and certificate.",
-        &format!("{flash}{kv}<p>{}</p>{enable_form}{hint}", html_escape(&st.detail)),
+        &format!(
+            "{flash}{kv}<p>{}</p>{enable_form}{hint}",
+            html_escape(&st.detail)
+        ),
         None,
         None,
     )
