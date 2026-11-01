@@ -778,8 +778,7 @@ pub(crate) async fn finish(
                 crate::panel_service::PanelServiceMode::EnablePreferRunning,
                 allow_remote,
             );
-            if mark_server_ready
-                && let Some(hostname) = crate::panel_network::load_panel_hostname()
+            if mark_server_ready && let Some(hostname) = crate::panel_network::load_panel_hostname()
             {
                 let port = crate::panel_network::preferred_listen_port_or_default();
                 let report =
