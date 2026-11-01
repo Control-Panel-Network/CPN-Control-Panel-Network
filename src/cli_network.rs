@@ -1,4 +1,4 @@
-//! `cpn network` subcommands (listen port, hostname, public URL, migration, HTTPS).
+//! `cpn network` subcommands (listen port, hostname, public URL, migration, HTTPS, phone-home).
 
 use crate::panel_access_mode::{PanelAccessMode, load_panel_access_mode, set_panel_access_mode};
 use crate::panel_https_front::enable_panel_https_with;
@@ -6,6 +6,9 @@ use crate::panel_network::{
     OldPortPolicy, apply_network_change, clear_panel_hostname, clear_port_migration,
     load_panel_hostname, load_port_migration, network_public, preferred_listen_port_or_default,
     save_panel_hostname,
+};
+use crate::panel_phonehome::{
+    phonehome_status, register_disabled_remote, register_now, set_phonehome_enabled,
 };
 use crate::panel_public_url::{
     clear_panel_public_url, load_panel_public_url, save_panel_public_url,
@@ -70,6 +73,21 @@ pub enum NetworkCommands {
     ClearPublicUrl,
     /// Clear port migration record (stops future redirect helper starts)
     ClearMigration,
+    /// Phone-home to api.newstargeted.com (register this panel for creator broadcasts)
+    PhoneHome {
+        /// Enable periodic registration (default for official builds)
+        #[arg(long, conflicts_with_all = ["off", "now", "status"])]
+        on: bool,
+        /// Disable phone-home (opt out; local only until next successful register with enabled=false)
+        #[arg(long, conflicts_with_all = ["on", "now", "status"])]
+        off: bool,
+        /// Register once now
+        #[arg(long, conflicts_with_all = ["on", "off", "status"])]
+        now: bool,
+        /// Show phone-home status (no secrets)
+        #[arg(long, conflicts_with_all = ["on", "off", "now"])]
+        status: bool,
+    },
 }
 
 pub fn run_network(
@@ -220,6 +238,52 @@ pub fn run_network(
             let _ = load_port_migration();
             clear_port_migration()?;
             println!("port_migration=");
+            Ok(())
+        }
+        NetworkCommands::PhoneHome {
+            on,
+            off,
+            now,
+            status,
+        } => {
+            if status || (!on && !off && !now) {
+                let s = phonehome_status();
+                println!("phonehome_enabled={}", s.enabled);
+                println!("install_id={}", s.install_id);
+                println!("api_url={}", s.api_url);
+                println!("panel_public_url={}", s.panel_public_url);
+                println!("has_hmac={}", s.has_hmac);
+                println!("allow_http={}", s.allow_http);
+                println!("last_register_at={}", s.last_register_at);
+                println!("last_register_ok={}", s.last_register_ok);
+                println!("last_error={}", s.last_error);
+                return Ok(());
+            }
+            require_root()?;
+            if on {
+                let s = set_phonehome_enabled(true)?;
+                println!("phonehome_enabled={}", s.enabled);
+                println!("note: run with --now to register immediately; background worker also runs daily");
+                return Ok(());
+            }
+            if off {
+                let s = set_phonehome_enabled(false)?;
+                println!("phonehome_enabled={}", s.enabled);
+                match register_disabled_remote() {
+                    Ok(_) => println!("note: API registry marked enabled=false"),
+                    Err(err) => println!("note: local opt-out saved; remote update skipped: {err}"),
+                }
+                return Ok(());
+            }
+            if now {
+                let s = register_now()?;
+                println!("phonehome_enabled={}", s.enabled);
+                println!("install_id={}", s.install_id);
+                println!("last_register_ok={}", s.last_register_ok);
+                println!("panel_public_url={}", s.panel_public_url);
+                println!("note: remote-push receiver enabled when API issued push_hmac");
+                return Ok(());
+            }
             Ok(())
         }
     }

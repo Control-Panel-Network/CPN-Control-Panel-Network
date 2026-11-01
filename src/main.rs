@@ -1752,6 +1752,7 @@ async fn main() -> std::io::Result<()> {
         hosts.join(", ")
     );
     let _ = std::io::Write::flush(&mut std::io::stdout());
+    cpn_installer::panel_phonehome::spawn_phonehome_worker().await;
     let running = server.run();
     let handle = running.handle();
     tokio::spawn(async move {

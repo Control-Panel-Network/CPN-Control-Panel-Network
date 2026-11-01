@@ -283,6 +283,7 @@ pub mod panel_notifications;
 pub mod panel_notifications_remote;
 pub mod panel_notifications_remote_routes;
 pub mod panel_notifications_routes;
+pub mod panel_phonehome;
 pub mod panel_ops_activity;
 pub mod panel_ops_activity_host;
 pub mod panel_ops_apache_handler;
