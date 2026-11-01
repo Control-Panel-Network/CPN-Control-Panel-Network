@@ -76,6 +76,18 @@ pub fn read_password_confirmed(
     Ok(result)
 }
 
+/// Announce which account a password reset will target (SSH operator UX).
+///
+/// Prints the username on purpose so operators know which login is about to change.
+pub fn announce_password_reset_target(username: &str) {
+    eprintln!("Resetting password for user '{username}'");
+}
+
+/// Confirm a successful password reset and name the account.
+pub fn print_password_updated_ok(username: &str) {
+    println!("password updated ok for user '{username}'");
+}
+
 /// True for clear affirmative answers (case-insensitive, trimmed).
 ///
 /// Accepted: `y`, `yes`, `yeah`, `yep`, `ok`, `okay`, `true`, `1`.

@@ -3,7 +3,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use cpn_installer::account::{default_password_policy, load_bootstrap};
+use cpn_installer::account::default_password_policy;
 use cpn_installer::account_lifecycle::{
     deactivate_account, enable_account, rename_account, role_label, status_label,
 };
@@ -12,7 +12,8 @@ use cpn_installer::account_mgmt::{
 };
 use cpn_installer::cli_apps;
 use cpn_installer::cli_common::{
-    confirm_delete, print_generated, read_password_confirmed, require_root_for_mutation,
+    announce_password_reset_target, confirm_delete, print_generated, print_password_updated_ok,
+    read_password_confirmed, require_root_for_mutation,
 };
 use cpn_installer::cli_doctor;
 use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
@@ -58,7 +59,10 @@ enum Commands {
     },
     /// Reset a panel password from the server terminal
     Password {
-        /// Account username; defaults to the primary administrator account
+        /// Account username. When omitted with exactly one account, resets that
+        /// account (usually the bootstrap primary administrator from
+        /// `/var/lib/cpn/panel-bootstrap.json`). Required when more than one
+        /// account exists.
         #[arg(long)]
         username: Option<String>,
         /// Read the new password from stdin (never from argv)
@@ -346,6 +350,29 @@ enum PluginCommands {
     },
 }
 
+/// Resolve which account `cpn password` should reset when `--username` is omitted.
+///
+/// With exactly one configured account (normally the bootstrap primary administrator
+/// in `/var/lib/cpn/panel-bootstrap.json`), that username is used. When more than one
+/// account exists, `--username` is required so the operator does not reset the wrong login.
+fn resolve_password_target_username(username: Option<String>) -> Result<String, String> {
+    if let Some(value) = username.filter(|value| !value.trim().is_empty()) {
+        return Ok(value.trim().to_string());
+    }
+    let accounts = list_accounts()?;
+    match accounts.as_slice() {
+        [] => Err(
+            "No primary account exists yet; finish installation before resetting a password"
+                .into(),
+        ),
+        [only] => Ok(only.username.clone()),
+        many => Err(format!(
+            "Multiple panel accounts exist ({}); pass --username <NAME> so the correct login is reset. Example: sudo cpn password --username <NAME>. The bootstrap primary administrator is in /var/lib/cpn/panel-bootstrap.json (username field).",
+            many.len()
+        )),
+    }
+}
+
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
@@ -360,7 +387,7 @@ fn run() -> Result<(), String> {
             println!("passkey  List, remove, or clear WebAuthn passkeys for an account");
             println!("totp     Show or clear TOTP authenticator for an account");
             println!("mfa      Clear all MFA (TOTP + passkeys) for an account");
-            println!("password Reset a panel password from this terminal");
+            println!("password Reset a panel password (prints username; sole/bootstrap by default)");
             println!(
                 "site     Manage website records under {}/sites",
                 paths::platform_data_dir()
@@ -441,17 +468,12 @@ fn run() -> Result<(), String> {
             generate,
         } => {
             require_root_for_mutation()?;
-            let username = username
-                .filter(|value| !value.trim().is_empty())
-                .or_else(|| load_bootstrap().map(|account| account.username))
-                .ok_or_else(|| {
-                    "No primary account exists yet; finish installation before resetting a password"
-                        .to_string()
-                })?;
+            let username = resolve_password_target_username(username)?;
+            announce_password_reset_target(&username);
             let (password, generate) = read_password_confirmed(password_stdin, generate)?;
             let result = reset_account_password(&username, password.as_deref(), generate)?;
-            let _ = result.public;
-            println!("password updated ok");
+            let confirmed = result.public.username;
+            print_password_updated_ok(&confirmed);
             print_generated(result.generated_password)?;
             Ok(())
         }
@@ -538,10 +560,11 @@ fn run() -> Result<(), String> {
                 generate,
             } => {
                 require_root_for_mutation()?;
+                announce_password_reset_target(&username);
                 let (password, generate) = read_password_confirmed(password_stdin, generate)?;
                 let result = reset_account_password(&username, password.as_deref(), generate)?;
-                let _ = result.public;
-                println!("password updated ok");
+                let confirmed = result.public.username;
+                print_password_updated_ok(&confirmed);
                 print_generated(result.generated_password)?;
                 Ok(())
             }

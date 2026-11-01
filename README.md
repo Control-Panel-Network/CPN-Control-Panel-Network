@@ -89,7 +89,7 @@ Default removes the panel package and `/var/lib/cpn`, and keeps website files un
 ```bash
 cpn --help
 cpn panel url
-sudo cpn password            # reset an account password from the terminal
+sudo cpn password            # reset password (prints username; defaults to sole/bootstrap account)
 ```
 
 ## Docs

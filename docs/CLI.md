@@ -171,20 +171,25 @@ Resolution order for the primary login URL: `panel_public_url` if set, else `htt
 ```bash
 cpn account list
 
+sudo cpn password
+sudo cpn password --username admin
+sudo cpn account passwd --username admin --generate
+
 sudo cpn account create \
   --username admin \
   --email admin@example.com \
   --language en \
   --generate
 
-sudo cpn account passwd --username admin --generate
 sudo cpn account rename --username siteuser --to newname
 sudo cpn account deactivate --username siteuser --yes
 sudo cpn account enable --username siteuser --yes
 sudo cpn account delete --username siteuser --yes
 ```
 
-`cpn account list` prints one row per account with `status=active|disabled` and `role=admin|user` (usernames are omitted from stdout to avoid cleartext logging).
+`sudo cpn password` is the short operator reset path (alias of `cpn account passwd` with a default target). When `--username` is omitted and exactly one panel account exists, it resets that account (normally the bootstrap primary administrator from `/var/lib/cpn/panel-bootstrap.json`). When more than one account exists, `--username` is required. The CLI always prints the username before prompting and again after success (`password updated ok for user '...'`).
+
+`cpn account list` prints one row per account with `status=active|disabled` and `role=admin|user` (usernames are omitted from stdout to avoid cleartext logging). For the bootstrap username, read `/var/lib/cpn/panel-bootstrap.json` (field `username`).
 
 Rename rejects reserved / blacklisted usernames using the same live GitHub list (24h cache + bundled fallback) as account create and first-admin setup. Case rules match create (case-insensitive collision checks; reserved match is case-insensitive).
 
