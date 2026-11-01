@@ -184,6 +184,15 @@ fn apply_allow_remote_dropin(allow_remote: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Public wrapper used by access-mode toggles (Domain-only vs Domain + IP backup).
+pub fn set_allow_remote_dropin(allow_remote: bool) -> Result<(), String> {
+    apply_allow_remote_dropin(allow_remote)?;
+    if cfg!(unix) && is_root() {
+        let _ = systemctl(&["daemon-reload"]);
+    }
+    Ok(())
+}
+
 fn systemctl(args: &[&str]) -> Result<(), String> {
     let status = Command::new("systemctl")
         .args(args)

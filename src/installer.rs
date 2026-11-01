@@ -778,6 +778,16 @@ pub(crate) async fn finish(
                 crate::panel_service::PanelServiceMode::EnablePreferRunning,
                 allow_remote,
             );
+            if mark_server_ready && let Some(hostname) = crate::panel_network::load_panel_hostname()
+            {
+                let port = crate::panel_network::preferred_listen_port_or_default();
+                let report =
+                    crate::panel_https_front::enable_panel_https_best_effort(&hostname, port);
+                state.log(report.summary_line(), "info");
+                for note in report.notes {
+                    state.log(note, "info");
+                }
+            }
             let _ = state
                 .events
                 .send(InstallerEvent::Completed { status: snapshot });

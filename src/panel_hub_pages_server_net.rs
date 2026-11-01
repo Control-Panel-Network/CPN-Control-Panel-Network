@@ -1,5 +1,6 @@
 //! Server hub: Change Port page (DNS lives in panel_hub_pages_dns*).
 
+use crate::panel_access_mode::{PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode};
 use crate::panel_hubs::feature_shell;
 use crate::panel_network::{network_public, preferred_listen_port_or_default};
 
@@ -11,10 +12,46 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn access_mode_form(bind_port: u16) -> String {
+    let mode = load_panel_access_mode();
+    let backup = ip_backup_http_login_url(bind_port).unwrap_or_else(|| {
+        format!("http://SERVER_IP:{bind_port}/login (enable IP backup to advertise)")
+    });
+    let domain_checked = if mode == PanelAccessMode::DomainOnly {
+        " checked"
+    } else {
+        ""
+    };
+    let backup_checked = if mode == PanelAccessMode::DomainPlusIpBackup {
+        " checked"
+    } else {
+        ""
+    };
+    format!(
+        r#"<h3 style="margin-top:28px;">Panel access mode</h3>
+        <ul class="kv-list">
+          <li><span>Current</span><strong>{label}</strong></li>
+          <li><span>IP backup URL</span><strong>{backup}</strong></li>
+        </ul>
+        <form method="post" action="/settings/port/ip-backup" class="stack-form" style="max-width:520px;margin-top:12px;">
+          <label><input type="radio" name="mode" value="domain_only"{domain_checked}> Domain-only (loopback HTTP + HTTPS hostname on 443)</label>
+          <label><input type="radio" name="mode" value="domain_plus_ip_backup"{backup_checked}> Domain + IP backup (also bind 0.0.0.0 for HTTP IP:port)</label>
+          <p class="muted">IP backup is plain HTTP only. Never open <code>https://IP:{bind_port}</code> (ERR_SSL_PROTOCOL_ERROR). Prefer the hostname when DNS works.</p>
+          <button type="submit" class="btn-primary">Save access mode</button>
+        </form>"#,
+        label = html_escape(mode.label()),
+        backup = html_escape(&backup),
+        domain_checked = domain_checked,
+        backup_checked = backup_checked,
+        bind_port = bind_port,
+    )
+}
+
 pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str>) -> String {
     let preferred = preferred_listen_port_or_default();
     let summary = network_public(bind_port, None);
     let public_url = summary.panel_public_url.as_deref().unwrap_or("");
+    let access = access_mode_form(bind_port);
     // Use r## so CSS/JS color literals like "#f87171" cannot terminate the raw string.
     let form = format!(
         r##"<ul class="kv-list">
@@ -179,11 +216,13 @@ pub fn change_port_page(bind_port: u16, notice: Option<&str>, error: Option<&str
           }});
         }})();
         </script>
-        <p class="muted">Uses the panel port migration API. When the listen port changes, the panel service restarts and this page opens on the new URL automatically.</p>"##,
+        <p class="muted">Uses the panel port migration API. When the listen port changes, the panel service restarts and this page opens on the new URL automatically.</p>
+        {access}"##,
         bind = bind_port,
         pref = preferred,
         base = html_escape(&summary.public_base_url),
         puburl = html_escape(public_url),
+        access = access,
     );
     feature_shell(
         &[

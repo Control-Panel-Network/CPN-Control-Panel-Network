@@ -1506,3 +1506,48 @@ pub async fn settings_port_page(
         ),
     ))
 }
+
+#[derive(Debug, serde::Deserialize)]
+pub struct IpBackupForm {
+    #[serde(default)]
+    mode: String,
+}
+
+#[post("/settings/port/ip-backup")]
+pub async fn settings_port_ip_backup(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<IpBackupForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/settings/port",
+            None,
+            Some("Only panel admins can change panel access mode."),
+        );
+    }
+    let mode = match form.mode.trim() {
+        "domain_plus_ip_backup" | "ip_backup" | "backup" => {
+            crate::panel_access_mode::PanelAccessMode::DomainPlusIpBackup
+        }
+        "domain_only" | "loopback" | "" => crate::panel_access_mode::PanelAccessMode::DomainOnly,
+        other => {
+            return redirect_notice(
+                "/settings/port",
+                None,
+                Some(&format!("Unknown access mode '{other}'")),
+            );
+        }
+    };
+    match crate::panel_access_mode::set_panel_access_mode(mode, true) {
+        Ok(notes) => {
+            let msg = format!("{} | {}", mode.label(), notes.join(" | "));
+            let short: String = msg.chars().take(400).collect();
+            redirect_notice("/settings/port", Some(&short), None)
+        }
+        Err(err) => redirect_notice("/settings/port", None, Some(&err)),
+    }
+}

@@ -275,6 +275,10 @@ sudo cpn network set-port \
   --old-port-policy redirect_1m
 
 sudo cpn network set-hostname --hostname panel.example.com
+# Skip automatic reverse-proxy + Let's Encrypt:
+sudo cpn network set-hostname --hostname panel.example.com --skip-https
+sudo cpn network enable-https
+sudo cpn network enable-https --hostname panel.example.com --skip-cert
 sudo cpn network clear-hostname
 sudo cpn network clear-migration
 ```
@@ -284,6 +288,24 @@ sudo cpn network clear-migration
 - `--port <PORT>` : preferred listen port.
 - `--old-port-policy <MODE>` : `redirect_1m`, `redirect_3m`, or `deny` when changing from the current port.
 - `--from-port <PORT>` : optional previous port override used when recording the migration.
+
+`network set-hostname` / `enable-https`:
+
+- Saves the bare DNS hostname and configures OpenLiteSpeed, nginx, or Caddy to reverse-proxy `https://hostname` (port 443) to the CPN listen port (plain HTTP, default `2087`).
+- Issues Let's Encrypt via HTTP-01 webroot when DNS A/AAAA already points at the server and TCP 80 is open.
+- Sets `panel_public_url` to `https://hostname` (or `http://hostname` until a cert exists).
+- Defaults to **Domain-only** (loopback bind). Pass `--keep-ip-backup` to keep `0.0.0.0` HTTP bind during setup.
+- The listen port stays HTTP. Never open `https://SERVER_IP:2087` (browsers show `ERR_SSL_PROTOCOL_ERROR`).
+- Without a hostname, use `http://127.0.0.1:2087` locally or an SSH tunnel / NAT forward with `http://`.
+
+IP backup (emergency access when DNS/proxy fails):
+
+```bash
+sudo cpn network set-ip-backup --on    # Domain + IP backup: HTTP on SERVER_IP:listen_port
+sudo cpn network set-ip-backup --off   # Domain-only: loopback + HTTPS hostname
+```
+
+Also under Settings > Change Port > Panel access mode. IP backup is HTTP only; never advertise `https://IP:2087`.
 
 After changing the preferred port, restart the installer/panel process on the new port when instructed.
 

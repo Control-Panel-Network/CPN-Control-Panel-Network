@@ -405,6 +405,8 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
 
     println!("\nOptional panel hostname (DNS name for HTTPS login without a port).");
     println!("Leave empty to skip. Example: panel.example.com");
+    println!("When set, CPN configures the web server reverse proxy on 443 -> panel listen port.");
+    println!("The listen port stays plain HTTP. Never open https://SERVER_IP:2087.");
     let hostname = match read_line("Panel hostname: ") {
         Ok(v) => v,
         Err(e) => return fail(e),
@@ -414,13 +416,18 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
             eprintln!("warning: could not save panel hostname: {error}");
         } else {
             println!("Saved panel hostname: {hostname}");
+            println!("HTTPS reverse proxy + Let's Encrypt will run after the web stack installs.");
         }
+    } else {
+        println!("No hostname: panel stays HTTP on the listen port until you set one later.");
+        println!("Later: cpn network set-hostname --hostname panel.example.com");
     }
 
     println!("\nOptional external panel URL for emails and browsers (NAT labs, reverse proxies).");
     println!(
         "Leave empty to skip. Example for VirtualBox host forward 2089: http://127.0.0.1:2089"
     );
+    println!("With a public hostname, prefer https://panel.example.com (no :2087).");
     let public_url = match read_line("Panel public URL: ") {
         Ok(v) => v,
         Err(e) => return fail(e),
@@ -565,6 +572,19 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         crate::panel_service::PanelServiceMode::EnableAndStart,
         allow_remote,
     );
+    if !hostname.is_empty() {
+        println!("\nConfiguring panel HTTPS reverse proxy for {hostname}...");
+        let report = crate::panel_https_front::enable_panel_https_best_effort(&hostname, port);
+        println!("{}", report.summary_line());
+        for note in &report.notes {
+            println!("  {note}");
+        }
+    } else {
+        println!(
+            "\nPanel is HTTP on port {port}. HTTPS needs a hostname + reverse proxy (cpn network set-hostname)."
+        );
+        println!("Do not use https://SERVER_IP:{port} (plain HTTP listener).");
+    }
     let host = if hostname.is_empty() {
         None
     } else {
