@@ -21,20 +21,80 @@ pub fn manage_modal_shell() -> &'static str {
 <style>
 .users-manage-dialog {
   border:0; padding:0; max-width:min(720px,calc(100vw - 24px)); width:100%;
-  background:transparent;
+  background:transparent; color-scheme:inherit;
 }
 .users-manage-dialog::backdrop { background:rgba(15,23,42,.72); }
 .users-manage-card {
-  background:var(--panel,#1a1d26); color:inherit; border:1px solid var(--hairline,#334155);
+  background:var(--canvas,#fff); color:var(--ink,#1d1d1f);
+  border:1px solid var(--hairline,#e0e0e0);
   border-radius:16px; padding:18px 16px 16px; max-height:min(88vh,900px); overflow:auto;
 }
 .users-manage-head {
   display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
   margin:0 0 14px;
 }
-.users-manage-head h2 { margin:0; font-size:18px; }
+.users-manage-head h2 { margin:0; font-size:18px; color:var(--ink,#1d1d1f); }
+#users-manage-body,
+#users-manage-body .modify-tabpanel,
+#users-manage-body .stack-form,
+#users-manage-body h3,
+#users-manage-body h4,
+#users-manage-body p,
+#users-manage-body label,
+#users-manage-body strong {
+  color:var(--ink,#1d1d1f);
+}
+#users-manage-body .muted,
+#users-manage-body p.muted {
+  color:var(--muted,#5c6570);
+}
+#users-manage-body .stack-form input,
+#users-manage-body .stack-form select,
+#users-manage-body .stack-form textarea {
+  background:var(--surface-soft,#fafafc); color:var(--ink,#1d1d1f);
+  border:1px solid var(--hairline,#e0e0e0);
+}
+#users-manage-body .stack-form input:disabled {
+  opacity:.85; color:var(--muted,#5c6570);
+}
 #users-manage-body .modify-tabpanel[hidden] { display:none !important; }
 #users-manage-body .modify-tabs { min-width:0; }
+[data-color-mode="dark"] .users-manage-card,
+html[data-color-mode="dark"] .users-manage-card {
+  background:var(--canvas,#1a1d26); color:var(--ink,#e8edf5);
+  border-color:var(--hairline,#3b4558);
+}
+[data-color-mode="dark"] .users-manage-head h2,
+html[data-color-mode="dark"] .users-manage-head h2,
+[data-color-mode="dark"] #users-manage-body,
+[data-color-mode="dark"] #users-manage-body .modify-tabpanel,
+[data-color-mode="dark"] #users-manage-body .stack-form,
+[data-color-mode="dark"] #users-manage-body h3,
+[data-color-mode="dark"] #users-manage-body h4,
+[data-color-mode="dark"] #users-manage-body p,
+[data-color-mode="dark"] #users-manage-body label,
+[data-color-mode="dark"] #users-manage-body strong,
+html[data-color-mode="dark"] #users-manage-body,
+html[data-color-mode="dark"] #users-manage-body label {
+  color:#e8edf5;
+}
+[data-color-mode="dark"] #users-manage-body .muted,
+[data-color-mode="dark"] #users-manage-body p.muted,
+html[data-color-mode="dark"] #users-manage-body .muted {
+  color:#b7c0cc;
+}
+[data-color-mode="dark"] #users-manage-body .stack-form input,
+[data-color-mode="dark"] #users-manage-body .stack-form select,
+[data-color-mode="dark"] #users-manage-body .stack-form textarea,
+html[data-color-mode="dark"] #users-manage-body .stack-form input,
+html[data-color-mode="dark"] #users-manage-body .stack-form select,
+html[data-color-mode="dark"] #users-manage-body .stack-form textarea {
+  background:#12151c; border-color:#3b4558; color:#f3f6fb; color-scheme:dark;
+}
+[data-color-mode="dark"] #users-manage-body .stack-form input:disabled,
+html[data-color-mode="dark"] #users-manage-body .stack-form input:disabled {
+  color:#98a2b3;
+}
 </style>
 <dialog id="users-manage-dialog" class="users-manage-dialog" aria-labelledby="users-manage-title">
   <div class="users-manage-card">
@@ -232,7 +292,9 @@ pub fn users_manage_fragment(viewer: &str, target_raw: &str) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::manage_modal_shell;
+    use super::{manage_modal_shell, users_manage_fragment};
+    use crate::account::{default_password_policy, with_test_data_dir};
+    use crate::account_mgmt::{create_account, update_own_profile};
 
     #[test]
     fn modal_reexecutes_injected_scripts() {
@@ -240,5 +302,66 @@ mod tests {
         assert!(html.contains("runInlineScripts"), "{html}");
         assert!(html.contains("users-manage-dialog"), "{html}");
         assert!(html.contains("q.get('manage')"), "{html}");
+    }
+
+    #[test]
+    fn manage_modal_uses_theme_tokens_not_undefined_panel() {
+        let html = manage_modal_shell();
+        assert!(
+            html.contains("background:var(--canvas"),
+            "card must use --canvas, got {html}"
+        );
+        assert!(
+            !html.contains("var(--panel"),
+            "undefined --panel makes dark navy cards unreadable"
+        );
+        assert!(
+            html.contains("[data-color-mode=\"dark\"] .users-manage-card"),
+            "dark mode card contrast rules required"
+        );
+        assert!(
+            html.contains("#e8edf5"),
+            "dark mode body/label ink must stay readable"
+        );
+    }
+
+    #[test]
+    fn owner_can_edit_other_user_without_target_mfa() {
+        with_test_data_dir(|| {
+            unsafe {
+                std::env::set_var("CPN_RESERVED_USERNAMES_OFFLINE", "1");
+            }
+            create_account(
+                "panelowner",
+                Some("OwnerPass1!xx"),
+                false,
+                "owner@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("owner");
+            create_account(
+                "siteuser",
+                Some("SiteUserPass1!"),
+                false,
+                "old@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("site user");
+            let updated =
+                update_own_profile("siteuser", Some("new@example.com"), Some("nb")).expect("save");
+            assert_eq!(updated.recovery_email, "new@example.com");
+            let frag = users_manage_fragment("panelowner", "siteuser").expect("fragment");
+            assert!(frag.contains("Save details"), "{frag}");
+            assert!(
+                frag.contains("new@example.com") || frag.contains("old@example.com"),
+                "{frag}"
+            );
+            assert!(!frag.contains("Enable two-factor"), "{frag}");
+            unsafe {
+                std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
+            }
+        });
     }
 }

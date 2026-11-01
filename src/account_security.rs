@@ -15,7 +15,14 @@ pub fn must_change_password(username: &str) -> bool {
 }
 
 /// True when MFA (TOTP or at least one passkey) is required and not yet enrolled.
+///
+/// Only panel admins (bootstrap owner) are gated for dashboard use. Regular users
+/// keep `totp_required` as a soft preference; owners may edit those accounts without
+/// the target having 2FA enrolled first.
 pub fn needs_mfa_enrollment(username: &str) -> bool {
+    if !crate::packages::is_panel_admin(username) {
+        return false;
+    }
     let requires = find_account(username)
         .map(|(boot, _)| boot.totp_required)
         .unwrap_or(false);
@@ -382,6 +389,22 @@ mod tests {
             clear_must_change_password("panelowner").unwrap();
             assert!(!must_change_password("panelowner"));
             assert!(needs_mfa_enrollment("panelowner"));
+
+            // Secondary accounts stay editable without forcing their own 2FA enroll gate.
+            let secondary = create_account(
+                "siteuser",
+                Some("SiteUserPass1!"),
+                false,
+                "site@example.com",
+                default_password_policy(),
+                "en",
+            )
+            .expect("create secondary");
+            assert!(secondary.generated_password.is_none());
+            assert!(
+                !needs_mfa_enrollment("siteuser"),
+                "non-admin accounts must not be MFA-gated for panel use"
+            );
             unsafe {
                 std::env::remove_var("CPN_RESERVED_USERNAMES_OFFLINE");
             }

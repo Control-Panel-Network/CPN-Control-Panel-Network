@@ -557,6 +557,11 @@ pub fn install_plugin(domain_raw: &str, plugin_id: &str) -> Result<CpnPluginMani
     };
     write_manifest(&domain, &manifest)?;
     sync_email_auth_feature_flags(&id);
+    crate::panel_notifications::notify_panel_admins(
+        "Plugin installed",
+        &format!("{} ({}) on {domain}", manifest.name, manifest.id),
+        crate::panel_notifications::CATEGORY_PLUGINS,
+    );
     Ok(manifest)
 }
 
@@ -567,8 +572,21 @@ pub fn uninstall_plugin(domain_raw: &str, plugin_id: &str) -> Result<(), String>
     if !dest.exists() {
         return Err(format!("Plugin `{id}` is not installed on `{domain}`"));
     }
-    fs::remove_dir_all(&dest).map_err(|error| format!("Could not remove plugin: {error}"))?;
+    fs::remove_dir_all(&dest).map_err(|error| {
+        let msg = format!("Could not remove plugin: {error}");
+        crate::panel_notifications::notify_panel_admins(
+            "Plugin uninstall failed",
+            &format!("{id} on {domain}: {msg}"),
+            crate::panel_notifications::CATEGORY_PLUGINS,
+        );
+        msg
+    })?;
     sync_email_auth_feature_flags(&id);
+    crate::panel_notifications::notify_panel_admins(
+        "Plugin uninstalled",
+        &format!("{id} removed from {domain}"),
+        crate::panel_notifications::CATEGORY_PLUGINS,
+    );
     Ok(())
 }
 

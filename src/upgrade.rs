@@ -417,6 +417,11 @@ async fn run_maintenance_inner(
             request.action, release.tag_name
         )
     };
+    crate::panel_notifications::notify_panel_admins(
+        "Panel version event",
+        &status.message,
+        crate::panel_notifications::CATEGORY_PANEL,
+    );
     status.restart_scheduled = will_schedule_reload(request.action, "package");
     if let Some(info) = status.maintenance.as_mut() {
         info.installed_version = release.version.clone();

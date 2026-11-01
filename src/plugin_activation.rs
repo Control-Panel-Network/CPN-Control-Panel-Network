@@ -339,6 +339,11 @@ pub fn install_host_plugin(plugin_id: &str) -> Result<CpnPluginManifest, String>
             let _ = Command::new("bash").arg(&script).status();
         }
     }
+    crate::panel_notifications::notify_panel_admins(
+        "Host plugin installed",
+        &format!("{} ({id}) is ready on this host", manifest.name),
+        crate::panel_notifications::CATEGORY_PLUGINS,
+    );
     Ok(manifest)
 }
 
