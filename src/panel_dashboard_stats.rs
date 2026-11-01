@@ -222,10 +222,18 @@ pub fn dashboard_stats_styles() -> &'static str {
 .cpn-stats-list li {
   display:flex; justify-content:space-between; align-items:baseline; gap:16px;
   padding:12px 0; border-bottom:1px solid var(--hairline,#e0e0e0);
+  cursor:default;
 }
 .cpn-stats-list li:last-child { border-bottom:0; }
-.cpn-stats-label { color:var(--blue,#0066cc); font-weight:600; font-size:15px; }
-.cpn-stats-value { color:var(--muted,#6e6e73); font-size:14px; text-align:right; white-space:nowrap; }
+/* View mode: plain readable labels (not blue link chrome). Reorder only via Edit overview. */
+.cpn-stats-label {
+  color:var(--ink,#1d1d1f); font-weight:600; font-size:15px;
+  cursor:default; text-decoration:none; pointer-events:none;
+}
+.cpn-stats-value {
+  color:var(--muted,#6e6e73); font-size:14px; text-align:right; white-space:nowrap;
+  cursor:default; pointer-events:none;
+}
 @media (max-width:519.98px) {
   .cpn-stats-list li { flex-direction:column; align-items:flex-start; gap:4px; }
   .cpn-stats-value { text-align:left; }
@@ -291,6 +299,34 @@ mod tests {
             assert!(!html.contains("of -1"), "{html}");
             assert!(!html.to_ascii_lowercase().contains("cpanel"));
             assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
+            // Meter rows are plain text spans, not deep links.
+            assert!(
+                !html.contains("<a "),
+                "Statistics meter rows must not be hyperlinks in view mode: {html}"
+            );
+            assert!(
+                html.contains(r#"cpn-stats-label">Websites</span>"#),
+                "Websites must render as a plain label span: {html}"
+            );
         });
+    }
+
+    #[test]
+    fn stats_styles_are_plain_text_not_link_blue() {
+        let css = dashboard_stats_styles();
+        assert!(
+            css.contains("color:var(--ink"),
+            "labels must use ink (readable), not link blue: {css}"
+        );
+        assert!(
+            !css.contains("cpn-stats-label { color:var(--blue")
+                && !css.contains(".cpn-stats-label { color:var(--blue"),
+            "labels must not look like blue hyperlinks: {css}"
+        );
+        assert!(
+            css.contains("pointer-events:none"),
+            "meter labels/values must not invite clicks in view mode: {css}"
+        );
+        assert!(!css.to_ascii_lowercase().contains("cyberpanel"));
     }
 }
