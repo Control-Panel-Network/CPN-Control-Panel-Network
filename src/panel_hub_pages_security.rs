@@ -399,7 +399,7 @@ fn urlencoding_lite(value: &str) -> String {
     out
 }
 
-pub fn hostname_ssl_page() -> String {
+pub fn hostname_ssl_page(notice: Option<&str>, error: Option<&str>) -> String {
     let st = hostname_ssl_status();
     let host = st.hostname.as_deref().unwrap_or("(not set)");
     let kv = status_kv(&[
@@ -413,9 +413,26 @@ pub fn hostname_ssl_page() -> String {
             if st.certbot { "Available" } else { "Not found" },
         ),
     ]);
-    let hint = if st.certbot && st.hostname.is_some() && !st.has_cert {
+    let mut flash = String::new();
+    if let Some(n) = notice.filter(|s| !s.is_empty()) {
+        flash.push_str(&format!(r#"<p class="flash-ok">{}</p>"#, html_escape(n)));
+    }
+    if let Some(e) = error.filter(|s| !s.is_empty()) {
+        flash.push_str(&format!(r#"<p class="flash-err">{}</p>"#, html_escape(e)));
+    }
+    let enable_form = if st.hostname.is_some() {
+        r#"<form method="post" action="/security/ssl/hostname/enable" class="stack-form" style="margin-top:16px;max-width:520px;">
+  <p>Reverse-proxy port 443 to the CPN listen port (plain HTTP), issue Let's Encrypt when DNS points here, set <code>panel_public_url</code> to <code>https://hostname</code>. Never use <code>https://IP:2087</code>.</p>
+  <button type="submit">Enable HTTPS hostname</button>
+</form>"#
+            .to_string()
+    } else {
+        r#"<p class="muted">Set a panel hostname first: <code>cpn network set-hostname --hostname panel.example.com</code>.</p>"#
+            .to_string()
+    };
+    let hint = if st.hostname.is_some() && !st.has_cert {
         format!(
-            r#"<p class="muted">Example (run as root):</p><pre class="manage-log-pre">certbot certonly --standalone -d {}</pre>"#,
+            r#"<p class="muted">CLI: <code>sudo cpn network enable-https</code>. Manual fallback: <code>certbot certonly --webroot -w /var/lib/cpn/acme-webroot -d {}</code></p>"#,
             html_escape(st.hostname.as_deref().unwrap_or(""))
         )
     } else {
@@ -428,8 +445,8 @@ pub fn hostname_ssl_page() -> String {
             ("Hostname SSL", None),
         ],
         "Hostname SSL",
-        "Panel hostname certificate status.",
-        &format!("{kv}<p>{}</p>{hint}", html_escape(&st.detail)),
+        "Panel hostname HTTPS reverse proxy and certificate.",
+        &format!("{flash}{kv}<p>{}</p>{enable_form}{hint}", html_escape(&st.detail)),
         None,
         None,
     )
@@ -477,7 +494,6 @@ mod tests {
         assert!(html.contains("Secure SSH") || html.contains("SSH"));
         assert!(!html.contains("CyberPanel"));
         assert!(!html.contains("Imunify"));
-        // Fail2ban / Malware / Firewall tiles are feature-gated when not installed.
-        // Hub copy may still mention them; live tiles appear only when enabled.
+        // Fail2ban / Malware / Firewall tiles appear when those features are enabled.
     }
 }

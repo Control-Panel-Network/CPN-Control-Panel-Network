@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Login health gate fails closed when probes are unconfirmed**: `/login` and `/api/login/services` still block when MariaDB or the web stack are known unhealthy. On probe timeout they reuse a recent confirmed-ready cache (stale-while-revalidate); without that cache, sign-in stays disabled with a clear "wait and try again" banner instead of inviting login. Recovery remains `CPN_LOGIN_SERVICE_GATE=0`. TCP-first MariaDB/OLS checks cut false timeouts on reverse-proxy hosts where the panel listens on loopback.
+- **Panel HTTPS on first install**: When a panel hostname is set at install (CLI prompt, `--panel-hostname`, or `cpn network set-hostname`), CPN configures the selected web server (OpenLiteSpeed, nginx, or Caddy) as a reverse proxy from `https://hostname` on port 443 to the plain-HTTP listen port (default 2087), issues Let's Encrypt when public DNS is ready, and sets `panel_public_url` to `https://hostname`. Operators can also run `cpn network enable-https` or Security > Hostname SSL > Enable HTTPS hostname. The listen port never speaks TLS; `https://IP:2087` is unsupported and no longer implied.
+- **Domain-only vs Domain + IP backup**: After HTTPS proxy setup, CPN defaults to Domain-only (loopback bind). Owners can enable Domain + IP backup (`cpn network set-ip-backup --on` or Settings > Change Port) to keep plain HTTP on `SERVER_IP:listen_port` as emergency access when DNS fails. MOTD and `cpn panel url` show the HTTP backup URL only when enabled; never `https://IP:port`.
 
 ### Fixed
 

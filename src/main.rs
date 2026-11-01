@@ -83,7 +83,8 @@ use cpn_installer::panel_hub_routes::{
     security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
     security_malware_run, security_modsec, security_modsec_rules, security_page,
     security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
-    security_ssl_defaults, security_ssl_hostname, security_ssl_issue, security_ssl_issue_all,
+    security_ssl_defaults, security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
+    security_ssl_issue_all,
     security_ssl_mail, security_ssl_manage, security_ssl_mark_custom, security_ssl_origin_backup,
     security_ssl_provider, security_ssl_renew, security_ssl_restore_le, security_ssl_upload,
     server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
@@ -108,7 +109,8 @@ use cpn_installer::panel_hub_routes::{
     settings_error_messages_preview, settings_error_messages_restore_all,
     settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
     settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
-    settings_logs_save, settings_markdown_preview, settings_page, settings_port_page,
+    settings_logs_save, settings_markdown_preview, settings_page, settings_port_ip_backup,
+    settings_port_page,
     settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_preview_site_ready, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
@@ -1110,6 +1112,10 @@ async fn main() -> std::io::Result<()> {
             println!(
                 "  --allow-remote mode: listening on 0.0.0.0:{listen_port} (HTTP without TLS)."
             );
+            println!(
+                "  Do not open https://IP:{listen_port} (plain HTTP; browsers show ERR_SSL_PROTOCOL_ERROR)."
+            );
+            println!("  Prefer a hostname + reverse proxy on 443, or an SSH tunnel.");
             println!("  Prefer SSH tunnel or set the install cookie via first local visit.");
             println!(
                 "  Bootstrap once: http://127.0.0.1:{listen_port}/?token=<full-token-from-secure-channel>"
@@ -1450,6 +1456,7 @@ async fn main() -> std::io::Result<()> {
             .service(settings_logs_page)
             .service(settings_logs_save)
             .service(settings_port_page)
+            .service(settings_port_ip_backup)
             .service(security_page)
             .service(security_firewall)
             .service(security_firewall_enable)
@@ -1482,6 +1489,7 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssl)
             .service(security_ssl_manage)
             .service(security_ssl_hostname)
+            .service(security_ssl_hostname_enable)
             .service(security_ssl_mail)
             .service(security_ssl_issue)
             .service(security_ssl_origin_backup)

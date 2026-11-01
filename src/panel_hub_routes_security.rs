@@ -307,6 +307,7 @@ pub async fn security_ssl_manage(
 pub async fn security_ssl_hostname(
     http: HttpRequest,
     state: web::Data<Arc<AppState>>,
+    query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
@@ -315,8 +316,44 @@ pub async fn security_ssl_hostname(
         &user,
         "security",
         "Hostname SSL",
-        &hostname_ssl_page(),
+        &hostname_ssl_page(
+            query.get("notice").map(String::as_str),
+            query.get("error").map(String::as_str),
+        ),
     ))
+}
+
+#[post("/security/ssl/hostname/enable")]
+pub async fn security_ssl_hostname_enable(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/ssl/hostname",
+            None,
+            Some("Only panel admins can enable panel HTTPS."),
+        );
+    }
+    let result = web::block(|| crate::panel_https_front::enable_panel_https(None, None, true))
+        .await
+        .unwrap_or_else(|e| Err(format!("Panel HTTPS task failed: {e}")));
+    match result {
+        Ok(report) => {
+            let mut msg = report.summary_line();
+            if !report.notes.is_empty() {
+                msg.push_str(" | ");
+                msg.push_str(&report.notes.join(" | "));
+            }
+            // Keep flash messages short enough for the query string.
+            let short: String = msg.chars().take(400).collect();
+            redirect_notice("/security/ssl/hostname", Some(&short), None)
+        }
+        Err(err) => redirect_notice("/security/ssl/hostname", None, Some(&err)),
+    }
 }
 
 #[get("/security/ssl/mail")]

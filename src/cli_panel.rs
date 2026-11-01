@@ -1,6 +1,9 @@
 //! `cpn panel` subcommands: live login URL and panel status (no secrets).
 
 use crate::motd::ensure_motd_installed;
+use crate::panel_access_mode::{
+    PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode,
+};
 use crate::panel_login_facts::{
     load_display_listen_port, load_display_panel_hostname, load_display_panel_public_url,
     sync_public_login_facts,
@@ -43,6 +46,8 @@ pub struct PanelUrlInfo {
     pub local_base: String,
     pub local_login: String,
     pub hostname_login: Option<String>,
+    pub access_mode: PanelAccessMode,
+    pub ip_backup_login: Option<String>,
 }
 
 fn service_active_label() -> String {
@@ -88,6 +93,8 @@ pub fn resolve_panel_url_info() -> PanelUrlInfo {
     let hostname_login = panel_hostname
         .as_ref()
         .map(|host| format!("https://{host}/login"));
+    let access_mode = load_panel_access_mode();
+    let ip_backup_login = ip_backup_http_login_url(listen_port);
     PanelUrlInfo {
         listen_port,
         panel_public_url,
@@ -97,6 +104,8 @@ pub fn resolve_panel_url_info() -> PanelUrlInfo {
         local_login: format!("{local_base}/login"),
         local_base,
         hostname_login,
+        access_mode,
+        ip_backup_login,
     }
 }
 
@@ -111,6 +120,14 @@ fn print_url_human(info: &PanelUrlInfo, indent: &str) {
             println!("{indent}Hostname login: {host_login}");
         }
     }
+    println!("{indent}Access mode   : {}", info.access_mode.label());
+    if let Some(ref backup) = info.ip_backup_login {
+        println!("{indent}IP backup     : {backup}");
+        println!(
+            "{indent}Note          : IP backup is HTTP only; never https://IP:{}",
+            info.listen_port
+        );
+    }
     println!("{indent}Listen port   : {}", info.listen_port);
     if let Some(ref public) = info.panel_public_url {
         println!("{indent}Public URL    : {public}");
@@ -118,6 +135,10 @@ fn print_url_human(info: &PanelUrlInfo, indent: &str) {
             "{indent}Lab tip       : Windows host may use the public URL when NAT forwards the guest port"
         );
     } else if info.panel_hostname.is_none() {
+        println!(
+            "{indent}HTTPS tip     : cpn network set-hostname (443 proxy); never https://IP:{}",
+            info.listen_port
+        );
         println!(
             "{indent}Lab tip       : ssh -L {0}:127.0.0.1:{0} user@host",
             info.listen_port
@@ -140,6 +161,11 @@ fn print_url_raw(info: &PanelUrlInfo) {
     println!(
         "panel_hostname={}",
         info.panel_hostname.as_deref().unwrap_or("")
+    );
+    println!("access_mode={}", info.access_mode.as_str());
+    println!(
+        "ip_backup_login_url={}",
+        info.ip_backup_login.as_deref().unwrap_or("")
     );
     println!("public_base_url={}", info.primary_base);
     if let Some(ref host_login) = info.hostname_login {

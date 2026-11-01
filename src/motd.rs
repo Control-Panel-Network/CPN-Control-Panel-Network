@@ -6,6 +6,7 @@
 //! `cpn panel url`), not baked as a static `/etc/motd` at install time.
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
+use crate::panel_access_mode::{ip_backup_http_login_url, load_panel_access_mode};
 use crate::panel_network::load_panel_hostname;
 use crate::panel_public_url::{load_panel_public_url, local_listen_base_url};
 use std::fs;
@@ -113,14 +114,25 @@ pub fn panel_ready_lines(version: &str, port: u16, hostname: Option<&str>) -> Ve
         if url.trim_end_matches('/') != local.trim_end_matches('/') {
             lines.push(format!("Local login: {local}/login"));
         }
+        lines.push(format!("Access mode: {}", load_panel_access_mode().label()));
+        if let Some(backup) = ip_backup_http_login_url(port) {
+            lines.push(format!("IP backup (HTTP only): {backup}"));
+        }
         lines.push(
             "Lab tip: Windows host may use the public URL when NAT forwards the guest port".into(),
         );
     } else if let Some(ref host) = host {
         lines.push(format!("Hostname login: https://{host}/login"));
         lines.push(format!("Local login: {local}/login"));
+        lines.push(format!("Access mode: {}", load_panel_access_mode().label()));
+        if let Some(backup) = ip_backup_http_login_url(port) {
+            lines.push(format!("IP backup (HTTP only): {backup}"));
+        }
     } else {
         lines.push(format!("Local login: {local}/login"));
+        lines.push(format!(
+            "HTTPS: set a hostname (cpn network set-hostname) for reverse proxy on 443; never https://IP:{port}"
+        ));
         lines.push(format!("Lab tip: ssh -L {port}:127.0.0.1:{port} user@host"));
         lines.push(format!(
             "VirtualBox NAT: if host maps 2089->guest {port}, open http://127.0.0.1:2089/login on the host"
@@ -167,11 +179,13 @@ mod tests {
             let joined = lines.join("\n");
             assert!(joined.contains("v1.0.0"));
             assert!(joined.contains("http://127.0.0.1:2087/login"));
+            assert!(joined.contains("never https://IP:2087"));
             assert!(joined.contains("cpn-installer.service"));
             assert!(joined.contains("cpn panel url"));
             assert!(joined.contains("2089"));
             assert!(!joined.to_lowercase().contains("cyberpanel"));
             assert!(!joined.contains("password"));
+            assert!(!joined.contains("https://127.0.0.1:2087"));
         });
     }
 

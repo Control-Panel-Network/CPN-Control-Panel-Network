@@ -1,5 +1,7 @@
-//! `cpn network` subcommands (listen port, hostname, public URL, migration).
+//! `cpn network` subcommands (listen port, hostname, public URL, migration, HTTPS).
 
+use crate::panel_access_mode::{PanelAccessMode, load_panel_access_mode, set_panel_access_mode};
+use crate::panel_https_front::enable_panel_https_with;
 use crate::panel_network::{
     OldPortPolicy, apply_network_change, clear_panel_hostname, clear_port_migration,
     load_panel_hostname, load_port_migration, network_public, preferred_listen_port_or_default,
@@ -29,9 +31,36 @@ pub enum NetworkCommands {
     SetHostname {
         #[arg(long)]
         hostname: String,
+        /// Skip automatic reverse-proxy + Let's Encrypt setup
+        #[arg(long)]
+        skip_https: bool,
+        /// Keep HTTP IP:port backup bind (0.0.0.0) after HTTPS proxy (default: Domain-only)
+        #[arg(long)]
+        keep_ip_backup: bool,
     },
     /// Clear panel hostname (fall back to public URL or loopback)
     ClearHostname,
+    /// Configure reverse proxy + certificate for the panel hostname (HTTPS on 443)
+    EnableHttps {
+        /// Hostname override (default: saved panel_hostname)
+        #[arg(long)]
+        hostname: Option<String>,
+        /// Skip Let's Encrypt issue (proxy only)
+        #[arg(long)]
+        skip_cert: bool,
+        /// Keep HTTP IP:port backup bind after proxy setup
+        #[arg(long)]
+        keep_ip_backup: bool,
+    },
+    /// Domain-only vs Domain + IP backup (HTTP on SERVER_IP:listen_port)
+    SetIpBackup {
+        /// Enable HTTP IP:port backup (binds 0.0.0.0)
+        #[arg(long)]
+        on: bool,
+        /// Disable IP backup (Domain-only / loopback)
+        #[arg(long)]
+        off: bool,
+    },
     /// Set external panel base URL for emails/browsers (example: http://127.0.0.1:2089)
     SetPublicUrl {
         #[arg(long)]
@@ -61,6 +90,7 @@ pub fn run_network(
                 "panel_public_url={}",
                 summary.panel_public_url.as_deref().unwrap_or("")
             );
+            println!("access_mode={}", load_panel_access_mode().as_str());
             println!("public_base_url={}", summary.public_base_url);
             if let Some(migration) = summary.port_migration {
                 println!(
@@ -104,22 +134,68 @@ pub fn run_network(
             }
             Ok(())
         }
-        NetworkCommands::SetHostname { hostname } => {
+        NetworkCommands::SetHostname {
+            hostname,
+            skip_https,
+            keep_ip_backup,
+        } => {
             require_root()?;
             save_panel_hostname(&hostname)?;
             println!(
                 "panel_hostname={}",
                 load_panel_hostname().unwrap_or_default()
             );
-            println!(
-                "note: point DNS A/AAAA for this hostname at the server and terminate TLS on 443 with a reverse proxy to the CPN listen port"
-            );
+            if skip_https {
+                println!(
+                    "note: skipped HTTPS setup; later run: cpn network enable-https (DNS A/AAAA must point here; never use https://IP:2087)"
+                );
+            } else {
+                let report =
+                    enable_panel_https_with(Some(&hostname), None, true, keep_ip_backup)?;
+                println!("{}", report.summary_line());
+                for note in report.notes {
+                    println!("note: {note}");
+                }
+            }
             Ok(())
         }
         NetworkCommands::ClearHostname => {
             require_root()?;
             clear_panel_hostname()?;
             println!("panel_hostname=");
+            Ok(())
+        }
+        NetworkCommands::EnableHttps {
+            hostname,
+            skip_cert,
+            keep_ip_backup,
+        } => {
+            require_root()?;
+            let report =
+                enable_panel_https_with(hostname.as_deref(), None, !skip_cert, keep_ip_backup)?;
+            println!("{}", report.summary_line());
+            for note in report.notes {
+                println!("note: {note}");
+            }
+            Ok(())
+        }
+        NetworkCommands::SetIpBackup { on, off } => {
+            require_root()?;
+            if on == off {
+                return Err(
+                    "Pass exactly one of --on or --off (Domain + IP backup vs Domain-only)".into(),
+                );
+            }
+            let mode = if on {
+                PanelAccessMode::DomainPlusIpBackup
+            } else {
+                PanelAccessMode::DomainOnly
+            };
+            let notes = set_panel_access_mode(mode, true)?;
+            println!("access_mode={}", mode.as_str());
+            for note in notes {
+                println!("note: {note}");
+            }
             Ok(())
         }
         NetworkCommands::SetPublicUrl { url } => {
