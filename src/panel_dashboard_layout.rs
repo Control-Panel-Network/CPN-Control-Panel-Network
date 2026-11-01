@@ -84,7 +84,7 @@ pub fn wrap_dash_widget(id: &str, label: &str, inner: &str) -> String {
     format!(
         r#"<article class="dash-widget" data-dash-widget="{id}" aria-label="{label}">
   <div class="dash-widget-chrome" hidden>
-    <span class="dash-widget-handle" draggable="true" title="Drag to reorder">{label}</span>
+    <span class="dash-widget-handle" draggable="false" title="Drag to reorder">{label}</span>
   </div>
   {inner}
 </article>"#,
@@ -114,9 +114,11 @@ pub fn dashboard_layout_styles() -> &'static str {
 .dash-layout-toolbar .muted { margin:0; flex:1 1 220px; font-size:12px; }
 .dash-layout-stack { display:flex; flex-direction:column; gap:18px; min-width:0; }
 .dash-widget { min-width:0; position:relative; }
+/* Chrome stays hidden in view mode. display:flex must not override the hidden attribute. */
 .dash-widget-chrome {
-  display:flex; align-items:center; gap:8px; margin:0 0 8px;
+  display:none; align-items:center; gap:8px; margin:0 0 8px;
 }
+.dash-widget-chrome[hidden] { display:none !important; }
 .dash-widget-handle {
   display:inline-flex; align-items:center; min-height:32px; padding:0 10px;
   border-radius:999px; border:1px dashed var(--hairline); font-size:12px; font-weight:700;
@@ -158,6 +160,11 @@ pub fn dashboard_layout_script() -> &'static str {
     widgets().forEach(function(el){
       var chrome=el.querySelector('.dash-widget-chrome');
       if(chrome) chrome.hidden=!editing;
+      var handle=el.querySelector('.dash-widget-handle');
+      if(handle){
+        handle.setAttribute('draggable', editing?'true':'false');
+        handle.draggable=!!editing;
+      }
     });
   }
   function setDirty(on){
@@ -185,6 +192,9 @@ pub fn dashboard_layout_script() -> &'static str {
   widgets().forEach(function(el){
     var handle=el.querySelector('.dash-widget-handle');
     if(!handle) return;
+    handle.addEventListener('click', function(ev){
+      if(!editing){ ev.preventDefault(); ev.stopPropagation(); }
+    });
     handle.addEventListener('dragstart', function(ev){
       if(!canDrag()){ ev.preventDefault(); return; }
       dragEl=el;
@@ -285,5 +295,38 @@ mod tests {
             assert!(!prefs.activity_board_open);
             assert_eq!(load_dashboard_widgets("Admin")[0], "stats");
         });
+    }
+
+    #[test]
+    fn widget_chrome_hidden_until_edit_overview() {
+        let html = wrap_dash_widget("stats", "Statistics", "<p>inner</p>");
+        assert!(
+            html.contains(r#"class="dash-widget-chrome" hidden"#),
+            "chrome must start hidden: {html}"
+        );
+        assert!(
+            html.contains(r#"draggable="false""#),
+            "handles must not be draggable until Edit overview: {html}"
+        );
+        let css = dashboard_layout_styles();
+        assert!(
+            css.contains(".dash-widget-chrome[hidden]"),
+            "CSS must honor the hidden attribute: {css}"
+        );
+        assert!(
+            css.contains("display:none !important"),
+            "hidden chrome must win over display:flex: {css}"
+        );
+        let js = dashboard_layout_script();
+        assert!(
+            js.contains("handle.draggable=!!editing"),
+            "Edit overview must toggle handle.draggable: {js}"
+        );
+        assert!(js.contains("Edit overview"));
+        assert!(js.contains("dash-layout-save"));
+        assert!(js.contains("dash-layout-restore"));
+        assert!(!html.to_ascii_lowercase().contains("cyberpanel"));
+        assert!(!css.to_ascii_lowercase().contains("cyberpanel"));
+        assert!(!js.to_ascii_lowercase().contains("cyberpanel"));
     }
 }
