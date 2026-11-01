@@ -195,10 +195,10 @@ fn hmac_hex(secret: &str, payload: &str) -> String {
 }
 
 fn hostname_guess() -> String {
-    if let Some(h) = crate::panel_network::load_panel_hostname() {
-        if !h.trim().is_empty() {
-            return h;
-        }
+    if let Some(h) = crate::panel_network::load_panel_hostname()
+        && !h.trim().is_empty()
+    {
+        return h;
     }
     std::env::var("HOSTNAME")
         .or_else(|_| std::env::var("COMPUTERNAME"))
@@ -367,13 +367,14 @@ fn register_with_enabled_flag(remote_enabled: bool) -> Result<PhonehomeStatus, S
         return Err(cfg.last_error.clone());
     }
 
-    if remote_enabled && (parsed.push_hmac_issued || parsed.push_hmac.trim().len() >= 32) {
-        if let Err(e) = enable_remote_push_with_hmac(parsed.push_hmac.trim()) {
-            cfg.last_register_ok = false;
-            cfg.last_error = format!("registered but remote-push enable failed: {e}");
-            let _ = save_phonehome_config(&cfg);
-            return Err(cfg.last_error.clone());
-        }
+    if remote_enabled
+        && (parsed.push_hmac_issued || parsed.push_hmac.trim().len() >= 32)
+        && let Err(e) = enable_remote_push_with_hmac(parsed.push_hmac.trim())
+    {
+        cfg.last_register_ok = false;
+        cfg.last_error = format!("registered but remote-push enable failed: {e}");
+        let _ = save_phonehome_config(&cfg);
+        return Err(cfg.last_error.clone());
     }
 
     cfg.last_register_ok = true;
