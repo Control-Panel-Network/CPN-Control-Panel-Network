@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.7] - 01/11/2026
+
+Patch release after v1.4.6. Panel HTTPS front on first install, login health gate fail-closed, sub-users, notifications inbox plus toast severity and remote broadcast, phone-home registry, Manage user UX, dashboard Edit overview lock, and `cpn password` account naming (#613 to #616, #622 to #626).
+
 ### Added
 
 - **Sub-users (ACL secondary logins)**: Panel owner manages `/account/users/sub-users` to create secondary accounts with selected section capabilities. Sub-users reuse sidebar visibility ACL and site ACL (`all_owned_by` parent). They manage the owner's panel within that scope; Reseller Center stays the separate multi-tenant hierarchy. Website/sub-domain create and WordPress create-if-missing assign sites to the parent owner via `resource_owner_for()`.
 - **Remote notification broadcast**: `POST /api/nt/notifications/broadcast` accepts HMAC-SHA256 signed JSON from News Targeted (`api.newstargeted.com`) to push inbox items to all panel accounts or a username list. Config at `<data dir>/notifications/remote-push.json` (disabled by default). Replay nonces, timestamp skew, per-minute rate limit, optional AES-256-GCM body, and `panel.notifications.remote` action-log rows. Existing GET / mark-read / session self-push routes are unchanged. See `docs/REMOTE-NOTIFICATIONS.md`.
-- **Phone-home registry client**: periodic HMAC registration to `POST https://api.newstargeted.com/api/cpn/phonehome/register` so creator broadcasts can reach all installs. Stable `install_id` under `/var/lib/cpn/phonehome/`, CLI `cpn network phone-home --on|--off|--now|--status`, background daily worker, and automatic remote-push enablement when the API issues `push_hmac`. Opt-out is local and best-effort remote. See `docs/REMOTE-NOTIFICATIONS.md` and `to-do/PHONEHOME.md`.
+- **Phone-home registry client**: periodic HMAC registration to `POST https://api.newstargeted.com/api/cpn/phonehome/register` so creator broadcasts can reach all installs. Stable `install_id` under `/var/lib/cpn/phonehome/`, CLI `cpn network phone-home --on|--off|--now|--status`, background daily worker, and automatic remote-push enablement when the API issues `push_hmac`. Opt-out is local and best-effort remote. See `docs/REMOTE-NOTIFICATIONS.md` and `docs/PHONEHOME.md`.
 
 ### Changed
 
@@ -25,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`cpn password` names the account it resets**: Before prompting and after success the CLI prints the target username (`password updated ok for user '...'`). With no `--username`, a single configured account (normally the bootstrap primary administrator) is still the default; when more than one account exists, `--username` is required so the wrong login is not reset silently. Same confirmation on `cpn account passwd`.
 - **Notifications inbox auto-fill**: high-value panel events push into the existing per-account store (`/var/lib/cpn/notifications/<user>.json`) with short title/body and categories `ssl`, `plugins`, `panel`, and `generic`. Wired for SSL renew/fail/expiring, plugin install/uninstall, panel upgrade/version completion, and site create/delete.
 - **Manage user modal contrast**: List Users manage dialog uses theme `--canvas` / `--ink` tokens (not undefined `--panel`) with readable dark and light label, muted, and form control colors on Account / Security / Other tabs.
-- **Edit user without target 2FA**: mandatory MFA enroll remains for the bootstrap panel owner’s dashboard use only. Secondary accounts are created without `totp_required`, and owners can Save details for users who have not enrolled 2FA.
+- **Edit user without target 2FA**: mandatory MFA enroll remains for the bootstrap panel owner's dashboard use only. Secondary accounts are created without `totp_required`, and owners can Save details for users who have not enrolled 2FA.
+- **Dashboard Statistics stay non-interactive until Edit overview**: overview gauges and widgets are not clickable until the signed-in user enters Edit overview, so accidental navigation from the dashboard is avoided.
 
 ## [1.4.6] - 25/10/2026
 
