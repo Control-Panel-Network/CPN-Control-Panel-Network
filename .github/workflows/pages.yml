@@ -1,5 +1,6 @@
 # Publish site/ as a secondary GitHub Pages landing (project URL).
 # Canonical install host remains https://cpn.newstargeted.com/ (scripts + .htaccess).
+# Only deploy from the org repo; forks often lack Pages enabled and would fail Setup Pages.
 name: Pages
 
 on:
@@ -23,6 +24,7 @@ concurrency:
 jobs:
   build:
     name: Build
+    if: github.repository == 'Control-Panel-Network/CPN-Control-Panel-Network'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,6 +40,7 @@ jobs:
 
   deploy:
     name: Deploy
+    if: github.repository == 'Control-Panel-Network/CPN-Control-Panel-Network'
     needs: build
     runs-on: ubuntu-latest
     environment:

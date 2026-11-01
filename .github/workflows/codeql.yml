@@ -25,8 +25,9 @@ jobs:
         include:
           - language: javascript-typescript
             build-mode: none
+          # CodeQL Rust extractor only supports build-mode none (not manual).
           - language: rust
-            build-mode: manual
+            build-mode: none
 
     steps:
       - name: Checkout
@@ -37,30 +38,6 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-
-      - name: Install Rust toolchain
-        if: matrix.language == 'rust'
-        # Pin to commit SHA (actions/unpinned-tag). Tag: stable.
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
-        with:
-          toolchain: stable
-
-      - name: Install Node.js for embedded installer UI
-        if: matrix.language == 'rust'
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: installer-ui/package-lock.json
-
-      - name: Build installer UI for Rust embed
-        if: matrix.language == 'rust'
-        working-directory: installer-ui
-        run: npm ci && npm run build
-
-      - name: Build Rust for CodeQL
-        if: matrix.language == 'rust'
-        run: cargo build --locked
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
