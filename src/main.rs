@@ -136,6 +136,7 @@ use cpn_installer::panel_network::{
     OldPortPolicy, active_redirect_migration, apply_network_change, network_public,
     purge_expired_migration, save_panel_hostname,
 };
+use cpn_installer::panel_notifications_remote_routes::panel_notifications_remote_broadcast;
 use cpn_installer::panel_notifications_routes::{
     panel_notifications_get, panel_notifications_mark_read, panel_notifications_push,
 };
@@ -1246,6 +1247,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
+            .service(panel_notifications_remote_broadcast)
             .service(panel_feedback_submit)
             .service(websites_manage_metrics)
             .service(websites_manage_logs)
