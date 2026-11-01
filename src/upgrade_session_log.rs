@@ -217,7 +217,7 @@ mod tests {
         append_session("error", "marker missing");
         append_session(
             "error",
-            "login_service_gate: /api/login/services timed out; sign-in left open",
+            "login_service_gate: /api/login/services timed out; sign-in blocked until health is confirmed",
         );
         finish_session_ok("Updated to stable @ abc1234 (1.4.0)", true);
         let tail = tail_session();
@@ -248,7 +248,7 @@ mod tests {
     fn gate_noise_is_demoted_while_a_job_runs() {
         let line = format_session_line(
             "error",
-            "login_service_gate: POST /login gate timed out; sign-in left open",
+            "login_service_gate: POST /login gate timed out; sign-in blocked until health is confirmed",
             true,
         )
         .expect("demoted line");
@@ -258,7 +258,7 @@ mod tests {
         assert!(
             format_session_line(
                 "error",
-                "login_service_gate: evaluate timed out; sign-in left open (fail-open)",
+                "login_service_gate: evaluate timed out; sign-in blocked until health is confirmed (fail-closed)",
                 false
             )
             .is_none()

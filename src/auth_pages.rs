@@ -163,10 +163,15 @@ pub fn panel_login_html_with_gate(
     }
   }
   var pollFails=0;
-  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. You can still sign in; if login fails, wait for the panel to finish background work.';
+  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. Sign-in is disabled until panel services are confirmed running. Wait a few seconds and try again.';
   function resetSignInButton(){
     if(!submit || !form) return;
     form.removeAttribute('data-cpn-submitting');
+    // Do not re-enable while the health gate still blocks sign-in.
+    if(notice && notice.getAttribute('data-ready')==='0'){
+      submit.disabled=true;
+      return;
+    }
     submit.disabled=false;
     submit.textContent=submit.getAttribute('data-cpn-label')||'Sign in';
   }
@@ -195,11 +200,10 @@ pub fn panel_login_html_with_gate(
       if(!ready && notice) notice.setAttribute('data-was-blocked','1');
     }catch(e){
       pollFails++;
-      // Fail-open: keep the form usable; only show the timeout banner after repeated failures.
-      if(pollFails>=2){
-        applyReady(true, defaultTimeoutMsg);
-      } else {
-        applyReady(true, '');
+      // Fail-closed: do not invite sign-in when health cannot be confirmed.
+      applyReady(false, defaultTimeoutMsg);
+      if(pollFails>=1 && notice){
+        notice.setAttribute('data-was-blocked','1');
       }
     }
     setTimeout(poll, 4000);

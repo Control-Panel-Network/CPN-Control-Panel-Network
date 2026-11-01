@@ -21,7 +21,7 @@ use crate::login_next::{
     referer_return_path, request_return_path,
 };
 use crate::login_service_gate::{
-    LOGIN_SERVICE_TIMEOUT_WARNING, evaluate_login_services, login_services_ready,
+    evaluate_login_services, fail_closed_or_stale, login_services_ready,
 };
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
@@ -263,7 +263,7 @@ fn login_fail_fast_html(message: &str, next: Option<&str>) -> String {
 #[get("/api/login/services")]
 pub async fn login_services_status() -> HttpResponse {
     // Off the Actix worker so a slow gate cannot starve other /login requests.
-    // Short timeout + fail-open: labs under restore/rsync must still reach the form.
+    // Outer timeout: reuse last-good when present; otherwise fail closed (no invite to sign in).
     match tokio::time::timeout(
         std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(evaluate_login_services),
@@ -273,29 +273,21 @@ pub async fn login_services_status() -> HttpResponse {
         Ok(Ok(status)) => HttpResponse::Ok().json(status),
         Ok(Err(_)) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: /api/login/services task failed; sign-in left open",
+                "login_service_gate: /api/login/services task failed; sign-in blocked until health is confirmed",
                 None,
             );
-            HttpResponse::InternalServerError().json(serde_json::json!({
-                "ready": true,
-                "message": LOGIN_SERVICE_TIMEOUT_WARNING,
-                "blocking": [],
-                "warnings": [LOGIN_SERVICE_TIMEOUT_WARNING],
-            }))
+            let status = fail_closed_or_stale();
+            HttpResponse::InternalServerError().json(status)
         }
         Err(_) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: /api/login/services timed out; sign-in left open",
+                "login_service_gate: /api/login/services timed out; sign-in blocked until health is confirmed",
                 None,
             );
+            let status = fail_closed_or_stale();
             HttpResponse::Ok()
                 .insert_header(("Retry-After", "2"))
-                .json(serde_json::json!({
-                    "ready": true,
-                    "message": LOGIN_SERVICE_TIMEOUT_WARNING,
-                    "blocking": [],
-                    "warnings": [LOGIN_SERVICE_TIMEOUT_WARNING],
-                }))
+                .json(status)
         }
     }
 }
@@ -360,17 +352,17 @@ pub async fn login_submit(
         Ok(Ok(ready)) => ready,
         Ok(Err(_)) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: POST /login gate task failed; sign-in left open",
+                "login_service_gate: POST /login gate task failed; sign-in blocked until health is confirmed",
                 None,
             );
-            true
+            fail_closed_or_stale().ready
         }
         Err(_) => {
             crate::upgrade_tip_log::log_failure(
-                "login_service_gate: POST /login gate timed out; sign-in left open",
+                "login_service_gate: POST /login gate timed out; sign-in blocked until health is confirmed",
                 None,
             );
-            true
+            fail_closed_or_stale().ready
         }
     };
     if !gate_ready {
