@@ -393,7 +393,9 @@ fn run() -> Result<(), String> {
                 "site     Manage website records under {}/sites",
                 paths::platform_data_dir()
             );
-            println!("network  Manage listen port, hostname, public URL, and port migration");
+            println!(
+                "network  Manage listen port, hostname, public URL, phone-home, and port migration"
+            );
             println!("plugin   Manage host-scoped and per-site plugins (/home/<domain>/plugins)");
             println!(
                 "app      Manage host apps (mariadb, postgresql, phpmyadmin, email, rabbitmq, docker, snappymail, ...)"

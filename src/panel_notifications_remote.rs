@@ -164,6 +164,23 @@ pub fn load_remote_push_config() -> RemotePushConfig {
     serde_json::from_str(&raw).unwrap_or_default()
 }
 
+/// Persist remote-push receiver config (mode 600). Used by phone-home after register.
+pub fn save_remote_push_config(cfg: &RemotePushConfig) -> Result<(), String> {
+    write_json(&config_path(), cfg)
+}
+
+/// Enable the remote receiver with the given HMAC (and optional AES key left unchanged).
+pub fn enable_remote_push_with_hmac(hmac_secret: &str) -> Result<(), String> {
+    let secret = hmac_secret.trim();
+    if secret.len() < 32 {
+        return Err("push hmac must be at least 32 characters".into());
+    }
+    let mut cfg = load_remote_push_config();
+    cfg.enabled = true;
+    cfg.hmac_secret = secret.to_string();
+    save_remote_push_config(&cfg)
+}
+
 fn hmac_hex(secret: &str, payload: &str) -> String {
     let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(secret.as_bytes())
         .expect("HMAC accepts any key length");

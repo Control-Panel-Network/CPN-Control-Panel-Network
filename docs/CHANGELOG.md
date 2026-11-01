@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Sub-users (ACL secondary logins)**: Panel owner manages `/account/users/sub-users` to create secondary accounts with selected section capabilities. Sub-users reuse sidebar visibility ACL and site ACL (`all_owned_by` parent). They manage the owner's panel within that scope; Reseller Center stays the separate multi-tenant hierarchy. Website/sub-domain create and WordPress create-if-missing assign sites to the parent owner via `resource_owner_for()`.
 - **Remote notification broadcast**: `POST /api/nt/notifications/broadcast` accepts HMAC-SHA256 signed JSON from News Targeted (`api.newstargeted.com`) to push inbox items to all panel accounts or a username list. Config at `<data dir>/notifications/remote-push.json` (disabled by default). Replay nonces, timestamp skew, per-minute rate limit, optional AES-256-GCM body, and `panel.notifications.remote` action-log rows. Existing GET / mark-read / session self-push routes are unchanged. See `docs/REMOTE-NOTIFICATIONS.md`.
+- **Phone-home registry client**: periodic HMAC registration to `POST https://api.newstargeted.com/api/cpn/phonehome/register` so creator broadcasts can reach all installs. Stable `install_id` under `/var/lib/cpn/phonehome/`, CLI `cpn network phone-home --on|--off|--now|--status`, background daily worker, and automatic remote-push enablement when the API issues `push_hmac`. Opt-out is local and best-effort remote. See `docs/REMOTE-NOTIFICATIONS.md` and `to-do/PHONEHOME.md`.
 
 ### Changed
 

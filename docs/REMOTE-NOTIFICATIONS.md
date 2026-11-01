@@ -60,3 +60,27 @@ Rate buckets: `notifications/remote-rate.json`
 ## Audit
 
 Successful and failed remote attempts append `panel.notifications.remote` to `panel-actions.jsonl`.
+
+## Phone-home (register this install)
+
+So News Targeted can discover panels on the internet (not only a manual URL list), CPN can register with the API.
+
+### CLI
+
+```bash
+sudo cpn network set-public-url --url https://panel.example
+# HMAC: env CPN_PHONEHOME_HMAC_SECRET, /var/lib/cpn/phonehome/config.json hmac_secret,
+# build-time CPN_PHONEHOME_BUILD_SECRET, or existing remote-push.json hmac_secret
+sudo cpn network phone-home --now
+sudo cpn network phone-home --status
+sudo cpn network phone-home --off   # opt out
+```
+
+### Behaviour
+
+- Default **enabled** locally; worker runs shortly after panel start and about once per day.
+- Never sends passwords. Payload: install_id, panel_public_url, version, hostname, optional contact_email.
+- HTTPS public URL required unless `allow_http` is set in phonehome config (labs).
+- On first successful register, API may return one-time `push_hmac`; CPN writes `notifications/remote-push.json` with `enabled: true`.
+
+Operator UI: `https://cpn.newstargeted.com/installs` and compose checkbox for all phoned-home installs.
