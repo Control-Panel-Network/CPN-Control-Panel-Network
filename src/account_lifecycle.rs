@@ -69,6 +69,10 @@ pub fn status_label(disabled: bool) -> &'static str {
 pub fn role_label(username: &str) -> &'static str {
     if is_panel_admin(username) {
         "admin"
+    } else if crate::panel_subusers::account_is_subuser(username) {
+        "sub-user"
+    } else if crate::panel_reseller::account_is_reseller(username) {
+        "reseller"
     } else {
         "user"
     }

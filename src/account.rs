@@ -32,13 +32,17 @@ pub struct PanelBootstrap {
     /// When true, the account cannot sign in (sessions are rejected).
     #[serde(default)]
     pub disabled: bool,
-    /// Account role: empty/`user` for normal users, `reseller` for resellers.
+    /// Account role: empty/`user` for normal users, `reseller` for resellers,
+    /// `subuser` for owner-scoped ACL secondary logins.
     /// The bootstrap owner remains admin via `is_panel_admin` (not this field).
     #[serde(default)]
     pub role: String,
     /// Parent reseller username when this account is jailed under a reseller.
     #[serde(default)]
     pub parent_reseller: String,
+    /// Parent panel owner when this account is a sub-user (ACL secondary login).
+    #[serde(default)]
+    pub parent_owner: String,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +134,7 @@ pub fn to_account_public(boot: &PanelBootstrap) -> AccountPublic {
         disabled: boot.disabled,
         role: boot.role.clone(),
         parent_reseller: boot.parent_reseller.clone(),
+        parent_owner: boot.parent_owner.clone(),
     }
 }
 
@@ -513,6 +518,7 @@ pub fn setup_account(
         disabled: false,
         role: String::new(),
         parent_reseller: String::new(),
+        parent_owner: String::new(),
     };
     persist_bootstrap(&boot)?;
     // OLS WebAdmin uses htpasswd (apr1/bcrypt), not CPN PBKDF2. Align while plaintext

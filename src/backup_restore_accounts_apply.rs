@@ -110,6 +110,7 @@ pub(crate) fn ensure_imported_account(
         disabled,
         role: String::new(),
         parent_reseller: String::new(),
+        parent_owner: String::new(),
     };
     let path = if load_bootstrap().is_none() {
         bootstrap_path()

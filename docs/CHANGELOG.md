@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-users (ACL secondary logins)**: Panel owner manages `/account/users/sub-users` to create secondary accounts with selected section capabilities. Sub-users reuse sidebar visibility ACL and site ACL (`all_owned_by` parent). They manage the owner's panel within that scope; Reseller Center stays the separate multi-tenant hierarchy. Website/sub-domain create and WordPress create-if-missing assign sites to the parent owner via `resource_owner_for()`.
+
 ### Changed
 
 - **Login health gate fails closed when probes are unconfirmed**: `/login` and `/api/login/services` still block when MariaDB or the web stack are known unhealthy. On probe timeout they reuse a recent confirmed-ready cache (stale-while-revalidate); without that cache, sign-in stays disabled with a clear "wait and try again" banner instead of inviting login. Recovery remains `CPN_LOGIN_SERVICE_GATE=0`. TCP-first MariaDB/OLS checks cut false timeouts on reverse-proxy hosts where the panel listens on loopback.

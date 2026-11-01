@@ -420,7 +420,7 @@ async fn wordpress_install_for_kind(
     };
     let req = WordpressInstallRequest {
         domain: form.domain.clone(),
-        owner: user.clone(),
+        owner: crate::panel_subusers::resource_owner_for(&user),
         title: form.title.clone(),
         site_url: form.site_url.clone(),
         admin_user: form.admin_user.clone(),

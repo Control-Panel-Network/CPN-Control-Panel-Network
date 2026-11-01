@@ -60,6 +60,7 @@ pub fn resolve_href(href: &str) -> (&'static str, IconTone) {
         ("/account/users/create", "user-plus", IconTone::Green),
         ("/account/users/modify", "user-cog", IconTone::Amber),
         ("/account/users/reseller", "users", IconTone::Violet),
+        ("/account/users/sub-users", "user-cog", IconTone::Green),
         ("/account/acl/create", "key", IconTone::Green),
         ("/account/acl/modify", "key-round", IconTone::Amber),
         ("/account/api-access", "key", IconTone::Cyan),

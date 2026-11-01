@@ -244,13 +244,14 @@ pub async fn websites_create(
         return login_redirect(&http);
     };
     let admin = crate::packages::is_panel_admin(&user);
+    let self_owner = crate::panel_subusers::resource_owner_for(&user);
     let owner = if form.owner.trim().is_empty() {
-        user.clone()
+        self_owner
     } else if admin {
         form.owner.trim().to_string()
     } else {
-        // Non-admins may only create sites for themselves.
-        user.clone()
+        // Non-admins (including sub-users) create under their resource owner.
+        self_owner
     };
     let cloudflare_mode =
         crate::panel_ops_cloudflare::cloudflare_configured() && !form.cf_zone.trim().is_empty();
@@ -334,12 +335,13 @@ pub async fn subdomains_create(
         return login_redirect(&http);
     };
     let admin = crate::packages::is_panel_admin(&user);
+    let self_owner = crate::panel_subusers::resource_owner_for(&user);
     let owner = if form.owner.trim().is_empty() {
-        user.clone()
+        self_owner
     } else if admin {
         form.owner.trim().to_string()
     } else {
-        user.clone()
+        self_owner
     };
     let parent = match crate::sites::normalize_domain(&form.parent) {
         Ok(d) => d,
