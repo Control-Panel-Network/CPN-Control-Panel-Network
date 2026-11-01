@@ -101,7 +101,7 @@ mod tests {
             disabled: false,
             role: String::new(),
             parent_reseller: String::new(),
-        parent_owner: String::new(),
+            parent_owner: String::new(),
         };
         persist_bootstrap(&boot).expect("bootstrap");
     }

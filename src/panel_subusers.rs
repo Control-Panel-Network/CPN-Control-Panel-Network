@@ -4,7 +4,9 @@
 //! Sub-users reuse sidebar visibility grants and site ACL (`all_owned_by` parent).
 
 use crate::account::{default_password_policy, write_account_file};
-use crate::account_mgmt::{create_account, delete_account, find_account, list_accounts, usernames_equal};
+use crate::account_mgmt::{
+    create_account, delete_account, find_account, list_accounts, usernames_equal,
+};
 use crate::packages::is_panel_admin;
 use crate::sidebar_visibility::{controllable_nav_items, set_grant_for_member};
 use crate::site_acl::{SiteAclGrant, add_grant, list_grants, remove_grant_at};
@@ -106,7 +108,9 @@ fn sanitize_allowed_nav_ids(raw: &[String]) -> Result<Vec<String>, String> {
             continue;
         }
         if !GRANTABLE_NAV_IDS.contains(&trimmed) {
-            return Err(format!("Capability `{trimmed}` is not grantable to sub-users"));
+            return Err(format!(
+                "Capability `{trimmed}` is not grantable to sub-users"
+            ));
         }
         if !out.iter().any(|x: &String| x == trimmed) {
             out.push(trimmed.to_string());
@@ -183,7 +187,9 @@ fn set_subuser_fields(username: &str, parent_owner: &str) -> Result<(), String> 
         return Err("The panel owner cannot become a sub-user".into());
     }
     if !boot.parent_reseller.trim().is_empty() {
-        return Err("Unassign this account from its reseller parent before making it a sub-user".into());
+        return Err(
+            "Unassign this account from its reseller parent before making it a sub-user".into(),
+        );
     }
     boot.role = ROLE_SUBUSER.to_string();
     boot.parent_owner = parent_owner.trim().to_string();
@@ -371,19 +377,31 @@ mod tests {
             }
             create_site("example.com", "cpnowner", None, None, None).unwrap();
             assert!(
-                crate::site_acl::can_manage_site("helper1", "example.com", crate::site_acl::SitePerm::Install)
-                    .unwrap()
+                crate::site_acl::can_manage_site(
+                    "helper1",
+                    "example.com",
+                    crate::site_acl::SitePerm::Install
+                )
+                .unwrap()
             );
-            assert!(crate::sidebar_visibility::path_allowed("helper1", "/websites"));
+            assert!(crate::sidebar_visibility::path_allowed(
+                "helper1",
+                "/websites"
+            ));
             assert!(crate::sidebar_visibility::path_allowed("helper1", "/email"));
-            assert!(!crate::sidebar_visibility::path_allowed("helper1", "/docker"));
+            assert!(!crate::sidebar_visibility::path_allowed(
+                "helper1", "/docker"
+            ));
             assert!(!crate::sidebar_visibility::path_allowed(
                 "helper1",
                 "/account/users/create"
             ));
 
             update_subuser_capabilities("cpnowner", "helper1", &["email".into()]).unwrap();
-            assert!(!crate::sidebar_visibility::path_allowed("helper1", "/websites"));
+            assert!(!crate::sidebar_visibility::path_allowed(
+                "helper1",
+                "/websites"
+            ));
             assert!(crate::sidebar_visibility::path_allowed("helper1", "/email"));
 
             delete_subuser("cpnowner", "helper1").unwrap();
