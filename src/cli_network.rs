@@ -263,7 +263,9 @@ pub fn run_network(
             if on {
                 let s = set_phonehome_enabled(true)?;
                 println!("phonehome_enabled={}", s.enabled);
-                println!("note: run with --now to register immediately; background worker also runs daily");
+                println!(
+                    "note: run with --now to register immediately; background worker also runs daily"
+                );
                 return Ok(());
             }
             if off {
