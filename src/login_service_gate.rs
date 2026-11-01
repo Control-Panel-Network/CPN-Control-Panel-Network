@@ -187,7 +187,9 @@ pub(crate) fn fail_closed_or_stale() -> LoginServiceStatus {
 fn log_gate_timeout(where_: &str) {
     // Main Log + Error logs; no credentials or usernames.
     crate::upgrade_tip_log::log_failure(
-        format!("login_service_gate: {where_} timed out; sign-in blocked until health is confirmed (fail-closed)"),
+        format!(
+            "login_service_gate: {where_} timed out; sign-in blocked until health is confirmed (fail-closed)"
+        ),
         None,
     );
 }
