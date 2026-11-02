@@ -200,7 +200,13 @@ pub fn parse_node_version(output: &str) -> Option<(u32, u32, u32)> {
     let minor = parts.next()?.parse().ok()?;
     let patch = parts
         .next()
-        .and_then(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok())
+        .and_then(|p| {
+            p.chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse()
+                .ok()
+        })
         .unwrap_or(0);
     Some((major, minor, patch))
 }
@@ -221,11 +227,7 @@ pub fn probe_node_version(node: &Path) -> Option<(u32, u32, u32)> {
 fn npm_beside(node: &Path) -> Option<PathBuf> {
     let bin = node.parent()?;
     let npm = bin.join("npm");
-    if is_exec(&npm) {
-        Some(npm)
-    } else {
-        None
-    }
+    if is_exec(&npm) { Some(npm) } else { None }
 }
 
 fn discover_node_npm() -> (Option<PathBuf>, Option<PathBuf>) {

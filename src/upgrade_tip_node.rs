@@ -6,8 +6,8 @@
 
 use crate::upgrade_tip_log;
 use crate::upgrade_tip_toolchain::{
-    self, node_version_meets_min, parse_node_version, probe_node_version, Toolchain,
-    MIN_NODE_MAJOR, MIN_NODE_MINOR,
+    self, MIN_NODE_MAJOR, MIN_NODE_MINOR, Toolchain, node_version_meets_min, parse_node_version,
+    probe_node_version,
 };
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -98,11 +98,7 @@ pub fn find_supported_node() -> Option<(PathBuf, NodeVersion)> {
 fn npm_beside(node: &Path) -> Option<PathBuf> {
     let bin = node.parent()?;
     let npm = bin.join("npm");
-    if is_exec(&npm) {
-        Some(npm)
-    } else {
-        None
-    }
+    if is_exec(&npm) { Some(npm) } else { None }
 }
 
 /// Put a good Node ahead of distro `/usr/bin` so `#!/usr/bin/env node` and npm
@@ -310,36 +306,46 @@ mod tests {
 
     #[test]
     fn tip_floor_rejects_old_node() {
-        assert!(!NodeVersion {
-            major: 16,
-            minor: 20,
-            patch: 2
-        }
-        .meets_tip_floor());
-        assert!(!NodeVersion {
-            major: 18,
-            minor: 20,
-            patch: 0
-        }
-        .meets_tip_floor());
-        assert!(!NodeVersion {
-            major: 20,
-            minor: 11,
-            patch: 1
-        }
-        .meets_tip_floor());
-        assert!(NodeVersion {
-            major: 20,
-            minor: 19,
-            patch: 0
-        }
-        .meets_tip_floor());
-        assert!(NodeVersion {
-            major: 22,
-            minor: 14,
-            patch: 0
-        }
-        .meets_tip_floor());
+        assert!(
+            !NodeVersion {
+                major: 16,
+                minor: 20,
+                patch: 2
+            }
+            .meets_tip_floor()
+        );
+        assert!(
+            !NodeVersion {
+                major: 18,
+                minor: 20,
+                patch: 0
+            }
+            .meets_tip_floor()
+        );
+        assert!(
+            !NodeVersion {
+                major: 20,
+                minor: 11,
+                patch: 1
+            }
+            .meets_tip_floor()
+        );
+        assert!(
+            NodeVersion {
+                major: 20,
+                minor: 19,
+                patch: 0
+            }
+            .meets_tip_floor()
+        );
+        assert!(
+            NodeVersion {
+                major: 22,
+                minor: 14,
+                patch: 0
+            }
+            .meets_tip_floor()
+        );
     }
 
     #[test]
@@ -347,15 +353,14 @@ mod tests {
         assert!(looks_like_node_engine_failure(
             "SyntaxError: The requested module 'node:util' does not provide an export named 'styleText'"
         ));
-        assert!(looks_like_node_engine_failure("EBADENGINE Unsupported engine"));
+        assert!(looks_like_node_engine_failure(
+            "EBADENGINE Unsupported engine"
+        ));
         assert!(!looks_like_node_engine_failure("cargo build failed OOM"));
     }
 
     #[test]
     fn parse_helper_matches_toolchain() {
-        assert_eq!(
-            parse_node_version("v22.14.0\n"),
-            Some((22, 14, 0))
-        );
+        assert_eq!(parse_node_version("v22.14.0\n"), Some((22, 14, 0)));
     }
 }
