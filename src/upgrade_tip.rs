@@ -128,19 +128,7 @@ fn read_cargo_version(root: &Path) -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-async fn build_installer_ui(
-    state: &AppState,
-    root: &Path,
-    tools: &Toolchain,
-) -> Result<(), String> {
-    let ui = root.join("installer-ui");
-    let dist_index = ui.join("dist").join("index.html");
-    if dist_index.is_file() {
-        return Ok(());
-    }
-    if let Err(error) = upgrade_tip_toolchain::require_node_for_installer_ui(tools) {
-        return Err(fail(error, None));
-    }
+async fn run_installer_ui_npm(tools: &Toolchain, ui: &Path) -> Result<(), String> {
     let Some(npm) = tools.npm.as_ref() else {
         return Err(fail(
             "installer-ui needs npm (not on PATH or common locations) and dist/index.html is missing",
@@ -154,12 +142,69 @@ async fn build_installer_ui(
             npm.display()
         ));
     }
+    let npm_s = npm.to_string_lossy().into_owned();
+    upgrade_tip_cmd::run_checked(&npm_s, &["ci"], ui, &tools.env).await?;
+    upgrade_tip_cmd::run_checked(&npm_s, &["run", "build"], ui, &tools.env).await?;
+    Ok(())
+}
+
+async fn build_installer_ui(
+    state: &AppState,
+    root: &Path,
+    tools: &mut Toolchain,
+) -> Result<(), String> {
+    let ui = root.join("installer-ui");
+    let dist_index = ui.join("dist").join("index.html");
+    if dist_index.is_file() {
+        return Ok(());
+    }
+    state
+        .progress("installing", 38, "Checking Node for installer UI")
+        .await;
+    // Prefer an existing modern Node; otherwise auto-install Node 22 LTS once.
+    crate::upgrade_tip_node::ensure_supported_node(tools)
+        .await
+        .map_err(|error| fail(error, Some(1)))?;
+    if let Err(error) = upgrade_tip_toolchain::require_node_for_installer_ui(tools) {
+        return Err(fail(error, Some(1)));
+    }
     state
         .progress("installing", 40, "Building installer UI (npm)")
         .await;
-    let npm_s = npm.to_string_lossy().into_owned();
-    upgrade_tip_cmd::run_checked(&npm_s, &["ci"], &ui, &tools.env).await?;
-    upgrade_tip_cmd::run_checked(&npm_s, &["run", "build"], &ui, &tools.env).await?;
+    match run_installer_ui_npm(tools, &ui).await {
+        Ok(()) => {}
+        Err(first) => {
+            if crate::upgrade_tip_node::looks_like_node_engine_failure(&first) {
+                upgrade_tip_log::log_failure(
+                    format!(
+                        "installer-ui npm failed on Node engine ({first}); auto-healing Node and retrying"
+                    ),
+                    Some(1),
+                );
+                state
+                    .progress("installing", 39, "Auto-installing Node for tip UI build")
+                    .await;
+                let (node, ver) = crate::upgrade_tip_node::install_node_lts()
+                    .await
+                    .map_err(|error| fail(error, Some(1)))?;
+                crate::upgrade_tip_node::apply_node_to_toolchain(tools, &node, None);
+                upgrade_tip_log::log_info(format!(
+                    "Node auto-heal complete (v{}.{}.{}); retrying npm run build",
+                    ver.major, ver.minor, ver.patch
+                ));
+                state
+                    .progress(
+                        "installing",
+                        40,
+                        "Retrying installer UI (npm) after Node heal",
+                    )
+                    .await;
+                run_installer_ui_npm(tools, &ui).await?;
+            } else {
+                return Err(first);
+            }
+        }
+    }
     if !dist_index.is_file() {
         return Err(fail(
             "installer-ui build did not produce dist/index.html",
@@ -174,7 +219,7 @@ async fn cargo_build_release(
     root: &Path,
     git_sha: &str,
     branch: &str,
-    tools: &Toolchain,
+    tools: &mut Toolchain,
 ) -> Result<(), String> {
     build_installer_ui(state, root, tools).await?;
     state
@@ -430,7 +475,7 @@ pub async fn apply_tip_ref(
     crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
     crate::upgrade_tip_verify::inject_keep_module(&root, &sha)?;
     let package_version = read_cargo_version(&root);
-    cargo_build_release(state, &root, &sha, &branch, &tools).await?;
+    cargo_build_release(state, &root, &sha, &branch, &mut tools).await?;
     install_built_bins(&root, &tools, &sha).await?;
 
     upgrade_tip_log::log_info(format!(

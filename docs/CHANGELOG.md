@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Tip upgrade Node / SHA stamp**: Commit upgrades no longer pick distro `/usr/bin/cargo` first (that prepended `/usr/bin` and made `npm` run under Node 16 while `/usr/local` had Node 24, failing Vite 8 with missing `styleText`). Rustup cargo is preferred; Node >= 20.19 is discovered and prepended on PATH; clear errors when Node is too old. Matching release-package tip fallback stamps `CPN_BUILD_SHA` via temp+rename so a running `/usr/bin/cpn-installer` does not fail with Text file busy.
+- **Tip upgrade Node heal / SHA stamp**: Commit source builds no longer fail when distro Node 16/18 is ahead of a modern Node on PATH (Vite 8 / `styleText` needs Node `>=20.19`). Rustup cargo and `/usr/local` npm are preferred; tip jobs detect Node before `npm run build`, auto-install Node 22 LTS under `/usr/local` when needed, retry the UI build once, and only fail after heal+retry. Matching release-package tip fallback stamps `CPN_BUILD_SHA` via temp+rename so a running `/usr/bin/cpn-installer` does not hit Text file busy.
 
 ## [1.4.7] - 01/11/2026
 

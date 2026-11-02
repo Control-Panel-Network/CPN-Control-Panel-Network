@@ -145,6 +145,29 @@ fn path_env_value(dirs: &[PathBuf]) -> String {
     parts.join(":")
 }
 
+fn current_path_value(env: &[(String, String)]) -> String {
+    env.iter()
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+}
+
+/// Prepend `dir` in front of the toolchain PATH (Node must win over `/usr/bin`).
+pub fn prepend_path_front(dir: &Path, env: &mut Vec<(String, String)>) {
+    let mut parts = vec![dir.display().to_string()];
+    let existing = current_path_value(env);
+    if !existing.is_empty() {
+        for part in std::env::split_paths(&existing) {
+            let s = part.display().to_string();
+            if !parts.iter().any(|p| p == &s) {
+                parts.push(s);
+            }
+        }
+    }
+    env.retain(|(k, _)| k != "PATH");
+    env.push(("PATH".into(), parts.join(":")));
+}
+
 /// Cap parallel rustc jobs from free RAM so tip builds on 4 to 8 GB labs
 /// are less likely to hit the OOM killer (SIGKILL / exit 137).
 pub fn cargo_build_jobs() -> u32 {
@@ -231,8 +254,17 @@ fn discover_node_npm() -> (Option<PathBuf>, Option<PathBuf>) {
 fn env_for_toolchain(cargo: &Path, node: Option<&Path>) -> Vec<(String, String)> {
     let mut env = vec![("CARGO_TERM_COLOR".into(), "never".into())];
     let mut path_dirs: Vec<PathBuf> = Vec::new();
-    if let Some(bin) = cargo.parent() {
+    // Node bin first: if cargo is `/usr/bin/cargo`, putting cargo's parent
+    // first would shadow `/usr/local` Node with distro Node 16/18.
+    if let Some(node) = node
+        && let Some(bin) = node.parent()
+    {
         path_dirs.push(bin.to_path_buf());
+    }
+    if let Some(bin) = cargo.parent() {
+        if !path_dirs.iter().any(|p| p == bin) {
+            path_dirs.push(bin.to_path_buf());
+        }
         let bin_s = bin.to_string_lossy();
         if bin_s.ends_with(".cargo/bin")
             && let Some(cargo_home) = bin.parent()
@@ -245,15 +277,6 @@ fn env_for_toolchain(cargo: &Path, node: Option<&Path>) -> Vec<(String, String)>
                     env.push(("RUSTUP_HOME".into(), rustup.display().to_string()));
                 }
             }
-        }
-    }
-    if let Some(node) = node
-        && let Some(bin) = node.parent()
-    {
-        // Keep Node ahead of /usr/bin so `#!/usr/bin/env node` (npm) does not
-        // pick distro Node 16/18 when cargo lived under /usr/bin.
-        if !path_dirs.iter().any(|p| p == bin) {
-            path_dirs.push(bin.to_path_buf());
         }
     }
     env.retain(|(k, _)| k != "PATH");
