@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tip upgrade Node heal / SHA stamp**: Commit source builds no longer fail when distro Node 16/18 is ahead of a modern Node on PATH (Vite 8 / `styleText` needs Node `>=20.19`). Rustup cargo and `/usr/local` npm are preferred; tip jobs detect Node before `npm run build`, auto-install Node 22 LTS under `/usr/local` when needed, retry the UI build once, and only fail after heal+retry. Matching release-package tip fallback stamps `CPN_BUILD_SHA` via temp+rename so a running `/usr/bin/cpn-installer` does not hit Text file busy.
+
 ## [1.4.7] - 01/11/2026
 
 Patch release after v1.4.6. Panel HTTPS front on first install, login health gate fail-closed, sub-users, notifications inbox plus toast severity and remote broadcast, phone-home registry, Manage user UX, dashboard Edit overview lock, and `cpn password` account naming (#613 to #616, #622 to #626).
