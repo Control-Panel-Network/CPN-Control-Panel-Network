@@ -131,7 +131,7 @@ fn first_exec(candidates: &[PathBuf]) -> Option<PathBuf> {
 fn path_env_value(dirs: &[PathBuf]) -> String {
     let mut parts: Vec<String> = dirs
         .iter()
-        .filter(|d| d.as_os_str().len() > 0)
+        .filter(|d| !d.as_os_str().is_empty())
         .map(|d| d.display().to_string())
         .collect();
     if let Ok(existing) = std::env::var("PATH") {
