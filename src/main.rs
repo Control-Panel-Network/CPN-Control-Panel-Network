@@ -14,10 +14,9 @@ use cpn_installer::auth_password_reset_api::{
 };
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status,
-    extend_allowed_hosts_with_aliases, extend_allowed_hosts_with_public_url,
-    install_finished, install_session_cookie_header,
-    normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
-    wants_html, websocket_origin_ok,
+    extend_allowed_hosts_with_aliases, extend_allowed_hosts_with_public_url, install_finished,
+    install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
+    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
