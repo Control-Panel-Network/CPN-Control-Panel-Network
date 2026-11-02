@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tip upgrade Node / SHA stamp**: Commit upgrades no longer pick distro `/usr/bin/cargo` first (that prepended `/usr/bin` and made `npm` run under Node 16 while `/usr/local` had Node 24, failing Vite 8 with missing `styleText`). Rustup cargo is preferred; Node >= 20.19 is discovered and prepended on PATH; clear errors when Node is too old. Matching release-package tip fallback stamps `CPN_BUILD_SHA` via temp+rename so a running `/usr/bin/cpn-installer` does not fail with Text file busy.
+
 ## [1.4.7] - 01/11/2026
 
 Patch release after v1.4.6. Panel HTTPS front on first install, login health gate fail-closed, sub-users, notifications inbox plus toast severity and remote broadcast, phone-home registry, Manage user UX, dashboard Edit overview lock, and `cpn password` account naming (#613 to #616, #622 to #626).

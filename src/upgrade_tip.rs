@@ -138,12 +138,22 @@ async fn build_installer_ui(
     if dist_index.is_file() {
         return Ok(());
     }
+    if let Err(error) = upgrade_tip_toolchain::require_node_for_installer_ui(tools) {
+        return Err(fail(error, None));
+    }
     let Some(npm) = tools.npm.as_ref() else {
         return Err(fail(
             "installer-ui needs npm (not on PATH or common locations) and dist/index.html is missing",
             None,
         ));
     };
+    if let Some(node) = tools.node.as_ref() {
+        upgrade_tip_log::log_info(format!(
+            "installer-ui Node {} with npm {}",
+            node.display(),
+            npm.display()
+        ));
+    }
     state
         .progress("installing", 40, "Building installer UI (npm)")
         .await;
