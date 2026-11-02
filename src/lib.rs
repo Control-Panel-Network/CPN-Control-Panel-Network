@@ -514,6 +514,7 @@ pub mod upgrade_tip;
 pub mod upgrade_tip_artifacts;
 pub mod upgrade_tip_cmd;
 pub mod upgrade_tip_log;
+pub mod upgrade_tip_node;
 pub mod upgrade_tip_prebuilt;
 pub mod upgrade_tip_release_fallback;
 pub mod upgrade_tip_run;

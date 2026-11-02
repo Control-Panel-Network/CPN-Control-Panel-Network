@@ -145,6 +145,29 @@ fn path_env_value(dirs: &[PathBuf]) -> String {
     parts.join(":")
 }
 
+fn current_path_value(env: &[(String, String)]) -> String {
+    env.iter()
+        .find(|(k, _)| k == "PATH")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+}
+
+/// Prepend `dir` in front of the toolchain PATH (Node must win over `/usr/bin`).
+pub fn prepend_path_front(dir: &Path, env: &mut Vec<(String, String)>) {
+    let mut parts = vec![dir.display().to_string()];
+    let existing = current_path_value(env);
+    if !existing.is_empty() {
+        for part in std::env::split_paths(&existing) {
+            let s = part.display().to_string();
+            if !parts.iter().any(|p| p == &s) {
+                parts.push(s);
+            }
+        }
+    }
+    env.retain(|(k, _)| k != "PATH");
+    env.push(("PATH".into(), parts.join(":")));
+}
+
 /// Cap parallel rustc jobs from free RAM so tip builds on 4 to 8 GB labs
 /// are less likely to hit the OOM killer (SIGKILL / exit 137).
 pub fn cargo_build_jobs() -> u32 {
