@@ -14,7 +14,8 @@ use cpn_installer::auth_password_reset_api::{
 };
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status,
-    extend_allowed_hosts_with_public_url, install_finished, install_session_cookie_header,
+    extend_allowed_hosts_with_aliases, extend_allowed_hosts_with_public_url,
+    install_finished, install_session_cookie_header,
     normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
     wants_html, websocket_origin_ok,
 };
@@ -1063,9 +1064,16 @@ async fn main() -> std::io::Result<()> {
     if let Some(hostname) = startup_hostname.as_ref() {
         host_seeds.push(hostname.clone());
     }
+    for alias in cpn_installer::panel_host_aliases::load_panel_host_aliases() {
+        if !host_seeds.iter().any(|h| h.eq_ignore_ascii_case(&alias)) {
+            host_seeds.push(alias);
+        }
+    }
     let mut allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
     // NAT / reverse-proxy public URL (for example host 2090 -> guest 2087).
     extend_allowed_hosts_with_public_url(&mut allowed_hosts);
+    // Extra reverse-proxy hostnames (same install; see panel_host_aliases).
+    extend_allowed_hosts_with_aliases(&mut allowed_hosts, listen_port);
     let state = Arc::new(AppState {
         status: std::sync::RwLock::new(initial),
         events,

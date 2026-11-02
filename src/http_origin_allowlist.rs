@@ -195,9 +195,18 @@ pub fn extend_allowed_hosts_with_public_url(allowed_hosts: &mut Vec<String>) {
     push_allowed_authority(allowed_hosts, &authority);
 }
 
+/// Merge operator-configured host aliases (extra reverse-proxy hostnames).
+pub fn extend_allowed_hosts_with_aliases(allowed_hosts: &mut Vec<String>, default_port: u16) {
+    for authority in crate::panel_host_aliases::alias_authorities_for_allowlist(default_port) {
+        push_allowed_authority(allowed_hosts, &authority);
+    }
+}
+
 fn effective_allowed_hosts(allowed_hosts: &[String]) -> Vec<String> {
     let mut hosts = allowed_hosts.to_vec();
     extend_allowed_hosts_with_public_url(&mut hosts);
+    let default_port = crate::panel_network::preferred_listen_port_or_default();
+    extend_allowed_hosts_with_aliases(&mut hosts, default_port);
     hosts
 }
 

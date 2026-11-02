@@ -301,6 +301,10 @@ pub fn webauthn_for_request(
             }
         }
     }
+    // Extra reverse-proxy hostnames (same install). Origins are allowlisted for
+    // ceremonies on that Host; browsers still bind credentials to the RP ID of
+    // the page hostname, so unrelated domains need their own passkey enroll.
+    extras.extend(crate::panel_host_aliases::alias_https_origins());
     extras.extend(crate::panel_webauthn_origins::load_persisted_origins());
     extras.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     extras.dedup();
@@ -626,6 +630,24 @@ mod tests {
             assert!(
                 origins.iter().any(|u| u.as_str().contains(":2091")),
                 "panel_public_url origin should be allowed among {origins:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn host_alias_origin_appended_when_configured() {
+        use crate::panel_host_aliases::add_panel_host_alias;
+        with_test_data_dir(|| {
+            add_panel_host_alias("vmi.example.net").expect("alias");
+            let (wan, rp_id) =
+                webauthn_for_request(Some("panel.example.com"), true).expect("webauthn");
+            assert_eq!(rp_id, "panel.example.com");
+            let origins = wan.get_allowed_origins();
+            assert!(
+                origins
+                    .iter()
+                    .any(|u| u.as_str().contains("vmi.example.net")),
+                "host alias origin should be allowed among {origins:?}"
             );
         });
     }

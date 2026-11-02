@@ -8,8 +8,8 @@ use actix_web::HttpRequest;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use crate::http_origin_allowlist::{
-    build_allowed_hosts, extend_allowed_hosts_with_public_url, origin_matches_allowed,
-    remote_origin_ok, websocket_origin_ok,
+    build_allowed_hosts, extend_allowed_hosts_with_aliases, extend_allowed_hosts_with_public_url,
+    origin_matches_allowed, remote_origin_ok, websocket_origin_ok,
 };
 pub use crate::listen_port::DEFAULT_PORT;
 
