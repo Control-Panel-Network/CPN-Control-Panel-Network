@@ -150,6 +150,7 @@ pub mod panel_feedback_mail;
 pub mod panel_firewall_store;
 pub mod panel_flash_guard;
 pub mod panel_footer_chrome;
+pub mod panel_host_aliases;
 pub mod panel_host_info;
 pub mod panel_https_front;
 pub mod panel_https_front_config;

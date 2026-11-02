@@ -307,6 +307,17 @@ sudo cpn network set-ip-backup --off   # Domain-only: loopback + HTTPS hostname
 
 Also under Settings > Change Port > Panel access mode. IP backup is HTTP only; never advertise `https://IP:2087`.
 
+Host aliases (same install, extra reverse-proxy hostnames; primary URL unchanged):
+
+```bash
+sudo cpn network add-host-alias --hostname vmi123.example.net
+cpn network list-host-aliases
+sudo cpn network remove-host-alias --hostname vmi123.example.net
+sudo cpn network clear-host-aliases
+```
+
+Aliases update the Host/Origin allowlist so login POSTs work on those names. Passkeys stay bound to the hostname used at enroll (see `docs/MULTI-HOSTNAME-MFA.md`). Prefer one primary HTTPS hostname for passkeys; TOTP works on every alias of this install.
+
 After changing the preferred port, restart the installer/panel process on the new port when instructed.
 
 ## Plugins
