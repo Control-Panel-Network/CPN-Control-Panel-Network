@@ -75,7 +75,8 @@ use cpn_installer::panel_hub_routes::{
     panel_migrate_route, panel_migrate_wipe, passkey_delete_post, passkey_login_finish,
     passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
     passkey_register_start, passkey_rename_post, security_csf, security_csf_enable,
-    security_csf_install, security_fail2ban, security_firewall, security_firewall_ban_add,
+    security_csf_install, security_fail2ban, security_fail2ban_bans, security_fail2ban_unban,
+    security_firewall, security_firewall_ban_add,
     security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
     security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
     security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
@@ -1490,6 +1491,8 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssh_toggle)
             .service(security_ssh_show_review)
             .service(security_fail2ban)
+            .service(security_fail2ban_bans)
+            .service(security_fail2ban_unban)
             .service(security_modsec)
             .service(security_modsec_rules)
             .service(security_rule_packs)

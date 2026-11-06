@@ -100,6 +100,7 @@ pub fn action_label(action: &str) -> &'static str {
         "theme.update-all" => "Theme: update all",
         "theme.redeem" => "Theme: redeem",
         "panel.notifications.remote" => "Panel: remote notification broadcast",
+        "security.fail2ban.unban" => "Security: Fail2Ban unban",
         _ => "Panel action",
     }
 }
