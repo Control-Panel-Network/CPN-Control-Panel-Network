@@ -2,7 +2,18 @@
 
 use crate::panel_pages::panel_shell;
 
-fn host_gauges() -> [(Option<u8>, String); 3] {
+/// Snapshot of dashboard CPU / RAM / disk gauges (also used by live metrics API).
+#[derive(Debug, Clone)]
+pub struct HostGaugesSnapshot {
+    pub cpu_percent: Option<u8>,
+    pub cpu_detail: String,
+    pub ram_percent: Option<u8>,
+    pub ram_detail: String,
+    pub disk_percent: Option<u8>,
+    pub disk_detail: String,
+}
+
+pub fn host_gauges_snapshot() -> HostGaugesSnapshot {
     let cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
@@ -67,13 +78,28 @@ fn host_gauges() -> [(Option<u8>, String); 3] {
                 format!("{:.0}/{:.0} GB", used / 1048576.0, total / 1048576.0),
             ))
         });
+    let (ram_percent, ram_detail) = memory
+        .map(|(v, d)| (Some(v), d))
+        .unwrap_or((None, "Unavailable".into()));
+    let (disk_percent, disk_detail) = disk
+        .map(|(v, d)| (Some(v), d))
+        .unwrap_or((None, "Unavailable".into()));
+    HostGaugesSnapshot {
+        cpu_percent: cpu,
+        cpu_detail: format!("{cores} cores"),
+        ram_percent,
+        ram_detail,
+        disk_percent,
+        disk_detail,
+    }
+}
+
+fn host_gauges() -> [(Option<u8>, String); 3] {
+    let s = host_gauges_snapshot();
     [
-        (cpu, format!("{cores} cores")),
-        memory
-            .map(|(v, d)| (Some(v), d))
-            .unwrap_or((None, "Unavailable".into())),
-        disk.map(|(v, d)| (Some(v), d))
-            .unwrap_or((None, "Unavailable".into())),
+        (s.cpu_percent, s.cpu_detail),
+        (s.ram_percent, s.ram_detail),
+        (s.disk_percent, s.disk_detail),
     ]
 }
 
@@ -157,11 +183,14 @@ pub fn panel_dashboard_html(username: &str) -> String {
         "Statistics",
         &crate::panel_dashboard_stats::dashboard_stats_html(username),
     );
+    let minimalist = crate::panel_user_prefs::load_user_minimalist_mode(username);
+    let poll_ms: u64 = if minimalist { 0 } else { 5000 };
     let gauges = crate::panel_dashboard_layout::wrap_dash_widget(
         "gauges",
         "Usage gauges",
         &format!(
-            r#"<div class="resource-grid">
+            r#"<p id="dash-metrics-status" class="muted" role="status" data-state="ok" style="margin:0 0 10px;font-size:13px;">Loading gauges…</p>
+      <div class="resource-grid" data-live-metrics="1" data-metrics-poll="{poll_ms}">
         <article class="resource-card">
           <h2 title="Average CPU usage since boot">CPU Usage</h2>
           <div class="gauge" role="img" aria-label="CPU Usage: {cpu_pct}%">
@@ -183,7 +212,9 @@ pub fn panel_dashboard_html(username: &str) -> String {
             <div class="gauge-copy"><strong style="color:{disk_tone}">{disk_pct}%</strong><span>{disk_detail}</span></div>
           </div>
         </article>
-      </div>"#,
+      </div>
+      {metrics_js}"#,
+            poll_ms = poll_ms,
             cpu_pct = cpu_pct,
             ram_pct = ram_pct,
             disk_pct = disk_pct,
@@ -193,6 +224,7 @@ pub fn panel_dashboard_html(username: &str) -> String {
             cpu_tone = cpu_tone,
             ram_tone = ram_tone,
             disk_tone = disk_tone,
+            metrics_js = crate::panel_dashboard_metrics::dashboard_metrics_script(poll_ms),
         ),
     );
     let tools = crate::panel_dashboard_layout::wrap_dash_widget(

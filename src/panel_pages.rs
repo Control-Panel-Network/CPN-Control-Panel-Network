@@ -101,6 +101,8 @@ button { font:inherit; cursor:pointer; }
   margin:0; font-size:34px; line-height:1.25; letter-spacing:-.025em; font-weight:600;
 }
 .dashboard-heading > div > p:last-child { margin:14px 0 0; color:var(--muted); max-width:600px; }
+#dash-metrics-status[data-state="stale"] { color:#b45309; }
+#dash-metrics-status[data-state="error"] { color:#b91c1c; }
 .resource-grid {
   max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px;
 }

@@ -138,6 +138,7 @@ pub mod panel_dashboard_activity_routes;
 pub mod panel_dashboard_activity_ssh;
 pub mod panel_dashboard_layout;
 pub mod panel_dashboard_layout_routes;
+pub mod panel_dashboard_metrics;
 pub mod panel_dashboard_stats;
 pub mod panel_dashboard_tools;
 pub mod panel_db_acl;

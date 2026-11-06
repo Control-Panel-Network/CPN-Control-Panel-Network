@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fail2Ban ban management (#627)**: `/security/fail2ban` lists banned IPs per jail with search and jail filter, and admins can unban with confirmation. JSON APIs `GET /api/security/fail2ban/bans` and `POST /api/security/fail2ban/unban` use argv-only `fail2ban-client` (validated jail/IP, no shell), CSRF, admin ACL, and `security.fail2ban.unban` audit rows. Graceful when Fail2Ban is missing or stopped.
 - **Panel SPA tab navigation (#617)**: Sidebar and in-panel same-origin links swap `.panel-main` via fetch + History API (URL, Back/Forward, keyboard focus, polite live region) without a full document reload.
 - **Async login JSON (#618) / login fade (#619)**: `POST /login` accepts `Accept: application/json` and returns `{ok,error,redirect,fade}` without a form-document round trip on failure. Successful sign-in fades out the login view (honors `prefers-reduced-motion`) then fades in the panel.
+- **Live dashboard gauges (#621)**: Authenticated `GET /api/dashboard/metrics` plus client polling (5s, exponential backoff, pause when the tab is hidden) updates CPU/RAM/Disk gauges without a full page reload. Shows last-updated time and a stale state on disconnect. Minimalist mode disables polling.
 
 ### Fixed
 
