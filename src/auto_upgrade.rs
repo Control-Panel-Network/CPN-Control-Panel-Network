@@ -279,11 +279,7 @@ mod tests {
         let pub_status = public_status(&AutoUpgradeConfig::default());
         assert!(!pub_status.default_enabled);
         assert!(pub_status.security_detection_note.contains("Security-only"));
-        assert!(
-            pub_status
-                .security_detection_note
-                .contains("Prefer off")
-        );
+        assert!(pub_status.security_detection_note.contains("Prefer off"));
         assert!(!pub_status.security_detection_note.contains('\u{2014}'));
         assert!(!pub_status.security_detection_note.contains('\u{2013}'));
     }
