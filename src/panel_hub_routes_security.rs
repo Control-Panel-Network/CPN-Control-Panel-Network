@@ -4,8 +4,8 @@ use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_security::{
-    fail2ban_page, hostname_ssl_page, mail_ssl_page, malware_scan_page, modsec_page,
-    modsec_rules_page, rule_packs_page, run_sshd_toggle, secure_ssh_page, security_hub_main,
+    hostname_ssl_page, mail_ssl_page, malware_scan_page, modsec_page, modsec_rules_page,
+    rule_packs_page, run_sshd_toggle, secure_ssh_page, security_hub_main,
 };
 use crate::panel_hub_pages_security_csf::{csf_page, run_csf_enable, run_csf_install};
 use crate::panel_hub_pages_ssl_le::manage_ssl_page as manage_ssl_providers_page;
@@ -95,14 +95,6 @@ pub async fn security_ssh_show_review(
         ),
         Err(err) => redirect_notice("/security/ssh", None, Some(&err)),
     }
-}
-
-#[get("/security/fail2ban")]
-pub async fn security_fail2ban(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
-    let Some(user) = require_panel_user(&state, &http) else {
-        return login_redirect(&http);
-    };
-    html_ok(panel_shell(&user, "security", "Fail2ban", &fail2ban_page()))
 }
 
 #[get("/security/modsecurity")]

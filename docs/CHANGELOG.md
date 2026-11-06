@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Fail2Ban ban management (#627)**: `/security/fail2ban` lists banned IPs per jail with search and jail filter, and admins can unban with confirmation. JSON APIs `GET /api/security/fail2ban/bans` and `POST /api/security/fail2ban/unban` use argv-only `fail2ban-client` (validated jail/IP, no shell), CSRF, admin ACL, and `security.fail2ban.unban` audit rows. Graceful when Fail2Ban is missing or stopped.
+
 ### Fixed
 
 - **Port-scoped lab session cookies**: Auth cookies (`cpn_panel_session`, MFA pending, login return, install token, locale) include the browser `Host` port when present (`cpn_panel_session_2092`), so concurrent lab panels on the same loopback host (for example AlmaLinux `:2087` and Ubuntu `:2092`) keep independent logins. Production hosts without a port in `Host` keep the unscoped base name; legacy unscoped cookies remain readable for one upgrade cycle.
