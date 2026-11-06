@@ -145,7 +145,9 @@ mod tests {
     }
 
     #[test]
-    fn sample_default_off() {
-        assert!(!AutoUpgradeConfig::default().enabled);
+    fn sample_default_on_all() {
+        let cfg = AutoUpgradeConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.mode, AutoUpgradeMode::All);
     }
 }
