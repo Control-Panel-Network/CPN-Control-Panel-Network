@@ -1,6 +1,6 @@
 //! Compile-time panel build metadata (git SHA).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Marker bytes compiled into the panel ELF so commit-upgrade can verify the SHA.
 /// `#[used]` keeps the prefix visible to `strings` under thin LTO.
@@ -148,6 +148,34 @@ fn parse_marker_from_bytes(bytes: &[u8]) -> Option<String> {
     best.map(|(_, sha)| sha)
 }
 
+/// Write an executable via same-dir temp + rename.
+///
+/// In-place `write` on a running ELF fails with ETXTBSY ("Text file busy") on
+/// Linux. Rename-over keeps the old inode for the running process.
+fn write_executable_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("cpn-bin");
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let tmp: PathBuf = parent.join(format!(".{name}.cpn-sha-stamp"));
+    std::fs::write(&tmp, bytes)
+        .map_err(|error| format!("Could not stage CPN_BUILD_SHA marker: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755));
+    }
+    std::fs::rename(&tmp, path).map_err(|error| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Could not write CPN_BUILD_SHA marker: {error}")
+    })?;
+    Ok(())
+}
+
 /// Overwrite an existing `CPN_BUILD_SHA=` marker (same length) or append one.
 ///
 /// Used when a matching release package is installed for a docs/CI-only tip so
@@ -190,13 +218,7 @@ pub fn overwrite_embedded_sha(path: &Path, expected_sha: &str) -> Result<(), Str
         bytes.extend_from_slice(expected.as_bytes());
         bytes.push(0);
     }
-    std::fs::write(path, &bytes)
-        .map_err(|error| format!("Could not write CPN_BUILD_SHA marker: {error}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
-    }
+    write_executable_atomic(path, &bytes)?;
     match sha_embedded_in_binary(path) {
         Some(got) if sha_equal(&got, expected) => Ok(()),
         Some(got) => Err(format!(
@@ -234,13 +256,7 @@ pub fn stamp_sha_marker_if_missing(path: &Path, expected_sha: &str) -> Result<()
             bytes.extend_from_slice(&marker_needle());
             bytes.extend_from_slice(expected.as_bytes());
             bytes.push(0);
-            std::fs::write(path, bytes)
-                .map_err(|error| format!("Could not stamp CPN_BUILD_SHA marker: {error}"))?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
-            }
+            write_executable_atomic(path, &bytes)?;
             match sha_embedded_in_binary(path) {
                 Some(got) if sha_equal(&got, expected) => Ok(()),
                 Some(got) => Err(format!(

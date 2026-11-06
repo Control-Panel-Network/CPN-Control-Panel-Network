@@ -14,9 +14,9 @@ use cpn_installer::auth_password_reset_api::{
 };
 use cpn_installer::http_helpers::{
     VERSION, authorized_request, build_allowed_hosts, enrich_status,
-    extend_allowed_hosts_with_public_url, install_finished, install_session_cookie_header,
-    normalize_language, panel_account_ready, remote_origin_ok, smtp_status_public, token_matches,
-    wants_html, websocket_origin_ok,
+    extend_allowed_hosts_with_aliases, extend_allowed_hosts_with_public_url, install_finished,
+    install_session_cookie_header, normalize_language, panel_account_ready, remote_origin_ok,
+    smtp_status_public, token_matches, wants_html, websocket_origin_ok,
 };
 use cpn_installer::installer::AppState;
 use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
@@ -1063,9 +1063,16 @@ async fn main() -> std::io::Result<()> {
     if let Some(hostname) = startup_hostname.as_ref() {
         host_seeds.push(hostname.clone());
     }
+    for alias in cpn_installer::panel_host_aliases::load_panel_host_aliases() {
+        if !host_seeds.iter().any(|h| h.eq_ignore_ascii_case(&alias)) {
+            host_seeds.push(alias);
+        }
+    }
     let mut allowed_hosts = build_allowed_hosts(listen_port, &host_seeds);
     // NAT / reverse-proxy public URL (for example host 2090 -> guest 2087).
     extend_allowed_hosts_with_public_url(&mut allowed_hosts);
+    // Extra reverse-proxy hostnames (same install; see panel_host_aliases).
+    extend_allowed_hosts_with_aliases(&mut allowed_hosts, listen_port);
     let state = Arc::new(AppState {
         status: std::sync::RwLock::new(initial),
         events,
@@ -1154,6 +1161,7 @@ async fn main() -> std::io::Result<()> {
         });
     }
     let cancel_state = state.clone();
+    let auto_upgrade_state = state.clone();
     let mut server = HttpServer::new(move || {
         App::new()
             .wrap(cpn_installer::sidebar_access_guard::SidebarAccessGuard)
@@ -1672,6 +1680,9 @@ async fn main() -> std::io::Result<()> {
             .service(cpn_installer::maintenance_api::api_version_source_get)
             .service(cpn_installer::maintenance_api::api_version_source_post)
             .service(cpn_installer::maintenance_api_branches::api_version_branches)
+            .service(cpn_installer::auto_upgrade_api::api_auto_upgrade_get)
+            .service(cpn_installer::auto_upgrade_api::api_auto_upgrade_post)
+            .service(cpn_installer::auto_upgrade_api::api_auto_upgrade_check)
             .service(cpn_installer::maintenance_api::api_releases)
             .service(cpn_installer::maintenance_api::api_maintenance_status)
             .service(cpn_installer::maintenance_api::start_maintenance)
@@ -1753,6 +1764,7 @@ async fn main() -> std::io::Result<()> {
     );
     let _ = std::io::Write::flush(&mut std::io::stdout());
     cpn_installer::panel_phonehome::spawn_phonehome_worker().await;
+    cpn_installer::auto_upgrade_run::spawn_auto_upgrade_worker(auto_upgrade_state).await;
     let running = server.run();
     let handle = running.handle();
     tokio::spawn(async move {

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.8] - 06/11/2026
+
+Patch release after v1.4.7. Owner automatic updates (default ON, All newer releases, Owner can toggle off), panel host aliases for multi-hostname MFA, tip Node heal / SHA stamp, and actix/pulldown cargo-audit patches (#628, #629, #642, #643).
+
+### Added
+
+- **Owner automatic updates**: Version Management (`/settings/version`) adds an **Automatic updates** block (**enabled by default** on new installs / missing config, strategy **All newer releases**). The panel Owner can turn it off at any time; an explicit saved OFF is never overwritten by seeding. Optional security-looking tags/titles mode remains available (best-effort keywords: CVE, GHSA, security, secfix, advisory) but is not the default. When armed, the panel uses the same package upgrade path as Upgrade to latest release (maintenance page, guest-matching RPM/DEB preferred, MFA and sites/docker/mail/accounts/plans preserved). Config: `/var/lib/cpn/auto-upgrade.json`. APIs: `GET/POST /api/auto-upgrade`, dry-run `POST /api/auto-upgrade/check` with `apply: false`. Interval default 6 hours (`CPN_AUTO_UPGRADE_INTERVAL_SECS`).
+- **Panel host aliases (multi-hostname, one install)**: `cpn network add-host-alias|remove-host-alias|list-host-aliases|clear-host-aliases` stores extra reverse-proxy hostnames in `/var/lib/cpn/panel_host_aliases.json`. Aliases join the Host/Origin allowlist and WebAuthn allowed-origin list while `panel_public_url` / `panel_hostname` stay the primary URL for emails and MOTD. Passkeys remain RP ID / origin scoped: enroll on one primary HTTPS hostname (or re-enroll per unrelated hostname); TOTP works across aliases on the same install. See `docs/MULTI-HOSTNAME-MFA.md` and `docs/CLI.md`.
+
+### Fixed
+
+- **Tip upgrade Node heal / SHA stamp**: Commit source builds no longer fail when distro Node 16/18 is ahead of a modern Node on PATH (Vite 8 / `styleText` needs Node `>=20.19`). Rustup cargo and `/usr/local` npm are preferred; tip jobs detect Node before `npm run build`, auto-install Node 22 LTS under `/usr/local` when needed, retry the UI build once, and only fail after heal+retry. Matching release-package tip fallback stamps `CPN_BUILD_SHA` via temp+rename so a running `/usr/bin/cpn-installer` does not hit Text file busy.
+- **cargo-audit actix / pulldown**: Bump `actix-web` to 4.18.2 (`actix-http` 3.20.3) and `pulldown-cmark` to 0.13.6 for RUSTSEC-2026-0446, 0447, 0448, 0455, and 0433.
+
 ## [1.4.7] - 01/11/2026
 
 Patch release after v1.4.6. Panel HTTPS front on first install, login health gate fail-closed, sub-users, notifications inbox plus toast severity and remote broadcast, phone-home registry, Manage user UX, dashboard Edit overview lock, and `cpn password` account naming (#613 to #616, #622 to #626).

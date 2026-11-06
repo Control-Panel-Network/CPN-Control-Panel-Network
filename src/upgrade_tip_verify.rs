@@ -154,6 +154,7 @@ mod tests {
         let mut tools = Toolchain {
             cargo: PathBuf::from("/home/cpn/.cargo/bin/cargo"),
             npm: None,
+            node: None,
             env: vec![(
                 "CARGO_TARGET_DIR".into(),
                 "/home/cpn/cpn-cargo-target".into(),

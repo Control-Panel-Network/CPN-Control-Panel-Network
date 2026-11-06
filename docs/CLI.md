@@ -54,6 +54,10 @@ There is **no** `cpn --repair` as a global installer switch on `cpn` itself for 
 
 ```bash
 sudo cpn-installer --upgrade          # tip package (or --to X.Y.Z); preserves accounts/sites
+# Automatic updates (Owner toggle on Version Management; enabled by default, mode all):
+#   GET/POST /api/auto-upgrade , dry-run POST /api/auto-upgrade/check {"apply":false}
+#   Config: /var/lib/cpn/auto-upgrade.json (enabled, mode all|security, interval)
+#   Owner can uncheck Enable automatic updates and Save to opt out.
 sudo cpn-installer --repair           # re-apply core files from install-manifest / release
 sudo cpn-installer --repair --reset-data   # destructive: also wipes bootstrap/accounts/sites/smtp/secrets
 sudo cpn-installer --uninstall        # interactive confirm; removes panel + package + /var/lib/cpn
@@ -306,6 +310,17 @@ sudo cpn network set-ip-backup --off   # Domain-only: loopback + HTTPS hostname
 ```
 
 Also under Settings > Change Port > Panel access mode. IP backup is HTTP only; never advertise `https://IP:2087`.
+
+Host aliases (same install, extra reverse-proxy hostnames; primary URL unchanged):
+
+```bash
+sudo cpn network add-host-alias --hostname vmi123.example.net
+cpn network list-host-aliases
+sudo cpn network remove-host-alias --hostname vmi123.example.net
+sudo cpn network clear-host-aliases
+```
+
+Aliases update the Host/Origin allowlist so login POSTs work on those names. Passkeys stay bound to the hostname used at enroll (see `docs/MULTI-HOSTNAME-MFA.md`). Prefer one primary HTTPS hostname for passkeys; TOTP works on every alias of this install.
 
 After changing the preferred port, restart the installer/panel process on the new port when instructed.
 
