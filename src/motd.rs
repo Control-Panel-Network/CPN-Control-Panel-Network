@@ -228,5 +228,14 @@ mod tests {
         assert!(!lower.contains("enjoy your accelerated"));
         assert!(!MOTD_SCRIPT.contains('\u{2014}'));
         assert!(!MOTD_SCRIPT.contains('\u{2013}'));
+        // CPN ASCII: N must keep its top and bottom underscores (match C/P weight).
+        assert!(
+            MOTD_SCRIPT.contains("____ ____  _   _"),
+            "MOTD CPN banner missing N top underscore"
+        );
+        assert!(
+            MOTD_SCRIPT.contains("|_|_\\_|") || MOTD_SCRIPT.contains("|_|_\\\\_|"),
+            "MOTD CPN banner missing N bottom underscore connector"
+        );
     }
 }

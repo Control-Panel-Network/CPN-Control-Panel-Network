@@ -425,6 +425,7 @@ pub mod panel_site_tools_routes;
 pub mod panel_site_tools_security;
 pub mod panel_site_vhost_wire;
 pub mod panel_sogo_proxy;
+pub mod panel_spa_nav;
 pub mod panel_storage_fmt;
 pub mod panel_subusers;
 pub mod panel_subusers_csrf;

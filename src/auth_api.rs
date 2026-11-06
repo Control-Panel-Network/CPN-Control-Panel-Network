@@ -144,6 +144,14 @@ fn maybe_upgrade_password_hash(
     let _ = write_account_file(path, boot);
 }
 
+fn wants_login_json(http: &HttpRequest) -> bool {
+    http.headers()
+        .get(actix_web::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_ascii_lowercase().contains("application/json"))
+        .unwrap_or(false)
+}
+
 pub(crate) fn login_success_response(
     http: &HttpRequest,
     token: &str,
@@ -169,6 +177,27 @@ pub(crate) fn login_success_response(
     let location = crate::account_security::post_login_security_path(username)
         .map(str::to_string)
         .unwrap_or_else(|| post_login_location(next));
+    if wants_login_json(http) {
+        let mut builder = HttpResponse::Ok();
+        builder.content_type("application/json; charset=utf-8");
+        append_set_cookies(
+            &mut builder,
+            issue_session_cookie_headers(token, secure, port),
+        );
+        append_set_cookies(&mut builder, clear_mfa_pending_cookie_headers(secure, port));
+        append_set_cookies(
+            &mut builder,
+            clear_login_return_cookie_headers(secure, port),
+        );
+        return builder.body(
+            serde_json::json!({
+                "ok": true,
+                "redirect": location,
+                "fade": true,
+            })
+            .to_string(),
+        );
+    }
     let mut builder = HttpResponse::SeeOther();
     builder.append_header(("Location", location));
     append_set_cookies(
@@ -413,13 +442,25 @@ pub async fn login_submit(
     };
 
     let Some(session_user) = authed else {
+        let err_msg = login_error_message(locale);
+        if wants_login_json(&http) {
+            return HttpResponse::Unauthorized()
+                .content_type("application/json; charset=utf-8")
+                .body(
+                    serde_json::json!({
+                        "ok": false,
+                        "error": err_msg,
+                    })
+                    .to_string(),
+                );
+        }
         // Avoid a second slow host probe when re-rendering the form after a bad password.
         let gate = evaluate_login_services();
         return HttpResponse::Unauthorized()
             .content_type("text/html; charset=utf-8")
             .body(crate::auth_pages::panel_login_html_with_gate(
                 &payload,
-                Some(login_error_message(locale)),
+                Some(err_msg),
                 next.as_deref(),
                 &gate,
             ));
@@ -432,8 +473,32 @@ pub async fn login_submit(
     if needs_mfa {
         let pending = create_mfa_pending_token(&session_user, &secret);
         let port = request_auth_cookie_port(&http);
+        let mfa_loc = mfa_location(next.as_deref());
+        if wants_login_json(&http) {
+            let mut builder = HttpResponse::Ok();
+            builder.content_type("application/json; charset=utf-8");
+            append_set_cookies(
+                &mut builder,
+                issue_mfa_pending_cookie_headers(&pending, secure, port),
+            );
+            append_set_cookies(&mut builder, clear_session_cookie_headers(secure, port));
+            if let Some(ref path) = next
+                && let Some(cookie) = login_return_cookie_header(path, secure, port)
+            {
+                builder.append_header(("Set-Cookie", cookie));
+            }
+            return builder.body(
+                serde_json::json!({
+                    "ok": true,
+                    "redirect": mfa_loc,
+                    "fade": false,
+                    "mfa": true,
+                })
+                .to_string(),
+            );
+        }
         let mut builder = HttpResponse::SeeOther();
-        builder.append_header(("Location", mfa_location(next.as_deref())));
+        builder.append_header(("Location", mfa_loc));
         append_set_cookies(
             &mut builder,
             issue_mfa_pending_cookie_headers(&pending, secure, port),

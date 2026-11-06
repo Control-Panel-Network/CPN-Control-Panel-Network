@@ -161,11 +161,11 @@ _cpn_print_live_urls() {
 }
 
 echo ""
-echo "${_C_CYAN}   ____ ____  _   ${_C_RESET}"
+echo "${_C_CYAN}   ____ ____  _   _${_C_RESET}"
 echo "${_C_CYAN}  / ___|  _ \\| \\ | |${_C_RESET}"
 echo "${_C_BLUE} | |   | |_) |  \\| |${_C_RESET}"
 echo "${_C_BLUE} | |___|  __/| |\\  |${_C_RESET}"
-echo "${_C_CYAN}  \\____|_|   |_| \\_|${_C_RESET}"
+echo "${_C_CYAN}  \\____|_|   |_|_\\_|${_C_RESET}"
 echo "${_C_DIM}  Control Panel Network / News Targeted${_C_RESET}"
 echo "============================================================"
 echo "  This server has installed CPN"

@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Fail2Ban ban management (#627)**: `/security/fail2ban` lists banned IPs per jail with search and jail filter, and admins can unban with confirmation. JSON APIs `GET /api/security/fail2ban/bans` and `POST /api/security/fail2ban/unban` use argv-only `fail2ban-client` (validated jail/IP, no shell), CSRF, admin ACL, and `security.fail2ban.unban` audit rows. Graceful when Fail2Ban is missing or stopped.
+- **Panel SPA tab navigation (#617)**: Sidebar and in-panel same-origin links swap `.panel-main` via fetch + History API (URL, Back/Forward, keyboard focus, polite live region) without a full document reload.
+- **Async login JSON (#618) / login fade (#619)**: `POST /login` accepts `Accept: application/json` and returns `{ok,error,redirect,fade}` without a form-document round trip on failure. Successful sign-in fades out the login view (honors `prefers-reduced-motion`) then fades in the panel.
 
 ### Fixed
 
+- **CPN MOTD ASCII N**: Restore the missing underscore on the letter **N** in `packaging/cpn-motd.sh` so the banner matches C/P weight.
 - **Port-scoped lab session cookies**: Auth cookies (`cpn_panel_session`, MFA pending, login return, install token, locale) include the browser `Host` port when present (`cpn_panel_session_2092`), so concurrent lab panels on the same loopback host (for example AlmaLinux `:2087` and Ubuntu `:2092`) keep independent logins. Production hosts without a port in `Host` keep the unscoped base name; legacy unscoped cookies remain readable for one upgrade cycle.
 
 ## [1.4.8] - 06/11/2026
