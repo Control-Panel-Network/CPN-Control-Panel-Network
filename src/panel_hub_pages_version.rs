@@ -382,9 +382,10 @@ mod tests {
         assert!(html.contains("cpn-source-repo"));
         assert!(html.contains("id=\"cpn-auto-enabled\""));
         assert!(html.contains("Automatic updates"));
-        assert!(html.contains("Enabled by default on new installs"));
         assert!(html.contains("Off by default"));
-        assert!(html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\" checked"));
+        assert!(!html.contains("Enabled by default on new installs"));
+        assert!(html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\""));
+        assert!(!html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\" checked"));
         assert!(html.contains("/api/auto-upgrade"));
         assert!(html.contains("id=\"cpn-source-branch\""));
         assert!(html.contains("<option value=\"stable\" selected>"));
