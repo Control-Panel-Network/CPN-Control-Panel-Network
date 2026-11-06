@@ -199,7 +199,7 @@ pub(crate) fn package_form(
         </div>
       </fieldset>
       <label style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" name="fqdn_enabled" value="1"{fqdn_checked}>
+        <input type="checkbox" class="cpn-switch" role="switch" name="fqdn_enabled" value="1"{fqdn_checked}>
         Allow FQDN / subdomain creation
       </label>
       <label>Notes

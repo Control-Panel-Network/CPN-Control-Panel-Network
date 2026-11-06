@@ -151,7 +151,7 @@ fn cron_row(site: &SiteRecord, csrf: &str, domain_q: &str, job: &SiteCronJob) ->
   <input type="hidden" name="weekday" value="{w}">
   <input type="hidden" name="command" value="{cmd}">
   <input type="hidden" name="comment" value="{c}">
-  <label><input type="checkbox" name="enabled" value="1"{enabled_checked}> On</label>
+  <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{enabled_checked}> On</label>
   <button type="submit" class="btn-secondary">Save</button>
 </form>
 <form method="post" action="/websites/cron/delete" style="display:inline;" onsubmit="return confirm('Delete this cron job?');">

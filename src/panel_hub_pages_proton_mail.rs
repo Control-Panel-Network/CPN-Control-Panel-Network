@@ -123,7 +123,7 @@ pub fn email_proton_page(notice: Option<&str>, error: Option<&str>) -> String {
         <label for="display_name">Display name (optional)</label>
         <input id="display_name" name="display_name" type="text" value="{display_val}" autocomplete="off">
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-          <input type="checkbox" name="open_button_enabled" value="1"{open_enabled}> Enable Open Proton Mail button
+          <input type="checkbox" class="cpn-switch" role="switch" name="open_button_enabled" value="1"{open_enabled}> Enable Open Proton Mail button
         </label>
         <label for="open_button_label">Custom Open button label (optional)</label>
         <input id="open_button_label" name="open_button_label" type="text" value="{label_val}" placeholder="Open Proton Mail" autocomplete="off">

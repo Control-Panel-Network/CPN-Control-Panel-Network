@@ -29,8 +29,10 @@ fn resolve_initial_locale(status: &InstallerStatus) -> &'static str {
     normalize_panel_locale(&status.language)
 }
 
-fn shared_auth_styles() -> &'static str {
-    r#"
+fn shared_auth_styles() -> String {
+    format!(
+        "{}{}",
+        r#"
     body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; transition:opacity .28s ease; }
     body.cpn-login-fade-out { opacity:0; pointer-events:none; }
     @media (prefers-reduced-motion: reduce) {
@@ -50,7 +52,7 @@ fn shared_auth_styles() -> &'static str {
     .btn-secondary:disabled { opacity:.55; cursor:not-allowed; }
     .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .remember { display:flex; align-items:center; gap:8px; margin:14px 0 0; font-weight:600; font-size:.92rem; }
-    .remember input { width:auto; margin:0; }
+    .remember input { width:auto; margin:0; padding:0; border-radius:5px; }
     a { color:#0066cc; text-decoration:none; font-size:.92rem; }
     .hint { margin-top:14px; font-size:.9rem; }
     .error {
@@ -77,7 +79,9 @@ fn shared_auth_styles() -> &'static str {
     .command-box { margin:22px 0; border:1px solid #b8d8fa; border-radius:14px; padding:16px; background:#f4f9ff; }
     .command-box code { display:block; margin-top:8px; border-radius:9px; padding:12px; background:#101828; color:#f8fafc; font:600 .9rem ui-monospace,SFMono-Regular,Consolas,monospace; user-select:all; }
     @media (max-width:520px) { .card { padding:24px; } .lang-host { position:static; display:flex; justify-content:flex-end; margin-bottom:12px; } .brand-logo { width:160px; } }
-"#
+"#,
+        crate::panel_controls::control_styles(),
+    )
 }
 
 pub fn panel_login_html(

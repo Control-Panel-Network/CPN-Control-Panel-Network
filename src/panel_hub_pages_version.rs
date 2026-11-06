@@ -75,7 +75,7 @@ pub fn version_management_page(can_manage: bool) -> String {
       style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
   </label>
   <label style="margin-top:10px;display:flex;gap:8px;align-items:center;">
-    <input id="cpn-source-clear-token" type="checkbox" />
+    <input id="cpn-source-clear-token" type="checkbox" class="cpn-check" />
     <span>Clear stored GitHub token</span>
   </label>
   <div style="margin-top:12px;">
@@ -93,7 +93,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     The panel Owner can turn this off at any time to stop scheduled upgrades.
   </p>
   <label style="display:flex;gap:8px;align-items:center;">
-    <input id="cpn-auto-enabled" type="checkbox" checked />
+    <input id="cpn-auto-enabled" type="checkbox" class="cpn-switch" role="switch" checked />
     <span>Enable automatic updates</span>
   </label>
   <label for="cpn-auto-mode" style="margin-top:12px;display:block;">When enabled, upgrade
@@ -104,7 +104,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     </select>
   </label>
   <label style="margin-top:10px;display:flex;gap:8px;align-items:center;">
-    <input id="cpn-auto-prerelease" type="checkbox" />
+    <input id="cpn-auto-prerelease" type="checkbox" class="cpn-check" />
     <span>Include GitHub prerelease tags</span>
   </label>
   <p id="cpn-auto-security-note" class="muted" style="margin:10px 0 0;font-size:13px;line-height:1.45;"></p>
@@ -385,7 +385,16 @@ mod tests {
         assert!(html.contains("Automatic updates"));
         assert!(html.contains("Enabled by default on new installs"));
         assert!(!html.contains("Off by default"));
-        assert!(html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\" checked"));
+        assert!(html.contains(
+            "id=\"cpn-auto-enabled\" type=\"checkbox\" class=\"cpn-switch\" role=\"switch\" checked"
+        ));
+        assert!(
+            html.contains("id=\"cpn-source-clear-token\" type=\"checkbox\" class=\"cpn-check\"")
+        );
+        assert!(html.contains("id=\"cpn-auto-prerelease\" type=\"checkbox\" class=\"cpn-check\""));
+        assert!(
+            !html.contains("id=\"cpn-auto-prerelease\" type=\"checkbox\" class=\"cpn-switch\"")
+        );
         assert!(html.contains("/api/auto-upgrade"));
         assert!(html.contains("id=\"cpn-source-branch\""));
         assert!(html.contains("<option value=\"stable\" selected>"));

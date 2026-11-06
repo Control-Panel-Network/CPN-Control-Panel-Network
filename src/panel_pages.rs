@@ -189,8 +189,7 @@ button { font:inherit; cursor:pointer; }
   min-width:0; overflow-wrap:anywhere;
 }
 .stack-form .cpn-check-item input[type=checkbox], .cpn-check-item input[type=checkbox] {
-  flex:0 0 auto; width:16px; height:16px; min-width:16px; padding:0; margin:2px 0 0;
-  border-radius:4px; accent-color:var(--accent,#0b66ff);
+  flex:0 0 auto; margin:2px 0 0;
 }
 .cpn-check-item > span { flex:1 1 auto; min-width:0; }
 .cpn-check-single { margin-top:2px; }
@@ -429,8 +428,9 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
+        crate::panel_controls::control_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
@@ -565,6 +565,17 @@ mod tests {
                 && css.contains("z-index:90")
                 && css.contains("pointer-events:auto"),
             "drawer must stack above the nav backdrop and stay clickable"
+        );
+    }
+
+    #[test]
+    fn panel_shell_includes_control_styles() {
+        let html = super::panel_shell("tester", "dashboard", "Dashboard", "<p>ok</p>");
+        assert!(
+            html.contains("input[type=checkbox]:not(.cpn-switch)")
+                && html.contains("input[type=checkbox].cpn-switch")
+                && html.contains("--cpn-control-on"),
+            "panel shell must ship Option C checkbox and Option D switch styles"
         );
     }
 

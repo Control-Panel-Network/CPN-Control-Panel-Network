@@ -86,7 +86,7 @@ pub fn apache_toggle_html(site: &SiteRecord, csrf: &str) -> String {
   <input type="hidden" name="domain" value="{domain}">
   <input type="hidden" name="csrf" value="{csrf}">
   <input type="hidden" name="action" value="apache_handler_toggle">
-  <label><input type="checkbox" name="enabled" value="1"{checked}> Apache handler for this site (optional; OpenLiteSpeed stays the default stack)</label>
+  <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{checked}> Apache handler for this site (optional; OpenLiteSpeed stays the default stack)</label>
   <button type="submit" class="btn-secondary" style="margin-top:8px;">Save handler</button>
 </form>"#,
         domain = html_escape(&site.domain),

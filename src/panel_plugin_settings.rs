@@ -59,6 +59,15 @@ fn installed_for_domain(domain: &str) -> Vec<InstalledPlugin> {
     list_installed(domain).unwrap_or_default()
 }
 
+fn checkbox_is_master_toggle(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    k == "enabled"
+        || k.starts_with("enable")
+        || k.starts_with("allow_")
+        || k.ends_with("_enabled")
+        || k == "show_in_sidebar"
+}
+
 fn field_input(key: &str, field_type: &str, value: &str) -> String {
     let ft = field_type.to_ascii_lowercase();
     if ft == "checkbox" {
@@ -67,8 +76,14 @@ fn field_input(key: &str, field_type: &str, value: &str) -> String {
         } else {
             ""
         };
+        let switch = if checkbox_is_master_toggle(key) {
+            r#" class="cpn-switch" role="switch""#
+        } else {
+            ""
+        };
         return format!(
-            r#"<input type="checkbox" id="f-{key}" name="field_{key}" value="1"{checked}>"#,
+            r#"<input type="checkbox"{switch} id="f-{key}" name="field_{key}" value="1"{checked}>"#,
+            switch = switch,
             key = html_escape(key),
             checked = checked,
         );
@@ -252,7 +267,7 @@ pub fn plugin_settings_main(
           <input type="hidden" name="domain" value="{domain}">
           <input type="hidden" name="id" value="{id}">
           <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-            <input type="checkbox" name="show_in_sidebar" value="1"{sidebar}>
+            <input type="checkbox" class="cpn-switch" role="switch" name="show_in_sidebar" value="1"{sidebar}>
             Show in sidebar
           </label>
           <p class="muted">When enabled and the plugin is Active, webmail plugins appear under Email; other plugins appear under Installed plugins. The floating chat bubble (if the plugin declares one) is a separate setting, not this checkbox. The sidebar footer speech icon is Feedback.</p>
