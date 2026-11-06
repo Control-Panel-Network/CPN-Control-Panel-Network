@@ -284,7 +284,11 @@ async fn bootstrap_session(
     HttpResponse::Ok()
         .append_header((
             actix_web::http::header::SET_COOKIE,
-            install_session_cookie_header(&state.session_id, secure),
+            install_session_cookie_header(
+                &state.session_id,
+                secure,
+                cpn_installer::panel_session::request_auth_cookie_port(&http),
+            ),
         ))
         .append_header((
             actix_web::http::header::CACHE_CONTROL,

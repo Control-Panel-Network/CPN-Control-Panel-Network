@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Port-scoped lab session cookies**: Auth cookies (`cpn_panel_session`, MFA pending, login return, install token, locale) include the browser `Host` port when present (`cpn_panel_session_2092`), so concurrent lab panels on the same loopback host (for example AlmaLinux `:2087` and Ubuntu `:2092`) keep independent logins. Production hosts without a port in `Host` keep the unscoped base name; legacy unscoped cookies remain readable for one upgrade cycle.
+
 ## [1.4.8] - 06/11/2026
 
 Patch release after v1.4.7. Owner automatic updates (default ON, All newer releases, Owner can toggle off), panel host aliases for multi-hostname MFA, tip Node heal / SHA stamp, and actix/pulldown cargo-audit patches (#628, #629, #642, #643).

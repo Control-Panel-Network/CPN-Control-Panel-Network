@@ -1,7 +1,8 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PanelShell } from "./PanelShell";
 import {
+  authCookiePortFromHost,
   readSessionCookie,
   sessionCookieName,
   verifySessionToken,
@@ -15,13 +16,15 @@ type SectionPageProps = {
 
 async function requireSession(): Promise<string> {
   const jar = await cookies();
+  const port = authCookiePortFromHost((await headers()).get("host"));
   const raw =
-    jar.get(sessionCookieName())?.value ||
+    jar.get(sessionCookieName(port))?.value ||
     readSessionCookie(
       jar
         .getAll()
         .map((item) => `${item.name}=${item.value}`)
         .join("; "),
+      port,
     );
   const sessionUser = raw ? verifySessionToken(raw) : null;
   if (!sessionUser) {

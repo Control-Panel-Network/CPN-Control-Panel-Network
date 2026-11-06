@@ -14,7 +14,9 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_profile::users_modify_page_with_tab;
 use crate::panel_hub_pages_profile::users_profile_page;
 use crate::panel_pages::panel_shell;
-use crate::panel_session::{create_session_token, session_cookie_header, session_secret};
+use crate::panel_session::{
+    create_session_token, issue_session_cookie_headers, request_auth_cookie_port, session_secret,
+};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -192,10 +194,13 @@ pub async fn users_profile_details_post(
     let secret = session_secret(Some(&state.token));
     let token = create_session_token(&session_user, &secret);
     let secure = request_secure(&http);
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/account/users/profile?notice=Profile+updated"))
-        .append_header(("Set-Cookie", session_cookie_header(&token, secure)))
-        .finish()
+    let port = request_auth_cookie_port(&http);
+    let mut builder = HttpResponse::SeeOther();
+    builder.append_header(("Location", "/account/users/profile?notice=Profile+updated"));
+    for cookie in issue_session_cookie_headers(&token, secure, port) {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+    builder.finish()
 }
 
 #[post("/account/users/profile/password")]

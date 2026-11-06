@@ -16,7 +16,7 @@ use crate::http_helpers::{
 };
 use crate::installer::AppState;
 use crate::login_next::{
-    clear_login_return_cookie_header, first_safe_next, login_location, login_query_error_message,
+    clear_login_return_cookie_headers, first_safe_next, login_location, login_query_error_message,
     login_return_cookie_header, mfa_location, post_login_location, read_login_return_cookie,
     referer_return_path, request_return_path,
 };
@@ -27,9 +27,10 @@ use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
 use crate::panel_dashboard::panel_dashboard_html;
 use crate::panel_session::{
-    clear_mfa_pending_cookie_header, clear_session_cookie_header, create_mfa_pending_token,
-    create_session_token, mfa_pending_cookie_header, read_mfa_pending_cookie, read_session_cookie,
-    session_cookie_header, session_secret, verify_mfa_pending_token, verify_session_token,
+    clear_mfa_pending_cookie_headers, clear_session_cookie_headers, create_mfa_pending_token,
+    create_session_token, issue_mfa_pending_cookie_headers, issue_session_cookie_headers,
+    read_mfa_pending_cookie, read_session_cookie, request_auth_cookie_port, session_secret,
+    verify_mfa_pending_token, verify_session_token,
 };
 use crate::postfix_fallback::ensure_postfix_default;
 use crate::smtp_settings::persist_smtp;
@@ -89,6 +90,12 @@ fn request_secure(http: &HttpRequest) -> bool {
     crate::panel_session::request_https_from_headers(http)
 }
 
+fn append_set_cookies(builder: &mut actix_web::HttpResponseBuilder, cookies: Vec<String>) {
+    for cookie in cookies {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+}
+
 pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
     if let Some(auth) = http
         .headers()
@@ -110,7 +117,8 @@ pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<S
         .headers()
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
-    let token = read_session_cookie(cookie)?;
+    let port = request_auth_cookie_port(http);
+    let token = read_session_cookie(cookie, port)?;
     let secret = session_secret(Some(&state.token));
     let username = verify_session_token(&token, &secret)?;
     reject_if_account_disabled(username)
@@ -157,15 +165,22 @@ pub(crate) fn login_success_response(
         peer.as_deref(),
     );
     let secure = request_secure(http);
+    let port = request_auth_cookie_port(http);
     let location = crate::account_security::post_login_security_path(username)
         .map(str::to_string)
         .unwrap_or_else(|| post_login_location(next));
-    HttpResponse::SeeOther()
-        .append_header(("Location", location))
-        .append_header(("Set-Cookie", session_cookie_header(token, secure)))
-        .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
-        .append_header(("Set-Cookie", clear_login_return_cookie_header(secure)))
-        .finish()
+    let mut builder = HttpResponse::SeeOther();
+    builder.append_header(("Location", location));
+    append_set_cookies(
+        &mut builder,
+        issue_session_cookie_headers(token, secure, port),
+    );
+    append_set_cookies(&mut builder, clear_mfa_pending_cookie_headers(secure, port));
+    append_set_cookies(
+        &mut builder,
+        clear_login_return_cookie_headers(secure, port),
+    );
+    builder.finish()
 }
 
 fn resolve_next_from_request(
@@ -177,7 +192,8 @@ fn resolve_next_from_request(
         .headers()
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
-    let from_cookie = read_login_return_cookie(cookie);
+    let port = request_auth_cookie_port(http);
+    let from_cookie = read_login_return_cookie(cookie, port);
     first_safe_next(&[form_next, query_next, from_cookie.as_deref()])
 }
 
@@ -233,15 +249,19 @@ pub async fn login_page(
             next.as_deref(),
         ),
     };
+    let port = request_auth_cookie_port(&http);
     let mut builder = HttpResponse::Ok();
     builder.content_type("text/html; charset=utf-8");
     builder.insert_header(("Cache-Control", "no-store"));
     if let Some(ref path) = next
-        && let Some(cookie) = login_return_cookie_header(path, secure)
+        && let Some(cookie) = login_return_cookie_header(path, secure, port)
     {
         builder.append_header(("Set-Cookie", cookie));
     } else if next.is_none() {
-        builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
+        append_set_cookies(
+            &mut builder,
+            clear_login_return_cookie_headers(secure, port),
+        );
     }
     builder.body(body)
 }
@@ -411,12 +431,16 @@ pub async fn login_submit(
 
     if needs_mfa {
         let pending = create_mfa_pending_token(&session_user, &secret);
+        let port = request_auth_cookie_port(&http);
         let mut builder = HttpResponse::SeeOther();
         builder.append_header(("Location", mfa_location(next.as_deref())));
-        builder.append_header(("Set-Cookie", mfa_pending_cookie_header(&pending, secure)));
-        builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
+        append_set_cookies(
+            &mut builder,
+            issue_mfa_pending_cookie_headers(&pending, secure, port),
+        );
+        append_set_cookies(&mut builder, clear_session_cookie_headers(secure, port));
         if let Some(ref path) = next
-            && let Some(cookie) = login_return_cookie_header(path, secure)
+            && let Some(cookie) = login_return_cookie_header(path, secure, port)
         {
             builder.append_header(("Set-Cookie", cookie));
         }
@@ -484,8 +508,9 @@ pub async fn login_mfa_page(
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
     let secret = session_secret(Some(&state.token));
-    let pending_user =
-        read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret));
+    let port = request_auth_cookie_port(&http);
+    let pending_user = read_mfa_pending_cookie(cookie, port)
+        .and_then(|token| verify_mfa_pending_token(&token, &secret));
     let next = first_safe_next(&[query.get("next").map(String::as_str)]);
     let Some(username) = pending_user else {
         // Opaque-redirect login JS always lands here. If password login already
@@ -524,8 +549,9 @@ pub async fn login_mfa_submit(
         .and_then(|value| value.to_str().ok());
     let secret = session_secret(Some(&state.token));
     let next = resolve_next_from_request(&http, Some(form.next.as_str()), None);
-    let Some(username) =
-        read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret))
+    let port = request_auth_cookie_port(&http);
+    let Some(username) = read_mfa_pending_cookie(cookie, port)
+        .and_then(|token| verify_mfa_pending_token(&token, &secret))
     else {
         return HttpResponse::SeeOther()
             .append_header(("Location", login_location(next.as_deref())))
@@ -617,6 +643,7 @@ pub async fn panel_alias() -> HttpResponse {
 
 fn logout_response(http: &HttpRequest) -> HttpResponse {
     let secure = request_secure(http);
+    let port = request_auth_cookie_port(http);
     let query_map = web::Query::<std::collections::HashMap<String, String>>::from_query(
         http.uri().query().unwrap_or(""),
     )
@@ -631,17 +658,20 @@ fn logout_response(http: &HttpRequest) -> HttpResponse {
     ]);
     let mut builder = HttpResponse::SeeOther();
     builder.append_header(("Location", login_location(next.as_deref())));
-    builder.append_header(("Set-Cookie", clear_session_cookie_header(secure)));
-    builder.append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)));
+    append_set_cookies(&mut builder, clear_session_cookie_headers(secure, port));
+    append_set_cookies(&mut builder, clear_mfa_pending_cookie_headers(secure, port));
     for cookie in crate::panel_phpmyadmin_proxy::clear_phpmyadmin_cookie_headers(secure) {
         builder.append_header(("Set-Cookie", cookie));
     }
     if let Some(ref path) = next
-        && let Some(cookie) = login_return_cookie_header(path, secure)
+        && let Some(cookie) = login_return_cookie_header(path, secure, port)
     {
         builder.append_header(("Set-Cookie", cookie));
     } else if next.is_none() {
-        builder.append_header(("Set-Cookie", clear_login_return_cookie_header(secure)));
+        append_set_cookies(
+            &mut builder,
+            clear_login_return_cookie_headers(secure, port),
+        );
     }
     builder.finish()
 }
