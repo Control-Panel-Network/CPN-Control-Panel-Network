@@ -1,15 +1,19 @@
 //! Owner-controlled automatic panel upgrades from GitHub Releases.
 //!
 //! Config: `/var/lib/cpn/auto-upgrade.json` (mode 600).
-//! Default: **disabled** so upgrades never surprise a production host.
+//! Default: **enabled** on fresh installs (and when the config file is
+//! missing), with strategy **All newer releases**. The Owner can turn this
+//! off under Version Management at any time; an explicit saved `enabled:
+//! false` is never overwritten by seeding.
 //! When enabled, a background worker periodically checks for a newer
 //! installable release and runs the same package upgrade path as Version
 //! Management (`spawn_maintenance` / `cpn-installer --upgrade`).
 //!
-//! Security-only mode is best-effort: GitHub release tags/names rarely carry
-//! reliable security labels, so keyword matching on tag and title is used.
-//! Prefer leaving automatic updates off, or use all newer releases, when
-//! you need certainty.
+//! Security-only mode is optional and best-effort: GitHub release tags/names
+//! rarely carry reliable security labels, so keyword matching on tag and
+//! title is used. Prefer **All newer releases** (the default) when you need
+//! certainty; turn automatic updates off if you do not want scheduled
+//! upgrades.
 
 use crate::paths;
 use crate::releases::CpnRelease;
@@ -37,8 +41,8 @@ pub enum AutoUpgradeMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoUpgradeConfig {
-    /// Master switch. Default false (Owner must opt in).
-    #[serde(default)]
+    /// Master switch. Default true (enabled on install; Owner may opt out).
+    #[serde(default = "default_enabled_on")]
     pub enabled: bool,
     #[serde(default)]
     pub mode: AutoUpgradeMode,
@@ -60,6 +64,10 @@ pub struct AutoUpgradeConfig {
     pub updated_at_unix: u64,
 }
 
+fn default_enabled_on() -> bool {
+    true
+}
+
 fn default_interval() -> u64 {
     DEFAULT_INTERVAL_SECS
 }
@@ -67,7 +75,7 @@ fn default_interval() -> u64 {
 impl Default for AutoUpgradeConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             mode: AutoUpgradeMode::All,
             include_prerelease: false,
             check_interval_secs: DEFAULT_INTERVAL_SECS,
@@ -184,8 +192,8 @@ pub fn public_status(cfg: &AutoUpgradeConfig) -> AutoUpgradePublic {
         last_result: cfg.last_result.clone(),
         last_applied_version: cfg.last_applied_version.clone(),
         updated_at_unix: cfg.updated_at_unix,
-        default_enabled: false,
-        security_detection_note: "Security-only matching uses the release tag and title (CVE, GHSA, security, secfix, advisory). GitHub does not always label security releases, so this mode can miss or mis-classify updates. Prefer off, or all newer releases, when you need certainty.".into(),
+        default_enabled: true,
+        security_detection_note: "Security-only matching uses the release tag and title (CVE, GHSA, security, secfix, advisory). GitHub does not always label security releases, so this mode can miss or mis-classify updates. Prefer All newer releases (the default). Turn automatic updates off under Version Management if you do not want scheduled upgrades.".into(),
     }
 }
 
@@ -230,19 +238,19 @@ mod tests {
     }
 
     #[test]
-    fn default_is_off() {
+    fn default_is_on_all_releases() {
         let cfg = AutoUpgradeConfig::default();
-        assert!(!cfg.enabled);
+        assert!(cfg.enabled);
         assert_eq!(cfg.mode, AutoUpgradeMode::All);
         assert!(!cfg.include_prerelease);
         assert_eq!(cfg.check_interval_secs, DEFAULT_INTERVAL_SECS);
     }
 
     #[test]
-    fn missing_enabled_field_deserializes_off() {
+    fn missing_enabled_field_deserializes_on() {
         let cfg: AutoUpgradeConfig =
             serde_json::from_str(r#"{"mode":"all","include_prerelease":false}"#).unwrap();
-        assert!(!cfg.enabled);
+        assert!(cfg.enabled);
         assert_eq!(cfg.mode, AutoUpgradeMode::All);
     }
 
@@ -275,11 +283,15 @@ mod tests {
     }
 
     #[test]
-    fn public_status_documents_default_off() {
+    fn public_status_documents_default_on() {
         let pub_status = public_status(&AutoUpgradeConfig::default());
-        assert!(!pub_status.default_enabled);
+        assert!(pub_status.default_enabled);
         assert!(pub_status.security_detection_note.contains("Security-only"));
-        assert!(pub_status.security_detection_note.contains("Prefer off"));
+        assert!(
+            pub_status
+                .security_detection_note
+                .contains("All newer releases")
+        );
         assert!(!pub_status.security_detection_note.contains('\u{2014}'));
         assert!(!pub_status.security_detection_note.contains('\u{2013}'));
     }

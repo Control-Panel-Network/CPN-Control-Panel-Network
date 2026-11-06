@@ -268,8 +268,8 @@ pub async fn run_auto_upgrade_check(
 
 /// Background worker: wait, then check on an interval while the panel runs.
 pub async fn spawn_auto_upgrade_worker(state: Arc<AppState>) {
-    // Fresh installs / first start: seed defaults (enabled OFF) when the config
-    // file is absent. Never clobber Owner-saved settings.
+    // Fresh installs / first start: seed enabled ON + All newer releases when
+    // the config file is absent. Never clobber Owner-saved OFF.
     ensure_default_auto_upgrade_config();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(STARTUP_DELAY_SECS)).await;
