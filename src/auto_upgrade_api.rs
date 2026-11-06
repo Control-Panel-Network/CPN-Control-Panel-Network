@@ -1,11 +1,11 @@
 //! HTTP API for Owner automatic-update settings and dry-run checks.
 
+use crate::auth_api::panel_user_from_request;
 use crate::auto_upgrade::{
     AutoUpgradeConfig, AutoUpgradeMode, load_auto_upgrade_config, public_status,
     save_auto_upgrade_config,
 };
 use crate::auto_upgrade_run::run_auto_upgrade_check;
-use crate::auth_api::panel_user_from_request;
 use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
 use crate::model::TokenQuery;
@@ -57,9 +57,7 @@ fn parse_mode(raw: Option<&str>) -> Result<AutoUpgradeMode, String> {
             Ok(AutoUpgradeMode::All)
         }
         Some("security") | Some("security_only") | Some("sec") => Ok(AutoUpgradeMode::Security),
-        Some(other) => Err(format!(
-            "Unknown mode '{other}'. Use 'all' or 'security'."
-        )),
+        Some(other) => Err(format!("Unknown mode '{other}'. Use 'all' or 'security'.")),
     }
 }
 
@@ -145,7 +143,10 @@ mod tests {
     #[test]
     fn parses_modes() {
         assert_eq!(parse_mode(None).unwrap(), AutoUpgradeMode::All);
-        assert_eq!(parse_mode(Some("security")).unwrap(), AutoUpgradeMode::Security);
+        assert_eq!(
+            parse_mode(Some("security")).unwrap(),
+            AutoUpgradeMode::Security
+        );
         assert!(parse_mode(Some("weird")).is_err());
     }
 

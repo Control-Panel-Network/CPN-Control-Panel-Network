@@ -183,15 +183,7 @@ pub fn public_status(cfg: &AutoUpgradeConfig) -> AutoUpgradePublic {
 pub fn looks_like_security_release(release: &CpnRelease) -> bool {
     let hay = format!("{} {}", release.tag_name, release.name).to_ascii_lowercase();
     const KEYS: &[&str] = &[
-        "security",
-        "cve-",
-        "cve ",
-        "ghsa-",
-        "ghsa ",
-        "secfix",
-        "sec-fix",
-        "advisory",
-        "vulnerab",
+        "security", "cve-", "cve ", "ghsa-", "ghsa ", "secfix", "sec-fix", "advisory", "vulnerab",
         "hotfix",
     ];
     KEYS.iter().any(|k| hay.contains(k))
@@ -242,7 +234,10 @@ mod tests {
             "v1.4.8",
             "Security fix for auth bypass"
         )));
-        assert!(looks_like_security_release(&sample("v1.4.8-cve-2026-1", "")));
+        assert!(looks_like_security_release(&sample(
+            "v1.4.8-cve-2026-1",
+            ""
+        )));
         assert!(looks_like_security_release(&sample(
             "v1.4.9",
             "GHSA-xxxx advisory"

@@ -57,8 +57,8 @@ pub async fn run_auto_upgrade_check(
 ) -> Result<AutoUpgradeCheckReport, String> {
     let mut cfg = load_auto_upgrade_config();
     if !cfg.enabled && apply {
-        let msg =
-            "Automatic updates are off. Owner can enable them under Version Management.".to_string();
+        let msg = "Automatic updates are off. Owner can enable them under Version Management."
+            .to_string();
         remember(&mut cfg, true, &msg);
         upgrade_tip_log::log_tagged_main_only("auto_upgrade", "info", &msg);
         return Ok(AutoUpgradeCheckReport {
@@ -104,8 +104,8 @@ pub async fn run_auto_upgrade_check(
         upgrade_busy::is_busy_phase(&status.phase)
     };
     if apply && (upgrade_busy::job_in_flight() || phase_busy) {
-        let msg =
-            "Skipped automatic upgrade: another maintenance job is already in progress.".to_string();
+        let msg = "Skipped automatic upgrade: another maintenance job is already in progress."
+            .to_string();
         upgrade_tip_log::log_tagged_main_only("auto_upgrade", "info", &msg);
         return Ok(AutoUpgradeCheckReport {
             enabled: cfg.enabled,
