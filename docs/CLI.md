@@ -54,6 +54,10 @@ There is **no** `cpn --repair` as a global installer switch on `cpn` itself for 
 
 ```bash
 sudo cpn-installer --upgrade          # tip package (or --to X.Y.Z); preserves accounts/sites
+# Automatic updates (Owner toggle on Version Management; off by default, mode all when on):
+#   GET/POST /api/auto-upgrade , dry-run POST /api/auto-upgrade/check {"apply":false}
+#   Config: /var/lib/cpn/auto-upgrade.json (enabled, mode all|security, interval)
+#   Owner checks Enable automatic updates and Save to opt in.
 sudo cpn-installer --repair           # re-apply core files from install-manifest / release
 sudo cpn-installer --repair --reset-data   # destructive: also wipes bootstrap/accounts/sites/smtp/secrets
 sudo cpn-installer --uninstall        # interactive confirm; removes panel + package + /var/lib/cpn
