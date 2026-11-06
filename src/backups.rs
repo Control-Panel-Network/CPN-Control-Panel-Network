@@ -267,6 +267,7 @@ fn stage_panel_config(staging: &Path) -> Result<(), String> {
         "panel-session.secret",
         "panel_hostname",
         "panel_public_url",
+        "panel_host_aliases.json",
         "listen_port",
         "panel-hostname.json",
         "listen-port.json",

@@ -128,45 +128,14 @@ fn read_cargo_version(root: &Path) -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-async fn build_installer_ui(
-    state: &AppState,
-    root: &Path,
-    tools: &Toolchain,
-) -> Result<(), String> {
-    let ui = root.join("installer-ui");
-    let dist_index = ui.join("dist").join("index.html");
-    if dist_index.is_file() {
-        return Ok(());
-    }
-    let Some(npm) = tools.npm.as_ref() else {
-        return Err(fail(
-            "installer-ui needs npm (not on PATH or common locations) and dist/index.html is missing",
-            None,
-        ));
-    };
-    state
-        .progress("installing", 40, "Building installer UI (npm)")
-        .await;
-    let npm_s = npm.to_string_lossy().into_owned();
-    upgrade_tip_cmd::run_checked(&npm_s, &["ci"], &ui, &tools.env).await?;
-    upgrade_tip_cmd::run_checked(&npm_s, &["run", "build"], &ui, &tools.env).await?;
-    if !dist_index.is_file() {
-        return Err(fail(
-            "installer-ui build did not produce dist/index.html",
-            None,
-        ));
-    }
-    Ok(())
-}
-
 async fn cargo_build_release(
     state: &AppState,
     root: &Path,
     git_sha: &str,
     branch: &str,
-    tools: &Toolchain,
+    tools: &mut Toolchain,
 ) -> Result<(), String> {
-    build_installer_ui(state, root, tools).await?;
+    crate::upgrade_tip_node::build_installer_ui(state, root, tools).await?;
     state
         .progress(
             "installing",
@@ -420,7 +389,7 @@ pub async fn apply_tip_ref(
     crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
     crate::upgrade_tip_verify::inject_keep_module(&root, &sha)?;
     let package_version = read_cargo_version(&root);
-    cargo_build_release(state, &root, &sha, &branch, &tools).await?;
+    cargo_build_release(state, &root, &sha, &branch, &mut tools).await?;
     install_built_bins(&root, &tools, &sha).await?;
 
     upgrade_tip_log::log_info(format!(

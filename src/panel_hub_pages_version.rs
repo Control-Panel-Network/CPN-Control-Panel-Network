@@ -1,6 +1,7 @@
 //! Version Management settings page (searchable release picker).
 
 use crate::manifest::detect_existing_install;
+use crate::panel_hub_pages_version_auto_script::version_auto_upgrade_script;
 use crate::panel_hub_pages_version_script::version_page_script;
 use crate::panel_hub_pages_version_source_script::version_source_script;
 use crate::panel_hubs::feature_shell;
@@ -81,6 +82,38 @@ pub fn version_management_page(can_manage: bool) -> String {
     <button type="button" class="btn-primary" id="cpn-source-save">Save update source</button>
   </div>
   <p id="cpn-source-status" class="muted" style="margin-top:10px;" role="status"></p>
+</div>
+<div id="cpn-version-auto" class="stack-form" style="margin-top:22px;max-width:640px;">
+  <h3 style="margin:0 0 10px;">Automatic updates</h3>
+  <p class="muted" style="margin:0 0 12px;line-height:1.45;">
+    Enabled by default on new installs (All newer releases). Background checks of GitHub Releases
+    run on a schedule while this stays on. A newer guest-matching RPM/DEB triggers the same upgrade
+    path as <strong>Upgrade to latest release</strong>
+    (maintenance page, package preferred over source, sites/docker/mail/accounts/plans and MFA preserved).
+    The panel Owner can turn this off at any time to stop scheduled upgrades.
+  </p>
+  <label style="display:flex;gap:8px;align-items:center;">
+    <input id="cpn-auto-enabled" type="checkbox" checked />
+    <span>Enable automatic updates</span>
+  </label>
+  <label for="cpn-auto-mode" style="margin-top:12px;display:block;">When enabled, upgrade
+    <select id="cpn-auto-mode"
+      style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;">
+      <option value="all" selected>All newer releases</option>
+      <option value="security">Security-looking releases only (best-effort)</option>
+    </select>
+  </label>
+  <label style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+    <input id="cpn-auto-prerelease" type="checkbox" />
+    <span>Include GitHub prerelease tags</span>
+  </label>
+  <p id="cpn-auto-security-note" class="muted" style="margin:10px 0 0;font-size:13px;line-height:1.45;"></p>
+  <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;">
+    <button type="button" class="btn-primary" id="cpn-auto-save">Save automatic updates</button>
+    <button type="button" id="cpn-auto-check">Check now (dry-run)</button>
+  </div>
+  <p id="cpn-auto-status" class="muted" style="margin-top:10px;" role="status"></p>
+  <p id="cpn-auto-last" class="muted" style="margin-top:6px;font-size:13px;"></p>
 </div>"#
     } else {
         ""
@@ -137,6 +170,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     let mut script = version_page_script(can_manage);
     if can_manage {
         script.push_str(&version_source_script());
+        script.push_str(&version_auto_upgrade_script());
     }
     let body = format!(
         r#"<style>
@@ -347,6 +381,12 @@ mod tests {
         let html = version_management_page(true);
         assert!(html.contains("cpn-version-source-tip"));
         assert!(html.contains("cpn-source-repo"));
+        assert!(html.contains("id=\"cpn-auto-enabled\""));
+        assert!(html.contains("Automatic updates"));
+        assert!(html.contains("Enabled by default on new installs"));
+        assert!(!html.contains("Off by default"));
+        assert!(html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\" checked"));
+        assert!(html.contains("/api/auto-upgrade"));
         assert!(html.contains("id=\"cpn-source-branch\""));
         assert!(html.contains("<option value=\"stable\" selected>"));
         assert!(html.contains("<option value=\"dev\">"));
@@ -397,6 +437,7 @@ mod tests {
         let html = version_management_page(false);
         assert!(!html.contains("id=\"cpn-source-branch\""));
         assert!(!html.contains("id=\"cpn-source-repo\""));
+        assert!(!html.contains("id=\"cpn-auto-enabled\""));
         assert!(html.contains("Only the panel admin can upgrade"));
         assert!(!html.contains('\u{2014}'));
     }

@@ -1,6 +1,10 @@
 //! `cpn network` subcommands (listen port, hostname, public URL, migration, HTTPS, phone-home).
 
 use crate::panel_access_mode::{PanelAccessMode, load_panel_access_mode, set_panel_access_mode};
+use crate::panel_host_aliases::{
+    add_panel_host_alias, clear_panel_host_aliases, load_panel_host_aliases,
+    remove_panel_host_alias,
+};
 use crate::panel_https_front::enable_panel_https_with;
 use crate::panel_network::{
     OldPortPolicy, apply_network_change, clear_panel_hostname, clear_port_migration,
@@ -71,6 +75,20 @@ pub enum NetworkCommands {
     },
     /// Clear external panel public URL
     ClearPublicUrl,
+    /// Add an extra hostname alias for the same panel install (CSRF / Host allowlist)
+    AddHostAlias {
+        #[arg(long)]
+        hostname: String,
+    },
+    /// Remove one hostname alias
+    RemoveHostAlias {
+        #[arg(long)]
+        hostname: String,
+    },
+    /// List hostname aliases (same install; not separate panels)
+    ListHostAliases,
+    /// Clear all hostname aliases
+    ClearHostAliases,
     /// Clear port migration record (stops future redirect helper starts)
     ClearMigration,
     /// Phone-home to api.newstargeted.com (register this panel for creator broadcasts)
@@ -108,6 +126,12 @@ pub fn run_network(
                 "panel_public_url={}",
                 summary.panel_public_url.as_deref().unwrap_or("")
             );
+            let aliases = load_panel_host_aliases();
+            if aliases.is_empty() {
+                println!("panel_host_aliases=");
+            } else {
+                println!("panel_host_aliases={}", aliases.join(","));
+            }
             println!("access_mode={}", load_panel_access_mode().as_str());
             println!("public_base_url={}", summary.public_base_url);
             if let Some(migration) = summary.port_migration {
@@ -231,6 +255,44 @@ pub fn run_network(
             require_root()?;
             clear_panel_public_url()?;
             println!("panel_public_url=");
+            Ok(())
+        }
+        NetworkCommands::AddHostAlias { hostname } => {
+            require_root()?;
+            let host = add_panel_host_alias(&hostname)?;
+            println!("panel_host_alias_added={host}");
+            println!(
+                "note: aliases share this install (one MFA store). Passkeys are bound to the hostname used at enroll; use one primary HTTPS hostname for passkeys, or enroll again on this alias. TOTP works on every alias."
+            );
+            println!(
+                "note: point DNS and terminate TLS on 443 with a reverse proxy to the CPN listen port for this hostname"
+            );
+            Ok(())
+        }
+        NetworkCommands::RemoveHostAlias { hostname } => {
+            require_root()?;
+            let removed = remove_panel_host_alias(&hostname)?;
+            println!(
+                "panel_host_alias_removed={}",
+                if removed { "1" } else { "0" }
+            );
+            Ok(())
+        }
+        NetworkCommands::ListHostAliases => {
+            let aliases = load_panel_host_aliases();
+            if aliases.is_empty() {
+                println!("panel_host_aliases=");
+            } else {
+                for host in aliases {
+                    println!("panel_host_alias={host}");
+                }
+            }
+            Ok(())
+        }
+        NetworkCommands::ClearHostAliases => {
+            require_root()?;
+            clear_panel_host_aliases()?;
+            println!("panel_host_aliases=");
             Ok(())
         }
         NetworkCommands::ClearMigration => {

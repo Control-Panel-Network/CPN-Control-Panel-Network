@@ -394,7 +394,7 @@ fn run() -> Result<(), String> {
                 paths::platform_data_dir()
             );
             println!(
-                "network  Manage listen port, hostname, public URL, phone-home, and port migration"
+                "network  Manage listen port, hostname, aliases, public URL, phone-home, and port migration"
             );
             println!("plugin   Manage host-scoped and per-site plugins (/home/<domain>/plugins)");
             println!(
