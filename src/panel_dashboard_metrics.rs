@@ -17,10 +17,7 @@ fn now_unix() -> u64 {
 
 /// Authenticated JSON snapshot for dashboard resource gauges.
 #[get("/api/dashboard/metrics")]
-pub async fn dashboard_metrics(
-    http: HttpRequest,
-    state: web::Data<Arc<AppState>>,
-) -> HttpResponse {
+pub async fn dashboard_metrics(http: HttpRequest, state: web::Data<Arc<AppState>>) -> HttpResponse {
     let Some(user) = require_panel_user(&state, &http) else {
         return HttpResponse::Unauthorized()
             .content_type("application/json; charset=utf-8")
