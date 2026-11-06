@@ -13,6 +13,37 @@ export type PanelBootstrap = {
 
 const SESSION_COOKIE = "cpn_panel_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
+
+/**
+ * Browser cookies ignore TCP port. Lab panels on 127.0.0.1:2087 vs :2092 must
+ * use distinct names (`cpn_panel_session_2092`) so concurrent logins stay independent.
+ */
+export function sessionCookieNameForPort(port?: number | null): string {
+  if (port && port > 0) {
+    return `${SESSION_COOKIE}_${port}`;
+  }
+  return SESSION_COOKIE;
+}
+
+/** Parse an explicit port from an HTTP Host header (NAT lab ports). */
+export function authCookiePortFromHost(
+  host: string | null | undefined,
+): number | null {
+  const raw = String(host || "").trim();
+  if (!raw || raw.length > 253) return null;
+  if (raw.startsWith("[")) {
+    const end = raw.indexOf("]");
+    if (end < 0) return null;
+    const after = raw.slice(end + 1);
+    if (!after.startsWith(":")) return null;
+    const port = Number(after.slice(1));
+    return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+  }
+  if ((raw.match(/:/g) || []).length !== 1) return null;
+  const port = Number(raw.split(":")[1]);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+}
+
 /** Match Rust `PBKDF2_ITERATIONS`. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -195,28 +226,51 @@ export function verifySessionToken(token: string): string | null {
   }
 }
 
-export function sessionCookieName(): string {
-  return SESSION_COOKIE;
+export function sessionCookieName(port?: number | null): string {
+  return sessionCookieNameForPort(port);
 }
 
-export function sessionCookieValue(token: string, secure: boolean): string {
+export function sessionCookieValue(
+  token: string,
+  secure: boolean,
+  port?: number | null,
+): string {
   const secureFlag = secure ? "; Secure" : "";
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secureFlag}`;
+  const name = sessionCookieNameForPort(port);
+  return `${name}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secureFlag}`;
 }
 
-export function clearSessionCookie(secure: boolean): string {
+export function clearSessionCookie(
+  secure: boolean,
+  port?: number | null,
+): string {
   const secureFlag = secure ? "; Secure" : "";
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`;
+  const name = sessionCookieNameForPort(port);
+  return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`;
 }
 
-export function readSessionCookie(cookieHeader: string | null): string | null {
-  if (!cookieHeader) return null;
+function readNamedCookie(cookieHeader: string, name: string): string | null {
+  const prefix = `${name}=`;
   for (const part of cookieHeader.split(";")) {
     const trimmed = part.trim();
-    if (trimmed.startsWith(`${SESSION_COOKIE}=`)) {
-      const value = trimmed.slice(SESSION_COOKIE.length + 1).trim();
+    if (trimmed.startsWith(prefix)) {
+      const value = trimmed.slice(prefix.length).trim();
       return value || null;
     }
+  }
+  return null;
+}
+
+export function readSessionCookie(
+  cookieHeader: string | null,
+  port?: number | null,
+): string | null {
+  if (!cookieHeader) return null;
+  const scoped = sessionCookieNameForPort(port);
+  const fromScoped = readNamedCookie(cookieHeader, scoped);
+  if (fromScoped) return fromScoped;
+  if (port && port > 0) {
+    return readNamedCookie(cookieHeader, SESSION_COOKIE);
   }
   return null;
 }

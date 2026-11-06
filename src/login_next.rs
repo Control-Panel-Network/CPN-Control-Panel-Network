@@ -205,12 +205,20 @@ pub fn passkey_register_location(next: Option<&str>) -> String {
         .unwrap_or_else(|| "/account/users/modify?tab=security".to_string())
 }
 
+pub fn login_return_cookie_name(port: Option<u16>) -> String {
+    crate::panel_session::scoped_auth_cookie_name(LOGIN_RETURN_COOKIE, port)
+}
+
 pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
     let next = request_return_path(http);
+    let port = crate::panel_session::request_auth_cookie_port(http);
     let mut builder = HttpResponse::SeeOther();
     if let Some(ref path) = next
-        && let Some(cookie) =
-            login_return_cookie_header(path, crate::panel_session::request_https_from_headers(http))
+        && let Some(cookie) = login_return_cookie_header(
+            path,
+            crate::panel_session::request_https_from_headers(http),
+            port,
+        )
     {
         builder.append_header(("Set-Cookie", cookie));
     }
@@ -219,13 +227,28 @@ pub fn login_redirect(http: &HttpRequest) -> HttpResponse {
         .finish()
 }
 
-pub fn login_return_cookie_header(next: &str, secure: bool) -> Option<String> {
+pub fn login_return_cookie_header(next: &str, secure: bool, port: Option<u16>) -> Option<String> {
     let safe = sanitize_login_next(next)?;
     let encoded = URL_SAFE_NO_PAD.encode(safe.as_bytes());
     let secure_flag = if secure { "; Secure" } else { "" };
+    let name = login_return_cookie_name(port);
     Some(format!(
-        "{LOGIN_RETURN_COOKIE}={encoded}; Path=/; HttpOnly; SameSite=Lax; Max-Age={LOGIN_RETURN_TTL_SECONDS}{secure_flag}"
+        "{name}={encoded}; Path=/; HttpOnly; SameSite=Lax; Max-Age={LOGIN_RETURN_TTL_SECONDS}{secure_flag}"
     ))
+}
+
+pub fn clear_login_return_cookie_headers(secure: bool, port: Option<u16>) -> Vec<String> {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    let mut headers = vec![format!(
+        "{}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}",
+        login_return_cookie_name(port)
+    )];
+    if port.is_some() {
+        headers.push(format!(
+            "{LOGIN_RETURN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}"
+        ));
+    }
+    headers
 }
 
 pub fn clear_login_return_cookie_header(secure: bool) -> String {
@@ -233,11 +256,23 @@ pub fn clear_login_return_cookie_header(secure: bool) -> String {
     format!("{LOGIN_RETURN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
 }
 
-pub fn read_login_return_cookie(cookie_header: Option<&str>) -> Option<String> {
+pub fn read_login_return_cookie(cookie_header: Option<&str>, port: Option<u16>) -> Option<String> {
     let cookie_header = cookie_header?;
+    let scoped = login_return_cookie_name(port);
+    if let Some(path) = decode_login_return_value(cookie_header, &scoped) {
+        return Some(path);
+    }
+    if port.is_some() {
+        return decode_login_return_value(cookie_header, LOGIN_RETURN_COOKIE);
+    }
+    None
+}
+
+fn decode_login_return_value(cookie_header: &str, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
     for part in cookie_header.split(';') {
         let part = part.trim();
-        if let Some(value) = part.strip_prefix(&format!("{LOGIN_RETURN_COOKIE}=")) {
+        if let Some(value) = part.strip_prefix(&prefix) {
             let value = value.trim();
             if value.is_empty() {
                 continue;

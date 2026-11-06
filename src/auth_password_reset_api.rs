@@ -15,7 +15,8 @@ use crate::installer::AppState;
 use crate::mail_outbound::{build_password_reset_email, send_mail};
 use crate::panel_public_url::panel_email_bases;
 use crate::panel_session::{
-    clear_mfa_pending_cookie_header, create_session_token, session_cookie_header, session_secret,
+    clear_mfa_pending_cookie_headers, create_session_token, issue_session_cookie_headers,
+    request_auth_cookie_port, session_secret,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use std::sync::Arc;
@@ -215,14 +216,18 @@ pub async fn reset_password_submit(
 
     let secret = session_secret(Some(&state.token));
     let secure = request_secure(&http);
+    let port = request_auth_cookie_port(&http);
     let session = create_session_token(&username, &secret);
-    HttpResponse::SeeOther()
-        .append_header(("Location", "/dashboard"))
-        .append_header(("Set-Cookie", session_cookie_header(&session, secure)))
-        .append_header(("Set-Cookie", clear_mfa_pending_cookie_header(secure)))
-        .append_header((
-            "Set-Cookie",
-            crate::login_next::clear_login_return_cookie_header(secure),
-        ))
-        .finish()
+    let mut builder = HttpResponse::SeeOther();
+    builder.append_header(("Location", "/dashboard"));
+    for cookie in issue_session_cookie_headers(&session, secure, port) {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+    for cookie in clear_mfa_pending_cookie_headers(secure, port) {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+    for cookie in crate::login_next::clear_login_return_cookie_headers(secure, port) {
+        builder.append_header(("Set-Cookie", cookie));
+    }
+    builder.finish()
 }

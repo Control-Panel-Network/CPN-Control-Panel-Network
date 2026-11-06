@@ -11,8 +11,8 @@ use crate::login_service_gate::{
 };
 use crate::panel_hub_http::{login_redirect, redirect_notice, require_panel_user};
 use crate::panel_session::{
-    create_session_token, read_mfa_pending_cookie, request_https_from_headers, session_secret,
-    verify_mfa_pending_token,
+    create_session_token, read_mfa_pending_cookie, request_auth_cookie_port,
+    request_https_from_headers, session_secret, verify_mfa_pending_token,
 };
 use crate::panel_webauthn::{
     RegisterAuthenticatorKind, finish_authentication, finish_registration, start_authentication,
@@ -387,9 +387,10 @@ pub async fn passkey_login_finish(
                 .headers()
                 .get(actix_web::http::header::COOKIE)
                 .and_then(|value| value.to_str().ok());
+            let port = request_auth_cookie_port(&http);
             let next = crate::login_next::first_safe_next(&[
                 body.next.as_deref(),
-                crate::login_next::read_login_return_cookie(cookie).as_deref(),
+                crate::login_next::read_login_return_cookie(cookie, port).as_deref(),
             ]);
             json_session_ok(&http, &state, &session_user, next.as_deref())
         }
@@ -406,8 +407,9 @@ fn mfa_pending_username(http: &HttpRequest, state: &AppState) -> Option<String> 
         .headers()
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok());
+    let port = request_auth_cookie_port(http);
     let secret = session_secret(Some(&state.token));
-    read_mfa_pending_cookie(cookie).and_then(|token| verify_mfa_pending_token(&token, &secret))
+    read_mfa_pending_cookie(cookie, port).and_then(|token| verify_mfa_pending_token(&token, &secret))
 }
 
 /// Lightweight probe so an open /login/2fa page can leave once its session is gone.
@@ -486,9 +488,10 @@ pub async fn passkey_mfa_finish(
                 .headers()
                 .get(actix_web::http::header::COOKIE)
                 .and_then(|value| value.to_str().ok());
+            let port = request_auth_cookie_port(&http);
             let next = crate::login_next::first_safe_next(&[
                 body.next.as_deref(),
-                crate::login_next::read_login_return_cookie(cookie).as_deref(),
+                crate::login_next::read_login_return_cookie(cookie, port).as_deref(),
             ]);
             // login_success_response (via json_session_ok) already clears the MFA pending cookie.
             json_session_ok(&http, &state, &session_user, next.as_deref())

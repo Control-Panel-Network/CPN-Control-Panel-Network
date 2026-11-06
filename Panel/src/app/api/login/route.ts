@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  authCookiePortFromHost,
   createSessionToken,
   sessionCookieValue,
   verifyCredentials,
@@ -41,10 +42,14 @@ export async function POST(request: NextRequest) {
 
   const token = createSessionToken(boot.username);
   const secure = request.nextUrl.protocol === "https:";
+  const port = authCookiePortFromHost(request.headers.get("host"));
   const response = NextResponse.redirect(
     new URL("/dashboard", request.url),
     303,
   );
-  response.headers.append("Set-Cookie", sessionCookieValue(token, secure));
+  response.headers.append(
+    "Set-Cookie",
+    sessionCookieValue(token, secure, port),
+  );
   return response;
 }

@@ -6,7 +6,18 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
   var STORAGE_KEY = 'cpn-panel-locale';
   var REMEMBER_USER_KEY = 'cpn_remember_username';
   var LEGACY_USER_KEY = 'cpn-panel-last-username';
-  var COOKIE_KEY = 'cpn_locale';
+  var COOKIE_KEY = (function () {
+    var host = String(window.location.host || '');
+    var port = '';
+    if (host.charAt(0) === '[') {
+      var end = host.indexOf(']');
+      if (end > 0 && host.charAt(end + 1) === ':') port = host.slice(end + 2);
+    } else {
+      var idx = host.lastIndexOf(':');
+      if (idx > 0 && host.indexOf(':') === idx) port = host.slice(idx + 1);
+    }
+    return port ? ('cpn_locale_' + port) : 'cpn_locale';
+  })();
   var LABELS = { en: 'English', es: 'Español', nb: 'Norsk' };
   var M = {
     en: {
@@ -130,8 +141,15 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
   }
 
   function readCookie() {
-    var match = document.cookie.match(/(?:^|; )cpn_locale=([^;]*)/);
-    return match ? decodeURIComponent(match[1]) : '';
+    var esc = COOKIE_KEY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var match = document.cookie.match(new RegExp('(?:^|; )' + esc + '=([^;]*)'));
+    if (match) return decodeURIComponent(match[1]);
+    // Legacy unscoped name (pre port-scoped cookies).
+    if (COOKIE_KEY !== 'cpn_locale') {
+      var legacy = document.cookie.match(/(?:^|; )cpn_locale=([^;]*)/);
+      if (legacy) return decodeURIComponent(legacy[1]);
+    }
+    return '';
   }
 
   function writeCookie(locale) {

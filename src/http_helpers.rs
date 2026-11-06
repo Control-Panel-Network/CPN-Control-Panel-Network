@@ -30,6 +30,10 @@ pub fn detect_system_language() -> String {
 
 const INSTALL_TOKEN_COOKIE: &str = "cpn_install_token";
 
+fn install_token_cookie_name(port: Option<u16>) -> String {
+    crate::panel_session::scoped_auth_cookie_name(INSTALL_TOKEN_COOKIE, port)
+}
+
 fn constant_time_eq(a: &str, b: &str) -> bool {
     let a = a.as_bytes();
     let b = b.as_bytes();
@@ -92,9 +96,22 @@ fn session_from_cookie(request: &HttpRequest) -> Option<String> {
         .headers()
         .get(actix_web::http::header::COOKIE)
         .and_then(|value| value.to_str().ok())?;
+    let port = crate::panel_session::request_auth_cookie_port(request);
+    let scoped = install_token_cookie_name(port);
+    if let Some(value) = read_install_cookie_value(cookie_header, &scoped) {
+        return Some(value);
+    }
+    if port.is_some() {
+        return read_install_cookie_value(cookie_header, INSTALL_TOKEN_COOKIE);
+    }
+    None
+}
+
+fn read_install_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
     for part in cookie_header.split(';') {
         let part = part.trim();
-        if let Some(value) = part.strip_prefix(&format!("{INSTALL_TOKEN_COOKIE}=")) {
+        if let Some(value) = part.strip_prefix(&prefix) {
             let value = value.trim();
             if !value.is_empty() {
                 return Some(value.to_string());
@@ -120,11 +137,16 @@ pub fn authorized_request(state: &AppState, query: &TokenQuery, request: &HttpRe
 }
 
 /// Build HttpOnly install-session cookie (value is server-generated session_id).
-pub fn install_session_cookie_header(session_id: &str, secure: bool) -> String {
+/// When `port` is set (lab Host `:2092`), the name is port-scoped so concurrent
+/// installer panels on the same browser host do not overwrite each other.
+pub fn install_session_cookie_header(
+    session_id: &str,
+    secure: bool,
+    port: Option<u16>,
+) -> String {
     let secure_flag = if secure { "; Secure" } else { "" };
-    format!(
-        "{INSTALL_TOKEN_COOKIE}={session_id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400{secure_flag}"
-    )
+    let name = install_token_cookie_name(port);
+    format!("{name}={session_id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400{secure_flag}")
 }
 
 /// True when a panel bootstrap account exists (memory or disk).
@@ -302,7 +324,7 @@ mod tests {
 
     #[test]
     fn install_cookie_is_httponly_samesite_strict() {
-        let value = install_session_cookie_header("abc123", false);
+        let value = install_session_cookie_header("abc123", false, None);
         assert!(value.contains("HttpOnly"));
         assert!(value.contains("SameSite=Strict"));
         assert!(!value.contains("Secure"));

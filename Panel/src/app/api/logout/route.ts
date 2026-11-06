@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearSessionCookie } from "../../../lib/auth";
+import {
+  authCookiePortFromHost,
+  clearSessionCookie,
+} from "../../../lib/auth";
 
 export async function POST(request: NextRequest) {
   const secure = request.nextUrl.protocol === "https:";
+  const port = authCookiePortFromHost(request.headers.get("host"));
   const response = NextResponse.redirect(new URL("/", request.url), 303);
-  response.headers.append("Set-Cookie", clearSessionCookie(secure));
+  response.headers.append("Set-Cookie", clearSessionCookie(secure, port));
   return response;
 }
 

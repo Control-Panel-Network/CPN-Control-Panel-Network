@@ -1,8 +1,9 @@
-﻿import { cookies } from "next/headers";
+﻿import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Search, ShieldCheck } from "lucide-react";
 import { PanelShell } from "../../components/PanelShell";
 import {
+  authCookiePortFromHost,
   readSessionCookie,
   sessionCookieName,
   verifySessionToken,
@@ -59,13 +60,15 @@ type DashboardProps = {
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   const params = await Promise.resolve(searchParams ?? {});
   const jar = await cookies();
+  const port = authCookiePortFromHost((await headers()).get("host"));
   const raw =
-    jar.get(sessionCookieName())?.value ||
+    jar.get(sessionCookieName(port))?.value ||
     readSessionCookie(
       jar
         .getAll()
         .map((item) => `${item.name}=${item.value}`)
         .join("; "),
+      port,
     );
   const sessionUser = raw ? verifySessionToken(raw) : null;
   const previewOnly = params.preview === "1" && !sessionUser;
