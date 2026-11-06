@@ -2,8 +2,7 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::auto_upgrade::{
-    AutoUpgradeConfig, AutoUpgradeMode, load_auto_upgrade_config, public_status,
-    save_auto_upgrade_config,
+    AutoUpgradeMode, load_auto_upgrade_config, public_status, save_auto_upgrade_config,
 };
 use crate::auto_upgrade_run::run_auto_upgrade_check;
 use crate::http_helpers::authorized_request;
@@ -130,15 +129,10 @@ pub async fn api_auto_upgrade_check(
     }
 }
 
-/// Reset helper for tests that want a known empty config shape.
-#[cfg(test)]
-pub fn sample_save_all_off() -> AutoUpgradeConfig {
-    AutoUpgradeConfig::default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auto_upgrade::AutoUpgradeConfig;
 
     #[test]
     fn parses_modes() {
@@ -152,6 +146,6 @@ mod tests {
 
     #[test]
     fn sample_default_off() {
-        assert!(!sample_save_all_off().enabled);
+        assert!(!AutoUpgradeConfig::default().enabled);
     }
 }

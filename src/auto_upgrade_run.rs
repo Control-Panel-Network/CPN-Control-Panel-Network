@@ -101,7 +101,7 @@ pub async fn run_auto_upgrade_check(
     upgrade_busy::heal_orphaned_busy(&state);
     let phase_busy = {
         let status = state.status.read().unwrap_or_else(|e| e.into_inner());
-        upgrade_busy::is_busy_phase(&status.phase)
+        upgrade_busy::is_busy_phase(status.phase.as_str())
     };
     if apply && (upgrade_busy::job_in_flight() || phase_busy) {
         let msg = "Skipped automatic upgrade: another maintenance job is already in progress."
@@ -221,7 +221,7 @@ pub async fn run_auto_upgrade_check(
 
     {
         let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
-        if upgrade_busy::is_busy_phase(&current.phase) {
+        if upgrade_busy::is_busy_phase(current.phase.as_str()) {
             let busy = "Skipped automatic upgrade: became busy before start.".to_string();
             upgrade_tip_log::log_tagged_main_only("auto_upgrade", "info", &busy);
             return Ok(AutoUpgradeCheckReport {
