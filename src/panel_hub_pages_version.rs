@@ -86,14 +86,13 @@ pub fn version_management_page(can_manage: bool) -> String {
 <div id="cpn-version-auto" class="stack-form" style="margin-top:22px;max-width:640px;">
   <h3 style="margin:0 0 10px;">Automatic updates</h3>
   <p class="muted" style="margin:0 0 12px;line-height:1.45;">
-    Enabled by default on new installs (All newer releases). Background checks of GitHub Releases
-    run on a schedule while this stays on. A newer guest-matching RPM/DEB triggers the same upgrade
-    path as <strong>Upgrade to latest release</strong>
+    Off by default. When enabled, the panel Owner opts in to background checks of GitHub Releases.
+    A newer guest-matching RPM/DEB triggers the same upgrade path as <strong>Upgrade to latest release</strong>
     (maintenance page, package preferred over source, sites/docker/mail/accounts/plans and MFA preserved).
-    The panel Owner can turn this off at any time to stop scheduled upgrades.
+    Turn this off at any time to stop scheduled upgrades.
   </p>
   <label style="display:flex;gap:8px;align-items:center;">
-    <input id="cpn-auto-enabled" type="checkbox" checked />
+    <input id="cpn-auto-enabled" type="checkbox" />
     <span>Enable automatic updates</span>
   </label>
   <label for="cpn-auto-mode" style="margin-top:12px;display:block;">When enabled, upgrade
@@ -384,7 +383,7 @@ mod tests {
         assert!(html.contains("id=\"cpn-auto-enabled\""));
         assert!(html.contains("Automatic updates"));
         assert!(html.contains("Enabled by default on new installs"));
-        assert!(!html.contains("Off by default"));
+        assert!(html.contains("Off by default"));
         assert!(html.contains("id=\"cpn-auto-enabled\" type=\"checkbox\" checked"));
         assert!(html.contains("/api/auto-upgrade"));
         assert!(html.contains("id=\"cpn-source-branch\""));
