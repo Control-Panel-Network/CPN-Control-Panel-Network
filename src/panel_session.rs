@@ -267,11 +267,7 @@ pub fn session_cookie_header(token: &str, secure: bool, port: Option<u16>) -> St
 
 /// Set the port-scoped session cookie; also expire the legacy unscoped name when ported
 /// so concurrent labs on the same host stop sharing a pre-fix cookie.
-pub fn issue_session_cookie_headers(
-    token: &str,
-    secure: bool,
-    port: Option<u16>,
-) -> Vec<String> {
+pub fn issue_session_cookie_headers(token: &str, secure: bool, port: Option<u16>) -> Vec<String> {
     let mut headers = vec![session_cookie_header(token, secure, port)];
     if port.is_some() {
         headers.push(clear_named_cookie_header(SESSION_COOKIE, secure));
@@ -474,9 +470,7 @@ mod tests {
         assert!(ubuntu.starts_with(&format!("{SESSION_COOKIE}_2092=")));
         assert_ne!(alma, ubuntu);
 
-        let jar = format!(
-            "{SESSION_COOKIE}_2087=alma; {SESSION_COOKIE}_2092=ubuntu; other=1"
-        );
+        let jar = format!("{SESSION_COOKIE}_2087=alma; {SESSION_COOKIE}_2092=ubuntu; other=1");
         assert_eq!(
             read_session_cookie(Some(&jar), Some(2087)).as_deref(),
             Some("alma")

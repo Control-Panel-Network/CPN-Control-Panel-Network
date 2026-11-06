@@ -139,11 +139,7 @@ pub fn authorized_request(state: &AppState, query: &TokenQuery, request: &HttpRe
 /// Build HttpOnly install-session cookie (value is server-generated session_id).
 /// When `port` is set (lab Host `:2092`), the name is port-scoped so concurrent
 /// installer panels on the same browser host do not overwrite each other.
-pub fn install_session_cookie_header(
-    session_id: &str,
-    secure: bool,
-    port: Option<u16>,
-) -> String {
+pub fn install_session_cookie_header(session_id: &str, secure: bool, port: Option<u16>) -> String {
     let secure_flag = if secure { "; Secure" } else { "" };
     let name = install_token_cookie_name(port);
     format!("{name}={session_id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400{secure_flag}")

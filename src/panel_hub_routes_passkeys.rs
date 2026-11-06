@@ -409,7 +409,8 @@ fn mfa_pending_username(http: &HttpRequest, state: &AppState) -> Option<String> 
         .and_then(|value| value.to_str().ok());
     let port = request_auth_cookie_port(http);
     let secret = session_secret(Some(&state.token));
-    read_mfa_pending_cookie(cookie, port).and_then(|token| verify_mfa_pending_token(&token, &secret))
+    read_mfa_pending_cookie(cookie, port)
+        .and_then(|token| verify_mfa_pending_token(&token, &secret))
 }
 
 /// Lightweight probe so an open /login/2fa page can leave once its session is gone.

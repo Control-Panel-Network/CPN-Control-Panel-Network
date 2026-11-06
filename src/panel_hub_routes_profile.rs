@@ -14,7 +14,9 @@ use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_pa
 use crate::panel_hub_pages_profile::users_modify_page_with_tab;
 use crate::panel_hub_pages_profile::users_profile_page;
 use crate::panel_pages::panel_shell;
-use crate::panel_session::{create_session_token, issue_session_cookie_headers, request_auth_cookie_port, session_secret};
+use crate::panel_session::{
+    create_session_token, issue_session_cookie_headers, request_auth_cookie_port, session_secret,
+};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 

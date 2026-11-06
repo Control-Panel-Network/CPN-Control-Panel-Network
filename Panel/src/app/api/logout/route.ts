@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  authCookiePortFromHost,
-  clearSessionCookie,
-} from "../../../lib/auth";
+import { authCookiePortFromHost, clearSessionCookie } from "../../../lib/auth";
 
 export async function POST(request: NextRequest) {
   const secure = request.nextUrl.protocol === "https:";

@@ -171,11 +171,11 @@ pub(crate) fn login_success_response(
         .unwrap_or_else(|| post_login_location(next));
     let mut builder = HttpResponse::SeeOther();
     builder.append_header(("Location", location));
-    append_set_cookies(&mut builder, issue_session_cookie_headers(token, secure, port));
     append_set_cookies(
         &mut builder,
-        clear_mfa_pending_cookie_headers(secure, port),
+        issue_session_cookie_headers(token, secure, port),
     );
+    append_set_cookies(&mut builder, clear_mfa_pending_cookie_headers(secure, port));
     append_set_cookies(
         &mut builder,
         clear_login_return_cookie_headers(secure, port),
@@ -659,10 +659,7 @@ fn logout_response(http: &HttpRequest) -> HttpResponse {
     let mut builder = HttpResponse::SeeOther();
     builder.append_header(("Location", login_location(next.as_deref())));
     append_set_cookies(&mut builder, clear_session_cookie_headers(secure, port));
-    append_set_cookies(
-        &mut builder,
-        clear_mfa_pending_cookie_headers(secure, port),
-    );
+    append_set_cookies(&mut builder, clear_mfa_pending_cookie_headers(secure, port));
     for cookie in crate::panel_phpmyadmin_proxy::clear_phpmyadmin_cookie_headers(secure) {
         builder.append_header(("Set-Cookie", cookie));
     }
