@@ -142,7 +142,8 @@ pub async fn security_fail2ban_unban(
         .unwrap_or_else(|e| Err(format!("Unban task failed: {e}")));
     match result {
         Ok(msg) => {
-            let _ = panel_action_log::record(&actor, "security.fail2ban.unban", &target, true, &msg);
+            let _ =
+                panel_action_log::record(&actor, "security.fail2ban.unban", &target, true, &msg);
             HttpResponse::Ok()
                 .content_type("application/json; charset=utf-8")
                 .body(serde_json::json!({ "ok": true, "message": msg }).to_string())

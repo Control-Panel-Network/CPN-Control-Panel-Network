@@ -113,8 +113,8 @@ fn fail2ban_client(args: &[&str]) -> Result<String, String> {
             "Fail2Ban service is not running (systemctl reports {active})"
         ));
     }
-    let (ok, stdout, stderr) =
-        cmd_output_timeout("fail2ban-client", args, F2B_TIMEOUT_SECS).ok_or_else(|| {
+    let (ok, stdout, stderr) = cmd_output_timeout("fail2ban-client", args, F2B_TIMEOUT_SECS)
+        .ok_or_else(|| {
             format!(
                 "fail2ban-client {} timed out after {F2B_TIMEOUT_SECS}s",
                 args.join(" ")
@@ -140,7 +140,9 @@ fn parse_banned_ips(status_text: &str) -> Vec<String> {
             continue;
         };
         for part in rest.split(|c: char| c == ',' || c.is_whitespace()) {
-            let t = part.trim().trim_matches(|c| c == '[' || c == ']' || c == ',');
+            let t = part
+                .trim()
+                .trim_matches(|c| c == '[' || c == ']' || c == ',');
             if t.is_empty() {
                 continue;
             }
@@ -239,7 +241,11 @@ pub fn list_banned(jail_filter: Option<&str>) -> Fail2banInventory {
         if bans.is_empty() {
             "No banned IPs in the selected jails.".into()
         } else {
-            format!("{} banned IP(s) across {} jail(s).", bans.len(), jails.len())
+            format!(
+                "{} banned IP(s) across {} jail(s).",
+                bans.len(),
+                jails.len()
+            )
         }
     } else {
         let joined: String = errors.join(" ");
