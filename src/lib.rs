@@ -398,6 +398,7 @@ pub mod panel_reseller_csrf;
 pub mod panel_reseller_quota;
 pub mod panel_routes;
 pub mod panel_sections;
+pub mod panel_spa_nav;
 pub mod panel_server_logs;
 pub mod panel_server_logs_fields;
 pub mod panel_server_logs_kind;

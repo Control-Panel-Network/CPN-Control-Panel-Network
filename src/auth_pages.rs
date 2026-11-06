@@ -31,7 +31,12 @@ fn resolve_initial_locale(status: &InstallerStatus) -> &'static str {
 
 fn shared_auth_styles() -> &'static str {
     r#"
-    body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; }
+    body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:#f5f5f7; color:#1d1d1f; transition:opacity .28s ease; }
+    body.cpn-login-fade-out { opacity:0; pointer-events:none; }
+    @media (prefers-reduced-motion: reduce) {
+      body { transition:none; }
+      body.cpn-login-fade-out { opacity:0; }
+    }
     main { min-height:100vh; display:grid; place-items:center; padding:48px 20px; }
     .card { width:min(100%,420px); background:#fff; border:1px solid #e0e0e0; border-radius:22px; padding:32px; position:relative; box-shadow:0 18px 50px rgba(16,24,40,.08); }
     h1 { margin:0 0 8px; font-size:1.7rem; }
@@ -243,20 +248,37 @@ pub fn panel_login_html_with_gate(
       var ctrl=new AbortController();
       var settled=false;
       var timer=setTimeout(function(){ctrl.abort();},12000);
-      // Safety net if the promise never settles (hung browser fetch).
       var safety=setTimeout(function(){
         if(settled) return;
         try{ ctrl.abort(); }catch(_e){}
         showErr('Sign-in timed out. The panel may be busy with background work; wait a moment and try again.');
         resetSubmit();
       },13000);
-      // Follow redirects so we land on the real post-login URL (dashboard,
-      // enroll-2fa, or /login/2fa). redirect:'manual' often yields opaqueredirect
-      // with a hidden Location, which forced a slow bounce via /login/2fa and
-      // left the button stuck on "Signing in..." in Cursor/Chromium.
+      function preferReducedMotion(){
+        return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      }
+      function goAfterLogin(url, withFade){
+        settled=true;
+        clearTimeout(safety);
+        try{
+          if(withFade){ sessionStorage.setItem('cpn-login-fade','1'); }
+          else { sessionStorage.removeItem('cpn-login-fade'); }
+        }catch(_e){}
+        var dest=url||'/dashboard';
+        if(withFade && !preferReducedMotion()){
+          document.body.classList.add('cpn-login-fade-out');
+          setTimeout(function(){ location.assign(dest); }, 280);
+        }else{
+          location.assign(dest);
+        }
+        setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
+      }
       fetch(form.getAttribute('action')||'/login',{
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        headers:{
+          'Content-Type':'application/x-www-form-urlencoded',
+          'Accept':'application/json, text/html;q=0.8'
+        },
         body:body,
         credentials:'same-origin',
         redirect:'follow',
@@ -267,35 +289,47 @@ pub fn panel_login_html_with_gate(
           showErr('Sign-in timed out because the panel was busy. Wait a few seconds and try again.');
           return null;
         }
+        var ctype=(res.headers.get('Content-Type')||'');
+        if(ctype.indexOf('application/json')>=0){
+          return res.json().then(function(data){
+            if(data && data.ok && data.redirect){
+              goAfterLogin(data.redirect, !!data.fade);
+              return null;
+            }
+            showErr((data && data.error) || 'Sign-in failed. Try again.');
+            try{ document.getElementById('password').focus(); }catch(_e){}
+            return null;
+          });
+        }
         if(res.status>=300 && res.status<400){
-          settled=true;
-          clearTimeout(safety);
-          var loc=res.headers.get('Location')||'/dashboard';
-          location.href=loc;
-          // If navigation is delayed or blocked, do not leave Signing in... stuck.
-          setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
+          goAfterLogin(res.headers.get('Location')||'/dashboard', true);
           return null;
         }
         if(res.type==='opaqueredirect'){
-          // Fallback when a browser still hides redirect details.
-          settled=true;
-          clearTimeout(safety);
-          location.href='/login/2fa';
-          setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
+          goAfterLogin('/login/2fa', false);
           return null;
         }
         try{
           var finalPath=new URL(res.url, location.origin).pathname;
           if(finalPath!=='/login'){
-            settled=true;
-            clearTimeout(safety);
-            location.href=res.url;
-            setTimeout(function(){ if(document.getElementById('i18n-submit')===submit) resetSubmit(); }, 2500);
+            goAfterLogin(res.url, finalPath.indexOf('/login')!==0);
             return null;
           }
         }catch(_e){}
         return res.text().then(function(html){
           if(res.status===401 || res.status===503 || res.ok){
+            // Prefer in-page error when the HTML still looks like the login form.
+            try{
+              var doc=new DOMParser().parseFromString(html,'text/html');
+              var nextErr=doc.getElementById('i18n-login-error');
+              if(nextErr && nextErr.textContent && res.status===401){
+                settled=true;
+                clearTimeout(safety);
+                showErr(nextErr.textContent);
+                try{ document.getElementById('password').focus(); }catch(_e){}
+                return;
+              }
+            }catch(_e){}
             settled=true;
             clearTimeout(safety);
             document.open();

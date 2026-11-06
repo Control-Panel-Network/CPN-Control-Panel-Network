@@ -429,7 +429,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
@@ -445,17 +445,19 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_theme::design_css_vars(&design),
         // After Theme Store CSS so light/dark nav tile bg+text stay paired on toggle.
         crate::panel_nav_tree::sidebar_nav_contrast_styles(),
+        crate::panel_spa_nav::spa_nav_styles(),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_nav_tree::nav_tree_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script(),
         crate::panel_footer_chrome::notifications_popover_script(),
-        crate::panel_feedback::feedback_script()
+        crate::panel_feedback::feedback_script(),
+        crate::panel_spa_nav::spa_nav_script(),
     );
     let plugin_float = crate::panel_plugin_float::panel_float_inject_html(username);
     format!(
