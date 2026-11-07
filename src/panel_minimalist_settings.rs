@@ -55,7 +55,7 @@ pub fn minimalist_settings_card(username: &str) -> String {
   <h2>Minimalist mode</h2>
   <p class="manage-muted">Static UI with less CPU and RAM. Live host graphs on site Overview update only when you refresh the page (no 10s polling).</p>
   <label class="cpn-minimalist-toggle">
-    <input type="checkbox" id="cpn-minimalist-mode"{checked}>
+    <input type="checkbox" id="cpn-minimalist-mode" class="cpn-switch" role="switch"{checked}>
     Enable Minimalist mode
   </label>
   <p class="manage-muted" id="cpn-minimalist-status" aria-live="polite"></p>

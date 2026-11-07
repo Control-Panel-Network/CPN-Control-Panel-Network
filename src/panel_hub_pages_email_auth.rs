@@ -177,7 +177,7 @@ pub fn email_mta_sts_page(domain: &str, notice: Option<&str>, error: Option<&str
       <form method="post" action="/email/mta-sts/save" class="stack-form">
         <input type="hidden" name="domain" value="{domain}">
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-          <input type="checkbox" name="enabled" value="1"{enabled}> Enable MTA-STS plan for this domain
+          <input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{enabled}> Enable MTA-STS plan for this domain
         </label>
         <label for="mode">Mode</label>
         <select id="mode" name="mode">{mode_opts}</select>
@@ -259,7 +259,7 @@ pub fn email_bimi_page(domain: &str, notice: Option<&str>, error: Option<&str>) 
       <form method="post" action="/email/bimi/save" class="stack-form">
         <input type="hidden" name="domain" value="{domain}">
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-          <input type="checkbox" name="enabled" value="1"{enabled}> Enable BIMI plan for this domain
+          <input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{enabled}> Enable BIMI plan for this domain
         </label>
         <label for="logo_svg_url">Logo SVG URL (https)</label>
         <input id="logo_svg_url" name="logo_svg_url" type="url" value="{logo}" placeholder="https://example.com/brand.svg">

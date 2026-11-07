@@ -91,11 +91,11 @@ fn host_policy_card(user: &str, notice: Option<&str>, error: Option<&str>) -> St
   <p class="muted">Current mode: <strong>{mode}</strong></p>
   <form method="post" action="/plugins/mr-agent/host-policy" class="stack-form" style="max-width:520px;">
     <label style="display:flex;align-items:flex-start;gap:10px;font-weight:600;">
-      <input type="checkbox" name="allow_host_chat" value="1"{chat_checked}>
+      <input type="checkbox" class="cpn-switch" role="switch" name="allow_host_chat" value="1"{chat_checked}>
       <span>Allow host chat (panel bubble and <code>/plugins/mr-agent</code>). Default on.</span>
     </label>
     <label style="display:flex;align-items:flex-start;gap:10px;font-weight:600;">
-      <input type="checkbox" name="allow_site_install" value="1"{site_checked}>
+      <input type="checkbox" class="cpn-switch" role="switch" name="allow_site_install" value="1"{site_checked}>
       <span>Allow site install (Store users may Install on their sites). Default off.</span>
     </label>
     <p class="muted">Turning off site install does not uninstall existing site copies. New Installs are blocked with a clear message.</p>
