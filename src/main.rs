@@ -30,6 +30,7 @@ use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
     panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
 };
+use cpn_installer::panel_dashboard_metrics::dashboard_metrics;
 use cpn_installer::panel_docs_routes::{docs_image, docs_page, documentation_alias};
 use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
@@ -75,15 +76,16 @@ use cpn_installer::panel_hub_routes::{
     panel_migrate_route, panel_migrate_wipe, passkey_delete_post, passkey_login_finish,
     passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
     passkey_register_start, passkey_rename_post, security_csf, security_csf_enable,
-    security_csf_install, security_fail2ban, security_firewall, security_firewall_ban_add,
-    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
-    security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
-    security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
-    security_firewall_rules_import, security_firewall_start, security_firewall_stop,
-    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
-    security_malware_run, security_modsec, security_modsec_rules, security_page,
-    security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
-    security_ssl_defaults, security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
+    security_csf_install, security_fail2ban, security_fail2ban_bans, security_fail2ban_unban,
+    security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
+    security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
+    security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
+    security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
+    security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
+    security_firewall_trusted_delete, security_malware, security_malware_run, security_modsec,
+    security_modsec_rules, security_page, security_rule_packs, security_ssh,
+    security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
+    security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
     security_ssl_issue_all, security_ssl_mail, security_ssl_manage, security_ssl_mark_custom,
     security_ssl_origin_backup, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
     security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
@@ -284,7 +286,11 @@ async fn bootstrap_session(
     HttpResponse::Ok()
         .append_header((
             actix_web::http::header::SET_COOKIE,
-            install_session_cookie_header(&state.session_id, secure),
+            install_session_cookie_header(
+                &state.session_id,
+                secure,
+                cpn_installer::panel_session::request_auth_cookie_port(&http),
+            ),
         ))
         .append_header((
             actix_web::http::header::CACHE_CONTROL,
@@ -1252,6 +1258,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_dashboard_layout_get)
             .service(panel_dashboard_layout_set)
             .service(panel_dashboard_layout_restore)
+            .service(dashboard_metrics)
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
@@ -1486,6 +1493,8 @@ async fn main() -> std::io::Result<()> {
             .service(security_ssh_toggle)
             .service(security_ssh_show_review)
             .service(security_fail2ban)
+            .service(security_fail2ban_bans)
+            .service(security_fail2ban_unban)
             .service(security_modsec)
             .service(security_modsec_rules)
             .service(security_rule_packs)

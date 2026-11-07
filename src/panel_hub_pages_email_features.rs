@@ -131,7 +131,7 @@ pub fn autoresponders_page(user: &str, notice: Option<&str>, error: Option<&str>
           <label for="body">Message</label>
           <textarea id="body" name="body" rows="5" required maxlength="4000"></textarea>
           <label style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" name="enabled" value="1" checked>
+            <input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1" checked>
             Enabled
           </label>
           <button type="submit" class="btn-primary">Save autoresponder</button>

@@ -26,10 +26,10 @@ pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> S
         format!(
             r#"<p class="muted" style="margin:0 0 14px;">Secrets are stored under the CPN data directory (mode 600) and never written into destination JSON or logs. <a href="/backups/google-drive">Google Drive</a> · <a href="/backups/remote">Remote SFTP</a> · <a href="/backups/s3">S3-compatible</a></p>
     <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
-      <label><input type="checkbox" name="local_enabled" value="1"{local}> Local archives enabled</label>
-      <label><input type="checkbox" name="gdrive_enabled" value="1"{gdrive}> Google Drive enabled</label>
-      <label><input type="checkbox" name="remote_enabled" value="1"{remote}> Remote SFTP/SCP enabled</label>
-      <label><input type="checkbox" name="s3_enabled" value="1"{s3}> S3-compatible enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local archives enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="gdrive_enabled" value="1"{gdrive}> Google Drive enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="remote_enabled" value="1"{remote}> Remote SFTP/SCP enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="s3_enabled" value="1"{s3}> S3-compatible enabled</label>
       <button type="submit" class="btn-primary">Save destination toggles</button>
     </form>"#,
             local = checked(d.local_enabled),
@@ -45,7 +45,7 @@ pub fn backups_destinations_page(notice: Option<&str>, error: Option<&str>) -> S
       <a class="btn" href="/plugins?view=store&amp;target=host" style="margin-left:8px;">Open Plugin Store</a>
     </p>
     <form method="post" action="/backups/destinations/save" class="stack-form" style="max-width:640px;display:grid;gap:12px;">
-      <label><input type="checkbox" name="local_enabled" value="1"{local}> Local archives enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="local_enabled" value="1"{local}> Local archives enabled</label>
       <p class="muted" style="margin:0;">Google Drive, Remote SFTP/SCP, and S3 toggles appear after the Host plugin is installed.</p>
       <button type="submit" class="btn-primary">Save destination toggles</button>
     </form>"#,
@@ -86,7 +86,7 @@ pub fn backups_gdrive_page(notice: Option<&str>, error: Option<&str>) -> String 
     };
     let body = format!(
         r#"<form method="post" action="/backups/google-drive/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
-      <label><input type="checkbox" name="enabled" value="1"{en}> Enable Google Drive destination</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{en}> Enable Google Drive destination</label>
       <label>OAuth client ID
         <input type="text" name="client_id" value="{cid}" maxlength="200" autocomplete="off" style="width:100%;">
       </label>
@@ -137,7 +137,7 @@ pub fn backups_remote_page(notice: Option<&str>, error: Option<&str>) -> String 
     let pass_hint = if r.password_set { "saved" } else { "not set" };
     let body = format!(
         r#"<form method="post" action="/backups/remote/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
-      <label><input type="checkbox" name="enabled" value="1"{en}> Enable remote SFTP/SCP</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{en}> Enable remote SFTP/SCP</label>
       <label>Protocol
         <select name="protocol" style="width:100%;max-width:240px;">
           <option value="sftp"{sftp}>SFTP</option>
@@ -227,7 +227,7 @@ pub fn backups_s3_page(notice: Option<&str>, error: Option<&str>) -> String {
     let sk = if s.secret_key_set { "saved" } else { "not set" };
     let body = format!(
         r#"<form method="post" action="/backups/s3/save" class="stack-form" style="max-width:640px;display:grid;gap:10px;">
-      <label><input type="checkbox" name="enabled" value="1"{en}> Enable S3-compatible destination</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{en}> Enable S3-compatible destination</label>
       <label>Endpoint URL <span class="muted">(Wasabi, Cloudflare R2, MinIO, AWS)</span>
         <input type="text" name="endpoint" value="{endpoint}" maxlength="300" required style="width:100%;" placeholder="https://s3.eu-central-1.wasabisys.com">
       </label>

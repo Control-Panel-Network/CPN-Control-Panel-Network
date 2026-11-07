@@ -72,6 +72,15 @@ const STORAGE_KEYS: &[&str] = &[
     "max_chat_disk_mb",
 ];
 
+fn checkbox_is_master_toggle(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    k == "enabled"
+        || k.starts_with("enable")
+        || k.starts_with("allow_")
+        || k.ends_with("_enabled")
+        || k == "show_in_sidebar"
+}
+
 fn field_input(key: &str, field_type: &str, value: &str) -> String {
     let ft = field_type.to_ascii_lowercase();
     if ft == "checkbox" {
@@ -80,9 +89,15 @@ fn field_input(key: &str, field_type: &str, value: &str) -> String {
         } else {
             ""
         };
+        let switch = if checkbox_is_master_toggle(key) {
+            r#" class="cpn-switch" role="switch""#
+        } else {
+            ""
+        };
         return format!(
             r#"<input type="hidden" name="present_field_{key}" value="1">
-        <input type="checkbox" id="f-{key}" name="field_{key}" value="1"{checked}>"#,
+        <input type="checkbox"{switch} id="f-{key}" name="field_{key}" value="1"{checked}>"#,
+            switch = switch,
             key = html_escape(key),
             checked = checked,
         );
@@ -183,11 +198,11 @@ fn access_policy_block(is_host: bool, is_admin: bool) -> String {
             r#"<h3>Host policy</h3>
         <p class="muted">Stored in <code>/var/lib/cpn/mr-agent/host-policy.json</code>. Applies panel-wide.</p>
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-          <input type="checkbox" name="allow_host_chat" value="1"{chat}>
+          <input type="checkbox" class="cpn-switch" role="switch" name="allow_host_chat" value="1"{chat}>
           Allow host chat (panel bubble and /plugins/mr-agent)
         </label>
         <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-          <input type="checkbox" name="allow_site_install" value="1"{site}>
+          <input type="checkbox" class="cpn-switch" role="switch" name="allow_site_install" value="1"{site}>
           Allow site install (Store Site target for Mr Agent)
         </label>
         <input type="hidden" name="save_host_policy" value="1">"#,
@@ -359,7 +374,7 @@ pub fn mr_agent_settings_main(
             format!(
                 r#"<input type="hidden" name="sidebar_present" value="1">
           <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-            <input type="checkbox" name="show_in_sidebar" value="1"{sidebar}>
+            <input type="checkbox" class="cpn-switch" role="switch" name="show_in_sidebar" value="1"{sidebar}>
             Show in sidebar
           </label>
           <p class="muted">Sidebar listing is separate from the floating chat bubble.</p>

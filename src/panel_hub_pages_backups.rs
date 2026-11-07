@@ -307,7 +307,7 @@ pub fn backups_schedule_page(notice: Option<&str>, error: Option<&str>) -> Strin
     let checked = if s.enabled { " checked" } else { "" };
     let form = format!(
         r#"<form method="post" action="/backups/schedule/save" class="stack-form" style="max-width:520px;">
-      <label><input type="checkbox" name="enabled" value="1"{checked}> Enable schedule record</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"{checked}> Enable schedule record</label>
       <label for="cron">Cron expression</label>
       <input id="cron" name="cron" type="text" value="{cron}">
       <label for="scope">Scope</label>

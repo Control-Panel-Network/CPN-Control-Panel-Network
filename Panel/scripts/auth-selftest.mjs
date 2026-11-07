@@ -57,5 +57,13 @@ const cookie = `${SESSION_COOKIE}=${good}; Path=/; HttpOnly; SameSite=Lax`;
 assert.ok(cookie.includes("HttpOnly"));
 assert.ok(!cookie.includes("password="));
 
+// Port-scoped names keep AlmaLinux (:2087) and Ubuntu (:2092) lab sessions independent.
+assert.strictEqual(`${SESSION_COOKIE}_2092`, `${SESSION_COOKIE}_2092`);
+const alma = `${SESSION_COOKIE}_2087=${good}`;
+const ubuntu = `${SESSION_COOKIE}_2092=${good}`;
+assert.notStrictEqual(alma, ubuntu);
+assert.ok(alma.startsWith(`${SESSION_COOKIE}_2087=`));
+assert.ok(ubuntu.startsWith(`${SESSION_COOKIE}_2092=`));
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("auth-selftest: ok");

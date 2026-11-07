@@ -176,7 +176,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
           <label for="public_path">Webmail URL path</label>
           <input id="public_path" name="public_path" type="text" value="{path}" autocomplete="off">
           <label style="display:flex;align-items:center;gap:10px;font-weight:600;">
-            <input type="checkbox" name="internal_embed" value="1"{embed}>
+            <input type="checkbox" class="cpn-switch" role="switch" name="internal_embed" value="1"{embed}>
             Enable internal webmail embed on this page
           </label>
           <button type="submit" class="btn-primary">Save webmail settings</button>

@@ -14,6 +14,7 @@ pub use crate::panel_hub_routes_email_features::*;
 pub use crate::panel_hub_routes_email_proton::*;
 pub use crate::panel_hub_routes_email_stubs::*;
 pub use crate::panel_hub_routes_error_messages::*;
+pub use crate::panel_hub_routes_fail2ban::*;
 pub use crate::panel_hub_routes_files::*;
 pub use crate::panel_hub_routes_files_list::*;
 pub use crate::panel_hub_routes_firewall::*;

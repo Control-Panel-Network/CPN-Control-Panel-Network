@@ -1,6 +1,13 @@
 //! Panel session cookies (HMAC-SHA256), shared format with `Panel/src/lib/auth.ts`.
+//!
+//! Browser cookies are scoped by name + domain + path, **not** TCP port. Lab panels
+//! on the same host (`127.0.0.1:2087` vs `127.0.0.1:2092`) would overwrite each other
+//! if they shared a fixed cookie name. Cookie names therefore include the Host port
+//! when the browser sent one (`cpn_panel_session_2092`). Production hosts without a
+//! port in `Host` keep the unscoped base name.
 
 use crate::account::data_dir;
+use actix_web::HttpRequest;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use hmac::{Hmac, KeyInit, Mac};
 use rand::Rng;
@@ -17,6 +24,60 @@ pub const SESSION_TTL_SECONDS: u64 = 60 * 60 * 12;
 /// Password-ok / MFA-pending window. Must cover a normal WebAuthn prompt (Windows Hello,
 /// security key, PIN) without forcing the operator back to /login mid-ceremony.
 pub const MFA_PENDING_TTL_SECONDS: u64 = 60 * 15;
+
+/// Parse an explicit port from an HTTP `Host` value (`127.0.0.1:2092`, `[::1]:2087`).
+/// Returns `None` when the browser omitted the port (default 80/443 or reverse proxy).
+pub fn auth_cookie_port_from_host(host: &str) -> Option<u16> {
+    let host = host.trim();
+    if host.is_empty() || host.len() > 253 {
+        return None;
+    }
+    if let Some(rest) = host.strip_prefix('[') {
+        let end = rest.find(']')?;
+        let after = rest.get(end + 1..)?;
+        let port_str = after.strip_prefix(':')?;
+        return parse_cookie_port(port_str);
+    }
+    // One colon only: hostname:port or IPv4:port (reject raw IPv6 without brackets).
+    if host.matches(':').count() != 1 {
+        return None;
+    }
+    let port_str = host.rsplit_once(':')?.1;
+    parse_cookie_port(port_str)
+}
+
+fn parse_cookie_port(raw: &str) -> Option<u16> {
+    let port: u16 = raw.parse().ok()?;
+    if port == 0 {
+        return None;
+    }
+    Some(port)
+}
+
+/// Browser-facing port from the request `Host` header (NAT lab ports, not guest bind).
+pub fn request_auth_cookie_port(http: &HttpRequest) -> Option<u16> {
+    let host = http
+        .headers()
+        .get(actix_web::http::header::HOST)
+        .and_then(|value| value.to_str().ok())?;
+    auth_cookie_port_from_host(host)
+}
+
+/// `cpn_panel_session` or `cpn_panel_session_2092`.
+pub fn scoped_auth_cookie_name(base: &str, port: Option<u16>) -> String {
+    match port {
+        Some(port) => format!("{base}_{port}"),
+        None => base.to_string(),
+    }
+}
+
+pub fn session_cookie_name(port: Option<u16>) -> String {
+    scoped_auth_cookie_name(SESSION_COOKIE, port)
+}
+
+pub fn mfa_pending_cookie_name(port: Option<u16>) -> String {
+    scoped_auth_cookie_name(MFA_PENDING_COOKIE, port)
+}
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -185,43 +246,117 @@ pub fn verify_mfa_pending_token(token: &str, secret: &str) -> Option<String> {
     Some(username)
 }
 
-pub fn session_cookie_header(token: &str, secure: bool) -> String {
-    let secure_flag = if secure { "; Secure" } else { "" };
+fn cookie_secure_flag(secure: bool) -> &'static str {
+    if secure { "; Secure" } else { "" }
+}
+
+fn clear_named_cookie_header(name: &str, secure: bool) -> String {
     format!(
-        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL_SECONDS}{secure_flag}"
+        "{name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{}",
+        cookie_secure_flag(secure)
     )
 }
 
-pub fn mfa_pending_cookie_header(token: &str, secure: bool) -> String {
-    let secure_flag = if secure { "; Secure" } else { "" };
+pub fn session_cookie_header(token: &str, secure: bool, port: Option<u16>) -> String {
+    let name = session_cookie_name(port);
     format!(
-        "{MFA_PENDING_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={MFA_PENDING_TTL_SECONDS}{secure_flag}"
+        "{name}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL_SECONDS}{}",
+        cookie_secure_flag(secure)
     )
 }
 
+/// Set the port-scoped session cookie; also expire the legacy unscoped name when ported
+/// so concurrent labs on the same host stop sharing a pre-fix cookie.
+pub fn issue_session_cookie_headers(token: &str, secure: bool, port: Option<u16>) -> Vec<String> {
+    let mut headers = vec![session_cookie_header(token, secure, port)];
+    if port.is_some() {
+        headers.push(clear_named_cookie_header(SESSION_COOKIE, secure));
+    }
+    headers
+}
+
+pub fn mfa_pending_cookie_header(token: &str, secure: bool, port: Option<u16>) -> String {
+    let name = mfa_pending_cookie_name(port);
+    format!(
+        "{name}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={MFA_PENDING_TTL_SECONDS}{}",
+        cookie_secure_flag(secure)
+    )
+}
+
+pub fn issue_mfa_pending_cookie_headers(
+    token: &str,
+    secure: bool,
+    port: Option<u16>,
+) -> Vec<String> {
+    let mut headers = vec![mfa_pending_cookie_header(token, secure, port)];
+    if port.is_some() {
+        headers.push(clear_named_cookie_header(MFA_PENDING_COOKIE, secure));
+    }
+    headers
+}
+
+/// Clear this Host port's session cookie (and the legacy unscoped name when ported).
+pub fn clear_session_cookie_headers(secure: bool, port: Option<u16>) -> Vec<String> {
+    let mut headers = vec![clear_named_cookie_header(
+        &session_cookie_name(port),
+        secure,
+    )];
+    if port.is_some() {
+        headers.push(clear_named_cookie_header(SESSION_COOKIE, secure));
+    }
+    headers
+}
+
+pub fn clear_mfa_pending_cookie_headers(secure: bool, port: Option<u16>) -> Vec<String> {
+    let mut headers = vec![clear_named_cookie_header(
+        &mfa_pending_cookie_name(port),
+        secure,
+    )];
+    if port.is_some() {
+        headers.push(clear_named_cookie_header(MFA_PENDING_COOKIE, secure));
+    }
+    headers
+}
+
+/// Backward-compatible single clear (unscoped / no Host port).
 pub fn clear_session_cookie_header(secure: bool) -> String {
-    let secure_flag = if secure { "; Secure" } else { "" };
-    format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
+    clear_named_cookie_header(SESSION_COOKIE, secure)
 }
 
 pub fn clear_mfa_pending_cookie_header(secure: bool) -> String {
-    let secure_flag = if secure { "; Secure" } else { "" };
-    format!("{MFA_PENDING_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure_flag}")
+    clear_named_cookie_header(MFA_PENDING_COOKIE, secure)
 }
 
-pub fn read_session_cookie(cookie_header: Option<&str>) -> Option<String> {
-    read_named_cookie(cookie_header, SESSION_COOKIE)
+pub fn read_session_cookie(cookie_header: Option<&str>, port: Option<u16>) -> Option<String> {
+    read_scoped_then_legacy(cookie_header, SESSION_COOKIE, port)
 }
 
-pub fn read_mfa_pending_cookie(cookie_header: Option<&str>) -> Option<String> {
-    read_named_cookie(cookie_header, MFA_PENDING_COOKIE)
+pub fn read_mfa_pending_cookie(cookie_header: Option<&str>, port: Option<u16>) -> Option<String> {
+    read_scoped_then_legacy(cookie_header, MFA_PENDING_COOKIE, port)
+}
+
+fn read_scoped_then_legacy(
+    cookie_header: Option<&str>,
+    base: &str,
+    port: Option<u16>,
+) -> Option<String> {
+    let scoped = scoped_auth_cookie_name(base, port);
+    if let Some(value) = read_named_cookie(cookie_header, &scoped) {
+        return Some(value);
+    }
+    // Upgrade path: older panels used the unscoped name only.
+    if port.is_some() {
+        return read_named_cookie(cookie_header, base);
+    }
+    None
 }
 
 fn read_named_cookie(cookie_header: Option<&str>, name: &str) -> Option<String> {
     let cookie_header = cookie_header?;
+    let prefix = format!("{name}=");
     for part in cookie_header.split(';') {
         let part = part.trim();
-        if let Some(value) = part.strip_prefix(&format!("{name}=")) {
+        if let Some(value) = part.strip_prefix(&prefix) {
             let value = value.trim();
             if !value.is_empty() {
                 return Some(value.to_string());
@@ -294,11 +429,12 @@ mod tests {
 
     #[test]
     fn cookie_headers_use_samesite_lax() {
-        let set = session_cookie_header("abc", false);
+        let set = session_cookie_header("abc", false, None);
+        assert!(set.starts_with(&format!("{SESSION_COOKIE}=")));
         assert!(set.contains("HttpOnly"));
         assert!(set.contains("SameSite=Lax"));
         assert!(!set.contains("Secure"));
-        let secure = session_cookie_header("abc", true);
+        let secure = session_cookie_header("abc", true, None);
         assert!(secure.contains("Secure"));
         let clear = clear_session_cookie_header(false);
         assert!(clear.contains("Max-Age=0"));
@@ -311,7 +447,50 @@ mod tests {
             "MFA pending cookie must survive a normal passkey prompt (got {}s)",
             MFA_PENDING_TTL_SECONDS
         );
-        let set = mfa_pending_cookie_header("tok", false);
+        let set = mfa_pending_cookie_header("tok", false, None);
         assert!(set.contains(&format!("Max-Age={MFA_PENDING_TTL_SECONDS}")));
+    }
+
+    #[test]
+    fn host_port_scopes_cookie_names_for_lab_panels() {
+        assert_eq!(auth_cookie_port_from_host("127.0.0.1:2087"), Some(2087));
+        assert_eq!(auth_cookie_port_from_host("127.0.0.1:2092"), Some(2092));
+        assert_eq!(auth_cookie_port_from_host("[::1]:2090"), Some(2090));
+        assert_eq!(auth_cookie_port_from_host("panel.example.com"), None);
+        assert_eq!(auth_cookie_port_from_host("127.0.0.1"), None);
+        assert_eq!(
+            session_cookie_name(Some(2092)),
+            format!("{SESSION_COOKIE}_2092")
+        );
+        assert_eq!(session_cookie_name(None), SESSION_COOKIE);
+
+        let alma = session_cookie_header("tok-a", false, Some(2087));
+        let ubuntu = session_cookie_header("tok-b", false, Some(2092));
+        assert!(alma.starts_with(&format!("{SESSION_COOKIE}_2087=")));
+        assert!(ubuntu.starts_with(&format!("{SESSION_COOKIE}_2092=")));
+        assert_ne!(alma, ubuntu);
+
+        let jar = format!("{SESSION_COOKIE}_2087=alma; {SESSION_COOKIE}_2092=ubuntu; other=1");
+        assert_eq!(
+            read_session_cookie(Some(&jar), Some(2087)).as_deref(),
+            Some("alma")
+        );
+        assert_eq!(
+            read_session_cookie(Some(&jar), Some(2092)).as_deref(),
+            Some("ubuntu")
+        );
+
+        // Legacy unscoped cookie still readable for one upgrade cycle.
+        let legacy = format!("{SESSION_COOKIE}=legacy");
+        assert_eq!(
+            read_session_cookie(Some(&legacy), Some(2092)).as_deref(),
+            Some("legacy")
+        );
+
+        let issued = issue_session_cookie_headers("new", false, Some(2092));
+        assert_eq!(issued.len(), 2);
+        assert!(issued[0].starts_with(&format!("{SESSION_COOKIE}_2092=")));
+        assert!(issued[1].starts_with(&format!("{SESSION_COOKIE}=")));
+        assert!(issued[1].contains("Max-Age=0"));
     }
 }

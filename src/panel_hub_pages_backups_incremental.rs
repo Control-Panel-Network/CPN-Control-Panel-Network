@@ -120,7 +120,7 @@ pub fn backups_incremental_page(notice: Option<&str>, error: Option<&str>) -> St
         </select>
       </label>
       <label>Cron (24h) <input type="text" name="schedule_cron" value="0 2 * * *" style="width:100%;"></label>
-      <label><input type="checkbox" name="enabled" value="1" checked> Enabled</label>
+      <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1" checked> Enabled</label>
       <button type="submit" class="btn-primary">Save job</button>
     </form>
     <p class="muted">Uses restic (preferred) or borg. S3/SFTP credentials come from Backup Destinations (mode 600). Restore: list snapshots above, then restore via restic CLI or Create/Restore for full archives.</p>"#;

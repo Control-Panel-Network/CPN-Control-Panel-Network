@@ -101,6 +101,8 @@ button { font:inherit; cursor:pointer; }
   margin:0; font-size:34px; line-height:1.25; letter-spacing:-.025em; font-weight:600;
 }
 .dashboard-heading > div > p:last-child { margin:14px 0 0; color:var(--muted); max-width:600px; }
+#dash-metrics-status[data-state="stale"] { color:#b45309; }
+#dash-metrics-status[data-state="error"] { color:#b91c1c; }
 .resource-grid {
   max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px;
 }
@@ -189,8 +191,7 @@ button { font:inherit; cursor:pointer; }
   min-width:0; overflow-wrap:anywhere;
 }
 .stack-form .cpn-check-item input[type=checkbox], .cpn-check-item input[type=checkbox] {
-  flex:0 0 auto; width:16px; height:16px; min-width:16px; padding:0; margin:2px 0 0;
-  border-radius:4px; accent-color:var(--accent,#0b66ff);
+  flex:0 0 auto; margin:2px 0 0;
 }
 .cpn-check-item > span { flex:1 1 auto; min-width:0; }
 .cpn-check-single { margin-top:2px; }
@@ -429,8 +430,9 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
-        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
         panel_styles(),
+        crate::panel_controls::control_styles(),
         crate::panel_nav_tree::nav_tree_styles(),
         crate::panel_sidebar::sidebar_extra_styles(),
         crate::panel_nav_chrome::sidebar_collapse_styles(),
@@ -445,17 +447,19 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         crate::panel_theme::design_css_vars(&design),
         // After Theme Store CSS so light/dark nav tile bg+text stay paired on toggle.
         crate::panel_nav_tree::sidebar_nav_contrast_styles(),
+        crate::panel_spa_nav::spa_nav_styles(),
     );
     let boot = crate::panel_theme_chrome::color_mode_boot_script(color_mode);
     let footer = crate::panel_footer_chrome::sidebar_footer_markup(username, color_mode);
     let script = format!(
-        "{}{}{}{}{}{}",
+        "{}{}{}{}{}{}{}",
         crate::panel_nav_chrome::panel_nav_script(),
         crate::panel_nav_tree::nav_tree_script(),
         crate::panel_sidebar::sidebar_search_and_ip_script(),
         crate::panel_theme_chrome::color_mode_toggle_script(),
         crate::panel_footer_chrome::notifications_popover_script(),
-        crate::panel_feedback::feedback_script()
+        crate::panel_feedback::feedback_script(),
+        crate::panel_spa_nav::spa_nav_script(),
     );
     let plugin_float = crate::panel_plugin_float::panel_float_inject_html(username);
     format!(
@@ -563,6 +567,17 @@ mod tests {
                 && css.contains("z-index:90")
                 && css.contains("pointer-events:auto"),
             "drawer must stack above the nav backdrop and stay clickable"
+        );
+    }
+
+    #[test]
+    fn panel_shell_includes_control_styles() {
+        let html = super::panel_shell("tester", "dashboard", "Dashboard", "<p>ok</p>");
+        assert!(
+            html.contains("input[type=checkbox]:not(.cpn-switch)")
+                && html.contains("input[type=checkbox].cpn-switch")
+                && html.contains("--cpn-control-on"),
+            "panel shell must ship Option C checkbox and Option D switch styles"
         );
     }
 

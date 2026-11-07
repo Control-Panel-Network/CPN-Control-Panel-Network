@@ -623,7 +623,7 @@ fn tab_general(site: &WordpressSite, domain_q: &str) -> String {
           </div>
           <form method="post" action="/wordpress/toggle/password-protection" class="stack-form" style="max-width:420px;margin-top:18px;">
             <input type="hidden" name="domain" value="{domain_q}">
-            <label><input type="checkbox" name="enabled" value="1"> Enable HTTP basic protection</label>
+            <label><input type="checkbox" class="cpn-switch" role="switch" name="enabled" value="1"> Enable HTTP basic protection</label>
             <label>Username<input type="text" name="username" autocomplete="off"></label>
             <label>Password<input type="password" name="password" autocomplete="new-password"></label>
             <button type="submit" class="btn-secondary">Apply protection</button>

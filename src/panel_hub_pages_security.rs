@@ -5,7 +5,7 @@ use crate::panel_hub_defs::security_hub_sections;
 use crate::panel_hubs::{
     feature_shell, hub_tiles_grid, not_configured_body, section_heading, status_kv,
 };
-use crate::panel_ops_security::{apply_sshd_toggle, fail2ban_status, sshd_status};
+use crate::panel_ops_security::{apply_sshd_toggle, sshd_status};
 use crate::panel_ops_security_ssl::{
     hostname_ssl_status, list_modsec_rule_files, mail_ssl_status, malware_scan_status,
     modsec_status, site_ssl_rows,
@@ -134,52 +134,9 @@ pub fn run_sshd_toggle(user: &str, key: &str, value: &str) -> Result<String, Str
     apply_sshd_toggle(key, value)
 }
 
+/// Legacy entry used by tests; production page is `fail2ban_manager_page`.
 pub fn fail2ban_page() -> String {
-    let st = fail2ban_status();
-    if !st.installed {
-        return feature_shell(
-            &[
-                ("Dashboard", Some("/dashboard")),
-                ("Security", Some("/security")),
-                ("Fail2ban", None),
-            ],
-            "Fail2ban",
-            "Brute-force protection.",
-            &not_configured_body(
-                &st.detail,
-                "Install fail2ban on this host, then reopen this tile for live jail status.",
-            ),
-            None,
-            None,
-        );
-    }
-    let jails = if st.jails.is_empty() {
-        "<p class=\"muted\">No jails listed (service may be idle).</p>".to_string()
-    } else {
-        let mut ul = String::from("<ul>");
-        for j in &st.jails {
-            ul.push_str(&format!("<li><code>{}</code></li>", html_escape(j)));
-        }
-        ul.push_str("</ul>");
-        ul
-    };
-    let kv = status_kv(&[
-        ("Installed", "yes"),
-        ("Active", &st.active),
-        ("Enabled", &st.enabled),
-    ]);
-    feature_shell(
-        &[
-            ("Dashboard", Some("/dashboard")),
-            ("Security", Some("/security")),
-            ("Fail2ban", None),
-        ],
-        "Fail2ban",
-        "Live jail status.",
-        &format!("{kv}<h3>Jails</h3>{jails}{}", pre_block(&st.detail)),
-        None,
-        None,
-    )
+    crate::panel_hub_pages_fail2ban::fail2ban_manager_page("", false)
 }
 
 pub fn modsec_page() -> String {
