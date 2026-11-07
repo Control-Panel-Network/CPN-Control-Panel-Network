@@ -30,6 +30,7 @@ use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
     panel_dashboard_layout_get, panel_dashboard_layout_restore, panel_dashboard_layout_set,
 };
+use cpn_installer::panel_dashboard_metrics::dashboard_metrics;
 use cpn_installer::panel_docs_routes::{docs_image, docs_page, documentation_alias};
 use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
@@ -1257,6 +1258,7 @@ async fn main() -> std::io::Result<()> {
             .service(panel_dashboard_layout_get)
             .service(panel_dashboard_layout_set)
             .service(panel_dashboard_layout_restore)
+            .service(dashboard_metrics)
             .service(panel_notifications_get)
             .service(panel_notifications_mark_read)
             .service(panel_notifications_push)
