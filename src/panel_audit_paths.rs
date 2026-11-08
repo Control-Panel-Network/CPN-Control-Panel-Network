@@ -116,6 +116,15 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/settings/migrate" => Some("migrate.apply"),
         "/settings/version/upgrade" => Some("updates.upgrade"),
         "/api/panel/upgrade" => Some("updates.upgrade"),
+        "/api/auto-upgrade" => Some("updates.auto-upgrade.configure"),
+        "/api/auto-upgrade/check" => Some("updates.auto-upgrade.check"),
+        "/api/version-source" => Some("updates.source.configure"),
+        "/api/panel/notifications" => Some("panel.notifications.push"),
+        "/api/panel/notifications/mark-read" => Some("panel.notifications.mark-read"),
+        "/api/panel/color-mode" => Some("ui.color-mode"),
+        "/api/panel/minimalist-mode" => Some("ui.minimalist-mode"),
+        "/api/panel/dashboard-layout" => Some("ui.dashboard-layout"),
+        "/api/panel/dashboard-layout/restore" => Some("ui.dashboard-layout.restore"),
         "/websites/create" => Some("website.create"),
         "/websites/delete" => Some("website.delete"),
         "/websites/suspend" => Some("website.suspend"),
@@ -124,6 +133,24 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
         "/packages/delete" => Some("hosting_package.delete"),
         "/packages/edit" => Some("hosting_package.edit"),
         "/packages/assign" => Some("hosting_package.assign"),
+        "/databases/install-mariadb" => Some("db.install-mariadb"),
+        "/databases/create" => Some("db.create"),
+        "/databases/delete" => Some("db.delete"),
+        "/databases/password" => Some("db.password"),
+        "/databases/ftp-create" => Some("ftp.create"),
+        "/ftp/create" => Some("ftp.create"),
+        "/ftp/delete" => Some("ftp.delete"),
+        "/ftp/reset" => Some("ftp.reset"),
+        "/ftp/reset-password" => Some("ftp.password"),
+        "/server/dns/zones/create" => Some("dns.zone.create"),
+        "/server/dns/zones/save" => Some("dns.zone.save"),
+        "/server/dns/zones/delete" => Some("dns.zone.delete"),
+        "/server/dns/zones/record/add" => Some("dns.record.add"),
+        "/server/dns/zones/record/delete" => Some("dns.record.delete"),
+        "/server/dns/nameservers/add" => Some("dns.nameservers.add"),
+        "/server/dns/nameservers/delete" => Some("dns.nameservers.delete"),
+        "/server/dns/nameservers/save" => Some("dns.nameservers.save"),
+        "/server/dns/defaults/save" => Some("dns.defaults.save"),
         "/email/create" => Some("email.mailbox.create"),
         "/email/delete" => Some("email.mailbox.delete"),
         "/email/password" => Some("email.password"),
@@ -202,10 +229,27 @@ pub fn category_for_path(path: &str) -> AuditCategory {
         AuditCategory::Auth
     } else if path.starts_with("/account") {
         AuditCategory::Accounts
+    } else if path.starts_with("/databases")
+        || path.starts_with("/ftp")
+        || path.starts_with("/sftp")
+    {
+        AuditCategory::Database
     } else if path.starts_with("/security") || path.starts_with("/firewall") {
         AuditCategory::Firewall
-    } else if path.starts_with("/dns") {
+    } else if path.starts_with("/dns") || path.starts_with("/server/dns") {
         AuditCategory::Dns
+    } else if path.starts_with("/api/auto-upgrade")
+        || path.starts_with("/api/version-source")
+        || path.starts_with("/settings/version")
+    {
+        AuditCategory::Updates
+    } else if path.starts_with("/api/panel/notifications") {
+        AuditCategory::Notifications
+    } else if path.starts_with("/api/panel/color-mode")
+        || path.starts_with("/api/panel/minimalist-mode")
+        || path.starts_with("/api/panel/dashboard-layout")
+    {
+        AuditCategory::Ui
     } else if path.starts_with("/email") {
         AuditCategory::Email
     } else if path.starts_with("/backups") {
@@ -357,6 +401,72 @@ mod tests {
         assert_eq!(
             category_for_action("firewall.stop"),
             AuditCategory::Firewall
+        );
+    }
+
+    #[test]
+    fn maps_phase_2a_real_mutation_routes() {
+        let cases = [
+            ("/databases/create", "db.create", AuditCategory::Database),
+            (
+                "/ftp/reset-password",
+                "ftp.password",
+                AuditCategory::Database,
+            ),
+            (
+                "/server/dns/zones/create",
+                "dns.zone.create",
+                AuditCategory::Dns,
+            ),
+            (
+                "/api/auto-upgrade/check",
+                "updates.auto-upgrade.check",
+                AuditCategory::Updates,
+            ),
+            (
+                "/api/panel/notifications/mark-read",
+                "panel.notifications.mark-read",
+                AuditCategory::Notifications,
+            ),
+            ("/api/panel/color-mode", "ui.color-mode", AuditCategory::Ui),
+            (
+                "/api/panel/minimalist-mode",
+                "ui.minimalist-mode",
+                AuditCategory::Ui,
+            ),
+            (
+                "/api/panel/dashboard-layout/restore",
+                "ui.dashboard-layout.restore",
+                AuditCategory::Ui,
+            ),
+        ];
+        for (path, action, category) in cases {
+            assert_eq!(action_for_path(path), Some(action), "action for {path}");
+            assert_eq!(category_for_path(path), category, "category for {path}");
+        }
+    }
+
+    #[test]
+    fn phase_2a_prefix_fallbacks_preserve_categories() {
+        assert_eq!(
+            category_for_path("/databases/future-action"),
+            AuditCategory::Database
+        );
+        assert_eq!(
+            category_for_path("/server/dns/future-action"),
+            AuditCategory::Dns
+        );
+        assert_eq!(
+            category_for_path("/api/auto-upgrade/future-action"),
+            AuditCategory::Updates
+        );
+        assert_eq!(
+            category_for_path("/api/panel/notifications/future-action"),
+            AuditCategory::Notifications
+        );
+        assert_eq!(
+            category_for_path("/api/panel/dashboard-layout/future-action"),
+            AuditCategory::Ui
         );
     }
 }
