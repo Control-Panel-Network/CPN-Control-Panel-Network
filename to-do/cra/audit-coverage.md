@@ -72,23 +72,21 @@ Documented in `src/panel_audit_paths.rs::is_noisy_read_like`:
 ## Verification checklist (verify-2a)
 
 - [x] `cargo test panel_audit --lib` (and related module tests) green
-- [ ] `cargo check` green (not re-run during the lab-only close-out)
-- [ ] Lab smoke: most categories passed, but real database, DNS, updates, notifications, and UI routes are misclassified as `other`
+- [x] `cargo check --locked` green on WSL after category fix `64f98992`
+- [x] Lab smoke: real database, DNS, updates, notifications, and UI routes use their intended categories; zero `other` rows in the close-out run
 - [x] Security-essential categories cannot be disabled in Settings > Audit trail
-- [ ] Non-essential opt-out skips `ui`: unit passes, but real `/api/panel/color-mode` is `other` and is not suppressed by `disable_ui`
+- [x] Non-essential opt-out skips `ui`: real `/api/panel/color-mode` returned 200 and added zero rows with `disable_ui=1`
 - [x] Export JSONL/CSV downloads without secrets
 - [x] Optional local webhook receives redacted JSON only
 - [x] Auth fail spike notifies panel admins
 
 ## Remaining after this pass
 
-Prioritize next:
+Follow-up improvements:
 
-1. Fix category inference for real `/databases/*`, `/ftp/*`, `/server/dns/*`, `/api/auto-upgrade/*`, `/api/panel/notifications/*`, and real UI preference routes before Phase 2a verification can pass.
-2. Dedicated path map entries for every WordPress, site-apps, PHP default, SSL, SFTP, and email feature POST still synthesizing `http.post:...`
-3. Explicit auth records for lockout and password-reset outcomes with richer messages
-4. Integrity hash chain per rotated day file (optional plan item)
-5. CI inventory script: fail if a new authenticated mutating route is neither mapped nor denylisted
-6. Re-run the lab category and opt-out smoke after the mapping fix
+1. Dedicated path map entries for every WordPress, site-apps, PHP default, SSL, SFTP, and email feature POST still synthesizing `http.post:...`
+2. Explicit auth records for lockout and password-reset outcomes with richer messages
+3. Integrity hash chain per rotated day file (optional plan item)
+4. CI inventory script: fail if a new authenticated mutating route is neither mapped nor denylisted
 
-Do not mark Phase 2a complete until the verification checklist above passes on a lab install.
+Phase 2a verification passed on the AL10 lab at `64f98992`.

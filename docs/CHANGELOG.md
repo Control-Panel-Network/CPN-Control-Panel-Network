@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CRA audit route categories**: Database, FTP/SFTP, DNS, automatic update, panel notification, and UI preference mutations now use stable audit actions and their intended categories instead of `other`. UI preference routes now honor the non-essential `ui` audit opt-out while deny-by-default coverage remains active.
+
 ## [1.4.9] - 07/11/2026
 
 Patch release after v1.4.8. Fail2Ban ban management, SPA tab navigation, async login with fade, live dashboard gauges, checkbox/switch styles, MOTD ASCII N fix, and port-scoped lab session cookies (#627, #617 to #619, #621, #645 to #649).

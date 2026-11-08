@@ -14,7 +14,7 @@ Final engineering vs human split: [cra-verification-evidence.md](cra-verificatio
 | [#653](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/653) | `feat/cra-phase-2b-3-4` | Phase 0/1 CVD, Phase 2b/3 SBOM gate, Phase 2c disclosure site | **MERGED** | `bb27b13d` | Phase 0/1 paper, 2b SBOM/gate, 2c site, legal scaffold |
 | [#654](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/654) | `feat/phase2a-full-panel-audit` | Phase 2a full panel audit trail and Settings UI | **MERGED** | `e62d706d` | `phase2-audit-trail` / `verify-2a-audit-trail` |
 
-`stable` tip used for lab smoke: `5ccfa94c` (docs after Merge #654 `e62d706d`). Re-check:
+`stable` tip used for verify-2a lab smoke: `64f98992` (category fix after Merge #654 `e62d706d`). Re-check:
 
 ```bash
 gh pr view 652 --json state,mergedAt,mergeCommit
@@ -38,10 +38,10 @@ gh api "repos/Control-Panel-Network/CPN-Control-Panel-Network/code-scanning/aler
 | Plan todo | Evidence | Status this pass |
 |-----------|----------|------------------|
 | `verify-1b-github-security` | `gh` Dependabot + Code Scanning open=0 on `stable` after #652 | **DONE** (engineering) |
-| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 merged | **BLOCKED after practical lab completion.** AL10 `2229` tip `5ccfa94` / 1.4.9: logout, CLI doctor heal, webhook delivery, auth-fail spike, policy lock, export, and safe real-route mutations exercised. Database, DNS, update-check, notification, and UI-preference routes are audited as `category=other`; real UI opt-out therefore fails. Code mapping fixes and a re-smoke are required. |
+| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 + `64f98992` | **DONE (engineering).** AL10 `2229` upgraded to `64f98992` / 1.4.9. Database, DNS, update-check, notification, and UI-preference routes now record their intended categories with zero `other` rows in the close-out smoke. Real `disable_ui` opt-out suppressed the color-mode mutation while security-essential auditing remained active. |
 | `verify-2b-sbom-release` | [verify-2b-evidence.md](verify-2b-evidence.md), #653 merged | **PARTIAL local pass.** CycloneDX JSON produced for Cargo + installer-ui + Panel; `cpn-security-release.json` written; `cra-release-audit-gate.sh` exit **0**. **Blocker:** no new tagged GitHub Release after #653 (latest public tag still `v1.4.9`). |
 | `verify-2c-disclosure-site` | Live site sync 08/11/2026 | **DONE (live).** `curl -sI https://cpn.newstargeted.com/security` → **200** `text/html`; `/data/security-advisories.json` → **200**; `/security.html` → **301** to `/security`. Empty-state present. |
-| `cra-verification` (E2E) | This file + [cra-verification-evidence.md](cra-verification-evidence.md) | **PARTIAL.** Engineering merge + alerts=0 + live `/security` recorded. Still blocked on verify-2a category fixes, a post-#653 tagged release for verify-2b assets, and human legal track. |
+| `cra-verification` (E2E) | This file + [cra-verification-evidence.md](cra-verification-evidence.md) | **PARTIAL.** Engineering merge + alerts=0 + verify-2a PASS + live `/security` recorded. Still blocked on a post-#653 tagged release for verify-2b assets and human legal track. |
 
 ## Site sync notes (verify-2b / 2c deploy, 08/11/2026)
 
@@ -66,11 +66,10 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 
 ## Remaining gates (ordered)
 
-1. Fix **verify-2a** real-route category mappings for database/FTP, `/server/dns`, auto-upgrade/version, panel notifications, and UI preferences; then re-smoke the UI opt-out. Logout, CLI, webhook, spike alert, export, and policy-lock checks already pass.
-2. **verify-2b tagged release:** cut or dry-run a release after #653; attach SBOM + security-meta asset URLs in [verify-2b-evidence.md](verify-2b-evidence.md). Local CycloneDX + audit gate already recorded.
-3. Keep https://cpn.newstargeted.com/security healthy (already **200** after sync).
-4. Humans advance [legal-track.md](legal-track.md) (classification first; ENISA account urgent).
-5. Mark plan `cra-verification` completed only when engineering verify siblings finish; keep legal-* open until humans close them.
+1. **verify-2b tagged release:** cut or dry-run a release after #653; attach SBOM + security-meta asset URLs in [verify-2b-evidence.md](verify-2b-evidence.md). Local CycloneDX + audit gate already recorded.
+2. Keep https://cpn.newstargeted.com/security healthy (already **200** after sync).
+3. Humans advance [legal-track.md](legal-track.md) (classification first; ENISA account urgent).
+4. Mark plan `cra-verification` completed only when engineering verify siblings finish; keep legal-* open until humans close them.
 
 ## Related files
 
@@ -93,3 +92,4 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 | 08/11/2026 | verify-2a AL10 lab partial smoke recorded (auth/settings/firewall + export); remaining checklist still open |
 | 08/11/2026 | verify-2a practical close-out run completed; logout/CLI/webhook/spike/policy checks passed; real-route category and UI opt-out defects now block completion |
 | 08/11/2026 | verify-2b/site-sync: live `/security` **200**; local CycloneDX + security-meta + audit gate PASSED; tagged release after #653 still blocked |
+| 08/11/2026 | verify-2a category fix `64f98992` deployed and re-smoked on AL10 2229; all target categories and real UI opt-out passed; verify-2a DONE |

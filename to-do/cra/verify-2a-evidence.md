@@ -2,9 +2,9 @@
 
 Recorded: **08/11/2026** (engineering). Plan todo: `verify-2a-audit-trail`.
 
-**Verdict this pass:** lab execution is **done as far as practical**, but `verify-2a-audit-trail` must remain **BLOCKED**, not completed. Unit/integration evidence from PR **#654** remains green. AlmaLinux 10 prerelease (SSH `2229`) is on `stable @ 5ccfa94` / CPN `1.4.9`. Logout, privileged CLI audit, local webhook delivery, auth-failure spike notification, policy lock UI, and the remaining safe HTTP mutations were exercised. Most real routes produced redacted rows with actor, IP, outcome, category, and severity.
+**Verdict this pass:** `verify-2a-audit-trail` is **PASS** and can be marked completed. Commit `64f98992` maps the real database, DNS, updates, notifications, and UI preference mutation routes to stable actions and categories while retaining deny-by-default coverage. AlmaLinux 10 prerelease (SSH `2229`) was upgraded to `stable @ 64f98992` / CPN `1.4.9`, then the close-out and targeted opt-out smokes passed.
 
-The blocking defect is now concrete: real database, DNS, update-check, notification, and UI-preference routes are audited as synthesized actions with `category=other`, not their intended categories. Because `/api/panel/color-mode` is stored as `other`, selecting the UI's `disable_ui` opt-out does not suppress that real UI mutation. This contradicts the coverage matrix and prevents a clean Phase 2a verification pass. The optional webhook itself passed and was restored to disabled after the smoke.
+Real database, DNS, update-check, notification, and UI-preference routes now produce `database`, `dns`, `updates`, `notifications`, and `ui` rows. With `disable_ui` selected, a successful no-op POST to `/api/panel/color-mode` produced zero audit rows, while security-essential audit settings mutations remained recorded. The optional webhook passed and was restored to disabled after the smoke.
 
 Coverage matrix: [audit-coverage.md](audit-coverage.md).
 
@@ -14,9 +14,9 @@ Source branch / tip used for unit evidence:
 
 | Field | Value |
 |-------|-------|
-| PR | [#654](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/654) |
-| Branch | `feat/phase2a-full-panel-audit` (merged to `stable`) |
-| Commit | clippy-fix tip after rebase onto `stable` (prior evidence `57c64941`, `45a93052`) |
+| PR | [#654](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/654) plus direct `stable` category fix |
+| Branch | `stable` |
+| Commit | `64f98992` |
 | Host | WSL (OpenSSL available); Windows host `cargo test` blocked on missing OpenSSL / `openssl-sys` |
 
 ### Command
@@ -29,11 +29,13 @@ cargo test panel_audit --lib -- --nocapture
 ### Result (08/11/2026)
 
 ```
-running 11 tests
+running 13 tests
 test panel_audit_types::tests::essential_categories_locked ... ok
 test panel_audit_policy::tests::default_retention_is_ninety ... ok
 test panel_audit_paths::tests::category_inference ... ok
 test panel_audit_paths::tests::maps_plugin_and_auth_paths ... ok
+test panel_audit_paths::tests::maps_phase_2a_real_mutation_routes ... ok
+test panel_audit_paths::tests::phase_2a_prefix_fallbacks_preserve_categories ... ok
 test panel_audit_types::tests::legacy_json_deserializes ... ok
 test panel_audit::tests::retention_drops_old_rows ... ok
 test panel_audit::tests::ui_opt_out_skips_non_essential ... ok
@@ -42,7 +44,7 @@ test panel_audit_alerts::tests::auth_fail_spike_resets_window ... ok
 test panel_audit_policy::tests::cannot_disable_auth ... ok
 test panel_audit::tests::record_round_trips_and_redacts ... ok
 
-test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1210 filtered out
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 1211 filtered out
 ```
 
 Also run (legacy facade still covered on the same tip):
@@ -77,7 +79,7 @@ cargo test panel_action_log --lib -- --nocapture
 | Panel | `http://127.0.0.1:2087` (`panel_public_url` same) |
 | Pre-upgrade | `cpn 1.4.7` (no Phase 2a markers; no `/var/lib/cpn/audit/`; legacy `panel-actions.jsonl` only) |
 | Upgrade | `sudo cpn-installer --upgrade --to stable` (detached; log `/var/log/cpn/verify2a-upgrade.log`) |
-| Post-upgrade | `cpn 1.4.9`; `CPN_BUILD_SHA=5ccfa94caf0da1a3201989a87e9a8995a4eb89ce` (`origin/stable` tip after #654) |
+| Post-upgrade | `cpn 1.4.9`; `CPN_BUILD_SHA=64f9899294364f9c95ce344d0afe06992635c200` (category fix on `stable`) |
 | Ubuntu 2230 | Reachable; still `cpn 1.4.7` (not upgraded this pass; AL10 preferred) |
 
 Session cookie after tip upgrade is port-scoped: `cpn_panel_session_2087` (not bare `cpn_panel_session`).
@@ -97,15 +99,15 @@ Session cookie after tip upgrade is port-scoped: `cpn_panel_session_2087` (not b
 | 5 | Packages | POST `/plugins/disable-cpn` with empty id | 303 | `plugin.deactivate-cpn`, `category=packages`, expected failure audited |
 | 6 | Hosting packages | POST `/packages/create` with invalid empty input | 303 | `hosting_package.create`, `category=hosting_packages`, expected failure audited |
 | 7 | Websites | POST `/websites/create` with invalid empty input | 303 | `website.create`, `category=websites`, expected failure audited |
-| 8 | Database | POST `/databases/create` with empty name | 303 | row written, but `http.post:/databases/create`, `category=other` (**BLOCKED: misclassified**) |
-| 10 | DNS | POST `/server/dns/zones/create` without CSRF | 303 | row written, but synthesized action and `category=other` (**BLOCKED: misclassified**) |
+| 8 | Database | POST `/databases/create` with empty name | 303 | `action=db.create`, `category=database`, expected validation failure audited |
+| 10 | DNS | POST `/server/dns/zones/create` without CSRF | 303 | `action=dns.zone.create`, `category=dns`, expected CSRF failure audited |
 | 11 | Email | POST `/email/accounts/create` with invalid empty input | 303 | synthesized action, correctly inferred `category=email` |
 | 12 | Backup | POST `/backups/schedule/save` with empty/default form | 303 | synthesized action, `category=backup`, `ok=true` |
 | 13 | Docker | POST `/docker/create` with invalid empty input | 400 | `docker.create`, `category=docker`, expected failure audited |
 | 14 | Files | POST `/server/files/op` without CSRF | 303 | synthesized action, `category=files`, expected failure audited |
-| 16 | Updates | POST `/api/auto-upgrade/check` with `apply=false` | 200 | row written, but `category=other` (**BLOCKED: misclassified**) |
-| 18 | Notifications | POST `/api/panel/notifications/mark-read` with invalid empty JSON | 400 | row written, but `category=other` (**BLOCKED: misclassified**) |
-| 19 | UI prefs | no-op POST `/api/panel/color-mode` with current mode | 200 | row written, but `category=other` (**BLOCKED: misclassified**) |
+| 16 | Updates | POST `/api/auto-upgrade/check` with `apply=false` | 200 | `action=updates.auto-upgrade.check`, `category=updates` |
+| 18 | Notifications | POST `/api/panel/notifications/mark-read` with invalid empty JSON | 400 | `action=panel.notifications.mark-read`, `category=notifications`, expected validation failure audited |
+| 19 | UI prefs | no-op POST `/api/panel/color-mode` with current mode | 200 | `action=ui.color-mode`, `category=ui`; suppressed when `disable_ui=1` |
 
 ### Store confirmation
 
@@ -114,7 +116,7 @@ Session cookie after tip upgrade is port-scoped: `cpn_panel_session_2087` (not b
 /var/lib/cpn/panel-actions.jsonl legacy still present (older host/plugin rows)
 ```
 
-The close-out run added 26 rows, followed by targeted package/webhook/opt-out rows. Close-out category counts were `auth=9`, `identity=1`, `accounts=1`, `api_tokens=2`, `hosting_packages=1`, `websites=1`, `email=1`, `backup=1`, `docker=1`, `files=1`, `settings=2`, `cli=1`, and `other=4`. The targeted follow-up added `packages=1` and confirmed the update and UI routes still land in `other`.
+The fixed close-out run added 27 rows. Category counts were `auth=9`, `identity=1`, `accounts=1`, `api_tokens=2`, `packages=1`, `hosting_packages=1`, `websites=1`, `database=1`, `dns=1`, `email=1`, `backup=1`, `docker=1`, `files=1`, `notifications=1`, `ui=1`, `settings=2`, and `cli=1`. There were zero `other` rows. The targeted follow-up added `updates=1` and proved the real UI route was suppressed under `disable_ui`.
 
 Sample redacted shapes (no secrets in messages):
 
@@ -174,7 +176,7 @@ The live `/settings/audit` page returned 200 and showed:
 - a `disable_ui` checkbox
 - no `disable_auth` checkbox
 
-Saving `disable_ui=1` succeeded. A no-op real UI mutation at `/api/panel/color-mode` was still recorded as `http.post:/api/panel/color-mode`, `category=other`. This is a blocker, not a pass: the UI opt-out control exists, but the real preference route is misclassified and therefore does not honor the selected `ui` opt-out. The audit policy was restored to no disabled categories.
+Saving `disable_ui=1` succeeded. A no-op real UI mutation at `/api/panel/color-mode` returned HTTP 200 and added zero audit rows. The same route records `action=ui.color-mode`, `category=ui` when UI auditing is enabled. The audit policy was restored to no disabled categories.
 
 Final policy after all checks:
 
@@ -189,6 +191,8 @@ Both `/var/lib/cpn/audit/audit.jsonl` and `policy.json` remained mode `600`.
 - `to-do/_lab_ssh_once.py`
 - `to-do/_verify2a_upgrade_probe.py` (probe / start-upgrade / upgrade-status)
 - `to-do/_verify2a_post_upgrade_smoke.py` (auth / settings / firewall + store inspect)
+- `to-do/_verify2a_close_smoke.py` (full safe close-out category smoke)
+- `to-do/_verify2a_followup.py` (updates category + real UI opt-out proof)
 
 ## Manual lab smoke checklist
 
@@ -203,39 +207,30 @@ Run on a panel that includes Phase 2a. Confirm each category yields a redacted r
 | 5 | Packages / plugins / themes | Install or activate a host/plugin action | [x] plugin deactivate validation failure audited |
 | 6 | Hosting packages | Edit/assign package limits | [x] create validation failure audited |
 | 7 | Websites / WP / apps | Create or suspend a site (lab-only) | [x] create validation failure audited |
-| 8 | DB / FTP / SFTP | One mutating DB or FTP action | [ ] **BLOCKED: row is `category=other`** |
+| 8 | DB / FTP / SFTP | One mutating DB or FTP action | [x] `db.create`, `category=database` |
 | 9 | Firewall / security | Start/stop firewall or Fail2Ban unban | [x] reload exercised (lab zone error; audited) |
-| 10 | DNS / Cloudflare | Create or edit a DNS record (lab zone) | [ ] **BLOCKED: real `/server/dns/*` route is `category=other`** |
+| 10 | DNS / Cloudflare | Create or edit a DNS record (lab zone) | [x] `dns.zone.create`, `category=dns` |
 | 11 | Email | Create mailbox or change mailbox password | [x] expected validation failure audited |
 | 12 | Backup / restore | Trigger backup job if available | [x] schedule mutation audited |
 | 13 | Docker / PHP / services | Start/stop a container or service toggle | [x] Docker create validation failure audited |
 | 14 | Files | mkdir or upload in root File Manager | [x] file operation CSRF failure audited |
 | 15 | Settings / repair / migrate | Change audit retention or heal | [x] audit policy POST |
-| 16 | Updates | Version check POST that mutates state, or note denylist if read-only | [ ] **BLOCKED: real check route is `category=other`** |
+| 16 | Updates | Version check POST that mutates state, or note denylist if read-only | [x] `updates.auto-upgrade.check`, `category=updates` |
 | 17 | CLI | privileged mutation audit | [x] `cpn doctor heal --id panel.service --json` |
-| 18 | Notifications | Remote notify if enabled | [ ] **BLOCKED: real panel notification mutation is `category=other`; remote channel not configured** |
-| 19 | UI prefs | Toggle a UI preference (opt-outable) | [ ] **BLOCKED: real color-mode mutation is `category=other`, so `disable_ui` does not suppress it** |
+| 18 | Notifications | Remote notify if enabled | [x] `panel.notifications.mark-read`, `category=notifications`; local panel notification mutation exercised |
+| 19 | UI prefs | Toggle a UI preference (opt-outable) | [x] `ui.color-mode`, `category=ui`; zero rows while `disable_ui=1` |
 
 ### Export / policy / alerts (lab)
 
 - [x] Settings > Audit trail: security-essential categories shown locked on; no `disable_auth` control
-- [ ] Non-essential opt-out skips `ui`: **BLOCKED on real-route misclassification**
+- [x] Non-essential opt-out skips `ui`: real color-mode POST succeeded and added zero rows
 - [x] Export JSONL and CSV download; simple secret-smoke found no lab passwords / wrong-password string
 - [x] Optional local webhook received redacted JSON only; policy restored disabled
 - [x] Eight-event auth fail spike added one panel-admin inbox notification
 
 ## Closure disposition
 
-The practical lab work is complete. `verify-2a-audit-trail` **cannot be marked completed yet** because the real-route results disprove full category coverage and UI opt-out behavior.
-
-Required code follow-up:
-
-1. Map `/databases/*` and `/ftp/*` to `database`.
-2. Map `/server/dns/*` to `dns` (the current map primarily names stale `/dns/*` aliases).
-3. Map `/api/auto-upgrade/*` and other real version mutation routes to `updates`.
-4. Map `/api/panel/notifications/*` to `notifications`.
-5. Map real preference routes such as `/api/panel/color-mode`, minimalist mode, and dashboard layout to stable `ui.*` actions with `category=ui`.
-6. Re-run this close-out smoke and confirm `disable_ui` suppresses the real UI mutation while security-essential rows remain enabled.
+The practical lab work is complete. `verify-2a-audit-trail` **can be marked completed**. The category mapping defect is fixed, all 19 checklist categories have lab evidence, deny-by-default auditing remains active, and real-route UI opt-out behavior passed.
 
 ### Re-run confirmation (this agent, WSL)
 
@@ -278,3 +273,4 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1216 filtered out; f
 | 08/11/2026 | Rebased onto `stable` after #653; resolved add/add on this file; Clippy collapsible_if / too_many_arguments fixed |
 | 08/11/2026 | #654 merged; AL10 2229 tip-upgraded to `5ccfa94` / 1.4.9; lab smoke auth+settings+firewall; audit.jsonl + export secret-smoke documented; remaining checklist kept open |
 | 08/11/2026 | Close-out smoke: logout, CLI doctor heal, loopback webhook, auth-fail spike, policy lock, and safe real-route mutations exercised; database/DNS/updates/notifications/UI category defects documented as completion blockers |
+| 08/11/2026 | Commit `64f98992` deployed to AL10 2229; fixed category close-out produced zero `other` rows; targeted update and UI opt-out proof passed; verify-2a marked PASS |
