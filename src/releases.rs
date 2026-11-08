@@ -1,4 +1,4 @@
-/! GitHub Releases lookup for CPN installer packages.
+//! GitHub Releases lookup for CPN installer packages.
 
 use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
