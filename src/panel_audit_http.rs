@@ -28,6 +28,7 @@ pub fn request_ua(http: &HttpRequest) -> String {
 }
 
 /// Record an auth (or other) audit row with IP/UA from the request. Never panics.
+#[allow(clippy::too_many_arguments)]
 pub fn audit_from_request(
     http: &HttpRequest,
     actor: &str,

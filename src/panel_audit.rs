@@ -51,11 +51,11 @@ fn ensure_audit_dir() -> Result<(), String> {
 fn link_legacy_compat() {
     let legacy = legacy_log_path();
     let audit = log_path();
-    if legacy.exists() && !audit.exists() {
-        if let Ok(raw) = fs::read(&legacy) {
-            let _ = fs::write(&audit, raw);
-            set_private(&audit);
-        }
+    if legacy.exists() && !audit.exists()
+        && let Ok(raw) = fs::read(&legacy)
+    {
+        let _ = fs::write(&audit, raw);
+        set_private(&audit);
     }
     #[cfg(unix)]
     {
@@ -109,15 +109,15 @@ fn prune_by_retention(path: &PathBuf) {
             Err(_) => kept.push(line.to_string()),
         }
     }
-    if !changed {
-        if let Ok(meta) = fs::metadata(path) {
-            if meta.len() > SOFT_MAX_BYTES && kept.len() > 5000 {
-                let start = kept.len().saturating_sub(5000);
-                if start > 0 {
-                    kept = kept[start..].to_vec();
-                    changed = true;
-                }
-            }
+    if !changed
+        && let Ok(meta) = fs::metadata(path)
+        && meta.len() > SOFT_MAX_BYTES
+        && kept.len() > 5000
+    {
+        let start = kept.len().saturating_sub(5000);
+        if start > 0 {
+            kept = kept[start..].to_vec();
+            changed = true;
         }
     }
     if !changed {
@@ -195,6 +195,7 @@ pub fn record(
 }
 
 /// Richer helper used by auth and middleware.
+#[allow(clippy::too_many_arguments)]
 pub fn record_full(
     actor: &str,
     action: &str,
