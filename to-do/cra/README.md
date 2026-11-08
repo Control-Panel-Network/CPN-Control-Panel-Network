@@ -4,25 +4,27 @@ Living dashboard for Regulation (EU) 2024/2847 (Cyber Resilience Act) engineerin
 
 **This folder is engineering evidence and checklists.** It does **not** claim that CPN is CRA-conformant, CE-marked, or that a signed EU Declaration of Conformity exists. Binding legal outcomes stay with the manufacturer signatory and counsel.
 
-## Quick status (engineering scaffold)
+## Quick status (08/11/2026)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Phase 0 scaffold (`to-do/cra/`) | In progress | This folder |
-| Classification (working) | Draft | Important Class I assumption; counsel confirmation pending ([classification.md](classification.md)) |
-| Legal track (5 items) | **PENDING HUMAN** | [legal-track.md](legal-track.md); owners/deadlines set; no binding signatures in git |
-| Verification roll-up | In progress | [verification-summary.md](verification-summary.md) (PRs 652/653/654 + gates) |
-| Verify 2a evidence | Partial (units green; lab smoke pending) | [verify-2a-evidence.md](verify-2a-evidence.md) |
-| Verify 2b evidence | Partial (`bash -n` OK; live release pending) | [verify-2b-evidence.md](verify-2b-evidence.md) |
+| Phase 0 scaffold (`to-do/cra/`) | Done (engineering) | This folder on `stable` |
+| Merged CRA PRs | **#652, #653, #654 MERGED** to `stable` | Tip includes `e62d706d` (#654 merge) |
+| Dependabot / Code Scanning | **Open = 0** | After #652; see [verification-summary.md](verification-summary.md) |
+| Classification (working) | Draft | Important Class I assumption; counsel confirmation **BLOCKED-ON-HUMAN** ([classification.md](classification.md)) |
+| Legal track (5 items) | **BLOCKED-ON-HUMAN** | [legal-track.md](legal-track.md); owners/deadlines set; no binding signatures in git |
+| Verification roll-up | Partial | [verification-summary.md](verification-summary.md); final note [cra-verification-evidence.md](cra-verification-evidence.md) |
+| Verify 1b GitHub security | **Done** | open=0 |
+| Verify 2a evidence | Partial (units green; lab smoke = sibling) | [verify-2a-evidence.md](verify-2a-evidence.md) |
+| Verify 2b evidence | Partial (`bash -n` OK; live release = sibling) | [verify-2b-evidence.md](verify-2b-evidence.md) |
+| Verify 2c disclosure site | In-tree done; live deploy = sibling | `site/security.html`, advisories; https://cpn.newstargeted.com/security |
 | Art. 13 risk assessment | Started | [risk-assessment.md](risk-assessment.md) |
 | Annex I evidence matrix | Draft | [annex-I-evidence-matrix.md](annex-I-evidence-matrix.md) |
 | Support period policy | Draft | [support-period.md](support-period.md); aligned with SECURITY.md / docs/SUPPORT.md |
-| SECURITY.md CVD | Draft upgrade | Root [SECURITY.md](../../SECURITY.md) |
+| SECURITY.md CVD | Upgraded on #653 | Root [SECURITY.md](../../SECURITY.md) |
 | Art. 14 reporting playbook | Draft | [reporting-playbook.md](reporting-playbook.md); ENISA account is legal/ops |
-| Audit coverage matrix | In progress (Phase 2a) | [audit-coverage.md](audit-coverage.md); store `/var/lib/cpn/audit/audit.jsonl`, deny-by-default middleware, 90-day retention |
-| Public advisory log / `/security` | Other workstream | Expected: `docs/SECURITY-ADVISORIES.md`, `docs/security-advisories.json`, https://cpn.newstargeted.com/security |
-| Dependabot / Code Scanning clear | Other workstream | Phase 1b |
-| Phase 2b SBOM + security metadata + audit gate + USER-SECURITY | Draft / wired | Release SBOMs + `cpn-security-release.json`; [release-audit-gate.md](release-audit-gate.md); [docs/USER-SECURITY.md](../../docs/USER-SECURITY.md) |
+| Audit coverage matrix | Merged (#654) | [audit-coverage.md](audit-coverage.md); store `/var/lib/cpn/audit/audit.jsonl` |
+| Phase 2b SBOM + security metadata + audit gate + USER-SECURITY | Merged (#653) | [release-audit-gate.md](release-audit-gate.md); [docs/USER-SECURITY.md](../../docs/USER-SECURITY.md) |
 | Annex VII technical file / DoC / CE | Draft scaffolds only | [technical-file/](technical-file/README.md) (unsigned DoC; CE **not** affixed) |
 | Phase 4 operate runbook | Draft | [operate-runbook.md](operate-runbook.md) |
 
@@ -33,7 +35,7 @@ Living dashboard for Regulation (EU) 2024/2847 (Cyber Resilience Act) engineerin
 | **11 September 2026** | Art. 14 reporting (actively exploited vulnerabilities and severe incidents) via ENISA Single Reporting Platform |
 | **11 December 2027** | Full essential requirements, vulnerability handling expectations, CE marking, EU Declaration of Conformity for covered placements / substantial modifications |
 
-As of the scaffold date (**08/11/2026**), the Art. 14 reporting start date has already passed. Treat the playbook and ENISA account as **active obligations**, not future-only prep.
+As of **08/11/2026**, the Art. 14 reporting start date has already passed. Treat the playbook and ENISA account as **active obligations**, not future-only prep.
 
 ## Manufacturer (draft, confirm with counsel)
 
@@ -54,8 +56,9 @@ Do not put ENISA credentials, signing keys, insurance policy numbers, or persona
 | File | Purpose |
 |------|---------|
 | [classification.md](classification.md) | Class I working assumption and counsel questions |
-| [legal-track.md](legal-track.md) | Checklist for the five legal/manufacturer items (PENDING HUMAN) |
-| [verification-summary.md](verification-summary.md) | PR 652/653/654 status and remaining verify gates |
+| [legal-track.md](legal-track.md) | Checklist for the five legal/manufacturer items (**BLOCKED-ON-HUMAN**) |
+| [verification-summary.md](verification-summary.md) | Merged PRs 652/653/654, alerts open=0, remaining verify gates |
+| [cra-verification-evidence.md](cra-verification-evidence.md) | DONE vs HUMAN-REQUIRED vs sibling-waiting |
 | [verify-2a-evidence.md](verify-2a-evidence.md) | Phase 2a unit + lab smoke evidence |
 | [verify-2b-evidence.md](verify-2b-evidence.md) | Phase 2b SBOM / release gate evidence |
 | [risk-assessment.md](risk-assessment.md) | Living Art. 13 cybersecurity risk assessment |
@@ -73,11 +76,11 @@ Do not put ENISA credentials, signing keys, insurance policy numbers, or persona
 - [SECURITY.md](../../SECURITY.md): coordinated vulnerability disclosure (CVD)
 - [docs/USER-SECURITY.md](../../docs/USER-SECURITY.md): Annex II style user security instructions (including secure deletion)
 - [docs/SUPPORT.md](../../docs/SUPPORT.md): OS support tiers + security support period pointer
-- Future: [docs/SECURITY-ADVISORIES.md](../../docs/SECURITY-ADVISORIES.md) and https://cpn.newstargeted.com/security (public fixed-vuln log)
+- [docs/SECURITY-ADVISORIES.md](../../docs/SECURITY-ADVISORIES.md) and https://cpn.newstargeted.com/security (public fixed-vuln log)
 - [docs/RELEASES.md](../../docs/RELEASES.md): signed release distribution, SBOMs, security metadata
 
 ## How to update this dashboard
 
 1. After completing an engineering CRA deliverable, flip the matching row above and link evidence (PR, path, CI URL).
-2. Legal rows stay **pending** until counsel/ops mark them done in [legal-track.md](legal-track.md) with off-repo evidence pointers (no secrets).
+2. Legal rows stay **BLOCKED-ON-HUMAN** until counsel/ops mark them done in [legal-track.md](legal-track.md) with off-repo evidence pointers (no secrets).
 3. Never mark CRA-ready in public copy until Phase 3 legal outcomes and engineering verify gates agree.
