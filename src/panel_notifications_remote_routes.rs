@@ -22,11 +22,12 @@ fn json_body(status: u16, value: serde_json::Value) -> HttpResponse {
         .body(body)
 }
 
-fn header_str<'a>(req: &'a HttpRequest, name: &str) -> &'a str {
+fn header_opt<'a>(req: &'a HttpRequest, name: &str) -> Option<&'a str> {
     req.headers()
         .get(name)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 fn peer_ip(req: &HttpRequest) -> String {
@@ -73,9 +74,26 @@ pub async fn panel_notifications_remote_broadcast(
     body: web::Bytes,
 ) -> HttpResponse {
     let cfg = load_remote_push_config();
-    let timestamp = header_str(&http, "X-CPN-Timestamp");
-    let nonce = header_str(&http, "X-CPN-Nonce");
-    let signature = header_str(&http, "X-CPN-Signature");
+    // Require signed headers without a hard-coded empty fallback: CodeQL
+    // rust/hard-coded-cryptographic-value treats "" flowing into nonce as a finding.
+    let Some(timestamp) = header_opt(&http, "X-CPN-Timestamp") else {
+        return json_body(
+            401,
+            serde_json::json!({ "ok": false, "error": "missing timestamp" }),
+        );
+    };
+    let Some(nonce) = header_opt(&http, "X-CPN-Nonce") else {
+        return json_body(
+            401,
+            serde_json::json!({ "ok": false, "error": "missing nonce" }),
+        );
+    };
+    let Some(signature) = header_opt(&http, "X-CPN-Signature") else {
+        return json_body(
+            401,
+            serde_json::json!({ "ok": false, "error": "missing signature" }),
+        );
+    };
     let peer = peer_ip(&http);
 
     let parsed: RemoteBroadcastRequest = match serde_json::from_slice(&body) {

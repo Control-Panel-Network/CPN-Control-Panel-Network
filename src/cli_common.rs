@@ -76,16 +76,18 @@ pub fn read_password_confirmed(
     Ok(result)
 }
 
-/// Announce which account a password reset will target (SSH operator UX).
+/// Announce that a password reset is about to run (SSH operator UX).
 ///
-/// Prints the username on purpose so operators know which login is about to change.
-pub fn announce_password_reset_target(username: &str) {
-    eprintln!("Resetting password for user '{username}'");
+/// Does not echo the username: CodeQL `rust/cleartext-logging`. The operator
+/// already supplied the target via CLI args / prompts.
+pub fn announce_password_reset_target(_username: &str) {
+    eprintln!("Resetting password for the selected account");
 }
 
-/// Confirm a successful password reset and name the account.
-pub fn print_password_updated_ok(username: &str) {
-    println!("password updated ok for user '{username}'");
+/// Confirm a successful password reset without echoing the account name.
+pub fn print_password_updated_ok(_username: &str) {
+    // Do not echo usernames: CodeQL rust/cleartext-logging.
+    println!("password updated ok");
 }
 
 /// True for clear affirmative answers (case-insensitive, trimmed).

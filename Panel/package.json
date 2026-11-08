@@ -29,5 +29,11 @@
     "@typescript-eslint/parser": "^8.72.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "minimatch@7": "11.0.1",
+    "minimatch@8": "11.0.1",
+    "minimatch@9": "11.0.1",
+    "minimatch@10": "11.0.1"
   }
 }

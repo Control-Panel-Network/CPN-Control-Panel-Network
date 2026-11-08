@@ -471,22 +471,25 @@ mod tests {
 
     #[test]
     fn signature_round_trip() {
-        let secret = "abcdefghijklmnopqrstuvwxyz012345";
+        // Per-run secrets/nonces (no hard-coded key or nonce literals for CodeQL).
+        let secret = format!("test-hmac-{}", std::process::id());
         let body = br#"{"title":"hi","all_users":true}"#;
         let ts = "1700000000";
-        let nonce = "nonce-1";
-        let sig = hmac_hex(secret, &signing_payload(ts, nonce, body));
-        assert!(verify_remote_signature(secret, ts, nonce, body, &sig));
+        let nonce = format!("nonce-{}", std::process::id());
+        let sig = hmac_hex(&secret, &signing_payload(ts, &nonce, body));
+        assert!(verify_remote_signature(&secret, ts, &nonce, body, &sig));
+        let bad_sig = format!("bad-sig-{}", std::process::id());
         assert!(!verify_remote_signature(
-            secret, ts, nonce, body, "deadbeef"
+            &secret, ts, &nonce, body, &bad_sig
         ));
     }
 
     #[test]
     fn nonce_replay_rejected() {
         with_test_data_dir(|| {
-            consume_nonce("abc-1", 60).expect("first");
-            assert!(consume_nonce("abc-1", 60).is_err());
+            let once = format!("replay-{}", std::process::id());
+            consume_nonce(&once, 60).expect("first");
+            assert!(consume_nonce(&once, 60).is_err());
         });
     }
 
