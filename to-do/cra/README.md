@@ -15,7 +15,7 @@ Living dashboard for Regulation (EU) 2024/2847 (Cyber Resilience Act) engineerin
 | Legal track (5 items) | **BLOCKED-ON-HUMAN** | [legal-track.md](legal-track.md); owners/deadlines set; no binding signatures in git |
 | Verification roll-up | Partial | [verification-summary.md](verification-summary.md); final note [cra-verification-evidence.md](cra-verification-evidence.md) |
 | Verify 1b GitHub security | **Done** | open=0 |
-| Verify 2a evidence | Partial (units green; AL10 auth/settings/firewall + export secret-smoke; remaining categories open) | [verify-2a-evidence.md](verify-2a-evidence.md) |
+| Verify 2a evidence | **Blocked after practical lab completion** (logout/CLI/webhook/spike/policy/export pass; real database, DNS, update, notification, and UI routes misclassified as `other`) | [verify-2a-evidence.md](verify-2a-evidence.md) |
 | Verify 2b evidence | Partial (`bash -n` OK; live release = sibling) | [verify-2b-evidence.md](verify-2b-evidence.md) |
 | Verify 2c disclosure site | In-tree done; live deploy = sibling | `site/security.html`, advisories; https://cpn.newstargeted.com/security |
 | Art. 13 risk assessment | Started | [risk-assessment.md](risk-assessment.md) |

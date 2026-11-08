@@ -38,7 +38,7 @@ gh api "repos/Control-Panel-Network/CPN-Control-Panel-Network/code-scanning/aler
 | Plan todo | Evidence | Status this pass |
 |-----------|----------|------------------|
 | `verify-1b-github-security` | `gh` Dependabot + Code Scanning open=0 on `stable` after #652 | **DONE** (engineering) |
-| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 merged | **PARTIAL.** AL10 `2229` tip `5ccfa94` / 1.4.9: auth fail+ok, settings audit save, firewall reload in `audit.jsonl`; export JSONL/CSV secret-smoke clean. Remaining categories + logout + webhook/spike/CLI still open. |
+| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 merged | **BLOCKED after practical lab completion.** AL10 `2229` tip `5ccfa94` / 1.4.9: logout, CLI doctor heal, webhook delivery, auth-fail spike, policy lock, export, and safe real-route mutations exercised. Database, DNS, update-check, notification, and UI-preference routes are audited as `category=other`; real UI opt-out therefore fails. Code mapping fixes and a re-smoke are required. |
 | `verify-2b-sbom-release` | [verify-2b-evidence.md](verify-2b-evidence.md), #653 merged | **WAITING sibling verify-2b** for live tagged release (or dry-run) with SBOM + `cpn-security-release.json` assets. Scripts `bash -n` OK. |
 | `verify-2c-disclosure-site` | `site/security.html`, advisories JSON/MD on #653 | Engineering **DONE** in tree. Live https://cpn.newstargeted.com/security owned by sibling deploy agent (not re-checked here). |
 | `cra-verification` (E2E) | This file + [cra-verification-evidence.md](cra-verification-evidence.md) | **PARTIAL.** Engineering merge + alerts=0 recorded. Blocked on sibling verify-2a/2b completion and human legal track. |
@@ -57,7 +57,7 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 
 ## Remaining gates (ordered)
 
-1. Finish **verify-2a** remaining checklist (logout + other categories + webhook/spike/CLI) per [verify-2a-evidence.md](verify-2a-evidence.md).
+1. Fix **verify-2a** real-route category mappings for database/FTP, `/server/dns`, auto-upgrade/version, panel notifications, and UI preferences; then re-smoke the UI opt-out. Logout, CLI, webhook, spike alert, export, and policy-lock checks already pass.
 2. Sibling **verify-2b**: tagged release or dry-run; attach SBOM + security-meta asset URLs in [verify-2b-evidence.md](verify-2b-evidence.md).
 3. Sibling **deploy**: confirm live https://cpn.newstargeted.com/security (not owned by this pass).
 4. Humans advance [legal-track.md](legal-track.md) (classification first; ENISA account urgent).
@@ -82,3 +82,4 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 | 08/11/2026 | Initial verification summary for PRs 652/653/654 and remaining gates |
 | 08/11/2026 | PRs 652/653/654 **MERGED** to `stable`; Dependabot open=0; Code Scanning open=0; sibling verify-2a/2b still waiting; link cra-verification-evidence |
 | 08/11/2026 | verify-2a AL10 lab partial smoke recorded (auth/settings/firewall + export); remaining checklist still open |
+| 08/11/2026 | verify-2a practical close-out run completed; logout/CLI/webhook/spike/policy checks passed; real-route category and UI opt-out defects now block completion |
