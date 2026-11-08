@@ -14,7 +14,7 @@ Final engineering vs human split: [cra-verification-evidence.md](cra-verificatio
 | [#653](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/653) | `feat/cra-phase-2b-3-4` | Phase 0/1 CVD, Phase 2b/3 SBOM gate, Phase 2c disclosure site | **MERGED** | `bb27b13d` | Phase 0/1 paper, 2b SBOM/gate, 2c site, legal scaffold |
 | [#654](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/654) | `feat/phase2a-full-panel-audit` | Phase 2a full panel audit trail and Settings UI | **MERGED** | `e62d706d` | `phase2-audit-trail` / `verify-2a-audit-trail` |
 
-`stable` tip after merges (this pass): `e62d706d` (Merge #654). Re-check:
+`stable` tip used for lab smoke: `5ccfa94c` (docs after Merge #654 `e62d706d`). Re-check:
 
 ```bash
 gh pr view 652 --json state,mergedAt,mergeCommit
@@ -38,7 +38,7 @@ gh api "repos/Control-Panel-Network/CPN-Control-Panel-Network/code-scanning/aler
 | Plan todo | Evidence | Status this pass |
 |-----------|----------|------------------|
 | `verify-1b-github-security` | `gh` Dependabot + Code Scanning open=0 on `stable` after #652 | **DONE** (engineering) |
-| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 merged | **WAITING sibling verify-2a** for lab category smoke + export/opt-out/alerts. Unit suite already green (11+5). |
+| `verify-2a-audit-trail` | [verify-2a-evidence.md](verify-2a-evidence.md), [audit-coverage.md](audit-coverage.md), #654 merged | **PARTIAL.** AL10 `2229` tip `5ccfa94` / 1.4.9: auth fail+ok, settings audit save, firewall reload in `audit.jsonl`; export JSONL/CSV secret-smoke clean. Remaining categories + logout + webhook/spike/CLI still open. |
 | `verify-2b-sbom-release` | [verify-2b-evidence.md](verify-2b-evidence.md), #653 merged | **WAITING sibling verify-2b** for live tagged release (or dry-run) with SBOM + `cpn-security-release.json` assets. Scripts `bash -n` OK. |
 | `verify-2c-disclosure-site` | `site/security.html`, advisories JSON/MD on #653 | Engineering **DONE** in tree. Live https://cpn.newstargeted.com/security owned by sibling deploy agent (not re-checked here). |
 | `cra-verification` (E2E) | This file + [cra-verification-evidence.md](cra-verification-evidence.md) | **PARTIAL.** Engineering merge + alerts=0 recorded. Blocked on sibling verify-2a/2b completion and human legal track. |
@@ -57,7 +57,7 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 
 ## Remaining gates (ordered)
 
-1. Sibling **verify-2a**: lab smoke + export/webhook from [verify-2a-evidence.md](verify-2a-evidence.md) on a panel with #654 tip.
+1. Finish **verify-2a** remaining checklist (logout + other categories + webhook/spike/CLI) per [verify-2a-evidence.md](verify-2a-evidence.md).
 2. Sibling **verify-2b**: tagged release or dry-run; attach SBOM + security-meta asset URLs in [verify-2b-evidence.md](verify-2b-evidence.md).
 3. Sibling **deploy**: confirm live https://cpn.newstargeted.com/security (not owned by this pass).
 4. Humans advance [legal-track.md](legal-track.md) (classification first; ENISA account urgent).
@@ -81,3 +81,4 @@ All five items: **BLOCKED-ON-HUMAN**. Owners and deadlines: [legal-track.md](leg
 |-------------------|--------|
 | 08/11/2026 | Initial verification summary for PRs 652/653/654 and remaining gates |
 | 08/11/2026 | PRs 652/653/654 **MERGED** to `stable`; Dependabot open=0; Code Scanning open=0; sibling verify-2a/2b still waiting; link cra-verification-evidence |
+| 08/11/2026 | verify-2a AL10 lab partial smoke recorded (auth/settings/firewall + export); remaining checklist still open |
