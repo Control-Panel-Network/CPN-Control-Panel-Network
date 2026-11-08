@@ -192,7 +192,7 @@ mod tests {
             // Cells carry their column name so narrow screens can stack each row as a card.
             assert!(html.contains(r#"data-label="Details""#));
             // A different non-admin user sees nothing of alice's actions.
-            assert!(panel_actions_table("bob").contains("No plugin or host-package actions"));
+            assert!(panel_actions_table("bob").contains("No audit events recorded yet"));
         });
     }
 
