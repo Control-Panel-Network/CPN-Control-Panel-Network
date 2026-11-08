@@ -32,9 +32,8 @@ pub fn export_csv(
     category_filter: Option<&str>,
 ) -> String {
     let rows = recent_filtered(limit, actor_filter, category_filter, None);
-    let mut out = String::from(
-        "ts,actor,action,target,ok,message,ip,ua,request_id,category,severity\n",
-    );
+    let mut out =
+        String::from("ts,actor,action,target,ok,message,ip,ua,request_id,category,severity\n");
     for row in rows {
         out.push_str(&csv_row(&row));
         out.push('\n');

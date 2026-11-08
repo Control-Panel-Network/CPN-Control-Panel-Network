@@ -30,10 +30,7 @@ pub fn is_noisy_read_like(path: &str) -> bool {
 }
 
 fn normalize_path(path: &str) -> &str {
-    path.split('?')
-        .next()
-        .unwrap_or(path)
-        .trim_end_matches('/')
+    path.split('?').next().unwrap_or(path).trim_end_matches('/')
 }
 
 pub fn action_for_path(path: &str) -> Option<&'static str> {
@@ -147,29 +144,53 @@ pub fn action_for_path(path: &str) -> Option<&'static str> {
 
 pub fn category_for_action(action: &str) -> AuditCategory {
     let a = action.to_ascii_lowercase();
-    if a.starts_with("auth.") { AuditCategory::Auth }
-    else if a.starts_with("identity.") { AuditCategory::Identity }
-    else if a.starts_with("account.") { AuditCategory::Accounts }
-    else if a.starts_with("token.") { AuditCategory::ApiTokens }
-    else if a.starts_with("plugin.") || a.starts_with("host.") { AuditCategory::Packages }
-    else if a.starts_with("hosting_package.") { AuditCategory::HostingPackages }
-    else if a.starts_with("website.") || a.starts_with("wordpress.") { AuditCategory::Websites }
-    else if a.starts_with("db.") || a.starts_with("ftp.") || a.starts_with("sftp.") { AuditCategory::Database }
-    else if a.starts_with("firewall.") || a.starts_with("security.") || a.starts_with("ssl.") { AuditCategory::Firewall }
-    else if a.starts_with("dns.") { AuditCategory::Dns }
-    else if a.starts_with("email.") { AuditCategory::Email }
-    else if a.starts_with("backup.") { AuditCategory::Backup }
-    else if a.starts_with("docker.") || a.starts_with("php.") { AuditCategory::Docker }
-    else if a.starts_with("files.") { AuditCategory::Files }
-    else if a.starts_with("settings.") { AuditCategory::Settings }
-    else if a.starts_with("repair.") { AuditCategory::Repair }
-    else if a.starts_with("migrate.") { AuditCategory::Migrate }
-    else if a.starts_with("updates.") || a.starts_with("upgrade.") { AuditCategory::Updates }
-    else if a.starts_with("cli.") { AuditCategory::Cli }
-    else if a.starts_with("theme.") { AuditCategory::Themes }
-    else if a.starts_with("panel.notifications") { AuditCategory::Notifications }
-    else if a.starts_with("ui.") { AuditCategory::Ui }
-    else { AuditCategory::Other }
+    if a.starts_with("auth.") {
+        AuditCategory::Auth
+    } else if a.starts_with("identity.") {
+        AuditCategory::Identity
+    } else if a.starts_with("account.") {
+        AuditCategory::Accounts
+    } else if a.starts_with("token.") {
+        AuditCategory::ApiTokens
+    } else if a.starts_with("plugin.") || a.starts_with("host.") {
+        AuditCategory::Packages
+    } else if a.starts_with("hosting_package.") {
+        AuditCategory::HostingPackages
+    } else if a.starts_with("website.") || a.starts_with("wordpress.") {
+        AuditCategory::Websites
+    } else if a.starts_with("db.") || a.starts_with("ftp.") || a.starts_with("sftp.") {
+        AuditCategory::Database
+    } else if a.starts_with("firewall.") || a.starts_with("security.") || a.starts_with("ssl.") {
+        AuditCategory::Firewall
+    } else if a.starts_with("dns.") {
+        AuditCategory::Dns
+    } else if a.starts_with("email.") {
+        AuditCategory::Email
+    } else if a.starts_with("backup.") {
+        AuditCategory::Backup
+    } else if a.starts_with("docker.") || a.starts_with("php.") {
+        AuditCategory::Docker
+    } else if a.starts_with("files.") {
+        AuditCategory::Files
+    } else if a.starts_with("settings.") {
+        AuditCategory::Settings
+    } else if a.starts_with("repair.") {
+        AuditCategory::Repair
+    } else if a.starts_with("migrate.") {
+        AuditCategory::Migrate
+    } else if a.starts_with("updates.") || a.starts_with("upgrade.") {
+        AuditCategory::Updates
+    } else if a.starts_with("cli.") {
+        AuditCategory::Cli
+    } else if a.starts_with("theme.") {
+        AuditCategory::Themes
+    } else if a.starts_with("panel.notifications") {
+        AuditCategory::Notifications
+    } else if a.starts_with("ui.") {
+        AuditCategory::Ui
+    } else {
+        AuditCategory::Other
+    }
 }
 
 pub fn category_for_path(path: &str) -> AuditCategory {
@@ -209,13 +230,19 @@ pub fn category_for_path(path: &str) -> AuditCategory {
 pub fn default_severity(action: &str, ok: bool) -> AuditSeverity {
     if !ok {
         return match category_for_action(action) {
-            AuditCategory::Auth | AuditCategory::Firewall | AuditCategory::Cli => AuditSeverity::Warning,
+            AuditCategory::Auth | AuditCategory::Firewall | AuditCategory::Cli => {
+                AuditSeverity::Warning
+            }
             _ => AuditSeverity::Notice,
         };
     }
     match action {
-        "firewall.stop" | "auth.lockout" | "cli.uninstall" | "token.issue"
-        | "identity.totp.disable" | "cli.mfa.clear" => AuditSeverity::Critical,
+        "firewall.stop"
+        | "auth.lockout"
+        | "cli.uninstall"
+        | "token.issue"
+        | "identity.totp.disable"
+        | "cli.mfa.clear" => AuditSeverity::Critical,
         "auth.login" | "auth.logout" | "auth.mfa.verify" => AuditSeverity::Notice,
         _ => AuditSeverity::Info,
     }
@@ -315,7 +342,10 @@ mod tests {
     fn maps_plugin_and_auth_paths() {
         assert_eq!(action_for_path("/apps/activate"), Some("host.attach"));
         assert_eq!(action_for_path("/login"), Some("auth.login"));
-        assert_eq!(action_for_path("/security/firewall/stop"), Some("firewall.stop"));
+        assert_eq!(
+            action_for_path("/security/firewall/stop"),
+            Some("firewall.stop")
+        );
         assert!(is_noisy_read_like("/settings/markdown-preview"));
         assert!(!is_noisy_read_like("/plugins/install-host"));
     }
@@ -324,6 +354,9 @@ mod tests {
     fn category_inference() {
         assert_eq!(category_for_action("auth.login"), AuditCategory::Auth);
         assert_eq!(category_for_action("token.issue"), AuditCategory::ApiTokens);
-        assert_eq!(category_for_action("firewall.stop"), AuditCategory::Firewall);
+        assert_eq!(
+            category_for_action("firewall.stop"),
+            AuditCategory::Firewall
+        );
     }
 }

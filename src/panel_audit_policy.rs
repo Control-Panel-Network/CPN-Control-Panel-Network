@@ -136,14 +136,18 @@ mod tests {
             policy.disabled_categories = vec!["auth".into(), "ui".into()];
             save_audit_policy(&policy).unwrap();
             let loaded = load_audit_policy();
-            assert!(!loaded
-                .disabled_categories
-                .iter()
-                .any(|c| c.eq_ignore_ascii_case("auth")));
-            assert!(loaded
-                .disabled_categories
-                .iter()
-                .any(|c| c.eq_ignore_ascii_case("ui")));
+            assert!(
+                !loaded
+                    .disabled_categories
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case("auth"))
+            );
+            assert!(
+                loaded
+                    .disabled_categories
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case("ui"))
+            );
             assert!(category_enabled(AuditCategory::Auth));
             assert!(!category_enabled(AuditCategory::Ui));
         });

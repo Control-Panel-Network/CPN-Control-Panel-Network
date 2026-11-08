@@ -1,7 +1,7 @@
 //! Settings > Audit trail policy page (retention, opt-out, webhook, export links).
 
 use crate::panel_audit_policy::{
-    DEFAULT_AUDIT_RETENTION_DAYS, AuditPolicy, load_audit_policy, opt_outable_categories,
+    AuditPolicy, DEFAULT_AUDIT_RETENTION_DAYS, load_audit_policy, opt_outable_categories,
 };
 use crate::panel_audit_types::AuditCategory;
 use crate::panel_hubs::feature_shell;

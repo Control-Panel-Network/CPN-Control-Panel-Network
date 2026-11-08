@@ -116,8 +116,7 @@ where
                     | "/forgot-password"
                     | "/reset-password"
             );
-            let should_log =
-                is_mutating(&method) && !is_noisy_read_like(&path) && !self_recorded;
+            let should_log = is_mutating(&method) && !is_noisy_read_like(&path) && !self_recorded;
             let actor = if should_log {
                 req.app_data::<actix_web::web::Data<Arc<AppState>>>()
                     .and_then(|state| panel_user_from_request(state.get_ref(), req.request()))
