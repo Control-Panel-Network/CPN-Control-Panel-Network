@@ -112,6 +112,7 @@ mod tests {
             prerelease,
             draft: false,
             html_url: String::new(),
+            body: String::new(),
             assets: Vec::new(),
             rpm_asset: None,
             binary_asset: None,

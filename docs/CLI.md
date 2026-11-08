@@ -68,6 +68,8 @@ sudo cpn-installer --uninstall --yes --dry-run   # print steps only
 
 ### Product uninstall (leave CPN)
 
+CRA-oriented operator instructions for permanent data deletion (Annex II style) live in [USER-SECURITY.md](USER-SECURITY.md) section 7. System Repair diagnoses and heals; it does not replace uninstall for secure deletion.
+
 Default uninstall is **destructive for CPN** but **keeps customer website files** and **keeps host MariaDB / OpenLiteSpeed** packages:
 
 | Removed by default | Kept by default |

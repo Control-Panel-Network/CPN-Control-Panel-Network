@@ -23,6 +23,12 @@ install -m 0644 "$ROOT/scripts/install.sh" "$DEST/install.sh"
 install -m 0644 "$ROOT/scripts/upgrade.sh" "$DEST/upgrade.sh"
 install -m 0644 "$ROOT/scripts/cpn-bootstrap-lib.sh" "$DEST/cpn-bootstrap-lib.sh"
 
+# Canonical advisories live under docs/; refresh the site feed on every sync.
+mkdir -p "$DEST/data"
+if [[ -f "$ROOT/docs/security-advisories.json" ]]; then
+  install -m 0644 "$ROOT/docs/security-advisories.json" "$DEST/data/security-advisories.json"
+fi
+
 # Optional alias used by some older docs; keep if present in scripts/
 if [[ -f "$ROOT/scripts/preUpgrade.sh" ]]; then
   install -m 0644 "$ROOT/scripts/preUpgrade.sh" "$DEST/preUpgrade.sh"

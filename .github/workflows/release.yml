@@ -10,6 +10,14 @@ on:
         description: "Build artifacts and checksums without creating a GitHub Release"
         required: false
         default: "true"
+      security_release:
+        description: "Mark this build as a security release (cpn-security-release.json + body marker)"
+        required: false
+        default: "false"
+      security_advisories_json:
+        description: "Optional JSON array of advisory ids for cpn-security-release.json (e.g. [\"GHSA-...\",\"CVE-...\"])"
+        required: false
+        default: "[]"
 
 permissions:
   contents: write
@@ -234,6 +242,12 @@ jobs:
           cp target/release/cpn dist/cpn
           chmod +x dist/cpn-installer dist/cpn
 
+      - name: CRA release audit gate (cargo + npm critical/high)
+        run: |
+          chmod +x scripts/cra-release-audit-gate.sh
+          cargo install cargo-audit --locked
+          ./scripts/cra-release-audit-gate.sh
+
       - name: Install GPG tools on runner
         run: |
           sudo apt-get update
@@ -311,16 +325,54 @@ jobs:
           chmod +x scripts/sign-cosign.sh
           ./scripts/sign-cosign.sh dist/cpn-installer dist/SHA256SUMS
 
-      - name: Generate SBOM
+      - name: Generate CycloneDX SBOMs (Cargo + installer-ui + Panel)
         run: |
+          chmod +x scripts/generate-release-sboms.sh
           cargo install cargo-cyclonedx --locked
-          cargo cyclonedx -f json --override-filename cpn-installer.cdx
-          mv cpn-installer.cdx.json dist/cpn-installer.cdx.json
+          CPN_SBOM_OUT="$PWD/dist" ./scripts/generate-release-sboms.sh
           test -s dist/cpn-installer.cdx.json
-          ! grep -q 'SBOM generation skipped' dist/cpn-installer.cdx.json
+          test -s dist/cpn-installer-ui.cdx.json
+          test -s dist/cpn-panel.cdx.json
+
+      - name: Write security release metadata
+        env:
+          CPN_SECURITY_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.security_release || 'false' }}
+          CPN_SECURITY_ADVISORIES_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.security_advisories_json || '[]' }}
+          CPN_RELEASE_TAG: ${{ github.ref_name }}
+          CPN_SBOM_OUT: ${{ github.workspace }}/dist
+        run: |
+          chmod +x scripts/write-security-release-meta.sh
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            tag="${GITHUB_REF_NAME:-}"
+            tag_lc="$(printf '%s' "$tag" | tr '[:upper:]' '[:lower:]')"
+            if [[ "$tag_lc" == *security* || "$tag_lc" == *cve* || "$tag_lc" == *ghsa* ]]; then
+              export CPN_SECURITY_RELEASE=true
+            else
+              export CPN_SECURITY_RELEASE=false
+            fi
+          fi
+          ./scripts/write-security-release-meta.sh
+          test -s dist/cpn-security-release.json
+          python3 - <<'PY'
+          import json
+          meta = json.load(open("dist/cpn-security-release.json", encoding="utf-8"))
+          assert "security_release" in meta and isinstance(meta["security_release"], bool)
+          print("security_release=", meta["security_release"])
+          PY
+
+      - name: Refresh SHA256SUMS for SBOMs and security metadata
+        run: |
           chmod +x scripts/publish-checksums.sh
           shopt -s nullglob
-          files=(dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/*.zip dist/cpn-installer.cdx.json dist/build-environment.txt)
+          files=(
+            dist/cpn-installer dist/cpn dist/*.rpm dist/*.deb dist/*.zip
+            dist/cpn-installer.cdx.json dist/cpn-installer-ui.cdx.json dist/cpn-panel.cdx.json
+            dist/cpn-security-release.json
+            dist/build-environment.txt
+          )
+          if [[ -f dist/CPN-SECURITY-RELEASE ]]; then
+            files+=(dist/CPN-SECURITY-RELEASE)
+          fi
           ./scripts/publish-checksums.sh "${files[@]}"
 
       - name: Re-sign SHA256SUMS after SBOM refresh
@@ -359,6 +411,9 @@ jobs:
             dist/*.deb
             dist/*.zip
             dist/cpn-installer.cdx.json
+            dist/cpn-installer-ui.cdx.json
+            dist/cpn-panel.cdx.json
+            dist/cpn-security-release.json
             dist/build-environment.txt
             dist/RPM-GPG-KEY-CPN
 
@@ -368,6 +423,72 @@ jobs:
           name: cpn-release-${{ github.sha }}
           path: dist/**
 
+      - name: Compose release body with security metadata marker
+        id: release_body
+        if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
+        run: |
+          marker="CPN-SECURITY-RELEASE: false"
+          if [[ -f dist/cpn-security-release.body-marker.txt ]]; then
+            marker="$(tr -d '\r' < dist/cpn-security-release.body-marker.txt | head -n1)"
+          fi
+          {
+            echo "$marker"
+            echo
+            echo "## Install from this release"
+            echo
+            echo "Download the native package for the guest OS instead of building CPN from source:"
+            echo
+            echo "- EL9: \`cpn-installer-*.el9.*.rpm\`"
+            echo "- EL10: \`cpn-installer-*.el10.*.rpm\`"
+            echo "- Ubuntu 22.04/24.04 and tested compatible apt guests: \`cpn-installer_*.deb\`"
+            echo "- Windows Server 2016+ Phase A: \`cpn-windows-x86_64.zip\`"
+            echo
+            echo "Supply-chain artifacts on this release:"
+            echo
+            echo "- CycloneDX SBOMs: \`cpn-installer.cdx.json\` (Cargo), \`cpn-installer-ui.cdx.json\`, \`cpn-panel.cdx.json\`"
+            echo "- Security metadata: \`cpn-security-release.json\` (prefer over title heuristics for auto-update security-only mode)"
+            echo
+            echo '```bash'
+            echo 'sudo dnf install ./cpn-installer-*.rpm'
+            echo '# or'
+            echo 'sudo apt install ./cpn-installer_*.deb'
+            echo
+            echo 'sudo cpn-installer'
+            echo '```'
+            echo
+            echo "Windows: extract the ZIP and run \`Install-Cpn.ps1\` from an elevated PowerShell prompt. Windows remains Phase A only; Linux web/mail package recipes are not available there."
+            echo
+            echo "## Verify before running as administrator/root"
+            echo
+            echo "Release signing fingerprint:"
+            echo
+            echo '```text'
+            echo 'FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5'
+            echo '```'
+            echo
+            echo '```bash'
+            echo 'sha256sum -c SHA256SUMS'
+            echo 'gpg --import RPM-GPG-KEY-CPN'
+            echo 'gpg --verify SHA256SUMS.asc SHA256SUMS'
+            echo
+            echo '# RPM only'
+            echo 'rpm --import RPM-GPG-KEY-CPN'
+            echo 'rpm --checksig *.rpm'
+            echo
+            echo '# GitHub provenance attestation'
+            echo 'gh attestation verify ./cpn-installer --repo Control-Panel-Network/CPN-Control-Panel-Network'
+            echo '```'
+            echo
+            echo "Upgrade/repair downloads verify SHA-256 by default (\`CPN_VERIFY_RELEASE=0\` disables; \`CPN_VERIFY_GPG=1\` also checks \`SHA256SUMS.asc\`)."
+            echo
+            echo "User security instructions (CRA Annex II style): [docs/USER-SECURITY.md](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/USER-SECURITY.md)."
+          } > dist/RELEASE-BODY.md
+          {
+            echo "body<<CPN_RELEASE_BODY_EOF"
+            cat dist/RELEASE-BODY.md
+            echo "CPN_RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') && github.event_name != 'workflow_dispatch'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -375,45 +496,4 @@ jobs:
           files: dist/**
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          body: |
-            ## Install from this release
-
-            Download the native package for the guest OS instead of building CPN from source:
-
-            - EL9: `cpn-installer-*.el9.*.rpm`
-            - EL10: `cpn-installer-*.el10.*.rpm`
-            - Ubuntu 22.04/24.04 and tested compatible apt guests: `cpn-installer_*.deb`
-            - Windows Server 2016+ Phase A: `cpn-windows-x86_64.zip`
-
-            ```bash
-            sudo dnf install ./cpn-installer-*.rpm
-            # or
-            sudo apt install ./cpn-installer_*.deb
-
-            sudo cpn-installer
-            ```
-
-            Windows: extract the ZIP and run `Install-Cpn.ps1` from an elevated PowerShell prompt. Windows remains Phase A only; Linux web/mail package recipes are not available there.
-
-            ## Verify before running as administrator/root
-
-            Release signing fingerprint:
-
-            ```text
-            FE70B9718F63B10BB70A6F70BECBB7488AE5C3E5
-            ```
-
-            ```bash
-            sha256sum -c SHA256SUMS
-            gpg --import RPM-GPG-KEY-CPN
-            gpg --verify SHA256SUMS.asc SHA256SUMS
-
-            # RPM only
-            rpm --import RPM-GPG-KEY-CPN
-            rpm --checksig *.rpm
-
-            # GitHub provenance attestation
-            gh attestation verify ./cpn-installer --repo Control-Panel-Network/CPN-Control-Panel-Network
-            ```
-
-            Upgrade/repair downloads verify SHA-256 by default (`CPN_VERIFY_RELEASE=0` disables; `CPN_VERIFY_GPG=1` also checks `SHA256SUMS.asc`).
+          body: ${{ steps.release_body.outputs.body }}
