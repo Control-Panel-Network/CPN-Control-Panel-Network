@@ -51,7 +51,8 @@ fn ensure_audit_dir() -> Result<(), String> {
 fn link_legacy_compat() {
     let legacy = legacy_log_path();
     let audit = log_path();
-    if legacy.exists() && !audit.exists()
+    if legacy.exists()
+        && !audit.exists()
         && let Ok(raw) = fs::read(&legacy)
     {
         let _ = fs::write(&audit, raw);
