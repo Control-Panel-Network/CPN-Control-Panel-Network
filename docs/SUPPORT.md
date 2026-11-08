@@ -1,6 +1,19 @@
 # Platform Support and Existing Hosts
 
-CPN's current stable line is **1.1.x** (first stable release: **v1.0.0**). Support tiers describe how much validation a platform currently receives; they do not imply identical maturity for every web, mail, database, or plugin combination.
+CPN's current stable line tracks published **1.4.x** releases (first stable release: **v1.0.0**; check [GitHub Releases](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/releases) for the live tip). Support tiers describe how much validation a platform currently receives; they do not imply identical maturity for every web, mail, database, or plugin combination.
+
+## Security support period (releases)
+
+This section is about **which CPN release tags receive security updates**. It is separate from the OS guest matrix below. It is **not** a CE mark or CRA conformity claim.
+
+| Policy | Detail |
+|--------|--------|
+| Supported set | **Latest two published releases** only (current release plus the previous release with installable assets) |
+| Outside that set | Tags remain selectable for labs/rollback but are **outside security support**; upgrade |
+| Calendar end-date guidance | When a release is displaced from the latest-two set, treat security support as ended in that calendar month (`mm/yyyy`), unless a more specific end date is published for the line |
+| Free security updates | During the support period, security remediation is intended via normal upgrade channels (Releases, Version Management / auto-update, `cpn-installer --upgrade`) without a separate security-fix fee |
+
+Canonical write-up: [to-do/cra/support-period.md](../to-do/cra/support-period.md). Vulnerability reporting and severity SLAs: [SECURITY.md](../SECURITY.md). Public fixed-vuln log: [SECURITY-ADVISORIES.md](SECURITY-ADVISORIES.md) and https://cpn.newstargeted.com/security. Version Management in the panel already warns when a selected tag is outside the latest two.
 
 ## Operating-system support
 
@@ -64,4 +77,4 @@ Use a test VM/VPS and keep backups for first installs and major upgrades.
 
 Product security updates during the published support window (latest two releases) and free security-update expectations are summarised for operators in [USER-SECURITY.md](USER-SECURITY.md). Engineering policy draft: [to-do/cra/support-period.md](../to-do/cra/support-period.md) (when present). CVD and reporting: [SECURITY.md](../SECURITY.md).
 
-For installation commands, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For operator commands after installation (including uninstall / secure deletion flags), see [CLI.md](CLI.md).
+For installation commands, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For operator commands after installation (including uninstall / secure deletion flags), see [CLI.md](CLI.md). For vulnerability reporting, see [SECURITY.md](../SECURITY.md).

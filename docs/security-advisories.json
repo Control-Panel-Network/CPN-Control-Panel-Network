@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "schema_version": 1,
+    "title": "CPN public security advisories",
+    "description": "Canonical machine-readable log of fixed vulnerabilities for CPN Control Panel Network. Keep in sync with docs/SECURITY-ADVISORIES.md and site/data/security-advisories.json. Do not invent entries; publish only after a fix ships and users have a reasonable upgrade path.",
+    "canonical_url": "https://cpn.newstargeted.com/security",
+    "github_advisories_url": "https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/security/advisories",
+    "entry_fields": {
+      "id": "Stable CPN advisory id (example: CPN-2026-001)",
+      "cve": "CVE id when assigned, else null",
+      "ghsa": "GitHub Security Advisory id when published, else null",
+      "title": "Short title",
+      "severity": "One of: critical, high, medium, low",
+      "affected_versions": "Semver range or list (example: < 1.4.10)",
+      "fixed_version": "First fixed release tag (example: 1.4.10)",
+      "published": "ISO date YYYY-MM-DD (site displays as dd/mm/yyyy)",
+      "summary": "What was wrong (no exploit PoC)",
+      "impact": "Confidentiality / integrity / availability impact",
+      "remediation": "Upgrade instruction and any interim mitigation",
+      "references": "Array of URL strings (GHSA, release notes, commits)"
+    }
+  },
+  "advisories": []
+}

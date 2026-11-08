@@ -109,6 +109,7 @@ All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel
 | [CHANGELOG.md](docs/CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Builds and PRs |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
+| [SECURITY-ADVISORIES.md](docs/SECURITY-ADVISORIES.md) | Public fixed-vuln disclosure log ([JSON](docs/security-advisories.json), site [/security](https://cpn.newstargeted.com/security)) |
 | [USER-SECURITY.md](docs/USER-SECURITY.md) | Annex II style user security instructions (secure updates, deletion, MFA) |
 
 ## License
