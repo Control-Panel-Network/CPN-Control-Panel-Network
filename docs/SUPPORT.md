@@ -60,4 +60,8 @@ Manual review may still be required when a machine has:
 
 Use a test VM/VPS and keep backups for first installs and major upgrades.
 
-For installation commands, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For operator commands after installation, see [CLI.md](CLI.md).
+## Security support period (pointer)
+
+Product security updates during the published support window (latest two releases) and free security-update expectations are summarised for operators in [USER-SECURITY.md](USER-SECURITY.md). Engineering policy draft: [to-do/cra/support-period.md](../to-do/cra/support-period.md) (when present). CVD and reporting: [SECURITY.md](../SECURITY.md).
+
+For installation commands, see the root [README](../README.md). For release history, see [CHANGELOG.md](CHANGELOG.md). For operator commands after installation (including uninstall / secure deletion flags), see [CLI.md](CLI.md).

@@ -155,6 +155,9 @@ jobs:
           scripts/publish-checksums.sh
           scripts/sign-release.sh
           scripts/sign-cosign.sh
+          scripts/generate-release-sboms.sh
+          scripts/cra-release-audit-gate.sh
+          scripts/write-security-release-meta.sh
           tests/docker-matrix.sh
           tests/webmail-permissions.sh
           scripts/verify-systemd-unit.sh

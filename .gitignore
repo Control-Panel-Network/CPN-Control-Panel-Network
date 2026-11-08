@@ -11,5 +11,7 @@
 /var/lib/cpn/
 panel-bootstrap.json
 
-to-do/
+to-do/*
+!to-do/cra/
+!to-do/cra/**
 site-dist/

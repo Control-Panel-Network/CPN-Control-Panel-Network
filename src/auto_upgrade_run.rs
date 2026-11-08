@@ -2,7 +2,7 @@
 
 use crate::auto_upgrade::{
     AutoUpgradeMode, STARTUP_DELAY_SECS, ensure_default_auto_upgrade_config, interval_secs,
-    load_auto_upgrade_config, looks_like_security_release, now_unix, save_auto_upgrade_config,
+    load_auto_upgrade_config, now_unix, resolve_security_release, save_auto_upgrade_config,
 };
 use crate::installer::AppState;
 use crate::login_service_gate::login_services_ready;
@@ -163,10 +163,10 @@ pub async fn run_auto_upgrade_check(
         });
     };
 
-    let security_match = looks_like_security_release(&target);
+    let security_match = resolve_security_release(&target).await;
     if cfg.mode == AutoUpgradeMode::Security && !security_match {
         let msg = format!(
-            "Newer release {} available, but security-only mode found no security keywords in tag/title; skipped.",
+            "Newer release {} available, but security-only mode found no security release metadata (and no tag/title security keywords); skipped.",
             target.tag_name
         );
         remember(&mut cfg, true, &msg);

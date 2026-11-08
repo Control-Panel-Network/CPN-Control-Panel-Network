@@ -109,6 +109,7 @@ All guides: **[docs/](https://github.com/Control-Panel-Network/CPN-Control-Panel
 | [CHANGELOG.md](docs/CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Builds and PRs |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
+| [USER-SECURITY.md](docs/USER-SECURITY.md) | Annex II style user security instructions (secure updates, deletion, MFA) |
 
 ## License
 

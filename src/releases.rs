@@ -1,4 +1,4 @@
-//! GitHub Releases lookup for CPN installer packages.
+/! GitHub Releases lookup for CPN installer packages.
 
 use crate::os_support::{GuestOs, PackageFamily};
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,9 @@ pub struct CpnRelease {
     pub prerelease: bool,
     pub draft: bool,
     pub html_url: String,
+    /// GitHub release body (may contain `CPN-SECURITY-RELEASE: true|false` metadata).
+    #[serde(default)]
+    pub body: String,
     pub assets: Vec<ReleaseAsset>,
     /// Legacy/UI summary field. Maintenance code must use compatible_package_asset().
     pub rpm_asset: Option<ReleaseAsset>,
@@ -364,6 +367,11 @@ pub(crate) fn parse_release(value: &serde_json::Value) -> Option<CpnRelease> {
             .and_then(|item| item.as_str())
             .unwrap_or("")
             .into(),
+        body: value
+            .get("body")
+            .and_then(|item| item.as_str())
+            .unwrap_or("")
+            .into(),
         assets,
         rpm_asset,
         binary_asset,
@@ -436,6 +444,7 @@ mod tests {
             prerelease: true,
             draft: false,
             html_url: "https://example.invalid".into(),
+            body: String::new(),
             assets: Vec::new(),
             rpm_asset: None,
             binary_asset: None,
@@ -450,6 +459,7 @@ mod tests {
             prerelease: true,
             draft: false,
             html_url: "https://example.invalid".into(),
+            body: String::new(),
             assets: vec![ReleaseAsset {
                 name: "cpn-installer".into(),
                 browser_download_url: "https://example.invalid/cpn-installer".into(),
@@ -479,6 +489,7 @@ mod tests {
             prerelease: false,
             draft: false,
             html_url: "https://example.invalid".into(),
+            body: String::new(),
             assets: Vec::new(),
             rpm_asset: None,
             binary_asset: None,
@@ -493,6 +504,7 @@ mod tests {
             prerelease: false,
             draft: false,
             html_url: "https://example.invalid".into(),
+            body: String::new(),
             assets: vec![ReleaseAsset {
                 name: "cpn-installer".into(),
                 browser_download_url: "https://example.invalid/cpn-installer".into(),
