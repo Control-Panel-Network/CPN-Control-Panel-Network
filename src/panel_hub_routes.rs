@@ -26,6 +26,7 @@ pub use crate::panel_hub_routes_reseller::*;
 pub use crate::panel_hub_routes_security::*;
 pub use crate::panel_hub_routes_server::*;
 pub use crate::panel_hub_routes_server_logs::*;
+pub use crate::panel_hub_routes_settings_audit::*;
 pub use crate::panel_hub_routes_settings_logs::*;
 pub use crate::panel_hub_routes_sidebar_acl::*;
 pub use crate::panel_hub_routes_site_files::*;

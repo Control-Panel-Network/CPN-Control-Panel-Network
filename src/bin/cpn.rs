@@ -446,6 +446,12 @@ fn run() -> Result<(), String> {
             purge_stack,
             dry_run,
         } => {
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.uninstall",
+                if dry_run { "dry-run" } else { "host" },
+                true,
+                "uninstall started",
+            );
             let code =
                 cpn_installer::cli_uninstall::run(cpn_installer::cli_uninstall::UninstallOptions {
                     yes,
@@ -455,6 +461,16 @@ fn run() -> Result<(), String> {
                     purge_stack,
                     dry_run,
                 });
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.uninstall",
+                if dry_run { "dry-run" } else { "host" },
+                code == 0,
+                if code == 0 {
+                    "uninstall finished"
+                } else {
+                    "uninstall failed"
+                },
+            );
             if code == 0 {
                 Ok(())
             } else {
@@ -476,6 +492,12 @@ fn run() -> Result<(), String> {
             let (password, generate) = read_password_confirmed(password_stdin, generate)?;
             let result = reset_account_password(&username, password.as_deref(), generate)?;
             let confirmed = result.public.username;
+            cpn_installer::panel_audit_cli::record_cli(
+                "cli.password",
+                &confirmed,
+                true,
+                "password updated",
+            );
             print_password_updated_ok(&confirmed);
             print_generated(result.generated_password)?;
             Ok(())
@@ -552,6 +574,13 @@ fn run() -> Result<(), String> {
                     default_password_policy(),
                     &language,
                 )?;
+                let created = result.public.username.clone();
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.account.create",
+                    &created,
+                    true,
+                    "account created",
+                );
                 let _ = result.public;
                 println!("created account ok");
                 print_generated(result.generated_password)?;
@@ -567,6 +596,12 @@ fn run() -> Result<(), String> {
                 let (password, generate) = read_password_confirmed(password_stdin, generate)?;
                 let result = reset_account_password(&username, password.as_deref(), generate)?;
                 let confirmed = result.public.username;
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.password",
+                    &confirmed,
+                    true,
+                    "password updated",
+                );
                 print_password_updated_ok(&confirmed);
                 print_generated(result.generated_password)?;
                 Ok(())
@@ -575,6 +610,12 @@ fn run() -> Result<(), String> {
                 require_root_for_mutation()?;
                 confirm_delete("Delete the selected account? This cannot be undone.", yes)?;
                 delete_account(&username)?;
+                cpn_installer::panel_audit_cli::record_cli(
+                    "cli.account.delete",
+                    &username,
+                    true,
+                    "account deleted",
+                );
                 println!("deleted account ok");
                 Ok(())
             }

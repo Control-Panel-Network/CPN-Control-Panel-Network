@@ -14,7 +14,7 @@ Source branch / tip used for this evidence:
 |-------|-------|
 | PR | [#654](https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/pull/654) |
 | Branch | `feat/phase2a-full-panel-audit` |
-| Commit | `45a930524b50a82182645ba17ce390d3cb44de56` |
+| Commit | clippy-fix tip after rebase onto `stable` (prior evidence `57c64941`, `45a93052`) |
 | Host | WSL (OpenSSL available); Windows host `cargo test` blocked on missing OpenSSL / `openssl-sys` |
 
 ### Command
@@ -123,8 +123,42 @@ Run on a panel that includes Phase 2a. Confirm each category yields a redacted r
 2. Complete export / opt-out / alerts checks.
 3. Keep [audit-coverage.md](audit-coverage.md) with no uncovered mutating routes outside the reviewed denylist (follow-up map polish may remain as `remaining` notes).
 
+### Re-run confirmation (this agent, WSL)
+
+Host: WSL `/tmp/cpn-pr654-verify2a` worktree at `57c6494179eef65e24c1128824b691a9289ddea5` (`feat/phase2a-full-panel-audit`). Earlier same-day run also green at `45a93052`.
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"   # or /home/Master3395/.cargo/bin
+cargo test panel_audit --lib -- --nocapture
+cargo test panel_action_log --lib -- --nocapture
+```
+
+`panel_audit` result:
+
+```
+running 11 tests
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1210 filtered out; finished in 0.01s
+```
+
+`panel_action_log` result:
+
+```
+running 5 tests
+test panel_action_log::tests::decodes_location_notice_and_domain ... ok
+test panel_action_log::tests::error_wins_and_flags_failure ... ok
+test panel_action_log::tests::percent_decode_handles_truncated_escapes ... ok
+test panel_action_log::tests::maps_plugin_and_host_paths ... ok
+test panel_action_log::tests::record_round_trips_newest_first_and_redacts ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1216 filtered out; finished in 0.00s
+```
+
+**Pass counts:** `panel_audit` **11/11**; `panel_action_log` **5/5** (16 total unit tests green under those filters).
+
 ## Update log
 
 | Date (dd/mm/yyyy) | Change |
 |-------------------|--------|
 | 08/11/2026 | Unit evidence: 11/11 `panel_audit*` and 5/5 `panel_action_log*` tests OK on WSL at `45a93052`; lab smoke deferred; port probe only |
+| 08/11/2026 | WSL re-run confirmed: 11/11 `panel_audit*` + 5/5 `panel_action_log*` at `57c64941` (also green at `45a93052`) |
+| 08/11/2026 | Rebased onto `stable` after #653; resolved add/add on this file; Clippy collapsible_if / too_many_arguments fixed |
