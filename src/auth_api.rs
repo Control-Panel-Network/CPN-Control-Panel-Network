@@ -158,6 +158,16 @@ pub(crate) fn login_success_response(
     username: &str,
     next: Option<&str>,
 ) -> HttpResponse {
+    crate::panel_audit_http::audit_from_request(
+        http,
+        username,
+        "auth.login",
+        "",
+        true,
+        "login ok",
+        crate::panel_audit_types::AuditCategory::Auth,
+        crate::panel_audit_types::AuditSeverity::Notice,
+    );
     let peer = http.peer_addr().map(|a| a.ip().to_string());
     crate::panel_firewall_store::record_admin_login_ip(username, peer.as_deref());
     let _ = crate::panel_firewall_store::ensure_protected_seeds(
@@ -442,6 +452,21 @@ pub async fn login_submit(
     };
 
     let Some(session_user) = authed else {
+        let actor = if username.is_empty() {
+            "anonymous"
+        } else {
+            username
+        };
+        crate::panel_audit_http::audit_from_request(
+            &http,
+            actor,
+            "auth.login.fail",
+            "",
+            false,
+            "login failed",
+            crate::panel_audit_types::AuditCategory::Auth,
+            crate::panel_audit_types::AuditSeverity::Warning,
+        );
         let err_msg = login_error_message(locale);
         if wants_login_json(&http) {
             return HttpResponse::Unauthorized()
@@ -640,17 +665,39 @@ pub async fn login_mfa_submit(
 
     match crate::account_mfa::verify_mfa_challenge(&username, &form.code) {
         Ok(true) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &username,
+                "auth.mfa.verify",
+                "",
+                true,
+                "mfa ok",
+                crate::panel_audit_types::AuditCategory::Auth,
+                crate::panel_audit_types::AuditSeverity::Notice,
+            );
             let token = create_session_token(&username, &secret);
             login_success_response(&http, &token, &username, next.as_deref())
         }
-        Ok(false) => HttpResponse::Unauthorized()
-            .content_type("text/html; charset=utf-8")
-            .body(panel_mfa_html(
-                &payload,
-                Some("Invalid authenticator or backup code."),
-                next.as_deref(),
-                options,
-            )),
+        Ok(false) => {
+            crate::panel_audit_http::audit_from_request(
+                &http,
+                &username,
+                "auth.mfa.fail",
+                "",
+                false,
+                "mfa failed",
+                crate::panel_audit_types::AuditCategory::Auth,
+                crate::panel_audit_types::AuditSeverity::Warning,
+            );
+            HttpResponse::Unauthorized()
+                .content_type("text/html; charset=utf-8")
+                .body(panel_mfa_html(
+                    &payload,
+                    Some("Invalid authenticator or backup code."),
+                    next.as_deref(),
+                    options,
+                ))
+        }
         Err(error) => {
             let rate_limited = crate::account_mfa::is_mfa_rate_limit_error(&error);
             let mut builder = if rate_limited {
@@ -706,7 +753,30 @@ pub async fn panel_alias() -> HttpResponse {
         .finish()
 }
 
+fn logout_actor(http: &HttpRequest) -> String {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let port = request_auth_cookie_port(http);
+    let secret = session_secret(None);
+    read_session_cookie(cookie, port)
+        .and_then(|token| verify_session_token(&token, &secret))
+        .unwrap_or_else(|| "anonymous".into())
+}
+
 fn logout_response(http: &HttpRequest) -> HttpResponse {
+    let actor = logout_actor(http);
+    crate::panel_audit_http::audit_from_request(
+        http,
+        &actor,
+        "auth.logout",
+        "",
+        true,
+        "logout",
+        crate::panel_audit_types::AuditCategory::Auth,
+        crate::panel_audit_types::AuditSeverity::Notice,
+    );
     let secure = request_secure(http);
     let port = request_auth_cookie_port(http);
     let query_map = web::Query::<std::collections::HashMap<String, String>>::from_query(

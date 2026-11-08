@@ -109,6 +109,7 @@ use cpn_installer::panel_hub_routes::{
     settings_connect_page, settings_design_page, settings_error_messages_page,
     settings_error_messages_preview, settings_error_messages_restore_all,
     settings_error_messages_restore_forbidden, settings_error_messages_restore_internal,
+    settings_audit_export, settings_audit_page, settings_audit_save,
     settings_error_messages_restore_not_found, settings_error_messages_save, settings_logs_page,
     settings_logs_save, settings_markdown_preview, settings_page, settings_port_ip_backup,
     settings_port_page, settings_setup_page, settings_setup_save, settings_site_messages_page,
@@ -1470,6 +1471,9 @@ async fn main() -> std::io::Result<()> {
             .service(settings_error_messages_restore_all)
             .service(settings_logs_page)
             .service(settings_logs_save)
+            .service(settings_audit_page)
+            .service(settings_audit_save)
+            .service(settings_audit_export)
             .service(settings_port_page)
             .service(settings_port_ip_backup)
             .service(security_page)

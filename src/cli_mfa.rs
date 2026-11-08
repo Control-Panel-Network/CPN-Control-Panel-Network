@@ -39,6 +39,14 @@ pub fn run(
             let totp_was = clear_totp_force(&username)?;
             let passkeys_removed = clear_all_passkeys(&username)?;
             let ceremonies_removed = clear_all_ceremonies()?;
+            crate::panel_audit_cli::record_cli(
+                "cli.mfa.clear",
+                &username,
+                true,
+                &format!(
+                    "totp_was_enabled={totp_was}; passkeys_removed={passkeys_removed}; ceremonies_removed={ceremonies_removed}"
+                ),
+            );
             println!(
                 "cleared mfa ok\ttotp_was_enabled={totp_was}\tpasskeys_removed={passkeys_removed}\tceremonies_removed={ceremonies_removed}"
             );

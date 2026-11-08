@@ -89,14 +89,14 @@ pub fn panel_actions_table_sized(username: &str, page_size: usize) -> String {
     };
     let rows = recent(TABLE_LIMIT, filter);
     if rows.is_empty() {
-        return r#"<p class="empty-state">No plugin or host-package actions recorded yet. Install, activate, deactivate and uninstall actions from the Plugins Store appear here.</p>"#
+        return r#"<p class="empty-state">No audit events recorded yet. Authenticated mutations, auth events, and privileged CLI actions appear here.</p>"#
             .into();
     }
     format!(
         "{}{}",
         wrap_activity_table_sized(
             "panel-actions",
-            "Filter user, action, site or details",
+            "Filter user, action, category, site or details",
             &rows_table(&rows),
             page_size
         ),
@@ -133,11 +133,17 @@ pub fn server_logs_page(username: &str) -> String {
             href: "/settings/logs",
             live: true,
         },
+        HubTile {
+            title: "Audit trail policy",
+            subtitle: "Retention (default 90 days), export, webhook, opt-out",
+            href: "/settings/audit",
+            live: true,
+        },
     ]);
     let body = format!(
         r#"{tabs}{tiles}
-<h2 style="margin:20px 0 6px;">Panel activity</h2>
-<p class="muted">Plugin and host-package actions: install, activate, deactivate, attach to a site, start, stop and uninstall. Times are shown in your browser time zone.</p>
+<h2 style="margin:20px 0 6px;">Panel audit trail</h2>
+<p class="muted">Authenticated mutations, auth events, firewall/DNS/email/backup/docker/files/settings changes, plugins/themes, and privileged CLI actions. Store: <code>/var/lib/cpn/audit/audit.jsonl</code>. Times are shown in your browser time zone.</p>
 {table}<script>{script}</script>"#,
         tabs = crate::panel_server_logs_tabs::log_tabs(None),
         tiles = hub_tiles_grid("Log sources", &tiles),
@@ -168,7 +174,7 @@ mod tests {
     fn empty_log_shows_hint() {
         with_test_data_dir(|| {
             let html = panel_actions_table("someone");
-            assert!(html.contains("No plugin or host-package actions"));
+            assert!(html.contains("No audit events recorded yet"));
         });
     }
 
