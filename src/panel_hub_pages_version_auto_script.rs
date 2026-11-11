@@ -14,10 +14,12 @@ pub fn version_auto_upgrade_script() -> String {
   var noteEl = document.getElementById("cpn-auto-security-note");
   if (!enabledEl || !saveBtn) return;
 
-  function autoStatus(msg, isError) {
-    if (!statusEl) return;
-    statusEl.textContent = msg || "";
-    statusEl.style.color = isError ? "#f87171" : "";
+  function autoStatus(msg, kind) {
+    if (typeof window.cpnVersionSetStatus === "function") {
+      window.cpnVersionSetStatus(statusEl, msg, kind);
+    } else if (statusEl) {
+      statusEl.textContent = msg || "";
+    }
   }
 
   function paint(data) {
@@ -42,13 +44,13 @@ pub fn version_auto_upgrade_script() -> String {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
     }).then(paint).catch(function (err) {
-      autoStatus(window.cpnFriendlyFetchError(err, "Load automatic updates"), true);
+      autoStatus(window.cpnFriendlyFetchError(err, "Load automatic updates"), "error");
     });
   }
 
   saveBtn.addEventListener("click", function () {
     saveBtn.disabled = true;
-    autoStatus("Saving...", false);
+    autoStatus("Saving...", "neutral");
     var body = {
       enabled: !!enabledEl.checked,
       mode: modeEl ? modeEl.value : "all",
@@ -66,11 +68,15 @@ pub fn version_auto_upgrade_script() -> String {
       });
     }).then(function (data) {
       paint(data);
-      autoStatus(data.enabled
-        ? "Automatic updates enabled. The panel checks GitHub Releases on a schedule and upgrades when a newer installable package exists."
-        : "Automatic updates disabled. No background upgrade will run.", false);
+      autoStatus("Automatic updates saved.", "ok");
+      if (typeof window.cpnVersionFlashSave === "function") {
+        var detail = data.enabled
+          ? "Scheduled release checks stay on."
+          : "Background upgrades stay off.";
+        window.cpnVersionFlashSave("Automatic updates saved", detail);
+      }
     }).catch(function (err) {
-      autoStatus(window.cpnFriendlyFetchError(err, "Save automatic updates"), true);
+      autoStatus(window.cpnFriendlyFetchError(err, "Save automatic updates"), "error");
     }).finally(function () {
       saveBtn.disabled = false;
     });
@@ -79,7 +85,7 @@ pub fn version_auto_upgrade_script() -> String {
   if (checkBtn) {
     checkBtn.addEventListener("click", function () {
       checkBtn.disabled = true;
-      autoStatus("Checking for updates (dry-run, will not apply while off)...", false);
+      autoStatus("Checking for updates (dry-run, will not apply while off)...", "neutral");
       fetch("/api/auto-upgrade/check", {
         method: "POST",
         credentials: "same-origin",
@@ -91,10 +97,10 @@ pub fn version_auto_upgrade_script() -> String {
           return data;
         });
       }).then(function (data) {
-        autoStatus((data && data.message) || "Check complete.", false);
+        autoStatus((data && data.message) || "Check complete.", "ok");
         if (lastEl && data && data.message) lastEl.textContent = data.message;
       }).catch(function (err) {
-        autoStatus(window.cpnFriendlyFetchError(err, "Check automatic updates"), true);
+        autoStatus(window.cpnFriendlyFetchError(err, "Check automatic updates"), "error");
       }).finally(function () {
         checkBtn.disabled = false;
       });
@@ -118,6 +124,7 @@ mod tests {
         assert!(js.contains("/api/auto-upgrade/check"));
         assert!(js.contains("cpn-auto-enabled"));
         assert!(js.contains("apply: false"));
+        assert!(js.contains("cpnVersionFlashSave"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
         assert!(!js.to_lowercase().contains("cyberpanel"));
