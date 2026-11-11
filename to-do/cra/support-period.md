@@ -20,13 +20,13 @@ For a release tag `vX.Y.Z` published on date `P` (display `dd/mm/yyyy`):
 | Tag has just fallen out of the latest two | Support ends in the **calendar month** when the second newer release was published (record as `mm/yyyy`) |
 | Manufacturer publishes an explicit end date for a line | That `mm/yyyy` wins over the rolling latest-two rule for that line |
 
-### Snapshot example (as of 08/11/2026)
+### Snapshot example (as of 11/11/2026)
 
 | Release | Published (approx.) | In latest two? | Support end guidance |
 |---------|---------------------|----------------|----------------------|
-| v1.4.9 | 07/11/2026 | Yes (current) | Rolling: until displaced by two newer releases |
-| v1.4.8 | 06/11/2026 | Yes (previous) | Rolling: until displaced by two newer releases |
-| v1.4.7 and older | earlier | No | Outside support; upgrade to a latest-two tag |
+| v1.4.10 | 11/11/2026 | Yes (current) | Rolling: until displaced by two newer releases |
+| v1.4.9 | 07/11/2026 | Yes (previous) | Rolling: until displaced by two newer releases |
+| v1.4.8 and older | earlier | No | Outside support; upgrade to a latest-two tag |
 
 Refresh this snapshot when cutting releases. Do not leave stale "current" rows in public claims.
 
