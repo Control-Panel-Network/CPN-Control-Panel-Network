@@ -38,9 +38,7 @@ pub async fn try_actions_or_release_package(
             );
         }
         Err(error) => {
-            upgrade_tip_log::log_info(format!(
-                "Prebuilt tip path skipped ({error}); continuing"
-            ));
+            upgrade_tip_log::log_info(format!("Prebuilt tip path skipped ({error}); continuing"));
             state.log(error, "info");
         }
     }

@@ -39,10 +39,7 @@ type TipTuple = (
 
 async fn attach_stable_tip(repo: &str, installed_version: &str) -> TipTuple {
     let tip = releases_stable_tip::fetch_stable_tip(repo).await;
-    let tip_error = tip
-        .error
-        .clone()
-        .or_else(|| tip.resolution_note.clone());
+    let tip_error = tip.error.clone().or_else(|| tip.resolution_note.clone());
     if tip.sha.is_empty() {
         return (
             None,

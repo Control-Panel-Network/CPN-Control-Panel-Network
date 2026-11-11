@@ -112,7 +112,13 @@ async fn download_tarball(repo: &str, git_ref: &str, dest: &Path) -> Result<(), 
         }
     }
     Err(fail(
-        format!("{last_err} {}", crate::releases_commit_resolve::upgrade_failure_hint(None, releases_cache::github_token().is_some())),
+        format!(
+            "{last_err} {}",
+            crate::releases_commit_resolve::upgrade_failure_hint(
+                None,
+                releases_cache::github_token().is_some()
+            )
+        ),
         None,
     ))
 }

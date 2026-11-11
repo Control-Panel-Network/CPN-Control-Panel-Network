@@ -137,8 +137,7 @@ pub async fn fetch_branch_tip(repo: &str, branch: &str) -> StableTipInfo {
                 sha: resolved.sha,
                 error: None,
                 resolution_note: resolved.note,
-                from_cache: resolved.source == "cache"
-                    || resolved.source == "cache-short-sha",
+                from_cache: resolved.source == "cache" || resolved.source == "cache-short-sha",
                 rate_limited: resolved.rate_limited,
             }
         }

@@ -52,10 +52,7 @@ impl TipBinaryBackup {
             }
         }
         if !notes.is_empty() {
-            crate::upgrade_tip_log::log_info(format!(
-                "Tip upgrade rollback: {}",
-                notes.join(", ")
-            ));
+            crate::upgrade_tip_log::log_info(format!("Tip upgrade rollback: {}", notes.join(", ")));
         }
         Ok(())
     }
@@ -90,7 +87,8 @@ fn restore_one(backup: &Path, target: &Path) -> Result<(), String> {
     if !backup.is_file() {
         return Err("backup missing".into());
     }
-    std::fs::copy(backup, target).map_err(|e| format!("Could not restore {}: {e}", target.display()))?;
+    std::fs::copy(backup, target)
+        .map_err(|e| format!("Could not restore {}: {e}", target.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

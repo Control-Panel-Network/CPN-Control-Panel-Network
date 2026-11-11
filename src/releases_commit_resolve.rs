@@ -66,9 +66,11 @@ pub fn save_cache(cache: &CommitTipCacheFile) -> Result<(), String> {
         schema_version: SCHEMA,
         entries: cache.entries.clone(),
     };
-    file.entries.retain(|e| build_meta::looks_like_git_sha(&e.sha));
+    file.entries
+        .retain(|e| build_meta::looks_like_git_sha(&e.sha));
     if file.entries.len() > 200 {
-        file.entries.sort_by_key(|e| std::cmp::Reverse(e.fetched_at_unix));
+        file.entries
+            .sort_by_key(|e| std::cmp::Reverse(e.fetched_at_unix));
         file.entries.truncate(200);
     }
     let body = serde_json::to_string_pretty(&file)
@@ -83,7 +85,11 @@ pub fn save_cache(cache: &CommitTipCacheFile) -> Result<(), String> {
     Ok(())
 }
 
-fn cache_lookup(cache: &CommitTipCacheFile, repo: &str, git_ref: &str) -> Option<CommitTipCacheEntry> {
+fn cache_lookup(
+    cache: &CommitTipCacheFile,
+    repo: &str,
+    git_ref: &str,
+) -> Option<CommitTipCacheEntry> {
     cache
         .entries
         .iter()
@@ -175,9 +181,7 @@ fn urlencoding_lite(value: &str) -> String {
 async fn resolve_via_api(repo: &str, trimmed: &str) -> Result<(String, u16), (u16, String)> {
     let encoded = urlencoding_lite(trimmed);
     let url = format!("https://api.github.com/repos/{repo}/commits/{encoded}");
-    let (status, body) = curl_github_json(&url)
-        .await
-        .map_err(|error| (0, error))?;
+    let (status, body) = curl_github_json(&url).await.map_err(|error| (0, error))?;
     if status != 200 {
         return Err((status, friendly_commits_rate_limit(status)));
     }
@@ -194,7 +198,9 @@ fn is_branch_like_ref(trimmed: &str) -> bool {
 async fn resolve_via_ls_remote(repo: &str, branch: &str) -> Result<String, String> {
     let url = format!("https://github.com/{repo}.git");
     let refname = format!("refs/heads/{branch}");
-    upgrade_tip_log::log_info(format!("Resolving {repo}@{branch} via git ls-remote (no GitHub API)"));
+    upgrade_tip_log::log_info(format!(
+        "Resolving {repo}@{branch} via git ls-remote (no GitHub API)"
+    ));
     let output = Command::new("git")
         .args(["ls-remote", &url, &refname])
         .stdin(Stdio::null())
@@ -262,7 +268,12 @@ async fn resolve_via_raw_marker(repo: &str, branch: &str) -> Result<String, Stri
 }
 
 /// Expand short SHAs using cache when the caller passed a 7-char pin from the UI.
-fn full_sha_from_cache(cache: &CommitTipCacheFile, repo: &str, git_ref: &str, short: &str) -> Option<String> {
+fn full_sha_from_cache(
+    cache: &CommitTipCacheFile,
+    repo: &str,
+    git_ref: &str,
+    short: &str,
+) -> Option<String> {
     let entry = cache_lookup(cache, repo, git_ref)?;
     if build_meta::sha_equal(&entry.sha, short) {
         Some(entry.sha.clone())
@@ -315,13 +326,7 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
             "Using last-good commit tip cache for {repo}@{trimmed} (about {age}s old)"
         ));
         let note = api_error.as_ref().map(|e| format!("{e} Using cached SHA."));
-        let _ = cache_store(
-            &mut cache,
-            repo,
-            trimmed,
-            &entry.sha,
-            api_error.clone(),
-        );
+        let _ = cache_store(&mut cache, repo, trimmed, &entry.sha, api_error.clone());
         let _ = save_cache(&cache);
         return Ok(ResolvedRef {
             sha: entry.sha.clone(),
@@ -333,7 +338,9 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
 
     if is_branch_like_ref(trimmed) {
         if let Ok(sha) = resolve_via_ls_remote(repo, trimmed).await {
-            let note = api_error.as_ref().map(|e| format!("{e} Resolved via git ls-remote."));
+            let note = api_error
+                .as_ref()
+                .map(|e| format!("{e} Resolved via git ls-remote."));
             cache_store(&mut cache, repo, trimmed, &sha, api_error.clone());
             let _ = save_cache(&cache);
             return Ok(ResolvedRef {
@@ -394,7 +401,9 @@ mod tests {
     #[test]
     fn branch_like_detection() {
         assert!(is_branch_like_ref("stable"));
-        assert!(!is_branch_like_ref("a7dc8f9638b262f7a9bef691da2e6f5ead8186bb"));
+        assert!(!is_branch_like_ref(
+            "a7dc8f9638b262f7a9bef691da2e6f5ead8186bb"
+        ));
     }
 
     #[test]
