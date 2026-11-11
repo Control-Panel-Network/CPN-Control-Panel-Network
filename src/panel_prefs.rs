@@ -13,6 +13,9 @@ pub struct PanelUiPrefs {
     /// domains that have no cached local capture.
     #[serde(default = "default_true")]
     pub remote_site_previews: bool,
+    /// When true, Version Management shows the next automatic update check countdown.
+    #[serde(default = "default_true")]
+    pub show_auto_upgrade_countdown: bool,
 }
 
 fn default_true() -> bool {
@@ -24,6 +27,7 @@ impl Default for PanelUiPrefs {
         Self {
             show_document_roots: true,
             remote_site_previews: true,
+            show_auto_upgrade_countdown: true,
         }
     }
 }
@@ -67,6 +71,13 @@ pub fn set_show_document_roots(show: bool) -> Result<PanelUiPrefs, String> {
 pub fn set_remote_site_previews(enabled: bool) -> Result<PanelUiPrefs, String> {
     let mut prefs = load_panel_ui_prefs();
     prefs.remote_site_previews = enabled;
+    save_panel_ui_prefs(&prefs)?;
+    Ok(prefs)
+}
+
+pub fn set_show_auto_upgrade_countdown(show: bool) -> Result<PanelUiPrefs, String> {
+    let mut prefs = load_panel_ui_prefs();
+    prefs.show_auto_upgrade_countdown = show;
     save_panel_ui_prefs(&prefs)?;
     Ok(prefs)
 }

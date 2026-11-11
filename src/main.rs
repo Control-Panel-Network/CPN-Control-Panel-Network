@@ -115,20 +115,20 @@ use cpn_installer::panel_hub_routes::{
     settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_preview_site_ready, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_system_repair_redirect, settings_version_page,
-    sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
-    site_files_list, site_files_op, site_files_page_route, site_files_upload,
-    system_repair_api_route, system_repair_heal_route, system_repair_report_route,
-    system_repair_route, users_admin_details_post, users_assign_package_post, users_create_get,
-    users_create_post, users_delete_post, users_list_route, users_manage_fragment_route,
-    users_modify_get, users_password_post, users_plans_page, users_profile_details_post,
-    users_profile_password_post, users_profile_route, users_profile_totp_begin,
-    users_profile_totp_confirm, users_profile_totp_disable, users_rename_post,
-    users_reseller_assign_post, users_reseller_branding_post, users_reseller_create_user_post,
-    users_reseller_demote_post, users_reseller_promote_post, users_reseller_quotas_post,
-    users_reseller_route, users_reseller_unassign_post, users_status_post,
-    users_subusers_capabilities_post, users_subusers_create_post, users_subusers_delete_post,
-    users_subusers_get,
+    settings_site_messages_save, settings_system_repair_redirect, settings_ui_prefs_save,
+    settings_version_page, sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post,
+    site_filemanager_alias, site_files_list, site_files_op, site_files_page_route,
+    site_files_upload, system_repair_api_route, system_repair_heal_route,
+    system_repair_report_route, system_repair_route, users_admin_details_post,
+    users_assign_package_post, users_create_get, users_create_post, users_delete_post,
+    users_list_route, users_manage_fragment_route, users_modify_get, users_password_post,
+    users_plans_page, users_profile_details_post, users_profile_password_post, users_profile_route,
+    users_profile_totp_begin, users_profile_totp_confirm, users_profile_totp_disable,
+    users_rename_post, users_reseller_assign_post, users_reseller_branding_post,
+    users_reseller_create_user_post, users_reseller_demote_post, users_reseller_promote_post,
+    users_reseller_quotas_post, users_reseller_route, users_reseller_unassign_post,
+    users_status_post, users_subusers_capabilities_post, users_subusers_create_post,
+    users_subusers_delete_post, users_subusers_get,
 };
 use cpn_installer::panel_mr_agent::{
     plugins_mr_agent_host_policy, plugins_mr_agent_page, plugins_mr_agent_prune,
@@ -1450,6 +1450,7 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_delete_post)
             .service(cloudflare_proxy_post)
             .service(settings_page)
+            .service(settings_ui_prefs_save)
             .service(settings_version_page)
             .service(settings_design_page)
             .service(settings_setup_page)

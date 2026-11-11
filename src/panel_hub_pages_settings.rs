@@ -2,6 +2,7 @@
 
 use crate::panel_hub_defs::settings_hub_sections;
 use crate::panel_hubs::{feature_shell, hub_tiles_grid, section_heading};
+use crate::panel_prefs::load_panel_ui_prefs;
 use crate::panel_theme_chrome::design_settings_panel;
 
 /// Settings pages that only the panel owner may open (tiles are hidden for other accounts).
@@ -32,6 +33,28 @@ pub fn settings_hub_main_with(is_owner: bool, notice: Option<&str>, error: Optio
         body.push_str(&format!(
             r#"<p class="panel-notice error">{}</p>"#,
             escape_text(msg)
+        ));
+    }
+    if is_owner {
+        let prefs = load_panel_ui_prefs();
+        let countdown_checked = if prefs.show_auto_upgrade_countdown {
+            " checked"
+        } else {
+            ""
+        };
+        body.push_str(&format!(
+            r#"<article class="section-card" style="max-width:720px;margin-bottom:18px;">
+  <h2 style="margin:0 0 8px;font-size:1.05rem;">Version Management display</h2>
+  <p class="muted" style="margin:0 0 12px;line-height:1.45;">Control optional chrome on <a href="/settings/version">Update CPN</a>.</p>
+  <form method="post" action="/settings/ui-prefs" class="stack-form" style="max-width:520px;">
+    <label style="display:flex;gap:8px;align-items:flex-start;">
+      <input type="checkbox" name="show_auto_upgrade_countdown" value="1" class="cpn-check"{countdown_checked} />
+      <span>Show next automatic update check countdown (live timer and local date on Version Management)</span>
+    </label>
+    <button type="submit" class="btn-primary" style="margin-top:12px;">Save display preference</button>
+  </form>
+</article>"#,
+            countdown_checked = countdown_checked,
         ));
     }
     for (title, tiles) in settings_hub_sections() {
