@@ -41,12 +41,14 @@ sha2 = "0.11"
 tokio = { version = "1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 url = "2"
 uuid = { version = "1", features = ["serde", "v4", "v5"] }
-webauthn-rs = { version = "0.5", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
+webauthn-rs = { version = "0.6", default-features = false, features = ["conditional-ui", "danger-allow-state-serialisation", "danger-credential-internals", "danger-user-presence-only-security-keys"] }
 # `webauthn-rs` (passkeys) links OpenSSL through `openssl-sys`. This optional direct
 # dependency only exists so the `vendored-openssl` feature can build OpenSSL from
 # source (needs a C compiler plus Perl; NASM is optional on Windows MSVC). Default
 # builds keep linking the system OpenSSL exactly as before.
 openssl-sys = { version = "0.9", optional = true }
+# Pull rustix >=1.1.6 for RUSTSEC-2026-0486 (transitive via tempfile).
+rustix = "1.1.6"
 
 [features]
 default = []
@@ -66,3 +68,7 @@ panic = "abort"
 
 # Self-contained workspace so a broken parent `../Cargo.toml` cannot block builds.
 [workspace]
+
+# kanidm/crypto-glue 0.2.2 still pins rsa 0.10.0-rc.* (RUSTSEC-2023-0071). Vendor patch until crates.io bump.
+[patch.crates-io]
+crypto-glue = { path = "vendor/crypto-glue" }
