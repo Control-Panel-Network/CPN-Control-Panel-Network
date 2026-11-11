@@ -211,8 +211,30 @@ pub async fn run_auto_upgrade_check(
         });
     }
 
+    if crate::docker_outer_update::is_outer_container_deployment() {
+        let queued = crate::docker_outer_update::queue_host_image_update(
+            "automatic",
+            &target.version,
+            &target.tag_name,
+        )?;
+        let msg = queued.last_result;
+        remember(&mut cfg, true, &msg);
+        upgrade_tip_log::log_tagged_main_only("auto_upgrade", "info", &msg);
+        return Ok(AutoUpgradeCheckReport {
+            enabled: true,
+            would_upgrade: true,
+            applied: false,
+            update_available: true,
+            target_version: Some(target.version),
+            target_tag: Some(target.tag_name),
+            security_match,
+            skipped_reason: Some("host_image_update_queued".into()),
+            message: msg,
+        });
+    }
+
     let msg = format!(
-        "Automatic upgrade starting for {} (mode={:?}).",
+        "Automatic package upgrade starting for {} (mode={:?}).",
         target.tag_name, cfg.mode
     );
     cfg.last_applied_version = target.version.clone();

@@ -12,6 +12,7 @@ pub fn version_auto_upgrade_script() -> String {
   var statusEl = document.getElementById("cpn-auto-status");
   var lastEl = document.getElementById("cpn-auto-last");
   var noteEl = document.getElementById("cpn-auto-security-note");
+  var deploymentEl = document.getElementById("cpn-auto-deployment");
   if (!enabledEl || !saveBtn) return;
 
   function autoStatus(msg, isError) {
@@ -26,6 +27,18 @@ pub fn version_auto_upgrade_script() -> String {
     if (modeEl) modeEl.value = (data.mode === "security") ? "security" : "all";
     if (preEl) preEl.checked = !!data.include_prerelease;
     if (noteEl && data.security_detection_note) noteEl.textContent = data.security_detection_note;
+    if (deploymentEl) {
+      var host = data.docker_host_update || {};
+      if (data.deployment === "docker_image") {
+        deploymentEl.textContent = host.host_updater_configured
+          ? "Docker image deployment: host updater ready for " + (host.image || "the configured Hub image") + ". The panel has no Docker socket."
+          : "Docker image deployment: host updater is not configured. Automatic apply cannot recreate the outer container. Run the host setup command from the Docker update guide.";
+        deploymentEl.style.color = host.host_updater_configured ? "#4ade80" : "#fbbf24";
+      } else {
+        deploymentEl.textContent = "Native deployment: updates use the installed RPM/DEB package.";
+        deploymentEl.style.color = "";
+      }
+    }
     if (lastEl) {
       var bits = [];
       if (data.last_result) bits.push(data.last_result);
@@ -67,7 +80,7 @@ pub fn version_auto_upgrade_script() -> String {
     }).then(function (data) {
       paint(data);
       autoStatus(data.enabled
-        ? "Automatic updates enabled. The panel checks GitHub Releases on a schedule and upgrades when a newer installable package exists."
+        ? "Automatic updates enabled. CPN checks GitHub Releases on a schedule and applies a newer package or requests a host image recreate, depending on deployment type."
         : "Automatic updates disabled. No background upgrade will run.", false);
     }).catch(function (err) {
       autoStatus(window.cpnFriendlyFetchError(err, "Save automatic updates"), true);

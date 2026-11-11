@@ -66,6 +66,7 @@ mod cli_uninstall_ops;
 pub mod db_defaults;
 #[cfg(test)]
 mod docker_http_tests;
+pub mod docker_outer_update;
 pub mod environment;
 pub mod foreign_panel;
 pub mod host_packages_catalog;

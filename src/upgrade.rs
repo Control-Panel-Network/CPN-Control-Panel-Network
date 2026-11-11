@@ -205,6 +205,52 @@ async fn run_maintenance_inner(
         return Err("Downgrade requires confirm_downgrade=true (or CLI --yes)".into());
     }
 
+    // A package update inside the guest leaves the running outer image stale.
+    // Supported Hub deployments delegate release upgrades to the root-owned
+    // host helper instead. No Docker socket is exposed to this process.
+    if crate::docker_outer_update::is_outer_container_deployment()
+        && matches!(request.action, MaintenanceAction::Upgrade)
+    {
+        if let Some(raw) = request.version.as_deref()
+            && crate::releases_stable_tip::parse_tip_upgrade_target(raw).is_some()
+        {
+            return Err(
+                "Commit upgrades are not available for Docker image deployments until a matching Hub image is published. Use Upgrade to latest release."
+                    .into(),
+            );
+        }
+        let latest = resolve_target_release(MaintenanceAction::Upgrade, None, &installed).await?;
+        if let Some(raw) = request.version.as_deref() {
+            let requested = releases::find_release(raw).await?;
+            if compare_versions(&requested.version, &latest.version) != Ordering::Equal {
+                return Err(format!(
+                    "Docker image deployments can apply the latest published Hub release ({}) only. Older selected releases are not recreated from a floating OS image tag.",
+                    latest.tag_name
+                ));
+            }
+        }
+        let queued = crate::docker_outer_update::queue_host_image_update(
+            "manual",
+            &latest.version,
+            &latest.tag_name,
+        )?;
+        let message = queued.last_result;
+        state.log(message.clone(), "info");
+        state.progress("completed", 100, message.clone()).await;
+        let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
+        status.phase = "completed";
+        status.progress = 100;
+        status.error = None;
+        status.message = message.clone();
+        status.restart_scheduled = false;
+        let _ = state.events.send(crate::model::InstallerEvent::Completed {
+            status: status.clone(),
+        });
+        drop(status);
+        crate::upgrade_session_log::finish_session_ok(&message, false);
+        return Ok(());
+    }
+
     // Commit / branch tip path: version like `stable`, `dev`, `branch:<name>`,
     // `<branch>@abc1234`, or a git SHA (branch default comes from Version Management).
     if matches!(
