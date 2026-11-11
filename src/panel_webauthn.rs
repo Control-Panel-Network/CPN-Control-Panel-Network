@@ -28,9 +28,9 @@ use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
     AuthenticatorAttachment, CreationChallengeResponse, Credential, DiscoverableAuthentication,
-    DiscoverableKey, Passkey, PasskeyRegistration, PublicKeyCredential,
-    RegisterPublicKeyCredential, RequestChallengeResponse, SecurityKey, SecurityKeyAuthentication,
-    SecurityKeyRegistration, Webauthn, WebauthnBuilder,
+    Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
+    RequestChallengeResponse, SecurityKey, SecurityKeyAuthentication, SecurityKeyRegistration,
+    Webauthn, WebauthnBuilder,
 };
 
 pub use crate::panel_webauthn_client::passkey_client_script;
@@ -542,12 +542,12 @@ pub fn finish_authentication(
                 })?;
             let username = passkey_owner(credential_id)
                 .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
-            let keys = passkeys_for_auth(&username)
-                .iter()
-                .map(DiscoverableKey::from)
-                .collect::<Vec<_>>();
+            let passkey = passkeys_for_auth(&username)
+                .into_iter()
+                .find(|candidate| candidate.cred_id() == credential_id)
+                .ok_or_else(|| "That passkey is not registered for this panel.".to_string())?;
             let result = webauthn
-                .finish_discoverable_authentication(credential, state, &keys)
+                .finish_discoverable_authentication_v2(credential, state, &passkey)
                 .map_err(|err| {
                     crate::upgrade_tip_log::log_tagged(
                         "webauthn",
