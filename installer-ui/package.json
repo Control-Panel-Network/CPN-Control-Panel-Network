@@ -18,7 +18,7 @@
     "bundle": "vite build"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.14",
+    "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-react": "^6.2.1",
     "lucide-react": "^1.65.0",
     "motion": "^14.9.0",
