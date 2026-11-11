@@ -1,0 +1,47 @@
+name: latest docs
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-docs
+
+      - name: Build documentation
+        id: build
+        env:
+          RUSTDOCFLAGS: -Z unstable-options --enable-index-page --html-before-content ${{ github.workspace }}/api-docs/before_content.html --extend-css ${{ github.workspace }}/api-docs/style.css
+        run: cargo doc -p crypto-glue
+
+      - name: Upload static files as artifact
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/doc/
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

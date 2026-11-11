@@ -47,6 +47,8 @@ webauthn-rs = { version = "0.6", default-features = false, features = ["conditio
 # source (needs a C compiler plus Perl; NASM is optional on Windows MSVC). Default
 # builds keep linking the system OpenSSL exactly as before.
 openssl-sys = { version = "0.9", optional = true }
+# Pull rustix >=1.1.6 for RUSTSEC-2026-0486 (transitive via tempfile).
+rustix = "1.1.6"
 
 [features]
 default = []
@@ -66,3 +68,7 @@ panic = "abort"
 
 # Self-contained workspace so a broken parent `../Cargo.toml` cannot block builds.
 [workspace]
+
+# kanidm/crypto-glue 0.2.2 still pins rsa 0.10.0-rc.* (RUSTSEC-2023-0071). Vendor patch until crates.io bump.
+[patch.crates-io]
+crypto-glue = { path = "vendor/crypto-glue" }
