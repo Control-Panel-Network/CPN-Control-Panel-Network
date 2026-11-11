@@ -383,6 +383,7 @@ mod tests {
         assert!(html.contains("cpn-version-source-tip"));
         assert!(html.contains("cpn-source-repo"));
         assert!(html.contains("id=\"cpn-auto-enabled\""));
+        assert!(html.contains("id=\"cpn-auto-countdown\""));
         assert!(html.contains("Automatic updates"));
         assert!(html.contains("Enabled by default on new installs"));
         assert!(!html.contains("Off by default"));
