@@ -4,12 +4,12 @@ use crate::auth_api::panel_user_from_request;
 use crate::auto_upgrade::{
     AutoUpgradeMode, load_auto_upgrade_config, public_status, save_auto_upgrade_config,
 };
-use crate::panel_prefs::load_panel_ui_prefs;
 use crate::auto_upgrade_run::run_auto_upgrade_check;
 use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
 use crate::model::TokenQuery;
 use crate::panel_admin::is_panel_admin;
+use crate::panel_prefs::load_panel_ui_prefs;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -72,10 +72,7 @@ pub async fn api_auto_upgrade_get(
     }
     let cfg = load_auto_upgrade_config();
     let prefs = load_panel_ui_prefs();
-    HttpResponse::Ok().json(public_status(
-        &cfg,
-        prefs.show_auto_upgrade_countdown,
-    ))
+    HttpResponse::Ok().json(public_status(&cfg, prefs.show_auto_upgrade_countdown))
 }
 
 #[post("/api/auto-upgrade")]
@@ -115,10 +112,7 @@ pub async fn api_auto_upgrade_post(
         ),
     );
     let prefs = load_panel_ui_prefs();
-    HttpResponse::Ok().json(public_status(
-        &saved,
-        prefs.show_auto_upgrade_countdown,
-    ))
+    HttpResponse::Ok().json(public_status(&saved, prefs.show_auto_upgrade_countdown))
 }
 
 /// Dry-run (default) or apply when armed. Toggle OFF never starts an upgrade.

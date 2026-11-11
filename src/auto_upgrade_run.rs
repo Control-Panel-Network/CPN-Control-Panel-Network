@@ -1,10 +1,12 @@
 //! Automatic upgrade check / apply / background worker.
 
 use crate::auto_upgrade::{
-    AutoUpgradeMode, STARTUP_DELAY_SECS, ensure_default_auto_upgrade_config, load_auto_upgrade_config,
-    now_unix, resolve_security_release, save_auto_upgrade_config,
+    AutoUpgradeMode, STARTUP_DELAY_SECS, ensure_default_auto_upgrade_config,
+    load_auto_upgrade_config, now_unix, resolve_security_release, save_auto_upgrade_config,
 };
-use crate::auto_upgrade_schedule::{ensure_next_check_scheduled, schedule_next_check, seconds_until_next_check};
+use crate::auto_upgrade_schedule::{
+    ensure_next_check_scheduled, schedule_next_check, seconds_until_next_check,
+};
 use crate::installer::AppState;
 use crate::login_service_gate::login_services_ready;
 use crate::manifest::detect_existing_install;

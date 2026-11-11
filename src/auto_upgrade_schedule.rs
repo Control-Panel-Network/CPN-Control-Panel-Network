@@ -1,6 +1,6 @@
 //! Per-install schedule jitter and next-check timestamps for automatic updates.
 
-use crate::auto_upgrade::{interval_secs, now_unix, AutoUpgradeConfig};
+use crate::auto_upgrade::{AutoUpgradeConfig, interval_secs, now_unix};
 use crate::panel_phonehome::ensure_install_id;
 use std::hash::{Hash, Hasher};
 
