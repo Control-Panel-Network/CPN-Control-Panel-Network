@@ -329,10 +329,7 @@ pub fn clear_mfa_pending_cookie_header(secure: bool) -> String {
 
 /// Expire unscoped auth cookie names when the browser sent `Host: …:port` so stale
 /// pre-1.4.9 cookies cannot hijack another lab panel on the same loopback host.
-pub fn purge_legacy_port_colliding_cookie_headers(
-    secure: bool,
-    port: Option<u16>,
-) -> Vec<String> {
+pub fn purge_legacy_port_colliding_cookie_headers(secure: bool, port: Option<u16>) -> Vec<String> {
     if port.is_none() {
         return Vec::new();
     }
