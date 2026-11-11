@@ -8,13 +8,14 @@ window.cpnFriendlyFetchError = function (err, context) {
   if (msg === "Failed to fetch" || msg.indexOf("NetworkError") >= 0 || msg.indexOf("Load failed") >= 0) {
     return (context || "Request") + " failed: network error (panel may be restarting, or the browser lost connection). Confirm cpn-installer is running, use the same host you signed in on (127.0.0.1 vs localhost use different cookies), then refresh.";
   }
-  if (msg.indexOf("HTTP 401") >= 0) {
+  var trim = msg.trim();
+  if (/^HTTP 401(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: not signed in. Sign in again.";
   }
-  if (msg.indexOf("HTTP 403") >= 0) {
+  if (/^HTTP 403(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: permission denied for this action.";
   }
-  if (msg.indexOf("HTTP 502") >= 0 || msg.indexOf("HTTP 503") >= 0 || msg.indexOf("HTTP 504") >= 0) {
+  if (/^HTTP 502(\s|$)/.test(trim) || /^HTTP 503(\s|$)/.test(trim) || /^HTTP 504(\s|$)/.test(trim)) {
     return (context || "Request") + " failed: panel service unavailable (" + msg + "). Try again shortly.";
   }
   return (context || "Request") + " failed: " + msg;
@@ -234,6 +235,12 @@ mod tests {
         assert!(version_fetch_helpers_script().contains("cpnFriendlyFetchError"));
         assert!(version_fetch_helpers_script().contains("cpnVersionSetStatus"));
         assert!(version_fetch_helpers_script().contains("panel-notice ok"));
+        let helpers = version_fetch_helpers_script();
+        assert!(
+            helpers.contains("^HTTP 403"),
+            "auth errors must not match GitHub rate-limit copy"
+        );
+        assert!(!helpers.contains("indexOf(\"HTTP 403\")"));
         assert!(!js.contains('\u{2014}'));
         assert!(!js.contains('\u{2013}'));
     }
