@@ -124,12 +124,8 @@ pub async fn run_auto_upgrade_check(
     let guest = detect_guest_os().map_err(|e| format!("Could not detect guest OS: {e}"))?;
     // Dry-run (manual Check now) may use cached releases when GitHub rate-limits;
     // scheduled apply keeps a forced refresh.
-    let check = releases::version_check_with_options(
-        VERSION,
-        &existing.package_version,
-        apply,
-    )
-    .await;
+    let check =
+        releases::version_check_with_options(VERSION, &existing.package_version, apply).await;
     if let Some(err) = check.error.as_ref() {
         if check.releases.is_empty() {
             let msg = format!("Automatic update check failed: {err}");
