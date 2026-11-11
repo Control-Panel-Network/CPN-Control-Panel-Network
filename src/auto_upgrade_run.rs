@@ -122,13 +122,26 @@ pub async fn run_auto_upgrade_check(
 
     let existing = detect_existing_install(VERSION);
     let guest = detect_guest_os().map_err(|e| format!("Could not detect guest OS: {e}"))?;
-    let check =
-        releases::version_check_with_options(VERSION, &existing.package_version, true).await;
+    // Dry-run (manual Check now) may use cached releases when GitHub rate-limits;
+    // scheduled apply keeps a forced refresh.
+    let check = releases::version_check_with_options(
+        VERSION,
+        &existing.package_version,
+        apply,
+    )
+    .await;
     if let Some(err) = check.error.as_ref() {
-        let msg = format!("Automatic update check failed: {err}");
-        remember(&mut cfg, false, &msg);
-        upgrade_tip_log::log_tagged_main_only("auto_upgrade", "error", &msg);
-        return Err(msg);
+        if check.releases.is_empty() {
+            let msg = format!("Automatic update check failed: {err}");
+            remember(&mut cfg, false, &msg);
+            upgrade_tip_log::log_tagged_main_only("auto_upgrade", "error", &msg);
+            return Err(msg);
+        }
+        upgrade_tip_log::log_tagged_main_only(
+            "auto_upgrade",
+            "info",
+            &format!("Release list note (using cache): {err}"),
+        );
     }
 
     let latest = check
