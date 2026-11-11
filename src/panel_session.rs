@@ -327,6 +327,24 @@ pub fn clear_mfa_pending_cookie_header(secure: bool) -> String {
     clear_named_cookie_header(MFA_PENDING_COOKIE, secure)
 }
 
+/// Expire unscoped auth cookie names when the browser sent `Host: …:port` so stale
+/// pre-1.4.9 cookies cannot hijack another lab panel on the same loopback host.
+pub fn purge_legacy_port_colliding_cookie_headers(secure: bool, port: Option<u16>) -> Vec<String> {
+    if port.is_none() {
+        return Vec::new();
+    }
+    let bases = [
+        SESSION_COOKIE,
+        MFA_PENDING_COOKIE,
+        "cpn_login_return",
+        "cpn_install_token",
+    ];
+    bases
+        .iter()
+        .map(|base| clear_named_cookie_header(base, secure))
+        .collect()
+}
+
 pub fn read_session_cookie(cookie_header: Option<&str>, port: Option<u16>) -> Option<String> {
     read_scoped_then_legacy(cookie_header, SESSION_COOKIE, port)
 }
@@ -344,11 +362,12 @@ fn read_scoped_then_legacy(
     if let Some(value) = read_named_cookie(cookie_header, &scoped) {
         return Some(value);
     }
-    // Upgrade path: older panels used the unscoped name only.
+    // Lab NAT URLs (`localhost:2087` vs `:2092`) share a browser host; unscoped cookies
+    // collide across ports. Never accept the legacy name when the browser sent a port.
     if port.is_some() {
-        return read_named_cookie(cookie_header, base);
+        return None;
     }
-    None
+    read_named_cookie(cookie_header, base)
 }
 
 fn read_named_cookie(cookie_header: Option<&str>, name: &str) -> Option<String> {
@@ -480,12 +499,9 @@ mod tests {
             Some("ubuntu")
         );
 
-        // Legacy unscoped cookie still readable for one upgrade cycle.
+        // Legacy unscoped cookie is ignored when the Host port is explicit (lab collision guard).
         let legacy = format!("{SESSION_COOKIE}=legacy");
-        assert_eq!(
-            read_session_cookie(Some(&legacy), Some(2092)).as_deref(),
-            Some("legacy")
-        );
+        assert_eq!(read_session_cookie(Some(&legacy), Some(2092)), None);
 
         let issued = issue_session_cookie_headers("new", false, Some(2092));
         assert_eq!(issued.len(), 2);

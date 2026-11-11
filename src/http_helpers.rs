@@ -102,9 +102,9 @@ fn session_from_cookie(request: &HttpRequest) -> Option<String> {
         return Some(value);
     }
     if port.is_some() {
-        return read_install_cookie_value(cookie_header, INSTALL_TOKEN_COOKIE);
+        return None;
     }
-    None
+    read_install_cookie_value(cookie_header, INSTALL_TOKEN_COOKIE)
 }
 
 fn read_install_cookie_value(cookie_header: &str, name: &str) -> Option<String> {
