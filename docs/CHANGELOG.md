@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Docker outer-image updates**: Hub Compose deployments can install a root-owned host systemd timer that follows the configured AlmaLinux or Ubuntu image stream, honors the Owner automatic-update toggle and interval, pulls changed image digests, validates persistent mounts, and recreates the CPN service with rollback on failed health verification. Version Management delegates latest-release updates to the host helper instead of updating only the package inside a stale container image. The panel container never receives the Docker socket. OLS/LiteSpeed and mail-enabled guests require their documented persistence overlays before the helper will update.
+
 ## [1.4.9] - 07/11/2026
 
 Patch release after v1.4.8. Fail2Ban ban management, SPA tab navigation, async login with fade, live dashboard gauges, checkbox/switch styles, MOTD ASCII N fix, and port-scoped lab session cookies (#627, #617 to #619, #621, #645 to #649).

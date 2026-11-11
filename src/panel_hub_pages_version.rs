@@ -87,10 +87,13 @@ pub fn version_management_page(can_manage: bool) -> String {
   <h3 style="margin:0 0 10px;">Automatic updates</h3>
   <p class="muted" style="margin:0 0 12px;line-height:1.45;">
     Enabled by default on new installs (All newer releases). Background checks of GitHub Releases
-    run on a schedule while this stays on. A newer guest-matching RPM/DEB triggers the same upgrade
-    path as <strong>Upgrade to latest release</strong>
-    (maintenance page, package preferred over source, sites/docker/mail/accounts/plans and MFA preserved).
+    run on a schedule while this stays on. Native installs use a guest-matching RPM/DEB. Supported
+    Docker image installs ask a root-owned host helper to pull and recreate the Compose service,
+    with persistent mounts checked before replacement. The panel container never receives the Docker socket.
     The panel Owner can turn this off at any time to stop scheduled upgrades.
+  </p>
+  <p id="cpn-auto-deployment" class="muted" style="margin:0 0 12px;line-height:1.45;" role="status">
+    Detecting deployment update path...
   </p>
   <label style="display:flex;gap:8px;align-items:center;">
     <input id="cpn-auto-enabled" type="checkbox" class="cpn-switch" role="switch" checked />
@@ -384,6 +387,9 @@ mod tests {
         assert!(html.contains("id=\"cpn-auto-enabled\""));
         assert!(html.contains("Automatic updates"));
         assert!(html.contains("Enabled by default on new installs"));
+        assert!(html.contains("cpn-auto-deployment"));
+        assert!(html.contains("root-owned host helper"));
+        assert!(html.contains("never receives the Docker socket"));
         assert!(!html.contains("Off by default"));
         assert!(html.contains(
             "id=\"cpn-auto-enabled\" type=\"checkbox\" class=\"cpn-switch\" role=\"switch\" checked"
