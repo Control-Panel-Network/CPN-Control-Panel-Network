@@ -115,7 +115,8 @@ use cpn_installer::panel_hub_routes::{
     settings_setup_page, settings_setup_save, settings_site_messages_page,
     settings_site_messages_preview_site_ready, settings_site_messages_reset,
     settings_site_messages_restore_site_ready, settings_site_messages_restore_suspend,
-    settings_site_messages_save, settings_system_repair_redirect, settings_version_page,
+    settings_site_messages_save, settings_system_repair_redirect, settings_ui_prefs_save,
+    settings_version_page,
     sidebar_acl_delete_post, sidebar_acl_get, sidebar_acl_post, site_filemanager_alias,
     site_files_list, site_files_op, site_files_page_route, site_files_upload,
     system_repair_api_route, system_repair_heal_route, system_repair_report_route,
@@ -1450,6 +1451,7 @@ async fn main() -> std::io::Result<()> {
             .service(cloudflare_delete_post)
             .service(cloudflare_proxy_post)
             .service(settings_page)
+            .service(settings_ui_prefs_save)
             .service(settings_version_page)
             .service(settings_design_page)
             .service(settings_setup_page)

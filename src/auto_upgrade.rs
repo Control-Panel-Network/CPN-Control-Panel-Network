@@ -61,6 +61,12 @@ pub struct AutoUpgradeConfig {
     pub last_result: String,
     #[serde(default)]
     pub last_applied_version: String,
+    /// Unix time for the next background check (enabled only).
+    #[serde(default)]
+    pub next_check_at_unix: u64,
+    /// Extra delay baked into the current schedule (per-install jitter).
+    #[serde(default)]
+    pub schedule_jitter_secs: u64,
     #[serde(default)]
     pub updated_at_unix: u64,
 }
@@ -84,6 +90,8 @@ impl Default for AutoUpgradeConfig {
             last_check_ok: true,
             last_result: String::new(),
             last_applied_version: String::new(),
+            next_check_at_unix: 0,
+            schedule_jitter_secs: 0,
             updated_at_unix: 0,
         }
     }
@@ -99,6 +107,11 @@ pub struct AutoUpgradePublic {
     pub last_check_ok: bool,
     pub last_result: String,
     pub last_applied_version: String,
+    pub next_check_at_unix: u64,
+    pub seconds_until_next_check: u64,
+    pub schedule_jitter_secs: u64,
+    pub check_interval_base_secs: u64,
+    pub show_countdown: bool,
     pub updated_at_unix: u64,
     pub default_enabled: bool,
     pub security_detection_note: String,
@@ -161,6 +174,12 @@ pub fn save_auto_upgrade_config(cfg: &AutoUpgradeConfig) -> Result<(), String> {
     ensure_data_dir()?;
     let mut clean = cfg.clone();
     clean.check_interval_secs = clean.check_interval_secs.max(MIN_INTERVAL_SECS);
+    if clean.enabled {
+        crate::auto_upgrade_schedule::ensure_next_check_scheduled(&mut clean);
+    } else {
+        clean.next_check_at_unix = 0;
+        clean.schedule_jitter_secs = 0;
+    }
     clean.updated_at_unix = now_unix();
     let path = config_path();
     let raw = serde_json::to_string_pretty(&clean)
@@ -182,7 +201,9 @@ pub fn save_auto_upgrade_config(cfg: &AutoUpgradeConfig) -> Result<(), String> {
     Ok(())
 }
 
-pub fn public_status(cfg: &AutoUpgradeConfig) -> AutoUpgradePublic {
+pub fn public_status(cfg: &AutoUpgradeConfig, show_countdown: bool) -> AutoUpgradePublic {
+    let base = interval_secs(cfg);
+    let until = crate::auto_upgrade_schedule::seconds_until_next_check(cfg);
     AutoUpgradePublic {
         enabled: cfg.enabled,
         mode: cfg.mode,
@@ -192,6 +213,11 @@ pub fn public_status(cfg: &AutoUpgradeConfig) -> AutoUpgradePublic {
         last_check_ok: cfg.last_check_ok,
         last_result: cfg.last_result.clone(),
         last_applied_version: cfg.last_applied_version.clone(),
+        next_check_at_unix: cfg.next_check_at_unix,
+        seconds_until_next_check: until,
+        schedule_jitter_secs: cfg.schedule_jitter_secs,
+        check_interval_base_secs: base,
+        show_countdown: show_countdown && cfg.enabled,
         updated_at_unix: cfg.updated_at_unix,
         default_enabled: true,
         security_detection_note: "Security-only matching prefers release metadata (CPN-SECURITY-RELEASE body marker, cpn-security-release.json, or CPN-SECURITY-RELEASE asset) over tag/title keywords (CVE, GHSA, security, secfix, advisory). Older releases without metadata still use heuristics and can miss or mis-classify updates. Prefer All newer releases (the default). Turn automatic updates off under Version Management if you do not want scheduled upgrades.".into(),
@@ -422,7 +448,7 @@ mod tests {
 
     #[test]
     fn public_status_documents_default_on() {
-        let pub_status = public_status(&AutoUpgradeConfig::default());
+        let pub_status = public_status(&AutoUpgradeConfig::default(), true);
         assert!(pub_status.default_enabled);
         assert!(pub_status.security_detection_note.contains("Security-only"));
         assert!(

@@ -112,6 +112,7 @@ pub fn version_management_page(can_manage: bool) -> String {
     <button type="button" class="btn-primary" id="cpn-auto-save">Save automatic updates</button>
     <button type="button" id="cpn-auto-check">Check now (dry-run)</button>
   </div>
+  <p id="cpn-auto-countdown" class="muted" style="margin-top:10px;font-size:13px;line-height:1.45;display:none;" role="status" aria-live="polite"></p>
   <p id="cpn-auto-status" class="muted" style="margin-top:10px;" role="status"></p>
   <p id="cpn-auto-last" class="muted" style="margin-top:6px;font-size:13px;"></p>
 </div>"#

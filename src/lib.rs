@@ -37,6 +37,7 @@ pub mod auth_password_reset_api;
 pub mod auto_upgrade;
 pub mod auto_upgrade_api;
 pub mod auto_upgrade_run;
+pub mod auto_upgrade_schedule;
 pub mod backup_restore;
 pub mod backup_restore_accounts;
 pub mod backup_restore_accounts_apply;

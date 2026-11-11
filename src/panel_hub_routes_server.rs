@@ -28,6 +28,7 @@ use crate::panel_hub_pages_settings::{
 use crate::panel_hub_pages_site_messages::site_messages_settings_page;
 use crate::panel_ops_docker_csrf::{user_can_manage_container, verify_docker_csrf};
 use crate::panel_pages::panel_shell;
+use crate::panel_prefs::set_show_auto_upgrade_countdown;
 use crate::site_messages::{
     SiteMessageDefaults, builtin_site_ready_html, load_defaults, restore_factory_site_ready,
     restore_factory_suspend_message, sanitize_site_ready_html, save_defaults,
@@ -1211,6 +1212,42 @@ pub async fn settings_page(
         )
     })
     .await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SettingsUiPrefsForm {
+    #[serde(default)]
+    show_auto_upgrade_countdown: String,
+}
+
+#[post("/settings/ui-prefs")]
+pub async fn settings_ui_prefs_save(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<SettingsUiPrefsForm>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_flash("/settings", None, Some("Admin only"));
+    }
+    let show = matches!(
+        form.show_auto_upgrade_countdown.trim(),
+        "1" | "true" | "on" | "yes"
+    );
+    match set_show_auto_upgrade_countdown(show) {
+        Ok(_) => redirect_flash(
+            "/settings",
+            Some(if show {
+                "Version Management countdown is visible"
+            } else {
+                "Version Management countdown is hidden"
+            }),
+            None,
+        ),
+        Err(error) => redirect_flash("/settings", None, Some(&error)),
+    }
 }
 
 #[get("/settings/version")]

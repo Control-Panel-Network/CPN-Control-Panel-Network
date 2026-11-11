@@ -4,6 +4,7 @@ use crate::auth_api::panel_user_from_request;
 use crate::auto_upgrade::{
     AutoUpgradeMode, load_auto_upgrade_config, public_status, save_auto_upgrade_config,
 };
+use crate::panel_prefs::load_panel_ui_prefs;
 use crate::auto_upgrade_run::run_auto_upgrade_check;
 use crate::http_helpers::authorized_request;
 use crate::installer::AppState;
@@ -70,7 +71,11 @@ pub async fn api_auto_upgrade_get(
         return HttpResponse::Unauthorized().finish();
     }
     let cfg = load_auto_upgrade_config();
-    HttpResponse::Ok().json(public_status(&cfg))
+    let prefs = load_panel_ui_prefs();
+    HttpResponse::Ok().json(public_status(
+        &cfg,
+        prefs.show_auto_upgrade_countdown,
+    ))
 }
 
 #[post("/api/auto-upgrade")]
@@ -100,15 +105,20 @@ pub async fn api_auto_upgrade_post(
     if let Err(error) = save_auto_upgrade_config(&cfg) {
         return HttpResponse::BadRequest().json(serde_json::json!({ "error": error }));
     }
+    let saved = load_auto_upgrade_config();
     crate::upgrade_tip_log::log_tagged_main_only(
         "auto_upgrade",
         "info",
         &format!(
             "Owner saved automatic updates: enabled={}, mode={:?}, prerelease={}",
-            cfg.enabled, cfg.mode, cfg.include_prerelease
+            saved.enabled, saved.mode, saved.include_prerelease
         ),
     );
-    HttpResponse::Ok().json(public_status(&cfg))
+    let prefs = load_panel_ui_prefs();
+    HttpResponse::Ok().json(public_status(
+        &saved,
+        prefs.show_auto_upgrade_countdown,
+    ))
 }
 
 /// Dry-run (default) or apply when armed. Toggle OFF never starts an upgrade.
