@@ -7,10 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.10] - 11/11/2026
+
+Patch release after v1.4.9. CRA audit trail and release SBOMs, Phase 1b dependency hygiene, WebAuthn 0.6, Version and dashboard UX polish, legacy lab cookie guard, and audit category fixes (#652 to #654, #656, #666, #667, #668).
+
+### Added
+
+- **Phase 2a panel audit trail (#654)**: Settings expose a searchable panel action log with category filters, export, and coverage for authenticated mutations. Deny-by-default auditing remains; non-essential UI preference routes honor the `ui` opt-out.
+- **CRA release artifacts (#653)**: Official `v*` builds attach CycloneDX SBOMs (`cpn-installer.cdx.json`, installer UI, Panel), `cpn-security-release.json`, and a `cra-release-audit-gate.sh` pass on critical/high `cargo-audit` and npm findings before publish. Coordinated vulnerability disclosure policy docs and public security advisory surfaces ship with this line.
+
+### Changed
+
+- **WebAuthn 0.6 (#656)**: `webauthn-rs` 0.6.2 with the current discoverable authentication API; vendored `crypto-glue` patch for upstream RSA audit alignment.
+
 ### Fixed
 
-- **Concurrent lab panels (legacy cookie guard)**: When the browser sends an explicit `Host` port (`localhost:2087` vs `:2092`), CPN no longer accepts unscoped `cpn_panel_session` / MFA / login-return / install-token cookies, and redirects to sign-in expire those legacy names. This stops a stale pre-1.4.9 cookie from one NAT port from blanking or hijacking another lab panel on the same loopback host. Use the same hostname for both labs (`localhost` or `127.0.0.1`, not mixed).
-- **CRA audit route categories**: Database, FTP/SFTP, DNS, automatic update, panel notification, and UI preference mutations now use stable audit actions and their intended categories instead of `other`. UI preference routes now honor the non-essential `ui` audit opt-out while deny-by-default coverage remains active.
+- **Version Management save feedback (#666)**: Upgrade, downgrade, commit, and auto-update saves show a green success notice instead of failing silently.
+- **Dashboard Save visibility (#667)**: The overview **Save** button stays hidden until **Edit overview** is active, matching the edit-lock pattern from v1.4.7.
+- **Concurrent lab panels (legacy cookie guard, #668)**: When the browser sends an explicit `Host` port (`localhost:2087` vs `:2092`), CPN no longer accepts unscoped `cpn_panel_session` / MFA / login-return / install-token cookies, and redirects to sign-in expire those legacy names. This stops a stale pre-1.4.9 cookie from one NAT port from blanking or hijacking another lab panel on the same loopback host. Use the same hostname for both labs (`localhost` or `127.0.0.1`, not mixed). Version Management sessionStorage cache keys are port-scoped; the Panel auth helper matches the same rule.
+- **CRA audit route categories**: Database, FTP/SFTP, DNS, automatic update, panel notification, and UI preference mutations use stable audit actions and intended categories instead of `other`.
+- **Phase 1b GitHub security (#652)**: Clear Dependabot and CodeQL findings in the panel stack (for example installer-ui `minimatch` and `zod`).
 
 ## [1.4.9] - 07/11/2026
 
