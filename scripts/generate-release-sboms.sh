@@ -30,12 +30,12 @@ generate_npm_sbom() {
   echo "Generating npm CycloneDX SBOM for $dir -> $out_name ..."
   (
     cd "$abs"
-    if [[ ! -d node_modules ]]; then
-      npm ci
-    fi
+    rm -rf node_modules
+    npm ci
     npx --yes @cyclonedx/cyclonedx-npm@4.0.0 \
       --output-file "$OUT/$out_name" \
       --output-reproducible \
+      --ignore-npm-errors \
       --spec-version 1.5
   )
   test -s "$OUT/$out_name"
