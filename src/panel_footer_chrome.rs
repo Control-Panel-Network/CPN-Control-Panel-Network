@@ -204,6 +204,17 @@ pub fn notifications_popover_script() -> &'static str {
   var POPOVER_WIDTH = 340;
   var POPOVER_GAP = 8;
   var VIEWPORT_PAD = 12;
+  var loadEpoch = 0;
+  var loadAbort = null;
+
+  function bumpLoadEpoch() {
+    loadEpoch += 1;
+    if (loadAbort) {
+      try { loadAbort.abort(); } catch (e) {}
+      loadAbort = null;
+    }
+    return loadEpoch;
+  }
 
   function placePanel() {
     var rect = btn.getBoundingClientRect();
@@ -303,17 +314,29 @@ pub fn notifications_popover_script() -> &'static str {
   }
 
   function markRead(ids, all) {
+    bumpLoadEpoch();
     return fetch("/api/panel/notifications/mark-read", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify(all ? { all: true } : { ids: ids || [] })
-    }).then(function (res) { return res.json(); })
-      .then(function (data) { if (data && data.ok) renderItems(data); })
-      .catch(function () {});
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+        return data;
+      });
+    }).then(function (data) {
+      if (data && data.ok) renderItems(data);
+    }).catch(function () {
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = "Could not update notifications.";
+      }
+    });
   }
 
   function renderItems(payload) {
+    if (!payload || payload.ok !== true) return;
     var items = (payload && payload.items) || [];
     updateBadge((payload && payload.unread_count) || 0);
     list.innerHTML = "";
@@ -349,21 +372,30 @@ pub fn notifications_popover_script() -> &'static str {
   }
 
   function loadNotifications() {
+    var epoch = bumpLoadEpoch();
+    loadAbort = new AbortController();
+    var signal = loadAbort.signal;
     return fetch("/api/panel/notifications", {
       credentials: "same-origin",
-      headers: { "Accept": "application/json" }
+      headers: { "Accept": "application/json" },
+      signal: signal
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
         return data;
       });
     }).then(function (data) {
+      if (epoch !== loadEpoch) return data;
       renderItems(data);
       return data;
-    }).catch(function () {
+    }).catch(function (err) {
+      if (err && err.name === "AbortError") return;
+      if (epoch !== loadEpoch) return;
       empty.hidden = false;
       empty.textContent = "Could not load notifications.";
       list.innerHTML = "";
+    }).finally(function () {
+      if (epoch === loadEpoch) loadAbort = null;
     });
   }
 
@@ -372,6 +404,10 @@ pub fn notifications_popover_script() -> &'static str {
     var next = panel.hidden;
     setOpen(next);
     if (next) loadNotifications();
+  });
+
+  panel.addEventListener("mousedown", function (ev) {
+    ev.stopPropagation();
   });
 
   document.addEventListener("click", function (ev) {
@@ -452,6 +488,8 @@ mod tests {
         assert!(js.contains("POPOVER_WIDTH = 340"));
         assert!(js.contains("itemSeverity"));
         assert!(js.contains("notify-toast-dismiss"));
+        assert!(js.contains("loadEpoch"));
+        assert!(js.contains("AbortController"));
         assert!(!js.contains("CyberPanel"));
     }
 }
