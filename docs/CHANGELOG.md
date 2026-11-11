@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Concurrent lab panels (legacy cookie guard)**: When the browser sends an explicit `Host` port (`localhost:2087` vs `:2092`), CPN no longer accepts unscoped `cpn_panel_session` / MFA / login-return / install-token cookies, and redirects to sign-in expire those legacy names. This stops a stale pre-1.4.9 cookie from one NAT port from blanking or hijacking another lab panel on the same loopback host. Use the same hostname for both labs (`localhost` or `127.0.0.1`, not mixed).
 - **CRA audit route categories**: Database, FTP/SFTP, DNS, automatic update, panel notification, and UI preference mutations now use stable audit actions and their intended categories instead of `other`. UI preference routes now honor the non-essential `ui` audit opt-out while deny-by-default coverage remains active.
 
 ## [1.4.9] - 07/11/2026
