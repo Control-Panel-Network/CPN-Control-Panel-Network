@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Automatic updates Check now**: Version Management no longer shows “permission denied” when GitHub rate-limits release fetches (HTTP 403 in the error text). `cpnFriendlyFetchError` only maps panel auth `HTTP 403` responses, and dry-run checks prefer cached releases when the live GitHub API is throttled.
+
 ## [1.4.10] - 11/11/2026
 
 Patch release after v1.4.9. CRA audit trail and release SBOMs, Phase 1b dependency hygiene, WebAuthn 0.6, Version and dashboard UX polish, legacy lab cookie guard, and audit category fixes (#652 to #654, #656, #666, #667, #668).
