@@ -41,15 +41,15 @@ impl TipBinaryBackup {
             return Ok(());
         }
         let mut notes: Vec<String> = Vec::new();
-        if let Some(ref path) = self.installer {
-            if restore_one(path, Path::new(installer_bin())).is_ok() {
-                notes.push("restored cpn-installer".into());
-            }
+        if let Some(ref path) = self.installer
+            && restore_one(path, Path::new(installer_bin())).is_ok()
+        {
+            notes.push("restored cpn-installer".into());
         }
-        if let Some(ref path) = self.cli {
-            if restore_one(path, Path::new(cli_bin())).is_ok() {
-                notes.push("restored cpn CLI".into());
-            }
+        if let Some(ref path) = self.cli
+            && restore_one(path, Path::new(cli_bin())).is_ok()
+        {
+            notes.push("restored cpn CLI".into());
         }
         if !notes.is_empty() {
             crate::upgrade_tip_log::log_info(format!("Tip upgrade rollback: {}", notes.join(", ")));

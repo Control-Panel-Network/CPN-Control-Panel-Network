@@ -297,10 +297,7 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
     }
 
     let mut cache = load_cache();
-    let mut api_status: Option<u16> = None;
-    let mut api_error: Option<String> = None;
-
-    match resolve_via_api(repo, trimmed).await {
+    let (api_status, api_error) = match resolve_via_api(repo, trimmed).await {
         Ok((sha, _status)) => {
             cache_store(&mut cache, repo, trimmed, &sha, None);
             let _ = save_cache(&cache);
@@ -312,13 +309,12 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
             });
         }
         Err((status, msg)) => {
-            api_status = Some(status);
-            api_error = Some(msg.clone());
             upgrade_tip_log::log_info(format!(
                 "GitHub commits API could not resolve {repo}@{trimmed}: {msg}"
             ));
+            (Some(status), Some(msg))
         }
-    }
+    };
 
     if let Some(entry) = cache_lookup(&cache, repo, trimmed) {
         let age = now_unix().saturating_sub(entry.fetched_at_unix);
@@ -326,7 +322,7 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
             "Using last-good commit tip cache for {repo}@{trimmed} (about {age}s old)"
         ));
         let note = api_error.as_ref().map(|e| format!("{e} Using cached SHA."));
-        let _ = cache_store(&mut cache, repo, trimmed, &entry.sha, api_error.clone());
+        cache_store(&mut cache, repo, trimmed, &entry.sha, api_error.clone());
         let _ = save_cache(&cache);
         return Ok(ResolvedRef {
             sha: entry.sha.clone(),
@@ -363,15 +359,15 @@ pub async fn resolve_ref_resilient(repo: &str, git_ref: &str) -> Result<Resolved
                 note,
             });
         }
-    } else if build_meta::looks_like_git_sha(trimmed) {
-        if let Some(full) = full_sha_from_cache(&cache, repo, trimmed, trimmed) {
-            return Ok(ResolvedRef {
-                sha: full,
-                source: "cache-short-sha",
-                rate_limited: matches!(api_status, Some(403 | 429)),
-                note: api_error.clone(),
-            });
-        }
+    } else if build_meta::looks_like_git_sha(trimmed)
+        && let Some(full) = full_sha_from_cache(&cache, repo, trimmed, trimmed)
+    {
+        return Ok(ResolvedRef {
+            sha: full,
+            source: "cache-short-sha",
+            rate_limited: matches!(api_status, Some(403 | 429)),
+            note: api_error.clone(),
+        });
     }
 
     let hint = upgrade_failure_hint(api_status, releases_cache::github_token().is_some());

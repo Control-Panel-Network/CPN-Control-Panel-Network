@@ -385,6 +385,7 @@ pub async fn apply_tip_ref(
     apply_result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn apply_tip_after_resolve(
     state: &AppState,
     repo: &str,
@@ -438,7 +439,7 @@ async fn apply_tip_after_resolve(
         .await;
     let extract_status = Command::new("tar")
         .args(["-xzf", tarball.to_str().unwrap_or("tip.tar.gz"), "-C"])
-        .arg(&work)
+        .arg(work)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -448,7 +449,7 @@ async fn apply_tip_after_resolve(
     if !extract_status.success() {
         return Err(fail("tar extract of tip archive failed", None));
     }
-    let root = find_extracted_root(&work)?;
+    let root = find_extracted_root(work)?;
     maybe_cleanup_build_trees(&root);
     crate::upgrade_tip_verify::write_tip_sha_file(&root, sha)?;
     crate::upgrade_tip_verify::inject_keep_module(&root, sha)?;

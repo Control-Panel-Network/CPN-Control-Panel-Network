@@ -100,21 +100,6 @@ pub(crate) async fn curl_github_json(url: &str) -> Result<(u16, String), String>
     Ok((status, body))
 }
 
-fn urlencoding_lite(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for ch in value.chars() {
-        match ch {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => out.push(ch),
-            _ => {
-                for byte in ch.to_string().as_bytes() {
-                    out.push_str(&format!("%{byte:02X}"));
-                }
-            }
-        }
-    }
-    out
-}
-
 pub async fn resolve_ref_sha(repo: &str, git_ref: &str) -> Result<String, String> {
     crate::releases_commit_resolve::resolve_ref_sha(repo, git_ref).await
 }
