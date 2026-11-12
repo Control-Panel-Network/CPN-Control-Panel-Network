@@ -27,7 +27,9 @@ pub struct TipApplyResult {
 
 fn fail(message: impl Into<String>, retry: Option<u32>) -> String {
     let message = message.into();
-    upgrade_tip_log::log_failure(&message, retry);
+    if let Some(n) = retry {
+        upgrade_tip_log::log_info(format!("{message} (will retry, attempt {n})"));
+    }
     message
 }
 
@@ -53,7 +55,7 @@ async fn require_cmd(name: &str) -> Result<(), String> {
     }
 }
 
-async fn download_tarball(repo: &str, git_ref: &str, dest: &Path) -> Result<(), String> {
+async fn download_tarball_once(repo: &str, git_ref: &str, dest: &Path) -> Result<(), String> {
     let url = format!("https://api.github.com/repos/{repo}/tarball/{git_ref}");
     let mut args: Vec<String> = vec![
         "--fail".into(),
@@ -81,18 +83,44 @@ async fn download_tarball(repo: &str, git_ref: &str, dest: &Path) -> Result<(), 
         .stderr(Stdio::piped())
         .output()
         .await
-        .map_err(|error| fail(format!("Download tip tarball failed: {error}"), None))?;
+        .map_err(|error| format!("Download tip tarball failed: {error}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(fail(
-            format!(
-                "Download tip tarball failed ({})",
-                stderr.trim().chars().take(200).collect::<String>()
-            ),
-            None,
+        return Err(format!(
+            "Download tip tarball failed ({})",
+            stderr.trim().chars().take(200).collect::<String>()
         ));
     }
     Ok(())
+}
+
+async fn download_tarball(repo: &str, git_ref: &str, dest: &Path) -> Result<(), String> {
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut last_err = String::new();
+    for attempt in 1..=MAX_ATTEMPTS {
+        match download_tarball_once(repo, git_ref, dest).await {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_err = error;
+                if attempt < MAX_ATTEMPTS {
+                    upgrade_tip_log::log_info(format!(
+                        "Tip tarball download attempt {attempt}/{MAX_ATTEMPTS} failed; retrying in 4s"
+                    ));
+                    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                }
+            }
+        }
+    }
+    Err(fail(
+        format!(
+            "{last_err} {}",
+            crate::releases_commit_resolve::upgrade_failure_hint(
+                None,
+                releases_cache::github_token().is_some()
+            )
+        ),
+        None,
+    ))
 }
 
 fn find_extracted_root(parent: &Path) -> Result<PathBuf, String> {
@@ -290,9 +318,14 @@ pub async fn apply_tip_ref(
     state
         .progress("downloading", 10, format!("Resolving commit ref {git_ref}"))
         .await;
-    let sha = releases_stable_tip::resolve_ref_sha(repo, git_ref)
+    let resolved = crate::releases_commit_resolve::resolve_ref_resilient(repo, git_ref)
         .await
         .map_err(|error| fail(error, None))?;
+    if let Some(note) = resolved.note.as_ref() {
+        state.log(note.clone(), "info");
+        upgrade_tip_log::log_info(note.clone());
+    }
+    let sha = resolved.sha;
     let short = crate::build_meta::short_sha(&sha);
     // Branch refs (`stable`, `dev`, `feat/x`) name themselves; a pinned SHA
     // (UI sends `<branch>@<sha>`) is labelled with the configured branch.
@@ -332,11 +365,43 @@ pub async fn apply_tip_ref(
     let staging = StagingDir::create("cpn-tip").map_err(|error| fail(error, None))?;
     let work = staging.path().to_path_buf();
     upgrade_tip_log::log_info(format!("Tip staging dir {}", work.display()));
+    let mut binary_backup = crate::upgrade_tip_backup::TipBinaryBackup::snapshot()
+        .map_err(|error| fail(error, None))?;
+    let apply_result = apply_tip_after_resolve(
+        state,
+        repo,
+        git_ref,
+        &sha,
+        &short,
+        &branch,
+        &label,
+        &work,
+        &mut binary_backup,
+    )
+    .await;
+    if apply_result.is_ok() {
+        binary_backup.commit_success();
+    }
+    apply_result
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn apply_tip_after_resolve(
+    state: &AppState,
+    repo: &str,
+    _git_ref: &str,
+    sha: &str,
+    short: &str,
+    branch: &str,
+    label: &str,
+    work: &std::path::Path,
+    _binary_backup: &mut crate::upgrade_tip_backup::TipBinaryBackup,
+) -> Result<TipApplyResult, String> {
     state
         .progress("downloading", 15, "Checking GitHub Actions commit binaries")
         .await;
     if let Some((source, package_version)) =
-        crate::upgrade_tip_prebuilt::try_actions_or_release_package(state, repo, &sha, &work)
+        crate::upgrade_tip_prebuilt::try_actions_or_release_package(state, repo, sha, work)
             .await
             .map_err(|error| fail(error, None))?
     {
@@ -344,12 +409,12 @@ pub async fn apply_tip_ref(
             "Installed {package_version} from prebuilt path for tip {label}"
         ));
         // Drop older tip cargo trees left by prior source builds on this host.
-        log_pruned_tip_cargo(Some(&sha));
+        log_pruned_tip_cargo(Some(sha));
         return Ok(TipApplyResult {
-            sha,
-            short_sha: short,
-            branch,
-            branch_label: label,
+            sha: sha.to_string(),
+            short_sha: short.to_string(),
+            branch: branch.to_string(),
+            branch_label: label.to_string(),
             package_version,
             source,
             skipped_rebuild: false,
@@ -357,7 +422,7 @@ pub async fn apply_tip_ref(
     }
 
     let mut tools = ensure_toolchain(state).await?;
-    crate::upgrade_tip_verify::apply_tip_build_env(&mut tools, &sha);
+    crate::upgrade_tip_verify::apply_tip_build_env(&mut tools, sha);
 
     let tarball = work.join("tip.tar.gz");
     state
@@ -367,14 +432,14 @@ pub async fn apply_tip_ref(
             format!("Downloading source tarball ({label})"),
         )
         .await;
-    download_tarball(repo, &sha, &tarball).await?;
+    download_tarball(repo, sha, &tarball).await?;
 
     state
         .progress("installing", 35, "Extracting commit source")
         .await;
     let extract_status = Command::new("tar")
         .args(["-xzf", tarball.to_str().unwrap_or("tip.tar.gz"), "-C"])
-        .arg(&work)
+        .arg(work)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -384,25 +449,25 @@ pub async fn apply_tip_ref(
     if !extract_status.success() {
         return Err(fail("tar extract of tip archive failed", None));
     }
-    let root = find_extracted_root(&work)?;
+    let root = find_extracted_root(work)?;
     maybe_cleanup_build_trees(&root);
-    crate::upgrade_tip_verify::write_tip_sha_file(&root, &sha)?;
-    crate::upgrade_tip_verify::inject_keep_module(&root, &sha)?;
+    crate::upgrade_tip_verify::write_tip_sha_file(&root, sha)?;
+    crate::upgrade_tip_verify::inject_keep_module(&root, sha)?;
     let package_version = read_cargo_version(&root);
-    cargo_build_release(state, &root, &sha, &branch, &mut tools).await?;
-    install_built_bins(&root, &tools, &sha).await?;
+    cargo_build_release(state, &root, sha, branch, &mut tools).await?;
+    install_built_bins(&root, &tools, sha).await?;
 
     upgrade_tip_log::log_info(format!(
         "Installed {package_version} from source tip {label}"
     ));
     // Earlier commit builds (`cpn-cargo-target/tip-<sha>`) are ~700 MB each
     // and never reused for another SHA; keep only the one just built.
-    log_pruned_tip_cargo(Some(&sha));
+    log_pruned_tip_cargo(Some(sha));
     Ok(TipApplyResult {
-        sha,
-        short_sha: short,
-        branch,
-        branch_label: label,
+        sha: sha.to_string(),
+        short_sha: short.to_string(),
+        branch: branch.to_string(),
+        branch_label: label.to_string(),
         package_version,
         source: ManifestSource::Local,
         skipped_rebuild: false,

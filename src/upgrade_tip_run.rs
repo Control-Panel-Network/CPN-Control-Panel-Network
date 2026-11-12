@@ -99,7 +99,7 @@ pub(crate) async fn run_tip_maintenance(
     let tip = match crate::upgrade_tip::apply_tip_ref(&state, &repo, tip_ref).await {
         Ok(tip) => tip,
         Err(error) => {
-            crate::upgrade_tip_log::log_failure(&error, None);
+            let _ = crate::panel_maintenance_mode::clear_with_reason("failed");
             state.log(error.clone(), "error");
             crate::panel_notifications::notify_panel_admins(
                 "Panel upgrade failed",
