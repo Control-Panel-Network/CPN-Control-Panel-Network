@@ -431,10 +431,7 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
         return ready_status_unrestricted("");
     }
 
-    let cached = LOGIN_GATE_CACHE
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone());
+    let cached = LOGIN_GATE_CACHE.lock().ok().and_then(|guard| guard.clone());
     match cached {
         Some((at, status)) if at.elapsed() < LOGIN_GATE_CACHE_TTL => status,
         Some((_, stale)) => {
@@ -593,7 +590,12 @@ mod tests {
     fn timeout_fail_open_status_allows_sign_in_with_banner() {
         let status = timed_out_fail_open_status();
         assert!(status.ready);
-        assert!(status.warnings.iter().any(|w| w.contains("Sign-in stays available")));
+        assert!(
+            status
+                .warnings
+                .iter()
+                .any(|w| w.contains("Sign-in stays available"))
+        );
         assert_eq!(status.warnings[0], LOGIN_SERVICE_TIMEOUT_MESSAGE);
     }
 
