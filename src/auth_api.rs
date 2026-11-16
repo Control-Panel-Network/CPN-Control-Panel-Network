@@ -322,7 +322,7 @@ fn login_fail_fast_html(message: &str, next: Option<&str>) -> String {
 #[get("/api/login/services")]
 pub async fn login_services_status() -> HttpResponse {
     // Off the Actix worker so a slow gate cannot starve other /login requests.
-    // Outer timeout: reuse last-good when present; otherwise fail closed (no invite to sign in).
+    // Outer timeout: reuse last-good when present; otherwise fail open with a banner.
     match tokio::time::timeout(
         std::time::Duration::from_millis(5000),
         tokio::task::spawn_blocking(evaluate_login_services),

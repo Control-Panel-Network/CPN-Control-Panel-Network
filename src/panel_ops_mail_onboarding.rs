@@ -82,33 +82,94 @@ pub fn save_mail_onboarding(mut cfg: MailOnboarding) -> Result<(), String> {
     Ok(())
 }
 
+/// Placeholder when no hosted mailbox domain exists yet (never an operator apex).
+pub const MAIL_CLIENT_PLACEHOLDER_DOMAIN: &str = "your-domain.example";
+
+fn host_matches_mailbox_domain(host: &str, domain: &str) -> bool {
+    let host = host.trim().to_ascii_lowercase();
+    let domain = domain.trim().to_ascii_lowercase();
+    if domain.is_empty() {
+        return false;
+    }
+    host == domain || host.ends_with(&format!(".{domain}"))
+}
+
 pub fn mail_client_server_host(domain: &str) -> String {
+    let domain = domain.trim().to_ascii_lowercase();
+    if domain.is_empty() || domain == MAIL_CLIENT_PLACEHOLDER_DOMAIN {
+        return MAIL_CLIENT_PLACEHOLDER_DOMAIN.into();
+    }
     let cfg = load_mail_onboarding();
     match cfg.mail_mode {
         MailMode::Local => {
             if !cfg.hostname.trim().is_empty() {
                 let host = cfg.hostname.trim().to_ascii_lowercase();
-                let domain = domain.trim().to_ascii_lowercase();
-                if host == domain || host.ends_with(&format!(".{domain}")) {
+                if host_matches_mailbox_domain(&host, &domain) {
                     return host;
                 }
             }
-            domain.trim().to_ascii_lowercase()
+            domain
         }
         MailMode::External => {
             if !cfg.external_imap_host.trim().is_empty() {
-                cfg.external_imap_host.trim().to_ascii_lowercase()
-            } else {
-                domain.trim().to_ascii_lowercase()
+                let ext = cfg.external_imap_host.trim().to_ascii_lowercase();
+                if host_matches_mailbox_domain(&ext, &domain) {
+                    return ext;
+                }
             }
+            domain
         }
     }
+}
+
+/// Distinct mailbox domains for client settings (enabled accounts first, then all).
+pub fn mail_client_domains_from_addresses<'a, I>(addresses: I) -> Vec<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let mut out: Vec<String> = Vec::new();
+    for addr in addresses {
+        let Some(domain) = addr.split('@').nth(1) else {
+            continue;
+        };
+        let domain = domain.trim().to_ascii_lowercase();
+        if domain.is_empty() {
+            continue;
+        }
+        if !out.iter().any(|d| d == &domain) {
+            out.push(domain);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
+
+    #[test]
+    fn mail_client_host_ignores_unrelated_onboarding_hostname() {
+        with_test_data_dir(|| {
+            let mut cfg = MailOnboarding::default();
+            cfg.hostname = "newstargeted.com".into();
+            save_mail_onboarding(cfg).unwrap();
+            assert_eq!(
+                mail_client_server_host("discord-bot-network.com"),
+                "discord-bot-network.com"
+            );
+        });
+    }
+
+    #[test]
+    fn mail_client_domains_dedupe_addresses() {
+        let list = mail_client_domains_from_addresses([
+            "a@example.com",
+            "b@example.com",
+            "c@other.test",
+        ]);
+        assert_eq!(list, vec!["example.com", "other.test"]);
+    }
 
     #[test]
     fn roundtrip_onboarding() {

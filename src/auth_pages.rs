@@ -172,7 +172,7 @@ pub fn panel_login_html_with_gate(
     }
   }
   var pollFails=0;
-  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. Sign-in is disabled until panel services are confirmed running. Wait a few seconds and try again.';
+  var defaultTimeoutMsg='Could not confirm MariaDB/web health in time. Sign-in stays available; confirm panel services when you can.';
   function resetSignInButton(){
     if(!submit || !form) return;
     form.removeAttribute('data-cpn-submitting');
@@ -505,9 +505,9 @@ pub fn panel_mfa_html(
         _ => r#"<p class="error" id="i18n-login-error" role="alert" hidden></p>"#.into(),
     };
     let intro = if options.totp_available && options.passkey_available {
-        "Enter the 6-digit code from your authenticator app, a one-time backup code, or sign in with a passkey."
+        "Enter a 6-digit authenticator or backup code, or use a passkey (Windows Hello, a security key, or another WebAuthn authenticator)."
     } else if options.passkey_available {
-        "Confirm sign-in with a registered passkey for this account."
+        "Confirm sign-in with a passkey (Windows Hello, a security key, or another WebAuthn authenticator registered for this account)."
     } else {
         "Enter the 6-digit code from your authenticator app, or a one-time backup code."
     };
@@ -544,6 +544,11 @@ pub fn panel_mfa_html(
     } else {
         String::new()
     };
+    let passkey_auto_script = if options.passkey_available {
+        MFA_PASSKEY_AUTO_START_JS
+    } else {
+        ""
+    };
     let passkey_script = if options.passkey_available {
         crate::panel_webauthn::passkey_client_script()
     } else {
@@ -574,6 +579,7 @@ pub fn panel_mfa_html(
     </section>
   </main>
   <script>{passkey_script}</script>
+  <script>{passkey_auto}</script>
   <script>{watch_script}</script>
   {script}
 </body>
@@ -593,9 +599,28 @@ pub fn panel_mfa_html(
             None => String::new(),
         },
         passkey_script = passkey_script,
+        passkey_auto = passkey_auto_script,
         script = PANEL_I18N_SCRIPT,
     )
 }
+
+/// Auto-start WebAuthn on MFA page load; button remains a manual fallback.
+const MFA_PASSKEY_AUTO_START_JS: &str = r#"
+(function(){
+  if(!document.getElementById('i18n-passkey')) return;
+  var started=false;
+  function go(){
+    if(started||window.__cpnMfaLeaving) return;
+    started=true;
+    if(typeof cpnMfaPasskey==='function') cpnMfaPasskey();
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(go,280); });
+  } else {
+    setTimeout(go,280);
+  }
+})();
+"#;
 
 pub fn forgot_password_html() -> String {
     let boot = load_bootstrap();
@@ -839,7 +864,9 @@ mod tests {
         );
         assert!(html.contains("cpnMfaPasskey"));
         assert!(html.contains("Sign in with passkey"));
+        assert!(html.contains("Windows Hello"));
         assert!(html.contains("Authenticator code"));
+        assert!(html.contains("setTimeout(go,280)"));
         assert!(html.contains("id=\"i18n-login-error\""));
         assert!(!html.contains("sudo cpn mfa clear"));
     }
