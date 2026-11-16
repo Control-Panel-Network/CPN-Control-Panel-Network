@@ -163,11 +163,8 @@ mod tests {
 
     #[test]
     fn mail_client_domains_dedupe_addresses() {
-        let list = mail_client_domains_from_addresses([
-            "a@example.com",
-            "b@example.com",
-            "c@other.test",
-        ]);
+        let list =
+            mail_client_domains_from_addresses(["a@example.com", "b@example.com", "c@other.test"]);
         assert_eq!(list, vec!["example.com", "other.test"]);
     }
 

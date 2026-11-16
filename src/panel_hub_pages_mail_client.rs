@@ -1,8 +1,8 @@
 //! Default mail client configuration panel (POP3/IMAP/SMTP/Sieve).
 
 use crate::panel_ops_mail_onboarding::{
-    MailMode, load_mail_onboarding, mail_client_server_host, mail_client_domains_from_addresses,
-    MAIL_CLIENT_PLACEHOLDER_DOMAIN,
+    MAIL_CLIENT_PLACEHOLDER_DOMAIN, MailMode, load_mail_onboarding,
+    mail_client_domains_from_addresses, mail_client_server_host,
 };
 
 fn esc(s: &str) -> String {
@@ -48,21 +48,16 @@ pub fn mail_client_config_html(domain: &str) -> String {
             "External mail mode is active. Hosts below follow onboarding external IMAP/SMTP when set."
         }
     };
-    let smtp_host = if cfg.mail_mode == MailMode::External && !cfg.external_smtp_host.trim().is_empty()
-    {
-        let ext = cfg.external_smtp_host.trim().to_ascii_lowercase();
-        let domain = domain.trim().to_ascii_lowercase();
-        let host_matches = domain.is_empty()
-            || ext == domain
-            || ext.ends_with(&format!(".{domain}"));
-        if host_matches {
-            ext
+    let smtp_host =
+        if cfg.mail_mode == MailMode::External && !cfg.external_smtp_host.trim().is_empty() {
+            let ext = cfg.external_smtp_host.trim().to_ascii_lowercase();
+            let domain = domain.trim().to_ascii_lowercase();
+            let host_matches =
+                domain.is_empty() || ext == domain || ext.ends_with(&format!(".{domain}"));
+            if host_matches { ext } else { server.clone() }
         } else {
             server.clone()
-        }
-    } else {
-        server.clone()
-    };
+        };
     format!(
         r#"<article class="section-card mail-client-config" style="margin-top:18px;">
   <h2 style="display:flex;align-items:center;gap:8px;margin:0 0 8px;">
