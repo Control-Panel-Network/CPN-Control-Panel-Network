@@ -256,23 +256,9 @@ pub fn email_accounts_main(
         rows.push_str("</tbody></table></div>");
     }
 
-    let client_panel = {
-        let domain = accounts
-            .first()
-            .map(|a| {
-                if a.domain.is_empty() {
-                    a.address
-                        .split('@')
-                        .nth(1)
-                        .unwrap_or("newstargeted.com")
-                        .to_string()
-                } else {
-                    a.domain.clone()
-                }
-            })
-            .unwrap_or_else(|| "newstargeted.com".into());
-        crate::panel_hub_pages_mail_client::mail_client_config_html(&domain)
-    };
+    let mailbox_addresses: Vec<String> = accounts.iter().map(|a| a.address.clone()).collect();
+    let client_panel =
+        crate::panel_hub_pages_mail_client::mail_client_configs_for_mailboxes(&mailbox_addresses);
 
     let create_form = email_mailbox_create_form_html("/email/accounts");
 

@@ -1,12 +1,39 @@
 //! Default mail client configuration panel (POP3/IMAP/SMTP/Sieve).
 
-use crate::panel_ops_mail_onboarding::{MailMode, load_mail_onboarding, mail_client_server_host};
+use crate::panel_ops_mail_onboarding::{
+    MAIL_CLIENT_PLACEHOLDER_DOMAIN, MailMode, load_mail_onboarding,
+    mail_client_domains_from_addresses, mail_client_server_host,
+};
 
 fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+/// One or more client-settings cards from mailbox addresses (scoped per domain).
+pub fn mail_client_configs_for_mailboxes(mailbox_addresses: &[String]) -> String {
+    let domains = mail_client_domains_from_addresses(mailbox_addresses.iter().map(String::as_str));
+    if domains.is_empty() {
+        return mail_client_config_html(MAIL_CLIENT_PLACEHOLDER_DOMAIN);
+    }
+    if domains.len() == 1 {
+        return mail_client_config_html(&domains[0]);
+    }
+    domains
+        .iter()
+        .map(|domain| {
+            format!(
+                r#"<div class="mail-client-domain-group" style="margin-top:18px;">
+  <h3 style="margin:0 0 8px;font-size:1rem;">{domain}</h3>
+  {body}
+</div>"#,
+                domain = esc(domain),
+                body = mail_client_config_html(domain),
+            )
+        })
+        .collect()
 }
 
 /// CPN-branded mail client settings card for a mailbox domain.
@@ -23,7 +50,11 @@ pub fn mail_client_config_html(domain: &str) -> String {
     };
     let smtp_host =
         if cfg.mail_mode == MailMode::External && !cfg.external_smtp_host.trim().is_empty() {
-            cfg.external_smtp_host.trim().to_ascii_lowercase()
+            let ext = cfg.external_smtp_host.trim().to_ascii_lowercase();
+            let domain = domain.trim().to_ascii_lowercase();
+            let host_matches =
+                domain.is_empty() || ext == domain || ext.ends_with(&format!(".{domain}"));
+            if host_matches { ext } else { server.clone() }
         } else {
             server.clone()
         };

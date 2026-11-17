@@ -9,9 +9,9 @@
 //! - Known unhealthy critical services: block sign-in.
 //! - Probe timeout with a recent confirmed-ready cache: reuse that status
 //!   (stale-while-revalidate) so a brief systemd stall does not lock owners out.
-//! - Probe timeout with no recent ready status: **fail closed** (do not invite
-//!   sign-in). Operators recover with `CPN_LOGIN_SERVICE_GATE=0` or by waiting
-//!   until probes succeed.
+//! - Probe timeout with no recent ready status: **fail open** with a visible
+//!   banner (sign-in stays available). Operators recover with
+//!   `CPN_LOGIN_SERVICE_GATE=0` or by waiting until probes succeed.
 //!
 //! Set `CPN_LOGIN_SERVICE_GATE=0` to disable the gate (tests / recovery).
 //!
@@ -26,6 +26,7 @@ use crate::service_detect::{
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// Reuse the last evaluation long enough to outlive the 4s login poll interval.
@@ -35,7 +36,7 @@ const LOGIN_GATE_CACHE_TTL: Duration = Duration::from_secs(30);
 const LOGIN_GATE_EVAL_BUDGET: Duration = Duration::from_millis(4000);
 
 /// Operator-facing text when probes exceed the budget and no recent ready cache exists.
-pub const LOGIN_SERVICE_TIMEOUT_MESSAGE: &str = "Could not confirm MariaDB/web health in time. Sign-in is disabled until panel services are confirmed running. Wait a few seconds and try again.";
+pub const LOGIN_SERVICE_TIMEOUT_MESSAGE: &str = "Could not confirm MariaDB/web health in time. Sign-in stays available; confirm panel services when you can.";
 
 /// Alias kept for older call sites and session-log filters.
 pub const LOGIN_SERVICE_TIMEOUT_WARNING: &str = LOGIN_SERVICE_TIMEOUT_MESSAGE;
@@ -44,6 +45,8 @@ static LOGIN_GATE_CACHE: Mutex<Option<(Instant, LoginServiceStatus)>> = Mutex::n
 
 /// Last ready status without a probe-timeout block (stale-while-revalidate on budget expiry).
 static LOGIN_GATE_LAST_GOOD: Mutex<Option<LoginServiceStatus>> = Mutex::new(None);
+
+static LOGIN_GATE_REFRESHING: AtomicBool = AtomicBool::new(false);
 
 /// Serializes tests that mutate `CPN_LOGIN_SERVICE_GATE` (process-wide env).
 #[cfg(test)]
@@ -116,10 +119,10 @@ fn ready_status_unrestricted(message: &str) -> LoginServiceStatus {
     }
 }
 
-fn timed_out_fail_closed_status() -> LoginServiceStatus {
+fn timed_out_fail_open_status() -> LoginServiceStatus {
     LoginServiceStatus {
-        ready: false,
-        message: LOGIN_SERVICE_TIMEOUT_MESSAGE.to_string(),
+        ready: true,
+        message: String::new(),
         web: ServiceSlice {
             expected: true,
             running: false,
@@ -136,7 +139,7 @@ fn timed_out_fail_closed_status() -> LoginServiceStatus {
             label: "n/a".into(),
         },
         blocking: Vec::new(),
-        warnings: Vec::new(),
+        warnings: vec![LOGIN_SERVICE_TIMEOUT_MESSAGE.to_string()],
     }
 }
 
@@ -176,19 +179,24 @@ fn peek_usable_last_good() -> Option<LoginServiceStatus> {
     None
 }
 
-/// Prefer a prior ready status; otherwise fail closed (do not invite sign-in).
-pub(crate) fn fail_closed_or_stale() -> LoginServiceStatus {
+/// Prefer a prior ready status; otherwise fail open with a timeout banner.
+pub(crate) fn fail_open_or_stale() -> LoginServiceStatus {
     if let Some(status) = peek_usable_last_good() {
         return status;
     }
-    timed_out_fail_closed_status()
+    timed_out_fail_open_status()
+}
+
+#[allow(dead_code)]
+pub(crate) fn fail_closed_or_stale() -> LoginServiceStatus {
+    fail_open_or_stale()
 }
 
 fn log_gate_timeout(where_: &str) {
     // Main Log + Error logs; no credentials or usernames.
     crate::upgrade_tip_log::log_failure(
         format!(
-            "login_service_gate: {where_} timed out; sign-in blocked until health is confirmed (fail-closed)"
+            "login_service_gate: {where_} timed out; sign-in left open with health banner (fail-open)"
         ),
         None,
     );
@@ -210,8 +218,37 @@ fn evaluate_login_services_budgeted() -> LoginServiceStatus {
         }
         Err(_) => {
             log_gate_timeout("evaluate");
-            fail_closed_or_stale()
+            fail_open_or_stale()
         }
+    }
+}
+
+fn store_login_gate_cache(status: &LoginServiceStatus) {
+    if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
+        *guard = Some((Instant::now(), status.clone()));
+    }
+}
+
+fn spawn_login_gate_refresh() {
+    if LOGIN_GATE_REFRESHING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("cpn-login-gate-refresh".into())
+        .spawn(|| {
+            struct Guard;
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    LOGIN_GATE_REFRESHING.store(false, Ordering::Release);
+                }
+            }
+            let _g = Guard;
+            let status = evaluate_login_services_budgeted();
+            remember_last_good(&status);
+            store_login_gate_cache(&status);
+        });
+    if spawned.is_err() {
+        LOGIN_GATE_REFRESHING.store(false, Ordering::Release);
     }
 }
 
@@ -394,18 +431,20 @@ pub fn evaluate_login_services() -> LoginServiceStatus {
         return ready_status_unrestricted("");
     }
 
-    if let Ok(guard) = LOGIN_GATE_CACHE.lock()
-        && let Some((at, ref status)) = *guard
-        && at.elapsed() < LOGIN_GATE_CACHE_TTL
-    {
-        return status.clone();
+    let cached = LOGIN_GATE_CACHE.lock().ok().and_then(|guard| guard.clone());
+    match cached {
+        Some((at, status)) if at.elapsed() < LOGIN_GATE_CACHE_TTL => status,
+        Some((_, stale)) => {
+            spawn_login_gate_refresh();
+            stale
+        }
+        None => {
+            let status = evaluate_login_services_budgeted();
+            remember_last_good(&status);
+            store_login_gate_cache(&status);
+            status
+        }
     }
-
-    let status = evaluate_login_services_budgeted();
-    if let Ok(mut guard) = LOGIN_GATE_CACHE.lock() {
-        *guard = Some((Instant::now(), status.clone()));
-    }
-    status
 }
 
 /// Drop the cached gate result (tests / after service heal).
@@ -548,16 +587,20 @@ mod tests {
     }
 
     #[test]
-    fn timeout_fail_closed_status_blocks_sign_in() {
-        let status = timed_out_fail_closed_status();
-        assert!(!status.ready);
-        assert!(status.message.contains("Sign-in is disabled"));
-        assert!(!status.message.contains("still sign in"));
-        assert_eq!(status.message, LOGIN_SERVICE_TIMEOUT_MESSAGE);
+    fn timeout_fail_open_status_allows_sign_in_with_banner() {
+        let status = timed_out_fail_open_status();
+        assert!(status.ready);
+        assert!(
+            status
+                .warnings
+                .iter()
+                .any(|w| w.contains("Sign-in stays available"))
+        );
+        assert_eq!(status.warnings[0], LOGIN_SERVICE_TIMEOUT_MESSAGE);
     }
 
     #[test]
-    fn timeout_prefers_last_ready_cache_over_fail_closed() {
+    fn timeout_prefers_last_ready_cache_over_fail_open() {
         let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
         let good = LoginServiceStatus {
@@ -590,18 +633,18 @@ mod tests {
                 good.clone(),
             ));
         }
-        let status = fail_closed_or_stale();
+        let status = fail_open_or_stale();
         invalidate_login_services_cache();
         assert_eq!(status, good);
         assert!(status.ready);
     }
 
     #[test]
-    fn timeout_without_last_good_fails_closed() {
+    fn timeout_without_last_good_fails_open_with_banner() {
         let _env = lock_login_service_gate_env();
         invalidate_login_services_cache();
-        let status = fail_closed_or_stale();
-        assert!(!status.ready);
-        assert_eq!(status.message, LOGIN_SERVICE_TIMEOUT_MESSAGE);
+        let status = fail_open_or_stale();
+        assert!(status.ready);
+        assert_eq!(status.warnings[0], LOGIN_SERVICE_TIMEOUT_MESSAGE);
     }
 }

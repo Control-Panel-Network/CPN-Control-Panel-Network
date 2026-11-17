@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Login service gate perf**: stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer 4s stalls on `/login` and `/api/login/services`.
+- **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains; removed hardcoded News Targeted apex fallback.
+- **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.
+
+### Added
+
+- **Operator docs**: `to-do/PERF-KRAO-INVESTIGATION.md` (slowness findings) and `to-do/SOCIAL-OAUTH-LOGIN.md` (OAuth login scaffold plan).
+
+### Fixed
+
 - **Automatic updates Check now**: Version Management no longer shows "permission denied" when GitHub rate-limits release fetches (HTTP 403 in the error text). `cpnFriendlyFetchError` only maps panel auth `HTTP 403` responses, and dry-run checks prefer cached releases when the live GitHub API is throttled.
 - **Commit / tip upgrade resilience**: Resolving `stable` (or another branch) no longer hard-fails on anonymous GitHub commits API HTTP 403. The panel tries token-backed API, last-good commit cache, `git ls-remote`, and raw `.cpn-git-sha`, then Actions binaries, matching release packages, and source build with download retries. Failures roll back `/usr/bin` binaries when possible, clear maintenance mode, and end with one `FAILED (job)` line plus next-step hints (token, retry, or release upgrade).
 
