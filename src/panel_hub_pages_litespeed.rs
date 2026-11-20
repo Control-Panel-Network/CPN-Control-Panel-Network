@@ -4,11 +4,11 @@ use crate::litespeed_license::{
     apply_license_key_text, apply_trial_key, license_status, refresh_license,
 };
 use crate::litespeed_stack::{
-    LiteSpeedKind, OWNED_PLANS, STORE_OWNED_LSWS, STORE_SUPPORT, WEBADMIN_PANEL_MOUNT, apply_serial,
-    detect_kind, detect_version_label, downgrade_openlitespeed_to, litespeed_enterprise_installed,
-    load_config, mask_serial, openlitespeed_installed, service_unit_hint, set_selected_tier,
-    set_webadmin_url, upgrade_openlitespeed_packages, webadmin_backend_url, webadmin_reachable,
-    webadmin_url,
+    LiteSpeedKind, OWNED_PLANS, STORE_OWNED_LSWS, STORE_SUPPORT, WEBADMIN_PANEL_MOUNT,
+    apply_serial, detect_kind, detect_version_label, downgrade_openlitespeed_to,
+    litespeed_enterprise_installed, load_config, mask_serial, openlitespeed_installed,
+    service_unit_hint, set_selected_tier, set_webadmin_url, upgrade_openlitespeed_packages,
+    webadmin_backend_url, webadmin_reachable, webadmin_url,
 };
 use crate::panel_hubs::{feature_shell, not_configured_body};
 
@@ -278,7 +278,11 @@ pub fn litespeed_manage_page(
         } else {
             "missing"
         },
-        probe = if lic.probe_ok { "ok" } else { "warned / refused" },
+        probe = if lic.probe_ok {
+            "ok"
+        } else {
+            "warned / refused"
+        },
         summary = html_escape(&lic.probe_summary),
         notes = lic_notes,
     );

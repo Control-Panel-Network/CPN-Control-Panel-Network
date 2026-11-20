@@ -283,7 +283,10 @@ pub fn ensure_site_vhost_logging(site: &SiteRecord) -> Result<String, String> {
     }
     let vh_name = safe_vhost_name(&site.domain);
     if !site.vhost_wired
-        && (Path::new(&format!("/usr/local/lsws/conf/vhosts/{vh_name}/vhconf.conf")).is_file()
+        && (Path::new(&format!(
+            "/usr/local/lsws/conf/vhosts/{vh_name}/vhconf.conf"
+        ))
+        .is_file()
             || Path::new(&format!("/usr/local/lsws/conf/vhosts/{vh_name}/vhost.conf")).is_file()
             || Path::new(&format!("/etc/nginx/conf.d/cpn-{}.conf", site.domain)).is_file())
     {

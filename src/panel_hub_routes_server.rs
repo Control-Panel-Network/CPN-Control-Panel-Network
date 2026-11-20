@@ -13,9 +13,9 @@ use crate::panel_hub_pages_docker_list::DockerListQuery;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
-    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_license_key,
-    run_apply_serial, run_apply_trial, run_downgrade, run_refresh_license,
-    run_set_tier, run_set_webadmin_url, run_upgrade,
+    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_license_key, run_apply_serial,
+    run_apply_trial, run_downgrade, run_refresh_license, run_set_tier, run_set_webadmin_url,
+    run_upgrade,
 };
 use crate::panel_hub_pages_server::{
     package_manager_page, php_tuning_page, processes_page, run_service_control, server_hub_main,
@@ -100,7 +100,9 @@ pub async fn server_openlitespeed_password_get(
     redirect_notice(
         "/server/openlitespeed",
         None,
-        Some("Password changes use the form on Open OLS (POST). This URL is not a standalone page."),
+        Some(
+            "Password changes use the form on Open OLS (POST). This URL is not a standalone page.",
+        ),
     )
 }
 

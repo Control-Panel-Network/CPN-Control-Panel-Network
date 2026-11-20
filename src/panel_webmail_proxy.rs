@@ -302,9 +302,7 @@ fn clear_legacy_root_webmail_cookies(client_https: bool) -> Vec<String> {
     let secure = if client_https { "; Secure" } else { "" };
     ["smtoken", "smsession"]
         .iter()
-        .map(|name| {
-            format!("{name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure}")
-        })
+        .map(|name| format!("{name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure}"))
         .collect()
 }
 
@@ -327,10 +325,22 @@ fn rewrite_json_web_path(body: &[u8], content_type: &str, mount: &str) -> Vec<u8
     // PHP json_encode often escapes slashes as \/
     let mount_escaped = mount_slash.replace('/', "\\/");
     let updated = text
-        .replace("\"webPath\":\"/\"", &format!("\"webPath\":\"{mount_slash}\""))
-        .replace("\"webPath\": \"/\"", &format!("\"webPath\": \"{mount_slash}\""))
-        .replace("\"webPath\":\"\\/\"", &format!("\"webPath\":\"{mount_escaped}\""))
-        .replace("\"webPath\": \"\\/\"", &format!("\"webPath\": \"{mount_escaped}\""));
+        .replace(
+            "\"webPath\":\"/\"",
+            &format!("\"webPath\":\"{mount_slash}\""),
+        )
+        .replace(
+            "\"webPath\": \"/\"",
+            &format!("\"webPath\": \"{mount_slash}\""),
+        )
+        .replace(
+            "\"webPath\":\"\\/\"",
+            &format!("\"webPath\":\"{mount_escaped}\""),
+        )
+        .replace(
+            "\"webPath\": \"\\/\"",
+            &format!("\"webPath\": \"{mount_escaped}\""),
+        );
     updated.into_bytes()
 }
 
@@ -438,7 +448,10 @@ mod tests {
         let body = br#"{"System":{"webPath":"\/","webVersionPath":"\/tachyon\/v\/4.2.3\/"}}"#;
         let out = rewrite_json_web_path(body, "application/json; charset=utf-8", "/tachyon");
         let text = String::from_utf8(out).unwrap();
-        assert!(text.contains("\"webPath\":\"\\/tachyon\\/\"") || text.contains("\"webPath\":\"/tachyon/\""));
+        assert!(
+            text.contains("\"webPath\":\"\\/tachyon\\/\"")
+                || text.contains("\"webPath\":\"/tachyon/\"")
+        );
         assert!(text.contains("webVersionPath"));
     }
 }

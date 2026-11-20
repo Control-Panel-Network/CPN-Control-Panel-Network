@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// htpasswd is read on WebAdmin login; a full LiteSpeed restart is not required and would drop the panel HTTPS proxy.
-const WEBADMIN_HTPASSWD_APPLY_NOTE: &str =
-    "Use the new password at the next WebAdmin login. The panel was kept online (no LiteSpeed restart).";
+const WEBADMIN_HTPASSWD_APPLY_NOTE: &str = "Use the new password at the next WebAdmin login. The panel was kept online (no LiteSpeed restart).";
 
 fn admin_conf_dir() -> PathBuf {
     PathBuf::from("/usr/local/lsws/admin/conf")

@@ -212,11 +212,10 @@ pub async fn apps_activate(
     if is_webmail {
         let return_view = form.return_view.clone();
         let domain = form.domain.trim().to_string();
-        let outcome = tokio::task::spawn_blocking(move || {
-            crate::apps_webmail::activate_webmail_app(parsed)
-        })
-        .await
-        .unwrap_or_else(|_| Err("Webmail activate task failed".into()));
+        let outcome =
+            tokio::task::spawn_blocking(move || crate::apps_webmail::activate_webmail_app(parsed))
+                .await
+                .unwrap_or_else(|_| Err("Webmail activate task failed".into()));
         return match outcome {
             Ok(message) => HttpResponse::SeeOther()
                 .append_header((

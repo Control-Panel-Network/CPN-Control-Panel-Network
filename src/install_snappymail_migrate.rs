@@ -26,7 +26,10 @@ pub fn discover_snappymail_data_sources() -> Vec<PathBuf> {
     for c in candidates {
         push_if_storage(PathBuf::from(c), &mut out);
     }
-    for pattern in ["/home/backup/cpn-full-cutover-*", "/home/backup/cpn-migrate-*"] {
+    for pattern in [
+        "/home/backup/cpn-full-cutover-*",
+        "/home/backup/cpn-migrate-*",
+    ] {
         if let Ok(paths) = glob_dirs(pattern) {
             for base in paths {
                 push_if_storage(base.join("lscp/cyberpanel/snappymail/data"), &mut out);
@@ -111,11 +114,13 @@ pub fn migrate_snappymail_into_tachyon() -> Result<String, String> {
     let _ = chown_data_tree(&dest_root);
     write_marker(
         &marker,
-        &format!("source={} files={copied} contacts={contacts_msg}", source.display()),
+        &format!(
+            "source={} files={copied} contacts={contacts_msg}",
+            source.display()
+        ),
     )?;
     Ok(format!(
-        "Migrated SnappyMail user storage from {} into Tachyon ({copied} files). {contacts_msg} Mailbox messages were not copied (IMAP/Maildir)."
-        ,
+        "Migrated SnappyMail user storage from {} into Tachyon ({copied} files). {contacts_msg} Mailbox messages were not copied (IMAP/Maildir).",
         source.display()
     ))
 }

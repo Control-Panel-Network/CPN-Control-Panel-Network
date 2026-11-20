@@ -106,10 +106,7 @@ pub const CHROME_SCHEMES: &[ChromeSchemeEntry] = &[
 
 pub fn parse_chrome_scheme(raw: &str) -> Option<&'static str> {
     let id = raw.trim().to_ascii_lowercase();
-    CHROME_SCHEMES
-        .iter()
-        .find(|s| s.id == id)
-        .map(|s| s.id)
+    CHROME_SCHEMES.iter().find(|s| s.id == id).map(|s| s.id)
 }
 
 fn html_escape(value: &str) -> String {

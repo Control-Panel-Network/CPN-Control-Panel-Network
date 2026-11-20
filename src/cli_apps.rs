@@ -234,7 +234,7 @@ pub fn run(
         AppCommands::MigrateSnappymail { to, force } => {
             require_root()?;
             migrate_snappymail(&to, force)
-        },
+        }
     }
 }
 
@@ -244,7 +244,9 @@ fn migrate_snappymail(to: &str, force: bool) -> Result<(), String> {
         return Err("Only --to tachyon is supported for SnappyMail data import".into());
     }
     if force {
-        let marker = std::path::Path::new("/var/lib/cpn-webmail/tachyon/_data_/_default_/.cpn-snappy-migrate-v1");
+        let marker = std::path::Path::new(
+            "/var/lib/cpn-webmail/tachyon/_data_/_default_/.cpn-snappy-migrate-v1",
+        );
         if marker.is_file() {
             let _ = std::fs::remove_file(marker);
         }

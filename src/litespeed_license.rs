@@ -5,7 +5,7 @@
 //! an operator-supplied `license.key` / `trial.key`. Paths match CyberPanel 3.0.x.
 
 use crate::litespeed_stack::{
-    LiteSpeedKind, detect_kind, load_config, litespeed_enterprise_installed, mask_serial,
+    LiteSpeedKind, detect_kind, litespeed_enterprise_installed, load_config, mask_serial,
     restart_litespeed, save_config, write_mode_600,
 };
 use std::fs;
@@ -173,7 +173,9 @@ fn summarize_probe(raw: &str) -> String {
 /// Read serial / license.key / trial.key presence and probe `lshttpd -V` when possible.
 pub fn license_status() -> LicenseStatus {
     let edition = match detect_kind() {
-        Some(LiteSpeedKind::OpenLiteSpeed) => "OpenLiteSpeed (no Enterprise license files required)",
+        Some(LiteSpeedKind::OpenLiteSpeed) => {
+            "OpenLiteSpeed (no Enterprise license files required)"
+        }
         Some(LiteSpeedKind::Enterprise) => "LiteSpeed Enterprise",
         None => "LiteSpeed not detected",
     }
@@ -363,9 +365,7 @@ pub fn refresh_license() -> Result<String, String> {
             "License refresh (lshttpd -r) completed. {summary} {restart}"
         ))
     } else {
-        Err(format!(
-            "License refresh failed: {summary}. {restart}"
-        ))
+        Err(format!("License refresh failed: {summary}. {restart}"))
     }
 }
 
@@ -385,16 +385,7 @@ fn http_get_bytes(url: &str) -> Result<Vec<u8>, String> {
                 url,
             ],
         ),
-        (
-            "wget",
-            vec![
-                "-q",
-                "--timeout=60",
-                "-O",
-                "-",
-                url,
-            ],
-        ),
+        ("wget", vec!["-q", "--timeout=60", "-O", "-", url]),
     ] {
         if let Ok(out) = Command::new(bin).args(&args).output() {
             if out.status.success() && !out.stdout.is_empty() {
