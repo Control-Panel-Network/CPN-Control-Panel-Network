@@ -27,7 +27,7 @@ clap = { version = "4", features = ["derive"] }
 data-encoding = "2"
 futures-util = "0.3"
 hmac = "0.13"
-lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
+lettre = { version = "0.11.24", default-features = false, features = ["builder", "smtp-transport", "native-tls"] }
 pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }

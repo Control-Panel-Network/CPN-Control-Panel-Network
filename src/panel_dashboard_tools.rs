@@ -20,7 +20,7 @@ fn dash_ssl_label_light(domain: &str, provider_label: &str) -> String {
     if ssl_material_present(domain) {
         return format!("Active ({provider_label})");
     }
-    format!("{provider_label}")
+    provider_label.to_string()
 }
 
 struct ToolLink {
@@ -271,7 +271,7 @@ pub fn dashboard_sites_panel() -> String {
     for (i, site) in sites.iter().enumerate() {
         let d = html_escape(&site.domain);
         options.push_str(&format!(r#"<option value="{d}">{d}</option>"#, d = d));
-        let ssl = dash_ssl_label_light(&site.domain, &site.ssl.provider.label());
+        let ssl = dash_ssl_label_light(&site.domain, site.ssl.provider.label());
         let preview = preview_mode_url(&site.domain)
             .unwrap_or_else(|_| format!("/websites/manage?domain={}", site.domain));
         if i > 0 {
