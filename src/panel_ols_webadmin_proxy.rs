@@ -360,7 +360,7 @@ fn parse_curl_include(raw: &[u8], backend_base: &str) -> Result<ProxiedHttp, Str
             out_headers.push((name, value));
         }
     }
-    let body = maybe_rewrite_body(&body, content_type.as_deref(), backend_base);
+    let body = maybe_rewrite_body(body, content_type.as_deref(), backend_base);
     Ok(ProxiedHttp {
         status,
         headers: out_headers,
