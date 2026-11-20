@@ -3,9 +3,7 @@
 //! Browsers cannot use `https://127.0.0.1:7080` when WebAdmin binds on the server only.
 //! The mount stays on the panel origin and requires a panel session (same pattern as phpMyAdmin).
 
-use crate::litespeed_stack::{
-    any_litespeed_installed, webadmin_backend_url, WEBADMIN_PANEL_MOUNT,
-};
+use crate::litespeed_stack::{WEBADMIN_PANEL_MOUNT, any_litespeed_installed, webadmin_backend_url};
 use crate::panel_session::request_https_from_headers;
 use actix_web::{HttpRequest, HttpResponse, http::Method, http::StatusCode, web};
 use futures_util::StreamExt;
@@ -31,9 +29,7 @@ fn backend_path(req_path: &str) -> Option<String> {
 }
 
 fn backend_base() -> String {
-    webadmin_backend_url()
-        .trim_end_matches('/')
-        .to_string()
+    webadmin_backend_url().trim_end_matches('/').to_string()
 }
 
 fn backend_host_header(base: &str) -> String {
@@ -514,8 +510,17 @@ fn replace_all_prefixed(text: &str, lead: &str, entries: &[&str]) -> String {
 fn prefix_html_root_urls(text: &str) -> String {
     let mut out = text.to_string();
     for attr in [
-        "href=", "src=", "action=", "formaction=", "data-src=", "data-href=", "data-url=",
-        ".href=", ".href =", "location=", "location =",
+        "href=",
+        "src=",
+        "action=",
+        "formaction=",
+        "data-src=",
+        "data-href=",
+        "data-url=",
+        ".href=",
+        ".href =",
+        "location=",
+        "location =",
     ] {
         for quote in ['"', '\''] {
             let lead = format!("{attr}{quote}");
@@ -556,11 +561,7 @@ pub fn webadmin_browser_url() -> String {
         crate::panel_network::preferred_listen_port_or_default(),
         None,
     );
-    format!(
-        "{}{}",
-        base.trim_end_matches('/'),
-        WEBADMIN_PANEL_MOUNT
-    )
+    format!("{}{}", base.trim_end_matches('/'), WEBADMIN_PANEL_MOUNT)
 }
 
 pub fn request_uses_https(req: &HttpRequest) -> bool {
@@ -586,13 +587,22 @@ mod tests {
             rewrite_location("https://127.0.0.1:7080/login.php", "https://127.0.0.1:7080"),
             format!("{WEBADMIN_PANEL_MOUNT}/login.php")
         );
-        assert_eq!(rewrite_location("/login.php", "https://127.0.0.1:7080"), "/ols/login.php");
+        assert_eq!(
+            rewrite_location("/login.php", "https://127.0.0.1:7080"),
+            "/ols/login.php"
+        );
         assert_eq!(
             rewrite_location("/login.php?timedout=1", "https://127.0.0.1:7080"),
             "/ols/login.php?timedout=1"
         );
-        assert_eq!(rewrite_location("/ols/login.php", "https://127.0.0.1:7080"), "/ols/login.php");
-        assert_eq!(rewrite_location("login.php", "https://127.0.0.1:7080"), "login.php");
+        assert_eq!(
+            rewrite_location("/ols/login.php", "https://127.0.0.1:7080"),
+            "/ols/login.php"
+        );
+        assert_eq!(
+            rewrite_location("login.php", "https://127.0.0.1:7080"),
+            "login.php"
+        );
         assert_eq!(
             rewrite_location("https://example.com/x", "https://127.0.0.1:7080"),
             "https://example.com/x"
@@ -615,7 +625,8 @@ mod tests {
 
     #[test]
     fn js_and_css_root_urls_prefixed() {
-        let js = br#"a.replace(/"/g,"");location.href="/login.php?timedout=1";load("/res/css/x.css");"#;
+        let js =
+            br#"a.replace(/"/g,"");location.href="/login.php?timedout=1";load("/res/css/x.css");"#;
         let out = String::from_utf8(maybe_rewrite_body(
             js,
             Some("text/javascript"),
