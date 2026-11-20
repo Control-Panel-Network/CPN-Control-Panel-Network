@@ -1,7 +1,8 @@
 //! Dashboard Statistics card: used / limit rows for the signed-in account.
 
 use crate::backups::is_subdomain_site;
-use crate::packages::{UNLIMITED, is_panel_admin, package_for_account, usage_for_account};
+use crate::package_quota::{UsageCollectOpts, usage_for_account_opts};
+use crate::packages::{UNLIMITED, is_panel_admin, package_for_account};
 use crate::panel_storage_fmt::{format_used_count, format_used_limit_for_user, unlimited_html};
 use crate::panel_website_resources::site_used_bytes;
 use crate::sites::{SiteRecord, list_sites};
@@ -33,10 +34,14 @@ fn subdomains_used(sites: &[SiteRecord]) -> u64 {
         .count() as u64
 }
 
-fn disk_bytes_used(sites: &[SiteRecord]) -> u64 {
-    sites
+/// Prefer package quota disk totals (already bounded). Avoid a second full-site walk here.
+fn disk_bytes_used(username: &str, usage: Option<&crate::packages::PackageUsage>) -> u64 {
+    if let Some(u) = usage {
+        return u.disk_mb_used.saturating_mul(1024 * 1024);
+    }
+    owned_sites(username)
         .iter()
-        .map(|s| site_used_bytes(s, 8_000).unwrap_or(0))
+        .map(|s| site_used_bytes(s, 400).unwrap_or(0))
         .fold(0u64, u64::saturating_add)
 }
 
@@ -74,7 +79,7 @@ fn row(label: &str, value_html: &str) -> String {
 /// Statistics widget for `/dashboard`.
 pub fn dashboard_stats_html(username: &str) -> String {
     let sites = owned_sites(username);
-    let usage = usage_for_account(username).ok();
+    let usage = usage_for_account_opts(username, UsageCollectOpts::dashboard()).ok();
     let pkg = package_for_account(username).ok();
     let domains_limit = usage
         .as_ref()
@@ -162,7 +167,7 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .or_else(|| pkg.as_ref().map(|p| p.database_disk_mb))
         .unwrap_or(UNLIMITED);
     let bw_bytes = crate::package_bandwidth::account_month_bytes(username);
-    let disk_used = disk_bytes_used(&sites);
+    let disk_used = disk_bytes_used(username, usage.as_ref());
     let blurb = if is_panel_admin(username) {
         "Totals for sites you own, against your assigned package. ∞ means unlimited (package limit -1). 0 means none allowed. Assign a package on Manage user to change these limits."
     } else {
@@ -178,7 +183,16 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.package_id.as_str())
         .or_else(|| pkg.as_ref().map(|p| p.id.as_str()))
         .unwrap_or("pkg-default");
-    let db_disk_html = bytes_html(username, db_disk, db_disk_limit);
+    let db_disk_html = if db_disk == 0 {
+        html_escape("Reload for totals")
+    } else {
+        bytes_html(username, db_disk, db_disk_limit)
+    };
+    let storage_html = if disk_used == 0 {
+        html_escape("Reload for totals")
+    } else {
+        bytes_html(username, disk_used, disk_limit)
+    };
     let rows = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}",
         row("Websites", &count_html(domains_used, domains_limit)),
@@ -186,7 +200,7 @@ pub fn dashboard_stats_html(username: &str) -> String {
         row("Databases", &count_html(db_used, db_limit)),
         row("Database disk", &db_disk_html),
         row("FTP accounts", &count_html(ftp_used, ftp_limit)),
-        row("Storage", &bytes_html(username, disk_used, disk_limit)),
+        row("Storage", &storage_html),
         row("Bandwidth", &bytes_html(username, bw_bytes, bw_limit)),
         row("Alias domains", &count_html(alias_used, alias_limit),),
         row("Sub-domains", &count_html(sub_used, sub_limit),),

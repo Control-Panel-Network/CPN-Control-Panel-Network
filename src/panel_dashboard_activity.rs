@@ -214,6 +214,14 @@ fn activity_script() -> String {
   if(toggle){
     toggle.addEventListener('click', function(){
       var next=root.classList.contains('is-collapsed');
+      if(next && !root.querySelector('.activity-panel')){
+        fetch('/api/panel/dashboard-layout',{
+          method:'POST', credentials:'same-origin',
+          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          body: JSON.stringify({ activity_board_open: true })
+        }).finally(function(){ location.reload(); });
+        return;
+      }
       setOpen(next);
       fetch('/api/panel/dashboard-layout',{
         method:'POST', credentials:'same-origin',
@@ -237,7 +245,13 @@ pub fn activity_board_html(username: &str) -> String {
     let toggle_label = if open { "Collapse" } else { "Expand" };
     let expanded = if open { "true" } else { "false" };
 
-    if !is_panel_admin(username) {
+    let placeholder = if !is_panel_admin(username) {
+        "SSH logs and host counters are available to the panel admin only."
+    } else {
+        "Activity Board is collapsed. Expand to load SSH logs, processes, and traffic."
+    };
+
+    if !is_panel_admin(username) || !open {
         return format!(
             r#"
         <article class="activity-board{collapsed}" id="activity-board" data-open="{open_attr}">
@@ -249,7 +263,7 @@ pub fn activity_board_html(username: &str) -> String {
             <button type="button" class="activity-board-toggle" data-activity-toggle aria-expanded="{expanded}">{toggle}</button>
           </div>
           <div class="activity-board-body">
-            <p class="empty-state">SSH logs and host counters are available to the panel admin only.</p>
+            <p class="empty-state">{placeholder}</p>
           </div>
         </article>
         <script>{script}</script>"#,
@@ -257,6 +271,7 @@ pub fn activity_board_html(username: &str) -> String {
             open_attr = open_attr,
             expanded = expanded,
             toggle = toggle_label,
+            placeholder = placeholder,
             script = activity_script(),
         );
     }
