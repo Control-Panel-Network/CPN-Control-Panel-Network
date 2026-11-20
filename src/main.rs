@@ -95,11 +95,13 @@ use cpn_installer::panel_hub_routes::{
     server_dns_zones_manage, server_dns_zones_save, server_docker_apps, server_docker_containers,
     server_docker_images, server_filemanager_alias, server_files_asset_css, server_files_asset_js,
     server_files_list, server_files_op, server_files_page, server_files_post, server_files_upload,
-    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_page,
-    server_litespeed_plans_page, server_litespeed_serial, server_litespeed_tier,
+    server_litespeed_downgrade, server_litespeed_enterprise_page, server_litespeed_license_key,
+    server_litespeed_license_refresh, server_litespeed_page, server_litespeed_plans_page,
+    server_litespeed_serial, server_litespeed_tier, server_litespeed_trial,
     server_litespeed_upgrade, server_litespeed_webadmin_url, server_log_view_route,
     server_logs_route, server_openlitespeed_guest, server_openlitespeed_guest_remove,
-    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_reset_cpn,
+    server_openlitespeed_page, server_openlitespeed_password, server_openlitespeed_password_get,
+    server_openlitespeed_reset_cpn,
     server_packages_page, server_page, server_php_configs, server_php_configs_post,
     server_php_configs_restart, server_php_configs_save_advanced, server_php_configs_save_basic,
     server_php_configs_set_default, server_php_configs_set_default_get, server_php_extensions,
@@ -1369,6 +1371,7 @@ async fn main() -> std::io::Result<()> {
             .service(system_repair_heal_route)
             .service(settings_system_repair_redirect)
             .service(server_openlitespeed_page)
+            .service(server_openlitespeed_password_get)
             .service(server_openlitespeed_password)
             .service(server_openlitespeed_reset_cpn)
             .service(server_openlitespeed_guest)
@@ -1378,6 +1381,9 @@ async fn main() -> std::io::Result<()> {
             .service(server_litespeed_plans_page)
             .service(server_litespeed_tier)
             .service(server_litespeed_serial)
+            .service(server_litespeed_license_key)
+            .service(server_litespeed_license_refresh)
+            .service(server_litespeed_trial)
             .service(server_litespeed_webadmin_url)
             .service(server_litespeed_upgrade)
             .service(server_litespeed_downgrade)

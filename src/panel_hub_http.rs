@@ -86,15 +86,26 @@ pub async fn html_blocking_budget<F>(budget: std::time::Duration, render: F) -> 
 where
     F: FnOnce() -> String + Send + 'static,
 {
+    html_blocking_budget_or_fallback(budget, render, || {
+        "<!DOCTYPE html><title>Busy</title><p>The panel is still gathering host status. Reload in a few seconds.</p>".into()
+    })
+    .await
+}
+
+/// Like [`html_blocking_budget`], but returns full panel HTML from `fallback` instead of a plain stub.
+pub async fn html_blocking_budget_or_fallback<F, G>(
+    budget: std::time::Duration,
+    render: F,
+    fallback: G,
+) -> HttpResponse
+where
+    F: FnOnce() -> String + Send + 'static,
+    G: FnOnce() -> String + Send + 'static,
+{
     match tokio::time::timeout(budget, tokio::task::spawn_blocking(render)).await {
         Ok(Ok(body)) => html_ok(body),
-        Ok(Err(_)) => HttpResponse::InternalServerError()
-            .content_type("text/html; charset=utf-8")
-            .body("<!DOCTYPE html><title>Error</title><p>This page could not be rendered. Reload to try again.</p>"),
-        Err(_) => HttpResponse::ServiceUnavailable()
-            .insert_header(("Retry-After", "5"))
-            .content_type("text/html; charset=utf-8")
-            .body("<!DOCTYPE html><title>Busy</title><p>The panel is still gathering host status. Reload in a few seconds.</p>"),
+        Ok(Err(_)) => html_ok(fallback()),
+        Err(_) => html_ok(fallback()),
     }
 }
 

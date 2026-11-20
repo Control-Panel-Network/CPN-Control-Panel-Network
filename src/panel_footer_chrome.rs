@@ -155,6 +155,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
         r#"<span class="notify-badge" id="cpn-notify-badge" hidden>0</span>"#.to_string()
     };
     let toggle = sidebar_theme_toggle(color_mode);
+    let schemes = crate::panel_chrome_scheme::sidebar_chrome_scheme_markup();
     let feedback = crate::panel_feedback::feedback_markup(username);
     format!(
         r#"<div class="sidebar-footer-actions">
@@ -177,6 +178,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
           <a class="footer-icon-btn" href="/account/users/profile"
             aria-label="Account settings" title="Account settings">{gear}</a>
           {feedback}
+          {schemes}
           {toggle}
         </div>
         <a class="logout" href="/logout">Log out</a>"#,
@@ -184,6 +186,7 @@ pub fn sidebar_footer_markup(username: &str, color_mode: ColorMode) -> String {
         badge = badge,
         gear = gear_svg(),
         feedback = feedback,
+        schemes = schemes,
         toggle = toggle,
     )
 }
@@ -453,8 +456,11 @@ mod tests {
             assert!(html.contains("cpn-notify-btn"));
             assert!(html.contains("/account/users/profile"));
             assert!(html.contains("cpn-feedback-btn"));
-            assert!(html.find("cpn-feedback-btn") < html.find("cpn-color-toggle"));
+            assert!(html.find("cpn-feedback-btn") < html.find("cpn-chrome-scheme-btn"));
+            assert!(html.find("cpn-chrome-scheme-btn") < html.find("cpn-color-toggle"));
             assert!(html.contains("cpn-feedback-modal"));
+            assert!(html.contains("Make it yours"));
+            assert!(html.contains("cpn-chrome-scheme-btn"));
             assert!(html.contains("cpn-color-toggle"));
             assert!(html.contains(">Log out</a>"));
             assert!(html.contains("Mark all as read"));

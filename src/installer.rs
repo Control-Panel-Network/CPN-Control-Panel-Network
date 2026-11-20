@@ -448,7 +448,7 @@ pub(crate) async fn install_php_runtime(
 ) -> Result<(), String> {
     let guest = require_installable_guest()?;
     let today = chrono_today_ymd();
-    // Prefer the persisted install default; otherwise enable preferred 8.5 (EL9+) with fallback.
+    // Prefer the persisted install default; otherwise enable preferred 8.6 (EL9+) with fallback.
     let requested = crate::php_defaults::load_php_default().map(|r| r.requested);
     match tokio::task::spawn_blocking({
         let guest = guest.clone();
@@ -497,7 +497,7 @@ pub(crate) async fn install_php_runtime(
         .map_err(|error| format!("PHP version check failed: {error}"))?;
     if !status.success() {
         return Err(
-            "Installed PHP is older than 8.2 (EOL). Enable Remi php:remi-8.5 (or 8.4/8.3/8.2) and retry."
+            "Installed PHP is older than 8.2 (EOL). Enable Remi php:remi-8.6 (or 8.5/8.4/8.3/8.2) and retry."
                 .into(),
         );
     }

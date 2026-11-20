@@ -148,6 +148,20 @@ cpn panel status
 
 Read-only check anytime: `cpn doctor`. Heal local-bin shadows: `sudo cpn doctor --heal` then `hash -r`.
 
+## Panel migrate (CyberPanel and others)
+
+Detect another hosting panel on this host, print a copy plan, copy into CPN, then wipe the foreign panel after a verified apply. CyberPanel is catalog id `classic`.
+
+```bash
+cpn panel-migrate checklist   # CyberPanel → CPN → AlmaLinux 10 operator steps + LiteSpeed license status
+cpn panel-migrate detect
+cpn panel-migrate plan --id classic
+sudo cpn panel-migrate apply --id classic --yes
+sudo cpn panel-migrate wipe --id classic --yes   # only after verified apply
+```
+
+LiteSpeed Enterprise license files (`serial.no`, `license.key`, `trial.key`) are managed in the panel under Server → LiteSpeed plans, or inspected via the checklist output. See `to-do/CYBERPANEL-308-TO-CPN-MIGRATION.md`.
+
 ## Panel URL and status
 
 Login URLs are resolved **live** from the same preference files the panel UI writes (`$CPN_DATA_DIR/listen_port`, `panel_public_url`, `panel_hostname`), with a world-readable mirror under `/etc/cpn/` so non-root SSH sessions can read them. Changing the listen port in Settings updates the next SSH MOTD and `cpn panel url` without reinstalling.
@@ -459,6 +473,7 @@ Interactive SSH logins show a cool English CPN ASCII banner with:
 
 - "This server has installed CPN", panel version, and service active state
 - **Live** login URL(s) via `cpn panel url --motd` on every login (reads current listen port / public URL / hostname; not a static `/etc/motd` baked at install)
+- Forum and Support links: `https://discord.gg/nx9Kzrk` (two lines, CyberPanel-style)
 - `systemctl` / `cpn-installer --web` / `--cli` start hints, plus `cpn panel url` anytime
 - VirtualBox NAT tip when no hostname/public URL is set (example host forward `2089` -> guest listen port => `http://127.0.0.1:2089/login` on the host)
 - Host facts: time, load average, CPU (load-based), RAM, disk on `/`, uptime

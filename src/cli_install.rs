@@ -158,18 +158,20 @@ fn prompt_database() -> Result<DatabaseEngine, String> {
 
 fn prompt_php_version() -> Result<String, String> {
     println!("\nPHP version (system php-fpm / CLI used by phpMyAdmin and webmail):");
-    println!("  1) 8.5  (default on AlmaLinux/RHEL 9+)");
-    println!("  2) 8.4");
-    println!("  3) 8.3");
-    println!("  4) 8.2");
-    println!("If 8.5 packages are missing, CPN falls back to the next available branch.");
-    prompt_menu("Enter 1-4 for PHP version", "1", |raw| match raw {
-        "1" | "8.5" | "85" => Ok("8.5".into()),
-        "2" | "8.4" | "84" => Ok("8.4".into()),
-        "3" | "8.3" | "83" => Ok("8.3".into()),
-        "4" | "8.2" | "82" => Ok("8.2".into()),
+    println!("  1) 8.6  (default on AlmaLinux/RHEL 9+)");
+    println!("  2) 8.5");
+    println!("  3) 8.4");
+    println!("  4) 8.3");
+    println!("  5) 8.2");
+    println!("If 8.6 packages are missing, CPN falls back to the next available branch (8.5 first).");
+    prompt_menu("Enter 1-5 for PHP version", "1", |raw| match raw {
+        "1" | "8.6" | "86" => Ok("8.6".into()),
+        "2" | "8.5" | "85" => Ok("8.5".into()),
+        "3" | "8.4" | "84" => Ok("8.4".into()),
+        "4" | "8.3" | "83" => Ok("8.3".into()),
+        "5" | "8.2" | "82" => Ok("8.2".into()),
         other => Err(format!(
-            "Unknown PHP version `{other}`. Enter 1 (8.5), 2 (8.4), 3 (8.3), or 4 (8.2)."
+            "Unknown PHP version `{other}`. Enter 1 (8.6), 2 (8.5), 3 (8.4), 4 (8.3), or 5 (8.2)."
         )),
     })
 }

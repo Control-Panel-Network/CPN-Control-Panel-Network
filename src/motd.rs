@@ -22,6 +22,10 @@ pub const PROFILE_D_MOTD_PATH: &str = "/etc/profile.d/cpn-motd.sh";
 /// Optional library copy for packaging and operators.
 pub const LIB_MOTD_PATH: &str = "/usr/lib/cpn/cpn-motd.sh";
 
+/// Legacy CyberPanel login banner (`/etc/profile.d/cyberpanel.sh`).
+const CYBERPANEL_PROFILE_D_MOTD: &str = "/etc/profile.d/cyberpanel.sh";
+const CYBERPANEL_MOTD_DISABLED_SUFFIX: &str = ".disabled-by-cpn";
+
 fn is_root() -> bool {
     #[cfg(unix)]
     {
@@ -58,6 +62,26 @@ fn write_executable(path: &Path, contents: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Rename CyberPanel's profile.d MOTD so only CPN's banner runs on SSH login.
+///
+/// Best-effort: no error if already disabled or missing. Does not remove CyberPanel itself.
+fn disable_legacy_cyberpanel_motd() {
+    let active = PathBuf::from(CYBERPANEL_PROFILE_D_MOTD);
+    if !active.is_file() {
+        return;
+    }
+    let disabled = PathBuf::from(format!(
+        "{CYBERPANEL_PROFILE_D_MOTD}{CYBERPANEL_MOTD_DISABLED_SUFFIX}"
+    ));
+    if disabled.is_file() {
+        let _ = fs::remove_file(&active);
+        return;
+    }
+    if fs::rename(&active, &disabled).is_err() {
+        let _ = fs::remove_file(&active);
+    }
+}
+
 /// Install the dynamic MOTD into `/etc/profile.d` (and `/usr/lib/cpn` when possible).
 ///
 /// No-op on Windows. Best-effort when not root (returns Ok with skipped note path).
@@ -75,6 +99,7 @@ pub fn install_motd() -> Result<Vec<PathBuf>, String> {
     let profile = PathBuf::from(PROFILE_D_MOTD_PATH);
     write_executable(&profile, MOTD_SCRIPT)?;
     written.push(profile);
+    disable_legacy_cyberpanel_motd();
     Ok(written)
 }
 
@@ -223,6 +248,8 @@ mod tests {
         assert!(MOTD_SCRIPT.contains("panel_public_url"));
         assert!(MOTD_SCRIPT.contains("/etc/cpn"));
         assert!(MOTD_SCRIPT.contains("This server has installed CPN"));
+        assert!(MOTD_SCRIPT.contains("Forum         : https://discord.gg/nx9Kzrk"));
+        assert!(MOTD_SCRIPT.contains("Support       : https://discord.gg/nx9Kzrk"));
         assert!(MOTD_SCRIPT.contains("cpn-installer.service"));
         assert!(!lower.contains("cyberpanel"));
         assert!(!lower.contains("enjoy your accelerated"));

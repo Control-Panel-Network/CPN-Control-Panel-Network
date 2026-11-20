@@ -53,7 +53,7 @@ const nb: LocaleMessages = {
   databasePhpmyadmin: "Installer ogsa phpMyAdmin (pa som standard)",
   phpVersionTitle: "PHP-versjon",
   phpVersionHint:
-    "Standard er PHP 8.5 pa AlmaLinux/RHEL 9+. Andre stottede versjoner kan velges. Hvis 8.5-pakker mangler, faller CPN tilbake og logger valget.",
+    "Standard er PHP 8.6 pa AlmaLinux/RHEL 9+. Andre stottede versjoner kan velges. Hvis 8.6-pakker mangler, faller CPN tilbake (8.5 forst) og logger valget.",
   serverOpenlitespeedDesc:
     "Høy ytelse med lavt ressursbruk. Bra for WordPress og travle nettsteder med innebygd LSCache.",
   serverNginxDesc:

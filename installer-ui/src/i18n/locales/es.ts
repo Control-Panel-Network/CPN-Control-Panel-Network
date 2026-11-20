@@ -56,7 +56,7 @@ const es: LocaleMessages = {
   databasePhpmyadmin: "Instalar tambien phpMyAdmin (activado por defecto)",
   phpVersionTitle: "Version de PHP",
   phpVersionHint:
-    "El valor predeterminado es PHP 8.5 en AlmaLinux/RHEL 9+. Otras versiones compatibles siguen disponibles. Si faltan paquetes de 8.5, CPN usa la siguiente y registra el cambio.",
+    "El valor predeterminado es PHP 8.6 en AlmaLinux/RHEL 9+. Otras versiones compatibles siguen disponibles. Si faltan paquetes de 8.6, CPN usa la siguiente (8.5 primero) y registra el cambio.",
   serverOpenlitespeedDesc:
     "Alto rendimiento y bajo consumo de recursos. Ideal para WordPress y sitios con alto tráfico gracias a su caché integrado (LSCache).",
   serverNginxDesc:

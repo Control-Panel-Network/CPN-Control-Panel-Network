@@ -73,6 +73,39 @@ fn restart_if_active(unit: &str) -> String {
     }
 }
 
+/// Refresh installed LiteSpeed `lsphp82` through `lsphp86` base packages and matching extensions.
+///
+/// Uses package globs so security patches for every installed series land without
+/// hardcoding patch versions. Skips cleanly when no lsphp series is present.
+fn upgrade_installed_lsphp() -> Result<String, String> {
+    let pm = package_manager()?;
+    const SERIES: &[&str] = &["lsphp86", "lsphp85", "lsphp84", "lsphp83", "lsphp82"];
+    let present: Vec<&str> = SERIES
+        .iter()
+        .copied()
+        .filter(|name| rpm_or_dpkg_installed(&[name]))
+        .collect();
+    if present.is_empty() {
+        return Ok("skipped (no lsphp82-86 installed)".into());
+    }
+    if pm == "dnf" {
+        let patterns: Vec<String> = present.iter().map(|p| format!("{p}*")).collect();
+        let mut args = vec!["upgrade".to_string(), "-y".to_string()];
+        args.extend(patterns);
+        let status = Command::new("dnf")
+            .args(&args)
+            .status()
+            .map_err(|error| format!("Could not start dnf lsphp upgrade: {error}"))?;
+        if !status.success() {
+            return Err(format!("dnf upgrade {} failed", present.join(" ")));
+        }
+        Ok(format!("upgraded {}", present.join(", ")))
+    } else {
+        // apt does not expand RPM-style globs; upgrade base packages that are installed.
+        upgrade_named_packages(&present, &present)
+    }
+}
+
 fn health_mariadb() -> String {
     let active = service_detect::systemd_unit_active("mariadb")
         || service_detect::systemd_unit_active("mysqld")
@@ -121,24 +154,46 @@ pub fn refresh_managed_stack() -> Vec<String> {
             "php",
             "php-fpm",
             "php-cli",
+            "php-common",
             "php-mysqlnd",
             "php-gd",
             "php-xml",
+            "php-mbstring",
+            "php-opcache",
+            "php-intl",
+            "php-zip",
+            "php-curl",
         ],
         &[
             "php",
             "php-fpm",
             "php-cli",
+            "php-common",
             "php-mysql",
             "php-gd",
             "php-xml",
+            "php-mbstring",
+            "php-opcache",
+            "php-intl",
+            "php-zip",
+            "php-curl",
         ],
     ) {
         Ok(msg) => notes.push(format!("PHP: {msg}")),
         Err(error) => notes.push(format!("PHP: {error} (continuing)")),
     }
+    match upgrade_installed_lsphp() {
+        Ok(msg) => notes.push(format!("LiteSpeed lsphp: {msg}")),
+        Err(error) => notes.push(format!("LiteSpeed lsphp: {error} (continuing)")),
+    }
     if rpm_or_dpkg_installed(&["php-fpm"]) {
         notes.push(restart_if_active("php-fpm"));
+    }
+    if rpm_or_dpkg_installed(&["openlitespeed"])
+        || rpm_or_dpkg_installed(&["lsphp86", "lsphp85", "lsphp84", "lsphp83", "lsphp82"])
+    {
+        notes.push(restart_if_active("lsws"));
+        notes.push(restart_if_active("lshttpd"));
     }
 
     notes.push(health_mariadb());
@@ -154,11 +209,20 @@ mod tests {
         for note in [
             "Refreshing CPN-managed host packages when already installed (MariaDB, OpenLiteSpeed, PHP). Databases and docroots are not dropped.",
             "MariaDB/MySQL unit active after refresh (databases preserved)",
+            "skipped (no lsphp82-86 installed)",
         ] {
             assert!(!note.contains('\u{2014}'));
             assert!(!note.contains('\u{2013}'));
             assert!(!note.to_lowercase().contains("cyberpanel"));
         }
+    }
+
+    #[test]
+    fn lsphp_series_list_covers_82_through_86() {
+        let series = ["lsphp86", "lsphp85", "lsphp84", "lsphp83", "lsphp82"];
+        assert_eq!(series.len(), 5);
+        assert!(series.contains(&"lsphp86"));
+        assert!(series.contains(&"lsphp82"));
     }
 
     #[test]

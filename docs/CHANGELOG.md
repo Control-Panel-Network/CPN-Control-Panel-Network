@@ -9,14 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **OpenLiteSpeed WebAdmin link**: session-gated reverse-proxy at `/ols` to loopback `:7080`; phpMyAdmin and webmail mounts hardened; OLS HTTPS listener maps avoid stealing site SNI on post-migration hosts.
+- **OpenLiteSpeed WebAdmin link**: `/server/openlitespeed` **Open WebAdmin** now opens `https://<panel>/ols` (session-gated reverse-proxy to loopback `:7080`) instead of sending the browser to `https://127.0.0.1:7080`.
+
+### Changed
+
+- **PHP 8.6 preferred on EL9/EL10**: Install default is Remi `php:remi-8.6` (fallback 8.5 -> 8.4 -> 8.3 -> 8.2). EL8 stays on Remi 8.2. CLI/web installers, `MANAGED_BRANCHES`, lsphp maps (`lsphp86`), cron/wp-cli binary candidates, and `upgrade_stack` now cover the 8.6 series. Webmail PHP max stays 8.5 until SnappyMail/Tachyon/Roundcube confirm 8.6. See `to-do/PHP-INSTALL-DEFAULT-86.md`.
+
+### Fixed
+
 - **Login service gate perf**: stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer 4s stalls on `/login` and `/api/login/services`.
 - **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains; removed hardcoded News Targeted apex fallback.
 - **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.
 
 ### Added
 
+- **LiteSpeed Enterprise license ops**: Server → LiteSpeed plans shows license status (`serial.no` / `license.key` / `trial.key`), applies serial with `lshttpd -r`, accepts pasted `license.key` (mode 600 + backup), refreshes license, and requests trial.key. Safe LSWS restart after apply. Helpers in `src/litespeed_license.rs` with unit tests.
+- **CyberPanel → CPN → AlmaLinux 10 checklist**: `cpn panel-migrate checklist` plus migrate UI hints (`classic` = CyberPanel). Operator gap doc covers NT Django `context_processors` / Discord Auth plugin loss on wipe: `to-do/CYBERPANEL-308-TO-CPN-MIGRATION.md`.
 - **Operator docs**: `to-do/PERF-KRAO-INVESTIGATION.md` (slowness findings) and `to-do/SOCIAL-OAUTH-LOGIN.md` (OAuth login scaffold plan).
+- **Stack upgrade**: `upgrade_stack` refreshes installed LiteSpeed `lsphp82` through `lsphp86` (plus Remi php/php-fpm and common extensions) so every series gets security patches without hardcoded patch pins.
 
 ### Fixed
 
@@ -131,7 +141,7 @@ Patch release after v1.4.4. Panel migrate from `dev` is on `stable`, the default
 ### Added
 
 - **Default install download size**: `docs/INSTALL-FOOTPRINT.md` records the measured package size from the v1.4.4 GitHub Release assets (about 7.3 MiB for the Enterprise Linux RPM, about 6.8 MiB for the deb). README and INSTALL link to it.
-- **Migrate another panel**: Server page `/server/panel-migrate` and `cpn panel-migrate detect|plan|apply|wipe` find a hosting panel already on this machine, copy websites into CPN docroots, import databases when the MariaDB client is present, and copy mail and DNS zones on a best-effort basis. Panel users are listed in the verify report and are not created as CPN accounts. After a verified copy, wipe removes that panel's install prefix and the duplicate files named in the report. Shared MariaDB, the web server, and mail stay. A site that already uses the CPN docroot is kept in place. Ajenti, and Webmin when Virtualmin is absent, stay "detected, inventory not mapped yet" until a site layout is present.
+- **Migrate another panel**: Server page `/server/panel-migrate` and `cpn panel-migrate detect|plan|apply|wipe|checklist` find a hosting panel already on this machine, copy websites into CPN docroots, import databases when the MariaDB client is present, and copy mail and DNS zones on a best-effort basis. Panel users are listed in the verify report and are not created as CPN accounts. After a verified copy, wipe removes that panel's install prefix and the duplicate files named in the report. Shared MariaDB, the web server, and mail stay. A site that already uses the CPN docroot is kept in place. Ajenti, and Webmin when Virtualmin is absent, stay "detected, inventory not mapped yet" until a site layout is present. CyberPanel is id `classic`.
 
 ### Changed
 

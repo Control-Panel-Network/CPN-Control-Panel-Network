@@ -206,7 +206,7 @@ export async function startServerInstall(
       database: options?.database ?? "mariadb",
       install_phpmyadmin: options?.install_phpmyadmin ?? true,
       enable_proxy_front: options?.enable_proxy_front ?? false,
-      php_version: options?.php_version ?? "8.5",
+      php_version: options?.php_version ?? "8.6",
       install_log_detail: options?.install_log_detail ?? "full",
     }),
   });

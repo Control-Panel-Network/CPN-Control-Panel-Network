@@ -96,6 +96,16 @@ pub enum AppCommands {
         #[command(subcommand)]
         command: AppBackupCommands,
     },
+    /// Import SnappyMail contacts/settings into Tachyon (IMAP mail is unchanged)
+    #[command(name = "migrate-snappymail")]
+    MigrateSnappymail {
+        /// Destination client (only tachyon is supported)
+        #[arg(long, default_value = "tachyon")]
+        to: String,
+        /// Re-run even when the migration marker exists
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -221,7 +231,27 @@ pub fn run(
         AppCommands::Backups { command } => match command {
             AppBackupCommands::List { name, domain } => lifecycle_backups(&name, &domain),
         },
+        AppCommands::MigrateSnappymail { to, force } => {
+            require_root()?;
+            migrate_snappymail(&to, force)
+        },
     }
+}
+
+fn migrate_snappymail(to: &str, force: bool) -> Result<(), String> {
+    let to = to.trim().to_ascii_lowercase();
+    if to != "tachyon" {
+        return Err("Only --to tachyon is supported for SnappyMail data import".into());
+    }
+    if force {
+        let marker = std::path::Path::new("/var/lib/cpn-webmail/tachyon/_data_/_default_/.cpn-snappy-migrate-v1");
+        if marker.is_file() {
+            let _ = std::fs::remove_file(marker);
+        }
+    }
+    let msg = crate::install_snappymail_migrate::migrate_snappymail_into_tachyon()?;
+    println!("{msg}");
+    Ok(())
 }
 
 pub fn list(domain: Option<&str>) -> Result<(), String> {

@@ -64,7 +64,7 @@ function AppShell() {
   );
   const [selectedMail, setSelectedMail] = useState<MailSystem | null>(null);
   const [database, setDatabase] = useState<DatabaseEngine>("mariadb");
-  const [phpVersion, setPhpVersion] = useState<PhpVersion>("8.5");
+  const [phpVersion, setPhpVersion] = useState<PhpVersion>("8.6");
   const [installPhpmyadmin, setInstallPhpmyadmin] = useState(true);
   const [enableProxyFront, setEnableProxyFront] = useState(false);
   const [status, setStatus] = useState(INITIAL_STATUS);

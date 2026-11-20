@@ -40,6 +40,7 @@ fn now_unix() -> u64 {
 
 fn branch_to_lsphp_prefix(branch: &str) -> Option<&'static str> {
     match branch.trim() {
+        "8.6" => Some("lsphp86"),
         "8.5" => Some("lsphp85"),
         "8.4" => Some("lsphp84"),
         "8.3" => Some("lsphp83"),
