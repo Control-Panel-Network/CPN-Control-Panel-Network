@@ -23,7 +23,7 @@ use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
-    InstallRequest, InstallerEvent, InstallerStatus, InstallPathRequest, LanguageRequest,
+    InstallPathRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
     ListenPortRequest, MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_admin::is_panel_admin;
@@ -593,27 +593,28 @@ async fn set_install_path(
         return HttpResponse::BadRequest()
             .json(serde_json::json!({"error": "No foreign panel is detected on this host"}));
     }
-    let target = if request.mode == cpn_installer::foreign_panel::install_intent::InstallPathMode::Migrate {
-        let trimmed = request
-            .target_panel_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        if let Some(id) = trimmed {
-            if !panels.iter().any(|row| row.id == id) {
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "error": format!("Unknown panel id `{id}`. Choose from the detected list."),
-                }));
+    let target =
+        if request.mode == cpn_installer::foreign_panel::install_intent::InstallPathMode::Migrate {
+            let trimmed = request
+                .target_panel_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            if let Some(id) = trimmed {
+                if !panels.iter().any(|row| row.id == id) {
+                    return HttpResponse::BadRequest().json(serde_json::json!({
+                        "error": format!("Unknown panel id `{id}`. Choose from the detected list."),
+                    }));
+                }
+                Some(id.to_string())
+            } else {
+                cpn_installer::foreign_panel::install_intent::default_migrate_target(
+                    &cpn_installer::foreign_panel::install_intent::detected_panels(),
+                )
             }
-            Some(id.to_string())
         } else {
-            cpn_installer::foreign_panel::install_intent::default_migrate_target(
-                &cpn_installer::foreign_panel::install_intent::detected_panels(),
-            )
-        }
-    } else {
-        None
-    };
+            None
+        };
     let record = cpn_installer::foreign_panel::install_intent::InstallPathRecord {
         mode: request.mode,
         target_panel_id: target.clone(),
@@ -1113,9 +1114,11 @@ async fn main() -> std::io::Result<()> {
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",
             existing.package_version
         )
-    } else if let Some(banner) = cpn_installer::foreign_panel::install_notice::format_detection_banner(
-        &cpn_installer::foreign_panel::install_notice::detect_foreign_panels(),
-    ) {
+    } else if let Some(banner) =
+        cpn_installer::foreign_panel::install_notice::format_detection_banner(
+            &cpn_installer::foreign_panel::install_notice::detect_foreign_panels(),
+        )
+    {
         format!("The system is ready to continue.\n\n{banner}")
     } else {
         "The system is ready to continue".into()

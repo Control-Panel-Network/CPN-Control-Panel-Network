@@ -130,8 +130,7 @@ mod tests {
             website_count: 2,
         }];
         assert!(can_start_server(&status, false).is_err());
-        status.install_path =
-            Some(crate::foreign_panel::install_intent::InstallPathMode::Migrate);
+        status.install_path = Some(crate::foreign_panel::install_intent::InstallPathMode::Migrate);
         assert!(can_start_server(&status, false).is_ok());
     }
 

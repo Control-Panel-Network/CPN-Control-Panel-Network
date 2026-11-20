@@ -27,10 +27,7 @@ export function InstallPathScreen({
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(
-        mode,
-        mode === "migrate" ? targetId : undefined,
-      );
+      await onConfirm(mode, mode === "migrate" ? targetId : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.unknownError);
       setBusy(false);
@@ -98,7 +95,9 @@ export function InstallPathScreen({
             {t.installPathMigrate}
           </button>
         </div>
-        <p className="text-xs text-[#667085] mt-4">{t.installPathMigrateHint}</p>
+        <p className="text-xs text-[#667085] mt-4">
+          {t.installPathMigrateHint}
+        </p>
       </div>
     </section>
   );

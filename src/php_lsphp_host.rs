@@ -4,8 +4,8 @@
 //! CPN must not pull Remi `php-fpm` / `php-opcache` when LiteSpeed PHP is already present.
 
 use crate::apps_pkg::{package_installed, rpm_or_dpkg_installed};
-use crate::php_defaults::{PhpDefaultRecord, save_php_default, normalize_php_request};
 use crate::os_support::GuestOs;
+use crate::php_defaults::{PhpDefaultRecord, normalize_php_request, save_php_default};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -47,8 +47,7 @@ fn lsphp_binary_path(prefix: &str) -> Option<PathBuf> {
 
 /// Best CLI binary for PHP version checks on LiteSpeed-only hosts.
 pub fn best_lsphp_cli_binary() -> Option<PathBuf> {
-    installed_lsphp_series()
-        .and_then(|(_, prefix)| lsphp_binary_path(&prefix))
+    installed_lsphp_series().and_then(|(_, prefix)| lsphp_binary_path(&prefix))
 }
 
 fn lsphp_common_on_disk() -> bool {
@@ -76,9 +75,8 @@ pub fn prepare_lsphp_host_php_record(
     guest: &GuestOs,
     requested: Option<&str>,
 ) -> Result<PhpDefaultRecord, String> {
-    let (default_branch, prefix) = installed_lsphp_series().ok_or_else(|| {
-        "LiteSpeed lsphp packages were not found on this host.".to_string()
-    })?;
+    let (default_branch, prefix) = installed_lsphp_series()
+        .ok_or_else(|| "LiteSpeed lsphp packages were not found on this host.".to_string())?;
     let requested_norm = normalize_php_request(requested, Some(guest));
     let branch = if requested_norm == default_branch || requested.is_none() {
         default_branch.clone()
@@ -125,7 +123,9 @@ pub fn ensure_lsphp_panel_extensions() -> Result<String, String> {
         }
     }
     if install.is_empty() {
-        return Ok(format!("LiteSpeed {prefix} extensions already present (PHP {branch})."));
+        return Ok(format!(
+            "LiteSpeed {prefix} extensions already present (PHP {branch})."
+        ));
     }
     let args: Vec<&str> = std::iter::once("install")
         .chain(std::iter::once("-y"))

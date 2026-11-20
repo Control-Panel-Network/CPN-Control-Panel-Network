@@ -497,9 +497,7 @@ pub(crate) async fn install_php_runtime(
         let bin = crate::php_lsphp_host::best_lsphp_cli_binary()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "php".into());
-        let check = format!(
-            "{bin} -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);'"
-        );
+        let check = format!("{bin} -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);'");
         let status = Command::new("bash")
             .args(["-c", &check])
             .kill_on_drop(true)

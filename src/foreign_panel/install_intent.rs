@@ -1,6 +1,6 @@
 //! Operator choice during install: fresh stack vs migrate from a detected foreign panel.
 
-use super::detect::{detect_at, host_root, Detection};
+use super::detect::{Detection, detect_at, host_root};
 use super::install_notice::detect_foreign_panels;
 use crate::http_helpers::now_unix;
 use crate::paths;
@@ -71,8 +71,8 @@ pub fn load_install_path() -> Option<InstallPathRecord> {
 
 pub fn save_install_path(record: &InstallPathRecord) -> Result<(), String> {
     let path = install_path_file();
-    let value = serde_json::to_value(record)
-        .map_err(|e| format!("Could not encode install path: {e}"))?;
+    let value =
+        serde_json::to_value(record).map_err(|e| format!("Could not encode install path: {e}"))?;
     write_json_600(&path, &value)
 }
 
@@ -171,16 +171,15 @@ pub fn prompt_cli_install_path(panels: &[Detection]) -> Result<InstallPathRecord
     }
     println!("\nHow should CPN install on this host?");
     println!("  1) Fresh install   (CPN stack only; may replace overlapping packages)");
-    println!("  2) Migrate path    (keep LiteSpeed/postfix/Dovecot; run panel-migrate after CPN is ready)");
+    println!(
+        "  2) Migrate path    (keep LiteSpeed/postfix/Dovecot; run panel-migrate after CPN is ready)"
+    );
     loop {
-        let raw = prompt_trimmed("Enter choice [1/2] (default: 2 when CyberPanel/classic is present): ")?;
+        let raw =
+            prompt_trimmed("Enter choice [1/2] (default: 2 when CyberPanel/classic is present): ")?;
         let default_migrate = panels.iter().any(|p| p.id == "classic");
         let choice = if raw.is_empty() {
-            if default_migrate {
-                "2"
-            } else {
-                "1"
-            }
+            if default_migrate { "2" } else { "1" }
         } else {
             raw.as_str()
         };
@@ -221,7 +220,9 @@ fn pick_migrate_target_cli(panels: &[Detection]) -> Result<String, String> {
         if panels.iter().any(|p| p.id == raw) {
             return Ok(raw);
         }
-        return Err(format!("Unknown panel id `{raw}`. Run cpn panel-migrate detect for ids."));
+        return Err(format!(
+            "Unknown panel id `{raw}`. Run cpn panel-migrate detect for ids."
+        ));
     }
     println!("Available panel ids:");
     for row in panels {
@@ -258,11 +259,7 @@ mod tests {
 
     #[test]
     fn flag_parse_rejects_both() {
-        let args = vec![
-            "cpn-installer".into(),
-            "--migrate".into(),
-            "--fresh".into(),
-        ];
+        let args = vec!["cpn-installer".into(), "--migrate".into(), "--fresh".into()];
         assert!(parse_install_path_flag(&args).is_none());
     }
 

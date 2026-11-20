@@ -214,10 +214,7 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
             Some("IMAP backend".into()),
         )?;
     } else {
-        state.log(
-            "Reusing existing Dovecot installation.".to_string(),
-            "info",
-        );
+        state.log("Reusing existing Dovecot installation.".to_string(), "info");
     }
 
     apply_local_mail_configuration()?;

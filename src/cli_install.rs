@@ -367,7 +367,9 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     println!("\nCPN Server Panel · SSH/CLI Installer {VERSION}");
     crate::foreign_panel::install_notice::print_install_migration_notice();
     let panels = crate::foreign_panel::install_intent::detected_panels();
-    let install_path = if let Some(mode) = crate::foreign_panel::install_intent::parse_install_path_flag(_args) {
+    let install_path = if let Some(mode) =
+        crate::foreign_panel::install_intent::parse_install_path_flag(_args)
+    {
         let target = if mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
             crate::foreign_panel::install_intent::default_migrate_target(&panels)
         } else {
@@ -391,7 +393,8 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     } else {
         match crate::foreign_panel::install_intent::prompt_cli_install_path(&panels) {
             Ok(record) => {
-                if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record) {
+                if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record)
+                {
                     eprintln!("warning: could not save install path: {error}");
                 }
                 record
@@ -402,10 +405,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     if install_path.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
         println!(
             "Install path: migrate from {} (panel-migrate runs after CPN is ready).",
-            install_path
-                .target_panel_id
-                .as_deref()
-                .unwrap_or("classic")
+            install_path.target_panel_id.as_deref().unwrap_or("classic")
         );
     } else if !panels.is_empty() {
         println!("Install path: fresh (you chose to proceed without panel-migrate first).");

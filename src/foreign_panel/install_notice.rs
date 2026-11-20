@@ -1,7 +1,7 @@
 //! Installer-facing migration hints when another panel is already on this host.
 
 use super::catalog::spec_by_id;
-use super::detect::{detect_at, host_root, Detection};
+use super::detect::{Detection, detect_at, host_root};
 
 /// Panels detected on the live host root (not dry-run).
 pub fn detect_foreign_panels() -> Vec<Detection> {
@@ -12,11 +12,9 @@ pub fn format_detection_banner(panels: &[Detection]) -> Option<String> {
     if panels.is_empty() {
         return None;
     }
-    let mut lines = vec![
-        String::from(
-            "Another hosting panel was detected on this server. CPN can migrate in place instead of overwriting stacks.",
-        ),
-    ];
+    let mut lines = vec![String::from(
+        "Another hosting panel was detected on this server. CPN can migrate in place instead of overwriting stacks.",
+    )];
     for row in panels {
         let port = spec_by_id(&row.id)
             .map(|spec| spec.listen_port.to_string())

@@ -336,13 +336,14 @@ function AppShell() {
           className="min-h-screen"
         >
           {screen === "preparing" && <PreparingScreen status={status} />}
-          {screen === "install_path" && (status.foreign_panels?.length ?? 0) > 0 && (
-            <InstallPathScreen
-              panels={status.foreign_panels ?? []}
-              initialTargetId={status.install_path_target_id}
-              onConfirm={confirmInstallPath}
-            />
-          )}
+          {screen === "install_path" &&
+            (status.foreign_panels?.length ?? 0) > 0 && (
+              <InstallPathScreen
+                panels={status.foreign_panels ?? []}
+                initialTargetId={status.install_path_target_id}
+                onConfirm={confirmInstallPath}
+              />
+            )}
           {screen === "maintenance" && status.maintenance && (
             <MaintenanceScreen
               info={status.maintenance}
