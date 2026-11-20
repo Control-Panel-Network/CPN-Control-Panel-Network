@@ -60,7 +60,8 @@ pub fn coerce_panel_public_url_input(raw: &str) -> String {
         .trim_end_matches('/')
         .rsplit_once(':')
         .map(|(host, port)| {
-            port.chars().all(|c| c.is_ascii_digit())
+            port.chars()
+                .all(|c| c.is_ascii_digit())
                 .then_some((host, port.parse::<u16>().ok()))
         })
         .flatten()
