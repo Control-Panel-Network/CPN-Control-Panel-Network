@@ -517,7 +517,9 @@ async fn set_listen_port(
         let result = if trimmed.is_empty() {
             clear_panel_public_url()
         } else {
-            save_panel_public_url(trimmed)
+            let normalized =
+                cpn_installer::panel_public_url::coerce_panel_public_url_input(trimmed);
+            save_panel_public_url(&normalized)
         };
         if let Err(error) = result {
             return listen_port_json_err(400, &error);
