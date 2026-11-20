@@ -42,9 +42,44 @@ fn normalize_base(url: &str) -> String {
     url.trim().trim_end_matches('/').to_string()
 }
 
+/// Accept operator input with or without a scheme (CLI/installer often types a bare hostname).
+pub fn coerce_panel_public_url_input(raw: &str) -> String {
+    let value = raw.trim();
+    if value.is_empty() {
+        return String::new();
+    }
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        return value.to_string();
+    }
+    if value.contains('/') || value.contains('?') || value.contains('#') {
+        return value.to_string();
+    }
+    // Public hostnames default to HTTPS; loopback/lab NAT often uses plain HTTP on a high port.
+    let host_part = value
+        .trim_end_matches('/')
+        .rsplit_once(':')
+        .map(|(host, port)| {
+            port.chars().all(|c| c.is_ascii_digit())
+                .then_some((host, port.parse::<u16>().ok()))
+        })
+        .flatten()
+        .unwrap_or((value.trim_end_matches('/'), None));
+    let (host, port) = host_part;
+    let prefer_http = host == "127.0.0.1"
+        || host.eq_ignore_ascii_case("localhost")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || host.starts_with("172.")
+        || matches!(port, Some(2087 | 2089 | 2090 | 2091));
+    let scheme = if prefer_http { "http" } else { "https" };
+    format!("{scheme}://{value}")
+}
+
 /// Validate a full panel base URL (scheme + host, optional port; no path required).
 pub fn validate_panel_public_url(raw: &str) -> Result<String, String> {
-    let value = raw.trim();
+    let coerced = coerce_panel_public_url_input(raw);
+    let value = coerced.trim();
     if value.is_empty() {
         return Err("Panel public URL cannot be empty".into());
     }
@@ -180,7 +215,14 @@ mod tests {
             validate_panel_public_url("HTTPS://panel.example.com").unwrap(),
             "https://panel.example.com"
         );
-        assert!(validate_panel_public_url("panel.example.com").is_err());
+        assert_eq!(
+            validate_panel_public_url("panel.example.com").unwrap(),
+            "https://panel.example.com"
+        );
+        assert_eq!(
+            validate_panel_public_url("127.0.0.1:2089").unwrap(),
+            "http://127.0.0.1:2089"
+        );
         assert!(validate_panel_public_url("http://panel.example.com/login").is_err());
         assert!(validate_panel_public_url("ftp://127.0.0.1:2089").is_err());
     }

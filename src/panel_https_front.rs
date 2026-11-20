@@ -154,7 +154,7 @@ fn configure_ols(
            configFile              $SERVER_ROOT/conf/vhosts/{OLS_VH_NAME}/vhconf.conf\n\
            allowSymbolLink         1\n\
            enableScript            1\n\
-           restrained              1\n\
+           restrained              0\n\
          }}\n"
     );
     if !conf.contains(&format!("virtualHost {OLS_VH_NAME}")) {

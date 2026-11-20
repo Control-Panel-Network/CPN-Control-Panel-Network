@@ -8,7 +8,7 @@ use crate::model::{
     DatabaseEngine, InstallerEvent, InstallerStatus, MailSystem, PasswordPolicy, ServerEngine,
 };
 use crate::panel_network::save_panel_hostname;
-use crate::panel_public_url::save_panel_public_url;
+use crate::panel_public_url::{coerce_panel_public_url_input, save_panel_public_url};
 use std::io::{self, IsTerminal, Write};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -482,10 +482,15 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         Err(e) => return fail(e),
     };
     if !public_url.is_empty() {
-        if let Err(error) = save_panel_public_url(&public_url) {
+        let normalized = coerce_panel_public_url_input(&public_url);
+        if let Err(error) = save_panel_public_url(&normalized) {
             eprintln!("warning: could not save panel public URL: {error}");
         } else {
-            println!("Saved panel public URL: {public_url}");
+            if normalized != public_url.trim() {
+                println!("Normalized panel public URL to: {normalized}");
+            } else {
+                println!("Saved panel public URL: {normalized}");
+            }
         }
     }
 

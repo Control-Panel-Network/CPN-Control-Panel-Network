@@ -20,10 +20,21 @@ pub fn ols_panel_proxy_vhconf(listen_port: u16, acme_webroot: &str) -> String {
            retryTimeout            0\n\
            respBuffer              0\n\
          }}\n\
+         context /.well-known/acme-challenge/ {{\n\
+           location                {acme_webroot}/.well-known/acme-challenge/\n\
+           allowBrowse             1\n\
+           addDefaultCharset       off\n\
+           accessControl  {{\n\
+             allow                 *\n\
+           }}\n\
+         }}\n\
          context /.well-known/ {{\n\
            location                {acme_webroot}/.well-known/\n\
            allowBrowse             1\n\
            addDefaultCharset       off\n\
+           accessControl  {{\n\
+             allow                 *\n\
+           }}\n\
          }}\n\
          context / {{\n\
            type                    proxy\n\
@@ -303,6 +314,7 @@ mod tests {
         let body = ols_panel_proxy_vhconf(2087, "/var/lib/cpn/acme-webroot");
         assert!(body.contains("http://127.0.0.1:2087"));
         assert!(body.contains("type                    proxy"));
+        assert!(body.contains("context /.well-known/acme-challenge/"));
         assert!(body.contains("context /.well-known/"));
         assert!(!body.contains("https://127.0.0.1:2087"));
     }

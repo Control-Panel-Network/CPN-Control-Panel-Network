@@ -4,12 +4,69 @@ use crate::install_journal::{self, JournalAction};
 use crate::install_mail_listeners::{append_cpn_mail_listeners, ensure_postfix_tls_material};
 use crate::install_recipes::{DnfProgress, command, pkg_install};
 use crate::installer::{AppState, run_command};
-use crate::os_support::require_installable_guest;
+use crate::os_support::{GuestOs, require_installable_guest};
 use std::path::Path;
 use std::process::{Command as StdCommand, Stdio};
 use tokio::process::Command;
 
 const STAGE: &str = "mail_backend";
+
+async fn run_pkg_install_resilient(
+    state: &AppState,
+    guest: &GuestOs,
+    packages_dnf: Vec<&'static str>,
+    packages_apt: Vec<&'static str>,
+    description: &'static str,
+    tracking: DnfProgress,
+    rpm_names: &[&str],
+    label: &'static str,
+) -> Result<(), String> {
+    let build_spec = || {
+        pkg_install(
+            guest,
+            packages_dnf.clone(),
+            packages_apt.clone(),
+            description,
+            tracking,
+        )
+    };
+    match run_command(state, build_spec()).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if crate::apps_pkg::rpm_or_dpkg_installed(rpm_names) {
+                state.log(
+                    format!(
+                        "{label} install reported an error but required packages are on disk; continuing ({err})"
+                    ),
+                    "info",
+                );
+                return Ok(());
+            }
+            let retriable = err.contains("Terminated")
+                || err.contains("terminated")
+                || err.contains("code 143")
+                || err.contains("code -15")
+                || err.contains("SIGTERM")
+                || err.contains("Killed")
+                || err.contains("Timed out waiting");
+            if !retriable {
+                return Err(err);
+            }
+            state.log(
+                format!("Retrying {label} after interrupted package-manager run"),
+                "info",
+            );
+            install_journal::record(
+                STAGE,
+                JournalAction::Note,
+                label,
+                None,
+                Some(format!("retry after package error: {err}")),
+            )?;
+            run_command(state, build_spec()).await
+        }
+    }
+}
 
 /// Postfix + Dovecot configuration shared by installer and Email host package heal.
 pub fn apply_local_mail_configuration() -> Result<(), String> {
@@ -163,21 +220,21 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
             Some("reused existing MTA".into()),
         )?;
     } else {
-        run_command(
+        run_pkg_install_resilient(
             state,
-            pkg_install(
-                &guest,
-                vec!["postfix"],
-                vec!["postfix"],
-                "Installing Postfix",
-                DnfProgress {
-                    download_start: 62,
-                    download_end: 66,
-                    install_start: 66,
-                    install_end: 70,
-                    label: "Postfix",
-                },
-            ),
+            &guest,
+            vec!["postfix"],
+            vec!["postfix"],
+            "Installing Postfix",
+            DnfProgress {
+                download_start: 62,
+                download_end: 66,
+                install_start: 66,
+                install_end: 70,
+                label: "Postfix",
+            },
+            &["postfix", "postfix3"],
+            "Postfix",
         )
         .await?;
         install_journal::record(
@@ -189,21 +246,21 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         )?;
     }
     if !crate::apps_pkg::rpm_or_dpkg_installed(&["dovecot", "dovecot-core"]) {
-        run_command(
+        run_pkg_install_resilient(
             state,
-            pkg_install(
-                &guest,
-                vec!["dovecot"],
-                vec!["dovecot-core", "dovecot-imapd"],
-                "Installing Dovecot",
-                DnfProgress {
-                    download_start: 70,
-                    download_end: 72,
-                    install_start: 72,
-                    install_end: 74,
-                    label: "Dovecot",
-                },
-            ),
+            &guest,
+            vec!["dovecot"],
+            vec!["dovecot-core", "dovecot-imapd"],
+            "Installing Dovecot",
+            DnfProgress {
+                download_start: 70,
+                download_end: 72,
+                install_start: 72,
+                install_end: 74,
+                label: "Dovecot",
+            },
+            &["dovecot", "dovecot-core"],
+            "Dovecot",
         )
         .await?;
         install_journal::record(
