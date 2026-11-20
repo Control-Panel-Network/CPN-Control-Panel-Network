@@ -10,6 +10,16 @@ use tokio::process::Command;
 const STAGE: &str = "mail_sieve";
 const CPN_SIEVE_CONF: &str = "/etc/dovecot/conf.d/99-cpn-sieve.conf";
 
+fn rpm_installed_any(names: &[&str]) -> bool {
+    names.iter().any(|name| {
+        std::process::Command::new("rpm")
+            .args(["-q", name])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
+}
+
 /// Install pigeonhole packages, enable ManageSieve on 4190, reload Dovecot.
 pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
     let guest = require_installable_guest()?;
@@ -26,7 +36,11 @@ pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
         state,
         pkg_install(
             &guest,
-            vec!["dovecot-pigeonhole"],
+            vec![
+                "dovecot23-pigeonhole",
+                "dovecot-pigeonhole",
+                "dovecot24-pigeonhole",
+            ],
             vec!["dovecot-sieve", "dovecot-managesieve"],
             "Installing Dovecot Sieve packages",
             DnfProgress {
@@ -97,17 +111,17 @@ pub fn ensure_dovecot_sieve_sync() -> Result<(), String> {
     // Best-effort package install when missing.
     let has_pkg = Path::new("/usr/lib64/dovecot/lib90_sieve_plugin.so").exists()
         || Path::new("/usr/lib/dovecot/lib90_sieve_plugin.so").exists()
-        || std::process::Command::new("rpm")
-            .args(["-q", "dovecot-pigeonhole"])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        || rpm_installed_any(&[
+            "dovecot-pigeonhole",
+            "dovecot23-pigeonhole",
+            "dovecot24-pigeonhole",
+        ]);
     if !has_pkg {
         let _ = std::process::Command::new("bash")
             .args([
                 "-c",
                 "if command -v dnf >/dev/null 2>&1; then \
-                   dnf install -y dovecot-pigeonhole >/dev/null 2>&1 || true; \
+                   dnf install -y dovecot-pigeonhole dovecot23-pigeonhole >/dev/null 2>&1 || true; \
                  elif command -v apt-get >/dev/null 2>&1; then \
                    apt-get install -y dovecot-sieve dovecot-managesieve >/dev/null 2>&1 || true; \
                  fi",

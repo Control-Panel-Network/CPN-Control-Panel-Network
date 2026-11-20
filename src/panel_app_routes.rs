@@ -149,12 +149,22 @@ pub async fn apps_install(
                 .finish();
         }
     };
-    match AppId::parse(&form.name).and_then(|id| install_app_on(id, domain.as_deref())) {
+    let name = form.name.clone();
+    let return_view = form.return_view.clone();
+    let domain_owned = domain.clone();
+    // Host installs (webmail download + PHP/runtime) can take minutes; never run them on
+    // the Actix worker. spawn_blocking also keeps nested Tokio runtimes off the arbiter.
+    let outcome = tokio::task::spawn_blocking(move || {
+        AppId::parse(&name).and_then(|id| install_app_on(id, domain_owned.as_deref()))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Host package install task failed".into()));
+    match outcome {
         Ok(message) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 apps_redirect_to(
-                    &form.return_view,
+                    &return_view,
                     domain.as_deref().unwrap_or(""),
                     Some(&message),
                     None,
@@ -165,7 +175,7 @@ pub async fn apps_install(
             .append_header((
                 "Location",
                 apps_redirect_to(
-                    &form.return_view,
+                    &return_view,
                     domain.as_deref().unwrap_or(""),
                     None,
                     Some(&error),
@@ -200,17 +210,24 @@ pub async fn apps_activate(
         AppId::Snappymail | AppId::Tachyon | AppId::Roundcube | AppId::Nextsnapmail | AppId::Sogo
     );
     if is_webmail {
-        return match crate::apps_webmail::activate_webmail_app(parsed) {
+        let return_view = form.return_view.clone();
+        let domain = form.domain.trim().to_string();
+        let outcome = tokio::task::spawn_blocking(move || {
+            crate::apps_webmail::activate_webmail_app(parsed)
+        })
+        .await
+        .unwrap_or_else(|_| Err("Webmail activate task failed".into()));
+        return match outcome {
             Ok(message) => HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    apps_redirect_to(&form.return_view, form.domain.trim(), Some(&message), None),
+                    apps_redirect_to(&return_view, &domain, Some(&message), None),
                 ))
                 .finish(),
             Err(error) => HttpResponse::SeeOther()
                 .append_header((
                     "Location",
-                    apps_redirect_to(&form.return_view, form.domain.trim(), None, Some(&error)),
+                    apps_redirect_to(&return_view, &domain, None, Some(&error)),
                 ))
                 .finish(),
         };
@@ -349,12 +366,20 @@ pub async fn apps_reinstall(
                 .finish();
         }
     };
-    match AppId::parse(&form.name).and_then(|id| reinstall_app_on(id, domain.as_deref())) {
+    let name = form.name.clone();
+    let return_view = form.return_view.clone();
+    let domain_owned = domain.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        AppId::parse(&name).and_then(|id| reinstall_app_on(id, domain_owned.as_deref()))
+    })
+    .await
+    .unwrap_or_else(|_| Err("Host package reinstall task failed".into()));
+    match outcome {
         Ok(message) => HttpResponse::SeeOther()
             .append_header((
                 "Location",
                 apps_redirect_to(
-                    &form.return_view,
+                    &return_view,
                     domain.as_deref().unwrap_or(""),
                     Some(&message),
                     None,
@@ -365,7 +390,7 @@ pub async fn apps_reinstall(
             .append_header((
                 "Location",
                 apps_redirect_to(
-                    &form.return_view,
+                    &return_view,
                     domain.as_deref().unwrap_or(""),
                     None,
                     Some(&error),

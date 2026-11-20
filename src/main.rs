@@ -779,6 +779,20 @@ async fn phpmyadmin_mount_proxy(
     cpn_installer::panel_phpmyadmin_proxy::phpmyadmin_panel_proxy(req, payload).await
 }
 
+async fn ols_webadmin_mount_proxy(
+    req: HttpRequest,
+    payload: web::Payload,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if !cpn_installer::panel_ols_webadmin_proxy::allowed_proxy_method(req.method()) {
+        return HttpResponse::MethodNotAllowed().finish();
+    }
+    if cpn_installer::panel_hub_http::require_panel_user(state.get_ref(), &req).is_none() {
+        return cpn_installer::panel_hub_http::login_redirect(&req);
+    }
+    cpn_installer::panel_ols_webadmin_proxy::ols_webadmin_panel_proxy(req, payload).await
+}
+
 /// SOGo mount entry without a method guard and without the `{path}` extractor, so WebDAV
 /// verbs (PROPFIND, REPORT, OPTIONS, MKCALENDAR, MOVE) on `/SOGo`, `/SOGo/...`, `/SOGo.woa/...`,
 /// and `/.well-known/caldav|carddav` reach the proxy. Delegates to `panel_catch_all`, which
@@ -810,6 +824,9 @@ async fn panel_catch_all(
     }
     if cpn_installer::panel_phpmyadmin_proxy::path_should_proxy_phpmyadmin(req.path()) {
         return phpmyadmin_mount_proxy(req, payload, state).await;
+    }
+    if cpn_installer::panel_ols_webadmin_proxy::path_should_proxy_ols_webadmin(req.path()) {
+        return ols_webadmin_mount_proxy(req, payload, state).await;
     }
     if matches!(*req.method(), Method::GET | Method::HEAD) {
         let name = path.into_inner();
@@ -1739,6 +1756,32 @@ async fn main() -> std::io::Result<()> {
                             .or(guard::Delete()),
                     )
                     .to(phpmyadmin_mount_proxy),
+            )
+            .route(
+                "/ols",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(ols_webadmin_mount_proxy),
+            )
+            .route(
+                "/ols/{path:.*}",
+                web::route()
+                    .guard(
+                        guard::Any(guard::Get())
+                            .or(guard::Head())
+                            .or(guard::Post())
+                            .or(guard::Put())
+                            .or(guard::Patch())
+                            .or(guard::Delete()),
+                    )
+                    .to(ols_webadmin_mount_proxy),
             )
             // Use Any/or for methods. Chained .method() guards are AND'd and never match.
             .route(

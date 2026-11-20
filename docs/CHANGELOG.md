@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenLiteSpeed WebAdmin link**: session-gated reverse-proxy at `/ols` to loopback `:7080`; phpMyAdmin and webmail mounts hardened; OLS HTTPS listener maps avoid stealing site SNI on post-migration hosts.
 - **Login service gate perf**: stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer 4s stalls on `/login` and `/api/login/services`.
 - **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains; removed hardcoded News Targeted apex fallback.
 - **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.

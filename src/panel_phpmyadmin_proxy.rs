@@ -38,21 +38,26 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
             .content_type("text/plain; charset=utf-8")
             .body("phpMyAdmin is not installed on this host.");
     }
-    if crate::apps_phpmyadmin_fast::runtime_dirs_need_heal() {
-        let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
-    }
-    if !crate::apps_phpmyadmin_fast::pma_sock_ready() {
-        let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
-    }
-    if !crate::apps_phpmyadmin_fast::pma_listener_ready() {
-        let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
-        if !port_open("127.0.0.1:8081", 200) {
-            return HttpResponse::BadGateway()
-                .content_type("text/plain; charset=utf-8")
-                .body(format!(
-                    "phpMyAdmin loopback listener is not ready ({BACKEND}). Open auto-login wires OpenLiteSpeed :8081 when needed."
-                ));
+    let heal = tokio::task::spawn_blocking(|| {
+        if crate::apps_phpmyadmin_fast::runtime_dirs_need_heal() {
+            let _ = crate::apps_phpmyadmin::ensure_phpmyadmin_runtime_dirs();
         }
+        if !crate::apps_phpmyadmin_fast::pma_sock_ready() {
+            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+        }
+        if !crate::apps_phpmyadmin_fast::pma_listener_ready() {
+            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+        }
+        port_open("127.0.0.1:8081", 200)
+    })
+    .await
+    .unwrap_or(false);
+    if !crate::apps_phpmyadmin_fast::pma_listener_ready() && !heal {
+        return HttpResponse::BadGateway()
+            .content_type("text/plain; charset=utf-8")
+            .body(format!(
+                "phpMyAdmin loopback listener is not ready ({BACKEND}). Open auto-login wires OpenLiteSpeed :8081 when needed."
+            ));
     }
     let Some(backend_path) = backend_path(req.path()) else {
         return HttpResponse::NotFound().finish();
@@ -63,7 +68,7 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
     } else {
         format!("{BACKEND}{backend_path}?{query}")
     };
-    let method = req.method().as_str();
+    let method = req.method().as_str().to_string();
     let body_bytes = match collect_body(payload).await {
         Ok(b) => b,
         Err(err) => {
@@ -72,21 +77,28 @@ pub async fn phpmyadmin_panel_proxy(req: HttpRequest, payload: web::Payload) -> 
                 .body(format!("Could not read request body: {err}"));
         }
     };
-    match forward_http(method, &target, &req, &body_bytes) {
+    let headers = proxy_request_headers(&req);
+    match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
         Ok(resp) if resp.status() == StatusCode::SERVICE_UNAVAILABLE => {
             // LiteSpeed 503 when php-fpm sock is down; heal FPM then retry once.
-            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
-            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
-            match forward_http(method, &target, &req, &body_bytes) {
+            let _ = tokio::task::spawn_blocking(|| {
+                let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+                let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+            })
+            .await;
+            match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
                 Ok(retry) => retry,
                 Err(_) => resp,
             }
         }
         Ok(resp) => resp,
         Err(err) => {
-            let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
-            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
-            match forward_http(method, &target, &req, &body_bytes) {
+            let _ = tokio::task::spawn_blocking(|| {
+                let _ = crate::apps_phpmyadmin::ensure_fpm_socket_for_ols();
+                let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+            })
+            .await;
+            match forward_http_blocking(&method, &target, &headers, &body_bytes).await {
                 Ok(resp) => resp,
                 Err(err2) => HttpResponse::BadGateway()
                     .content_type("text/plain; charset=utf-8")
@@ -112,23 +124,19 @@ async fn collect_body(mut payload: web::Payload) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-fn forward_http(
-    method: &str,
-    target: &str,
-    req: &HttpRequest,
-    body: &[u8],
-) -> Result<HttpResponse, String> {
-    let mut cmd = Command::new("curl");
-    cmd.args([
-        "--silent",
-        "--show-error",
-        "--include",
-        "--max-time",
-        "120",
-        "-X",
-        method,
-        "--path-as-is",
-    ]);
+fn proxy_max_time(target: &str) -> &'static str {
+    if target.contains("ajax_request=1")
+        || target.contains("/navigation")
+        || target.contains("/config/")
+    {
+        "35"
+    } else {
+        "120"
+    }
+}
+
+fn proxy_request_headers(req: &HttpRequest) -> Vec<(String, String)> {
+    let mut out = Vec::new();
     for (name, value) in req.headers() {
         let lower = name.as_str().to_ascii_lowercase();
         if matches!(
@@ -148,8 +156,65 @@ fn forward_http(
             continue;
         }
         if let Ok(v) = value.to_str() {
-            cmd.args(["-H", &format!("{}: {}", name.as_str(), v)]);
+            out.push((name.as_str().to_string(), v.to_string()));
         }
+    }
+    out
+}
+
+#[derive(Clone)]
+struct ProxiedHttp {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+async fn forward_http_blocking(
+    method: &str,
+    target: &str,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Result<HttpResponse, String> {
+    let method = method.to_string();
+    let target = target.to_string();
+    let headers = headers.to_vec();
+    let body = body.to_vec();
+    let proxied = tokio::task::spawn_blocking(move || {
+        forward_http_with_headers(&method, &target, &headers, &body)
+    })
+    .await
+    .map_err(|_| "phpMyAdmin proxy task failed".to_string())??;
+    Ok(proxied_to_response(proxied))
+}
+
+fn proxied_to_response(proxied: ProxiedHttp) -> HttpResponse {
+    let status = StatusCode::from_u16(proxied.status).unwrap_or(StatusCode::BAD_GATEWAY);
+    let mut builder = HttpResponse::build(status);
+    for (name, value) in proxied.headers {
+        builder.insert_header((name, value));
+    }
+    builder.body(proxied.body)
+}
+
+fn forward_http_with_headers(
+    method: &str,
+    target: &str,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Result<ProxiedHttp, String> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--silent",
+        "--show-error",
+        "--include",
+        "--max-time",
+        proxy_max_time(target),
+        "-X",
+        method,
+        "--path-as-is",
+    ]);
+    for (name, value) in headers {
+        cmd.args(["-H", &format!("{name}: {value}")]);
     }
     cmd.args(["-H", "Host: 127.0.0.1:8081"]);
     cmd.args(["-H", "Accept-Encoding: identity"]);
@@ -191,7 +256,7 @@ fn forward_http(
     parse_curl_include(&output.stdout)
 }
 
-fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
+fn parse_curl_include(raw: &[u8]) -> Result<ProxiedHttp, String> {
     // Keep the body as raw bytes. UTF-8 decoding corrupts PNG/GIF/JS themes
     // (0x89 PNG signature becomes U+FFFD) and breaks the phpMyAdmin UI.
     let (header_block, body) = split_headers_body_bytes(raw)
@@ -206,11 +271,10 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
         .nth(1)
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(502);
-    let status = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
-    let mut builder = HttpResponse::build(status);
+    let mut out_headers = Vec::new();
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
-            let name = name.trim();
+            let name = name.trim().to_string();
             let value = value.trim();
             let lower = name.to_ascii_lowercase();
             if matches!(
@@ -219,18 +283,21 @@ fn parse_curl_include(raw: &[u8]) -> Result<HttpResponse, String> {
             ) {
                 continue;
             }
-            if lower == "location" {
-                builder.insert_header((name, rewrite_location(value)));
-                continue;
-            }
-            if lower == "set-cookie" {
-                builder.insert_header((name, rewrite_set_cookie(value)));
-                continue;
-            }
-            builder.insert_header((name, value));
+            let value = if lower == "location" {
+                rewrite_location(value)
+            } else if lower == "set-cookie" {
+                rewrite_set_cookie(value)
+            } else {
+                value.to_string()
+            };
+            out_headers.push((name, value));
         }
     }
-    Ok(builder.body(body.to_vec()))
+    Ok(ProxiedHttp {
+        status,
+        headers: out_headers,
+        body: body.to_vec(),
+    })
 }
 
 fn find_header_body_sep(raw: &[u8]) -> Option<(usize, usize)> {
@@ -422,7 +489,9 @@ mod tests {
         let (headers, body) = split_headers_body_bytes(&raw).expect("split");
         assert!(String::from_utf8_lossy(headers).contains("200 OK"));
         assert_eq!(&body[..8], b"\x89PNG\r\n\x1a\n");
-        let resp = parse_curl_include(&raw).expect("parse");
+        let parsed = parse_curl_include(&raw).expect("parse");
+        assert_eq!(parsed.status, StatusCode::OK.as_u16());
+        let resp = proxied_to_response(parsed);
         assert_eq!(resp.status(), StatusCode::OK);
     }
 }

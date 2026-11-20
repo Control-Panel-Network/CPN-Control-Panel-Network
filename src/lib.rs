@@ -390,6 +390,7 @@ pub mod panel_packages;
 pub mod panel_pages;
 pub mod panel_password_gen;
 pub mod panel_phonehome;
+pub mod panel_ols_webadmin_proxy;
 pub mod panel_phpmyadmin_proxy;
 pub mod panel_plugin_float;
 pub mod panel_plugin_icons;
