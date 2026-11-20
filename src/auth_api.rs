@@ -25,7 +25,7 @@ use crate::login_service_gate::{
 };
 use crate::mail_outbound::{build_setup_confirmation, send_mail_with_settings};
 use crate::model::{AccountSetupRequest, OptionalTokenQuery, TokenQuery};
-use crate::panel_dashboard::panel_dashboard_html;
+use crate::panel_dashboard::{panel_dashboard_html, panel_dashboard_html_degraded};
 use crate::panel_session::{
     clear_mfa_pending_cookie_headers, clear_session_cookie_headers, create_mfa_pending_token,
     create_session_token, issue_mfa_pending_cookie_headers, issue_session_cookie_headers,
@@ -717,6 +717,7 @@ pub async fn login_mfa_submit(
     }
 }
 
+#[allow(dead_code)]
 fn panel_html_response(
     http: &HttpRequest,
     state: &AppState,
@@ -743,7 +744,21 @@ pub async fn dashboard_page(
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> HttpResponse {
     let preview = query.get("preview").map(String::as_str) == Some("1");
-    panel_html_response(&http, &state, preview, panel_dashboard_html)
+    if let Some(user) = panel_user_from_request(state.get_ref(), &http) {
+        let fallback_user = user.clone();
+        return crate::panel_hub_http::html_blocking_budget_or_fallback(
+            crate::panel_hub_http::HUB_RENDER_BUDGET,
+            move || panel_dashboard_html(&user),
+            move || panel_dashboard_html_degraded(&fallback_user),
+        )
+        .await;
+    }
+    if preview {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body(panel_dashboard_html("preview"));
+    }
+    crate::login_next::login_redirect(&http)
 }
 
 #[get("/panel")]

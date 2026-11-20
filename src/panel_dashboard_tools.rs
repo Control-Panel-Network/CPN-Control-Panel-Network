@@ -1,7 +1,6 @@
 //! Dashboard Sites switcher + collapsible Tools groups (CPN-branded).
 
 use crate::panel_icons::nav_icon_html;
-use crate::panel_ops_ssl_le::ssl_status_for_domain;
 use crate::sites::{list_sites, site_home_from_record};
 use crate::website_preview::{preview_mode_url, ssl_material_present};
 
@@ -13,22 +12,15 @@ fn html_escape(value: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Short SSL label for the dashboard site jumper (Active / None / Pending / …).
-fn dash_ssl_label(domain: &str) -> String {
-    let row = ssl_status_for_domain(domain);
-    if row.provider == "none" || row.provider_label.eq_ignore_ascii_case("None") {
+/// Dashboard site jumper SSL hint without parsing every vhost cert on each load.
+fn dash_ssl_label_light(domain: &str, provider_label: &str) -> String {
+    if provider_label.eq_ignore_ascii_case("none") {
         return "None".into();
     }
-    if row.has_cert || ssl_material_present(domain) {
-        return format!("Active ({})", row.provider_label);
+    if ssl_material_present(domain) {
+        return format!("Active ({provider_label})");
     }
-    if !row.last_error.trim().is_empty() {
-        return format!("{} · error", row.provider_label);
-    }
-    if row.needs_issue {
-        return format!("{} · pending", row.provider_label);
-    }
-    format!("{} · no cert", row.provider_label)
+    provider_label.to_string()
 }
 
 struct ToolLink {
@@ -279,7 +271,7 @@ pub fn dashboard_sites_panel() -> String {
     for (i, site) in sites.iter().enumerate() {
         let d = html_escape(&site.domain);
         options.push_str(&format!(r#"<option value="{d}">{d}</option>"#, d = d));
-        let ssl = dash_ssl_label(&site.domain);
+        let ssl = dash_ssl_label_light(&site.domain, site.ssl.provider.label());
         let preview = preview_mode_url(&site.domain)
             .unwrap_or_else(|_| format!("/websites/manage?domain={}", site.domain));
         if i > 0 {

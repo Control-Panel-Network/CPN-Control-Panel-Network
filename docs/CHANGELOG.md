@@ -9,14 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **OpenLiteSpeed WebAdmin link**: `/server/openlitespeed` **Open WebAdmin** now opens `https://<panel>/ols` (session-gated reverse-proxy to loopback `:7080`) instead of sending the browser to `https://127.0.0.1:7080`.
+- **OpenLiteSpeed WebAdmin link**: `/server/openlitespeed` **Open WebAdmin** now opens `https://<panel>/ols` (session-gated reverse-proxy to loopback `:7080`) instead of sending the browser to `https://127.0.0.1:7080`; phpMyAdmin and webmail mounts hardened; OLS HTTPS listener maps avoid stealing site SNI on post-migration hosts.
 
 ### Changed
 
 - **PHP 8.6 preferred on EL9/EL10**: Install default is Remi `php:remi-8.6` (fallback 8.5 -> 8.4 -> 8.3 -> 8.2). EL8 stays on Remi 8.2. CLI/web installers, `MANAGED_BRANCHES`, lsphp maps (`lsphp86`), cron/wp-cli binary candidates, and `upgrade_stack` now cover the 8.6 series. Webmail PHP max stays 8.5 until SnappyMail/Tachyon/Roundcube confirm 8.6. See `to-do/PHP-INSTALL-DEFAULT-86.md`.
 
 ### Fixed
-
 - **Login service gate perf**: stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer 4s stalls on `/login` and `/api/login/services`.
 - **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains; removed hardcoded News Targeted apex fallback.
 - **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.

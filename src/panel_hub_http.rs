@@ -87,7 +87,8 @@ where
     F: FnOnce() -> String + Send + 'static,
 {
     html_blocking_budget_or_fallback(budget, render, || {
-        "<!DOCTYPE html><title>Busy</title><p>The panel is still gathering host status. Reload in a few seconds.</p>".into()
+        "<!DOCTYPE html><title>Busy</title><p>The panel is still gathering host status. Reload in a few seconds.</p>"
+            .into()
     })
     .await
 }

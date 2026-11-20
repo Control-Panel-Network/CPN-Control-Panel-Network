@@ -100,8 +100,8 @@ fn disk_used_mb(username: &str) -> Result<u64, String> {
     Ok(total)
 }
 
-/// Collect usage without full filesystem walks (dashboard and other hot paths).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Controls which usage probes run (dashboard avoids slow disk walks).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UsageCollectOpts {
     pub skip_disk_walk: bool,
 }
