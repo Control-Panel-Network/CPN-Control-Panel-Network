@@ -81,6 +81,10 @@ fn admin_config_path() -> &'static Path {
     Path::new("/usr/local/lsws/admin/conf/admin_config.conf")
 }
 
+fn serial_path() -> &'static Path {
+    Path::new("/usr/local/lsws/conf/serial.no")
+}
+
 fn version_file_candidates() -> [&'static Path; 2] {
     [
         Path::new("/usr/local/lsws/VERSION"),
@@ -310,7 +314,27 @@ pub fn mask_serial(serial: &str) -> String {
 
 /// Apply a LiteSpeed Enterprise serial (writes `serial.no`, runs `lshttpd -r` when possible, restarts).
 pub fn apply_serial(serial: &str) -> Result<String, String> {
-    crate::litespeed_license::apply_serial_and_register(serial)
+    let serial = serial.trim();
+    if serial.is_empty() {
+        return Err("Serial is empty.".into());
+    }
+    if serial.len() > 256 || serial.chars().any(|c| c.is_control()) {
+        return Err("Serial looks invalid.".into());
+    }
+    if !Path::new("/usr/local/lsws/conf").is_dir() {
+        return Err("LiteSpeed conf directory is missing (/usr/local/lsws/conf).".into());
+    }
+    let mut body = serial.to_string();
+    body.push('\n');
+    write_mode_600(serial_path(), body.as_bytes())?;
+    let mut cfg = load_config();
+    cfg.serial = Some(serial.to_string());
+    save_config(&cfg)?;
+    let restart = restart_litespeed();
+    Ok(format!(
+        "License serial applied to serial.no ({masked}). {restart}",
+        masked = mask_serial(serial)
+    ))
 }
 
 pub fn set_selected_tier(tier_id: &str) -> Result<String, String> {
