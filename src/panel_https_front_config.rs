@@ -156,10 +156,10 @@ pub fn ensure_ols_https_listener(
 
     // Always wire panel onto the primary public listeners when present.
     for listener in ["SSL", "Default"] {
-        if updated.contains(&format!("listener {listener}")) {
-            if let Some(next) = insert_map_before_catchall(&updated, listener, &map_line) {
-                updated = next;
-            }
+        if updated.contains(&format!("listener {listener}"))
+            && let Some(next) = insert_map_before_catchall(&updated, listener, &map_line)
+        {
+            updated = next;
         }
     }
 
