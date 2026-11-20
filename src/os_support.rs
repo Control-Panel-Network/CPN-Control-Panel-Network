@@ -73,7 +73,7 @@ impl GuestOs {
     }
 
     pub fn php_module_stream(&self) -> Option<&'static str> {
-        // Prefer Remi 8.5 on EL9+; EL8 stays on Remi 8.2. Install-time selection
+        // Prefer Remi 8.6 on EL9+; EL8 stays on Remi 8.2. Install-time selection
         // and fallback live in `php_defaults` (operator may choose another branch).
         crate::php_defaults::preferred_stream_for_guest(self)
     }
@@ -362,14 +362,14 @@ mod tests {
         assert_eq!(nine.major, 9);
         assert_eq!(nine.support, SupportStatus::Supported);
         assert_eq!(nine.family, PackageFamily::Dnf);
-        assert_eq!(nine.php_module_stream(), Some("php:remi-8.5"));
+        assert_eq!(nine.php_module_stream(), Some("php:remi-8.6"));
 
         let ten = detect_from_os_release(
             "ID=\"almalinux\"\nVERSION_ID=\"10.0\"\nPRETTY_NAME=\"AlmaLinux 10.0\"\n",
         )
         .unwrap();
         assert_eq!(ten.major, 10);
-        assert_eq!(ten.php_module_stream(), Some("php:remi-8.5"));
+        assert_eq!(ten.php_module_stream(), Some("php:remi-8.6"));
         assert_eq!(ten.epel_major_for_caddy().unwrap(), 10);
     }
 

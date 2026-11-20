@@ -1,4 +1,4 @@
-﻿//! Migrate SnappyMail-family user data (settings, identities, filters UI, PGP) into Tachyon.
+//! Migrate SnappyMail-family user data (settings, identities, filters UI, PGP) into Tachyon.
 //!
 //! Mailbox messages live in Dovecot/Maildir and are NOT copied. This only imports
 //! SnappyMail application storage and Contacts address books when discovered on disk

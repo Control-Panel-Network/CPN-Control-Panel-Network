@@ -53,7 +53,7 @@ const en: LocaleMessages = {
   databasePhpmyadmin: "Also install phpMyAdmin (default on)",
   phpVersionTitle: "PHP version",
   phpVersionHint:
-    "Default is PHP 8.5 on AlmaLinux/RHEL 9+. Other supported versions remain selectable. If 8.5 packages are missing, CPN falls back and records the choice.",
+    "Default is PHP 8.6 on AlmaLinux/RHEL 9+. Other supported versions remain selectable. If 8.6 packages are missing, CPN falls back (8.5 first) and records the choice.",
   serverOpenlitespeedDesc:
     "High performance with low resource use. Ideal for WordPress and busy sites thanks to built-in LSCache.",
   serverNginxDesc:

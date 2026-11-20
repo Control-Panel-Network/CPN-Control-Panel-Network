@@ -18,11 +18,13 @@ const ALLOWED_INTERPRETERS: &[&str] = &[
     "php8.3",
     "php8.4",
     "php8.5",
+    "php8.6",
     "/usr/bin/php",
     "/usr/bin/php82",
     "/usr/bin/php83",
     "/usr/bin/php84",
     "/usr/bin/php85",
+    "/usr/bin/php86",
     "/bin/true",
     "/usr/bin/true",
 ];

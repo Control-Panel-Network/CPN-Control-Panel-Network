@@ -38,6 +38,7 @@ fn run_dnf_install(packages: &[&str]) -> Result<(), String> {
 
 fn branch_to_lsphp_prefix(branch: &str) -> Option<&'static str> {
     match branch.trim() {
+        "8.6" => Some("lsphp86"),
         "8.5" => Some("lsphp85"),
         "8.4" => Some("lsphp84"),
         "8.3" => Some("lsphp83"),
@@ -203,6 +204,7 @@ mod tests {
 
     #[test]
     fn maps_branches() {
+        assert_eq!(branch_to_lsphp_prefix("8.6"), Some("lsphp86"));
         assert_eq!(branch_to_lsphp_prefix("8.5"), Some("lsphp85"));
         assert!(branch_to_lsphp_prefix("9.0").is_none());
     }

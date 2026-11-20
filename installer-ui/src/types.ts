@@ -16,7 +16,7 @@ export type MailSystem =
   | "sogo"
   | "thunderbird";
 export type DatabaseEngine = "mariadb" | "none";
-export type PhpVersion = "8.5" | "8.4" | "8.3" | "8.2";
+export type PhpVersion = "8.6" | "8.5" | "8.4" | "8.3" | "8.2";
 
 export type InstallerPhase =
   | "configuring"

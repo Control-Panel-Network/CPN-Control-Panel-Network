@@ -209,11 +209,13 @@ sudo install -m 600 /dev/stdin /var/lib/cpn/secrets/github-token <<<'ghp_...'
 
 ### PHP version at install
 
-- **Default on AlmaLinux/RHEL 9+:** PHP **8.5** (Remi `php:remi-8.5`).
+- **Default on AlmaLinux/RHEL 9+ (including AlmaLinux 10):** PHP **8.6** (Remi `php:remi-8.6`).
 - **Default on EL8:** Remi PHP **8.2**.
-- CLI and web installers let you choose 8.5 / 8.4 / 8.3 / 8.2.
-- If the selected packages are missing, CPN falls back (8.5 Ã¢â€ â€™ 8.4 Ã¢â€ â€™ 8.3 Ã¢â€ â€™ 8.2) and writes `/var/lib/cpn/php-default.json`.
-- See `to-do/PHP-INSTALL-DEFAULT-85.md`.
+- CLI and web installers let you choose 8.6 / 8.5 / 8.4 / 8.3 / 8.2.
+- If the selected packages are missing, CPN falls back (8.6 -> 8.5 -> 8.4 -> 8.3 -> 8.2) and writes `/var/lib/cpn/php-default.json`.
+- LiteSpeed `lsphp86` is managed when present; public LiteSpeed docs still list through `lsphp85`, so installs fall back to Remi modular PHP / `lsphp85` when `lsphp86` is not in the repo yet.
+- Webmail (SnappyMail / Tachyon / Roundcube) compatibility max remains **8.5** until those apps are confirmed on 8.6.
+- See `to-do/PHP-INSTALL-DEFAULT-86.md`.
 
 Post-upgrade verification checks panel `/login` (HTTP `200` or maintenance `503`), web server units, and MariaDB when present. Tip skip-rebuild (binary already on tip) verifies without restarting the panel and retries `/login` for about 40 seconds before failing.
 

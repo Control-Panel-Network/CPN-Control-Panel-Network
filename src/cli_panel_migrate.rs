@@ -34,6 +34,8 @@ pub enum PanelMigrateCommands {
         #[arg(long)]
         yes: bool,
     },
+    /// Print the CyberPanel → CPN → AlmaLinux 10 operator checklist (NewsTargeted path)
+    Checklist,
 }
 
 pub fn run(command: PanelMigrateCommands) -> Result<(), String> {
@@ -42,7 +44,53 @@ pub fn run(command: PanelMigrateCommands) -> Result<(), String> {
         PanelMigrateCommands::Plan { id } => plan(&id),
         PanelMigrateCommands::Apply { id, yes, port_ok } => apply(&id, yes, port_ok),
         PanelMigrateCommands::Wipe { id, yes } => wipe(&id, yes),
+        PanelMigrateCommands::Checklist => checklist(),
     }
+}
+
+fn checklist() -> Result<(), String> {
+    println!("CyberPanel → CPN → AlmaLinux 10 checklist");
+    println!("(CyberPanel detect id: classic; LiteSpeed conf: /usr/local/lsws/conf)");
+    for (idx, line) in crate::litespeed_license::nt_migration_checklist()
+        .iter()
+        .enumerate()
+    {
+        println!("{}. {}", idx + 1, line);
+    }
+    println!();
+    println!("LiteSpeed license status (this host):");
+    let status = crate::litespeed_license::license_status();
+    println!("  edition: {}", status.edition);
+    println!(
+        "  serial.no: {} ({})",
+        if status.serial_present {
+            "present"
+        } else {
+            "missing"
+        },
+        status.serial_masked
+    );
+    println!(
+        "  license.key: {}",
+        if status.license_key_present {
+            "present"
+        } else {
+            "missing"
+        }
+    );
+    println!(
+        "  trial.key: {}",
+        if status.trial_key_present {
+            "present"
+        } else {
+            "missing"
+        }
+    );
+    println!("  probe: {}", status.probe_summary);
+    for note in &status.notes {
+        println!("  note: {note}");
+    }
+    Ok(())
 }
 
 fn detect() -> Result<(), String> {

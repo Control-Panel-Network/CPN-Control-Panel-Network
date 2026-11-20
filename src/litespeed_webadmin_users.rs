@@ -3,10 +3,12 @@
 //! Paths: `/usr/local/lsws/admin/conf/htpasswd` and `admin_config.conf` (`user` / `guest` blocks).
 //! Passwords are never returned after set; only usernames are listed.
 
-use crate::litespeed_stack::restart_litespeed;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+/// htpasswd is read on WebAdmin login; a full LiteSpeed restart is not required and would drop the panel HTTPS proxy.
+const WEBADMIN_HTPASSWD_APPLY_NOTE: &str = "Use the new password at the next WebAdmin login. The panel was kept online (no LiteSpeed restart).";
 
 fn admin_conf_dir() -> PathBuf {
     PathBuf::from("/usr/local/lsws/admin/conf")
@@ -254,9 +256,8 @@ pub fn set_webadmin_password(username: &str, password: &str) -> Result<String, S
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
-    let restart = restart_litespeed();
     Ok(format!(
-        "WebAdmin password updated for user `{user}` (password not shown). {restart}"
+        "WebAdmin password updated for user `{user}` (password not shown). {WEBADMIN_HTPASSWD_APPLY_NOTE}"
     ))
 }
 
@@ -320,8 +321,9 @@ pub fn remove_webadmin_user(username: &str) -> Result<String, String> {
             .join("\n");
         let _ = fs::write(admin_config_path(), format!("{filtered}\n"));
     }
-    let restart = restart_litespeed();
-    Ok(format!("Removed WebAdmin user `{user}`. {restart}"))
+    Ok(format!(
+        "Removed WebAdmin user `{user}`. {WEBADMIN_HTPASSWD_APPLY_NOTE}"
+    ))
 }
 
 pub fn webadmin_users_present() -> bool {
@@ -368,7 +370,6 @@ pub fn align_webadmin_with_credentials(username: &str, password: &str) -> Result
     // Package default is often a random `admin` password operators never see.
     if user != "admin" {
         try_remove_htpasswd_user("admin");
-        let _ = restart_litespeed();
     }
     let fallback_note = if fell_back {
         " CPN username is not valid for OLS htpasswd; WebAdmin user is `admin` with the same password."

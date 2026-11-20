@@ -10,6 +10,8 @@ const PHP_BRANCH_EOL: &[(&str, &str)] = &[
     ("8.3", "2027-12-31"),
     ("8.4", "2028-12-31"),
     ("8.5", "2029-12-31"),
+    // 3-year security window matching 8.2-8.5 pattern (active + security).
+    ("8.6", "2030-12-31"),
 ];
 
 /// Minimum CPN-supported PHP major.minor while this release is published.
@@ -22,6 +24,8 @@ pub struct PhpCompatRange {
 }
 
 pub fn webmail_php_compat(mail: MailSystem) -> Option<PhpCompatRange> {
+    // Keep webmail max at 8.5 until SnappyMail / Tachyon / Roundcube are confirmed
+    // to tolerate PHP 8.6; host sites may still prefer 8.6 via Remi / lsphp86.
     match mail {
         MailSystem::Snappymail => Some(PhpCompatRange {
             min: "8.1",
@@ -95,6 +99,10 @@ pub fn assert_php_branch_not_eol(branch: &str, today_ymd: &str) -> Result<(), St
 /// Map GuestOs module stream / Remi tag to a PHP branch label.
 pub fn branch_from_module_stream(stream: &str) -> Option<&'static str> {
     let value = stream.trim();
+    // Longer minors first: "8.6" before "8.5" so substring order does not mis-map.
+    if value.contains("8.6") {
+        return Some("8.6");
+    }
     if value.contains("8.5") {
         return Some("8.5");
     }
@@ -162,5 +170,12 @@ mod tests {
     fn remi_85_maps() {
         assert_eq!(branch_from_module_stream("php:remi-8.5"), Some("8.5"));
         assert!(assert_selected_runtime_ok("php:remi-8.5", "2026-09-13").is_ok());
+    }
+
+    #[test]
+    fn remi_86_maps_before_85() {
+        assert_eq!(branch_from_module_stream("php:remi-8.6"), Some("8.6"));
+        assert!(assert_selected_runtime_ok("php:remi-8.6", "2026-11-19").is_ok());
+        assert!(assert_php_branch_not_eol("8.6", "2026-11-19").is_ok());
     }
 }

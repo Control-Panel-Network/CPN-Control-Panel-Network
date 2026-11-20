@@ -1,8 +1,9 @@
 //! Install-time PHP branch selection and host default persistence.
 //!
-//! Fresh CPN installs prefer PHP **8.5** on AlmaLinux/RHEL-family 9+ (Remi).
-//! Operators may choose 8.4 / 8.3 / 8.2. When the preferred packages are missing,
-//! CPN falls back to the next supported branch and records a clear message.
+//! Fresh CPN installs prefer PHP **8.6** on AlmaLinux/RHEL-family 9+ (Remi).
+//! Operators may choose 8.5 / 8.4 / 8.3 / 8.2. When the preferred packages are missing,
+//! CPN falls back to the next supported branch (including 8.5) and records a clear message.
+//! EL8 stays on Remi 8.2. LiteSpeed `lsphp86` is wired when present; otherwise Remi modular PHP is used.
 //!
 //! Persisted at `/var/lib/cpn/php-default.json` (mode 600) for new sites.
 
@@ -18,10 +19,10 @@ use crate::php_lifecycle::{
 };
 
 /// Preferred default when the operator does not pick another version.
-pub const CPN_PREFERRED_PHP_BRANCH: &str = "8.5";
+pub const CPN_PREFERRED_PHP_BRANCH: &str = "8.6";
 
 /// Fallback order when packages for the preferred (or selected) branch are missing.
-pub const CPN_PHP_FALLBACK_ORDER: &[&str] = &["8.5", "8.4", "8.3", "8.2"];
+pub const CPN_PHP_FALLBACK_ORDER: &[&str] = &["8.6", "8.5", "8.4", "8.3", "8.2"];
 
 const CONFIG_FILE: &str = "php-default.json";
 
@@ -46,7 +47,7 @@ fn config_path() -> PathBuf {
 /// Preferred branch for this guest when the operator leaves the choice empty / auto.
 pub fn preferred_branch_for_guest(guest: &GuestOs) -> &'static str {
     if guest.uses_dnf() && guest.major == 8 {
-        // AlmaLinux/RHEL 8: keep Remi 8.2 as the install default (8.5 is EL9+).
+        // AlmaLinux/RHEL 8: keep Remi 8.2 as the install default (8.6 is EL9+).
         return "8.2";
     }
     CPN_PREFERRED_PHP_BRANCH
@@ -230,7 +231,7 @@ pub fn host_php_fpm_branch() -> Option<String> {
 
 /// Enable the best available PHP module stream for this guest and persist the choice.
 ///
-/// `requested`: operator choice (`8.5`, `8.4`, …) or `None`/`auto` for preferred 8.5.
+/// `requested`: operator choice (`8.6`, `8.5`, …) or `None`/`auto` for preferred 8.6.
 /// When the preferred packages are missing, falls back and sets `message` accordingly.
 pub fn prepare_and_persist_php(
     guest: &GuestOs,
@@ -400,7 +401,7 @@ pub fn preferred_stream_for_guest(guest: &GuestOs) -> Option<&'static str> {
     }
     match guest.major {
         8 => Some("remi-8.2"), // EL8: stay on Remi 8.2 unless operator overrides at install
-        9 | 10 => Some("php:remi-8.5"),
+        9 | 10 => Some("php:remi-8.6"),
         _ => None,
     }
 }
@@ -418,20 +419,30 @@ mod tests {
     use crate::os_support::detect_from_os_release;
 
     #[test]
-    fn normalize_auto_is_85_on_el9() {
+    fn normalize_auto_is_86_on_el9() {
         let nine = detect_from_os_release(
             "ID=almalinux\nVERSION_ID=\"9.8\"\nPRETTY_NAME=\"AlmaLinux 9.8\"\n",
         )
         .unwrap();
-        assert_eq!(normalize_php_request(None, Some(&nine)), "8.5");
-        assert_eq!(normalize_php_request(Some("auto"), Some(&nine)), "8.5");
+        assert_eq!(normalize_php_request(None, Some(&nine)), "8.6");
+        assert_eq!(normalize_php_request(Some("auto"), Some(&nine)), "8.6");
         assert_eq!(normalize_php_request(Some("8.4"), Some(&nine)), "8.4");
     }
 
     #[test]
     fn candidates_prefer_requested_then_fallback() {
-        assert_eq!(candidate_branches("8.5"), vec!["8.5", "8.4", "8.3", "8.2"]);
-        assert_eq!(candidate_branches("8.3"), vec!["8.3", "8.5", "8.4", "8.2"]);
+        assert_eq!(
+            candidate_branches("8.6"),
+            vec!["8.6", "8.5", "8.4", "8.3", "8.2"]
+        );
+        assert_eq!(
+            candidate_branches("8.5"),
+            vec!["8.5", "8.6", "8.4", "8.3", "8.2"]
+        );
+        assert_eq!(
+            candidate_branches("8.3"),
+            vec!["8.3", "8.6", "8.5", "8.4", "8.2"]
+        );
     }
 
     #[test]
@@ -452,16 +463,29 @@ mod tests {
     }
 
     #[test]
-    fn el9_preferred_stream_is_remi_85() {
+    fn el9_preferred_stream_is_remi_86() {
         let nine = detect_from_os_release(
             "ID=almalinux\nVERSION_ID=\"9.8\"\nPRETTY_NAME=\"AlmaLinux 9.8\"\n",
         )
         .unwrap();
-        assert_eq!(preferred_stream_for_guest(&nine), Some("php:remi-8.5"));
+        assert_eq!(preferred_stream_for_guest(&nine), Some("php:remi-8.6"));
+        assert_eq!(
+            stream_for_branch(&nine, "8.6").as_deref(),
+            Some("php:remi-8.6")
+        );
         assert_eq!(
             stream_for_branch(&nine, "8.5").as_deref(),
             Some("php:remi-8.5")
         );
+    }
+
+    #[test]
+    fn el10_preferred_stream_is_remi_86() {
+        let ten = detect_from_os_release(
+            "ID=\"almalinux\"\nVERSION_ID=\"10.0\"\nPRETTY_NAME=\"AlmaLinux 10.0\"\n",
+        )
+        .unwrap();
+        assert_eq!(preferred_stream_for_guest(&ten), Some("php:remi-8.6"));
     }
 
     #[test]

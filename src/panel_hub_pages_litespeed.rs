@@ -1,10 +1,14 @@
 //! Server pages: Open OLS / Open OLSE WebAdmin and LiteSpeed plan/version management.
 
+use crate::litespeed_license::{
+    apply_license_key_text, apply_trial_key, license_status, refresh_license,
+};
 use crate::litespeed_stack::{
-    LiteSpeedKind, OWNED_PLANS, STORE_OWNED_LSWS, STORE_SUPPORT, apply_serial, detect_kind,
-    detect_version_label, downgrade_openlitespeed_to, litespeed_enterprise_installed, load_config,
-    mask_serial, openlitespeed_installed, service_unit_hint, set_selected_tier, set_webadmin_url,
-    upgrade_openlitespeed_packages, webadmin_reachable, webadmin_url,
+    LiteSpeedKind, OWNED_PLANS, STORE_OWNED_LSWS, STORE_SUPPORT, WEBADMIN_PANEL_MOUNT,
+    apply_serial, detect_kind, detect_version_label, downgrade_openlitespeed_to,
+    litespeed_enterprise_installed, load_config, mask_serial, openlitespeed_installed,
+    service_unit_hint, set_selected_tier, set_webadmin_url, upgrade_openlitespeed_packages,
+    webadmin_backend_url, webadmin_reachable, webadmin_url,
 };
 use crate::panel_hubs::{feature_shell, not_configured_body};
 
@@ -59,6 +63,7 @@ fn open_page(
         );
     }
     let url = webadmin_url();
+    let backend = webadmin_backend_url();
     let reachable = webadmin_reachable();
     let version = detect_version_label();
     let unit = service_unit_hint();
@@ -73,7 +78,8 @@ fn open_page(
   <li><span>Edition</span><strong>{title}</strong></li>
   <li><span>Version</span><strong>{version}</strong></li>
   <li><span>Service</span><strong>{unit}</strong></li>
-  <li><span>WebAdmin</span><strong><code>{url}</code></strong></li>
+  <li><span>WebAdmin (panel)</span><strong><code>{url}</code></strong></li>
+  <li><span>WebAdmin (loopback)</span><strong><code>{backend}</code></strong></li>
   <li><span>Reachability</span><strong>{reach}</strong></li>
 </ul>
 <p style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;">
@@ -81,13 +87,15 @@ fn open_page(
   <a class="btn-secondary" href="/server/litespeed">LiteSpeed plans &amp; versions</a>
   <a class="btn-secondary" href="/server/services">Services Status</a>
 </p>
-<p class="muted">WebAdmin uses HTTPS (often a self-signed certificate in labs). Accept the browser warning when opening <code>{url}</code>. Default lab URL is <code>https://127.0.0.1:7080</code>; override under LiteSpeed plans &amp; versions if needed.</p>"#,
+<p class="muted">Open WebAdmin through the panel mount <code>{mount}</code> (reverse-proxy to loopback <code>{backend}</code>). Requires a signed-in panel session; WebAdmin itself still prompts for htpasswd credentials. Override the browser URL under LiteSpeed plans &amp; versions only when you intentionally expose WebAdmin on another hostname.</p>"#,
         notice = flash("ok", notice),
         error = flash("error", error),
         title = html_escape(title),
         version = html_escape(&version),
         unit = html_escape(&unit),
         url = html_escape(&url),
+        backend = html_escape(&backend),
+        mount = html_escape(WEBADMIN_PANEL_MOUNT),
         reach = html_escape(reach_label),
     );
     feature_shell(
@@ -225,6 +233,59 @@ pub fn litespeed_manage_page(
         .filter(|s| !s.trim().is_empty())
         .map(mask_serial)
         .unwrap_or_else(|| "-".into());
+    let lic = license_status();
+    let lic_notes = if lic.notes.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<ul class=\"muted\">{}</ul>",
+            lic.notes
+                .iter()
+                .map(|n| format!("<li>{}</li>", html_escape(n)))
+                .collect::<String>()
+        )
+    };
+    let license_card = format!(
+        r#"<article class="section-card" style="margin-top:18px;">
+  <h2>License status</h2>
+  <ul class="kv-list">
+    <li><span>Edition</span><strong>{edition}</strong></li>
+    <li><span>serial.no</span><strong>{serial_file}</strong></li>
+    <li><span>license.key</span><strong>{license_file}</strong></li>
+    <li><span>trial.key</span><strong>{trial_file}</strong></li>
+    <li><span>Probe</span><strong>{probe}</strong></li>
+  </ul>
+  <p class="muted"><code>lshttpd -V</code> summary: {summary}</p>
+  {notes}
+</article>"#,
+        edition = html_escape(&lic.edition),
+        serial_file = html_escape(&format!(
+            "{} ({})",
+            if lic.serial_present {
+                "present"
+            } else {
+                "missing"
+            },
+            lic.serial_masked
+        )),
+        license_file = if lic.license_key_present {
+            "present"
+        } else {
+            "missing"
+        },
+        trial_file = if lic.trial_key_present {
+            "present"
+        } else {
+            "missing"
+        },
+        probe = if lic.probe_ok {
+            "ok"
+        } else {
+            "warned / refused"
+        },
+        summary = html_escape(&lic.probe_summary),
+        notes = lic_notes,
+    );
     let open_links = match kind {
         Some(LiteSpeedKind::OpenLiteSpeed) => {
             r#"<a class="btn-primary" href="/server/openlitespeed">Open OLS</a>"#
@@ -251,19 +312,38 @@ pub fn litespeed_manage_page(
     <button type="submit" class="btn-primary" style="margin-top:10px;">Save tier preference</button>
   </form>
   <form method="post" action="/server/litespeed/serial" class="stack-form" style="margin-top:18px;"
-    onsubmit="return confirm('Apply this serial to /usr/local/lsws/conf/serial.no and restart LiteSpeed?');">
+    onsubmit="return confirm('Apply this serial to /usr/local/lsws/conf/serial.no, run lshttpd -r when possible, and restart LiteSpeed?');">
     <label for="serial">License serial
       <input id="serial" name="serial" type="password" autocomplete="off" spellcheck="false"
-        placeholder="Paste serial from LiteSpeed store"
+        placeholder="Paste serial from LiteSpeed store (XXXX-XXXX-XXXX-XXXX)"
         style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
     </label>
-    <p class="muted">Stored serial (masked): <strong>{serial_mask}</strong></p>
+    <p class="muted">Stored serial (masked): <strong>{serial_mask}</strong>. Writes <code>/usr/local/lsws/conf/serial.no</code>, registers with <code>lshttpd -r</code> (Enterprise), then restarts safely.</p>
     <button type="submit" class="btn-primary">Apply serial &amp; restart</button>
+  </form>
+  <form method="post" action="/server/litespeed/license-key" class="stack-form" style="margin-top:18px;"
+    onsubmit="return confirm('Write license.key under /usr/local/lsws/conf and restart LiteSpeed?');">
+    <h3 style="margin:0 0 8px;font-size:16px;">license.key file</h3>
+    <p class="muted">Paste the vendor <code>license.key</code> contents (or a migrated copy from CyberPanel). Stored mode 600; previous file is backed up as <code>*.cpn-bak-*</code>.</p>
+    <label for="license_key">license.key contents
+      <textarea id="license_key" name="license_key" rows="6" spellcheck="false" autocomplete="off"
+        placeholder="Paste license.key here"
+        style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;font-family:ui-monospace,monospace;"></textarea>
+    </label>
+    <button type="submit" class="btn-primary" style="margin-top:10px;">Apply license.key &amp; restart</button>
+  </form>
+  <form method="post" action="/server/litespeed/license-refresh" class="stack-form" style="margin-top:14px;display:inline-block;margin-right:10px;"
+    onsubmit="return confirm('Run lshttpd -r against the current serial and restart LiteSpeed?');">
+    <button type="submit" class="btn-secondary">Refresh license (lshttpd -r)</button>
+  </form>
+  <form method="post" action="/server/litespeed/trial" class="stack-form" style="display:inline-block;margin-top:14px;"
+    onsubmit="return confirm('Download trial.key from LiteSpeed and restart? Enterprise hosts only.');">
+    <button type="submit" class="btn-secondary">Request trial.key</button>
   </form>
   <form method="post" action="/server/litespeed/webadmin-url" class="stack-form" style="margin-top:18px;">
     <label for="webadmin_url">WebAdmin URL override
       <input id="webadmin_url" name="webadmin_url" type="url" value="{url}"
-        placeholder="https://127.0.0.1:7080"
+        placeholder="https://panel.example.com/ols"
         style="display:block;width:100%;margin-top:6px;box-sizing:border-box;padding:8px 10px;" />
     </label>
     <button type="submit" class="btn-secondary" style="margin-top:10px;">Save WebAdmin URL</button>
@@ -307,6 +387,7 @@ pub fn litespeed_manage_page(
 <p style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;">{open_links}
   <a class="btn-secondary" href="{url}" target="_blank" rel="noopener noreferrer">Open WebAdmin</a>
 </p>
+{license_card}
 {manage}"#,
         notice = flash("ok", notice),
         error = flash("error", error),
@@ -324,6 +405,7 @@ pub fn litespeed_manage_page(
                 .unwrap_or(selected.as_str())
         }),
         open_links = open_links,
+        license_card = license_card,
         manage = manage,
     );
 
@@ -334,7 +416,7 @@ pub fn litespeed_manage_page(
             ("LiteSpeed", None),
         ],
         "LiteSpeed plans & versions",
-        "Open WebAdmin, choose owned LSWS tiers, apply license serials, and upgrade or downgrade OpenLiteSpeed packages.",
+        "Open WebAdmin, choose owned LSWS tiers, apply serial.no / license.key, refresh licenses, and upgrade or downgrade OpenLiteSpeed packages.",
         &body,
         None,
         None,
@@ -347,6 +429,18 @@ pub fn run_set_tier(tier: &str) -> Result<String, String> {
 
 pub fn run_apply_serial(serial: &str) -> Result<String, String> {
     apply_serial(serial)
+}
+
+pub fn run_apply_license_key(text: &str) -> Result<String, String> {
+    apply_license_key_text(text)
+}
+
+pub fn run_refresh_license() -> Result<String, String> {
+    refresh_license()
+}
+
+pub fn run_apply_trial() -> Result<String, String> {
+    apply_trial_key()
 }
 
 pub fn run_set_webadmin_url(url: &str) -> Result<String, String> {

@@ -411,10 +411,10 @@ export function ServerSelectionScreen({
               className="text-[14px] font-medium text-[#1a1c1d]"
             >
               {locale === "es"
-                ? "Versión de PHP (predeterminada 8.5)"
+                ? "Versión de PHP (predeterminada 8.6)"
                 : locale === "nb"
-                  ? "PHP-versjon (standard 8.5)"
-                  : "PHP version (default 8.5)"}
+                  ? "PHP-versjon (standard 8.6)"
+                  : "PHP version (default 8.6)"}
             </label>
             <select
               id="cpn-php-version"
@@ -426,17 +426,18 @@ export function ServerSelectionScreen({
                 )
               }
             >
-              <option value="8.5">PHP 8.5 (recommended)</option>
+              <option value="8.6">PHP 8.6 (recommended)</option>
+              <option value="8.5">PHP 8.5</option>
               <option value="8.4">PHP 8.4</option>
               <option value="8.3">PHP 8.3</option>
               <option value="8.2">PHP 8.2</option>
             </select>
             <p className="text-[13px] text-[#5f5e60] m-0">
               {locale === "es"
-                ? "Si faltan paquetes de 8.5, CPN usa la siguiente versión disponible y lo registra."
+                ? "Si faltan paquetes de 8.6, CPN usa la siguiente versión disponible (8.5 primero) y lo registra."
                 : locale === "nb"
-                  ? "Hvis 8.5-pakker mangler, bruker CPN neste tilgjengelige versjon og logger det."
-                  : "If 8.5 packages are missing, CPN enables the next available version and logs it."}
+                  ? "Hvis 8.6-pakker mangler, bruker CPN neste tilgjengelige versjon (8.5 forst) og logger det."
+                  : "If 8.6 packages are missing, CPN enables the next available version (8.5 first) and logs it."}
             </p>
           </div>
           <div

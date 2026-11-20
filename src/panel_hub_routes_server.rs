@@ -13,8 +13,9 @@ use crate::panel_hub_pages_docker_list::DockerListQuery;
 use crate::panel_hub_pages_docker_stacks::docker_stacks_page;
 use crate::panel_hub_pages_docker_view::docker_container_view_page;
 use crate::panel_hub_pages_litespeed::{
-    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_serial, run_downgrade,
-    run_set_tier, run_set_webadmin_url, run_upgrade,
+    litespeed_manage_page, open_ols_page, open_olse_page, run_apply_license_key, run_apply_serial,
+    run_apply_trial, run_downgrade, run_refresh_license, run_set_tier, run_set_webadmin_url,
+    run_upgrade,
 };
 use crate::panel_hub_pages_server::{
     package_manager_page, php_tuning_page, processes_page, run_service_control, server_hub_main,
@@ -85,6 +86,24 @@ pub async fn server_openlitespeed_page(
             query.get("error").map(String::as_str),
         ),
     ))
+}
+
+#[get("/server/openlitespeed/password")]
+pub async fn server_openlitespeed_password_get(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    let _ = user;
+    redirect_notice(
+        "/server/openlitespeed",
+        None,
+        Some(
+            "Password changes use the form on Open OLS (POST). This URL is not a standalone page.",
+        ),
+    )
 }
 
 #[post("/server/openlitespeed/password")]
@@ -299,6 +318,50 @@ pub async fn server_litespeed_serial(
     }
     let serial = form.get("serial").map(String::as_str).unwrap_or("");
     match run_apply_serial(serial) {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/license-key")]
+pub async fn server_litespeed_license_key(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    form: web::Form<std::collections::HashMap<String, String>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    let key = form.get("license_key").map(String::as_str).unwrap_or("");
+    match run_apply_license_key(key) {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/license-refresh")]
+pub async fn server_litespeed_license_refresh(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    match run_refresh_license() {
+        Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
+        Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
+    }
+}
+
+#[post("/server/litespeed/trial")]
+pub async fn server_litespeed_trial(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    if let Some(resp) = litespeed_admin_redirect(&state, &http) {
+        return resp;
+    }
+    match run_apply_trial() {
         Ok(msg) => redirect_notice("/server/litespeed/plans", Some(&msg), None),
         Err(err) => redirect_notice("/server/litespeed/plans", None, Some(&err)),
     }

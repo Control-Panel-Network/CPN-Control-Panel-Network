@@ -169,6 +169,8 @@ echo "${_C_CYAN}  \\____|_|   |_|_\\_|${_C_RESET}"
 echo "${_C_DIM}  Control Panel Network / News Targeted${_C_RESET}"
 echo "============================================================"
 echo "  This server has installed CPN"
+echo "  Forum         : https://discord.gg/nx9Kzrk"
+echo "  Support       : https://discord.gg/nx9Kzrk"
 echo "  Panel version : ${CPN_VERSION}"
 echo "  Panel service : ${_cpn_svc}"
 _cpn_print_live_urls

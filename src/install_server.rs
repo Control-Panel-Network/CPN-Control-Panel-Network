@@ -412,7 +412,7 @@ pub async fn install(state: std::sync::Arc<AppState>, server: ServerEngine) {
 
 /// Web server install plus optional MariaDB + phpMyAdmin defaults.
 ///
-/// `php_version`: optional major.minor (`8.5`, `8.4`, …) or `auto`/None for preferred 8.5 on EL9+.
+/// `php_version`: optional major.minor (`8.6`, `8.5`, …) or `auto`/None for preferred 8.6 on EL9+.
 pub async fn install_with_database(
     state: std::sync::Arc<AppState>,
     server: ServerEngine,
@@ -718,7 +718,7 @@ pub async fn install_with_database(
             .progress(
                 "installing",
                 96,
-                "Preparing PHP runtime (default 8.5 on EL9+)",
+                "Preparing PHP runtime (default 8.6 on EL9+)",
             )
             .await;
         let php_requested = php_version.clone();
