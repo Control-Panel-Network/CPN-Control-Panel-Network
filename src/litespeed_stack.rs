@@ -4,10 +4,11 @@ use crate::paths::join_data;
 use crate::service_detect::{port_open, systemd_unit_active};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(unix)]
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
@@ -16,6 +17,8 @@ pub const STORE_OWNED_LSWS: &str =
 pub const STORE_SUPPORT: &str =
     "https://store.litespeedtech.com/store/index.php?rp=/store/supportservice";
 pub const DEFAULT_WEBADMIN_URL: &str = "https://127.0.0.1:7080";
+/// Browser-facing mount on the panel origin (reverse-proxy to loopback WebAdmin).
+pub const WEBADMIN_PANEL_MOUNT: &str = "/ols";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiteSpeedKind {
@@ -74,12 +77,12 @@ fn config_path() -> PathBuf {
     join_data("litespeed.json")
 }
 
-fn serial_path() -> &'static Path {
-    Path::new("/usr/local/lsws/conf/serial.no")
-}
-
 fn admin_config_path() -> &'static Path {
     Path::new("/usr/local/lsws/admin/conf/admin_config.conf")
+}
+
+fn serial_path() -> &'static Path {
+    Path::new("/usr/local/lsws/conf/serial.no")
 }
 
 fn version_file_candidates() -> [&'static Path; 2] {
@@ -89,7 +92,7 @@ fn version_file_candidates() -> [&'static Path; 2] {
     ]
 }
 
-fn write_mode_600(path: &Path, contents: &[u8]) -> Result<(), String> {
+pub(crate) fn write_mode_600(path: &Path, contents: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
     }
@@ -246,15 +249,8 @@ fn parse_admin_address(contents: &str) -> Option<(String, u16)> {
     None
 }
 
-/// Prefer panel override, then admin_config.conf, then lab default https://127.0.0.1:7080.
-pub fn webadmin_url() -> String {
-    let cfg = load_config();
-    if let Some(url) = cfg.webadmin_url.as_ref() {
-        let trimmed = url.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
+/// Loopback (or admin_config) HTTPS base for the WebAdmin listener (server-side probes and proxy).
+pub fn webadmin_backend_url() -> String {
     if let Ok(raw) = fs::read_to_string(admin_config_path())
         && let Some((host, port)) = parse_admin_address(&raw)
     {
@@ -263,8 +259,20 @@ pub fn webadmin_url() -> String {
     DEFAULT_WEBADMIN_URL.to_string()
 }
 
+/// URL operators should open in a browser: panel `/ols` proxy by default, optional override.
+pub fn webadmin_url() -> String {
+    let cfg = load_config();
+    if let Some(url) = cfg.webadmin_url.as_ref() {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    crate::panel_ols_webadmin_proxy::webadmin_browser_url()
+}
+
 pub fn webadmin_reachable() -> bool {
-    let url = webadmin_url();
+    let url = webadmin_backend_url();
     if let Some(rest) = url
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))
@@ -304,6 +312,7 @@ pub fn mask_serial(serial: &str) -> String {
     format!("****{}", &s[s.len().saturating_sub(4)..])
 }
 
+/// Apply a LiteSpeed Enterprise serial (writes `serial.no`, runs `lshttpd -r` when possible, restarts).
 pub fn apply_serial(serial: &str) -> Result<String, String> {
     let serial = serial.trim();
     if serial.is_empty() {
@@ -370,31 +379,46 @@ pub fn set_webadmin_url(url: &str) -> Result<String, String> {
 }
 
 pub(crate) fn restart_litespeed() -> String {
+    if let Some(msg) = try_lswsctrl_reload("reload") {
+        return msg;
+    }
     for unit in ["openlitespeed", "lsws", "lshttpd"] {
         if systemd_unit_active(unit)
             || Path::new(&format!("/usr/lib/systemd/system/{unit}.service")).exists()
         {
             let status = Command::new("systemctl")
-                .args(["restart", unit])
+                .args(["reload-or-restart", unit])
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
             if status {
-                return format!("Restarted {unit}.");
+                return format!("Reloaded {unit}.");
             }
         }
     }
-    if Path::new("/usr/local/lsws/bin/lswsctrl").is_file() {
-        let status = Command::new("/usr/local/lsws/bin/lswsctrl")
-            .arg("restart")
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if status {
-            return "Restarted via lswsctrl.".into();
-        }
+    if let Some(msg) = try_lswsctrl_reload("restart") {
+        return msg;
     }
-    "Could not restart LiteSpeed automatically; restart the service from Server > Services.".into()
+    "Could not reload LiteSpeed automatically; restart the service from Server > Services.".into()
+}
+
+fn try_lswsctrl_reload(subcmd: &str) -> Option<String> {
+    let ctrl = Path::new("/usr/local/lsws/bin/lswsctrl");
+    if !ctrl.is_file() {
+        return None;
+    }
+    let ok = Command::new(ctrl)
+        .arg(subcmd)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok {
+        Some(format!(
+            "LiteSpeed {subcmd} via lswsctrl (graceful when supported)."
+        ))
+    } else {
+        None
+    }
 }
 
 pub use crate::litespeed_packages::{

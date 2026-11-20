@@ -282,10 +282,28 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
         let host_path = domains.join(name);
         let _ = std::fs::write(&host_path, format!("{pretty}\n"));
     }
-    // Soften SameSite for panel reverse-proxy labs (host:port).
+    // Soften SameSite for panel reverse-proxy labs (host:port) and scope cookies
+    // to the panel mount so CyberPanel Path=/ smtoken leftovers cannot collide.
     let ini = Path::new(data_dir).join("_data_/_default_/configs/application.ini");
     if let Ok(ini_raw) = std::fs::read_to_string(&ini) {
-        let updated = ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
+        let mut updated =
+            ini_raw.replace("cookie_samesite = \"Strict\"", "cookie_samesite = \"Lax\"");
+        let mount = crate::panel_webmail::load_webmail_config()
+            .public_path
+            .trim_end_matches('/')
+            .to_string();
+        if !mount.is_empty() && mount != "/" {
+            updated = crate::install_snappymail_lineage::replace_ini_quoted(
+                &updated,
+                "cookie_default_path",
+                &mount,
+            );
+            updated = crate::install_snappymail_lineage::replace_ini_bool(
+                &updated,
+                "cookie_default_secure",
+                false,
+            );
+        }
         if updated != ini_raw {
             let _ = std::fs::write(&ini, updated);
         }

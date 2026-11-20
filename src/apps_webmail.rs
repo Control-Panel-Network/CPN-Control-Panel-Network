@@ -264,10 +264,32 @@ fn quiet_app_state(engine: ServerEngine) -> Arc<AppState> {
     })
 }
 
+/// Drive an async webmail install/configure future from sync Host-package / CLI paths.
+///
+/// Panel handlers run on Actix/Tokio workers. Nesting `Runtime::block_on` there panics
+/// ("Cannot start a runtime from within a runtime") and aborts `cpn-installer`, which
+/// browsers surface as ERR_EMPTY_RESPONSE on POST `/apps/install`. When a Tokio handle
+/// already exists, run the future on a scoped OS thread with its own runtime so borrows
+/// (for example `&Arc<AppState>`) stay valid without forcing `'static`.
 fn block_on_runtime<F, T>(fut: F) -> Result<T, String>
 where
-    F: std::future::Future<Output = Result<T, String>>,
+    F: std::future::Future<Output = Result<T, String>> + Send,
+    T: Send,
 {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return std::thread::scope(|scope| {
+            scope
+                .spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .map_err(|e| format!("Could not start install runtime: {e}"))?;
+                    rt.block_on(fut)
+                })
+                .join()
+                .unwrap_or_else(|_| Err("Webmail install thread panicked".into()))
+        });
+    }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -307,15 +329,24 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
             let previous_active = crate::panel_webmail::detect_webmail_client()
                 .filter(|prev| *prev != mail && client_files_present(*prev));
             block_on_runtime(install_webmail(&state, mail, engine))?;
+            let migrate_note = if mail == MailSystem::Tachyon {
+                match crate::install_snappymail_migrate::migrate_snappymail_into_tachyon() {
+                    Ok(msg) => format!(" {msg}"),
+                    Err(err) => format!(" SnappyMail data migrate skipped: {err}"),
+                }
+            } else {
+                String::new()
+            };
             if let Some(prev) = previous_active
                 && let Some(prev_app) = app_id_for_mail(prev)
             {
                 let restored = activate_webmail_app(prev_app)?;
                 return Ok(format!(
-                    "Installed {} under /opt/cpn-webmail. Active panel webmail stays {} (use Set as active to switch). {}",
+                    "Installed {} under /opt/cpn-webmail. Active panel webmail stays {} (use Set as active to switch). {}{}",
                     id.label(),
                     prev_app.label(),
-                    restored
+                    restored,
+                    migrate_note
                 ));
             }
             // Install already configured runtime + current symlink; persist preference + public path.
@@ -324,9 +355,10 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
             cfg.public_path = public_path_for(mail).to_string();
             let _ = save_webmail_config(&cfg);
             Ok(format!(
-                "Installed {} under /opt/cpn-webmail and set it as the active panel webmail ({}).",
+                "Installed {} under /opt/cpn-webmail and set it as the active panel webmail ({}).{}",
                 id.label(),
-                cfg.public_path
+                cfg.public_path,
+                migrate_note
             ))
         }
         _ => match meta_for(id).install_status {
@@ -463,5 +495,12 @@ mod tests {
             MailSystem::Roundcube
         );
         assert!(mail_for_app(AppId::Nextcloud).is_err());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn block_on_runtime_from_inside_tokio_does_not_panic() {
+        // Mirrors panel POST /apps/install: Actix already owns a runtime.
+        let out = block_on_runtime(async { Ok::<_, String>(42u32) });
+        assert_eq!(out.unwrap(), 42);
     }
 }
