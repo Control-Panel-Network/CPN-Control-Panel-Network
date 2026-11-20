@@ -8,8 +8,8 @@ use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::litespeed_stack::{any_litespeed_installed, restart_litespeed};
 use crate::panel_https_front_config::{
     ACME_WEBROOT, CADDY_SNIPPET, HTTPD_CONF, NGINX_CONF, OLS_VH_NAME, caddy_panel_proxy_snippet,
-    ensure_ols_https_listener, insert_map_before_catchall, nginx_panel_proxy_conf,
-    ols_panel_proxy_vhconf,
+    ensure_ols_https_listener, ensure_ols_panel_virtual_host, insert_map_before_catchall,
+    nginx_panel_proxy_conf, ols_panel_proxy_vhconf,
 };
 use crate::panel_network::{load_panel_hostname, save_panel_hostname, validate_panel_hostname};
 use crate::panel_ops_certbot_install::ensure_certbot_on_path;
@@ -148,17 +148,9 @@ fn configure_ols(
 
     let mut conf =
         fs::read_to_string(HTTPD_CONF).map_err(|e| format!("Could not read {HTTPD_CONF}: {e}"))?;
-    let vh_block = format!(
-        "\nvirtualHost {OLS_VH_NAME} {{\n\
-           vhRoot                  {ACME_WEBROOT}/\n\
-           configFile              $SERVER_ROOT/conf/vhosts/{OLS_VH_NAME}/vhconf.conf\n\
-           allowSymbolLink         1\n\
-           enableScript            1\n\
-           restrained              0\n\
-         }}\n"
-    );
-    if !conf.contains(&format!("virtualHost {OLS_VH_NAME}")) {
-        conf.push_str(&vh_block);
+    let next_vh = ensure_ols_panel_virtual_host(&conf, OLS_VH_NAME, ACME_WEBROOT);
+    if next_vh != conf {
+        conf = next_vh;
         changed = true;
     }
 
@@ -167,7 +159,6 @@ fn configure_ols(
         if let Some(updated) = insert_map_before_catchall(&conf, listener, &map_line) {
             conf = updated;
             changed = true;
-            break;
         }
     }
 

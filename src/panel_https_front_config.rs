@@ -116,6 +116,46 @@ pub fn caddy_panel_proxy_snippet(hostname: &str, listen_port: u16) -> String {
     )
 }
 
+/// Canonical `virtualHost CPNPanel` block (docRoot on ACME webroot, unrestrained for HTTP-01).
+pub fn ols_panel_virtual_host_block(vh_name: &str, acme_webroot: &str) -> String {
+    format!(
+        "\nvirtualHost {vh_name} {{\n\
+           vhRoot                  {acme_webroot}/\n\
+           configFile              $SERVER_ROOT/conf/vhosts/{vh_name}/vhconf.conf\n\
+           allowSymbolLink         1\n\
+           enableScript            1\n\
+           restrained              0\n\
+         }}\n"
+    )
+}
+
+/// Insert or repair the panel virtual host stanza in `httpd_config.conf`.
+pub fn ensure_ols_panel_virtual_host(conf: &str, vh_name: &str, acme_webroot: &str) -> String {
+    let marker = format!("virtualHost {vh_name}");
+    let block = ols_panel_virtual_host_block(vh_name, acme_webroot);
+    let Some(start) = conf.find(&marker) else {
+        let mut out = conf.to_string();
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&block);
+        return out;
+    };
+    let rest = &conf[start..];
+    let Some(end_rel) = rest.find("\n}") else {
+        return conf.to_string();
+    };
+    let block_end = start + end_rel + 2;
+    let mut out = String::with_capacity(conf.len() + block.len());
+    out.push_str(&conf[..start]);
+    out.push_str(block.trim_start());
+    if !block.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&conf[block_end..]);
+    out
+}
+
 pub fn insert_map_before_catchall(conf: &str, listener: &str, map_line: &str) -> Option<String> {
     if conf.contains(map_line.trim()) {
         return None;
@@ -308,6 +348,23 @@ fn rewrite_ols_listener_certs(conf: &str, fullchain: &str, privkey: &str) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ensure_panel_vhost_repairs_restrained_and_vhroot() {
+        let base = "virtualHost CPNPanel {\n  vhRoot                  /var/www/cpn/\n  configFile              $SERVER_ROOT/conf/vhosts/CPNPanel/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}\n";
+        let out = ensure_ols_panel_virtual_host(base, "CPNPanel", "/var/lib/cpn/acme-webroot");
+        assert!(out.contains("restrained              0"));
+        assert!(out.contains("vhRoot                  /var/lib/cpn/acme-webroot/"));
+        assert!(!out.contains("restrained              1"));
+    }
+
+    #[test]
+    fn ensure_panel_vhost_appends_when_missing() {
+        let base = "listener Default {\n  address *:80\n}\n";
+        let out = ensure_ols_panel_virtual_host(base, "CPNPanel", "/var/lib/cpn/acme-webroot");
+        assert!(out.contains("virtualHost CPNPanel"));
+        assert!(out.contains("restrained              0"));
+    }
 
     #[test]
     fn ols_vhconf_proxies_listen_port_and_acme() {
