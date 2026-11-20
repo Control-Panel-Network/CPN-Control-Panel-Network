@@ -37,6 +37,11 @@ pub fn can_start_server(
             message: "Invalid state transition for web server install",
         });
     }
+    if !status.foreign_panels.is_empty() && status.install_path.is_none() {
+        return Err(TransitionDenied {
+            message: "Choose fresh install or migrate from the detected panel before starting the web stack",
+        });
+    }
     Ok(())
 }
 
@@ -112,6 +117,22 @@ mod tests {
         status.phase = "completed";
         assert!(can_start_mail(&status, false).is_err());
         assert!(can_start_mail(&status, true).is_ok());
+    }
+
+    #[test]
+    fn foreign_panel_requires_install_path() {
+        let mut status = base();
+        status.phase = "ready";
+        status.foreign_panels = vec![crate::foreign_panel::install_intent::ForeignPanelPublic {
+            id: "classic".into(),
+            name: "CyberPanel".into(),
+            tier: "primary".into(),
+            website_count: 2,
+        }];
+        assert!(can_start_server(&status, false).is_err());
+        status.install_path =
+            Some(crate::foreign_panel::install_intent::InstallPathMode::Migrate);
+        assert!(can_start_server(&status, false).is_ok());
     }
 
     #[test]

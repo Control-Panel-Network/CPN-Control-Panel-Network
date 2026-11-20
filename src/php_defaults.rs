@@ -241,6 +241,9 @@ pub fn prepare_and_persist_php(
     if guest.is_windows() {
         return Err("PHP module streams are not available on Windows Server Phase A".into());
     }
+    if crate::php_lsphp_host::should_skip_remi_php_packages() {
+        return crate::php_lsphp_host::prepare_lsphp_host_php_record(guest, requested);
+    }
     let preferred = preferred_branch_for_guest(guest);
     if guest.uses_apt() {
         let record = PhpDefaultRecord {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PreparingScreen } from "./components/PreparingScreen";
 import { MaintenanceScreen } from "./components/MaintenanceScreen";
+import { InstallPathScreen } from "./components/InstallPathScreen";
 import { ServerSelectionScreen } from "./components/ServerSelectionScreen";
 import { InstallingScreen } from "./components/InstallingScreen";
 import { MailSelectionScreen } from "./components/MailSelectionScreen";
@@ -14,6 +15,7 @@ import {
   connectInstallerEvents,
   getStatus,
   resolvePanelLoginUrl,
+  setInstallPath,
   setLanguage,
   setListenPort,
   startMailInstall,
@@ -90,7 +92,9 @@ function AppShell() {
         return;
       }
       if (next.phase === "ready") {
-        setScreen("selection");
+        const needsPath =
+          (next.foreign_panels?.length ?? 0) > 0 && !next.install_path;
+        setScreen(needsPath ? "install_path" : "selection");
         return;
       }
       if (
@@ -305,6 +309,15 @@ function AppShell() {
 
   const loginUrl = resolvePanelLoginUrl(status);
 
+  const confirmInstallPath = async (
+    mode: "fresh" | "migrate",
+    targetPanelId?: string,
+  ) => {
+    const next = await setInstallPath(mode, targetPanelId);
+    setStatus(next);
+    setScreen("selection");
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
       <img
@@ -323,6 +336,13 @@ function AppShell() {
           className="min-h-screen"
         >
           {screen === "preparing" && <PreparingScreen status={status} />}
+          {screen === "install_path" && (status.foreign_panels?.length ?? 0) > 0 && (
+            <InstallPathScreen
+              panels={status.foreign_panels ?? []}
+              initialTargetId={status.install_path_target_id}
+              onConfirm={confirmInstallPath}
+            />
+          )}
           {screen === "maintenance" && status.maintenance && (
             <MaintenanceScreen
               info={status.maintenance}

@@ -365,6 +365,51 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     }
 
     println!("\nCPN Server Panel · SSH/CLI Installer {VERSION}");
+    crate::foreign_panel::install_notice::print_install_migration_notice();
+    let panels = crate::foreign_panel::install_intent::detected_panels();
+    let install_path = if let Some(mode) = crate::foreign_panel::install_intent::parse_install_path_flag(_args) {
+        let target = if mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
+            crate::foreign_panel::install_intent::default_migrate_target(&panels)
+        } else {
+            None
+        };
+        let record = crate::foreign_panel::install_intent::InstallPathRecord {
+            mode,
+            target_panel_id: target,
+            chosen_at_unix: crate::http_helpers::now_unix(),
+        };
+        if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record) {
+            return fail(format!("Could not save install path: {error}"));
+        }
+        record
+    } else if panels.is_empty() {
+        crate::foreign_panel::install_intent::InstallPathRecord {
+            mode: crate::foreign_panel::install_intent::InstallPathMode::Fresh,
+            target_panel_id: None,
+            chosen_at_unix: crate::http_helpers::now_unix(),
+        }
+    } else {
+        match crate::foreign_panel::install_intent::prompt_cli_install_path(&panels) {
+            Ok(record) => {
+                if let Err(error) = crate::foreign_panel::install_intent::save_install_path(&record) {
+                    eprintln!("warning: could not save install path: {error}");
+                }
+                record
+            }
+            Err(error) => return fail(error),
+        }
+    };
+    if install_path.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
+        println!(
+            "Install path: migrate from {} (panel-migrate runs after CPN is ready).",
+            install_path
+                .target_panel_id
+                .as_deref()
+                .unwrap_or("classic")
+        );
+    } else if !panels.is_empty() {
+        println!("Install path: fresh (you chose to proceed without panel-migrate first).");
+    }
     let detected_language = crate::http_helpers::detect_system_language();
     println!("Detected language: {detected_language}. You can change it later in the panel.\n");
 
@@ -597,6 +642,12 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
     crate::motd::print_panel_ready_banner(VERSION, port, host);
     println!("SSH logins will show the CPN MOTD (English) via /etc/profile.d/cpn-motd.sh.");
     println!("The panel uses the detected language unless you change it in the language menu.");
+    if let Some(hint) = crate::foreign_panel::install_intent::post_install_hint(
+        install_path.mode,
+        install_path.target_panel_id.as_deref(),
+    ) {
+        println!("\n{hint}");
+    }
     0
 }
 

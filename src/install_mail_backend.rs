@@ -150,30 +150,75 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         )
         .await;
 
-    run_command(
-        state,
-        pkg_install(
-            &guest,
-            vec!["postfix", "dovecot"],
-            vec!["postfix", "dovecot-core", "dovecot-imapd"],
-            "Installing Postfix and Dovecot",
-            DnfProgress {
-                download_start: 62,
-                download_end: 68,
-                install_start: 68,
-                install_end: 74,
-                label: "Mail backend",
-            },
-        ),
-    )
-    .await?;
-    install_journal::record(
-        STAGE,
-        JournalAction::InstalledPackage,
-        "postfix,dovecot",
-        None,
-        Some("mail backend packages".into()),
-    )?;
+    if crate::mail_postfix_detect::postfix_mta_present() {
+        state.log(
+            "Reusing existing Postfix (postfix3, postfix, or active listeners). Skipping MTA package install.".to_string(),
+            "info",
+        );
+        install_journal::record(
+            STAGE,
+            JournalAction::Note,
+            "postfix",
+            None,
+            Some("reused existing MTA".into()),
+        )?;
+    } else {
+        run_command(
+            state,
+            pkg_install(
+                &guest,
+                vec!["postfix"],
+                vec!["postfix"],
+                "Installing Postfix",
+                DnfProgress {
+                    download_start: 62,
+                    download_end: 66,
+                    install_start: 66,
+                    install_end: 70,
+                    label: "Postfix",
+                },
+            ),
+        )
+        .await?;
+        install_journal::record(
+            STAGE,
+            JournalAction::InstalledPackage,
+            "postfix",
+            None,
+            Some("mail MTA package".into()),
+        )?;
+    }
+    if !crate::apps_pkg::rpm_or_dpkg_installed(&["dovecot", "dovecot-core"]) {
+        run_command(
+            state,
+            pkg_install(
+                &guest,
+                vec!["dovecot"],
+                vec!["dovecot-core", "dovecot-imapd"],
+                "Installing Dovecot",
+                DnfProgress {
+                    download_start: 70,
+                    download_end: 72,
+                    install_start: 72,
+                    install_end: 74,
+                    label: "Dovecot",
+                },
+            ),
+        )
+        .await?;
+        install_journal::record(
+            STAGE,
+            JournalAction::InstalledPackage,
+            "dovecot",
+            None,
+            Some("IMAP backend".into()),
+        )?;
+    } else {
+        state.log(
+            "Reusing existing Dovecot installation.".to_string(),
+            "info",
+        );
+    }
 
     apply_local_mail_configuration()?;
     install_journal::record(

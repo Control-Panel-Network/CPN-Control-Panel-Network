@@ -144,7 +144,7 @@ pub fn ensure_postfix_default(from_address: &str) -> Result<SmtpSettings, String
         Ok(_) => {}
     }
 
-    if !rpm_or_dpkg_installed(&["postfix"]) && !postfix_is_ready() {
+    if !crate::mail_postfix_detect::postfix_mta_present() {
         install_packages_dnf_or_apt(&["postfix"], &["postfix"])?;
     }
     if !systemd_unit_active("postfix") {

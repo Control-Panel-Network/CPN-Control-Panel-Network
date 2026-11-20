@@ -1,5 +1,6 @@
 import type {
   AccountSetupResponse,
+  InstallPathMode,
   InstallerEvent,
   InstallerStatus,
   MailSystem,
@@ -144,6 +145,26 @@ export async function setListenPort(
   if (!response.ok)
     throw new Error(await readError(response, "listen_port_failed"));
   return response.json();
+}
+
+export async function setInstallPath(
+  mode: InstallPathMode,
+  targetPanelId?: string,
+): Promise<InstallerStatus> {
+  const body: Record<string, unknown> = { mode };
+  if (targetPanelId) {
+    body.target_panel_id = targetPanelId;
+  }
+  const response = await apiFetch("/api/install/path", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response, "install_path_failed"));
+  }
+  const payload = await response.json();
+  return payload.status as InstallerStatus;
 }
 
 /** @deprecated alias kept for older call sites */

@@ -115,7 +115,13 @@ pub fn ensure_host_php_default(requested: Option<&str>) -> Result<String, String
         }
     };
 
-    if dnf_available() && record.stream != "apt" {
+    if dnf_available() && record.stream != "apt" && !record.stream.starts_with("lsphp:") {
+        if crate::php_lsphp_host::should_skip_remi_php_packages() {
+            return Ok(format!(
+                "Host PHP default is {} ({}). Remi php-fpm install skipped because LiteSpeed lsphp is present.",
+                record.branch, record.message
+            ));
+        }
         // switch-to already syncs modular packages; ensure core set is present for
         // first-boot / missing php-fpm, then restart so PMA picks up the binary.
         if let Err(err) = run_dnf_install(&[

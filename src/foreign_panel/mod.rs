@@ -3,6 +3,8 @@
 pub mod apply;
 pub mod catalog;
 pub mod detect;
+pub mod install_intent;
+pub mod install_notice;
 pub mod scan;
 mod scan_tail;
 pub mod wipe;

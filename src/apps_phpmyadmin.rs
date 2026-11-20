@@ -134,26 +134,47 @@ pub fn install_and_expose() -> Result<String, String> {
 /// When OpenLiteSpeed or Caddy owns HTTP, do **not** start/reload/enable nginx
 /// (default nginx.conf binds :80 and conflicts). Packages + php-fpm still install.
 pub fn install_and_expose_for(web_server: Option<ServerEngine>) -> Result<String, String> {
-    // Align Remi/php-fpm with persisted host default when present (phpMyAdmin uses php-fpm).
-    if crate::php_defaults::load_php_default().is_some() {
-        let _ = crate::panel_ops_php_host::ensure_host_php_default(None);
+    let lsphp_host = crate::php_lsphp_host::host_uses_lsphp_runtime();
+    if !lsphp_host {
+        // Align Remi/php-fpm with persisted host default when present (phpMyAdmin uses php-fpm).
+        if crate::php_defaults::load_php_default().is_some() {
+            let _ = crate::panel_ops_php_host::ensure_host_php_default(None);
+        }
+    } else if crate::php_defaults::load_php_default().is_none() {
+        if let Ok(guest) = crate::os_support::detect_guest_os() {
+            let _ = crate::php_lsphp_host::prepare_lsphp_host_php_record(&guest, None);
+            let _ = crate::php_lsphp_host::ensure_lsphp_panel_extensions();
+        }
     }
     ensure_epel()?;
-    install_packages_dnf_or_apt(
-        &[
-            "phpMyAdmin",
-            "php-mysqlnd",
-            "php-fpm",
-            "php-json",
-            "php-mbstring",
-        ],
-        &["phpmyadmin", "php-mysql", "php-fpm", "php-mbstring"],
-    )?;
+    if lsphp_host {
+        install_packages_dnf_or_apt(&["phpMyAdmin"], &["phpmyadmin"])?;
+    } else {
+        install_packages_dnf_or_apt(
+            &[
+                "phpMyAdmin",
+                "php-mysqlnd",
+                "php-fpm",
+                "php-json",
+                "php-mbstring",
+            ],
+            &["phpmyadmin", "php-mysql", "php-fpm", "php-mbstring"],
+        )?;
+    }
     let share = phpmyadmin_share_dir().ok_or_else(|| {
         String::from(
             "phpMyAdmin packages installed but share path /usr/share/phpMyAdmin was not found.",
         )
     })?;
+    if lsphp_host {
+        if crate::litespeed_stack::openlitespeed_installed() {
+            let _ = crate::apps_phpmyadmin_sso::ensure_ols_phpmyadmin_listener();
+        }
+        return Ok(format!(
+            "Installed phpMyAdmin under {} using LiteSpeed lsphp (skipped Remi php-fpm to avoid opcache path conflicts). Wire or heal the loopback listener from Apps if needed.",
+            share.display()
+        ));
+    }
     write_fpm_pool(&share)?;
     let _ = ensure_phpmyadmin_runtime_dirs();
     ensure_selinux_http_port(8081);
