@@ -183,15 +183,15 @@ pub fn dashboard_stats_html(username: &str) -> String {
         .map(|u| u.package_id.as_str())
         .or_else(|| pkg.as_ref().map(|p| p.id.as_str()))
         .unwrap_or("pkg-default");
-    let db_disk_html = if db_disk == 0 {
-        html_escape("Reload for totals")
-    } else {
+    let db_disk_html = if usage.is_some() {
         bytes_html(username, db_disk, db_disk_limit)
-    };
-    let storage_html = if disk_used == 0 {
-        html_escape("Reload for totals")
     } else {
+        html_escape("Reload for totals")
+    };
+    let storage_html = if usage.is_some() {
         bytes_html(username, disk_used, disk_limit)
+    } else {
+        html_escape("Reload for totals")
     };
     let rows = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}",
