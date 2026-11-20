@@ -315,6 +315,17 @@ pub fn panel_dashboard_html(username: &str) -> String {
     panel_shell(username, "dashboard", "Dashboard", &main)
 }
 
+/// Full dashboard shell when the primary render exceeds the hub time budget.
+pub fn panel_dashboard_html_degraded(username: &str) -> String {
+    let mut html = panel_dashboard_html(username);
+    const NEEDLE: &str = r#"<div class="dashboard-heading">"#;
+    const NOTICE: &str = r#"<p class="panel-notice warn" style="margin:0 0 16px;">Host checks were still running; this dashboard loaded in quick mode. Reload once for full storage totals.</p>"#;
+    if let Some(idx) = html.find(NEEDLE) {
+        html.insert_str(idx, NOTICE);
+    }
+    html
+}
+
 #[cfg(test)]
 mod tests {
     use super::gauge_stroke_for_usage;

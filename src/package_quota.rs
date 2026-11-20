@@ -100,7 +100,35 @@ fn disk_used_mb(username: &str) -> Result<u64, String> {
     Ok(total)
 }
 
+/// Controls which usage probes run (dashboard avoids slow disk walks).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UsageCollectOpts {
+    pub skip_disk_walk: bool,
+}
+
+impl UsageCollectOpts {
+    pub const fn full() -> Self {
+        Self {
+            skip_disk_walk: false,
+        }
+    }
+
+    /// Skip `disk_used_mb` and MariaDB size walks; counts stay live.
+    pub const fn dashboard() -> Self {
+        Self {
+            skip_disk_walk: true,
+        }
+    }
+}
+
 pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
+    usage_for_account_opts(username, UsageCollectOpts::full())
+}
+
+pub fn usage_for_account_opts(
+    username: &str,
+    opts: UsageCollectOpts,
+) -> Result<PackageUsage, String> {
     let package = package_for_account(username)?;
 
     let owned = owned_site_domains(username)?;
@@ -146,11 +174,21 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
         .filter(|f| names_equal(&f.owner, username))
         .count() as u64;
 
-    let disk_mb_used = disk_used_mb(username)?;
+    let disk_mb_used = if opts.skip_disk_walk {
+        0
+    } else {
+        disk_used_mb(username)?
+    };
 
     let bandwidth_mb_used = crate::package_bandwidth::bytes_to_mb_ceil(
         crate::package_bandwidth::account_month_bytes(username),
     );
+
+    let database_disk_bytes = if opts.skip_disk_walk {
+        0
+    } else {
+        database_disk_bytes_for_owner(username)
+    };
 
     Ok(PackageUsage {
         package_id: package.id,
@@ -207,7 +245,7 @@ pub fn usage_for_account(username: &str) -> Result<PackageUsage, String> {
 
         subdomains_limit: package.subdomains,
 
-        database_disk_bytes: database_disk_bytes_for_owner(username),
+        database_disk_bytes,
 
         fqdn_enabled: package.fqdn_enabled,
     })
