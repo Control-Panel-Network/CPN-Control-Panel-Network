@@ -283,7 +283,7 @@ pub fn apply_license_key_bytes(raw: &[u8]) -> Result<String, String> {
             "license.key is too large (max {MAX_LICENSE_BYTES} bytes)."
         ));
     }
-    if raw.iter().any(|b| *b == 0) {
+    if raw.contains(&0) {
         return Err("license.key must not contain NUL bytes.".into());
     }
     // Reject obvious HTML/error pages mistaken for keys (validate before host paths for unit tests).
@@ -387,10 +387,11 @@ fn http_get_bytes(url: &str) -> Result<Vec<u8>, String> {
         ),
         ("wget", vec!["-q", "--timeout=60", "-O", "-", url]),
     ] {
-        if let Ok(out) = Command::new(bin).args(&args).output() {
-            if out.status.success() && !out.stdout.is_empty() {
-                return Ok(out.stdout);
-            }
+        if let Ok(out) = Command::new(bin).args(&args).output()
+            && out.status.success()
+            && !out.stdout.is_empty()
+        {
+            return Ok(out.stdout);
         }
     }
     // Last resort: ureq-less blocking via `std::net` is not wired; fail clearly.
