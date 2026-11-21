@@ -216,7 +216,7 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
     #[cfg(not(unix))]
     {
         log("Proxy front enabled, but nginx package install is Linux-only.".into());
-        return Ok(());
+        Ok(())
     }
     #[cfg(unix)]
     {

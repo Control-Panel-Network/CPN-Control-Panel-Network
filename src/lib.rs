@@ -149,6 +149,7 @@ pub mod panel_backup_routes;
 pub mod panel_backups;
 pub mod panel_brand;
 pub mod panel_chrome_scheme;
+pub mod panel_chrome_session;
 pub mod panel_controls;
 pub mod panel_dashboard;
 pub mod panel_dashboard_activity;

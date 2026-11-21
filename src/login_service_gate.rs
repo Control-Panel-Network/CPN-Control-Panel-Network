@@ -323,7 +323,7 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 
     #[cfg(not(unix))]
     {
-        return ready_status_unrestricted("");
+        ready_status_unrestricted("")
     }
 
     #[cfg(unix)]

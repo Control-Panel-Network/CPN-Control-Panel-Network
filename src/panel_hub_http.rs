@@ -2,6 +2,8 @@
 
 use crate::auth_api::panel_user_from_request;
 use crate::installer::AppState;
+use crate::panel_chrome_session::session_exp_from_http;
+use crate::panel_pages::{panel_shell, panel_shell_exp};
 use actix_web::{HttpRequest, HttpResponse};
 
 pub use crate::login_next::login_redirect;
@@ -10,6 +12,52 @@ const FLASH_COOKIE: &str = "cpn_panel_flash";
 
 pub fn require_panel_user(state: &AppState, http: &HttpRequest) -> Option<String> {
     panel_user_from_request(state, http)
+}
+
+/// Panel HTML shell with sidebar session countdown when the request has a live session cookie.
+pub fn authenticated_panel_shell(
+    http: &HttpRequest,
+    username: &str,
+    active: &str,
+    title: &str,
+    main: &str,
+) -> String {
+    panel_shell_exp(username, active, title, main, session_exp_from_http(http))
+}
+
+/// Same as [`authenticated_panel_shell`] for call sites that already use [`panel_shell`].
+#[inline]
+pub fn panel_shell_authenticated(
+    http: &HttpRequest,
+    username: &str,
+    active: &str,
+    title: &str,
+    main: &str,
+) -> String {
+    authenticated_panel_shell(http, username, active, title, main)
+}
+
+/// Capture session expiry before `html_blocking` closures (extensions are per-request thread).
+#[inline]
+pub fn captured_session_exp(http: &HttpRequest) -> Option<u64> {
+    session_exp_from_http(http)
+}
+
+/// Render panel shell inside a blocking closure with a captured session expiry.
+pub fn panel_shell_blocking(
+    username: &str,
+    active: &str,
+    title: &str,
+    main: &str,
+    session_exp_unix: Option<u64>,
+) -> String {
+    panel_shell_exp(username, active, title, main, session_exp_unix)
+}
+
+/// Degraded/preview paths that keep the 4-arg [`panel_shell`] signature (no countdown).
+#[allow(clippy::too_many_arguments)]
+pub fn panel_shell_legacy(username: &str, active: &str, title: &str, main: &str) -> String {
+    panel_shell(username, active, title, main)
 }
 
 pub fn html_ok(body: String) -> HttpResponse {
@@ -104,6 +152,7 @@ where
     G: FnOnce() -> String + Send + 'static,
 {
     match tokio::time::timeout(budget, tokio::task::spawn_blocking(render)).await {
+        Ok(Ok(body)) if body.trim().is_empty() => html_ok(fallback()),
         Ok(Ok(body)) => html_ok(body),
         Ok(Err(_)) => html_ok(fallback()),
         Err(_) => html_ok(fallback()),

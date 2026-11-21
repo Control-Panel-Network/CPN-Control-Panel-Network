@@ -96,6 +96,18 @@ fn append_set_cookies(builder: &mut actix_web::HttpResponseBuilder, cookies: Vec
     }
 }
 
+/// Session cookie absolute expiry (unix seconds) when the request carries a valid panel session.
+pub fn panel_session_expiry_from_request(state: &AppState, http: &HttpRequest) -> Option<u64> {
+    let cookie = http
+        .headers()
+        .get(actix_web::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok());
+    let port = request_auth_cookie_port(http);
+    let token = read_session_cookie(cookie, port)?;
+    let secret = session_secret(Some(&state.token));
+    crate::panel_session::session_expiry_from_token(&token, &secret)
+}
+
 pub fn panel_user_from_request(state: &AppState, http: &HttpRequest) -> Option<String> {
     if let Some(auth) = http
         .headers()
@@ -746,17 +758,18 @@ pub async fn dashboard_page(
     let preview = query.get("preview").map(String::as_str) == Some("1");
     if let Some(user) = panel_user_from_request(state.get_ref(), &http) {
         let fallback_user = user.clone();
+        let session_exp = crate::panel_hub_http::captured_session_exp(&http);
         return crate::panel_hub_http::html_blocking_budget_or_fallback(
             crate::panel_hub_http::HUB_RENDER_BUDGET,
-            move || panel_dashboard_html(&user),
-            move || panel_dashboard_html_degraded(&fallback_user),
+            move || panel_dashboard_html(&user, session_exp),
+            move || panel_dashboard_html_degraded(&fallback_user, session_exp),
         )
         .await;
     }
     if preview {
         return HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
-            .body(panel_dashboard_html("preview"));
+            .body(panel_dashboard_html("preview", None));
     }
     crate::login_next::login_redirect(&http)
 }

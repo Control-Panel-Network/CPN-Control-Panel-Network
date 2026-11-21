@@ -198,7 +198,7 @@ pub fn create_mfa_pending_token(username: &str, secret: &str) -> String {
     URL_SAFE_NO_PAD.encode(format!("{payload}|{sig}").as_bytes())
 }
 
-pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
+fn verify_session_token_parts(token: &str, secret: &str) -> Option<(String, u64)> {
     let decoded = URL_SAFE_NO_PAD.decode(token.as_bytes()).ok()?;
     let decoded = String::from_utf8(decoded).ok()?;
     let mut parts = decoded.splitn(3, '|');
@@ -217,7 +217,16 @@ pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
     if !constant_time_eq(sig, &expected) {
         return None;
     }
-    Some(username)
+    Some((username, exp))
+}
+
+pub fn verify_session_token(token: &str, secret: &str) -> Option<String> {
+    verify_session_token_parts(token, secret).map(|(username, _)| username)
+}
+
+/// Expiry embedded in a valid session token (for panel chrome countdown only).
+pub fn session_expiry_from_token(token: &str, secret: &str) -> Option<u64> {
+    verify_session_token_parts(token, secret).map(|(_, exp)| exp)
 }
 
 pub fn verify_mfa_pending_token(token: &str, secret: &str) -> Option<String> {

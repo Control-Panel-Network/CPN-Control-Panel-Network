@@ -5,7 +5,7 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::panel_docs::docs_image_bytes;
 use crate::panel_docs_pages::docs_main;
-use crate::panel_pages::panel_shell;
+use crate::panel_hub_http::authenticated_panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::sync::Arc;
 
@@ -35,7 +35,13 @@ pub async fn docs_page(
     let page = query.page.trim().to_string();
     let q = query.q.trim().to_string();
     let main = docs_main(&page, &q);
-    html_ok(panel_shell(&user, "docs", "Documentation", &main))
+    html_ok(authenticated_panel_shell(
+        &http,
+        &user,
+        "docs",
+        "Documentation",
+        &main,
+    ))
 }
 
 #[get("/documentation")]
