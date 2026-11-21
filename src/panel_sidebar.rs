@@ -218,7 +218,7 @@ pub fn sidebar_extra_styles() -> &'static str {
 "#
 }
 
-pub fn sidebar_header_html(username: &str) -> String {
+pub fn sidebar_header_html(username: &str, session_exp_unix: Option<u64>) -> String {
     let user = html_escape(username);
     let host = host_sidebar_info();
     let catalog = search_catalog_json();
@@ -247,16 +247,20 @@ pub fn sidebar_header_html(username: &str) -> String {
       </div>"#,
         mark = brand_mark_svg(),
         catalog = catalog,
-        host_card = host_status_card_html(&host),
+        host_card = host_status_card_html(&host, session_exp_unix),
         user = user,
     )
 }
 
-fn host_status_card_html(host: &HostSidebarInfo) -> String {
+fn host_status_card_html(host: &HostSidebarInfo, session_exp_unix: Option<u64>) -> String {
     let ip = html_escape(&host.ip);
     let uptime = html_escape(&host.uptime);
+    let session_row = session_exp_unix.map(session_row_html).unwrap_or_default();
+    let session_exp_attr = session_exp_unix
+        .map(|exp| format!(" data-cpn-session-exp=\"{exp}\""))
+        .unwrap_or_default();
     format!(
-        r#"<div class="host-status" data-cpn-host-status>
+        r#"<div class="host-status" data-cpn-host-status{session_exp_attr}>
           <div class="host-status-icon" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <rect x="3" y="4" width="18" height="12" rx="2"></rect>
@@ -278,9 +282,21 @@ fn host_status_card_html(host: &HostSidebarInfo) -> String {
                 </button>
               </span>
             </div>
-            <div class="host-status-row"><span>Uptime:</span> <strong>{uptime}</strong></div>
+            <div class="host-status-row" data-cpn-host-uptime><span>Uptime:</span> <strong>{uptime}</strong></div>
+            {session_row}
           </div>
-        </div>"#
+        </div>"#,
+        ip = ip,
+        uptime = uptime,
+        session_exp_attr = session_exp_attr,
+        session_row = session_row,
+    )
+}
+
+fn session_row_html(exp_unix: u64) -> String {
+    format!(
+        r#"<div class="host-status-row" data-cpn-session-countdown><span>Session:</span> <strong data-cpn-session-remaining aria-live="polite">—</strong></div>
+        <meta name="cpn-session-exp" content="{exp_unix}">"#
     )
 }
 
@@ -360,11 +376,51 @@ pub fn sidebar_search_and_ip_script() -> &'static str {
     var label = (labelEl ? labelEl.textContent : a.textContent) || '';
     pushNav(String(label).replace(/\s+/g, ' ').trim(), href);
   });
+  (function () {
+    var hostCard = document.querySelector('[data-cpn-host-status]');
+  var expAttr = hostCard ? hostCard.getAttribute('data-cpn-session-exp') : null;
+  if (!expAttr && document.body) expAttr = document.body.getAttribute('data-cpn-session-exp');
+  var expUnix = expAttr ? parseInt(expAttr, 10) : NaN;
+  var remainingEl = document.querySelector('[data-cpn-session-remaining]');
+  if (!remainingEl || !expUnix || expUnix <= 0) return;
+  function formatRemaining(total) {
+    if (total <= 0) return '0M';
+    var days = Math.floor(total / 86400);
+    var hours = Math.floor((total % 86400) / 3600);
+    var mins = Math.floor((total % 3600) / 60);
+    var secs = total % 60;
+    if (days > 0) return days + 'D, ' + hours + 'H, ' + mins + 'M';
+    if (hours > 0) return hours + 'H, ' + mins + 'M, ' + secs + 'S';
+    if (mins > 0) return mins + 'M, ' + secs + 'S';
+    return secs + 'S';
+  }
+  function redirectLogin() {
+    try {
+      var dest = '/login?error=session_expired';
+      window.location.assign(dest);
+    } catch (_e) {
+      window.location.href = '/login';
+    }
+  }
+  function tick() {
+    var now = Math.floor(Date.now() / 1000);
+    var left = expUnix - now;
+    if (left <= 0) {
+      remainingEl.textContent = '0S';
+      redirectLogin();
+      return;
+    }
+    remainingEl.textContent = formatRemaining(left);
+  }
+  tick();
+  setInterval(tick, 1000);
+  })();
+
   var hostCard = document.querySelector('[data-cpn-host-status]');
   if (hostCard) {
     var hostIp = (hostCard.querySelector('[data-ip]') || {}).getAttribute
       ? hostCard.querySelector('[data-ip]').getAttribute('data-ip') : '';
-    var uptimeEl = hostCard.querySelector('.host-status-row:last-child strong');
+    var uptimeEl = hostCard.querySelector('[data-cpn-host-uptime] strong');
     catalog.push({
       label: 'Server IP',
       href: '#cpn-host-ip',
@@ -499,11 +555,14 @@ mod tests {
 
     #[test]
     fn header_embeds_blurred_ip_and_search() {
-        let html = sidebar_header_html("Admin");
+        let html = sidebar_header_html("Admin", None);
         assert!(html.contains("Search menu"));
         assert!(html.contains("cpn-ip-blur is-blurred"));
         assert!(html.contains("data-ip="));
         assert!(html.contains("Uptime:"));
         assert!(html.contains("CPN Panel"));
+        let with_session = sidebar_header_html("Admin", Some(4_102_444_800));
+        assert!(with_session.contains("data-cpn-session-exp"));
+        assert!(with_session.contains("Session:"));
     }
 }

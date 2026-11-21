@@ -4,10 +4,9 @@ use crate::apps::{AppId, AppStateKind, detect_app, install_app};
 use crate::apps_site::{apply_site_scope, clear_site_scope};
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
     html_blocking, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
-use crate::panel_pages::panel_shell;
 use crate::panel_site_apps_cmsms::{install_cmsms, remove_cmsms_installer};
 use crate::panel_site_apps_joomla::install_joomla;
 use crate::panel_site_apps_mautic::install_mautic;
@@ -45,8 +44,9 @@ pub async fn websites_apps_get(
     match require_manage_site(&user, domain, SitePerm::Enable) {
         Ok(site) => {
             let user_owned = user.clone();
+            let session_exp_shell = captured_session_exp(&http);
             html_blocking(move || {
-                panel_shell(
+                panel_shell_blocking(
                     &user_owned,
                     "websites",
                     &format!("Manage {}", site.domain),
@@ -57,6 +57,7 @@ pub async fn websites_apps_get(
                         notice.as_deref(),
                         error.as_deref(),
                     ),
+                    session_exp_shell,
                 )
             })
             .await

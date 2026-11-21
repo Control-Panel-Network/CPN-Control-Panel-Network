@@ -2,14 +2,13 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_firewall::firewall_manager_page;
 use crate::panel_ops_firewall::{
     add_rule_live, add_trusted_live, ban_ip_live, delete_rule_live, export_banned_json,
     export_rules_json, import_banned_json, import_rules_json, reload_firewall, remove_trusted_live,
     start_firewall, stop_firewall, unban_ip_live, verify_firewall_csrf,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,7 +80,7 @@ pub async fn security_firewall(
         return login_redirect(&http);
     };
     let tab = query.get("tab").map(String::as_str).unwrap_or("rules");
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "security",
         "Firewall",

@@ -1,7 +1,7 @@
 //! HTTP routes for Site File Manager (jailed to site home).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
     html_blocking_budget, login_redirect, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_files::site_files_page;
@@ -9,7 +9,6 @@ use crate::panel_hub_routes_files_common::{parse_op_form, run_op, same_origin_ok
 use crate::panel_ops_files::{
     MAX_UPLOAD_BYTES, check_rate_limit, read_text, upload_bytes, verify_files_csrf,
 };
-use crate::panel_pages::panel_shell;
 use crate::site_acl::{SitePerm, require_manage_site};
 use crate::sites::site_home_from_record;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -57,6 +56,7 @@ async fn render_site_files_page(
     let edit = query.get("edit").cloned();
     let domain_title = site.domain.clone();
     let user_c = user.clone();
+    let session_exp_shell = captured_session_exp(http);
     html_blocking_budget(SITE_FILES_PAGE_BUDGET, move || {
         let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
             match read_text(ep, &jail) {
@@ -67,7 +67,7 @@ async fn render_site_files_page(
             (None, None, None)
         };
         let err = error.as_deref().or(err2.as_deref());
-        panel_shell(
+        panel_shell_blocking(
             &user_c,
             "websites",
             &format!("File Manager: {domain_title}"),
@@ -81,6 +81,7 @@ async fn render_site_files_page(
                 edit_path.as_deref(),
                 edit_content.as_deref(),
             ),
+            session_exp_shell,
         )
     })
     .await

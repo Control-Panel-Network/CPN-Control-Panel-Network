@@ -1,11 +1,11 @@
 //! Panel-hosted Mr Agent full chat page (Expand target). Does not depend on site docroot.
 
 use crate::auth_api::panel_user_from_request;
+use crate::panel_hub_http::{authenticated_panel_shell, captured_session_exp, panel_shell_blocking};
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::mr_agent_policy::{MrAgentHostPolicy, load_host_policy, save_host_policy};
 use crate::panel_admin::is_panel_admin;
-use crate::panel_pages::panel_shell;
 use crate::panel_plugins_markup::html_escape;
 use crate::plugins_settings::{
     load_plugin_settings, plugin_visibility_allows, settings_field_truthy,
@@ -384,7 +384,7 @@ pub async fn plugins_mr_agent_page(
         Some(query.error.as_str())
     };
     let body = page_main(&user, &domain, notice, error);
-    html_ok(panel_shell(&user, "plugins", "Mr Agent", &body))
+    html_ok(authenticated_panel_shell(&http, &user, "plugins", "Mr Agent", &body))
 }
 
 /// Owner-only host policy toggles (allow_host_chat / allow_site_install).
