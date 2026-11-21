@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CPN Control Panel Network | News Targeted</title>
-  <meta name="description" content="CPN is an alpha hosting control panel from News Targeted. Install on AlmaLinux and friends with one-liners for install.sh and upgrade.sh.">
+  <meta name="description" content="CPN is a hosting control panel from News Targeted. Install on AlmaLinux and friends with one-liners for install.sh and upgrade.sh. Current release __CPN_VERSION__.">
   <link rel="canonical" href="https://cpn.newstargeted.com/">
   <meta name="theme-color" content="#070b10">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://cpn.newstargeted.com/">
   <meta property="og:title" content="CPN Control Panel Network">
-  <meta property="og:description" content="Alpha hosting control panel from News Targeted. Sites, mail, databases, SSL, and more.">
+  <meta property="og:description" content="Hosting control panel from News Targeted. Sites, mail, databases, SSL, and more. Release __CPN_VERSION__.">
   <meta property="og:image" content="https://cpn.newstargeted.com/assets/product/cpn-dashboard.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@450;550;650;750&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@650;750;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/site.css">
+  <link rel="stylesheet" href="assets/css/site.css?v=__CPN_VERSION__">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -26,7 +26,7 @@
     "url": "https://cpn.newstargeted.com/",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Linux",
-    "softwareVersion": "0.2.6-alpha",
+    "softwareVersion": "__CPN_VERSION__",
     "creator": {
       "@type": "Organization",
       "name": "News Targeted",
@@ -40,7 +40,7 @@
   }
   </script>
 </head>
-<body>
+<body data-cpn-release-api="/api/release-version">
   <a class="skip" href="#install">Skip to install</a>
 
   <header class="site-nav">
@@ -53,6 +53,7 @@
     </a>
     <nav class="nav-links" aria-label="Primary">
       <a href="#install">Install</a>
+      <a class="nav-login" href="/login">Login</a>
       <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network/blob/stable/docs/INSTALL.md">Docs</a>
       <a href="/security">Security</a>
       <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
@@ -65,7 +66,7 @@
       <div class="hero-inner">
         <p class="hero-kicker reveal">
           <span class="dot" aria-hidden="true"></span>
-          Alpha product line 0.2.x
+          Stable release <span class="js-cpn-version">__CPN_VERSION__</span>
         </p>
         <h1 id="hero-title" class="hero-brand reveal reveal-delay-1">
           CPN
@@ -79,7 +80,7 @@
           <a class="btn btn-ghost" href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">View on GitHub</a>
         </div>
         <p class="alpha-note reveal reveal-delay-3">
-          Alpha only. Tip tracks 0.2.6-alpha (not a stable 1.x). Prefer a disposable VPS or VM, keep backups, and read the platform support notes before important hosts.
+          Current tip is <span class="js-cpn-tag">__CPN_TAG__</span> on the stable branch. Prefer a disposable VPS or VM for first installs, keep backups, and read the platform support notes before important hosts.
         </p>
       </div>
     </section>
@@ -118,7 +119,7 @@
           <span><code>-b</code> / <code>--ref</code> example</span>
         </div>
         <div class="command-row">
-          <pre id="cmd-pin">curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b v0.2.6-alpha.49</pre>
+          <pre id="cmd-pin" class="js-cpn-pin-cmd">curl -fsSL https://cpn.newstargeted.com/upgrade.sh | bash -s -- -b __CPN_TAG__</pre>
           <button type="button" class="copy-btn" data-copy-target="cmd-pin">Copy</button>
         </div>
       </div>
@@ -170,7 +171,7 @@
       <div class="facts">
         <div>
           <h3>Native packages</h3>
-          <p>Install from GitHub Releases with checksums and optional GPG. EL9 and EL10 RPM assets ship while the line is alpha-only.</p>
+          <p>Install from GitHub Releases with checksums and optional GPG. EL9 and EL10 RPM assets ship for the 1.4.x line.</p>
         </div>
         <div>
           <h3>Panel + CLI</h3>
@@ -186,7 +187,7 @@
 
   <footer class="site-footer">
     <div class="inner">
-      <p>CPN by <a href="https://newstargeted.com">News Targeted</a>. Alpha software.</p>
+      <p>CPN by <a href="https://newstargeted.com">News Targeted</a>. Release <span class="js-cpn-version">__CPN_VERSION__</span>.</p>
       <p>
         <a href="https://github.com/Control-Panel-Network/CPN-Control-Panel-Network">GitHub</a>
         ·

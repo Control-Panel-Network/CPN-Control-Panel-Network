@@ -12,11 +12,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:-$ROOT/site-dist}"
 
-mkdir -p "$DEST"
+mkdir -p "$DEST/data/cache" "$DEST/data/logs" "$DEST/api" "$DEST/modules"
 
 rsync -a --delete \
   --exclude '.git' \
   --exclude 'README.md' \
+  --exclude 'index.html.live-backup' \
   "$ROOT/site/" "$DEST/"
 
 install -m 0644 "$ROOT/scripts/install.sh" "$DEST/install.sh"
