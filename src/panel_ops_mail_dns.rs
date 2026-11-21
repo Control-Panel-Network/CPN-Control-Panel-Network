@@ -6,7 +6,7 @@ use crate::panel_ops_dkim_keys::{
     dkim_dns_name, ensure_dkim_for_domain, read_dkim_txt_value, selector,
 };
 use crate::panel_ops_dns::{read_zone, write_zone};
-use crate::panel_ops_email_auth::{push_dns_plans_to_cloudflare, DnsRecordPlan};
+use crate::panel_ops_email_auth::{DnsRecordPlan, push_dns_plans_to_cloudflare};
 use crate::sites::normalize_domain;
 
 pub fn mail_auth_dns_plans(

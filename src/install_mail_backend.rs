@@ -2,9 +2,9 @@
 
 use crate::install_journal::{self, JournalAction};
 use crate::install_mail_listeners::{append_cpn_mail_listeners, ensure_postfix_tls_material};
-use crate::install_recipes::{command, pkg_install, DnfProgress};
-use crate::installer::{run_command, AppState};
-use crate::os_support::{require_installable_guest, GuestOs};
+use crate::install_recipes::{DnfProgress, command, pkg_install};
+use crate::installer::{AppState, run_command};
+use crate::os_support::{GuestOs, require_installable_guest};
 use std::path::Path;
 use std::process::{Command as StdCommand, Stdio};
 use tokio::process::Command;
