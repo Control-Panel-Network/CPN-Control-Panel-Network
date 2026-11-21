@@ -1,6 +1,5 @@
 //! Dashboard landing HTML for the authenticated CPN Panel.
 
-use crate::panel_pages::panel_shell;
 
 /// Snapshot of dashboard CPU / RAM / disk gauges (also used by live metrics API).
 #[derive(Debug, Clone)]

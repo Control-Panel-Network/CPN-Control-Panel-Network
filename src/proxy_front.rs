@@ -12,7 +12,6 @@ use std::fs;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 const SCHEMA_VERSION: u32 = 1;
 /// Private pool for lab/panel-local unique IPs (not public WAN addresses).
@@ -216,7 +215,7 @@ pub fn maybe_install_nginx_packages(log: &mut dyn FnMut(String)) -> Result<(), S
     #[cfg(not(unix))]
     {
         log("Proxy front enabled, but nginx package install is Linux-only.".into());
-        return Ok(());
+        Ok(())
     }
     #[cfg(unix)]
     {

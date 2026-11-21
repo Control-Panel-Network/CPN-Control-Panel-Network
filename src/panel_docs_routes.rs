@@ -5,9 +5,7 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::panel_docs::docs_image_bytes;
 use crate::panel_docs_pages::docs_main;
-use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-};
+use crate::panel_hub_http::authenticated_panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::sync::Arc;
 

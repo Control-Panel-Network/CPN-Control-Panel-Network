@@ -20,7 +20,7 @@
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
-    database_health_label, detect_database, detect_mail_service_label, detect_web_server_label,
+    database_health_label, detect_database, detect_web_server_label,
     openlitespeed_tree_present, port_open, systemd_unit_enabled,
 };
 use serde::Serialize;
@@ -323,7 +323,7 @@ fn evaluate_login_services_fresh() -> LoginServiceStatus {
 
     #[cfg(not(unix))]
     {
-        return ready_status_unrestricted("");
+        ready_status_unrestricted("")
     }
 
     #[cfg(unix)]

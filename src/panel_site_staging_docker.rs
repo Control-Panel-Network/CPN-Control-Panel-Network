@@ -7,7 +7,6 @@ use crate::panel_ops_docker_compose::{
 use crate::sites::{SiteRecord, site_home_from_record};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 pub fn stacks_linked_to_site(source: &SiteRecord) -> Vec<ComposeStackRow> {
     let Ok(stacks) = list_compose_stacks() else {

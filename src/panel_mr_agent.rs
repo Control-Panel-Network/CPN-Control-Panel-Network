@@ -5,9 +5,7 @@ use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::mr_agent_policy::{MrAgentHostPolicy, load_host_policy, save_host_policy};
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-};
+use crate::panel_hub_http::authenticated_panel_shell;
 use crate::panel_plugins_markup::html_escape;
 use crate::plugins_settings::{
     load_plugin_settings, plugin_visibility_allows, settings_field_truthy,

@@ -30,7 +30,7 @@ pub struct CpuActivity {
 pub fn network_traffic() -> Vec<TrafficNic> {
     #[cfg(windows)]
     {
-        return Vec::new();
+        Vec::new()
     }
     #[cfg(not(windows))]
     {
@@ -73,7 +73,7 @@ pub fn network_traffic() -> Vec<TrafficNic> {
 pub fn disk_io_snapshot() -> Vec<DiskIoRow> {
     #[cfg(windows)]
     {
-        return Vec::new();
+        Vec::new()
     }
     #[cfg(not(windows))]
     {

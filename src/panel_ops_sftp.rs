@@ -5,12 +5,9 @@
 //! applies `ChrootDirectory %h` + `ForceCommand internal-sftp`. Jail roots stay
 //! root-owned; only `public_html` (docroot) is writable by the SFTP user.
 
-use crate::resource_accounts::{
-    FtpAccountRecord, create_ftp_account, delete_ftp_account, list_ftp_accounts,
-};
-use crate::sites::{load_site, site_home_from_record};
+use crate::resource_accounts::FtpAccountRecord;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub const SFTP_GROUP: &str = "cpn-sftp";
@@ -30,11 +27,11 @@ pub struct SftpStackStatus {
 pub fn detect_sftp_stack() -> SftpStackStatus {
     #[cfg(not(unix))]
     {
-        return SftpStackStatus {
+        SftpStackStatus {
             stack: "Unavailable".into(),
             detail: "Jailed SFTP is supported on Linux panel hosts only.".into(),
             ready: false,
-        };
+        }
     }
     #[cfg(unix)]
     {
@@ -256,7 +253,7 @@ fn reload_sshd() -> Result<(), String> {
 pub fn ensure_sftp_stack() -> Result<String, String> {
     #[cfg(not(unix))]
     {
-        return Err("Jailed SFTP requires a Linux host".into());
+        Err("Jailed SFTP requires a Linux host".into())
     }
     #[cfg(unix)]
     {
@@ -325,7 +322,7 @@ pub fn create_jailed_sftp_account(
     #[cfg(not(unix))]
     {
         let _ = (owner, username_raw, domain_raw, password);
-        return Err("Jailed SFTP requires a Linux host".into());
+        Err("Jailed SFTP requires a Linux host".into())
     }
     #[cfg(unix)]
     {
@@ -394,7 +391,7 @@ pub fn delete_jailed_sftp_account(username_raw: &str) -> Result<String, String> 
     #[cfg(not(unix))]
     {
         let _ = username_raw;
-        return Err("Jailed SFTP requires a Linux host".into());
+        Err("Jailed SFTP requires a Linux host".into())
     }
     #[cfg(unix)]
     {
@@ -417,7 +414,7 @@ pub fn reset_sftp_password(username_raw: &str, password: &str) -> Result<String,
     #[cfg(not(unix))]
     {
         let _ = (username_raw, password);
-        return Err("Jailed SFTP requires a Linux host".into());
+        Err("Jailed SFTP requires a Linux host".into())
     }
     #[cfg(unix)]
     {
