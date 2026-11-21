@@ -6,14 +6,16 @@ Public install host for CPN bootstrap scripts and product landing page.
 
 | Path | Purpose |
 | --- | --- |
-| `site/` | Landing page (`index.html`), security page (`security.html` → `/security`), assets, `.htaccess` |
+| `site/` | Landing (`index.php` + `index.html` template), `api/release-version.php`, security page (`security.html` → `/security`), assets, `.htaccess` |
+| `site/modules/host_site_release.php` | GitHub Releases fetch + file cache (10m default) for displayed version |
+| `site/config.host-site.example.php` | Copy to `config.host-site.php` on the VPS (optional TTL/fallback overrides) |
 | `site/data/security-advisories.json` | Public advisory feed for `/security` (synced from `docs/security-advisories.json`) |
 | `scripts/install.sh` | Mirrored to `/install.sh` |
 | `scripts/upgrade.sh` | Mirrored to `/upgrade.sh` |
 | `scripts/cpn-bootstrap-lib.sh` | Mirrored to `/cpn-bootstrap-lib.sh` |
 | `scripts/sync-cpn-host-site.sh` | Builds a deployable tree |
 
-Homepage `/` is HTML. Clean URL `/security` serves the advisory disclosure page. Script URLs must keep returning shell source (not HTML) so one-liners work.
+Homepage `/` is rendered by `index.php` (GitHub Releases API, cached under `data/cache/`, fallback from `config.host-site.php`). The static `index.html` file is a template with `__CPN_VERSION__` / `__CPN_TAG__` tokens. JSON for browsers and mirrors: `/api/release-version`. Clean URL `/security` serves the advisory disclosure page. Script URLs must keep returning shell source (not HTML) so one-liners work.
 
 ## Build a dist tree
 
