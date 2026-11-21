@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **OpenDKIM by default for Host email**: `panel_ops_opendkim` installs OpenDKIM when missing, copies keys into `/etc/opendkim/keys` (SELinux-safe), syncs KeyTable/SigningTable from `/var/lib/cpn/dkim` (preserves classic CyberPanel rows), wires Postfix milters (`inet:8891@localhost`), and runs from Email stack start, mail backend heal, DKIM Manager ensure, and local-mail `site ready` / domain create. SPF plans include `ip4:` when the host public IP is known (still `a mx`, no invented includes). DMARC starter remains `p=none` with `rua=mailto:dmarc@<domain>`.
+- **OpenDKIM by default for Host email**: `panel_ops_opendkim` installs OpenDKIM when missing, copies keys into `/etc/opendkim/keys` (SELinux-safe), syncs KeyTable/SigningTable from `/var/lib/cpn/dkim` (preserves classic CyberPanel rows), wires OpenDKIM listen as `inet:8891@localhost` and Postfix milters as `inet:127.0.0.1:8891`, and runs from Email stack start, mail backend heal, DKIM Manager ensure, and local-mail `site ready` / domain create. SPF plans include `ip4:` when the host public IP is known (still `a mx`, no invented includes). DMARC starter remains `p=none` with `rua=mailto:dmarc@<domain>`.
 
 ### Fixed
 
