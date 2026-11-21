@@ -2,8 +2,8 @@
 
 use crate::panel_action_log;
 use crate::panel_notifications_remote::{
-    RemoteBroadcastRequest, authenticate_remote_broadcast, deliver_authenticated_broadcast,
-    load_remote_push_config,
+    authenticate_remote_broadcast, deliver_authenticated_broadcast, load_remote_push_config,
+    parse_remote_broadcast_json,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 
@@ -109,20 +109,18 @@ pub async fn panel_notifications_remote_broadcast(
     };
     let peer = peer_ip(&http);
 
-    // Authenticate the raw body before any JSON deserialization (CodeQL
-    // rust/unsafe-deserialization / alert #173).
+    // Authenticate the raw body before any JSON deserialization.
     if let Err(err) = authenticate_remote_broadcast(&cfg, &peer, timestamp, nonce, signature, &body)
     {
         return deny_remote("nt-remote", err);
     }
 
-    let parsed: RemoteBroadcastRequest = match serde_json::from_slice(&body) {
+    // Size-bounded parse (CodeQL rust/unsafe-deserialization / alert #173): validate
+    // length before serde_json::from_slice; struct uses deny_unknown_fields + bounded usernames.
+    let parsed = match parse_remote_broadcast_json(&body) {
         Ok(v) => v,
-        Err(_) => {
-            return json_body(
-                400,
-                serde_json::json!({ "ok": false, "error": "invalid JSON body" }),
-            );
+        Err(err) => {
+            return json_body(400, serde_json::json!({ "ok": false, "error": err }));
         }
     };
 

@@ -72,6 +72,7 @@ impl Default for RemotePushConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RemoteBroadcastRequest {
     pub title: String,
     #[serde(default)]
@@ -82,7 +83,7 @@ pub struct RemoteBroadcastRequest {
     #[serde(default)]
     pub all_users: bool,
     /// Optional username allowlist (case-insensitive match to panel accounts).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_bounded_usernames")]
     pub usernames: Vec<String>,
     /// Operator identity from api (Discord username / id). Audited only.
     #[serde(default)]
@@ -92,6 +93,28 @@ pub struct RemoteBroadcastRequest {
     pub body_enc: String,
     #[serde(default)]
     pub body_nonce: String,
+}
+
+fn deserialize_bounded_usernames<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let values = Vec::<String>::deserialize(deserializer)?;
+    if values.len() > MAX_USERNAMES {
+        return Err(serde::de::Error::custom("too many usernames"));
+    }
+    Ok(values)
+}
+
+/// Max JSON body accepted for remote broadcast (CodeQL rust/unsafe-deserialization).
+pub const MAX_REMOTE_BROADCAST_JSON_BYTES: usize = 64 * 1024;
+
+/// Size-check then deserialize a remote broadcast body.
+pub fn parse_remote_broadcast_json(raw: &[u8]) -> Result<RemoteBroadcastRequest, String> {
+    if raw.len() > MAX_REMOTE_BROADCAST_JSON_BYTES {
+        return Err("payload too large".into());
+    }
+    serde_json::from_slice(raw).map_err(|_| "invalid JSON body".into())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -420,8 +443,8 @@ pub fn deliver_broadcast(
 
 /// Authenticate a remote broadcast on the raw body before JSON deserialization.
 ///
-/// Callers must verify HMAC / replay / IP / rate limits first so CodeQL
-/// `rust/unsafe-deserialization` does not treat the body as untrusted input.
+/// Callers must verify HMAC / replay / IP / rate limits first, then parse with
+/// [`parse_remote_broadcast_json`] (size bound + deny_unknown_fields).
 pub fn authenticate_remote_broadcast(
     cfg: &RemotePushConfig,
     peer_ip: &str,
@@ -505,6 +528,24 @@ mod tests {
         assert!(!verify_remote_signature(
             &secret, ts, &nonce, body, &bad_sig
         ));
+    }
+
+    #[test]
+    fn parse_remote_broadcast_json_rejects_oversized_and_unknown_fields() {
+        let ok = br#"{"title":"hi","all_users":true}"#;
+        assert!(parse_remote_broadcast_json(ok).is_ok());
+
+        let oversized = vec![b'x'; MAX_REMOTE_BROADCAST_JSON_BYTES + 1];
+        assert_eq!(
+            parse_remote_broadcast_json(&oversized).unwrap_err(),
+            "payload too large"
+        );
+
+        let unknown = br#"{"title":"hi","all_users":true,"extra":1}"#;
+        assert_eq!(
+            parse_remote_broadcast_json(unknown).unwrap_err(),
+            "invalid JSON body"
+        );
     }
 
     #[test]
