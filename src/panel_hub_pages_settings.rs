@@ -209,7 +209,11 @@ pub fn setup_wizard_page_with(notice: Option<&str>, error: Option<&str>) -> Stri
     } else {
         ""
     };
-    let skip_checked = if cfg.skip_rdns { " checked" } else { "" };
+    let without_checked = if cfg.without_mail_domain || cfg.skip_rdns {
+        " checked"
+    } else {
+        ""
+    };
     let notice_html = notice
         .map(|n| format!(r#"<p class="notice ok">{}</p>"#, html_escape_setup(n)))
         .unwrap_or_default();
@@ -221,7 +225,7 @@ pub fn setup_wizard_page_with(notice: Option<&str>, error: Option<&str>) -> Stri
 <article class="section-card" style="max-width:720px;">
   <h2>SERVER CONFIGURATION</h2>
   <div class="notice info" style="margin:12px 0;padding:12px 14px;">
-    <p><strong>Choose wisely:</strong> If you are not going to use email service on this server, skip rDNS checks.</p>
+    <p><strong>Choose wisely:</strong> If you are not going to use email service on this server, install without a mail domain.</p>
     <p>Ensure that the hostname you provide below is set as rDNS (reverse DNS, also called PTR record) against your IP address. (Only required if you want to use email services on the same server).</p>
     <p>Make sure that the provided hostname also has an A record pointing to your server's IP address.</p>
     <p>If the above conditions fail, your server may not function as expected, especially for email services.</p>
@@ -238,8 +242,8 @@ pub fn setup_wizard_page_with(notice: Option<&str>, error: Option<&str>) -> Stri
     <input id="external_imap_host" name="external_imap_host" type="text" value="{imap}" placeholder="imap.provider.com">
     <label for="external_smtp_host">External SMTP host (optional)</label>
     <input id="external_smtp_host" name="external_smtp_host" type="text" value="{smtp}" placeholder="smtp.provider.com">
-    <label><input type="checkbox" name="skip_rdns" value="1"{skip_checked}> Skip rDNS/PTR check</label>
-    <p class="muted">Check this if you do not want to use email service on this server. New sites will skip SPF/DKIM/DMARC auto-DNS.</p>
+    <label><input type="checkbox" name="without_mail_domain" value="1"{without_checked}> Install without a mail domain</label>
+    <p class="muted">Skips SPF/DKIM/DMARC auto-DNS, rDNS guidance, and the default <code>info@</code> mailbox. Leave unchecked for Host email installs that should create <code>info@&lt;domain&gt;</code> automatically.</p>
     <button type="submit" class="btn-primary">Save configuration</button>
   </form>
 </article>
@@ -257,7 +261,7 @@ pub fn setup_wizard_page_with(notice: Option<&str>, error: Option<&str>) -> Stri
         ext_sel = ext_sel,
         imap = html_escape_setup(&cfg.external_imap_host),
         smtp = html_escape_setup(&cfg.external_smtp_host),
-        skip_checked = skip_checked,
+        without_checked = without_checked,
     );
     feature_shell(
         &[

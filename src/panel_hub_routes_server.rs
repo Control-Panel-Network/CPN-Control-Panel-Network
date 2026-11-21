@@ -1381,6 +1381,8 @@ pub struct SetupOnboardingForm {
     #[serde(default)]
     skip_rdns: String,
     #[serde(default)]
+    without_mail_domain: String,
+    #[serde(default)]
     external_imap_host: String,
     #[serde(default)]
     external_smtp_host: String,
@@ -1407,13 +1409,22 @@ pub async fn settings_setup_save(
         "external" => MailMode::External,
         _ => MailMode::Local,
     };
+    let without_mail_domain = matches!(
+        form.without_mail_domain
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "1" | "true" | "on" | "yes"
+    ) || matches!(
+        form.skip_rdns.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "on" | "yes"
+    );
     let cfg = MailOnboarding {
         schema_version: 1,
         hostname: form.hostname.trim().to_string(),
-        skip_rdns: matches!(
-            form.skip_rdns.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "on" | "yes"
-        ),
+        // Keep skip_rdns aligned: both mean "no local mail domain on this server".
+        skip_rdns: without_mail_domain,
+        without_mail_domain,
         mail_mode,
         external_imap_host: form.external_imap_host.trim().to_string(),
         external_smtp_host: form.external_smtp_host.trim().to_string(),

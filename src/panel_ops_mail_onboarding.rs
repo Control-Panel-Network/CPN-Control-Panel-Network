@@ -19,6 +19,9 @@ pub struct MailOnboarding {
     pub schema_version: u32,
     pub hostname: String,
     pub skip_rdns: bool,
+    /// When true, skip mail-domain DNS and the default `info@` mailbox on install.
+    #[serde(default)]
+    pub without_mail_domain: bool,
     pub mail_mode: MailMode,
     #[serde(default)]
     pub external_imap_host: String,
@@ -34,6 +37,7 @@ impl Default for MailOnboarding {
             schema_version: 1,
             hostname: String::new(),
             skip_rdns: false,
+            without_mail_domain: false,
             mail_mode: MailMode::Local,
             external_imap_host: String::new(),
             external_smtp_host: String::new(),

@@ -371,6 +371,7 @@ pub mod panel_ops_mail_extra;
 pub mod panel_ops_mail_filters;
 pub mod panel_ops_mail_lists;
 pub mod panel_ops_mail_onboarding;
+pub mod panel_ops_mail_default_mailbox;
 pub mod panel_ops_mail_ssl;
 pub mod panel_ops_mailbox_folders;
 pub mod panel_ops_mailbox_provision;
