@@ -1,10 +1,10 @@
 //! Nginx / Caddy / OpenLiteSpeed reverse-proxy snippets for webmail.
 
-pub fn nginx_webmail_conf(docroot: &str) -> String {
+pub fn nginx_webmail_conf(docroot: &str, port: u16) -> String {
     format!(
         "# Managed by CPN (issue #6)\n\
          server {{\n\
-           listen 127.0.0.1:8080;\n\
+           listen 127.0.0.1:{port};\n\
            server_name localhost;\n\
            root {docroot};\n\
            index index.php index.html;\n\
@@ -28,10 +28,10 @@ pub fn nginx_webmail_conf(docroot: &str) -> String {
     )
 }
 
-pub fn caddy_webmail_snippet(docroot: &str) -> String {
+pub fn caddy_webmail_snippet(docroot: &str, port: u16) -> String {
     format!(
         "# Managed by CPN (issue #6)\n\
-         http://127.0.0.1:8080 {{\n\
+         http://127.0.0.1:{port} {{\n\
            @denied path /data /data/* /temp /temp/* /logs /logs/* /config /config/* /.*\n\
            handle @denied {{\n\
              respond 403\n\
@@ -109,6 +109,13 @@ END_rules\n\
     )
 }
 
+/// OLS listener + virtualHost block for the CPN webmail loopback.
+pub fn ols_webmail_listener_block(port: u16) -> String {
+    format!(
+        "\nvirtualHost CPNWebmail {{\n  vhRoot                  /opt/cpn-webmail/\n  configFile              $SERVER_ROOT/conf/vhosts/CPNWebmail/vhconf.conf\n  allowSymbolLink         1\n  enableScript            1\n  restrained              1\n}}\n\nlistener CPNWebmailHttp {{\n  address                 127.0.0.1:{port}\n  secure                  0\n  map                     CPNWebmail *\n}}\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,17 +123,21 @@ mod tests {
 
     #[test]
     fn frontend_configs_deny_sensitive_paths() {
-        let nginx = nginx_webmail_conf("/opt/cpn-webmail/snappymail");
+        let nginx = nginx_webmail_conf("/opt/cpn-webmail/snappymail", 8080);
+        assert!(nginx.contains("listen 127.0.0.1:8080"));
         assert!(nginx.contains("return 403") && nginx.contains("temp|logs|data"));
         assert!(
             nginx.contains("PATH_INFO") && nginx.contains("fastcgi_split_path_info"),
             "nginx must accept index.php/ PATH_INFO for SnappyMail SPA"
         );
-        let caddy = caddy_webmail_snippet("/opt/cpn-webmail/snappymail");
+        let caddy = caddy_webmail_snippet("/opt/cpn-webmail/snappymail", 18081);
+        assert!(caddy.contains("http://127.0.0.1:18081"));
         assert!(caddy.contains("respond 403") && caddy.contains("/data /data/*"));
         let vh = ols_webmail_vhconf("/opt/cpn-webmail/snappymail");
         assert!(vh.contains("context /data/") && vh.contains("deny                  *"));
         assert!(vh.contains("RewriteRule ^/(data|temp|logs|config)(/.*)?$ - [F,L]"));
+        let listener = ols_webmail_listener_block(8088);
+        assert!(listener.contains("127.0.0.1:8088"));
         assert!(SNAPPYMAIL_DATA_DIR.starts_with("/var/lib/"));
     }
 }
