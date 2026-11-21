@@ -1,10 +1,11 @@
 //! Server > Logs route (panel activity plus links to every other log).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_blocking, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    captured_session_exp, html_blocking, login_redirect, panel_shell_blocking, require_panel_user,
+};
 use crate::panel_hub_pages_server_log_view::host_log_page;
 use crate::panel_hub_pages_server_logs::server_logs_page;
-use crate::panel_pages::panel_shell;
 use crate::panel_server_logs::{DEFAULT_PER_PAGE, HostLogKind};
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use std::sync::Arc;
@@ -14,7 +15,17 @@ pub async fn server_logs_route(http: HttpRequest, state: web::Data<Arc<AppState>
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_blocking(move || panel_shell(&user, "logs", "Logs", &server_logs_page(&user))).await
+    let session_exp_shell = captured_session_exp(&http);
+    html_blocking(move || {
+        panel_shell_blocking(
+            &user,
+            "logs",
+            "Logs",
+            &server_logs_page(&user),
+            session_exp_shell,
+        )
+    })
+    .await
 }
 
 /// One searchable, paginated page per host log (`/server/logs/panel`, `access`, `error`, `email`,
@@ -46,12 +57,14 @@ pub async fn server_log_view_route(
         .get("per")
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(DEFAULT_PER_PAGE);
+    let session_exp_shell = captured_session_exp(&http);
     html_blocking(move || {
-        panel_shell(
+        panel_shell_blocking(
             &user,
             "logs",
             kind.title(),
             &host_log_page(&user, kind, &search, page, per),
+            session_exp_shell,
         )
     })
     .await

@@ -1,11 +1,12 @@
 //! Incremental backup job routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_backups_incremental::{
     backups_incremental_page, run_incremental_form, save_incremental_form,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -19,7 +20,8 @@ pub async fn backups_incremental_route(
         return login_redirect(&http);
     };
     if !crate::panel_feature_gate::backup_destinations_unlocked() {
-        return html_ok(panel_shell(
+        return html_ok(authenticated_panel_shell(
+            &http,
             &user,
             "backups",
             "Incremental backups",
@@ -28,7 +30,8 @@ pub async fn backups_incremental_route(
             ),
         ));
     }
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Incremental backups",

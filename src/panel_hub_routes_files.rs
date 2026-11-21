@@ -2,13 +2,15 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_blocking_budget, html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking_budget, html_ok, login_redirect,
+    panel_shell_blocking, require_panel_user,
+};
 use crate::panel_hub_pages_files::root_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, root_redirect, run_op, same_origin_ok};
 use crate::panel_ops_files::{
     MAX_UPLOAD_BYTES, check_rate_limit, read_text, upload_bytes, verify_files_csrf,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, route, web};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -25,7 +27,8 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Bo
         return Err(Box::new(login_redirect(http)));
     };
     if !is_panel_admin(&user) {
-        return Err(Box::new(html_ok(panel_shell(
+        return Err(Box::new(html_ok(authenticated_panel_shell(
+            http,
             &user,
             "root-files",
             "Root File Manager",
@@ -42,7 +45,11 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Bo
     Ok(user)
 }
 
-async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpResponse {
+async fn render_root_files(
+    http: &HttpRequest,
+    user: &str,
+    query: &HashMap<String, String>,
+) -> HttpResponse {
     let path = query
         .get("path")
         .cloned()
@@ -51,6 +58,7 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
     let error = query.get("error").cloned();
     let edit = query.get("edit").cloned();
     let user = user.to_string();
+    let session_exp_shell = captured_session_exp(http);
     html_blocking_budget(FILES_PAGE_BUDGET, move || {
         let jail = Path::new("/");
         let (edit_path, edit_content, err2) = if let Some(ref ep) = edit {
@@ -62,7 +70,7 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
             (None, None, None)
         };
         let err = error.as_deref().or(err2.as_deref());
-        panel_shell(
+        panel_shell_blocking(
             &user,
             "root-files",
             "Root File Manager",
@@ -74,6 +82,7 @@ async fn render_root_files(user: &str, query: &HashMap<String, String>) -> HttpR
                 edit_path.as_deref(),
                 edit_content.as_deref(),
             ),
+            session_exp_shell,
         )
     })
     .await
@@ -86,7 +95,7 @@ pub async fn server_files_page(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
-        Ok(user) => render_root_files(&user, &query).await,
+        Ok(user) => render_root_files(&http, &user, &query).await,
         Err(resp) => *resp,
     }
 }
@@ -98,7 +107,7 @@ pub async fn filemanager_alias(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
-        Ok(user) => render_root_files(&user, &query).await,
+        Ok(user) => render_root_files(&http, &user, &query).await,
         Err(resp) => *resp,
     }
 }
@@ -110,7 +119,7 @@ pub async fn server_filemanager_alias(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
-        Ok(user) => render_root_files(&user, &query).await,
+        Ok(user) => render_root_files(&http, &user, &query).await,
         Err(resp) => *resp,
     }
 }
@@ -122,7 +131,7 @@ pub async fn server_files_post(
     query: web::Query<HashMap<String, String>>,
 ) -> HttpResponse {
     match require_admin_user(&state, &http) {
-        Ok(user) => render_root_files(&user, &query).await,
+        Ok(user) => render_root_files(&http, &user, &query).await,
         Err(resp) => *resp,
     }
 }

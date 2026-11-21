@@ -3,7 +3,8 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
+    authenticated_panel_shell, captured_session_exp, html_blocking, html_ok, login_redirect,
+    panel_shell_blocking, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_php_cfg::php_configurations_page;
 use crate::panel_hub_pages_php_ext::php_extensions_page;
@@ -13,7 +14,6 @@ use crate::panel_ops_php_ini::{
     BASIC_BOOL_KEYS, BASIC_VALUE_KEYS, apply_basic_settings, resolve_php_ini_target,
     restart_php_services, write_php_ini_with_backup,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -95,7 +95,8 @@ pub async fn server_php_overview(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "PHP",
@@ -121,8 +122,9 @@ pub async fn server_php_extensions(
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
     let admin = is_panel_admin(&user);
+    let session_exp_shell = captured_session_exp(&http);
     html_blocking(move || {
-        panel_shell(
+        panel_shell_blocking(
             &user,
             "server",
             "PHP Extensions",
@@ -135,6 +137,7 @@ pub async fn server_php_extensions(
                 error.as_deref(),
                 admin,
             ),
+            session_exp_shell,
         )
     })
     .await
@@ -292,7 +295,8 @@ pub async fn server_php_configs(
     };
     let php = query.get("php").map(String::as_str);
     let tab = query.get("tab").map(String::as_str).unwrap_or("basic");
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "PHP Configurations",

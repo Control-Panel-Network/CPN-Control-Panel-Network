@@ -3,10 +3,10 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_notice,
+    require_panel_user,
 };
 use crate::panel_hub_pages_system_repair::{system_repair_json_report_page, system_repair_page};
-use crate::panel_pages::panel_shell;
 use crate::system_repair::{PRODUCT_NAME, run_suite_ex};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
@@ -68,7 +68,8 @@ pub async fn system_repair_route(
     // never blocks on host probes (avoids the "gathering host status" 503 stub).
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         PRODUCT_NAME,
@@ -178,7 +179,8 @@ pub async fn system_repair_report_route(
             Some(err),
         ),
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "System Repair JSON",

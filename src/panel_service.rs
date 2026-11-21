@@ -130,7 +130,7 @@ pub fn save_allow_remote_preference(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn write_file(path: &Path, contents: &str, mode: u32) -> Result<(), String> {
+fn write_file(path: &Path, contents: &str, _mode: u32) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create directory {}: {error}", parent.display()))?;

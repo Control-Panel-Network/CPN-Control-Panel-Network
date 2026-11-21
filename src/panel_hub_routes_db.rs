@@ -2,7 +2,9 @@
 
 use crate::installer::AppState;
 use crate::panel_db_acl::require_manage_database;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_db_manage::{
     databases_all_page_for, databases_delete_page_for, databases_password_page_for,
 };
@@ -15,7 +17,6 @@ use crate::panel_hub_pages_hosting::{
 use crate::panel_ops_db::{
     change_database_user_password, drop_database_with_optional_users, is_protected_db_user,
 };
-use crate::panel_pages::panel_shell;
 use crate::uninstall_confirm::{CONFIRM_REQUIRED_MSG, confirm_accepted};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
@@ -29,7 +30,8 @@ pub async fn databases_all_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "All Databases",
@@ -50,7 +52,8 @@ pub async fn databases_create_get(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Create Database",
@@ -91,7 +94,8 @@ pub async fn databases_delete_get(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Delete Database",
@@ -181,7 +185,8 @@ pub async fn databases_password_get(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Change database password",
@@ -276,7 +281,8 @@ pub async fn databases_manager_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "MariaDB Manager",
@@ -296,7 +302,8 @@ pub async fn databases_phpmyadmin_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "phpMyAdmin",
@@ -354,7 +361,8 @@ pub async fn ftp_overview_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "FTP",
@@ -371,7 +379,8 @@ pub async fn ftp_accounts_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "SFTP Accounts",
@@ -401,7 +410,8 @@ pub async fn ftp_create(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Create SFTP Account",
@@ -454,7 +464,8 @@ pub async fn ftp_delete(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Delete SFTP Account",
@@ -489,7 +500,8 @@ pub async fn ftp_reset(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "databases",
         "Reset SFTP",
