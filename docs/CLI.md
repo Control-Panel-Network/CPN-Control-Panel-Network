@@ -228,7 +228,9 @@ Options used by account commands:
 
 ## Passkeys
 
-Manage WebAuthn passkeys for panel accounts from SSH (no web UI). Output never includes credential secrets; only id, label, and timestamps.
+List, rename-by-label inspection, and remove WebAuthn passkeys from SSH. Output never includes credential secrets; only `id`, `label`, and timestamps.
+
+**Registration** (Windows Hello, USB security keys, browser passkeys) cannot finish in SSH alone. Use `sudo cpn mfa enroll-url` (see **TOTP and MFA** below) and complete **Register passkey** in a desktop browser over HTTPS.
 
 ```bash
 sudo cpn passkey list --username admin
@@ -240,10 +242,14 @@ sudo cpn passkey clear --username admin --yes
 - `remove`: delete one passkey by `--id` from `list`.
 - `clear`: delete every passkey for the account; confirm with `yes`/`y` (case-insensitive) or pass `--yes` to skip the prompt. `no`/`n` (or empty) aborts.
 - All mutations and list require root (`sudo cpn …`), or `CPN_ALLOW_NONROOT=1` with a lab data dir.
+- In the browser, registration tries **platform** authenticators first (Windows Hello), then falls back to a **cross-platform** security key if the user cancels or the platform path is unavailable. In Microsoft Edge, **Save another way** can keep a local Hello / FIDO2 credential instead of a synced passkey when that fits your policy.
 
 ## TOTP and MFA
 
-Clear or inspect authenticator (TOTP) state from SSH. Output never includes secrets or backup codes.
+Inspect, enroll, or clear administrator MFA from SSH. Sensitive values (TOTP secrets, backup codes, enroll tokens) are never printed to stdout.
+
+> [!NOTE]
+> **`mfa status`**, **`mfa enroll-url`**, **`totp begin`**, and **`totp confirm`** ship in CPN builds that include the MFA SSH enroll CLI (`c77438e` and newer). Packages cut from older `stable` commits already provide `totp status|disable|clear`, `mfa clear`, and `passkey list|remove|clear`. Run `cpn mfa --help` on the host to see what your installed binary exposes.
 
 ```bash
 sudo cpn mfa status --username admin
@@ -256,8 +262,48 @@ sudo cpn totp clear --username admin --yes
 sudo cpn mfa clear --username admin --yes
 ```
 
-- `mfa status`: prints `totp_enabled`, `totp_pending_enroll`, `passkey_count`, `totp_required`, `needs_mfa_enrollment`, and whether an unused CLI enroll token is pending (no secrets).
-- `mfa enroll-url`: **root only**. Creates a **single-use** HTTPS link (15-minute TTL) that signs the user into the panel and opens MFA enrollment (TOTP QR or passkey register in the browser). Passkey / Windows Hello enrollment **cannot** run purely over SSH; open the printed URL on a desktop browser. WebAuthn requires **HTTPS** and an RP ID that matches the browser hostname. Set `cpn network public-url` (or panel hostname) so the link is not loopback-only. `http://IP` or mismatched hosts often fail passkey registration.
+### SSH: enroll passkeys or Windows Hello (`mfa enroll-url`)
+
+Passkeys and Windows Hello need a user-present browser ceremony. Operators on SSH mint a short-lived HTTPS link; the administrator opens it on a desktop machine with the authenticator.
+
+1. On the server: `sudo cpn mfa enroll-url --username USER`.
+2. Copy `enroll_url=` from the CLI output. Open it in a desktop browser within **15 minutes** (single use).
+3. The URL uses the panel **primary public HTTPS base** (`panel_public_url`, else `https://<panel_hostname>`). The token signs the user in and opens MFA enrollment, or **Modify User → Security** (`/account/users/modify?tab=security`) when MFA is already enrolled.
+4. Click **Register passkey**. Complete Windows Hello (platform) or, if prompted, a USB/NFC/Bluetooth security key.
+5. Verify over SSH: `sudo cpn passkey list --username USER`.
+
+**Add more passkeys** (second Hello, YubiKey, another laptop): repeat `enroll-url` for the same user and register again on the Security tab. **TOTP is one secret per account**; additional factors are extra passkeys (or change TOTP via the panel / `totp` CLI).
+
+**Enroll link rules:**
+
+| Rule | Detail |
+|---|---|
+| TTL | **15 minutes** (`expires_in_secs=` in CLI output) |
+| Use count | **Single-use**; an opened or expired link cannot be reused |
+| Pending links | **One unused link per username**; a new `enroll-url` **replaces** any prior unused link for that user (`cli_enroll_token_pending=` in `mfa status`) |
+| Disabled accounts | `enroll-url` fails until the account is enabled |
+
+**Hostname / RP ID (passkeys):**
+
+- Enroll and day-to-day login should use the **same HTTPS hostname** so the browser RP ID matches.
+- Do not rely on `http://SERVER_IP` or raw IP URLs for passkey registration. Set `sudo cpn network set-hostname` / `sudo cpn network set-public-url` (or Settings) so links are not loopback-only; the CLI may warn when `panel_public_url` is unset.
+- **Host aliases** on one install need a **separate** passkey registered on each alias hostname. TOTP works on every alias. See [MULTI-HOSTNAME-MFA.md](MULTI-HOSTNAME-MFA.md).
+
+### SSH: TOTP enroll (`totp begin` / `confirm`)
+
+```bash
+sudo cpn totp begin --username admin
+# stdout: totp_enroll_file=<mode-600 temp path> (base32 secret + otpauth URI inside; not printed)
+sudo cpn totp confirm --username admin --code 123456
+# backup codes land in another mode-600 temp file (backup_codes_file=); not stdout
+```
+
+Scan the `otpauth` URI from the temp file with an authenticator app. Delete or secure those files after enrollment.
+
+### Command reference
+
+- `mfa status`: `totp_enabled`, `totp_pending_enroll`, `passkey_count`, `totp_required`, `needs_mfa_enrollment`, `cli_enroll_token_pending` (booleans/counts only).
+- `mfa enroll-url`: **root only**. Prints `enroll_url=`, `expires_at_unix=`, `expires_in_secs=`, and operator notes (no raw token beyond the URL). Passkey / Windows Hello enrollment **cannot** run purely over SSH; open the printed URL on a desktop browser.
 - `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
 - `totp begin`: starts TOTP enrollment and writes the base32 secret and `otpauth` URI to a **mode-600** temp file (`totp_enroll_file=`); nothing sensitive is printed to stdout.
 - `totp confirm`: completes pending enrollment with `--code`; backup codes are written to a mode-600 temp file (`backup_codes_file=`), not stdout.
