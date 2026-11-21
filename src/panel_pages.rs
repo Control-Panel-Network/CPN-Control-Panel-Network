@@ -246,6 +246,13 @@ button { font:inherit; cursor:pointer; }
 .docker-list-wrap.table-wrap {
   overflow-x:hidden; overflow-y:visible; overscroll-behavior-x:none;
 }
+.docker-owner-assign .docker-owner-select {
+  min-height:36px; padding:0 10px; border:1px solid var(--hairline); border-radius:10px;
+  background:var(--canvas); color:var(--ink); font:inherit; box-sizing:border-box;
+}
+[data-color-mode=dark] .docker-owner-assign .docker-owner-select {
+  background:#12151c; border-color:#3b4558; color:#f3f6fb;
+}
 .docker-list-toolbar {
   display:flex; flex-wrap:wrap; gap:10px 12px; align-items:end; margin:0 0 14px;
 }
@@ -417,6 +424,16 @@ code { font-size:.9em; word-break:break-word; }
 }
 
 pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> String {
+    panel_shell_exp(username, active, title, main, None)
+}
+
+pub fn panel_shell_exp(
+    username: &str,
+    active: &str,
+    title: &str,
+    main: &str,
+    session_exp_unix: Option<u64>,
+) -> String {
     let (active, title, main_owned) = if let Some((gate_active, gate_title, gate_main)) =
         crate::account_security::security_gate_override(username, active)
     {
@@ -426,7 +443,10 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
     };
     let main = main_owned.as_str();
     let nav = crate::panel_nav_tree::nav_links_html(active, username);
-    let header = crate::panel_sidebar::sidebar_header_html(username);
+    let header = crate::panel_sidebar::sidebar_header_html(username, session_exp_unix);
+    let session_exp_attr = session_exp_unix
+        .map(|exp| format!(" data-cpn-session-exp=\"{exp}\""))
+        .unwrap_or_default();
     let color_mode = crate::panel_user_prefs::load_user_color_mode(username);
     let design = crate::panel_theme::load_panel_design();
     let styles = format!(
@@ -479,7 +499,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
   <style>{styles}</style>
   {boot}
 </head>
-<body data-color-mode="{mode}">
+<body data-color-mode="{mode}"{session_exp_attr}>
   <div class="panel-layout" data-page="{active}">
     <button type="button" id="nav-backdrop" class="sidebar-backdrop" aria-label="Close navigation" tabindex="-1"></button>
     <aside id="panel-sidebar" class="sidebar" aria-label="Panel navigation">
@@ -519,6 +539,7 @@ pub fn panel_shell(username: &str, active: &str, title: &str, main: &str) -> Str
         main = main,
         script = script,
         plugin_float = plugin_float,
+        session_exp_attr = session_exp_attr,
     )
 }
 

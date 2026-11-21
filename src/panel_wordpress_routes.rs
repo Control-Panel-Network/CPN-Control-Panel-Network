@@ -1,11 +1,10 @@
 //! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
     html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_category_overviews::wordpress_hub_main;
-use crate::panel_pages::panel_shell;
 use crate::panel_wordpress_ui::{
     WordpressInstallDraft, wordpress_install_page, wordpress_list_page, wordpress_manage_page,
     wordpress_subsites_install_page, wordpress_subsites_list_page,
@@ -158,7 +157,7 @@ pub async fn wordpress_overview_route(
             .append_header(("Location", loc))
             .finish();
     }
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "wordpress",
         "WordPress",
@@ -178,13 +177,15 @@ pub async fn wordpress_list_route(
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
     let q = query.get("q").cloned();
+    let session_exp_shell = captured_session_exp(&http);
     html_blocking(move || {
         let wp_cli = detect_wp_cli();
-        panel_shell(
+        panel_shell_blocking(
             &user,
             "wordpress",
             "WordPress Sites",
             &wordpress_list_page(notice.as_deref(), error.as_deref(), &wp_cli, q.as_deref()),
+            session_exp_shell,
         )
     })
     .await
@@ -202,9 +203,10 @@ pub async fn wordpress_subsites_list_route(
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
     let q = query.get("q").cloned();
+    let session_exp_shell = captured_session_exp(&http);
     html_blocking(move || {
         let wp_cli = detect_wp_cli();
-        panel_shell(
+        panel_shell_blocking(
             &user,
             "wordpress-subsites",
             "WordPress Sub-sites",
@@ -214,6 +216,7 @@ pub async fn wordpress_subsites_list_route(
                 &wp_cli,
                 q.as_deref(),
             ),
+            session_exp_shell,
         )
     })
     .await
@@ -231,7 +234,7 @@ pub async fn wordpress_install_get(
     let draft = read_install_draft(&http);
     html_ok_install(
         &http,
-        panel_shell(
+        authenticated_panel_shell(&http, 
             &user,
             "wordpress",
             "Install WordPress",
@@ -257,7 +260,7 @@ pub async fn wordpress_subsites_install_get(
     let draft = read_install_draft(&http);
     html_ok_install(
         &http,
-        panel_shell(
+        authenticated_panel_shell(&http, 
             &user,
             "wordpress-subsites",
             "Install WordPress Sub-site",
@@ -509,7 +512,7 @@ pub async fn wordpress_manage_route(
             Some(&format!("WordPress site `{domain}` not found")),
         );
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "wordpress",
         "Manage WordPress",

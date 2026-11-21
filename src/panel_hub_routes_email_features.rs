@@ -3,7 +3,7 @@
 use crate::installer::AppState;
 use crate::mail_postfix_maps::owner_for_mail_domain;
 use crate::packages::{QuotaResource, require_quota};
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_email_features::{
     autoresponders_page, email_filters_page, mailing_lists_page,
 };
@@ -15,7 +15,6 @@ use crate::panel_ops_mail_filters::{add_filter, remove_filter};
 use crate::panel_ops_mail_lists::{
     add_list_member, apply_list_maps, create_mailing_list, delete_mailing_list, remove_list_member,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,7 +35,7 @@ pub async fn email_autoresponders_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "email",
         "Autoresponders",
@@ -111,7 +110,7 @@ pub async fn email_filters_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "email",
         "Email Filters",
@@ -177,7 +176,7 @@ pub async fn email_lists_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "email",
         "Mailing Lists",

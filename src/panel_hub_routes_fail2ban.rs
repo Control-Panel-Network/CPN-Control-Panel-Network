@@ -3,10 +3,9 @@
 use crate::installer::AppState;
 use crate::panel_action_log;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, require_panel_user};
 use crate::panel_hub_pages_fail2ban::fail2ban_manager_page;
 use crate::panel_ops_fail2ban::{list_banned, unban_ip, verify_fail2ban_csrf};
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -41,7 +40,7 @@ pub async fn security_fail2ban(http: HttpRequest, state: web::Data<Arc<AppState>
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "security",
         "Fail2ban",

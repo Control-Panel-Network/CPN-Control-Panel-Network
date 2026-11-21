@@ -10,10 +10,9 @@ use crate::account_mgmt::{
 };
 use crate::account_totp::otpauth_qr_svg;
 use crate::installer::AppState;
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_profile::users_modify_page_with_tab;
 use crate::panel_hub_pages_profile::users_profile_page;
-use crate::panel_pages::panel_shell;
 use crate::panel_session::{
     create_session_token, issue_session_cookie_headers, request_auth_cookie_port, session_secret,
 };
@@ -37,6 +36,7 @@ fn request_secure(http: &HttpRequest) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 fn modify_html(
+    http: &HttpRequest,
     user: &str,
     notice: Option<&str>,
     error: Option<&str>,
@@ -46,7 +46,8 @@ fn modify_html(
     generated_password: Option<&str>,
     initial_tab: &str,
 ) -> HttpResponse {
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(
+        http,
         user,
         "users",
         "Modify User",
@@ -108,7 +109,7 @@ pub async fn users_profile_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "users",
         "View Profile",
@@ -149,6 +150,7 @@ pub async fn users_modify_get(
         initial_tab = "security";
     }
     modify_html(
+        &http,
         &user,
         query.get("notice").map(String::as_str),
         query.get("error").map(String::as_str),
@@ -225,6 +227,7 @@ pub async fn users_profile_password_post(
         Ok(result) => {
             if result.generated_password.is_some() {
                 modify_html(
+                    &http,
                     &user,
                     Some("Password updated"),
                     None,

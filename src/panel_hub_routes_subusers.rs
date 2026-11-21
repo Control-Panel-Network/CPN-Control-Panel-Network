@@ -2,9 +2,8 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html};
-use crate::panel_hub_http::{html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
 use crate::panel_hub_pages_subusers::users_subusers_page;
-use crate::panel_pages::panel_shell;
 use crate::panel_site_tools_security::same_origin_ok;
 use crate::panel_subusers::{
     can_manage_subusers, create_subuser, delete_subuser, update_subuser_capabilities,
@@ -55,7 +54,7 @@ pub async fn users_subusers_get(
     if !can_manage_subusers(&user) {
         return admin_only_html(&user, "Sub-users");
     }
-    html_ok(panel_shell(
+    html_ok(authenticated_panel_shell(&http, 
         &user,
         "users",
         "Sub-users",
@@ -98,7 +97,7 @@ pub async fn users_subusers_create_post(
     ) {
         Ok((created, generated)) => {
             if let Some(password) = generated {
-                return html_ok(panel_shell(
+                return html_ok(authenticated_panel_shell(&http, 
                     &user,
                     "users",
                     "Sub-users",
