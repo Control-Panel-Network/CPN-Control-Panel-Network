@@ -110,10 +110,10 @@ pub fn sync_public_login_facts() {
 
 /// Cached or live public IPv4 for MOTD (never treated as a login URL).
 pub fn load_display_server_public_ipv4() -> String {
-    if let Some(ip) = read_trimmed(&etc_path("server_public_ipv4")) {
-        if !ip.eq_ignore_ascii_case("Unavailable") {
-            return ip;
-        }
+    if let Some(ip) = read_trimmed(&etc_path("server_public_ipv4"))
+        && !ip.eq_ignore_ascii_case("Unavailable")
+    {
+        return ip;
     }
     display_server_public_ipv4()
 }
