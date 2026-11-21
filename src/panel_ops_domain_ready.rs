@@ -64,6 +64,10 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
                 Ok(msg) => report.steps.push(msg),
                 Err(e) => report.warnings.push(format!("Mail DNS: {e}")),
             }
+            match crate::panel_ops_opendkim::ensure_opendkim_for_domain(&domain) {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!("OpenDKIM: {e}")),
+            }
             match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox(&domain) {
                 Ok(r) => report.steps.push(r.summary()),
                 Err(e) => report.warnings.push(format!("Default info@ mailbox: {e}")),

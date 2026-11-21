@@ -15,7 +15,14 @@ pub fn mail_auth_dns_plans(
     server_ip: Option<&str>,
 ) -> Vec<DnsRecordPlan> {
     let domain = domain.trim().trim_end_matches('.').to_ascii_lowercase();
-    let spf = "v=spf1 a mx ~all".to_string();
+    // Prefer a + mx, and add this host's public IPv4 when known (no invented includes).
+    let spf = match server_ip
+        .map(str::trim)
+        .filter(|v| !v.is_empty() && *v != "Unavailable")
+    {
+        Some(ip) => format!("v=spf1 a mx ip4:{ip} ~all"),
+        None => "v=spf1 a mx ~all".to_string(),
+    };
     let dmarc = format!("v=DMARC1; p=none; rua=mailto:dmarc@{domain}");
     let mut plans = vec![
         DnsRecordPlan {
@@ -23,7 +30,7 @@ pub fn mail_auth_dns_plans(
             name: domain.clone(),
             content: spf,
             ttl: 3600,
-            note: "SPF: allow this host A/MX to send mail.".into(),
+            note: "SPF: allow this host A/MX (and ip4 when known) to send mail.".into(),
         },
         DnsRecordPlan {
             record_type: "TXT".into(),
@@ -224,9 +231,30 @@ mod tests {
     fn plans_include_spf_dkim_dmarc() {
         let plans =
             mail_auth_dns_plans("example.com", "v=DKIM1; k=rsa; p=ABC", Some("203.0.113.10"));
-        assert!(plans.iter().any(|p| p.content.starts_with("v=spf1")));
+        let spf = plans
+            .iter()
+            .find(|p| p.content.starts_with("v=spf1"))
+            .expect("SPF");
+        assert!(spf.content.contains("ip4:203.0.113.10"));
+        assert!(spf.content.contains("a mx"));
         assert!(plans.iter().any(|p| p.name.contains("_domainkey")));
-        assert!(plans.iter().any(|p| p.name.starts_with("_dmarc")));
+        assert!(plans.iter().any(|p| {
+            p.name.starts_with("_dmarc")
+                && p.content.contains("p=none")
+                && p.content.contains("rua=")
+        }));
+        assert!(plans.iter().any(|p| p.record_type == "MX"));
+    }
+
+    #[test]
+    fn plans_spf_without_ip_omits_ip4() {
+        let plans = mail_auth_dns_plans("example.com", "v=DKIM1; k=rsa; p=ABC", None);
+        let spf = plans
+            .iter()
+            .find(|p| p.content.starts_with("v=spf1"))
+            .expect("SPF");
+        assert_eq!(spf.content, "v=spf1 a mx ~all");
+        assert!(!spf.content.contains("ip4:"));
     }
 
     #[test]
@@ -239,5 +267,19 @@ mod tests {
             assert!(merged.contains("IN A"));
             assert!(merged.contains("v=spf1"));
         });
+    }
+
+    #[test]
+    fn zone_line_escapes_txt() {
+        let plan = DnsRecordPlan {
+            record_type: "TXT".into(),
+            name: "example.com".into(),
+            content: r#"v=spf1 "quoted" ~all"#.into(),
+            ttl: 3600,
+            note: String::new(),
+        };
+        let line = zone_line_for_plan(&plan);
+        assert!(line.contains(r#"\""#));
+        assert!(line.contains("IN TXT"));
     }
 }
