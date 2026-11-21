@@ -182,9 +182,7 @@ pub async fn account_security_enroll_cli(
         return enroll_cli_invalid("This enroll link is invalid or the account no longer exists.");
     }
     if crate::account_lifecycle::account_is_disabled(&username) {
-        return enroll_cli_invalid(
-            "This account is disabled. Ask an operator to enable it first.",
-        );
+        return enroll_cli_invalid("This account is disabled. Ask an operator to enable it first.");
     }
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -212,9 +210,7 @@ pub async fn account_security_enroll_cli_post(
         return enroll_cli_invalid("This enroll link is invalid or the account no longer exists.");
     }
     if crate::account_lifecycle::account_is_disabled(&username) {
-        return enroll_cli_invalid(
-            "This account is disabled. Ask an operator to enable it first.",
-        );
+        return enroll_cli_invalid("This account is disabled. Ask an operator to enable it first.");
     }
     enroll_cli_session_redirect(&http, state.get_ref(), &username)
 }
