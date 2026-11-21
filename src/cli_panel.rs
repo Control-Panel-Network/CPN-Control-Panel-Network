@@ -2,8 +2,7 @@
 
 use crate::motd::ensure_motd_installed;
 use crate::panel_access_mode::{
-    domain_only_motd_note, ip_backup_http_login_url, load_panel_access_mode,
-    PanelAccessMode,
+    PanelAccessMode, domain_only_motd_note, ip_backup_http_login_url, load_panel_access_mode,
 };
 use crate::panel_login_facts::{
     load_display_listen_port, load_display_panel_hostname, load_display_panel_public_url,
@@ -131,11 +130,10 @@ fn print_url_human(info: &PanelUrlInfo, indent: &str) {
             "{indent}Note          : IP backup is HTTP only; never https://IP:{}",
             info.listen_port
         );
-    } else if info.access_mode == PanelAccessMode::DomainOnly && !is_loopback_login_base(&info.primary_base) {
-        println!(
-            "{indent}{}",
-            domain_only_motd_note(info.listen_port)
-        );
+    } else if info.access_mode == PanelAccessMode::DomainOnly
+        && !is_loopback_login_base(&info.primary_base)
+    {
+        println!("{indent}{}", domain_only_motd_note(info.listen_port));
     }
     println!("{indent}Listen port   : {}", info.listen_port);
     if let Some(ref public) = info.panel_public_url {
@@ -255,7 +253,9 @@ mod tests {
             assert_eq!(info.listen_port, 2099);
             assert_eq!(info.primary_login, "http://127.0.0.1:2099/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2099/login");
-            assert!(crate::panel_public_url::is_loopback_login_base(&info.primary_base));
+            assert!(crate::panel_public_url::is_loopback_login_base(
+                &info.primary_base
+            ));
         });
     }
 
@@ -268,7 +268,9 @@ mod tests {
             assert_eq!(info.listen_port, 2087);
             assert_eq!(info.primary_login, "http://127.0.0.1:2089/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2087/login");
-            assert!(crate::panel_public_url::is_loopback_login_base(&info.primary_base));
+            assert!(crate::panel_public_url::is_loopback_login_base(
+                &info.primary_base
+            ));
             clear_panel_public_url().unwrap();
         });
     }
@@ -282,7 +284,9 @@ mod tests {
             let info = resolve_panel_url_info();
             assert_eq!(info.primary_login, "https://panel.example.com/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2087/login");
-            assert!(!crate::panel_public_url::is_loopback_login_base(&info.primary_base));
+            assert!(!crate::panel_public_url::is_loopback_login_base(
+                &info.primary_base
+            ));
             clear_panel_hostname().unwrap();
         });
     }

@@ -104,10 +104,7 @@ pub fn sync_public_login_facts() {
     }
     let server_ip = display_server_public_ipv4();
     if server_ip != "Unavailable" {
-        let _ = write_world_readable(
-            &etc_path("server_public_ipv4"),
-            &format!("{server_ip}\n"),
-        );
+        let _ = write_world_readable(&etc_path("server_public_ipv4"), &format!("{server_ip}\n"));
     }
 }
 

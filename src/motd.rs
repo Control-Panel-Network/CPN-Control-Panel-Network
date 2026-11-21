@@ -7,11 +7,13 @@
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::panel_access_mode::{
-    domain_only_motd_note, ip_backup_http_login_url, load_panel_access_mode, PanelAccessMode,
+    PanelAccessMode, domain_only_motd_note, ip_backup_http_login_url, load_panel_access_mode,
 };
 use crate::panel_login_facts::load_display_server_public_ipv4;
 use crate::panel_network::load_panel_hostname;
-use crate::panel_public_url::{is_loopback_login_base, load_panel_public_url, local_listen_base_url};
+use crate::panel_public_url::{
+    is_loopback_login_base, load_panel_public_url, local_listen_base_url,
+};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
