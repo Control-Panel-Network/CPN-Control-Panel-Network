@@ -401,13 +401,7 @@ fn ensure_opendkim_el_repos() {
         return;
     }
     let _ = Command::new("dnf")
-        .args([
-            "install",
-            "-y",
-            "-q",
-            "epel-release",
-            "dnf-plugins-core",
-        ])
+        .args(["install", "-y", "-q", "epel-release", "dnf-plugins-core"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
