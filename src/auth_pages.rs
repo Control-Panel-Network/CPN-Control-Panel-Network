@@ -819,6 +819,12 @@ pub fn installer_token_required_html() -> String {
       <div id="cpn-lang-host" class="lang-host"></div>
       <h1 id="i18n-auth-title">Open the installer URL with its token</h1>
       <p id="i18n-auth-body">Installation is not finished yet. Use the full URL printed in the installer console, including the ?token=... query parameter.</p>
+      <p id="i18n-auth-recovery-title" class="muted" style="margin-top:1.25rem;font-weight:650;">Recovery on the server</p>
+      <ul class="muted" style="margin:0.35rem 0 0;padding-left:1.2rem;line-height:1.45;">
+        <li id="i18n-auth-recovery-file"><code>sudo cat /var/lib/cpn/installer-bootstrap.token</code></li>
+        <li id="i18n-auth-recovery-cli"><code>sudo cpn-installer --show-bootstrap-token</code></li>
+        <li id="i18n-auth-recovery-resume"><code>sudo cpn-installer --cli</code></li>
+      </ul>
       <p><a id="i18n-auth-login" href="/login">If installation already finished, open panel login.</a></p>
     </section>
   </main>

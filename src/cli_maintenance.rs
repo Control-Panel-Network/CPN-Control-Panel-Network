@@ -35,6 +35,7 @@ pub enum CliMode {
     Uninstall {
         options: crate::cli_uninstall::UninstallOptions,
     },
+    ShowBootstrapToken,
     Help,
 }
 
@@ -108,6 +109,13 @@ pub fn parse_cli(args: &[String]) -> Option<CliMode> {
             options: crate::cli_uninstall::UninstallOptions::from_args(args),
         });
     }
+    if args.iter().any(|arg| {
+        arg == "--show-bootstrap-token"
+            || arg == "--bootstrap-token"
+            || arg == "bootstrap-token"
+    }) {
+        return Some(CliMode::ShowBootstrapToken);
+    }
     None
 }
 
@@ -134,6 +142,8 @@ Usage:
   cpn-installer --bypass        With --upgrade: refresh CPN-managed Docker compose/stacks only (preserves volumes; never touches unlabeled user containers)
   cpn-installer --ensure-database-defaults [--database mariadb|none] [--skip-phpmyadmin]
                                  Install MariaDB (default) + phpMyAdmin on Linux without the UI
+  cpn-installer --show-bootstrap-token
+                                 Print the in-progress web installer token from the data directory (root; --allow-remote recovery)
 
 Notes:
   Installer language follows the saved browser choice, browser locale, or system locale; unsupported locales use English.
@@ -324,6 +334,32 @@ pub async fn run_cli(mode: CliMode) -> i32 {
             }
         },
         CliMode::Uninstall { options } => crate::cli_uninstall::run(options),
+        CliMode::ShowBootstrapToken => run_show_bootstrap_token(),
+    }
+}
+
+fn run_show_bootstrap_token() -> i32 {
+    let path = crate::paths::installer_bootstrap_token_path();
+    match crate::paths::read_installer_bootstrap_token() {
+        Some(token) => {
+            println!("Bootstrap token file: {}", path.display());
+            println!(
+                "Fingerprint (last 4): ...{}",
+                &token[token.len().saturating_sub(4)..]
+            );
+            println!("Open the installer once with /?token=<token> on your panel URL.");
+            println!("Token: {token}");
+            0
+        }
+        None => {
+            eprintln!("No bootstrap token at {}.", path.display());
+            eprintln!(
+                "The web installer may not be running, or the panel account is already configured."
+            );
+            eprintln!("Try: sudo journalctl -u cpn-installer -n 80 --no-pager");
+            eprintln!("Or resume without the browser: sudo cpn-installer --cli");
+            1
+        }
     }
 }
 

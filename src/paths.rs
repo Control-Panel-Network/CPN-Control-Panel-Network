@@ -101,8 +101,45 @@ pub fn legacy_panel_backups_dir() -> PathBuf {
 /// Root-only bootstrap token for `--allow-remote` labs (not printed in logs).
 pub const INSTALLER_BOOTSTRAP_TOKEN_FILE: &str = "installer-bootstrap.token";
 
+/// Length of generated installer bootstrap tokens (URL query and cookie).
+pub const INSTALLER_BOOTSTRAP_TOKEN_LEN: usize = 28;
+
 pub fn installer_bootstrap_token_path() -> PathBuf {
     join_data(INSTALLER_BOOTSTRAP_TOKEN_FILE)
+}
+
+/// Generate a new installer bootstrap token.
+pub fn new_installer_bootstrap_token() -> String {
+    use rand::{Rng, distr::Alphanumeric};
+    rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(INSTALLER_BOOTSTRAP_TOKEN_LEN)
+        .map(char::from)
+        .collect()
+}
+
+/// Read a persisted bootstrap token when the install is still in progress.
+pub fn read_installer_bootstrap_token() -> Option<String> {
+    let path = installer_bootstrap_token_path();
+    let bytes = std::fs::read(path).ok()?;
+    let token = String::from_utf8(bytes).ok()?.trim().to_string();
+    if token.len() != INSTALLER_BOOTSTRAP_TOKEN_LEN
+        || !token.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    Some(token)
+}
+
+/// Keep the bootstrap token stable across cpn-installer restarts until the panel account exists.
+pub fn resume_or_new_installer_bootstrap_token(
+    has_bootstrap_account: bool,
+    phase: &str,
+) -> String {
+    if has_bootstrap_account || phase == "completed" {
+        return new_installer_bootstrap_token();
+    }
+    read_installer_bootstrap_token().unwrap_or_else(new_installer_bootstrap_token)
 }
 
 fn bootstrap_token_tmp_path(final_path: &Path) -> PathBuf {
@@ -248,6 +285,25 @@ mod tests {
     fn bootstrap_token_path_is_under_data_dir() {
         let path = installer_bootstrap_token_path();
         assert!(path.ends_with(INSTALLER_BOOTSTRAP_TOKEN_FILE));
+    }
+
+    #[test]
+    fn resume_reuses_existing_bootstrap_token() {
+        let _guard = DATA_DIR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("cpn-token-resume-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp data dir");
+        unsafe {
+            std::env::set_var("CPN_DATA_DIR", &dir);
+        }
+        let saved = new_installer_bootstrap_token();
+        write_installer_bootstrap_token(&saved).expect("write token");
+        let again = resume_or_new_installer_bootstrap_token(false, "ready");
+        unsafe {
+            std::env::remove_var("CPN_DATA_DIR");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(saved, again);
     }
 
     #[test]
