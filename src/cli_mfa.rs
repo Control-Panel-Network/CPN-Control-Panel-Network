@@ -70,17 +70,21 @@ pub fn run(
             let info = resolve_panel_url_info();
             let base = info.primary_base.trim_end_matches('/');
             let enroll_url = format!("{base}/account/security/enroll-cli?token={raw}");
-            // Write the enroll URL (contains a one-time token) to a mode-600 file.
-            // Never print username, token, or full URL (CodeQL #175/#176/#177).
-            let path = write_mode600_temp_file("cpn-mfa-enroll-url", &enroll_url)?;
+            // Write the enroll URL (and absolute expiry) to a mode-600 file.
+            // Never print username, token, URL, or expires_at on stdout (CodeQL
+            // rust/cleartext-logging #175/#176/#177 traces create_mfa_enroll_token
+            // into println sinks).
+            let file_body = format!(
+                "# expires_at_unix={expires_at}\n# expires_in_secs={MFA_ENROLL_TOKEN_TTL_SECS}\n{enroll_url}"
+            );
+            let path = write_mode600_temp_file("cpn-mfa-enroll-url", &file_body)?;
             crate::panel_audit_cli::record_cli(
                 "cli.mfa.enroll-url",
                 &username,
                 true,
-                &format!("expires_at_unix={expires_at}; ttl_secs={MFA_ENROLL_TOKEN_TTL_SECS}"),
+                &format!("ttl_secs={MFA_ENROLL_TOKEN_TTL_SECS}"),
             );
             println!("enroll_url_file={}", path.display());
-            println!("expires_at_unix={expires_at}");
             println!("expires_in_secs={MFA_ENROLL_TOKEN_TTL_SECS}");
             println!(
                 "note=Open enroll_url_file in a desktop browser (Windows Hello / passkeys need HTTPS and a matching RP ID hostname; loopback or http://IP may fail WebAuthn)"

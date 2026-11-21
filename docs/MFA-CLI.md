@@ -72,8 +72,8 @@ sudo cpn mfa clear --username shadows --yes
 
 **Effect:** Creates a short-lived, single-use enroll token for that username (replaces any prior unused token for the same user). Writes the HTTPS enroll URL to a mode-600 temp file and prints:
 
-- `enroll_url_file=` (path to the mode-600 file; contents are the primary-panel HTTPS URL)
-- `expires_at_unix=` / `expires_in_secs=` (**900** = 15 minutes)
+- `enroll_url_file=` (path to the mode-600 file; contents are `# expires_at_unix=` / `# expires_in_secs=` comments plus the primary-panel HTTPS URL)
+- `expires_in_secs=` (**900** = 15 minutes; absolute `expires_at_unix` is only inside the file)
 - operator `note=` about desktop browser / HTTPS / RP ID
 - optional `warning=` when `panel_public_url` is unset
 
