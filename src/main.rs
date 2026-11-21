@@ -155,17 +155,18 @@ use cpn_installer::panel_public_url::{clear_panel_public_url, save_panel_public_
 use cpn_installer::panel_routes::{
     apps_activate, apps_deactivate, apps_install, apps_page, apps_reinstall, apps_start, apps_stop,
     apps_uninstall, backups_page, backups_run, databases_create, databases_ftp_create,
-    databases_install_mariadb, databases_page, email_account_create, email_account_disable,
-    email_account_enable, email_page, plugins_activate_host, plugins_dashboard_page,
-    plugins_deactivate_host, plugins_disable, plugins_disable_cpn, plugins_enable,
-    plugins_enable_cpn, plugins_install, plugins_install_cpn, plugins_install_host, plugins_page,
-    plugins_settings_page, plugins_settings_save, plugins_uninstall, plugins_uninstall_cpn,
-    plugins_uninstall_host, preview_content, preview_mode_page, site_preview_image,
-    site_preview_refresh, subdomains_create, subdomains_create_page, subdomains_page,
-    websites_create, websites_create_page, websites_delete, websites_list_page, websites_manage,
-    websites_page, websites_prefs, websites_pretty_manage, websites_preview_prefs,
-    websites_preview_redirect, websites_reset_placeholder, websites_resume, websites_suspend,
-    websites_suspend_message, websites_suspend_message_restore,
+    databases_install_mariadb, databases_page, email_account_create, email_account_delete,
+    email_account_disable, email_account_enable, email_account_modify, email_account_restore,
+    email_page, plugins_activate_host, plugins_dashboard_page, plugins_deactivate_host,
+    plugins_disable, plugins_disable_cpn, plugins_enable, plugins_enable_cpn, plugins_install,
+    plugins_install_cpn, plugins_install_host, plugins_page, plugins_settings_page,
+    plugins_settings_save, plugins_uninstall, plugins_uninstall_cpn, plugins_uninstall_host,
+    preview_content, preview_mode_page, site_preview_image, site_preview_refresh,
+    subdomains_create, subdomains_create_page, subdomains_page, websites_create,
+    websites_create_page, websites_delete, websites_list_page, websites_manage, websites_page,
+    websites_prefs, websites_pretty_manage, websites_preview_prefs, websites_preview_redirect,
+    websites_reset_placeholder, websites_resume, websites_suspend, websites_suspend_message,
+    websites_suspend_message_restore,
 };
 use cpn_installer::panel_site_apps_routes::{websites_apps_get, websites_apps_post};
 use cpn_installer::panel_site_tools_routes::{
@@ -1386,6 +1387,9 @@ async fn main() -> std::io::Result<()> {
             .service(email_account_create)
             .service(email_account_enable)
             .service(email_account_disable)
+            .service(email_account_delete)
+            .service(email_account_restore)
+            .service(email_account_modify)
             .service(databases_page)
             .service(databases_install_mariadb)
             .service(databases_create)

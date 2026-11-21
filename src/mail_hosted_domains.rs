@@ -60,7 +60,10 @@ pub fn plan_from_accounts(
 ) -> HostedMailPlan {
     let mut plan = HostedMailPlan::default();
     for account in accounts {
-        if !account.enabled || account.smtp_mode != MailSmtpMode::PostfixLocal {
+        if account.is_deleted()
+            || !account.enabled
+            || account.smtp_mode != MailSmtpMode::PostfixLocal
+        {
             continue;
         }
         let address = account.address.trim().to_ascii_lowercase();
@@ -525,6 +528,7 @@ mod tests {
             mailbox_password: String::new(),
             created_at_unix: 0,
             updated_at_unix: 0,
+            deleted_at_unix: None,
         }
     }
 

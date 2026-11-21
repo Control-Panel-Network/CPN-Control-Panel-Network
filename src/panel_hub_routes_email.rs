@@ -44,6 +44,7 @@ pub async fn email_accounts_route(
         "email",
         "Email Accounts",
         &email_accounts_page(
+            &user,
             status.selected_mail,
             status.mail_client_ready,
             status.mail_backend_ready || crate::apps_email::mail_backend_ready_fast(),
@@ -67,6 +68,7 @@ pub async fn email_create_route(
         "email",
         "Create Email",
         &email_create_page(
+            &user,
             query.get("notice").map(String::as_str),
             query.get("error").map(String::as_str),
         ),

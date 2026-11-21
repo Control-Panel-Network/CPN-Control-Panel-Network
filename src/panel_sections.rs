@@ -1,7 +1,5 @@
 //! Panel section page HTML (websites, email, databases, backups).
 
-use crate::http_helpers::smtp_status_public;
-use crate::install_webmail_runtime::webmail_health_url;
 use crate::panel_prefs::{set_remote_site_previews, set_show_document_roots};
 use crate::service_detect::{detect_database, install_mariadb_server};
 
@@ -24,67 +22,13 @@ pub fn email_mail_stack_notice_html() -> String {
     )
 }
 
-/// Shared create-mailbox form (`return_path` is post-success redirect base).
-pub fn email_mailbox_create_form_html(return_path: &str) -> String {
-    let return_path = if return_path.trim().is_empty() {
-        "/email/accounts"
-    } else {
-        return_path.trim()
-    };
-    format!(
-        r#"
-      <form method="post" action="/email/accounts/create" class="stack-form" style="max-width:560px;margin-top:16px;">
-        <input type="hidden" name="return_to" value="{return_path}">
-        <label for="address">Mailbox address</label>
-        <input id="address" name="address" type="email" required placeholder="user@example.com">
-        <label for="domain">Site FQDN (optional)</label>
-        <input id="domain" name="domain" type="text" placeholder="example.com or blog.example.com">
-        <label for="mailbox_password">Mailbox password (local Postfix/Dovecot + webmail)</label>
-        <input id="mailbox_password" name="mailbox_password" type="password" autocomplete="new-password" placeholder="Required for local mail login">
-        <label for="smtp_mode">SMTP mode</label>
-        <select id="smtp_mode" name="smtp_mode">
-          <option value="postfix_local">Local Postfix (default)</option>
-          <option value="external">External SMTP</option>
-        </select>
-        <label for="smtp_host">External host</label>
-        <input id="smtp_host" name="smtp_host" type="text" placeholder="smtp.example.com">
-        <label for="smtp_port">Port</label>
-        <input id="smtp_port" name="smtp_port" type="number" value="587">
-        <label for="smtp_tls">Encryption</label>
-        <select id="smtp_tls" name="smtp_tls">
-          <option value="starttls">STARTTLS</option>
-          <option value="tls">TLS</option>
-          <option value="none">None</option>
-        </select>
-        <label for="smtp_username">SMTP username</label>
-        <input id="smtp_username" name="smtp_username" type="text" autocomplete="off">
-        <label for="smtp_password">SMTP password</label>
-        <input id="smtp_password" name="smtp_password" type="password" autocomplete="new-password">
-        <label><input type="checkbox" name="enabled" value="1" checked> Enable now (requires valid SMTP)</label>
-        <button type="submit" class="btn-primary">Create mailbox</button>
-      </form>"#,
-        return_path = html_escape(return_path),
-    )
+/// Shared create-mailbox form. Prefer [`crate::panel_hub_pages_email_create`].
+pub fn email_mailbox_create_form_html(username: &str, return_path: &str) -> String {
+    crate::panel_hub_pages_email_create::email_mailbox_create_form_html(username, return_path)
 }
 
-pub fn email_create_main(notice: Option<&str>, error: Option<&str>) -> String {
-    format!(
-        r#"{heading}
-      {ok}
-      {err}
-      {stack}
-      <article class="section-card">
-        <h2>Create mailbox</h2>
-        <p>Add a local or external-SMTP mailbox. Local mail requires Postfix and Dovecot running on this host.</p>
-        {create}
-      </article>
-      <p class="muted"><a href="/email/accounts">View all mailboxes</a></p>"#,
-        heading = section_heading("Create Email", "Provision a mailbox on this CPN host.",),
-        ok = notice_block("ok", notice),
-        err = notice_block("error", error),
-        stack = email_mail_stack_notice_html(),
-        create = email_mailbox_create_form_html("/email/create"),
-    )
+pub fn email_create_main(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
+    crate::panel_hub_pages_email_create::email_create_main(username, notice, error)
 }
 
 fn section_heading(title: &str, blurb: &str) -> String {
@@ -129,179 +73,20 @@ pub fn set_websites_remote_preview_pref(enabled: bool) -> Result<(), String> {
 }
 
 pub fn email_accounts_main(
+    username: &str,
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
     notice: Option<&str>,
     error: Option<&str>,
 ) -> String {
-    use crate::mail_accounts::{MailSmtpMode, list_accounts_public};
-    use crate::postfix_fallback::postfix_is_ready;
-
-    let mail = selected_mail
-        .map(|value| value.label())
-        .or_else(|| crate::panel_webmail::detect_webmail_client().map(|m| m.label()))
-        .unwrap_or("Not selected");
-    let client_ready = if mail_client_ready || crate::panel_webmail::webmail_ready() {
-        "Ready"
-    } else {
-        "Not installed"
-    };
-    let live_backend = crate::apps_email::mail_backend_ready_fast();
-    let backend_ready = if mail_backend_ready || live_backend {
-        "Ready"
-    } else {
-        "Not verified"
-    };
-    let smtp = smtp_status_public();
-    let postfix_ready = postfix_is_ready();
-    let smtp_line = if smtp.configured {
-        format!(
-            "{}:{} ({}) from {}",
-            smtp.host.as_deref().unwrap_or("-"),
-            smtp.port.unwrap_or(0),
-            smtp.tls_mode.as_deref().unwrap_or("-"),
-            smtp.from_address.as_deref().unwrap_or("-"),
-        )
-    } else if postfix_ready {
-        "Using local Postfix fallback (127.0.0.1)".into()
-    } else {
-        "Outbound SMTP is not configured".into()
-    };
-    let mta_line = if postfix_ready {
-        "Postfix running (default local MTA)"
-    } else {
-        "Postfix not detected"
-    };
-    let webmail = if crate::panel_webmail::webmail_ready()
-        || crate::panel_webmail::sogo_is_active_webmail()
-        || (mail_client_ready
-            && matches!(
-                selected_mail,
-                Some(
-                    crate::model::MailSystem::Snappymail
-                        | crate::model::MailSystem::Tachyon
-                        | crate::model::MailSystem::Roundcube
-                )
-            )) {
-        let open = crate::panel_webmail::webmail_open_path()
-            .unwrap_or_else(|| webmail_health_url().to_string());
-        let label = crate::panel_webmail::webmail_label();
-        format!(
-            r#"<p><a class="btn-primary" href="{open}" target="_blank" rel="noopener noreferrer">Open {label}</a>
-        <a class="btn-secondary" href="/email/webmail">Webmail settings</a></p>
-        <p class="muted">Panel path opens through CPN; backend health URL: <code>{health}</code></p>"#,
-            open = html_escape(&open),
-            label = html_escape(label),
-            health = html_escape(&webmail_health_url()),
-        )
-    } else if matches!(selected_mail, Some(crate::model::MailSystem::Thunderbird)) {
-        "<p class=\"muted\">Thunderbird is a desktop client only. No local webmail URL is provisioned.</p>"
-            .into()
-    } else if matches!(selected_mail, Some(crate::model::MailSystem::Nextsnapmail)) {
-        "<p class=\"muted\">NextSnapMail runs inside Nextcloud (needs Nextcloud files). Prefer Tachyon (default), SnappyMail, Roundcube, or SOGo for panel webmail.</p>"
-            .into()
-    } else if matches!(selected_mail, Some(crate::model::MailSystem::Sogo)) {
-        "<p class=\"muted\">SOGo is selected but not installed yet. Install the SOGo host package from <a href=\"/plugins?tab=store&amp;q=sogo\">Plugins &gt; Store (Host)</a>; it then opens at <code>/SOGo/</code> with CalDAV/CardDAV at <code>/SOGo/dav/</code>.</p>"
-            .into()
-    } else {
-        "<p class=\"muted\">Install Tachyon (default), SnappyMail, Roundcube, or SOGo (installer mail stage or Host packages) to enable Open Webmail. Use Set as active to switch clients without orphaning mailboxes.</p>"
-            .into()
-    };
-
-    let accounts = list_accounts_public();
-    let mut rows = String::new();
-    if accounts.is_empty() {
-        rows.push_str(r#"<p class="muted">No mailboxes yet. Enabled accounts require valid external SMTP or a running Postfix local binding.</p>"#);
-    } else {
-        rows.push_str(r#"<div class="table-wrap"><table class="data-table"><thead><tr><th align="left">Address</th><th align="left">SMTP</th><th align="left">Valid</th><th align="left">State</th><th></th></tr></thead><tbody>"#);
-        for acct in &accounts {
-            let valid = if acct.smtp_valid { "Valid" } else { "Invalid" };
-            let err = acct
-                .smtp_error
-                .as_ref()
-                .map(|e| format!(r#" <span class="muted">({})</span>"#, html_escape(e)))
-                .unwrap_or_default();
-            let mode = match acct.smtp_mode {
-                MailSmtpMode::External => "external",
-                MailSmtpMode::PostfixLocal => "postfix_local",
-            };
-            let toggle = if acct.enabled {
-                format!(
-                    r#"<form method="post" action="/email/accounts/disable" class="inline-form" style="display:inline;"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-secondary">Disable</button></form>"#,
-                    id = html_escape(&acct.id),
-                )
-            } else {
-                format!(
-                    r#"<form method="post" action="/email/accounts/enable" class="inline-form" style="display:inline;" onsubmit="return confirm('Enable only if SMTP is valid.');"><input type="hidden" name="id" value="{id}"><button type="submit" class="btn-primary">Enable</button></form>"#,
-                    id = html_escape(&acct.id),
-                )
-            };
-            rows.push_str(&format!(
-                r#"<tr><td>{addr}<br><span class="muted">{domain}</span></td><td>{mode}: {summary}</td><td><strong>{valid}</strong>{err}</td><td>{state}</td><td>{toggle}</td></tr>"#,
-                addr = html_escape(&acct.address),
-                domain = html_escape(if acct.domain.is_empty() {
-                    "-"
-                } else {
-                    &acct.domain
-                }),
-                mode = mode,
-                summary = html_escape(&acct.smtp_summary),
-                valid = valid,
-                err = err,
-                state = if acct.enabled { "Enabled" } else { "Disabled" },
-                toggle = toggle,
-            ));
-        }
-        rows.push_str("</tbody></table></div>");
-    }
-
-    let mailbox_addresses: Vec<String> = accounts.iter().map(|a| a.address.clone()).collect();
-    let client_panel =
-        crate::panel_hub_pages_mail_client::mail_client_configs_for_mailboxes(&mailbox_addresses);
-
-    let create_form = email_mailbox_create_form_html("/email/accounts");
-
-    format!(
-        r#"{heading}
-      {ok}
-      {err}
-      {stack}
-      <article class="section-card">
-        <h2>Mail stack</h2>
-        <ul class="kv-list">
-          <li><span>Selected client</span><strong>{mail}</strong></li>
-          <li><span>Webmail client</span><strong>{client}</strong></li>
-          <li><span>IMAP/SMTP backend</span><strong>{backend}</strong></li>
-          <li><span>Local MTA</span><strong>{mta}</strong></li>
-          <li><span>Outbound SMTP</span><strong>{smtp}</strong></li>
-        </ul>
-        <p class="muted">If no external SMTP was set during install, Postfix is the default local MTA. Switching to external SMTP later does not remove Postfix unless you uninstall Email.</p>
-        {webmail}
-      </article>
-      {client_panel}
-      <article class="section-card" style="margin-top:18px;">
-        <h2>Mailboxes</h2>
-        <p>Enabled accounts must have complete external SMTP or a verified Postfix local binding.</p>
-        {rows}
-        {create}
-      </article>"#,
-        heading = section_heading(
-            "Email Accounts",
-            "Mail stack, Postfix default MTA, and per-mailbox SMTP validity.",
-        ),
-        ok = notice_block("ok", notice),
-        err = notice_block("error", error),
-        stack = email_mail_stack_notice_html(),
-        mail = html_escape(mail),
-        client = client_ready,
-        backend = backend_ready,
-        mta = mta_line,
-        smtp = html_escape(&smtp_line),
-        webmail = webmail,
-        client_panel = client_panel,
-        rows = rows,
-        create = create_form,
+    crate::panel_hub_pages_email_accounts::email_accounts_main(
+        username,
+        selected_mail,
+        mail_client_ready,
+        mail_backend_ready,
+        notice,
+        error,
     )
 }
 

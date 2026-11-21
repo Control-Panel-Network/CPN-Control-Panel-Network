@@ -53,6 +53,7 @@ pub fn databases_ftp_hub_main() -> String {
 }
 
 pub fn email_accounts_page(
+    username: &str,
     selected_mail: Option<crate::model::MailSystem>,
     mail_client_ready: bool,
     mail_backend_ready: bool,
@@ -60,6 +61,7 @@ pub fn email_accounts_page(
     error: Option<&str>,
 ) -> String {
     let inner = email_accounts_main(
+        username,
         selected_mail,
         mail_client_ready,
         mail_backend_ready,
@@ -77,7 +79,7 @@ pub fn email_accounts_page(
     )
 }
 
-pub fn email_create_page(notice: Option<&str>, error: Option<&str>) -> String {
+pub fn email_create_page(username: &str, notice: Option<&str>, error: Option<&str>) -> String {
     format!(
         r#"{}{}"#,
         crate::panel_hubs::breadcrumb(&[
@@ -85,7 +87,7 @@ pub fn email_create_page(notice: Option<&str>, error: Option<&str>) -> String {
             ("Email", Some("/email")),
             ("Create Email", None),
         ]),
-        crate::panel_sections::email_create_main(notice, error),
+        crate::panel_sections::email_create_main(username, notice, error),
     )
 }
 
