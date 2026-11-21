@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_db_acl::require_manage_database;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_db_manage::{
     databases_all_page_for, databases_delete_page_for, databases_password_page_for,

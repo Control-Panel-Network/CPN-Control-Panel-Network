@@ -4,8 +4,7 @@ use crate::installer::AppState;
 use crate::mail_postfix_maps::owner_for_mail_domain;
 use crate::packages::{QuotaResource, require_quota};
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_email_features::{
     autoresponders_page, email_filters_page, mailing_lists_page,

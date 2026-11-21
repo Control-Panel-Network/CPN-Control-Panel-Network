@@ -8,8 +8,7 @@ use crate::packages::is_panel_admin;
 use crate::panel_api_tokens::{issue_token, list_tokens, revoke_token};
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html};
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_account::{
     api_access_page, users_create_page, users_create_success_page, users_list_page,

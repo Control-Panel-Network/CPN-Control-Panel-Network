@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html};
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_account::{acl_create_page, acl_modify_page, grant_from_form_fields};
 use crate::panel_hub_routes_account::{parse_flag, require_admin};

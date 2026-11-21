@@ -2,8 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_backups_incremental::{
     backups_incremental_page, run_incremental_form, save_incremental_form,

@@ -4,8 +4,7 @@ use crate::installer::AppState;
 use crate::panel_action_log;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, require_panel_user,
 };
 use crate::panel_hub_pages_fail2ban::fail2ban_manager_page;
 use crate::panel_ops_fail2ban::{list_banned, unban_ip, verify_fail2ban_csrf};

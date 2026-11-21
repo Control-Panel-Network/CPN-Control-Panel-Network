@@ -8,7 +8,8 @@ use crate::panel_audit_policy::{
     AuditPolicy, load_audit_policy, opt_outable_categories, save_audit_policy,
 };
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_flash,
+    redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_audit::audit_settings_page;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};

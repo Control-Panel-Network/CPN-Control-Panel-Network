@@ -7,7 +7,8 @@ use crate::panel_error_messages::{
     restore_not_found, save_messages,
 };
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_flash,
+    redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_error_messages::error_messages_settings_page;
 use crate::panel_markdown::render_safe_markdown;
