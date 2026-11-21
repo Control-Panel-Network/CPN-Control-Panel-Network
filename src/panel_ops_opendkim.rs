@@ -95,20 +95,37 @@ pub fn signing_table_has_domain(existing: &str, domain: &str) -> bool {
     })
 }
 
+/// Install path under `/etc/opendkim/keys/<domain>/` (SELinux-friendly vs `/var/lib/cpn/dkim`).
+pub fn opendkim_key_install_path(domain: &str, sel: &str) -> PathBuf {
+    PathBuf::from(OPENDKIM_DIR)
+        .join("keys")
+        .join(domain)
+        .join(format!("{sel}.private"))
+}
+
+/// Copy CPN store private keys into `/etc/opendkim/keys` when possible; fall back to store path.
 pub fn collect_cpn_opendkim_entries() -> Vec<OpendkimDomainEntry> {
     let sel = selector().to_string();
     list_dkim_domain_rows()
         .into_iter()
         .filter(|row| row.has_key)
         .filter_map(|row| {
-            let key = private_key_path(&row.domain).ok()?;
-            if !key.is_file() {
+            let store_key = private_key_path(&row.domain).ok()?;
+            if !store_key.is_file() {
                 return None;
             }
+            let install = opendkim_key_install_path(&row.domain, &sel);
+            if let Some(parent) = install.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let private_key = match fs::copy(&store_key, &install) {
+                Ok(_) => install,
+                Err(_) => store_key,
+            };
             Some(OpendkimDomainEntry {
                 domain: row.domain,
                 selector: sel.clone(),
-                private_key: key,
+                private_key,
             })
         })
         .collect()
@@ -238,6 +255,20 @@ fn ensure_opendkim_conf() -> Result<bool, String> {
 }
 
 fn chown_opendkim_keys(entries: &[OpendkimDomainEntry]) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Root owns the CPN store; group opendkim must traverse (750) if a fallback path is used.
+        let root = dkim_root();
+        let _ = Command::new("chown")
+            .args(["root:opendkim"])
+            .arg(&root)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let _ = fs::set_permissions(&root, fs::Permissions::from_mode(0o750));
+    }
     for entry in entries {
         let _ = Command::new("chown")
             .args(["opendkim:opendkim"])
@@ -259,6 +290,11 @@ fn chown_opendkim_keys(entries: &[OpendkimDomainEntry]) {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o750));
+            }
         }
     }
     let _ = Command::new("chown")
@@ -267,9 +303,8 @@ fn chown_opendkim_keys(entries: &[OpendkimDomainEntry]) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    let _ = Command::new("chown")
-        .args(["opendkim:opendkim"])
-        .arg(dkim_root())
+    let _ = Command::new("restorecon")
+        .args(["-Rv", OPENDKIM_DIR])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
