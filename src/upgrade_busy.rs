@@ -7,8 +7,6 @@
 //! and no upgrade child remains.
 
 use crate::installer::AppState;
-use std::collections::HashMap;
-use std::fs;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 

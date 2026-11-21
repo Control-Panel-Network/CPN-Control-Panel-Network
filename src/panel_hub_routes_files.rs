@@ -28,7 +28,7 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Bo
     };
     if !is_panel_admin(&user) {
         return Err(Box::new(html_ok(authenticated_panel_shell(
-            &http,
+            http,
             &user,
             "root-files",
             "Root File Manager",

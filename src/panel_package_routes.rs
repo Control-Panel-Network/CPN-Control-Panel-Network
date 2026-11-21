@@ -7,9 +7,7 @@ use crate::packages::{
     PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package_for,
 };
-use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-};
+use crate::panel_hub_http::authenticated_panel_shell;
 use crate::panel_packages::{packages_edit_main, packages_main, packages_new_main};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;

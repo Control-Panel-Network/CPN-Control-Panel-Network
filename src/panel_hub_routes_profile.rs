@@ -11,7 +11,7 @@ use crate::account_mgmt::{
 use crate::account_totp::otpauth_qr_svg;
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, panel_shell_blocking,
+    authenticated_panel_shell, html_ok, login_redirect,
     redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_profile::users_modify_page_with_tab;

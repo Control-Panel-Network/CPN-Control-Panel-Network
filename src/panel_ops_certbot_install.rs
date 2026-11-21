@@ -30,10 +30,10 @@ pub fn ensure_certbot_on_path() -> Result<String, String> {
     }
     #[cfg(windows)]
     {
-        return Err(
+        Err(
             "certbot is not installed. On Windows labs, install certbot manually or issue SSL on the Linux panel host."
                 .into(),
-        );
+        )
     }
     #[cfg(not(windows))]
     {

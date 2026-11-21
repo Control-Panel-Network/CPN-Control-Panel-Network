@@ -2,7 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, html_blocking, login_redirect,
+    captured_session_exp, html_blocking, login_redirect,
     panel_shell_blocking, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_proton_mail::{email_proton_page, save_proton_mail_form};

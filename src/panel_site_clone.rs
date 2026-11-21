@@ -8,7 +8,6 @@ use crate::sites::{
 };
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 fn path_under_home(path: &Path) -> Result<(), String> {
     let home = hosting_home_root();

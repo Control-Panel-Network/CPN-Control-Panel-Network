@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, owner_only_html,
-    panel_shell_blocking, redirect_flash, redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_log_retention::log_retention_settings_page;
 use crate::panel_log_retention::{LogRetentionPrefs, save_log_retention};

@@ -2,7 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, captured_session_exp, html_blocking_budget, login_redirect,
+    captured_session_exp, html_blocking_budget, login_redirect,
     panel_shell_blocking, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_files::site_files_page;

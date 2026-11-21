@@ -60,12 +60,11 @@ where
 
     actix_web::dev::forward_ready!(service);
 
-    fn call(&self, mut req: ServiceRequest) -> Self::Future {
-        if let Some(state) = req.app_data::<actix_web::web::Data<Arc<AppState>>>() {
-            if let Some(exp) = panel_session_expiry_from_request(state.get_ref(), req.request()) {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        if let Some(state) = req.app_data::<actix_web::web::Data<Arc<AppState>>>()
+            && let Some(exp) = panel_session_expiry_from_request(state.get_ref(), req.request()) {
                 req.extensions_mut().insert(PanelSessionExpiry(exp));
             }
-        }
         let service = Rc::clone(&self.service);
         Box::pin(async move { service.call(req).await })
     }

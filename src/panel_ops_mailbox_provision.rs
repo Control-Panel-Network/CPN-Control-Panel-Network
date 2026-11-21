@@ -85,10 +85,10 @@ pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, 
     #[cfg(windows)]
     {
         let _ = user;
-        return Ok(
+        Ok(
             "Local mailbox provisioning is Linux-only; account was stored in the panel registry."
                 .into(),
-        );
+        )
     }
     #[cfg(not(windows))]
     {
