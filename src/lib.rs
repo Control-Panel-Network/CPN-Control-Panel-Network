@@ -111,6 +111,7 @@ pub mod mail_accounts;
 pub mod mail_accounts_import;
 pub mod mail_hosted_domains;
 pub mod mail_legacy_sql;
+pub mod mail_light_heal;
 pub mod mail_outbound;
 pub mod mail_postfix_detect;
 pub mod mail_postfix_maps;

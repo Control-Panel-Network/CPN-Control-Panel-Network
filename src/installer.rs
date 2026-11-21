@@ -711,6 +711,17 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 .map_err(|error| format!("webmail health join failed: {error}"))??;
             // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
             verify_imap_smtp_listeners().await?;
+            // Idempotent light heal after stack + webmail install (same path as upgrade).
+            let heal = crate::mail_light_heal::run_light_email_heal("mail install");
+            for line in heal.summary_lines() {
+                state.log(line, "info");
+            }
+            if heal.ran_mail && !heal.validate_ok {
+                return Err(format!(
+                    "Mail install light heal: config validate failed (reload aborted). {}",
+                    heal.summary_lines().join(" | ")
+                ));
+            }
             {
                 let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
