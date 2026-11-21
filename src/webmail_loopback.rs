@@ -124,10 +124,10 @@ pub fn foreign_listener_summary(port: u16) -> Option<String> {
 
 fn line_has_port(line: &str, port: u16) -> bool {
     for token in line.split_whitespace() {
-        if let Some(after) = token.rsplit_once(':') {
-            if after.1.parse::<u16>().ok() == Some(port) {
-                return true;
-            }
+        if let Some(after) = token.rsplit_once(':')
+            && after.1.parse::<u16>().ok() == Some(port)
+        {
+            return true;
         }
     }
     false

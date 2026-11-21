@@ -7,7 +7,7 @@ use crate::install_webmail_engines::{
 };
 use crate::installer::{AppState, run_command};
 use crate::model::ServerEngine;
-use crate::webmail_loopback::{self, DEFAULT_PORT};
+use crate::webmail_loopback;
 use std::path::Path;
 use tokio::process::Command;
 
@@ -460,7 +460,7 @@ mod tests {
     fn health_url_is_loopback_default() {
         assert_eq!(
             webmail_health_url(),
-            format!("http://127.0.0.1:{DEFAULT_PORT}/")
+            format!("http://127.0.0.1:{}/", webmail_loopback::DEFAULT_PORT)
         );
     }
 
