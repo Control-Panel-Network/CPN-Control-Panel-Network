@@ -43,7 +43,7 @@ fn dovecot_sql_uses_e_users() -> bool {
     if !lower.contains("e_users") {
         return false;
     }
-  // Classic stacks use the MySQL/MariaDB Dovecot SQL driver against `e_users`.
+    // Classic stacks use the MySQL/MariaDB Dovecot SQL driver against `e_users`.
     lower.contains("mysql") || lower.contains("mariadb")
 }
 
