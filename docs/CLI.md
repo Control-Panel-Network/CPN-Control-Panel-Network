@@ -177,11 +177,11 @@ sudo cpn panel install-motd
 Example (`cpn panel url`):
 
 ```text
-Login URL     : http://127.0.0.1:2089/login
-Local login   : http://127.0.0.1:2087/login
+Server IP     : 203.0.113.10
+Login URL     : https://panel.example.com/login
+Access mode   : Domain-only (loopback + HTTPS hostname)
+Panel note    : domain-only; HTTP :2087 is not open on Server IP. Use Login URL (HTTPS on 443). Optional: cpn network set-ip-backup --on
 Listen port   : 2087
-Public URL    : http://127.0.0.1:2089
-Lab tip       : Windows host may use the public URL when NAT forwards the guest port
 ```
 
 Resolution order for the primary login URL: `panel_public_url` if set, else `https://<panel_hostname>/login` if set, else `http://127.0.0.1:<listen_port>/login`.
@@ -370,7 +370,7 @@ sudo cpn network clear-migration
 - Sets `panel_public_url` to `https://hostname` (or `http://hostname` until a cert exists).
 - Defaults to **Domain-only** (loopback bind). Pass `--keep-ip-backup` to keep `0.0.0.0` HTTP bind during setup.
 - The listen port stays HTTP. Never open `https://SERVER_IP:2087` (browsers show `ERR_SSL_PROTOCOL_ERROR`).
-- Without a hostname, use `http://127.0.0.1:2087` locally or an SSH tunnel / NAT forward with `http://`.
+- Without a hostname, use `http://127.0.0.1:2087` on the server (or via SSH `-L` from your PC), or an HTTP NAT forward on the host.
 
 IP backup (emergency access when DNS/proxy fails):
 

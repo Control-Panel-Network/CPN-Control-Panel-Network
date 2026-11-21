@@ -265,11 +265,12 @@ pub fn stop_orphan_panel_listeners() -> Result<(), String> {
 
 /// English operator hints (no passwords). Used by end-of-install banners.
 pub fn post_install_service_hints(port: u16, allow_remote: bool) -> Vec<String> {
+    let server_ip = crate::panel_host_info::display_server_public_ipv4();
     let mut lines = vec![
         format!("systemd: enabled {UNIT_NAME} (starts on boot)"),
-        format!("Local login: http://127.0.0.1:{port}/login"),
+        format!("Server IP: {server_ip} (informational; use hostname HTTPS for login)"),
         format!(
-            "VirtualBox NAT tip: if host forwards 2089->guest {port}, open http://127.0.0.1:2089/login on the host"
+            "VirtualBox NAT tip: if host forwards 2089->guest {port}, use the mapped host port for lab HTTP"
         ),
     ];
     if allow_remote {
@@ -475,7 +476,9 @@ mod tests {
     fn hints_include_login_and_vbox_nat() {
         let lines = post_install_service_hints(2087, false);
         let joined = lines.join("\n");
-        assert!(joined.contains("http://127.0.0.1:2087/login"));
+        assert!(joined.contains("Server IP:"));
+        assert!(joined.contains("hostname HTTPS for login"));
+        assert!(!joined.contains("http://127.0.0.1:2087/login"));
         assert!(joined.contains("2089"));
         assert!(joined.contains("systemctl"));
         assert!(!joined.to_lowercase().contains("password"));
