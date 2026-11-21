@@ -102,11 +102,12 @@ pub fn start_email_stack() -> Result<String, String> {
     // Open the mail ports on the host firewall when firewalld is present (no-op otherwise).
     let _ = crate::panel_ops_firewall_heal::heal_firewalld("email stack start");
     // Default first mailbox info@<apex> unless operator installed without a mail domain.
-    let info_note = crate::panel_ops_mail_default_mailbox::ensure_default_info_mailboxes_for_known_domains()
-        .into_iter()
-        .map(|r| r.summary())
-        .collect::<Vec<_>>()
-        .join(" ");
+    let info_note =
+        crate::panel_ops_mail_default_mailbox::ensure_default_info_mailboxes_for_known_domains()
+            .into_iter()
+            .map(|r| r.summary())
+            .collect::<Vec<_>>()
+            .join(" ");
     let smtp587 = port_open("127.0.0.1:587", 250);
     let smtp465 = port_open("127.0.0.1:465", 250);
     Ok(format!(

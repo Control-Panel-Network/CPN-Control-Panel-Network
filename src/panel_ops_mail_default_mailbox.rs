@@ -196,10 +196,7 @@ mod tests {
             assert!(!accounts[0].mailbox_password.is_empty());
             let saved = accounts[0].mailbox_password.clone();
             let second = ensure_default_info_mailbox("example.com").unwrap();
-            assert!(matches!(
-                second,
-                DefaultMailboxResult::AlreadyExists { .. }
-            ));
+            assert!(matches!(second, DefaultMailboxResult::AlreadyExists { .. }));
             let again = list_accounts();
             assert_eq!(again[0].mailbox_password, saved);
         });

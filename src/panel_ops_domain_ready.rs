@@ -66,9 +66,7 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
             }
             match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox(&domain) {
                 Ok(r) => report.steps.push(r.summary()),
-                Err(e) => report
-                    .warnings
-                    .push(format!("Default info@ mailbox: {e}")),
+                Err(e) => report.warnings.push(format!("Default info@ mailbox: {e}")),
             }
         } else if onboarding.mail_mode == MailMode::External {
             report.steps.push(
@@ -76,9 +74,9 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
                 .into(),
         );
         } else if without_mail {
-            report
-                .steps
-                .push("Install without a mail domain: skipped mail DNS and default info@ mailbox.".into());
+            report.steps.push(
+                "Install without a mail domain: skipped mail DNS and default info@ mailbox.".into(),
+            );
         }
 
         let site = match load_site(&domain) {
