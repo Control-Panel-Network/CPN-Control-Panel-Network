@@ -22,10 +22,7 @@ pub enum MailCommands {
     },
 }
 
-pub fn run(
-    command: MailCommands,
-    require_root: fn() -> Result<(), String>,
-) -> Result<(), String> {
+pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> Result<(), String> {
     match command {
         MailCommands::ImportLegacy => {
             require_root()?;
@@ -46,15 +43,12 @@ pub fn run(
             }
             let (password, _) = read_password_confirmed(password_stdin, false)?;
             let Some(secret) = password else {
-                return Err("Password is required (use --password-stdin or interactive entry)".into());
+                return Err(
+                    "Password is required (use --password-stdin or interactive entry)".into(),
+                );
             };
             let msg = reset_mailbox_password(address, &secret)?;
-            record_cli(
-                "cli.mail.passwd",
-                address,
-                true,
-                "mailbox password updated",
-            );
+            record_cli("cli.mail.passwd", address, true, "mailbox password updated");
             println!("{msg}");
             Ok(())
         }

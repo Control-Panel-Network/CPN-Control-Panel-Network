@@ -253,14 +253,9 @@ pub fn virtual_sql_has_mailbox(email: &str) -> Result<bool, String> {
         .map_err(|e| format!("Could not query virtual-mail SQL: {e}"))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "Could not query virtual-mail SQL: {}",
-            err.trim()
-        ));
+        return Err(format!("Could not query virtual-mail SQL: {}", err.trim()));
     }
-    Ok(!String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .is_empty())
+    Ok(!String::from_utf8_lossy(&output.stdout).trim().is_empty())
 }
 
 /// Hash `password` and store it in `cyberpanel.e_users` when that table exists.

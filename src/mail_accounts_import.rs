@@ -31,13 +31,17 @@ pub fn ensure_legacy_registry_row(address: &str) -> Result<bool, String> {
         return Ok(false);
     }
     if !crate::mail_legacy_sql::legacy_mailbox_known(&address) {
-        return Err(format!("Mailbox `{address}` is not in the classic mail inventory"));
+        return Err(format!(
+            "Mailbox `{address}` is not in the classic mail inventory"
+        ));
     }
     let Some(row) = crate::mail_legacy_sql::list_legacy_mailboxes()
         .into_iter()
         .find(|m| m.email.eq_ignore_ascii_case(&address))
     else {
-        return Err(format!("Mailbox `{address}` is not in the classic mail inventory"));
+        return Err(format!(
+            "Mailbox `{address}` is not in the classic mail inventory"
+        ));
     };
     let mut file = load_accounts_file()?;
     file.accounts.push(account_from_legacy(&row));

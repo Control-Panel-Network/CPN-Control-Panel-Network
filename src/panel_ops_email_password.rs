@@ -76,9 +76,10 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     }
     let key_lc = key.to_ascii_lowercase();
     let mut file = load_accounts_file();
-    let found = file.accounts.iter().any(|a| {
-        a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc)
-    });
+    let found = file
+        .accounts
+        .iter()
+        .any(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc));
     if !found {
         let _ = crate::mail_accounts_import::ensure_legacy_registry_row(&key_lc);
         file = load_accounts_file();
