@@ -260,7 +260,7 @@ sudo cpn mfa clear --username shadows --yes
 ### Enroll passkeys or Windows Hello (`mfa enroll-url`)
 
 1. `sudo cpn mfa enroll-url --username shadows`
-2. Copy `enroll_url=`. Open it in a **desktop** browser within **15 minutes** by pasting into the **address bar**. Do **not** paste into chat/email first (link previews).
+2. Read `enroll_url_file=` (mode-600 temp file). Open that URL in a **desktop** browser within **15 minutes** by pasting into the **address bar**. Do **not** paste into chat/email first (link previews).
 3. On CPN **1.4.11** and older, the first GET/HEAD **burns** the single-use token. On intended/fixed builds, GET/HEAD peeks and shows **Continue to Security**; POST consumes the token.
 4. After continue, enroll MFA or open **Modify User → Security** when already enrolled, then **Register passkey**.
 5. Verify: `sudo cpn passkey list --username shadows`

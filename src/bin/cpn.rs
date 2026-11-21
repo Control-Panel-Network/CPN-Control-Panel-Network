@@ -822,7 +822,16 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
-            eprintln!("error: {message}");
+            // Err payloads may carry account/MFA/package context that CodeQL
+            // rust/cleartext-logging traces into this sink (#172). Keep a fixed
+            // stderr line and write the detail to a mode-600 temp file.
+            match cpn_installer::cli_common::write_mode600_temp_file("cpn-cli-error", &message) {
+                Ok(path) => {
+                    eprintln!("error: command failed");
+                    eprintln!("error_details_file={}", path.display());
+                }
+                Err(_) => eprintln!("error: command failed"),
+            }
             ExitCode::FAILURE
         }
     }

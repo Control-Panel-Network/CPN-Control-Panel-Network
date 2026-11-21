@@ -2,7 +2,8 @@
 
 use crate::panel_action_log;
 use crate::panel_notifications_remote::{
-    RemoteBroadcastRequest, load_remote_push_config, process_remote_broadcast,
+    RemoteBroadcastRequest, authenticate_remote_broadcast, deliver_authenticated_broadcast,
+    load_remote_push_config,
 };
 use actix_web::{HttpRequest, HttpResponse, post, web};
 
@@ -67,6 +68,18 @@ fn status_for_error(message: &str) -> u16 {
     }
 }
 
+fn deny_remote(operator: &str, err: String) -> HttpResponse {
+    let status = status_for_error(&err);
+    let _ = panel_action_log::record(
+        operator,
+        "panel.notifications.remote",
+        "denied",
+        false,
+        &err,
+    );
+    json_body(status, serde_json::json!({ "ok": false, "error": err }))
+}
+
 /// Signed broadcast from News Targeted api. No panel session; HMAC + replay protection required.
 #[post("/api/nt/notifications/broadcast")]
 pub async fn panel_notifications_remote_broadcast(
@@ -96,6 +109,13 @@ pub async fn panel_notifications_remote_broadcast(
     };
     let peer = peer_ip(&http);
 
+    // Authenticate the raw body before any JSON deserialization (CodeQL
+    // rust/unsafe-deserialization / alert #173).
+    if let Err(err) = authenticate_remote_broadcast(&cfg, &peer, timestamp, nonce, signature, &body)
+    {
+        return deny_remote("nt-remote", err);
+    }
+
     let parsed: RemoteBroadcastRequest = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => {
@@ -111,7 +131,7 @@ pub async fn panel_notifications_remote_broadcast(
     } else {
         parsed.operator.trim().to_string()
     };
-    match process_remote_broadcast(&cfg, &peer, timestamp, nonce, signature, &body, parsed) {
+    match deliver_authenticated_broadcast(&cfg, parsed) {
         Ok(result) => {
             let target = format!("delivered={}", result.delivered);
             let message = format!(
@@ -136,16 +156,6 @@ pub async fn panel_notifications_remote_broadcast(
                 }),
             )
         }
-        Err(err) => {
-            let status = status_for_error(&err);
-            let _ = panel_action_log::record(
-                &operator,
-                "panel.notifications.remote",
-                "denied",
-                false,
-                &err,
-            );
-            json_body(status, serde_json::json!({ "ok": false, "error": err }))
-        }
+        Err(err) => deny_remote(&operator, err),
     }
 }

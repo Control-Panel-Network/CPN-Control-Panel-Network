@@ -7,6 +7,7 @@ use crate::account_mfa_enroll_token::{
 use crate::account_mgmt::find_account;
 use crate::account_passkeys::passkey_count;
 use crate::account_security::needs_mfa_enrollment;
+use crate::cli_common::write_mode600_temp_file;
 use crate::cli_panel::resolve_panel_url_info;
 use clap::Subcommand;
 
@@ -52,8 +53,9 @@ pub fn run(
             let keys = passkey_count(&username);
             let needs_enroll = needs_mfa_enrollment(&username);
             let cli_token_pending = has_pending_mfa_enroll_token(&username);
+            // Omit username from stdout (CodeQL rust/cleartext-logging #174).
             println!(
-                "username={username}\ttotp_enabled={totp_enabled}\ttotp_pending_enroll={totp_pending}\tpasskey_count={keys}\ttotp_required={}\tneeds_mfa_enrollment={needs_enroll}\tcli_enroll_token_pending={cli_token_pending}",
+                "totp_enabled={totp_enabled}\ttotp_pending_enroll={totp_pending}\tpasskey_count={keys}\ttotp_required={}\tneeds_mfa_enrollment={needs_enroll}\tcli_enroll_token_pending={cli_token_pending}",
                 boot.totp_required
             );
             Ok(())
@@ -68,18 +70,20 @@ pub fn run(
             let info = resolve_panel_url_info();
             let base = info.primary_base.trim_end_matches('/');
             let enroll_url = format!("{base}/account/security/enroll-cli?token={raw}");
+            // Write the enroll URL (contains a one-time token) to a mode-600 file.
+            // Never print username, token, or full URL (CodeQL #175/#176/#177).
+            let path = write_mode600_temp_file("cpn-mfa-enroll-url", &enroll_url)?;
             crate::panel_audit_cli::record_cli(
                 "cli.mfa.enroll-url",
                 &username,
                 true,
                 &format!("expires_at_unix={expires_at}; ttl_secs={MFA_ENROLL_TOKEN_TTL_SECS}"),
             );
-            println!("username={username}");
-            println!("enroll_url={enroll_url}");
+            println!("enroll_url_file={}", path.display());
             println!("expires_at_unix={expires_at}");
             println!("expires_in_secs={MFA_ENROLL_TOKEN_TTL_SECS}");
             println!(
-                "note=Open enroll_url in a desktop browser (Windows Hello / passkeys need HTTPS and a matching RP ID hostname; loopback or http://IP may fail WebAuthn)"
+                "note=Open enroll_url_file in a desktop browser (Windows Hello / passkeys need HTTPS and a matching RP ID hostname; loopback or http://IP may fail WebAuthn)"
             );
             if info.panel_public_url.is_none() && info.panel_hostname.is_none() {
                 println!(

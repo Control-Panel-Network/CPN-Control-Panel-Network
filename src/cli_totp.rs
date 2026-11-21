@@ -88,8 +88,9 @@ pub fn run(
             crate::panel_audit_cli::record_cli("cli.totp.begin", &username, true, "pending=1");
             println!("totp_enroll_pending=true");
             println!("totp_enroll_file={}", path.display());
+            // Do not echo username on stdout (CodeQL rust/cleartext-logging #178).
             println!(
-                "note=Add the secret to an authenticator app, then run: sudo cpn totp confirm --username {username} --code CODE"
+                "note=Add the secret to an authenticator app, then run: sudo cpn totp confirm --username <account> --code CODE"
             );
             Ok(())
         }

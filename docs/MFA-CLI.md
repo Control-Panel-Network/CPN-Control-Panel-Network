@@ -11,7 +11,7 @@ Operator reference for `cpn totp`, `cpn passkey`, and `cpn mfa`, plus account co
 |---|---|
 | Root | Every `totp`, `passkey`, and `mfa` subcommand calls `require_root` (use `sudo cpn …`). Lab override: `CPN_ALLOW_NONROOT=1` with a non-production data dir. |
 | Username | Always `--username <NAME>`. Resolution is case-insensitive against the panel account store (`shadows` and `Shadows` resolve to the same account). |
-| Secrets on stdout | TOTP base32 secrets, backup codes, and raw enroll tokens are **not** dumped as free-standing secret lines. Enroll material goes to mode-600 temp files (`totp begin` / `totp confirm`). `mfa enroll-url` prints a full `enroll_url=` that embeds the token; treat that URL as a secret capability. |
+| Secrets on stdout | TOTP base32 secrets, backup codes, and raw enroll tokens are **not** printed on stdout. Enroll material goes to mode-600 temp files (`totp begin` / `totp confirm` / `mfa enroll-url`). `mfa enroll-url` prints `enroll_url_file=` (path only); treat the file contents as a secret capability. |
 | Confirmations | Destructive clears prompt for `yes`/`y` (case-insensitive) unless `--yes` is passed. `no`/`n` or empty aborts. |
 
 Quick discovery:
@@ -58,9 +58,8 @@ sudo cpn mfa clear --username shadows --yes
 
 **Flags:** `--username` (required).
 
-**Stdout (tab-separated flags, no secrets):**
+**Stdout (tab-separated flags, no secrets; username omitted):**
 
-- `username=`
 - `totp_enabled=` / `totp_pending_enroll=`
 - `passkey_count=`
 - `totp_required=` (bootstrap preference that MFA must be enrolled)
@@ -71,13 +70,14 @@ sudo cpn mfa clear --username shadows --yes
 
 **Flags:** `--username` (required).
 
-**Effect:** Creates a short-lived, single-use enroll token for that username (replaces any prior unused token for the same user). Prints:
+**Effect:** Creates a short-lived, single-use enroll token for that username (replaces any prior unused token for the same user). Writes the HTTPS enroll URL to a mode-600 temp file and prints:
 
-- `username=`
-- `enroll_url=` (HTTPS URL on the **primary** panel base: `panel_public_url`, else `https://<panel_hostname>`)
+- `enroll_url_file=` (path to the mode-600 file; contents are the primary-panel HTTPS URL)
 - `expires_at_unix=` / `expires_in_secs=` (**900** = 15 minutes)
 - operator `note=` about desktop browser / HTTPS / RP ID
 - optional `warning=` when `panel_public_url` is unset
+
+Username and the raw URL/token are not printed on stdout (CodeQL cleartext-logging).
 
 **Fails when:** account is disabled (enable first with `sudo cpn account enable --username shadows --yes`).
 
@@ -86,7 +86,7 @@ sudo cpn mfa clear --username shadows --yes
 #### Safe operator usage (enroll links)
 
 1. On the server: `sudo cpn mfa enroll-url --username shadows`.
-2. Copy `enroll_url=` from the SSH session.
+2. Read `enroll_url_file=` (for example `sudo cat` the path) and copy the URL.
 3. Open it on a **desktop** browser by pasting into the **address bar** (or open from the same SSH/client path that does not fetch URLs for previews).
 4. Complete **Continue to Security** (or the confirm step your build shows), then enroll passkey and/or TOTP in the panel.
 5. Verify: `sudo cpn passkey list --username shadows` and/or `sudo cpn totp status --username shadows`.
@@ -223,7 +223,7 @@ sudo cpn mfa enroll-url --username shadows
 ```bash
 sudo cpn mfa status --username shadows
 sudo cpn mfa enroll-url --username shadows
-# open enroll_url= on desktop address bar within 15 minutes; do not paste into chat first
+# read enroll_url_file=; open URL on desktop address bar within 15 minutes; do not paste into chat first
 sudo cpn passkey list --username shadows
 ```
 
