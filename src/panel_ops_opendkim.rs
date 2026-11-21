@@ -477,6 +477,7 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
 }
 
 /// Ensure keys for one domain, then refresh OpenDKIM tables/service.
+/// DNS publish stays in `provision_mail_dns` / Email Start / DKIM Manager (avoids double CF push on site ready).
 pub fn ensure_opendkim_for_domain(domain: &str) -> Result<String, String> {
     let key_msg = ensure_dkim_for_domain(domain)?;
     let stack = ensure_opendkim_stack()?;

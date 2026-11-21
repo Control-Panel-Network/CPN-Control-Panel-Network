@@ -204,7 +204,7 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
     // Accept mail for hosted domains and deliver it to the local mailbox users.
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mail configuration");
 
-    // Best-effort OpenDKIM (keys live under /var/lib/cpn/dkim; DNS via provision_mail_dns / site ready).
+    // Best-effort OpenDKIM (keys under /var/lib/cpn/dkim; DNS via provision_mail_dns on site ready / Email Start / DKIM ensure).
     match crate::panel_ops_opendkim::ensure_opendkim_stack() {
         Ok(_) => {}
         Err(e) => {

@@ -266,6 +266,48 @@ fn chrono_like_id() -> String {
     format!("{secs}")
 }
 
+/// Planned Cloudflare create/update for one DNS plan (no network I/O).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CloudflareUpsertAction {
+    SkipPlaceholder { name: String },
+    Create { record_type: String, name: String },
+    Update { record_id: String, name: String },
+}
+
+/// Decide create vs update for each plan against an existing Cloudflare record list.
+/// Never deletes unrelated records. Skips RFC 5737 documentation placeholder A records.
+pub fn plan_cloudflare_upserts(
+    existing: &[crate::panel_ops_cloudflare_api::CfDnsRecord],
+    plans: &[DnsRecordPlan],
+) -> Vec<CloudflareUpsertAction> {
+    let mut actions = Vec::with_capacity(plans.len());
+    for plan in plans {
+        if plan.record_type.eq_ignore_ascii_case("A") && plan.content.starts_with("203.0.113.") {
+            actions.push(CloudflareUpsertAction::SkipPlaceholder {
+                name: plan.name.clone(),
+            });
+            continue;
+        }
+        let name = plan.name.trim_end_matches('.').to_ascii_lowercase();
+        let rtype = plan.record_type.to_ascii_uppercase();
+        if let Some(found) = existing.iter().find(|r| {
+            r.record_type.eq_ignore_ascii_case(&rtype)
+                && r.name.trim_end_matches('.').eq_ignore_ascii_case(&name)
+        }) {
+            actions.push(CloudflareUpsertAction::Update {
+                record_id: found.id.clone(),
+                name: plan.name.clone(),
+            });
+        } else {
+            actions.push(CloudflareUpsertAction::Create {
+                record_type: plan.record_type.clone(),
+                name: plan.name.clone(),
+            });
+        }
+    }
+    actions
+}
+
 /// Add-only / upsert TXT or CNAME by name+type. Never deletes unrelated records.
 pub fn push_dns_plans_to_cloudflare(
     domain: &str,
@@ -278,44 +320,40 @@ pub fn push_dns_plans_to_cloudflare(
         );
     }
     let existing = list_dns_records(domain)?;
+    let actions = plan_cloudflare_upserts(&existing, plans);
     let mut messages = Vec::new();
-    for plan in plans {
-        // Skip RFC documentation placeholder A records (must be set by the operator).
-        if plan.record_type.eq_ignore_ascii_case("A") && plan.content.starts_with("203.0.113.") {
-            messages.push(format!(
-                "skipped placeholder A `{}` (set a real IP or CNAME for the policy host)",
-                plan.name
-            ));
-            continue;
-        }
-        let name = plan.name.trim_end_matches('.').to_ascii_lowercase();
-        let rtype = plan.record_type.to_ascii_uppercase();
-        let proxied = false; // MTA-STS / BIMI must not be orange-cloud proxied as TXT; CNAME for mta-sts host is DNS-only.
-        if let Some(found) = existing.iter().find(|r| {
-            r.record_type.eq_ignore_ascii_case(&rtype)
-                && r.name.trim_end_matches('.').eq_ignore_ascii_case(&name)
-        }) {
-            let msg = update_dns_record(
-                domain,
-                &found.id,
-                &plan.name,
-                &plan.content,
-                plan.ttl,
-                None,
-                proxied,
-            )?;
-            messages.push(format!("updated: {msg}"));
-        } else {
-            let msg = create_dns_record(
-                domain,
-                &plan.record_type,
-                &plan.name,
-                &plan.content,
-                plan.ttl,
-                None,
-                proxied,
-            )?;
-            messages.push(format!("added: {msg}"));
+    let proxied = false; // MTA-STS / BIMI / mail TXT must stay DNS-only (not orange-cloud).
+    for (plan, action) in plans.iter().zip(actions.iter()) {
+        match action {
+            CloudflareUpsertAction::SkipPlaceholder { name } => {
+                messages.push(format!(
+                    "skipped placeholder A `{name}` (set a real IP or CNAME for the policy host)"
+                ));
+            }
+            CloudflareUpsertAction::Update { record_id, .. } => {
+                let msg = update_dns_record(
+                    domain,
+                    record_id,
+                    &plan.name,
+                    &plan.content,
+                    plan.ttl,
+                    None,
+                    proxied,
+                )?;
+                messages.push(format!("updated: {msg}"));
+            }
+            CloudflareUpsertAction::Create { .. } => {
+                let msg = create_dns_record(
+                    domain,
+                    &plan.record_type,
+                    &plan.name,
+                    &plan.content,
+                    plan.ttl,
+                    None,
+                    proxied,
+                )?;
+                messages.push(format!("added: {msg}"));
+            }
         }
     }
     Ok(messages.join("; "))
@@ -363,5 +401,70 @@ mod tests {
             assert_eq!(dns[0].name, "default._bimi.example.com");
             assert!(dns[0].content.contains("v=BIMI1"));
         });
+    }
+
+    #[test]
+    fn cloudflare_upsert_plans_create_and_update() {
+        use crate::panel_ops_cloudflare_api::CfDnsRecord;
+        let existing = vec![CfDnsRecord {
+            id: "rec-spf".into(),
+            name: "example.com".into(),
+            record_type: "TXT".into(),
+            content: "v=spf1 ~all".into(),
+            ttl: 3600,
+            priority: None,
+            proxied: false,
+        }];
+        let plans = vec![
+            DnsRecordPlan {
+                record_type: "TXT".into(),
+                name: "example.com".into(),
+                content: "v=spf1 a mx ~all".into(),
+                ttl: 3600,
+                note: String::new(),
+            },
+            DnsRecordPlan {
+                record_type: "TXT".into(),
+                name: "default._domainkey.example.com".into(),
+                content: "v=DKIM1; k=rsa; p=ABC".into(),
+                ttl: 3600,
+                note: String::new(),
+            },
+            DnsRecordPlan {
+                record_type: "TXT".into(),
+                name: "_dmarc.example.com".into(),
+                content: "v=DMARC1; p=none".into(),
+                ttl: 3600,
+                note: String::new(),
+            },
+            DnsRecordPlan {
+                record_type: "A".into(),
+                name: "mta-sts.example.com".into(),
+                content: "203.0.113.10".into(),
+                ttl: 3600,
+                note: String::new(),
+            },
+        ];
+        let actions = plan_cloudflare_upserts(&existing, &plans);
+        assert_eq!(
+            actions,
+            vec![
+                CloudflareUpsertAction::Update {
+                    record_id: "rec-spf".into(),
+                    name: "example.com".into(),
+                },
+                CloudflareUpsertAction::Create {
+                    record_type: "TXT".into(),
+                    name: "default._domainkey.example.com".into(),
+                },
+                CloudflareUpsertAction::Create {
+                    record_type: "TXT".into(),
+                    name: "_dmarc.example.com".into(),
+                },
+                CloudflareUpsertAction::SkipPlaceholder {
+                    name: "mta-sts.example.com".into(),
+                },
+            ]
+        );
     }
 }
