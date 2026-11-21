@@ -13,11 +13,8 @@ const OPENDKIM_DIR: &str = "/etc/opendkim";
 const KEY_TABLE: &str = "/etc/opendkim/KeyTable";
 const SIGNING_TABLE: &str = "/etc/opendkim/SigningTable";
 const TRUSTED_HOSTS: &str = "/etc/opendkim/TrustedHosts";
-const OPENDKIM_CONF: &str = "/etc/opendkim.conf";
-/// OpenDKIM `Socket` (libmilter form `inet:port@host`).
-const OPENDKIM_LISTEN: &str = "inet:8891@localhost";
 /// Postfix milter target (`inet:host:port`).
-const POSTFIX_MILTER: &str = "inet:127.0.0.1:8891";
+const POSTFIX_MILTER: &str = crate::panel_ops_mail_milters::OPENDKIM_POSTFIX_MILTER;
 const CPN_BEGIN: &str = "# BEGIN CPN-managed OpenDKIM entries";
 const CPN_END: &str = "# END CPN-managed OpenDKIM entries";
 
@@ -178,85 +175,6 @@ fn ensure_baseline_trusted_hosts(existing: &str) -> String {
     out
 }
 
-fn ensure_opendkim_conf() -> Result<bool, String> {
-    let path = Path::new(OPENDKIM_CONF);
-    let mut raw = if path.exists() {
-        fs::read_to_string(path).map_err(|e| format!("Cannot read {OPENDKIM_CONF}: {e}"))?
-    } else {
-        String::new()
-    };
-    let mut changed = false;
-    let required = [
-        ("Mode", "sv"),
-        ("Syslog", "yes"),
-        ("SyslogSuccess", "yes"),
-        ("UserID", "opendkim:opendkim"),
-        ("Socket", OPENDKIM_LISTEN),
-        ("Umask", "002"),
-        ("Canonicalization", "relaxed/relaxed"),
-        ("OversignHeaders", "From"),
-        ("KeyTable", &format!("refile:{KEY_TABLE}")),
-        ("SigningTable", &format!("refile:{SIGNING_TABLE}")),
-        ("ExternalIgnoreList", &format!("refile:{TRUSTED_HOSTS}")),
-        ("InternalHosts", &format!("refile:{TRUSTED_HOSTS}")),
-    ];
-    for (key, value) in required {
-        let prefix = format!("{key}\t");
-        let prefix_sp = format!("{key} ");
-        let line = format!("{key}\t{value}");
-        if let Some(idx) = raw.lines().position(|l| {
-            let t = l.trim_start();
-            !t.starts_with('#') && (t.starts_with(&prefix) || t.starts_with(&prefix_sp))
-        }) {
-            let current = raw.lines().nth(idx).unwrap_or("").trim();
-            let want = line.as_str();
-            if current != want && !current.contains(value) {
-                let mut rebuilt = String::new();
-                for (i, l) in raw.lines().enumerate() {
-                    if i == idx {
-                        rebuilt.push_str(&line);
-                    } else {
-                        rebuilt.push_str(l);
-                    }
-                    rebuilt.push('\n');
-                }
-                raw = rebuilt;
-                changed = true;
-            }
-        } else {
-            if !raw.is_empty() && !raw.ends_with('\n') {
-                raw.push('\n');
-            }
-            raw.push_str(&line);
-            raw.push('\n');
-            changed = true;
-        }
-    }
-    // Drop conflicting single-domain KeyFile when KeyTable is in use.
-    if raw.lines().any(|l| {
-        let t = l.trim_start();
-        !t.starts_with('#') && t.starts_with("KeyFile")
-    }) {
-        let mut rebuilt = String::new();
-        for l in raw.lines() {
-            let t = l.trim_start();
-            if !t.starts_with('#') && t.starts_with("KeyFile") {
-                rebuilt.push_str("# ");
-                rebuilt.push_str(l);
-                changed = true;
-            } else {
-                rebuilt.push_str(l);
-            }
-            rebuilt.push('\n');
-        }
-        raw = rebuilt;
-    }
-    if changed {
-        write_if_changed(OPENDKIM_CONF, &raw)?;
-    }
-    Ok(changed)
-}
-
 fn chown_opendkim_keys(entries: &[OpendkimDomainEntry]) {
     #[cfg(unix)]
     {
@@ -369,11 +287,28 @@ pub fn sync_opendkim_tables(entries: &[OpendkimDomainEntry]) -> Result<String, S
     Ok(notes.join("; "))
 }
 
+fn rspamd_milter_listening() -> bool {
+    Path::new("/etc/rspamd").is_dir()
+        && (systemd_unit_file_exists("rspamd")
+            && Command::new("systemctl")
+                .args(["is-active", "--quiet", "rspamd"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false))
+}
+
 pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
+    let smtpd = crate::panel_ops_mail_milters::compose_smtpd_milters(
+        POSTFIX_MILTER,
+        rspamd_milter_listening(),
+    );
     let status = Command::new("postconf")
         .args([
             "-e",
-            &format!("smtpd_milters={POSTFIX_MILTER}"),
+            &format!("smtpd_milters={smtpd}"),
             &format!("non_smtpd_milters={POSTFIX_MILTER}"),
             "milter_default_action=accept",
             "milter_protocol=6",
@@ -392,7 +327,9 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    Ok(format!("Postfix milters -> {POSTFIX_MILTER}"))
+    Ok(format!(
+        "Postfix milters -> smtpd={smtpd}; non_smtpd={POSTFIX_MILTER}"
+    ))
 }
 
 /// EPEL OpenDKIM needs `libmemcached.so.11` from CRB/PowerTools on EL9/10.
@@ -446,7 +383,7 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
     let mut steps = Vec::new();
     steps.push(install_opendkim_package()?);
     ensure_opendkim_dirs()?;
-    if ensure_opendkim_conf()? {
+    if crate::panel_ops_opendkim_conf::ensure_opendkim_conf()? {
         steps.push("opendkim.conf updated".into());
     }
     // Touch table files so refile: paths exist before first sync.
@@ -468,6 +405,10 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
     }
     enable_now(&["opendkim"])?;
     steps.push("opendkim enabled".into());
+    // Soft-heal rspamd so Auth-Results (SPF/DMARC) stay available for Tachyon.
+    if let Ok(msg) = crate::panel_ops_email_antispam::heal_rspamd_for_auth_results() {
+        steps.push(msg);
+    }
     steps.push(ensure_postfix_opendkim_milters()?);
     Ok(format!(
         "OpenDKIM ready ({} CPN domain key(s)): {}",
