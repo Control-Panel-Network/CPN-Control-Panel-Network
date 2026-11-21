@@ -1,9 +1,9 @@
 //! Import legacy virtual mailboxes into the CPN panel registry and align webmail login mode.
 
 use crate::account::now_unix;
-use crate::mail_accounts::{MailAccount, MailSmtpMode, list_accounts};
+use crate::mail_accounts::{list_accounts, MailAccount, MailSmtpMode};
 use crate::mail_legacy_sql::{
-    LegacyMailbox, list_legacy_mailboxes, prefer_webmail_short_login, virtual_sql_mail_active,
+    list_legacy_mailboxes, prefer_webmail_short_login, virtual_sql_mail_active, LegacyMailbox,
 };
 use crate::smtp_settings::SmtpTlsMode;
 use serde_json::Value;
@@ -212,7 +212,7 @@ fn patch_domains_short_login(data_dir: &Path, short_login: bool) -> Result<usize
             continue;
         };
         let mut changed = false;
-        for key in ["IMAP", "SMTP", "Sieve"] {
+        for key in ["IMAP", "SMTP"] {
             if let Some(obj) = data.get_mut(key).and_then(|v| v.as_object_mut()) {
                 let next = Value::Bool(short_login);
                 if obj.get("shortLogin") != Some(&next) {
@@ -220,6 +220,10 @@ fn patch_domains_short_login(data_dir: &Path, short_login: bool) -> Result<usize
                     changed = true;
                 }
             }
+        }
+        // Sieve must follow IMAP/SMTP (create Sieve when missing).
+        if crate::install_snappymail_prefs::align_domain_sieve_short_login(&mut data) {
+            changed = true;
         }
         if changed {
             let pretty = serde_json::to_string_pretty(&data)

@@ -61,6 +61,81 @@ fn ensure_login_and_branding_defaults(data_dir: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Read IMAP (then SMTP) `shortLogin` from a SnappyMail/Tachyon domain profile.
+pub fn domain_mailbox_short_login(data: &Value) -> Option<bool> {
+    data.get("IMAP")
+        .and_then(|v| v.get("shortLogin"))
+        .and_then(|v| v.as_bool())
+        .or_else(|| {
+            data.get("SMTP")
+                .and_then(|v| v.get("shortLogin"))
+                .and_then(|v| v.as_bool())
+        })
+}
+
+/// Keep `Sieve.shortLogin` aligned with IMAP/SMTP on the same domain JSON.
+///
+/// Creates a Sieve object when missing. Never leaves Sieve false when IMAP
+/// shortLogin is true (Tachyon Filters ManageSieve ERROR 3 on PAM/unix users).
+pub fn align_domain_sieve_short_login(data: &mut Value) -> bool {
+    let Some(short) = domain_mailbox_short_login(data) else {
+        return false;
+    };
+    let Some(root) = data.as_object_mut() else {
+        return false;
+    };
+    let sieve = root
+        .entry("Sieve".to_string())
+        .or_insert_with(|| Value::Object(Default::default()));
+    let Some(obj) = sieve.as_object_mut() else {
+        return false;
+    };
+    let next = Value::Bool(short);
+    if obj.get("shortLogin") == Some(&next) {
+        return false;
+    }
+    obj.insert("shortLogin".into(), next);
+    true
+}
+
+/// Heal one domain JSON file so Sieve shortLogin matches IMAP/SMTP.
+pub fn heal_domain_sieve_short_login_file(path: &Path) -> Result<bool, String> {
+    let raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut data: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    if !align_domain_sieve_short_login(&mut data) {
+        return Ok(false);
+    }
+    let pretty = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+    std::fs::write(path, format!("{pretty}\n")).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// Ensure apex and `mail.<apex>` domain profiles are on the provision mirror list.
+pub fn append_mail_and_apex_domain_profiles(
+    mirror_names: &mut Vec<String>,
+    apex_domains: &[String],
+) {
+    for apex_raw in apex_domains {
+        let apex = apex_raw.trim().to_ascii_lowercase();
+        if apex.is_empty() {
+            continue;
+        }
+        push_domain_profile_name(mirror_names, &format!("{apex}.json"));
+        let mail_host = if apex.starts_with("mail.") {
+            apex.clone()
+        } else {
+            format!("mail.{apex}")
+        };
+        push_domain_profile_name(mirror_names, &format!("{mail_host}.json"));
+    }
+}
+
+fn push_domain_profile_name(mirror_names: &mut Vec<String>, name: &str) {
+    if !mirror_names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+        mirror_names.push(name.to_string());
+    }
+}
+
 fn ensure_domain_sieve_enabled(data_dir: &str) -> Result<(), String> {
     let domains = Path::new(data_dir).join("_data_/_default_/domains");
     if !domains.is_dir() {
@@ -97,12 +172,13 @@ fn ensure_domain_sieve_enabled(data_dir: &str) -> Result<(), String> {
         let Ok(mut data) = serde_json::from_str::<Value>(&raw) else {
             continue;
         };
+        let short_login = domain_mailbox_short_login(&data)
+            .unwrap_or_else(crate::mail_legacy_sql::prefer_webmail_short_login);
         let sieve = data.as_object_mut().map(|o| {
             o.entry("Sieve".to_string())
                 .or_insert_with(|| Value::Object(Default::default()))
         });
         if let Some(Value::Object(obj)) = sieve {
-            let short_login = crate::mail_legacy_sql::prefer_webmail_short_login();
             obj.insert("enabled".into(), Value::Bool(true));
             obj.insert("host".into(), Value::String("127.0.0.1".into()));
             obj.insert("port".into(), serde_json::json!(4190));
@@ -110,6 +186,8 @@ fn ensure_domain_sieve_enabled(data_dir: &str) -> Result<(), String> {
             obj.insert("lowerLogin".into(), Value::Bool(true));
             obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
+        // Final pass: never leave Sieve false when IMAP shortLogin is true.
+        let _ = align_domain_sieve_short_login(&mut data);
         if let Ok(pretty) = serde_json::to_string_pretty(&data) {
             let _ = std::fs::write(&path, format!("{pretty}\n"));
         }
@@ -214,12 +292,103 @@ fn patch_settings_file(path: &Path, force: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        align_domain_sieve_short_login, append_mail_and_apex_domain_profiles,
+        heal_domain_sieve_short_login_file,
+    };
     use crate::install_snappymail_lineage::replace_ini_bool;
+    use serde_json::json;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn sets_determine_user_domain_on() {
         let raw = "[login]\ndetermine_user_domain = Off\n";
         let out = replace_ini_bool(raw, "determine_user_domain", true);
         assert!(out.contains("determine_user_domain = On"));
+    }
+
+    #[test]
+    fn sieve_short_login_follows_imap_true() {
+        let mut data = json!({
+            "IMAP": { "shortLogin": true },
+            "SMTP": { "shortLogin": true },
+            "Sieve": { "enabled": true, "shortLogin": false }
+        });
+        assert!(align_domain_sieve_short_login(&mut data));
+        assert_eq!(data["Sieve"]["shortLogin"], true);
+    }
+
+    #[test]
+    fn sieve_short_login_created_when_missing() {
+        let mut data = json!({
+            "IMAP": { "shortLogin": true },
+            "SMTP": { "shortLogin": true }
+        });
+        assert!(align_domain_sieve_short_login(&mut data));
+        assert_eq!(data["Sieve"]["shortLogin"], true);
+    }
+
+    #[test]
+    fn sieve_short_login_follows_imap_false() {
+        let mut data = json!({
+            "IMAP": { "shortLogin": false },
+            "Sieve": { "shortLogin": true }
+        });
+        assert!(align_domain_sieve_short_login(&mut data));
+        assert_eq!(data["Sieve"]["shortLogin"], false);
+    }
+
+    #[test]
+    fn append_mail_and_apex_covers_both_profiles() {
+        let mut names = Vec::new();
+        append_mail_and_apex_domain_profiles(
+            &mut names,
+            &["threebrickstudio.com".into(), "mail.example.com".into()],
+        );
+        assert!(names.iter().any(|n| n == "threebrickstudio.com.json"));
+        assert!(names.iter().any(|n| n == "mail.threebrickstudio.com.json"));
+        assert!(names.iter().any(|n| n == "mail.example.com.json"));
+        assert_eq!(
+            names
+                .iter()
+                .filter(|n| n.eq_ignore_ascii_case("mail.example.com.json"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn heal_domain_file_aligns_sieve_with_imap() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("cpn-sieve-shortlogin-{stamp}"));
+        fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("mail.threebrickstudio.com.json");
+        let raw = json!({
+            "IMAP": { "host": "127.0.0.1", "shortLogin": true },
+            "SMTP": { "host": "127.0.0.1", "shortLogin": true },
+            "Sieve": {
+                "enabled": true,
+                "host": "127.0.0.1",
+                "port": 4190,
+                "shortLogin": false
+            }
+        });
+        fs::write(&path, format!("{}\n", raw)).expect("write domain");
+        assert_eq!(
+            heal_domain_sieve_short_login_file(&path).expect("heal"),
+            true
+        );
+        let healed: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(healed["Sieve"]["shortLogin"], true);
+        assert_eq!(
+            heal_domain_sieve_short_login_file(&path).expect("idempotent"),
+            false
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }
