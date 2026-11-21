@@ -86,12 +86,14 @@ pub fn start_email_stack() -> Result<String, String> {
         );
     }
     enable_now(&["dovecot"])?;
-    let _ = std::process::Command::new("systemctl")
-        .args(["reload", "postfix"])
-        .status();
-    let _ = std::process::Command::new("timeout")
-        .args(["8", "systemctl", "reload", "dovecot"])
-        .status();
+    // CyberPanel-style preflight: validate before reload; abort reload on hard failure.
+    let reload = crate::mail_light_heal::reload_mail_services_validated();
+    if !reload.validate_ok() {
+        return Err(format!(
+            "Email stack config validate failed (reload aborted): {}",
+            reload.summary()
+        ));
+    }
     if !mail_backend_ready_fast() {
         let st = detect_mail_stack_public();
         return Err(format!(

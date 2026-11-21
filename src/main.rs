@@ -1069,9 +1069,10 @@ async fn main() -> std::io::Result<()> {
             cpn_installer::upgrade_tip_log::log_tagged_main_only("upgrade", "info", &line);
         }
     });
-    // Heal hosted-domain mail routing on upgrade (no-op without Postfix or local mailboxes).
+    // CyberPanel-style light email heal after upgrade/restart (maps sync included).
+    // No-op when mail/webmail are absent. Never runs heavy Reset Email.
     std::thread::spawn(|| {
-        cpn_installer::mail_hosted_domains::sync_hosted_mail_delivery_logged("panel start");
+        cpn_installer::mail_light_heal::run_light_email_heal_logged("panel start");
     });
     // Minimal installs ship firewalld stopped; bring it up with a safe baseline
     // unless the operator stopped it on purpose.
