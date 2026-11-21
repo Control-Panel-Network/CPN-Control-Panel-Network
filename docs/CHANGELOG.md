@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Classic virtual-mail SQL password sync**: `mail_legacy_sql` and registry import dual-write now run the MariaDB client with socket auth first, then CPN `mariadb-admin.secret`, classic `mysqlPassword`, optional `root` client defaults, and Dovecot SQL `connect` credentials. Fixes panel `/email/password` on migrated hosts where passwordless `root` was denied.
+
 ## [1.4.11] - 21/11/2026
 
 Patch release after v1.4.10. CyberPanel coexistence migration, classic mail import and webmail loopback fixes, OLS WebAdmin proxy and HTTPS SNI, LiteSpeed license ops, PHP 8.6 defaults, login and upgrade resilience, and SSH MOTD public IP (#694 to #702, #697, #698, #699, #700, #701, #702).

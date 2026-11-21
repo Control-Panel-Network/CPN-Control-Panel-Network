@@ -5,6 +5,7 @@
 //! paths diverge. These helpers detect that backend and keep passwords in sync
 //! without putting brand names in operator-facing copy.
 
+use crate::panel_ops_mariadb_local::run_local_mariadb;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -48,30 +49,9 @@ fn dovecot_sql_uses_e_users() -> bool {
 }
 
 fn e_users_table_reachable() -> bool {
-    let Some(bin) = mysql_client() else {
-        return false;
-    };
-    Command::new(bin)
-        .args(["-N", "-e", "SELECT 1 FROM cyberpanel.e_users LIMIT 1"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
+    run_local_mariadb(&["-N", "-e", "SELECT 1 FROM cyberpanel.e_users LIMIT 1"])
+        .map(|o| o.status.success())
         .unwrap_or(false)
-}
-
-fn mysql_client() -> Option<&'static str> {
-    ["mariadb", "mysql"].into_iter().find(|&bin| {
-        Command::new(bin)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    })
 }
 
 /// Discover mailboxes from SQL inventory and/or `/home/vmail`.
@@ -92,19 +72,11 @@ pub fn list_legacy_mailboxes() -> Vec<LegacyMailbox> {
 }
 
 fn list_from_sql() -> Vec<LegacyMailbox> {
-    let Some(bin) = mysql_client() else {
-        return Vec::new();
-    };
-    let output = Command::new(bin)
-        .args([
-            "-N",
-            "-e",
-            "SELECT email, emailOwner_id FROM cyberpanel.e_users ORDER BY email",
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output();
+    let output = run_local_mariadb(&[
+        "-N",
+        "-e",
+        "SELECT email, emailOwner_id FROM cyberpanel.e_users ORDER BY email",
+    ]);
     let Ok(output) = output else {
         return Vec::new();
     };
@@ -239,17 +211,9 @@ pub fn virtual_sql_has_mailbox(email: &str) -> Result<bool, String> {
     if !valid_email(&email) {
         return Err("Mailbox address is invalid".into());
     }
-    let Some(bin) = mysql_client() else {
-        return Err("MariaDB client is not installed".into());
-    };
     let email_sql = escape_sql(&email);
     let sql = format!("SELECT 1 FROM cyberpanel.e_users WHERE email='{email_sql}' LIMIT 1");
-    let output = Command::new(bin)
-        .args(["-N", "-e", &sql])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
+    let output = run_local_mariadb(&["-N", "-e", &sql])
         .map_err(|e| format!("Could not query virtual-mail SQL: {e}"))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
@@ -276,19 +240,11 @@ pub fn sync_password_to_virtual_sql(email: &str, password: &str) -> Result<Strin
         ));
     }
     let hash = doveadm_blf_crypt(password)?;
-    let Some(bin) = mysql_client() else {
-        return Err("MariaDB client is not installed".into());
-    };
     let email_sql = escape_sql(&email);
     let hash_sql = escape_sql(&hash);
     let sql =
         format!("UPDATE cyberpanel.e_users SET password='{hash_sql}' WHERE email='{email_sql}'");
-    let output = Command::new(bin)
-        .args(["-e", &sql])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
+    let output = run_local_mariadb(&["-e", &sql])
         .map_err(|e| format!("Could not update virtual-mail SQL password: {e}"))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
