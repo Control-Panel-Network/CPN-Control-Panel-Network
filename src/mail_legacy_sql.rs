@@ -40,8 +40,11 @@ fn dovecot_sql_uses_e_users() -> bool {
         return false;
     };
     let lower = raw.to_ascii_lowercase();
-    lower.contains("e_users")
-        && (lower.contains("driver = mysql") || lower.contains("driver=mysql"))
+    if !lower.contains("e_users") {
+        return false;
+    }
+  // Classic stacks use the MySQL/MariaDB Dovecot SQL driver against `e_users`.
+    lower.contains("mysql") || lower.contains("mariadb")
 }
 
 fn e_users_table_reachable() -> bool {

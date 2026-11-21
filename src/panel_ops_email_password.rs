@@ -90,16 +90,22 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mailbox password");
     // SOGo authenticates against the shadow hash mirrored in its SQL user source.
     crate::apps_sogo_config::sync_users_if_installed();
+    let virtual_sql = crate::mail_legacy_sql::virtual_sql_mail_active();
     match provisioned {
-        Ok(_provision) => Ok(format!(
-            "Password updated for `{address}`. Local mailbox ready."
-        )),
+        Ok(detail) => Ok(format!("Password updated for `{address}`. {detail}")),
         Err(err) => {
-            // Registry is authoritative for panel UI; local system provision may be
-            // unavailable in CI or when the panel lacks useradd privileges.
-            Ok(format!(
-                "Password updated for `{address}` in the panel registry. Local provision: {err}."
-            ))
+            if virtual_sql {
+                // Dovecot/IMAP on classic stacks reads SQL only; do not claim success.
+                Err(format!(
+                    "Password saved in the panel registry, but virtual-mail SQL auth was not updated: {err}"
+                ))
+            } else {
+                // Registry is authoritative for panel UI; local system provision may be
+                // unavailable in CI or when the panel lacks useradd privileges.
+                Ok(format!(
+                    "Password updated for `{address}` in the panel registry. Local provision: {err}."
+                ))
+            }
         }
     }
 }
