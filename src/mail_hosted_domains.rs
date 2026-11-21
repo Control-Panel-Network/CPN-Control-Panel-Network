@@ -250,7 +250,10 @@ mod unix_impl {
             if owned.contains(domain) {
                 continue;
             }
-            if map_refs.iter().any(|map_ref| postmap_query(map_ref, domain)) {
+            if map_refs
+                .iter()
+                .any(|map_ref| postmap_query(map_ref, domain))
+            {
                 owned.insert(domain.clone());
             }
         }
@@ -624,7 +627,11 @@ mod tests {
     fn strip_virtual_mailbox_domains_removes_classic_overlap() {
         let accounts = vec![
             account("info@newstargeted.com", true, MailSmtpMode::PostfixLocal),
-            account("info@threebrickstudio.com", true, MailSmtpMode::PostfixLocal),
+            account(
+                "info@threebrickstudio.com",
+                true,
+                MailSmtpMode::PostfixLocal,
+            ),
         ];
         let mut plan = plan_from_accounts(&accounts, &|_| true, &BTreeSet::new());
         let mut owned = BTreeSet::new();
