@@ -564,6 +564,7 @@ pub mod upgrade_tip_node;
 pub mod upgrade_tip_prebuilt;
 pub mod upgrade_tip_release_fallback;
 pub mod upgrade_tip_run;
+pub mod upgrade_tip_rustup;
 pub mod upgrade_tip_toolchain;
 pub mod upgrade_tip_verify;
 pub mod upgrade_verify;
