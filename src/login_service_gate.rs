@@ -20,8 +20,8 @@
 
 use crate::manifest::load_manifest;
 use crate::service_detect::{
-    database_health_label, detect_database, detect_web_server_label, openlitespeed_tree_present,
-    port_open, systemd_unit_enabled,
+    database_health_label, detect_database, detect_mail_service_label, detect_web_server_label,
+    openlitespeed_tree_present, port_open, systemd_unit_enabled,
 };
 use serde::Serialize;
 use std::path::Path;

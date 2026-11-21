@@ -6,6 +6,7 @@ use crate::panel_storage_fmt::{
 };
 use crate::panel_website_logs::{candidate_log_paths, first_existing_log, read_log_tail};
 use crate::sites::SiteRecord;
+use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct BandwidthInfo {

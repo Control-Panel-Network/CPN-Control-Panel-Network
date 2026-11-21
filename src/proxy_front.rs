@@ -12,6 +12,7 @@ use std::fs;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const SCHEMA_VERSION: u32 = 1;
 /// Private pool for lab/panel-local unique IPs (not public WAN addresses).

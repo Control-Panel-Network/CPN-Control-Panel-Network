@@ -764,6 +764,47 @@ pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
     )
 }
 
+pub fn mfa_enroll_cli_confirm_html(token: &str, username: &str) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Continue MFA enroll · CPN Panel</title>
+  {favicons}
+  <style>{styles}</style>
+</head>
+<body data-page="mfa-enroll-confirm">
+  <main>
+    <section class="card">
+      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1>Continue MFA enrollment</h1>
+      <p class="hint">Operator link for account <strong>{user}</strong>. Click continue in a desktop browser to open the Security page (passkeys / Windows Hello). Chat or email link previews do not use this step.</p>
+      <form method="post" action="/account/security/enroll-cli" autocomplete="off">
+        <input type="hidden" name="token" value="{token}">
+        <button type="submit">Continue to Security</button>
+      </form>
+      <p class="hint">This confirmation is single-use and expires with the enroll link (15 minutes).</p>
+      <p><a href="/login">Back to login</a></p>
+    </section>
+  </main>
+</body>
+</html>"#,
+        locale = initial_locale,
+        favicons = brand_favicon_links(),
+        styles = shared_auth_styles(),
+        user = html_escape(username),
+        token = html_escape(token),
+    )
+}
+
 pub fn mfa_enroll_cli_invalid_html(message: &str) -> String {
     let boot = load_bootstrap();
     let initial_locale = boot
@@ -776,6 +817,7 @@ pub fn mfa_enroll_cli_invalid_html(message: &str) -> String {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
   <title>MFA enroll link · CPN Panel</title>
   {favicons}
   <style>{styles}</style>

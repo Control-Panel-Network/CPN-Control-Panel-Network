@@ -301,7 +301,7 @@ fn rewrite_signon_url_to_panel_open(raw: &str) -> String {
 
 /// EL packages ship `/etc/phpMyAdmin` as root-only (700/640). php-fpm runs as
 /// nobody and must be able to read `config.inc.php` or sign-on never applies.
-fn ensure_phpmyadmin_config_readable(_conf_inc: &Path) {
+fn ensure_phpmyadmin_config_readable(conf_inc: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
