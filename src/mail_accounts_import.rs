@@ -17,6 +17,32 @@ pub struct MailImportSummary {
     pub already_present: usize,
     pub short_login_files: usize,
     pub virtual_sql_active: bool,
+    /// Registry rows pushed to virtual-mail SQL (dual-write) when a password is known.
+    pub sql_passwords_synced: usize,
+}
+
+/// Register one classic mailbox in `mail-accounts.json` when it exists on disk/SQL but not in CPN.
+pub fn ensure_legacy_registry_row(address: &str) -> Result<bool, String> {
+    let address = address.trim().to_ascii_lowercase();
+    if list_accounts()
+        .into_iter()
+        .any(|a| a.address.eq_ignore_ascii_case(&address))
+    {
+        return Ok(false);
+    }
+    if !crate::mail_legacy_sql::legacy_mailbox_known(&address) {
+        return Err(format!("Mailbox `{address}` is not in the classic mail inventory"));
+    }
+    let Some(row) = crate::mail_legacy_sql::list_legacy_mailboxes()
+        .into_iter()
+        .find(|m| m.email.eq_ignore_ascii_case(&address))
+    else {
+        return Err(format!("Mailbox `{address}` is not in the classic mail inventory"));
+    };
+    let mut file = load_accounts_file()?;
+    file.accounts.push(account_from_legacy(&row));
+    save_accounts_file(&file)?;
+    Ok(true)
 }
 
 /// Discover classic virtual mailboxes and register any missing addresses in `mail-accounts.json`.
@@ -57,7 +83,26 @@ pub fn import_legacy_mailboxes_into_registry() -> Result<MailImportSummary, Stri
         save_accounts_file(&file)?;
     }
     summary.short_login_files = ensure_webmail_short_login_for_backend()?;
+    summary.sql_passwords_synced = sync_registry_passwords_to_virtual_sql()?;
     Ok(summary)
+}
+
+/// Dual-write known registry passwords into virtual-mail SQL (BLF-CRYPT, full address).
+fn sync_registry_passwords_to_virtual_sql() -> Result<usize, String> {
+    if !virtual_sql_mail_active() {
+        return Ok(0);
+    }
+    let mut synced = 0usize;
+    for account in list_accounts() {
+        let secret = account.mailbox_password.trim();
+        if secret.len() < 8 {
+            continue;
+        }
+        if crate::mail_legacy_sql::sync_password_to_virtual_sql(&account.address, secret).is_ok() {
+            synced += 1;
+        }
+    }
+    Ok(synced)
 }
 
 fn account_from_legacy(row: &LegacyMailbox) -> MailAccount {
@@ -185,12 +230,13 @@ fn patch_domains_short_login(data_dir: &Path, short_login: bool) -> Result<usize
 
 pub fn format_import_summary(summary: &MailImportSummary) -> String {
     format!(
-        "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={}",
+        "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={} sql_passwords_synced={}",
         summary.discovered,
         summary.imported,
         summary.already_present,
         summary.short_login_files,
-        summary.virtual_sql_active
+        summary.virtual_sql_active,
+        summary.sql_passwords_synced
     )
 }
 
@@ -206,6 +252,7 @@ mod tests {
             already_present: 1,
             short_login_files: 3,
             virtual_sql_active: true,
+            sql_passwords_synced: 0,
         });
         assert!(!text.to_ascii_lowercase().contains("cyberpanel"));
         assert!(text.contains("imported=1"));

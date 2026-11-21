@@ -16,6 +16,7 @@ use cpn_installer::cli_common::{
     read_password_confirmed, require_root_for_mutation,
 };
 use cpn_installer::cli_doctor;
+use cpn_installer::cli_mail::{self, MailCommands};
 use cpn_installer::cli_mfa::{MfaCommands, run as run_mfa};
 use cpn_installer::cli_network::{NetworkCommands, run_network};
 use cpn_installer::cli_packages::{self, PackageCommands};
@@ -96,6 +97,11 @@ enum Commands {
     Site {
         #[command(subcommand)]
         command: SiteCommands,
+    },
+    /// Local mailbox import and password sync (classic virtual-mail stacks)
+    Mail {
+        #[command(subcommand)]
+        command: MailCommands,
     },
     /// Listen port, panel hostname, and port migration
     Network {
@@ -764,6 +770,7 @@ fn run() -> Result<(), String> {
                 Ok(())
             }
         },
+        Commands::Mail { command } => cli_mail::run(command, require_root_for_mutation),
         Commands::Network { command } => run_network(command, require_root_for_mutation),
         Commands::Plugin { command } => match command {
             PluginCommands::List { domain } => cli_plugins::list_plugins(domain.as_deref()),

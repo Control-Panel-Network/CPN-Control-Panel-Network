@@ -54,6 +54,7 @@ pub mod cli_common;
 pub mod cli_doctor;
 pub mod cli_install;
 pub mod cli_maintenance;
+pub mod cli_mail;
 pub mod cli_mfa;
 pub mod cli_network;
 pub mod cli_packages;

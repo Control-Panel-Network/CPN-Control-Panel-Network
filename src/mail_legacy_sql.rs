@@ -219,6 +219,50 @@ fn valid_email(email: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
+/// True when `email` exists in the legacy virtual-mail inventory (SQL and/or vmail tree).
+pub fn legacy_mailbox_known(email: &str) -> bool {
+    let email = email.trim().to_ascii_lowercase();
+    if virtual_sql_mail_active() && virtual_sql_has_mailbox(&email).unwrap_or(false) {
+        return true;
+    }
+    list_legacy_mailboxes()
+        .into_iter()
+        .any(|m| m.email.eq_ignore_ascii_case(&email))
+}
+
+/// Best-effort probe for a row in the virtual-mail SQL table (no error when SQL is absent).
+pub fn virtual_sql_has_mailbox(email: &str) -> Result<bool, String> {
+    if !virtual_sql_mail_active() {
+        return Ok(false);
+    }
+    let email = email.trim().to_ascii_lowercase();
+    if !valid_email(&email) {
+        return Err("Mailbox address is invalid".into());
+    }
+    let Some(bin) = mysql_client() else {
+        return Err("MariaDB client is not installed".into());
+    };
+    let email_sql = escape_sql(&email);
+    let sql = format!("SELECT 1 FROM cyberpanel.e_users WHERE email='{email_sql}' LIMIT 1");
+    let output = Command::new(bin)
+        .args(["-N", "-e", &sql])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Could not query virtual-mail SQL: {e}"))?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Could not query virtual-mail SQL: {}",
+            err.trim()
+        ));
+    }
+    Ok(!String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .is_empty())
+}
+
 /// Hash `password` and store it in `cyberpanel.e_users` when that table exists.
 pub fn sync_password_to_virtual_sql(email: &str, password: &str) -> Result<String, String> {
     if !virtual_sql_mail_active() {
@@ -230,6 +274,11 @@ pub fn sync_password_to_virtual_sql(email: &str, password: &str) -> Result<Strin
     }
     if password.len() < 8 {
         return Err("Mailbox password must be at least 8 characters".into());
+    }
+    if !virtual_sql_has_mailbox(&email)? {
+        return Err(format!(
+            "Mailbox `{email}` was not found in virtual-mail SQL (`e_users`)"
+        ));
     }
     let hash = doveadm_blf_crypt(password)?;
     let Some(bin) = mysql_client() else {

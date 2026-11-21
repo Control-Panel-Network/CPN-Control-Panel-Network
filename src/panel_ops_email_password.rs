@@ -1,4 +1,8 @@
-//! Mailbox password reset (panel registry + local system hash via chpasswd).
+//! Mailbox password reset (panel registry + Dovecot auth backends).
+//!
+//! Virtual-mail SQL (`e_users`, BLF-CRYPT, full address) and PAM `chpasswd` (short local part)
+//! are selected by `mail_legacy_sql::virtual_sql_mail_active()`. The registry in
+//! `mail-accounts.json` is always updated; on classic stacks SQL and registry are dual-written.
 //! Webmail admin password sync for SnappyMail-family clients.
 
 use crate::install_snappymail_lineage::{WEBMAIL_ADMIN_CHOICE, webmail_admin_option_label};
@@ -72,13 +76,20 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     }
     let key_lc = key.to_ascii_lowercase();
     let mut file = load_accounts_file();
+    let found = file.accounts.iter().any(|a| {
+        a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc)
+    });
+    if !found {
+        let _ = crate::mail_accounts_import::ensure_legacy_registry_row(&key_lc);
+        file = load_accounts_file();
+    }
     let Some(account) = file
         .accounts
         .iter_mut()
         .find(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc))
     else {
         return Err(format!(
-            "Mailbox `{key_lc}` not found in the panel registry"
+            "Mailbox `{key_lc}` not found in the panel registry or classic mail inventory"
         ));
     };
     let address = account.address.clone();
