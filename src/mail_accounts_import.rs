@@ -1,9 +1,9 @@
 //! Import legacy virtual mailboxes into the CPN panel registry and align webmail login mode.
 
 use crate::account::now_unix;
-use crate::mail_accounts::{list_accounts, MailAccount, MailSmtpMode};
+use crate::mail_accounts::{MailAccount, MailSmtpMode, list_accounts};
 use crate::mail_legacy_sql::{
-    list_legacy_mailboxes, prefer_webmail_short_login, virtual_sql_mail_active, LegacyMailbox,
+    LegacyMailbox, list_legacy_mailboxes, prefer_webmail_short_login, virtual_sql_mail_active,
 };
 use crate::smtp_settings::SmtpTlsMode;
 use serde_json::Value;

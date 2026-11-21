@@ -5,7 +5,7 @@ use crate::install_recipes::command;
 use crate::install_webmail_engines::{
     configure_caddy_proxy, configure_nginx_proxy, configure_ols_proxy,
 };
-use crate::installer::{run_command, AppState};
+use crate::installer::{AppState, run_command};
 use crate::model::ServerEngine;
 use crate::webmail_loopback;
 use std::path::Path;
