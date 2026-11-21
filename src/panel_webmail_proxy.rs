@@ -1,13 +1,12 @@
-//! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP (:8080).
+//! Reverse-proxy webmail from the panel mount path to loopback PHP-FPM HTTP.
 
 use crate::panel_feature_gate::webmail_installed;
 use crate::panel_session::request_https_from_headers;
 use crate::panel_webmail::{backend_path_for_webmail_proxy, load_webmail_config, webmail_ready};
+use crate::webmail_loopback::{self, host_header_value};
 use actix_web::{HttpRequest, HttpResponse, http::Method, http::StatusCode, web};
 use futures_util::StreamExt;
 use std::process::{Command, Stdio};
-
-const BACKEND: &str = "http://127.0.0.1:8080";
 
 /// Catch-all proxy for the configured webmail public path (and nested assets).
 pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> HttpResponse {
@@ -26,6 +25,7 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
             let _ = crate::install_webmail_runtime::heal_webmail_loopback_config();
         });
     });
+    let backend = webmail_loopback::loopback_origin();
     let path = req.path();
     let Some(backend_path) = backend_path_for_webmail_proxy(path) else {
         return HttpResponse::NotFound().finish();
@@ -38,9 +38,9 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
     };
     let query = req.query_string();
     let target = if query.is_empty() {
-        format!("{BACKEND}{backend_path}")
+        format!("{backend}{backend_path}")
     } else {
-        format!("{BACKEND}{backend_path}?{query}")
+        format!("{backend}{backend_path}?{query}")
     };
 
     let method = req.method().as_str();
@@ -55,11 +55,14 @@ pub async fn webmail_panel_proxy(req: HttpRequest, payload: web::Payload) -> Htt
 
     match forward_http(method, &target, &req, &body_bytes) {
         Ok(resp) => resp,
-        Err(err) => HttpResponse::BadGateway()
-            .content_type("text/plain; charset=utf-8")
-            .body(format!(
-                "Webmail proxy could not reach {BACKEND} ({err}). Is PHP-FPM webmail listening on 127.0.0.1:8080?"
-            )),
+        Err(err) => {
+            let port = webmail_loopback::loopback_port();
+            HttpResponse::BadGateway()
+                .content_type("text/plain; charset=utf-8")
+                .body(format!(
+                    "Webmail proxy could not reach {backend} ({err}). Is the CPN webmail listener on 127.0.0.1:{port}?"
+                ))
+        }
     }
 }
 
@@ -160,7 +163,8 @@ fn forward_http(
         .to_string();
     // Always tell Tachyon/SnappyMail the browser scheme. Sending https on plain
     // http://IP:2087 marks smtoken Secure and browsers drop it → HTTP Token mismatch.
-    cmd.args(["-H", "Host: 127.0.0.1:8080"]);
+    let host_loopback = host_header_value(webmail_loopback::loopback_port());
+    cmd.args(["-H", &format!("Host: {host_loopback}")]);
     cmd.args(["-H", "Accept-Encoding: identity"]);
     cmd.args(["-H", &format!("X-Forwarded-Proto: {scheme}")]);
     cmd.args(["-H", &format!("X-Forwarded-Host: {host}")]);
@@ -375,6 +379,11 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 fn rewrite_location(value: &str, mount: &str) -> String {
+    let origin = webmail_loopback::loopback_origin();
+    if value.starts_with(&origin) {
+        return value.replacen(&origin, mount, 1);
+    }
+    // Legacy default port (pre webmail-loopback.json) still appears in some Location headers.
     if value.starts_with("http://127.0.0.1:8080") {
         return value.replacen("http://127.0.0.1:8080", mount, 1);
     }

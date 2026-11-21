@@ -193,7 +193,7 @@ pub fn email_accounts_main(
         <p class="muted">Panel path opens through CPN; backend health URL: <code>{health}</code></p>"#,
             open = html_escape(&open),
             label = html_escape(label),
-            health = html_escape(webmail_health_url()),
+            health = html_escape(&webmail_health_url()),
         )
     } else if matches!(selected_mail, Some(crate::model::MailSystem::Thunderbird)) {
         "<p class=\"muted\">Thunderbird is a desktop client only. No local webmail URL is provisioned.</p>"
