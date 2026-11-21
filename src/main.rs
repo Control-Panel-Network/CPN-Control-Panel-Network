@@ -1106,10 +1106,8 @@ async fn main() -> std::io::Result<()> {
         "ready"
     };
     let has_bootstrap_account = bootstrap_account.is_some();
-    let token = cpn_installer::paths::resume_or_new_installer_bootstrap_token(
-        has_bootstrap_account,
-        phase,
-    );
+    let token =
+        cpn_installer::paths::resume_or_new_installer_bootstrap_token(has_bootstrap_account, phase);
     let message = if maintenance.existing_install {
         format!(
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",

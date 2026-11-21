@@ -132,10 +132,7 @@ pub fn read_installer_bootstrap_token() -> Option<String> {
 }
 
 /// Keep the bootstrap token stable across cpn-installer restarts until the panel account exists.
-pub fn resume_or_new_installer_bootstrap_token(
-    has_bootstrap_account: bool,
-    phase: &str,
-) -> String {
+pub fn resume_or_new_installer_bootstrap_token(has_bootstrap_account: bool, phase: &str) -> String {
     if has_bootstrap_account || phase == "completed" {
         return new_installer_bootstrap_token();
     }

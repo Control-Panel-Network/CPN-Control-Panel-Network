@@ -110,9 +110,7 @@ pub fn parse_cli(args: &[String]) -> Option<CliMode> {
         });
     }
     if args.iter().any(|arg| {
-        arg == "--show-bootstrap-token"
-            || arg == "--bootstrap-token"
-            || arg == "bootstrap-token"
+        arg == "--show-bootstrap-token" || arg == "--bootstrap-token" || arg == "bootstrap-token"
     }) {
         return Some(CliMode::ShowBootstrapToken);
     }
