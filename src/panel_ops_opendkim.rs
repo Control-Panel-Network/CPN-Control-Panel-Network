@@ -395,10 +395,51 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
     Ok(format!("Postfix milters -> {POSTFIX_MILTER}"))
 }
 
+/// EPEL OpenDKIM needs `libmemcached.so.11` from CRB/PowerTools on EL9/10.
+fn ensure_opendkim_el_repos() {
+    if !Path::new("/usr/bin/dnf").is_file() && !Path::new("/bin/dnf").is_file() {
+        return;
+    }
+    let _ = Command::new("dnf")
+        .args([
+            "install",
+            "-y",
+            "-q",
+            "epel-release",
+            "dnf-plugins-core",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    // Alma/Rocky 9+: `/usr/bin/crb enable` or dnf config-manager.
+    let _ = Command::new("/usr/bin/crb")
+        .arg("enable")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    for repo in ["crb", "powertools", "PowerTools"] {
+        let _ = Command::new("dnf")
+            .args(["config-manager", "--set-enabled", repo])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = Command::new("dnf")
+        .args(["install", "-y", "-q", "libmemcached"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
 fn install_opendkim_package() -> Result<String, String> {
     if rpm_or_dpkg_installed(&["opendkim"]) {
         return Ok("opendkim package already installed".into());
     }
+    ensure_opendkim_el_repos();
     install_packages_dnf_or_apt(&["opendkim", "opendkim-tools"], &["opendkim"])?;
     if !rpm_or_dpkg_installed(&["opendkim"]) {
         return Err("opendkim package install did not leave the package on disk".into());
