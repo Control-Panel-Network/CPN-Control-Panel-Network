@@ -45,7 +45,7 @@ Factory-like reset of panel bootstrap data uses installer repair with `--reset-d
 
 ## 5. Authentication, authorisation, and audit
 
-- Enrol MFA or a passkey for every administrator account.
+- Enrol MFA or a passkey for every administrator account. SSH operators: [MFA-CLI.md](MFA-CLI.md) (`cpn mfa enroll-url`, `totp`, `passkey`).
 - Do not share Owner credentials; use scoped staff accounts where available.
 - Review Server logs and Activity Board for unexpected privilege actions.
 - A full CRA-aligned audit trail (retention, export, security-essential categories that cannot be disabled, and non-essential opt-out) is tracked under Phase 2a (`to-do/cra/audit-coverage.md`). Until that work lands, treat the existing panel action log and OS logs as partial evidence only.
@@ -100,6 +100,7 @@ Details: [CLI.md](CLI.md), [INSTALL.md](INSTALL.md). After uninstall, verify tha
 | [SUPPORT.md](SUPPORT.md) | OS tiers and support period |
 | [RELEASES.md](RELEASES.md) | Packages, SBOM, signatures |
 | [CLI.md](CLI.md) | Uninstall, doctor, repair |
+| [MFA-CLI.md](MFA-CLI.md) | TOTP / passkey / MFA CLI |
 | [to-do/cra/README.md](../to-do/cra/README.md) | CRA engineering status |
 
 Last reviewed: 08/11/2026 (engineering draft).
