@@ -6,6 +6,7 @@
 //! live URLs without reading secrets.
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
+use crate::panel_host_info::display_server_public_ipv4;
 use crate::panel_network::load_panel_hostname;
 use crate::panel_public_url::load_panel_public_url;
 use std::fs;
@@ -101,6 +102,23 @@ pub fn sync_public_login_facts() {
             let _ = clear_world_readable(&etc_path("panel_hostname"));
         }
     }
+    let server_ip = display_server_public_ipv4();
+    if server_ip != "Unavailable" {
+        let _ = write_world_readable(
+            &etc_path("server_public_ipv4"),
+            &format!("{server_ip}\n"),
+        );
+    }
+}
+
+/// Cached or live public IPv4 for MOTD (never treated as a login URL).
+pub fn load_display_server_public_ipv4() -> String {
+    if let Some(ip) = read_trimmed(&etc_path("server_public_ipv4")) {
+        if !ip.eq_ignore_ascii_case("Unavailable") {
+            return ip;
+        }
+    }
+    display_server_public_ipv4()
 }
 
 /// Listen port for display: data dir when readable, else `/etc/cpn/listen_port`.

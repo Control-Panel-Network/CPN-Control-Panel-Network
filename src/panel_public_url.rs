@@ -129,6 +129,16 @@ pub fn local_listen_base_url(listen_port: u16) -> String {
     }
 }
 
+/// True when the URL base is loopback-only (omit from SSH MOTD login lines).
+pub fn is_loopback_login_base(base: &str) -> bool {
+    let lower = base.trim().trim_end_matches('/').to_ascii_lowercase();
+    lower.contains("127.0.0.1")
+        || lower.contains("[::1]")
+        || lower.contains("://localhost")
+        || lower.starts_with("http://localhost")
+        || lower.starts_with("https://localhost")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelEmailBases {
     pub primary: String,

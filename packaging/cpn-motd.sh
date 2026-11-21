@@ -142,21 +142,32 @@ _cpn_print_live_urls() {
     _cpn_public="$(tr -d '\r\n' < "${CPN_DATA_DIR}/panel_public_url" 2>/dev/null | sed 's/[[:space:]]*$//' || true)"
     _cpn_public="${_cpn_public%/}"
   fi
-  if [ -n "${_cpn_public}" ]; then
-    echo "  Login URL     : ${_cpn_public}/login"
-    echo "  Local login   : http://127.0.0.1:${_cpn_port}/login"
-    echo "  Listen port   : ${_cpn_port}"
-    echo "  Public URL    : ${_cpn_public}"
-    echo "  Lab tip       : Windows host may use the public URL when NAT forwards the guest port"
-  elif [ -n "${_cpn_hostname}" ]; then
+  _cpn_server_ip="Unavailable"
+  if [ -r "${_cpn_facts_dir}/server_public_ipv4" ]; then
+    _cpn_server_ip="$(tr -d '[:space:]' < "${_cpn_facts_dir}/server_public_ipv4" 2>/dev/null || true)"
+  fi
+  echo "  Server IP     : ${_cpn_server_ip}"
+  if [ -n "${_cpn_hostname}" ]; then
     echo "  Login URL     : https://${_cpn_hostname}/login"
-    echo "  Local login   : http://127.0.0.1:${_cpn_port}/login"
     echo "  Listen port   : ${_cpn_port}"
+    echo "  Panel note    : domain-only; use Login URL (HTTPS on 443), not http://Server-IP:${_cpn_port}"
+  elif [ -n "${_cpn_public}" ]; then
+    case "${_cpn_public}" in
+      *127.0.0.1*|*localhost*)
+        echo "  Login URL     : (set hostname HTTPS: cpn network set-hostname)"
+        echo "  Listen port   : ${_cpn_port}"
+        echo "  Lab tip       : NAT/lab URL stored; not shown as Login URL"
+        ;;
+      *)
+        echo "  Login URL     : ${_cpn_public}/login"
+        echo "  Listen port   : ${_cpn_port}"
+        echo "  Public URL    : ${_cpn_public}"
+        ;;
+    esac
   else
-    echo "  Login URL     : http://127.0.0.1:${_cpn_port}/login"
+    echo "  Login URL     : (set hostname HTTPS: cpn network set-hostname)"
     echo "  Listen port   : ${_cpn_port}"
-    echo "  Lab tip       : ssh -L ${_cpn_port}:127.0.0.1:${_cpn_port} user@host"
-    echo "  VBox NAT tip  : host forward 2089->${_cpn_port} => http://127.0.0.1:2089/login"
+    echo "  Admin tunnel  : ssh -L ${_cpn_port}:127.0.0.1:${_cpn_port} user@host"
   fi
 }
 

@@ -71,6 +71,13 @@ pub fn ip_backup_http_login_url(listen_port: u16) -> Option<String> {
     Some(format!("http://{ip}:{listen_port}/login"))
 }
 
+/// Short MOTD/CLI line: domain-only does not expose panel HTTP on the public IPv4.
+pub fn domain_only_motd_note(listen_port: u16) -> String {
+    format!(
+        "Panel note: domain-only; HTTP :{listen_port} is not open on Server IP. Use Login URL (HTTPS on 443). Optional: cpn network set-ip-backup --on"
+    )
+}
+
 fn try_close_panel_firewall_port() -> Result<(), String> {
     let port = panel_listen_port();
     let port_arg = format!("{port}/tcp");
@@ -177,6 +184,14 @@ mod tests {
             assert!(url.contains(":2087/login"));
             save_allow_remote_preference(false).unwrap();
         });
+    }
+
+    #[test]
+    fn domain_only_motd_note_mentions_access_mode() {
+        let note = domain_only_motd_note(2087);
+        assert!(note.contains("domain-only"));
+        assert!(note.contains("Server IP"));
+        assert!(!note.contains('\u{2014}'));
     }
 
     #[test]

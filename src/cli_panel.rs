@@ -1,12 +1,15 @@
 //! `cpn panel` subcommands: live login URL and panel status (no secrets).
 
 use crate::motd::ensure_motd_installed;
-use crate::panel_access_mode::{PanelAccessMode, ip_backup_http_login_url, load_panel_access_mode};
+use crate::panel_access_mode::{
+    domain_only_motd_note, ip_backup_http_login_url, load_panel_access_mode,
+    PanelAccessMode,
+};
 use crate::panel_login_facts::{
     load_display_listen_port, load_display_panel_hostname, load_display_panel_public_url,
-    sync_public_login_facts,
+    load_display_server_public_ipv4, sync_public_login_facts,
 };
-use crate::panel_public_url::local_listen_base_url;
+use crate::panel_public_url::{is_loopback_login_base, local_listen_base_url};
 use crate::panel_service::UNIT_NAME;
 use clap::Subcommand;
 use std::process::Command;
@@ -108,13 +111,16 @@ pub fn resolve_panel_url_info() -> PanelUrlInfo {
 }
 
 fn print_url_human(info: &PanelUrlInfo, indent: &str) {
-    println!("{indent}Login URL     : {}", info.primary_login);
-    if info.primary_base != info.local_base {
-        println!("{indent}Local login   : {}", info.local_login);
+    let server_ip = load_display_server_public_ipv4();
+    println!("{indent}Server IP     : {server_ip}");
+    if is_loopback_login_base(&info.primary_base) {
+        println!("{indent}Login URL     : (set hostname HTTPS: cpn network set-hostname)");
+    } else {
+        println!("{indent}Login URL     : {}", info.primary_login);
     }
     if let Some(ref host_login) = info.hostname_login {
         let host_base = host_login.trim_end_matches("/login");
-        if host_base != info.primary_base && host_base != info.local_base {
+        if host_base != info.primary_base {
             println!("{indent}Hostname login: {host_login}");
         }
     }
@@ -125,30 +131,43 @@ fn print_url_human(info: &PanelUrlInfo, indent: &str) {
             "{indent}Note          : IP backup is HTTP only; never https://IP:{}",
             info.listen_port
         );
+    } else if info.access_mode == PanelAccessMode::DomainOnly && !is_loopback_login_base(&info.primary_base) {
+        println!(
+            "{indent}{}",
+            domain_only_motd_note(info.listen_port)
+        );
     }
     println!("{indent}Listen port   : {}", info.listen_port);
     if let Some(ref public) = info.panel_public_url {
-        println!("{indent}Public URL    : {public}");
-        println!(
-            "{indent}Lab tip       : Windows host may use the public URL when NAT forwards the guest port"
-        );
+        if is_loopback_login_base(public) {
+            println!(
+                "{indent}Lab tip       : Windows host may use NAT-forwarded public URL (not the panel listen IP)"
+            );
+        } else {
+            println!("{indent}Public URL    : {public}");
+            println!(
+                "{indent}Lab tip       : Windows host may use the public URL when NAT forwards the guest port"
+            );
+        }
     } else if info.panel_hostname.is_none() {
         println!(
             "{indent}HTTPS tip     : cpn network set-hostname (443 proxy); never https://IP:{}",
             info.listen_port
         );
         println!(
-            "{indent}Lab tip       : ssh -L {0}:127.0.0.1:{0} user@host",
+            "{indent}Lab tip       : ssh -L {0}:127.0.0.1:{0} user@host (admin tunnel; not shown as Login URL)",
             info.listen_port
         );
         println!(
-            "{indent}VBox NAT tip  : host forward 2089->{0} => http://127.0.0.1:2089/login",
+            "{indent}VBox NAT tip  : host forward 2089->{0} => guest panel HTTP on mapped host port",
             info.listen_port
         );
     }
 }
 
 fn print_url_raw(info: &PanelUrlInfo) {
+    let server_ip = load_display_server_public_ipv4();
+    println!("server_public_ipv4={server_ip}");
     println!("login_url={}", info.primary_login);
     println!("local_login_url={}", info.local_login);
     println!("listen_port={}", info.listen_port);
@@ -236,6 +255,7 @@ mod tests {
             assert_eq!(info.listen_port, 2099);
             assert_eq!(info.primary_login, "http://127.0.0.1:2099/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2099/login");
+            assert!(crate::panel_public_url::is_loopback_login_base(&info.primary_base));
         });
     }
 
@@ -248,6 +268,7 @@ mod tests {
             assert_eq!(info.listen_port, 2087);
             assert_eq!(info.primary_login, "http://127.0.0.1:2089/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2087/login");
+            assert!(crate::panel_public_url::is_loopback_login_base(&info.primary_base));
             clear_panel_public_url().unwrap();
         });
     }
@@ -261,6 +282,7 @@ mod tests {
             let info = resolve_panel_url_info();
             assert_eq!(info.primary_login, "https://panel.example.com/login");
             assert_eq!(info.local_login, "http://127.0.0.1:2087/login");
+            assert!(!crate::panel_public_url::is_loopback_login_base(&info.primary_base));
             clear_panel_hostname().unwrap();
         });
     }

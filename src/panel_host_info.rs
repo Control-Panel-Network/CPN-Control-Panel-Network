@@ -18,6 +18,17 @@ pub fn host_sidebar_info() -> HostSidebarInfo {
     }
 }
 
+/// IPv4 label for MOTD / `cpn panel url` (informational, not a login URL).
+pub fn display_server_public_ipv4() -> String {
+    let ip = host_sidebar_info().ip;
+    let ip = ip.trim();
+    if ip.is_empty() || ip.eq_ignore_ascii_case("Unavailable") {
+        "Unavailable".into()
+    } else {
+        ip.to_string()
+    }
+}
+
 fn primary_ipv4() -> Option<String> {
     // Prefer local hostname enumeration first. UDP connect to 1.1.1.1 can stall on some
     // lab/NAT guests when outbound routing flaps, and the sidebar runs on every page.
