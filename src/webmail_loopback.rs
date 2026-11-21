@@ -256,8 +256,8 @@ mod tests {
 
     #[test]
     fn free_ephemeral_port_is_usable_via_bind() {
-        let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
-            .expect("bind ephemeral");
+        let listener =
+            TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).expect("bind ephemeral");
         let port = listener.local_addr().expect("addr").port();
         drop(listener);
         assert!(
