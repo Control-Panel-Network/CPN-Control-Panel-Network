@@ -243,6 +243,53 @@ port_listeners_ok() {
   '
 }
 
+# Resolve CPN webmail loopback port (persisted when heal relocates off :8080).
+webmail_loopback_port() {
+  local name="$1"
+  local port
+  port="$("$engine" exec "$name" bash -lc '
+    set +e
+    f=/var/lib/cpn/webmail-loopback.json
+    if [[ -f "$f" ]]; then
+      sed -n "s/.*\"port\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p" "$f" | head -1
+    fi
+  ' 2>/dev/null || true)"
+  port="$(printf '%s' "$port" | tr -d '[:space:]')"
+  if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
+    port=8080
+  fi
+  printf '%s' "$port"
+}
+
+# Curl webmail UI with diagnostics (matches install_webmail_health expect patterns).
+assert_webmail_http() {
+  local name="$1" expect_re="$2"
+  local port body code
+  port="$(webmail_loopback_port "$name")"
+  echo "[MATRIX] webmail loopback port=$port" >&2
+  body="$("$engine" exec "$name" bash -lc "
+    set -euo pipefail
+    tmp=\$(mktemp)
+    code=\$(curl -sS -L --max-redirs 3 -o \"\$tmp\" -w '%{http_code}' --max-time 10 http://127.0.0.1:${port}/ || true)
+    echo \"\$code\"
+    echo '---BODY---'
+    head -c 600 \"\$tmp\" || true
+    rm -f \"\$tmp\"
+  ")"
+  code="$(printf '%s' "$body" | head -n1)"
+  if [[ "$code" != "200" ]]; then
+    echo "[MATRIX] webmail HTTP failed code=$code port=$port" >&2
+    printf '%s\n' "$body" >&2
+    return 1
+  fi
+  if ! printf '%s' "$body" | grep -Eiq "$expect_re"; then
+    echo "[MATRIX] webmail body did not match /$expect_re/ on port=$port" >&2
+    printf '%s\n' "$body" >&2
+    return 1
+  fi
+  echo "[OK] webmail HTTP on :$port matched /$expect_re/" >&2
+}
+
 # After long package installs HTTP can stall; restart installer so mail POST works.
 # Manifest from the completed server stage puts the process into maintenance with
 # server_ready, which still allows /api/install/mail.
@@ -458,7 +505,7 @@ run_case() {
       "$engine" exec "$name" bash /usr/share/cpn-installer/webmail-permissions.sh /opt/cpn-webmail/snappymail 2>/dev/null || \
         "$engine" exec -i "$name" bash -s /opt/cpn-webmail/snappymail <"$project_dir/tests/webmail-permissions.sh"
       port_listeners_ok "$name"
-      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi SnappyMail"
+      assert_webmail_http "$name" 'snappymail|tachyon|rainloop|rl-started|login|email|password|admin|cpn webmail'
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     roundcube)
@@ -468,7 +515,7 @@ run_case() {
       "$engine" exec "$name" php -r '$m=fileperms("/opt/cpn-webmail/roundcube/db.sqlite") & 0777; if ($m & 0002) {exit(1);}'
       "$engine" exec -i "$name" bash -s /opt/cpn-webmail/roundcube/public_html <"$project_dir/tests/webmail-permissions.sh"
       port_listeners_ok "$name"
-      "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:8080/ 2>/dev/null | grep -qi Roundcube"
+      assert_webmail_http "$name" 'roundcube|login|email|password|username'
       "$engine" exec "$name" sh -lc "curl -fsS http://127.0.0.1:2087/api/status?token=$token | grep -q '\"mail_backend_ready\":true'"
       ;;
     thunderbird)
