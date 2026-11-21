@@ -183,9 +183,10 @@ pub fn has_pending_mfa_enroll_token(username: &str) -> bool {
     let now = now_unix();
     let _guard = STORE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let store = load_token_store();
-    store.tokens.iter().any(|t| {
-        t.username.eq_ignore_ascii_case(username.trim()) && t.expires_at_unix > now
-    })
+    store
+        .tokens
+        .iter()
+        .any(|t| t.username.eq_ignore_ascii_case(username.trim()) && t.expires_at_unix > now)
 }
 
 #[cfg(test)]

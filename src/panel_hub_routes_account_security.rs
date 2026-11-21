@@ -4,8 +4,8 @@ use crate::account::{hash_password, new_password_salt, password_meets_policy, wr
 use crate::account_mfa::{
     begin_totp_enroll, confirm_totp_enroll, load_pending_secret, store_once_backup_codes,
 };
-use crate::account_mgmt::find_account;
 use crate::account_mfa_enroll_token::{consume_mfa_enroll_token, peek_mfa_enroll_token};
+use crate::account_mgmt::find_account;
 use crate::account_security::{
     change_password_gate_main, enroll_mfa_gate_main, must_change_password, needs_mfa_enrollment,
     post_login_security_path,
@@ -15,11 +15,11 @@ use crate::installer::AppState;
 use crate::panel_hub_http::{
     html_ok, login_redirect, redirect, require_panel_user, urlencoding_simple,
 };
+use crate::panel_pages::panel_shell;
 use crate::panel_session::{
     clear_mfa_pending_cookie_headers, create_session_token, issue_session_cookie_headers,
     request_auth_cookie_port, session_secret,
 };
-use crate::panel_pages::panel_shell;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use std::sync::Arc;
 
@@ -169,8 +169,8 @@ pub async fn account_security_enroll_cli(
     let secure = request_secure(&http);
     let port = request_auth_cookie_port(&http);
     let session = create_session_token(&username, &secret);
-    let location = post_login_security_path(&username)
-        .unwrap_or("/account/users/modify?tab=security");
+    let location =
+        post_login_security_path(&username).unwrap_or("/account/users/modify?tab=security");
     let mut builder = HttpResponse::SeeOther();
     builder.append_header(("Location", location));
     for cookie in issue_session_cookie_headers(&session, secure, port) {
