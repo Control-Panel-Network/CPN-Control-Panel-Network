@@ -57,9 +57,7 @@ fn essential_path() -> String {
     }
     std::env::join_paths(&dirs)
         .map(|os| os.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| {
-            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into()
-        })
+        .unwrap_or_else(|_| "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into())
 }
 
 fn cargo_after_heal(home: &Path) -> Option<PathBuf> {
@@ -124,9 +122,8 @@ async fn download_rustup_script(script: &Path, attempt: u32) -> Result<(), Strin
             clip(stderr.trim(), 240)
         ));
     }
-    let meta = std::fs::metadata(script).map_err(|error| {
-        format!("rustup-init script missing after download: {error}")
-    })?;
+    let meta = std::fs::metadata(script)
+        .map_err(|error| format!("rustup-init script missing after download: {error}"))?;
     if meta.len() < 64 {
         return Err(format!(
             "rustup-init download too small ({} bytes); refusing to run",
@@ -203,9 +200,7 @@ pub async fn heal_rustup(state: &AppState) -> Result<(), String> {
         .map(|s| s.success())
         .unwrap_or(false);
     if !curl_ok {
-        return Err(
-            "Tip upgrade rustup heal requires `curl` on PATH (/usr/bin/curl)".into(),
-        );
+        return Err("Tip upgrade rustup heal requires `curl` on PATH (/usr/bin/curl)".into());
     }
 
     let home = upgrade_tip_toolchain::rustup_home_dir();
