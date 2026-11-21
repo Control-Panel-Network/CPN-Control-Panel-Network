@@ -374,6 +374,7 @@ pub mod panel_ops_mailbox_folders;
 pub mod panel_ops_mailbox_provision;
 pub mod panel_ops_malware_nt;
 pub mod panel_ops_malware_scan;
+pub mod panel_ops_mariadb_local;
 pub mod panel_ops_path;
 pub mod panel_ops_php;
 pub mod panel_ops_php_ext;
