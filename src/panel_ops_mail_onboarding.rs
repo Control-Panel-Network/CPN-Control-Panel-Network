@@ -128,6 +128,18 @@ pub fn apex_from_panel_hostname(hostname: &str) -> Option<String> {
     Some(host)
 }
 
+/// CPN mail DNS / client convention: `mail.<apex>` (matches MX plans in `panel_ops_mail_dns`).
+pub fn preferred_mail_service_hostname(domain: &str) -> String {
+    let domain = domain.trim().to_ascii_lowercase();
+    if !valid_display_domain(&domain) || domain == MAIL_CLIENT_PLACEHOLDER_DOMAIN {
+        return MAIL_CLIENT_PLACEHOLDER_DOMAIN.into();
+    }
+    if domain.starts_with("mail.") {
+        return domain;
+    }
+    format!("mail.{domain}")
+}
+
 fn push_unique_domain(out: &mut Vec<String>, domain: &str) {
     let domain = domain.trim().to_ascii_lowercase();
     if !valid_display_domain(&domain) {
@@ -138,7 +150,7 @@ fn push_unique_domain(out: &mut Vec<String>, domain: &str) {
     }
 }
 
-/// Domains inferred from panel hostname, website inventory, and mail onboarding.
+/// Apex domains inferred from panel hostname, website inventory, and mail onboarding.
 pub fn mail_client_fallback_domains() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     if let Ok(sites) = crate::sites::list_sites() {
@@ -152,14 +164,15 @@ pub fn mail_client_fallback_domains() -> Vec<String> {
         if let Some(apex) = apex_from_panel_hostname(&panel_host) {
             push_unique_domain(&mut out, &apex);
         }
-        push_unique_domain(&mut out, &panel_host);
     }
     let cfg = load_mail_onboarding();
-    push_unique_domain(&mut out, &cfg.hostname);
+    if let Some(apex) = apex_from_panel_hostname(&cfg.hostname) {
+        push_unique_domain(&mut out, &apex);
+    }
     out
 }
 
-/// Prefer mailbox domains; otherwise site/panel/onboarding defaults (never invent secrets).
+/// Prefer mailbox domains; otherwise site/panel/onboarding apex defaults (never invent secrets).
 pub fn mail_client_display_domains(mailbox_addresses: &[String]) -> Vec<String> {
     let from_mailboxes =
         mail_client_domains_from_addresses(mailbox_addresses.iter().map(String::as_str));
@@ -169,17 +182,17 @@ pub fn mail_client_display_domains(mailbox_addresses: &[String]) -> Vec<String> 
     mail_client_fallback_domains()
 }
 
-/// Seed local mail onboarding hostname once from panel/site inventory (Host email install).
+/// Seed local mail onboarding hostname once as `mail.<apex>` (Host email / webmail install).
 pub fn seed_mail_onboarding_hostname_if_empty() -> Result<bool, String> {
     let mut cfg = load_mail_onboarding();
     if !cfg.hostname.trim().is_empty() {
         return Ok(false);
     }
     let domains = mail_client_fallback_domains();
-    let Some(host) = domains.into_iter().next() else {
+    let Some(apex) = domains.into_iter().next() else {
         return Ok(false);
     };
-    cfg.hostname = host;
+    cfg.hostname = preferred_mail_service_hostname(&apex);
     cfg.mail_mode = MailMode::Local;
     save_mail_onboarding(cfg)?;
     Ok(true)
@@ -196,10 +209,14 @@ pub fn mail_client_server_host(domain: &str) -> String {
             if !cfg.hostname.trim().is_empty() {
                 let host = cfg.hostname.trim().to_ascii_lowercase();
                 if host_matches_mailbox_domain(&host, &domain) {
+                    // Bare apex in onboarding still displays as mail.<apex> (MX convention).
+                    if host == domain {
+                        return preferred_mail_service_hostname(&domain);
+                    }
                     return host;
                 }
             }
-            domain
+            preferred_mail_service_hostname(&domain)
         }
         MailMode::External => {
             if !cfg.external_imap_host.trim().is_empty() {
@@ -208,7 +225,7 @@ pub fn mail_client_server_host(domain: &str) -> String {
                     return ext;
                 }
             }
-            domain
+            preferred_mail_service_hostname(&domain)
         }
     }
 }
@@ -240,9 +257,10 @@ mod tests {
             let mut cfg = MailOnboarding::default();
             cfg.hostname = "newstargeted.com".into();
             save_mail_onboarding(cfg).unwrap();
+            // Unrelated onboarding must not leak; fall back to mail.<mailbox-domain>.
             assert_eq!(
                 mail_client_server_host("discord-bot-network.com"),
-                "discord-bot-network.com"
+                "mail.discord-bot-network.com"
             );
         });
     }
@@ -293,9 +311,42 @@ mod tests {
             clear_panel_hostname().unwrap();
             save_panel_hostname("panel.example.com").unwrap();
             assert!(seed_mail_onboarding_hostname_if_empty().unwrap());
-            assert_eq!(load_mail_onboarding().hostname, "example.com");
+            assert_eq!(load_mail_onboarding().hostname, "mail.example.com");
             assert!(!seed_mail_onboarding_hostname_if_empty().unwrap());
             clear_panel_hostname().unwrap();
+        });
+    }
+
+    #[test]
+    fn client_server_prefers_mail_subdomain() {
+        with_test_data_dir(|| {
+            clear_panel_hostname().unwrap();
+            // No onboarding hostname: still show mail.<apex>, not bare apex / placeholder.
+            assert_eq!(
+                mail_client_server_host("threebrickstudio.com"),
+                "mail.threebrickstudio.com"
+            );
+            let mut cfg = MailOnboarding::default();
+            cfg.hostname = "threebrickstudio.com".into();
+            save_mail_onboarding(cfg).unwrap();
+            assert_eq!(
+                mail_client_server_host("threebrickstudio.com"),
+                "mail.threebrickstudio.com"
+            );
+            let mut cfg = load_mail_onboarding();
+            cfg.hostname = "mail.threebrickstudio.com".into();
+            save_mail_onboarding(cfg).unwrap();
+            assert_eq!(
+                mail_client_server_host("threebrickstudio.com"),
+                "mail.threebrickstudio.com"
+            );
+            let mut cfg = load_mail_onboarding();
+            cfg.hostname = "mx.threebrickstudio.com".into();
+            save_mail_onboarding(cfg).unwrap();
+            assert_eq!(
+                mail_client_server_host("threebrickstudio.com"),
+                "mx.threebrickstudio.com"
+            );
         });
     }
 
