@@ -7,28 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [1.4.11] - 21/11/2026
 
-- **OpenLiteSpeed WebAdmin link**: `/server/openlitespeed` **Open WebAdmin** now opens `https://<panel>/ols` (session-gated reverse-proxy to loopback `:7080`) instead of sending the browser to `https://127.0.0.1:7080`; phpMyAdmin and webmail mounts hardened; OLS HTTPS listener maps avoid stealing site SNI on post-migration hosts.
-
-### Changed
-
-- **PHP 8.6 preferred on EL9/EL10**: Install default is Remi `php:remi-8.6` (fallback 8.5 -> 8.4 -> 8.3 -> 8.2). EL8 stays on Remi 8.2. CLI/web installers, `MANAGED_BRANCHES`, lsphp maps (`lsphp86`), cron/wp-cli binary candidates, and `upgrade_stack` now cover the 8.6 series. Webmail PHP max stays 8.5 until SnappyMail/Tachyon/Roundcube confirm 8.6. See `to-do/PHP-INSTALL-DEFAULT-86.md`.
-
-### Fixed
-- **Login service gate perf**: stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer 4s stalls on `/login` and `/api/login/services`.
-- **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains; removed hardcoded News Targeted apex fallback.
-- **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.
+Patch release after v1.4.10. CyberPanel coexistence migration, classic mail import and webmail loopback fixes, OLS WebAdmin proxy and HTTPS SNI, LiteSpeed license ops, PHP 8.6 defaults, login and upgrade resilience, and SSH MOTD public IP (#694 to #702, #697, #698, #699, #700, #701, #702).
 
 ### Added
 
-- **LiteSpeed Enterprise license ops**: Server → LiteSpeed plans shows license status (`serial.no` / `license.key` / `trial.key`), applies serial with `lshttpd -r`, accepts pasted `license.key` (mode 600 + backup), refreshes license, and requests trial.key. Safe LSWS restart after apply. Helpers in `src/litespeed_license.rs` with unit tests.
-- **CyberPanel → CPN → AlmaLinux 10 checklist**: `cpn panel-migrate checklist` plus migrate UI hints (`classic` = CyberPanel). Operator gap doc covers NT Django `context_processors` / Discord Auth plugin loss on wipe: `to-do/CYBERPANEL-308-TO-CPN-MIGRATION.md`.
+- **CyberPanel migration installer path (#698)**: Detects coexistence with a classic panel install and guides migration with installer and coexistence fixes.
+- **LiteSpeed Enterprise license ops (#697)**: Server → LiteSpeed plans shows license status (`serial.no` / `license.key` / `trial.key`), applies serial with `lshttpd -r`, accepts pasted `license.key` (mode 600 + backup), refreshes license, and requests trial.key. Safe LSWS restart after apply. Helpers in `src/litespeed_license.rs` with unit tests.
+- **CyberPanel → CPN → AlmaLinux 10 checklist (#697)**: `cpn panel-migrate checklist` plus migrate UI hints (`classic` = CyberPanel). Operator gap doc: `to-do/CYBERPANEL-308-TO-CPN-MIGRATION.md`.
+- **OLS WebAdmin proxy and HTTPS SNI (#695)**: Session-gated `/ols/` reverse proxy to loopback WebAdmin; phpMyAdmin and webmail mounts hardened; OLS HTTPS listener maps avoid stealing site SNI on post-migration hosts.
 - **Operator docs**: `to-do/PERF-KRAO-INVESTIGATION.md` (slowness findings) and `to-do/SOCIAL-OAUTH-LOGIN.md` (OAuth login scaffold plan).
 - **Stack upgrade**: `upgrade_stack` refreshes installed LiteSpeed `lsphp82` through `lsphp86` (plus Remi php/php-fpm and common extensions) so every series gets security patches without hardcoded patch pins.
+- **SSH MFA enroll documentation (#701)**: Documents `enroll-url` for additional passkeys and Windows Hello.
+
+### Changed
+
+- **PHP 8.6 preferred on EL9/EL10 (#697)**: Install default is Remi `php:remi-8.6` (fallback 8.5 -> 8.4 -> 8.3 -> 8.2). EL8 stays on Remi 8.2. CLI/web installers, `MANAGED_BRANCHES`, lsphp maps (`lsphp86`), cron/wp-cli binary candidates, and `upgrade_stack` now cover the 8.6 series. Webmail PHP max stays 8.5 until SnappyMail/Tachyon/Roundcube confirm 8.6. See `to-do/PHP-INSTALL-DEFAULT-86.md`.
 
 ### Fixed
 
+- **Classic virtual mail import (#700)**: Import classic virtual mailbox registry into CPN mail inventory and align Tachyon `shortLogin` with full-address IMAP login.
+- **Webmail loopback port (#699)**: Relocate webmail loopback binding when host port `:8080` is already taken.
+- **SSH MOTD banner (#702)**: MOTD shows the server public IP in the SSH banner; panel login URL no longer points at loopback.
+- **Login service gate perf (#694)**: Stale-while-revalidate for cached health probes; probe timeout fail-open with banner instead of blocking sign-in; fewer stalls on `/login` and `/api/login/services`.
+- **Dashboard activity (#694)**: Dashboard activity feed and login service gate improvements.
+- **Email client settings hostnames**: Mail Accounts client configuration uses each mailbox domain (multi-domain cards); onboarding hostname no longer overrides unrelated tenant domains.
+- **Login 2FA passkey UX**: `/login/2fa` clarifies Windows Hello and security keys; auto-starts WebAuthn on page load with button fallback; TOTP form still shown when both factors are enrolled.
 - **Automatic updates Check now**: Version Management no longer shows "permission denied" when GitHub rate-limits release fetches (HTTP 403 in the error text). `cpnFriendlyFetchError` only maps panel auth `HTTP 403` responses, and dry-run checks prefer cached releases when the live GitHub API is throttled.
 - **Commit / tip upgrade resilience**: Resolving `stable` (or another branch) no longer hard-fails on anonymous GitHub commits API HTTP 403. The panel tries token-backed API, last-good commit cache, `git ls-remote`, and raw `.cpn-git-sha`, then Actions binaries, matching release packages, and source build with download retries. Failures roll back `/usr/bin` binaries when possible, clear maintenance mode, and end with one `FAILED (job)` line plus next-step hints (token, retry, or release upgrade).
 
