@@ -7,9 +7,10 @@
 //! proxy + engine snippets.
 
 use serde::{Deserialize, Serialize};
-use std::net::{SocketAddr, TcpListener};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::process::Command;
+use std::time::Duration;
 
 pub const DEFAULT_PORT: u16 = 8080;
 /// Prefer 8080, then nearby reserved loopback alternatives.
@@ -74,12 +75,55 @@ fn port_usable_for_webmail(port: u16) -> bool {
     if can_bind_loopback(port) {
         return true;
     }
-    listener_looks_like_cpn_web_server(port)
+    if listener_looks_like_cpn_web_server(port) {
+        return true;
+    }
+    // Rocky/Alma matrix guests often omit `ss` (iproute). After Nginx/Caddy already
+    // owns :8080, can_bind fails and ss-based identity is None, so a naive heal would
+    // "move" webmail to :8088 and break curl checks that still hit :8080. Keep the
+    // port when a live listener answers as CPN webmail (or when we cannot probe but
+    // also cannot prove a foreign holder).
+    if !tcp_connect_ok(port) {
+        return false;
+    }
+    match probe_loopback_http(port) {
+        Some((status, body)) => !loopback_response_looks_foreign(&body, status),
+        None => foreign_listener_summary(port).is_none(),
+    }
 }
 
 fn can_bind_loopback(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     TcpListener::bind(addr).is_ok()
+}
+
+fn tcp_connect_ok(port: u16) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok()
+}
+
+fn probe_loopback_http(port: u16) -> Option<(u16, String)> {
+    let url = format!("http://127.0.0.1:{port}/");
+    let output = Command::new("curl")
+        .args([
+            "-sS",
+            "-L",
+            "--max-redirs",
+            "3",
+            "--max-time",
+            "3",
+            "-o",
+            "-",
+            "-w",
+            "\n%{http_code}",
+            &url,
+        ])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let (body, code_s) = text.rsplit_once('\n')?;
+    let status = code_s.trim().parse::<u16>().ok()?;
+    Some((status, body.to_string()))
 }
 
 fn listener_looks_like_cpn_web_server(port: u16) -> bool {
@@ -208,5 +252,17 @@ mod tests {
         assert!(line_has_port("LISTEN 0 0 0.0.0.0:8080 0.0.0.0:*", 8080));
         assert!(!line_has_port("LISTEN 0 0 0.0.0.0:80800 0.0.0.0:*", 8080));
         assert!(line_has_port("LISTEN 0 0 127.0.0.1:18081 0.0.0.0:*", 18081));
+    }
+
+    #[test]
+    fn free_ephemeral_port_is_usable_via_bind() {
+        let listener =
+            TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).expect("bind ephemeral");
+        let port = listener.local_addr().expect("addr").port();
+        drop(listener);
+        assert!(
+            port_usable_for_webmail(port),
+            "freshly freed port must be usable"
+        );
     }
 }

@@ -697,21 +697,11 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                 )
                 .await?;
             }
-            state
-                .progress(
-                    "testing",
-                    97,
-                    format!("Validating HTTP UI and data/temp/logs denial ({})", mail.label()),
-                )
-                .await;
-            // Keep blocking work off the Actix worker (curl + body checks).
-            let mail_key = mail.label().to_string();
-            tokio::task::spawn_blocking(move || verify_webmail_http_surface(&mail_key))
-                .await
-                .map_err(|error| format!("webmail health join failed: {error}"))??;
             // Re-check IMAP/SMTP after webmail so success means real mail stack (issue #9).
             verify_imap_smtp_listeners().await?;
             // Idempotent light heal after stack + webmail install (same path as upgrade).
+            // Must run before the final HTTP UI check: heal may rewrite loopback listen
+            // config, and guests without `ss` used to relocate off :8080 incorrectly.
             let heal = crate::mail_light_heal::run_light_email_heal("mail install");
             for line in heal.summary_lines() {
                 state.log(line, "info");
@@ -722,6 +712,21 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
                     heal.summary_lines().join(" | ")
                 ));
             }
+            state
+                .progress(
+                    "testing",
+                    97,
+                    format!(
+                        "Validating HTTP UI and data/temp/logs denial after light heal ({})",
+                        mail.label()
+                    ),
+                )
+                .await;
+            // Keep blocking work off the Actix worker (curl + body checks).
+            let mail_key = mail.label().to_string();
+            tokio::task::spawn_blocking(move || verify_webmail_http_surface(&mail_key))
+                .await
+                .map_err(|error| format!("webmail health join failed: {error}"))??;
             {
                 let mut status = state.status.write().unwrap_or_else(|e| e.into_inner());
                 status.mail_client_ready = true;
