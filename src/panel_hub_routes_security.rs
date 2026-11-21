@@ -372,3 +372,24 @@ pub async fn security_ssl_mail(http: HttpRequest, state: web::Data<Arc<AppState>
         &mail_ssl_page(),
     ))
 }
+
+#[post("/security/ssl/mail/issue")]
+pub async fn security_ssl_mail_issue(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+) -> HttpResponse {
+    let Some(user) = require_panel_user(&state, &http) else {
+        return login_redirect(&http);
+    };
+    if !is_panel_admin(&user) {
+        return redirect_notice(
+            "/security/ssl/mail",
+            None,
+            Some("Only panel admins can issue mail SSL."),
+        );
+    }
+    match crate::panel_ops_mail_ssl::ensure_mail_ssl_default() {
+        Ok(msg) => redirect_notice("/security/ssl/mail", Some(&msg), None),
+        Err(err) => redirect_notice("/security/ssl/mail", None, Some(&err)),
+    }
+}

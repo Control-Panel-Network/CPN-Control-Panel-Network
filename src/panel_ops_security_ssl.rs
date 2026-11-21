@@ -219,12 +219,13 @@ pub fn mail_ssl_status() -> MailSslStatus {
             found.push(p.to_string());
         }
     }
-    if let Some(host) = load_panel_hostname() {
-        let mail_host = format!("mail.{host}");
+    if let Some(mail_host) = crate::panel_ops_mail_ssl::resolve_mail_ssl_hostname() {
         let p = format!("/etc/letsencrypt/live/{mail_host}/fullchain.pem");
-        if Path::new(&p).is_file() {
+        if Path::new(&p).is_file() && !found.contains(&p) {
             found.push(p);
         }
+    }
+    if let Some(host) = load_panel_hostname() {
         let p2 = format!("/etc/letsencrypt/live/{host}/fullchain.pem");
         if Path::new(&p2).is_file() && !found.contains(&p2) {
             found.push(p2);
