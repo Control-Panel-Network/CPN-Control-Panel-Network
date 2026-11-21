@@ -166,6 +166,23 @@ pub fn inet_interfaces_loopback_only(raw: &str) -> bool {
     })
 }
 
+/// Drop domains (and their mailboxes) already owned by `virtual_mailbox_domains`.
+///
+/// Classic CyberPanel / mysql virtual mailbox stacks must not also list the same
+/// domain in CPN `virtual_alias_domains` (Postfix warns and recipients bounce
+/// with "User unknown in virtual alias table").
+pub fn strip_virtual_mailbox_domains(plan: &mut HostedMailPlan, owned: &BTreeSet<String>) {
+    if owned.is_empty() {
+        return;
+    }
+    plan.domains.retain(|domain| !owned.contains(domain));
+    plan.mailboxes
+        .retain(|address, _| match address.split_once('@') {
+            Some((_, domain)) => !owned.contains(domain),
+            None => true,
+        });
+}
+
 #[cfg(unix)]
 mod unix_impl {
     use super::*;
@@ -191,6 +208,105 @@ mod unix_impl {
             .map(|d| d.trim().to_ascii_lowercase())
             .filter(|d| !d.is_empty())
             .collect()
+    }
+
+    fn postmap_query(map_ref: &str, key: &str) -> bool {
+        Command::new("postmap")
+            .args(["-q", key, map_ref])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    /// Domains among `candidates` that Postfix already treats as virtual mailbox domains.
+    fn virtual_mailbox_owned_domains(candidates: &BTreeSet<String>) -> BTreeSet<String> {
+        if candidates.is_empty() {
+            return BTreeSet::new();
+        }
+        let raw = postconf_value(&["-h", "virtual_mailbox_domains"]);
+        let mut owned = BTreeSet::new();
+        let mut map_refs: Vec<String> = Vec::new();
+        for part in raw
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            if part.starts_with('$') {
+                continue;
+            }
+            if part.contains(':') {
+                map_refs.push(part.to_string());
+                continue;
+            }
+            let domain = part.to_ascii_lowercase();
+            if candidates.contains(&domain) {
+                owned.insert(domain);
+            }
+        }
+        for domain in candidates {
+            if owned.contains(domain) {
+                continue;
+            }
+            if map_refs
+                .iter()
+                .any(|map_ref| postmap_query(map_ref, domain))
+            {
+                owned.insert(domain.clone());
+            }
+        }
+        owned
+    }
+
+    fn ensure_myhostname_in_mydestination(hostname: &str) -> Result<bool, String> {
+        let host = hostname.trim().to_ascii_lowercase();
+        if host.is_empty() || !valid_domain(&host) {
+            return Ok(false);
+        }
+        let existing = postconf_value(&["-n", "-h", "mydestination"]);
+        let already = existing
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .map(|p| p.trim().to_ascii_lowercase())
+            .any(|p| p == host);
+        if already {
+            return Ok(false);
+        }
+        let merged = if existing.trim().is_empty() {
+            host
+        } else {
+            format!("{}, {}", existing.trim(), host)
+        };
+        let status = Command::new("postconf")
+            .args(["-e", &format!("mydestination={merged}")])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|e| format!("postconf failed to start for mydestination: {e}"))?;
+        if !status.success() {
+            return Err("postconf -e mydestination failed".into());
+        }
+        Ok(true)
+    }
+
+    fn ensure_public_inet_interfaces() -> Result<bool, String> {
+        let current = postconf_value(&["-h", "inet_interfaces"]);
+        if !inet_interfaces_loopback_only(&current) {
+            return Ok(false);
+        }
+        let status = Command::new("postconf")
+            .args(["-e", "inet_interfaces=all"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|e| format!("postconf failed to start for inet_interfaces: {e}"))?;
+        if !status.success() {
+            return Err("postconf -e inet_interfaces=all failed".into());
+        }
+        Ok(true)
     }
 
     /// Postfix map type for this host (`lmdb` on AlmaLinux 10, `hash` on older releases).
@@ -294,11 +410,21 @@ mod unix_impl {
             &crate::panel_ops_mailbox_provision::user_exists,
             &excluded,
         );
-        // Loopback-only Postfix cannot be the public MX. Exclusive
-        // virtual_alias_domains would bounce unknown recipients (Feedback to
-        // info@ on a domain that also has one lab mailbox) instead of relaying.
-        if inet_interfaces_loopback_only(&postconf_value(&["-h", "inet_interfaces"])) {
+        // Never dual-list domains already owned by virtual_mailbox_domains
+        // (CyberPanel mysql maps): that yields 5.1.1 virtual-alias bounces.
+        let classic_owned = virtual_mailbox_owned_domains(&plan.domains);
+        strip_virtual_mailbox_domains(&mut plan, &classic_owned);
+        // CPN-native hosted mailboxes need a public SMTP listener to accept MX
+        // inbound. Promote loopback-only installs instead of clearing domains.
+        if !plan.domains.is_empty()
+            && inet_interfaces_loopback_only(&postconf_value(&["-h", "inet_interfaces"]))
+        {
+            let _ = ensure_public_inet_interfaces()?;
+        } else if inet_interfaces_loopback_only(&postconf_value(&["-h", "inet_interfaces"])) {
+            // Loopback-only with no CPN-owned domains: leave maps empty so
+            // unknown recipients (Feedback) relay to the real public MX.
             plan.domains.clear();
+            plan.mailboxes.clear();
         }
         let domains_present = Path::new(VIRTUAL_DOMAINS_PATH).exists();
         if plan.mailboxes.is_empty() && plan.domains.is_empty() && !domains_present {
@@ -313,6 +439,10 @@ mod unix_impl {
             mailboxes: plan.mailboxes.len(),
             ..HostedMailReport::default()
         };
+        if !plan.domains.is_empty() && !target_host.is_empty() {
+            // Aliases rewrite to user@myhostname; that host must be local.
+            report.main_cf_changed |= ensure_myhostname_in_mydestination(&target_host)?;
+        }
         // Aliases first so a domain is never accepted without its mailbox table.
         let map_type = map_type();
         report.files_changed |= write_map_if_changed(
@@ -491,5 +621,25 @@ mod tests {
         assert!(!inet_interfaces_loopback_only("all"));
         assert!(!inet_interfaces_loopback_only("127.0.0.1, 10.0.2.15"));
         assert!(!inet_interfaces_loopback_only(""));
+    }
+
+    #[test]
+    fn strip_virtual_mailbox_domains_removes_classic_overlap() {
+        let accounts = vec![
+            account("info@newstargeted.com", true, MailSmtpMode::PostfixLocal),
+            account(
+                "info@threebrickstudio.com",
+                true,
+                MailSmtpMode::PostfixLocal,
+            ),
+        ];
+        let mut plan = plan_from_accounts(&accounts, &|_| true, &BTreeSet::new());
+        let mut owned = BTreeSet::new();
+        owned.insert("newstargeted.com".to_string());
+        strip_virtual_mailbox_domains(&mut plan, &owned);
+        assert!(!plan.domains.contains("newstargeted.com"));
+        assert!(plan.domains.contains("threebrickstudio.com"));
+        assert!(!plan.mailboxes.contains_key("info@newstargeted.com"));
+        assert!(plan.mailboxes.contains_key("info@threebrickstudio.com"));
     }
 }
