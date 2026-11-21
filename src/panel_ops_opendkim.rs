@@ -14,7 +14,10 @@ const KEY_TABLE: &str = "/etc/opendkim/KeyTable";
 const SIGNING_TABLE: &str = "/etc/opendkim/SigningTable";
 const TRUSTED_HOSTS: &str = "/etc/opendkim/TrustedHosts";
 const OPENDKIM_CONF: &str = "/etc/opendkim.conf";
-const MILTER_SOCKET: &str = "inet:8891@localhost";
+/// OpenDKIM `Socket` (libmilter form `inet:port@host`).
+const OPENDKIM_LISTEN: &str = "inet:8891@localhost";
+/// Postfix milter target (`inet:host:port`).
+const POSTFIX_MILTER: &str = "inet:127.0.0.1:8891";
 const CPN_BEGIN: &str = "# BEGIN CPN-managed OpenDKIM entries";
 const CPN_END: &str = "# END CPN-managed OpenDKIM entries";
 
@@ -188,7 +191,7 @@ fn ensure_opendkim_conf() -> Result<bool, String> {
         ("Syslog", "yes"),
         ("SyslogSuccess", "yes"),
         ("UserID", "opendkim:opendkim"),
-        ("Socket", MILTER_SOCKET),
+        ("Socket", OPENDKIM_LISTEN),
         ("Umask", "002"),
         ("Canonicalization", "relaxed/relaxed"),
         ("OversignHeaders", "From"),
@@ -370,8 +373,8 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
     let status = Command::new("postconf")
         .args([
             "-e",
-            &format!("smtpd_milters={MILTER_SOCKET}"),
-            &format!("non_smtpd_milters={MILTER_SOCKET}"),
+            &format!("smtpd_milters={POSTFIX_MILTER}"),
+            &format!("non_smtpd_milters={POSTFIX_MILTER}"),
             "milter_default_action=accept",
             "milter_protocol=6",
         ])
@@ -389,7 +392,7 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    Ok(format!("Postfix milters -> {MILTER_SOCKET}"))
+    Ok(format!("Postfix milters -> {POSTFIX_MILTER}"))
 }
 
 fn install_opendkim_package() -> Result<String, String> {
