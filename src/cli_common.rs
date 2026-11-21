@@ -188,6 +188,43 @@ mod confirm_reply_tests {
     }
 }
 
+/// Write operator-only material to a mode-600 file under the system temp dir (never stdout).
+pub fn write_mode600_temp_file(prefix: &str, content: &str) -> Result<std::path::PathBuf, String> {
+    let safe_prefix: String = prefix
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .collect();
+    let label = if safe_prefix.is_empty() {
+        "cpn-secret".into()
+    } else {
+        safe_prefix
+    };
+    let path = std::env::temp_dir().join(format!("{label}-{}.txt", std::process::id()));
+    {
+        use std::io::Write;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&path)
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+        file.write_all(content.as_bytes())
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+        file.write_all(b"\n")
+            .map_err(|error| format!("Failed to write temp file: {error}"))?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(path)
+}
+
 /// Write a one-time generated secret to a mode-600 temp file and print its path.
 ///
 /// Parameter is intentionally not named `password` / `salt` / `nonce` / `iv`:

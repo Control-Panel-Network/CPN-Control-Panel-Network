@@ -62,7 +62,7 @@ pub const CATALOG: &[PanelSpec] = &[
         id: "classic",
         name: "Classic control panel",
         tier: CopyTier::Primary,
-        markers: &["usr/local/CyberCP"],
+        markers: &["usr/local/CyberCP", "etc/cyberpanel"],
         scan: ScanKind::DomainHomes,
         listen_port: 8090,
         wipe_rel: &["usr/local/CyberCP"],

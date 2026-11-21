@@ -1,6 +1,6 @@
 //! Postfix as the default local MTA when outbound SMTP is skipped.
 
-use crate::apps_pkg::{enable_now, install_packages_dnf_or_apt, rpm_or_dpkg_installed};
+use crate::apps_pkg::{enable_now, install_packages_dnf_or_apt};
 use crate::install_mail_listeners::{append_cpn_panel_outbound, master_cf_has_panel_outbound};
 use crate::os_support::{PackageFamily, detect_guest_os};
 use crate::service_detect::{port_open, systemd_unit_active};
@@ -144,7 +144,7 @@ pub fn ensure_postfix_default(from_address: &str) -> Result<SmtpSettings, String
         Ok(_) => {}
     }
 
-    if !rpm_or_dpkg_installed(&["postfix"]) && !postfix_is_ready() {
+    if !crate::mail_postfix_detect::postfix_mta_present() {
         install_packages_dnf_or_apt(&["postfix"], &["postfix"])?;
     }
     if !systemd_unit_active("postfix") {

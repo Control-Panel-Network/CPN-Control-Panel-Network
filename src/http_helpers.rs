@@ -257,6 +257,11 @@ pub fn enrich_status(mut status: InstallerStatus, token: &str) -> InstallerStatu
         .panel_login_url
         .replace(panel_login_url_for(&status, token));
     status.smtp = Some(smtp_status_public());
+    status.foreign_panels = crate::foreign_panel::install_intent::foreign_panels_public();
+    if let Some(record) = crate::foreign_panel::install_intent::load_install_path() {
+        status.install_path = Some(record.mode);
+        status.install_path_target_id = record.target_panel_id;
+    }
     status
 }
 

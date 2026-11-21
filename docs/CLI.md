@@ -246,13 +246,21 @@ sudo cpn passkey clear --username admin --yes
 Clear or inspect authenticator (TOTP) state from SSH. Output never includes secrets or backup codes.
 
 ```bash
+sudo cpn mfa status --username admin
+sudo cpn mfa enroll-url --username admin
 sudo cpn totp status --username admin
+sudo cpn totp begin --username admin
+sudo cpn totp confirm --username admin --code 123456
 sudo cpn totp disable --username admin --yes
 sudo cpn totp clear --username admin --yes
 sudo cpn mfa clear --username admin --yes
 ```
 
+- `mfa status`: prints `totp_enabled`, `totp_pending_enroll`, `passkey_count`, `totp_required`, `needs_mfa_enrollment`, and whether an unused CLI enroll token is pending (no secrets).
+- `mfa enroll-url`: **root only**. Creates a **single-use** HTTPS link (15-minute TTL) that signs the user into the panel and opens MFA enrollment (TOTP QR or passkey register in the browser). Passkey / Windows Hello enrollment **cannot** run purely over SSH; open the printed URL on a desktop browser. WebAuthn requires **HTTPS** and an RP ID that matches the browser hostname. Set `cpn network public-url` (or panel hostname) so the link is not loopback-only. `http://IP` or mismatched hosts often fail passkey registration.
 - `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
+- `totp begin`: starts TOTP enrollment and writes the base32 secret and `otpauth` URI to a **mode-600** temp file (`totp_enroll_file=`); nothing sensitive is printed to stdout.
+- `totp confirm`: completes pending enrollment with `--code`; backup codes are written to a mode-600 temp file (`backup_codes_file=`), not stdout.
 - `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; confirm with `yes`/`y` or pass `--yes` to skip.
 - `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; same confirmation rules (`yes`/`y`/`YES`, or `--yes`; `no`/`n` aborts).
 - Destructive confirmations are case-insensitive and trim whitespace (shared helper for account/site/plugin clears too).
