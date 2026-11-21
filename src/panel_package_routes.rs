@@ -1,12 +1,14 @@
 //! Authenticated `/packages` panel routes.
 
 use crate::auth_api::panel_user_from_request;
-use crate::panel_hub_http::{authenticated_panel_shell, captured_session_exp, panel_shell_blocking};
 use crate::installer::AppState;
 use crate::login_next::login_redirect;
 use crate::packages::{
     PackageInput, assign_package, create_package_for, delete_package, ensure_default_package,
     get_package, is_panel_admin, update_package_for,
+};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
 };
 use crate::panel_packages::{packages_edit_main, packages_main, packages_new_main};
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -218,7 +220,8 @@ pub async fn packages_page(
     let _ = ensure_default_package();
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "packages",
         "Packages",
@@ -242,7 +245,8 @@ pub async fn packages_new_page(
     }
     let notice = query.get("notice").map(String::as_str);
     let error = query.get("error").map(String::as_str);
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "packages",
         "Create package",
@@ -269,7 +273,8 @@ pub async fn packages_edit_page(
         Ok(pkg) => {
             let notice = query.get("notice").map(String::as_str);
             let error = query.get("error").map(String::as_str);
-            html_ok(authenticated_panel_shell(&http, 
+            html_ok(authenticated_panel_shell(
+                &http,
                 &user,
                 "packages",
                 "Edit package",

@@ -3,7 +3,10 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_host_info::host_sidebar_info;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, panel_shell_blocking,
+    redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_dns::{dns_zone_create_page, dns_zone_manage_page, dns_zones_page};
 use crate::panel_hub_pages_dns_ns::{default_nameservers_page, nameservers_manage_page};
 use crate::panel_ops_dns::{
@@ -68,7 +71,8 @@ pub async fn server_dns_zones(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "DNS Zones",
@@ -89,7 +93,8 @@ pub async fn server_dns_zones_create_get(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Create DNS Zone",
@@ -137,7 +142,8 @@ pub async fn server_dns_zones_manage(
     let Some(name) = query.get("name").filter(|s| !s.is_empty()) else {
         return redirect_notice("/server/dns/zones", None, Some("Missing zone name"));
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Manage DNS Zone",
@@ -268,7 +274,8 @@ pub async fn server_dns_nameservers(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Nameservers",
@@ -333,7 +340,8 @@ pub async fn server_dns_defaults(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Default Nameservers",

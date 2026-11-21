@@ -1,8 +1,9 @@
 //! HTTP routes for Site File Manager (jailed to site home).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_blocking_budget, login_redirect, require_panel_user, urlencoding_simple,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking_budget, login_redirect,
+    panel_shell_blocking, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_files::site_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, run_op, same_origin_ok, site_redirect};

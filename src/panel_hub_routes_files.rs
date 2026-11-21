@@ -2,7 +2,10 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_blocking_budget, html_ok, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking_budget, html_ok, login_redirect,
+    panel_shell_blocking, require_panel_user,
+};
 use crate::panel_hub_pages_files::root_files_page;
 use crate::panel_hub_routes_files_common::{parse_op_form, root_redirect, run_op, same_origin_ok};
 use crate::panel_ops_files::{
@@ -24,7 +27,8 @@ fn require_admin_user(state: &AppState, http: &HttpRequest) -> Result<String, Bo
         return Err(Box::new(login_redirect(http)));
     };
     if !is_panel_admin(&user) {
-        return Err(Box::new(html_ok(authenticated_panel_shell(&http, 
+        return Err(Box::new(html_ok(authenticated_panel_shell(
+            &http,
             &user,
             "root-files",
             "Root File Manager",

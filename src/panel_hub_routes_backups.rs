@@ -4,9 +4,9 @@ use crate::backup_restore::{RestoreRequest, restore_backup};
 use crate::backup_restore_extract::RESTORE_PLAN_RENDER_BUDGET;
 use crate::installer::AppState;
 use crate::panel_backups::BackupsPageQuery;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_blocking, html_blocking_budget, html_ok, login_redirect, redirect_notice,
-    require_panel_user, urlencoding_simple,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking, html_blocking_budget, html_ok,
+    login_redirect, panel_shell_blocking, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_backups::{
     backups_create_page, backups_destinations_page, backups_restore_page, backups_schedule_page,
@@ -30,7 +30,8 @@ pub async fn backups_create_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Create Backup",
@@ -268,7 +269,8 @@ pub async fn backups_schedule_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Schedule Backup",
@@ -316,7 +318,8 @@ pub async fn backups_destinations_route(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Destinations",
@@ -374,14 +377,16 @@ pub async fn backups_gdrive_route(
         return login_redirect(&http);
     };
     if !crate::panel_feature_gate::backup_destinations_unlocked() {
-        return html_ok(authenticated_panel_shell(&http, 
+        return html_ok(authenticated_panel_shell(
+            &http,
             &user,
             "backups",
             "Google Drive",
             &crate::panel_feature_gate::backup_destinations_plugin_required_page("Google Drive"),
         ));
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Google Drive",
@@ -468,14 +473,16 @@ pub async fn backups_remote_route(
         return login_redirect(&http);
     };
     if !crate::panel_feature_gate::backup_destinations_unlocked() {
-        return html_ok(authenticated_panel_shell(&http, 
+        return html_ok(authenticated_panel_shell(
+            &http,
             &user,
             "backups",
             "Remote Backups",
             &crate::panel_feature_gate::backup_destinations_plugin_required_page("Remote Backups"),
         ));
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "Remote Backups",
@@ -574,14 +581,16 @@ pub async fn backups_s3_route(
         return login_redirect(&http);
     };
     if !crate::panel_feature_gate::backup_destinations_unlocked() {
-        return html_ok(authenticated_panel_shell(&http, 
+        return html_ok(authenticated_panel_shell(
+            &http,
             &user,
             "backups",
             "S3",
             &crate::panel_feature_gate::backup_destinations_plugin_required_page("S3"),
         ));
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "backups",
         "S3",

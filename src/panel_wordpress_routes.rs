@@ -1,8 +1,9 @@
 //! Authenticated `/wordpress` panel routes.
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user, urlencoding_simple,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking, html_ok, login_redirect,
+    panel_shell_blocking, redirect_notice, require_panel_user, urlencoding_simple,
 };
 use crate::panel_hub_pages_category_overviews::wordpress_hub_main;
 use crate::panel_wordpress_ui::{
@@ -157,7 +158,8 @@ pub async fn wordpress_overview_route(
             .append_header(("Location", loc))
             .finish();
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "wordpress",
         "WordPress",
@@ -234,7 +236,8 @@ pub async fn wordpress_install_get(
     let draft = read_install_draft(&http);
     html_ok_install(
         &http,
-        authenticated_panel_shell(&http, 
+        authenticated_panel_shell(
+            &http,
             &user,
             "wordpress",
             "Install WordPress",
@@ -260,7 +263,8 @@ pub async fn wordpress_subsites_install_get(
     let draft = read_install_draft(&http);
     html_ok_install(
         &http,
-        authenticated_panel_shell(&http, 
+        authenticated_panel_shell(
+            &http,
             &user,
             "wordpress-subsites",
             "Install WordPress Sub-site",
@@ -512,7 +516,8 @@ pub async fn wordpress_manage_route(
             Some(&format!("WordPress site `{domain}` not found")),
         );
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "wordpress",
         "Manage WordPress",

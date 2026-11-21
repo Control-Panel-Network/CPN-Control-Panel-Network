@@ -2,8 +2,9 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_log_retention::log_retention_settings_page;
 use crate::panel_log_retention::{LogRetentionPrefs, save_log_retention};
@@ -22,7 +23,8 @@ pub async fn settings_logs_page(
     if !is_panel_admin(&user) {
         return owner_only_html(&user, "settings", "Log retention");
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "settings",
         "Log retention",

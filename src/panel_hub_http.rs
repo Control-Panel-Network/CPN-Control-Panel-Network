@@ -22,13 +22,7 @@ pub fn authenticated_panel_shell(
     title: &str,
     main: &str,
 ) -> String {
-    panel_shell_exp(
-        username,
-        active,
-        title,
-        main,
-        session_exp_from_http(http),
-    )
+    panel_shell_exp(username, active, title, main, session_exp_from_http(http))
 }
 
 /// Same as [`authenticated_panel_shell`] for call sites that already use [`panel_shell`].
@@ -62,12 +56,7 @@ pub fn panel_shell_blocking(
 
 /// Degraded/preview paths that keep the 4-arg [`panel_shell`] signature (no countdown).
 #[allow(clippy::too_many_arguments)]
-pub fn panel_shell_legacy(
-    username: &str,
-    active: &str,
-    title: &str,
-    main: &str,
-) -> String {
+pub fn panel_shell_legacy(username: &str, active: &str, title: &str, main: &str) -> String {
     panel_shell(username, active, title, main)
 }
 

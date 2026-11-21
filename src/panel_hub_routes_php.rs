@@ -2,8 +2,9 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_blocking, html_ok, login_redirect, redirect_notice, require_panel_user,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking, html_ok, login_redirect,
+    panel_shell_blocking, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_php_cfg::php_configurations_page;
 use crate::panel_hub_pages_php_ext::php_extensions_page;
@@ -94,7 +95,8 @@ pub async fn server_php_overview(
     let Some(user) = require_panel_user(&state, &http) else {
         return login_redirect(&http);
     };
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "PHP",
@@ -293,7 +295,8 @@ pub async fn server_php_configs(
     };
     let php = query.get("php").map(String::as_str);
     let tab = query.get("tab").map(String::as_str).unwrap_or("basic");
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "PHP Configurations",

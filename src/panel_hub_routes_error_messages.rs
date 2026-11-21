@@ -6,8 +6,9 @@ use crate::panel_error_messages::{
     PanelErrorMessages, load_messages, restore_all_builtins, restore_forbidden, restore_internal,
     restore_not_found, save_messages,
 };
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_error_messages::error_messages_settings_page;
 use crate::panel_markdown::render_safe_markdown;
@@ -26,7 +27,8 @@ pub async fn settings_error_messages_page(
     if !is_panel_admin(&user) {
         return owner_only_html(&user, "settings", "Error messages");
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "settings",
         "Error messages",

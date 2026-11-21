@@ -7,8 +7,9 @@ use crate::panel_audit_export::{export_csv, export_jsonl};
 use crate::panel_audit_policy::{
     AuditPolicy, load_audit_policy, opt_outable_categories, save_audit_policy,
 };
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_ok, login_redirect, owner_only_html, redirect_flash, redirect_notice, require_panel_user,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect_flash, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_audit::audit_settings_page;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -27,7 +28,8 @@ pub async fn settings_audit_page(
     if !is_panel_admin(&user) {
         return owner_only_html(&user, "settings", "Audit trail");
     }
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "settings",
         "Audit trail",

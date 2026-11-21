@@ -1,7 +1,10 @@
 //! Server > Logs route (panel activity plus links to every other log).
 
 use crate::installer::AppState;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_blocking, login_redirect, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_blocking, login_redirect,
+    panel_shell_blocking, require_panel_user,
+};
 use crate::panel_hub_pages_server_log_view::host_log_page;
 use crate::panel_hub_pages_server_logs::server_logs_page;
 use crate::panel_server_logs::{DEFAULT_PER_PAGE, HostLogKind};
@@ -15,7 +18,13 @@ pub async fn server_logs_route(http: HttpRequest, state: web::Data<Arc<AppState>
     };
     let session_exp_shell = captured_session_exp(&http);
     html_blocking(move || {
-        panel_shell_blocking(&user, "logs", "Logs", &server_logs_page(&user), session_exp_shell)
+        panel_shell_blocking(
+            &user,
+            "logs",
+            "Logs",
+            &server_logs_page(&user),
+            session_exp_shell,
+        )
     })
     .await
 }

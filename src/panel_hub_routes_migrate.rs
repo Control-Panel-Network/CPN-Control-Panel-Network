@@ -4,8 +4,9 @@ use crate::foreign_panel::apply::ApplyOptions;
 use crate::foreign_panel::{apply_panel, host_root, wipe_panel};
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,
-    html_ok, login_redirect, owner_only_html, redirect_notice, require_panel_user,
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, owner_only_html,
+    panel_shell_blocking, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_migrate::panel_migrate_page;
 use crate::panel_session::session_secret;
@@ -54,7 +55,8 @@ pub async fn panel_migrate_route(
     };
     let notice = query.get("notice").cloned();
     let error = query.get("error").cloned();
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Migrate another panel",
