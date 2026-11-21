@@ -66,6 +66,10 @@ pub fn start_email_stack() -> Result<String, String> {
         install_packages_dnf_or_apt(DNF_MAIL_PKGS, APT_MAIL_PKGS)?;
     }
     apply_local_mail_configuration()?;
+    // Prefer real panel/site domains in Mail Client Configuration over your-domain.example.
+    let _ = crate::panel_ops_mail_onboarding::seed_mail_onboarding_hostname_if_empty();
+    // Default mail TLS: Let's Encrypt for mail.<apex> unless operator chose Custom/None.
+    let _ = crate::panel_ops_mail_ssl::ensure_mail_ssl_default();
     let _ = crate::install_mail_sieve::ensure_dovecot_sieve_sync();
     let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
     crate::install_selinux_mail::ensure_httpd_mail_ports();
@@ -97,10 +101,16 @@ pub fn start_email_stack() -> Result<String, String> {
     }
     // Open the mail ports on the host firewall when firewalld is present (no-op otherwise).
     let _ = crate::panel_ops_firewall_heal::heal_firewalld("email stack start");
+    // Default first mailbox info@<apex> unless operator installed without a mail domain.
+    let info_note = crate::panel_ops_mail_default_mailbox::ensure_default_info_mailboxes_for_known_domains()
+        .into_iter()
+        .map(|r| r.summary())
+        .collect::<Vec<_>>()
+        .join(" ");
     let smtp587 = port_open("127.0.0.1:587", 250);
     let smtp465 = port_open("127.0.0.1:465", 250);
     Ok(format!(
-        "Started Email stack (Postfix + Dovecot). IMAP :143 ready; submission :587 {}; SMTPS :465 {}.",
+        "Started Email stack (Postfix + Dovecot). IMAP :143 ready; submission :587 {}; SMTPS :465 {}. {info_note}",
         if smtp587 {
             "listening"
         } else {

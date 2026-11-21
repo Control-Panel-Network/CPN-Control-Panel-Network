@@ -669,6 +669,12 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             provision_local_mail_backend(&state).await?;
             verify_imap_smtp_listeners().await?;
             crate::install_mail_backend::verify_mail_roundtrip(&state).await?;
+            // Default first mailbox info@<apex> unless Setup Wizard opted out of a mail domain.
+            match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox_for_host_email()
+            {
+                Ok(r) => state.log(r.summary(), "info"),
+                Err(e) => state.log(format!("Default info@ mailbox: {e}"), "warn"),
+            }
             install_webmail(&state, mail, engine).await?;
             state
                 .progress("testing", 92, format!("Checking {}", mail.label()))
