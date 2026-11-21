@@ -502,13 +502,13 @@ pub async fn install_with_database(
                 }
             };
             state.log(label.to_string(), "info");
-            if record.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate {
-                if let Some(target) = record.target_panel_id.as_deref() {
-                    state.log(
-                        crate::foreign_panel::install_intent::migrate_apply_command(target),
-                        "info",
-                    );
-                }
+            if record.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate
+                && let Some(target) = record.target_panel_id.as_deref()
+            {
+                state.log(
+                    crate::foreign_panel::install_intent::migrate_apply_command(target),
+                    "info",
+                );
             }
         }
         if crate::php_lsphp_host::should_skip_remi_php_packages() {

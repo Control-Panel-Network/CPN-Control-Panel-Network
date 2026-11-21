@@ -140,11 +140,11 @@ pub fn install_and_expose_for(web_server: Option<ServerEngine>) -> Result<String
         if crate::php_defaults::load_php_default().is_some() {
             let _ = crate::panel_ops_php_host::ensure_host_php_default(None);
         }
-    } else if crate::php_defaults::load_php_default().is_none() {
-        if let Ok(guest) = crate::os_support::detect_guest_os() {
-            let _ = crate::php_lsphp_host::prepare_lsphp_host_php_record(&guest, None);
-            let _ = crate::php_lsphp_host::ensure_lsphp_panel_extensions();
-        }
+    } else if crate::php_defaults::load_php_default().is_none()
+        && let Ok(guest) = crate::os_support::detect_guest_os()
+    {
+        let _ = crate::php_lsphp_host::prepare_lsphp_host_php_record(&guest, None);
+        let _ = crate::php_lsphp_host::ensure_lsphp_panel_extensions();
     }
     ensure_epel()?;
     if lsphp_host {

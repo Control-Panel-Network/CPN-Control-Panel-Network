@@ -59,12 +59,11 @@ pub fn coerce_panel_public_url_input(raw: &str) -> String {
     let host_part = value
         .trim_end_matches('/')
         .rsplit_once(':')
-        .map(|(host, port)| {
+        .and_then(|(host, port)| {
             port.chars()
                 .all(|c| c.is_ascii_digit())
                 .then_some((host, port.parse::<u16>().ok()))
         })
-        .flatten()
         .unwrap_or((value.trim_end_matches('/'), None));
     let (host, port) = host_part;
     let prefer_http = host == "127.0.0.1"

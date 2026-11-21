@@ -6,7 +6,7 @@
 use crate::apps_pkg::{package_installed, rpm_or_dpkg_installed};
 use crate::os_support::GuestOs;
 use crate::php_defaults::{PhpDefaultRecord, normalize_php_request, save_php_default};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 const LSPHP_SERIES: &[(&str, &str)] = &[

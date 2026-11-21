@@ -11,16 +11,28 @@ use tokio::process::Command;
 
 const STAGE: &str = "mail_backend";
 
-async fn run_pkg_install_resilient(
-    state: &AppState,
-    guest: &GuestOs,
+struct PkgInstallResilientSpec<'a> {
     packages_dnf: Vec<&'static str>,
     packages_apt: Vec<&'static str>,
     description: &'static str,
     tracking: DnfProgress,
-    rpm_names: &[&str],
+    rpm_names: &'a [&'static str],
     label: &'static str,
+}
+
+async fn run_pkg_install_resilient(
+    state: &AppState,
+    guest: &GuestOs,
+    spec: PkgInstallResilientSpec<'_>,
 ) -> Result<(), String> {
+    let PkgInstallResilientSpec {
+        packages_dnf,
+        packages_apt,
+        description,
+        tracking,
+        rpm_names,
+        label,
+    } = spec;
     let build_spec = || {
         pkg_install(
             guest,
@@ -223,18 +235,20 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         run_pkg_install_resilient(
             state,
             &guest,
-            vec!["postfix"],
-            vec!["postfix"],
-            "Installing Postfix",
-            DnfProgress {
-                download_start: 62,
-                download_end: 66,
-                install_start: 66,
-                install_end: 70,
+            PkgInstallResilientSpec {
+                packages_dnf: vec!["postfix"],
+                packages_apt: vec!["postfix"],
+                description: "Installing Postfix",
+                tracking: DnfProgress {
+                    download_start: 62,
+                    download_end: 66,
+                    install_start: 66,
+                    install_end: 70,
+                    label: "Postfix",
+                },
+                rpm_names: &["postfix", "postfix3"],
                 label: "Postfix",
             },
-            &["postfix", "postfix3"],
-            "Postfix",
         )
         .await?;
         install_journal::record(
@@ -249,18 +263,20 @@ pub async fn provision_local_mail_backend(state: &AppState) -> Result<(), String
         run_pkg_install_resilient(
             state,
             &guest,
-            vec!["dovecot"],
-            vec!["dovecot-core", "dovecot-imapd"],
-            "Installing Dovecot",
-            DnfProgress {
-                download_start: 70,
-                download_end: 72,
-                install_start: 72,
-                install_end: 74,
+            PkgInstallResilientSpec {
+                packages_dnf: vec!["dovecot"],
+                packages_apt: vec!["dovecot-core", "dovecot-imapd"],
+                description: "Installing Dovecot",
+                tracking: DnfProgress {
+                    download_start: 70,
+                    download_end: 72,
+                    install_start: 72,
+                    install_end: 74,
+                    label: "Dovecot",
+                },
+                rpm_names: &["dovecot", "dovecot-core"],
                 label: "Dovecot",
             },
-            &["dovecot", "dovecot-core"],
-            "Dovecot",
         )
         .await?;
         install_journal::record(
