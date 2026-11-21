@@ -28,7 +28,16 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
             require_root()?;
             let summary = import_legacy_mailboxes_into_registry()?;
             let text = format_import_summary(&summary);
-            record_cli("cli.mail.import-legacy", "all", true, &text);
+            // Audit omit sql_passwords_synced count (CodeQL rust/cleartext-logging).
+            let audit = format!(
+                "Mail registry import: discovered={} imported={} already={} shortLogin_files={} virtual_sql={}",
+                summary.discovered,
+                summary.imported,
+                summary.already_present,
+                summary.short_login_files,
+                summary.virtual_sql_active,
+            );
+            record_cli("cli.mail.import-legacy", "all", true, &audit);
             println!("{text}");
             Ok(())
         }
@@ -47,9 +56,10 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
                     "Password is required (use --password-stdin or interactive entry)".into(),
                 );
             };
-            let msg = reset_mailbox_password(address, &secret)?;
+            reset_mailbox_password(address, &secret)?;
             record_cli("cli.mail.passwd", address, true, "mailbox password updated");
-            println!("{msg}");
+            // Do not echo reset_mailbox_password return (CodeQL rust/cleartext-logging).
+            println!("Mailbox password updated for `{address}`.");
             Ok(())
         }
     }
