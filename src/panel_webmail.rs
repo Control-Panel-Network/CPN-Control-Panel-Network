@@ -326,7 +326,7 @@ pub fn webmail_label() -> &'static str {
     }
 }
 
-pub fn webmail_health_hint() -> &'static str {
+pub fn webmail_health_hint() -> String {
     webmail_health_url()
 }
 

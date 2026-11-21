@@ -303,10 +303,10 @@ Scan the `otpauth` URI from the temp file with an authenticator app. Delete or s
 ### Command reference
 
 - `mfa status`: `totp_enabled`, `totp_pending_enroll`, `passkey_count`, `totp_required`, `needs_mfa_enrollment`, `cli_enroll_token_pending` (booleans/counts only).
-- `mfa enroll-url`: **root only**. Prints `enroll_url=`, `expires_at_unix=`, `expires_in_secs=`, and operator notes (no raw token beyond the URL).
+- `mfa enroll-url`: **root only**. Prints `enroll_url=`, `expires_at_unix=`, `expires_in_secs=`, and operator notes (no raw token beyond the URL). Passkey / Windows Hello enrollment **cannot** run purely over SSH; open the printed URL on a desktop browser.
 - `totp status`: prints `totp_enabled=` and `pending_enroll=` (boolean flags only).
-- `totp begin`: starts TOTP enrollment; secret and `otpauth` URI only in a mode-600 temp file.
-- `totp confirm`: completes pending enrollment with `--code`.
+- `totp begin`: starts TOTP enrollment and writes the base32 secret and `otpauth` URI to a **mode-600** temp file (`totp_enroll_file=`); nothing sensitive is printed to stdout.
+- `totp confirm`: completes pending enrollment with `--code`; backup codes are written to a mode-600 temp file (`backup_codes_file=`), not stdout.
 - `totp disable` / `totp clear`: remove the TOTP secret and pending enrollment without an authenticator code; confirm with `yes`/`y` or pass `--yes` to skip.
 - `mfa clear`: clears TOTP, all passkeys, and pending WebAuthn ceremony files; same confirmation rules (`yes`/`y`/`YES`, or `--yes`; `no`/`n` aborts).
 - Destructive confirmations are case-insensitive and trim whitespace (shared helper for account/site/plugin clears too).

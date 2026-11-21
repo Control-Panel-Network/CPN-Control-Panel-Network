@@ -55,6 +55,10 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       resetInvalidHint: 'Request a new reset from the forgot password page.',
       authBlockedTitle: 'Open the installer URL with its token',
       authBlockedBody: 'Installation is not finished yet. Use the full URL printed in the installer console, including the ?token=... query parameter.',
+      authBlockedRecoveryTitle: 'Recovery on the server',
+      authBlockedRecoveryFile: 'Read the saved token: sudo cat /var/lib/cpn/installer-bootstrap.token',
+      authBlockedRecoveryCli: 'Print token for this install: sudo cpn-installer --show-bootstrap-token',
+      authBlockedRecoveryResume: 'Resume without a browser: sudo cpn-installer --cli',
       authBlockedLogin: 'If installation already finished, open panel login.'
     },
     es: {
@@ -92,6 +96,10 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       resetInvalidHint: 'Solicita un nuevo restablecimiento desde la página de contraseña olvidada.',
       authBlockedTitle: 'Abre la URL del instalador con su token',
       authBlockedBody: 'La instalación aún no ha terminado. Usa la URL completa impresa en la consola del instalador, incluyendo el parámetro ?token=...',
+      authBlockedRecoveryTitle: 'Recuperación en el servidor',
+      authBlockedRecoveryFile: 'Lee el token guardado: sudo cat /var/lib/cpn/installer-bootstrap.token',
+      authBlockedRecoveryCli: 'Imprime el token de esta instalación: sudo cpn-installer --show-bootstrap-token',
+      authBlockedRecoveryResume: 'Continúa sin navegador: sudo cpn-installer --cli',
       authBlockedLogin: 'Si la instalación ya terminó, abre el inicio de sesión del panel.'
     },
     nb: {
@@ -129,6 +137,10 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       resetInvalidHint: 'Be om en ny tilbakestilling fra glemt-passord-siden.',
       authBlockedTitle: 'Åpne installasjons-URL-en med token',
       authBlockedBody: 'Installasjonen er ikke ferdig ennå. Bruk hele URL-en som ble skrevet ut i installasjonskonsollen, inkludert ?token=...-parameteren.',
+      authBlockedRecoveryTitle: 'Gjenoppretting på serveren',
+      authBlockedRecoveryFile: 'Les lagret token: sudo cat /var/lib/cpn/installer-bootstrap.token',
+      authBlockedRecoveryCli: 'Skriv ut token for denne installasjonen: sudo cpn-installer --show-bootstrap-token',
+      authBlockedRecoveryResume: 'Fortsett uten nettleser: sudo cpn-installer --cli',
       authBlockedLogin: 'Hvis installasjonen allerede er ferdig, åpne panelinnlogging.'
     }
   };
@@ -190,6 +202,10 @@ pub const PANEL_I18N_SCRIPT: &str = r#"
       document.title = 'CPN Installer';
       setText('i18n-auth-title', t.authBlockedTitle);
       setText('i18n-auth-body', t.authBlockedBody);
+      setText('i18n-auth-recovery-title', t.authBlockedRecoveryTitle);
+      setText('i18n-auth-recovery-file', t.authBlockedRecoveryFile);
+      setText('i18n-auth-recovery-cli', t.authBlockedRecoveryCli);
+      setText('i18n-auth-recovery-resume', t.authBlockedRecoveryResume);
       setText('i18n-auth-login', t.authBlockedLogin);
       return;
     }

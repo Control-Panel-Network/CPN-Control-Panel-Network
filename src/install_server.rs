@@ -485,6 +485,47 @@ pub async fn install_with_database(
             ));
         }
 
+        if let Some(banner) = crate::foreign_panel::install_notice::format_detection_banner(
+            &crate::foreign_panel::install_notice::detect_foreign_panels(),
+        ) {
+            for line in banner.lines() {
+                state.log(line.to_string(), "info");
+            }
+        }
+        if let Some(record) = crate::foreign_panel::install_intent::load_install_path() {
+            let label = match record.mode {
+                crate::foreign_panel::install_intent::InstallPathMode::Fresh => {
+                    "Install path: fresh (operator confirmed fresh stack)."
+                }
+                crate::foreign_panel::install_intent::InstallPathMode::Migrate => {
+                    "Install path: migrate (reuse LiteSpeed/postfix/Dovecot where possible; panel-migrate after CPN is ready)."
+                }
+            };
+            state.log(label.to_string(), "info");
+            if record.mode == crate::foreign_panel::install_intent::InstallPathMode::Migrate
+                && let Some(target) = record.target_panel_id.as_deref()
+            {
+                state.log(
+                    crate::foreign_panel::install_intent::migrate_apply_command(target),
+                    "info",
+                );
+            }
+        }
+        if crate::php_lsphp_host::should_skip_remi_php_packages() {
+            state.log(
+                "LiteSpeed lsphp detected: installer will skip Remi php-fpm to avoid package conflicts."
+                    .to_string(),
+                "info",
+            );
+        }
+        if crate::mail_postfix_detect::postfix_mta_present() {
+            state.log(
+                "Existing Postfix/postfix3 detected: mail stage will reuse the MTA instead of installing AppStream postfix."
+                    .to_string(),
+                "info",
+            );
+        }
+
         let server_preexisting = web_server_present(server);
         if server_preexisting {
             state.log(

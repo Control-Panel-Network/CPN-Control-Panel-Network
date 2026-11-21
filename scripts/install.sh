@@ -470,11 +470,19 @@ print_next_steps() {
 
 CPN package install finished.
 
+If CyberPanel or another panel is already on this server, the installer prints
+a migration banner (classic = CyberPanel). Prefer:
+  cpn panel-migrate checklist && cpn panel-migrate detect
+before choosing a fresh install that replaces packages.
+
 Start the installer (language is detected automatically):
   sudo cpn-installer
   # or explicitly:
   sudo cpn-installer --cli    # SSH/CLI questions in this terminal
   sudo cpn-installer --web    # Web UI (browser)
+  # When another panel is detected, record the install path non-interactively:
+  sudo cpn-installer --migrate     # coexist + panel-migrate after CPN is ready
+  sudo cpn-installer --fresh       # fresh stack (default when no panel is detected)
 
 Default web listen address: 127.0.0.1:2087
 Remote access for the web UI (SSH tunnel recommended):

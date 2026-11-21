@@ -23,8 +23,8 @@ use cpn_installer::installer_transitions::{can_start_mail, can_start_server};
 use cpn_installer::listen_port::{resolve_listen_port, validate_listen_port};
 use cpn_installer::manifest::detect_existing_install;
 use cpn_installer::model::{
-    InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest, ListenPortRequest,
-    MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
+    InstallPathRequest, InstallRequest, InstallerEvent, InstallerStatus, LanguageRequest,
+    ListenPortRequest, MailInstallRequest, OptionalTokenQuery, SessionBootstrapRequest, TokenQuery,
 };
 use cpn_installer::panel_admin::is_panel_admin;
 use cpn_installer::panel_dashboard_layout_routes::{
@@ -36,56 +36,56 @@ use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
-    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
-    acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
-    api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
-    backups_destinations_save, backups_gdrive_route, backups_gdrive_save, backups_gdrive_test,
-    backups_incremental_route, backups_incremental_run, backups_incremental_save,
-    backups_remote_route, backups_remote_save, backups_remote_test, backups_restore_plan_route,
-    backups_restore_route, backups_restore_run, backups_s3_route, backups_s3_save, backups_s3_test,
-    backups_schedule_route, backups_schedule_save, cloudflare_add_post, cloudflare_delete_post,
-    cloudflare_dns_get, cloudflare_oauth_callback_get, cloudflare_oauth_client_post,
-    cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post, cloudflare_proxy_post,
-    cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post, cloudflare_update_post,
-    dashboard_ssh_security_review_show, dashboard_ssh_security_review_snooze, databases_all_route,
-    databases_create_get, databases_create_post, databases_delete_get, databases_delete_post,
-    databases_manager_route, databases_password_get, databases_password_post,
-    databases_phpmyadmin_open, databases_phpmyadmin_route, docker_apps_action, docker_apps_deploy,
-    docker_apps_route, docker_container_action, docker_create_container, docker_create_route,
-    docker_export_route, docker_home, docker_image_delete, docker_image_prune, docker_image_pull,
-    docker_images_route, docker_list_route, docker_logs_route, docker_stack_create,
-    docker_stack_refresh, docker_stacks_route, docker_view_exec, docker_view_route,
-    email_accounts_route, email_autoresponders_delete, email_autoresponders_route,
-    email_autoresponders_save, email_bimi_push_cf, email_bimi_route, email_bimi_save,
-    email_catchall_route, email_catchall_save, email_create_route, email_debugger,
-    email_delivery_route, email_dkim_ensure, email_dkim_route, email_filters_delete,
-    email_filters_route, email_filters_save, email_forwarding_apply, email_forwarding_delete,
-    email_forwarding_route, email_forwarding_save, email_limits, email_limits_delete,
-    email_limits_save, email_lists_apply, email_lists_create, email_lists_delete,
-    email_lists_member_add, email_lists_member_delete, email_lists_route, email_mailscanner,
-    email_mailscanner_enable, email_marketing, email_marketing_list, email_marketing_recipient,
-    email_marketing_send, email_mta_sts_push_cf, email_mta_sts_route, email_mta_sts_save,
-    email_password, email_password_save, email_pattern_fwd, email_pattern_fwd_apply,
-    email_pattern_fwd_delete, email_pattern_fwd_save, email_plus, email_plus_save,
-    email_proton_route, email_proton_save, email_queue, email_queue_delete, email_queue_delete_all,
-    email_queue_flush, email_rspamd, email_rspamd_enable, email_spamassassin,
-    email_spamassassin_enable, email_webmail_app_route, email_webmail_regenerate_path,
-    email_webmail_route, email_webmail_settings_save, filemanager_alias, ftp_accounts_route,
-    ftp_create, ftp_create_post, ftp_delete, ftp_delete_post, ftp_overview_route, ftp_reset,
-    ftp_reset_password_post, ftp_reset_post, login_mfa_session, panel_migrate_apply,
-    panel_migrate_route, panel_migrate_wipe, passkey_delete_post, passkey_login_finish,
-    passkey_login_start, passkey_mfa_finish, passkey_mfa_start, passkey_register_finish,
-    passkey_register_start, passkey_rename_post, security_csf, security_csf_enable,
-    security_csf_install, security_fail2ban, security_fail2ban_bans, security_fail2ban_unban,
-    security_firewall, security_firewall_ban_add, security_firewall_ban_delete,
-    security_firewall_ban_unban, security_firewall_banned_import, security_firewall_enable,
-    security_firewall_export_banned, security_firewall_export_rules, security_firewall_reload,
-    security_firewall_rule_add, security_firewall_rule_delete, security_firewall_rules_import,
-    security_firewall_start, security_firewall_stop, security_firewall_trusted_add,
-    security_firewall_trusted_delete, security_malware, security_malware_run, security_modsec,
-    security_modsec_rules, security_page, security_rule_packs, security_ssh,
-    security_ssh_show_review, security_ssh_toggle, security_ssl, security_ssl_defaults,
-    security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
+    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get,
+    account_security_enroll_cli, acl_create_get, acl_create_post, acl_delete_post, acl_modify_get,
+    api_access_create_post, api_access_revoke_post, api_access_route, backups_create_route,
+    backups_destinations_route, backups_destinations_save, backups_gdrive_route,
+    backups_gdrive_save, backups_gdrive_test, backups_incremental_route, backups_incremental_run,
+    backups_incremental_save, backups_remote_route, backups_remote_save, backups_remote_test,
+    backups_restore_plan_route, backups_restore_route, backups_restore_run, backups_s3_route,
+    backups_s3_save, backups_s3_test, backups_schedule_route, backups_schedule_save,
+    cloudflare_add_post, cloudflare_delete_post, cloudflare_dns_get, cloudflare_oauth_callback_get,
+    cloudflare_oauth_client_post, cloudflare_oauth_connect_post, cloudflare_oauth_disconnect_post,
+    cloudflare_proxy_post, cloudflare_settings_post, cloudflare_sync_post, cloudflare_test_post,
+    cloudflare_update_post, dashboard_ssh_security_review_show,
+    dashboard_ssh_security_review_snooze, databases_all_route, databases_create_get,
+    databases_create_post, databases_delete_get, databases_delete_post, databases_manager_route,
+    databases_password_get, databases_password_post, databases_phpmyadmin_open,
+    databases_phpmyadmin_route, docker_apps_action, docker_apps_deploy, docker_apps_route,
+    docker_container_action, docker_create_container, docker_create_route, docker_export_route,
+    docker_home, docker_image_delete, docker_image_prune, docker_image_pull, docker_images_route,
+    docker_list_route, docker_logs_route, docker_stack_create, docker_stack_refresh,
+    docker_stacks_route, docker_view_exec, docker_view_route, email_accounts_route,
+    email_autoresponders_delete, email_autoresponders_route, email_autoresponders_save,
+    email_bimi_push_cf, email_bimi_route, email_bimi_save, email_catchall_route,
+    email_catchall_save, email_create_route, email_debugger, email_delivery_route,
+    email_dkim_ensure, email_dkim_route, email_filters_delete, email_filters_route,
+    email_filters_save, email_forwarding_apply, email_forwarding_delete, email_forwarding_route,
+    email_forwarding_save, email_limits, email_limits_delete, email_limits_save, email_lists_apply,
+    email_lists_create, email_lists_delete, email_lists_member_add, email_lists_member_delete,
+    email_lists_route, email_mailscanner, email_mailscanner_enable, email_marketing,
+    email_marketing_list, email_marketing_recipient, email_marketing_send, email_mta_sts_push_cf,
+    email_mta_sts_route, email_mta_sts_save, email_password, email_password_save,
+    email_pattern_fwd, email_pattern_fwd_apply, email_pattern_fwd_delete, email_pattern_fwd_save,
+    email_plus, email_plus_save, email_proton_route, email_proton_save, email_queue,
+    email_queue_delete, email_queue_delete_all, email_queue_flush, email_rspamd,
+    email_rspamd_enable, email_spamassassin, email_spamassassin_enable, email_webmail_app_route,
+    email_webmail_regenerate_path, email_webmail_route, email_webmail_settings_save,
+    filemanager_alias, ftp_accounts_route, ftp_create, ftp_create_post, ftp_delete,
+    ftp_delete_post, ftp_overview_route, ftp_reset, ftp_reset_password_post, ftp_reset_post,
+    login_mfa_session, panel_migrate_apply, panel_migrate_route, panel_migrate_wipe,
+    passkey_delete_post, passkey_login_finish, passkey_login_start, passkey_mfa_finish,
+    passkey_mfa_start, passkey_register_finish, passkey_register_start, passkey_rename_post,
+    security_csf, security_csf_enable, security_csf_install, security_fail2ban,
+    security_fail2ban_bans, security_fail2ban_unban, security_firewall, security_firewall_ban_add,
+    security_firewall_ban_delete, security_firewall_ban_unban, security_firewall_banned_import,
+    security_firewall_enable, security_firewall_export_banned, security_firewall_export_rules,
+    security_firewall_reload, security_firewall_rule_add, security_firewall_rule_delete,
+    security_firewall_rules_import, security_firewall_start, security_firewall_stop,
+    security_firewall_trusted_add, security_firewall_trusted_delete, security_malware,
+    security_malware_run, security_modsec, security_modsec_rules, security_page,
+    security_rule_packs, security_ssh, security_ssh_show_review, security_ssh_toggle, security_ssl,
+    security_ssl_defaults, security_ssl_hostname, security_ssl_hostname_enable, security_ssl_issue,
     security_ssl_issue_all, security_ssl_mail, security_ssl_manage, security_ssl_mark_custom,
     security_ssl_origin_backup, security_ssl_provider, security_ssl_renew, security_ssl_restore_le,
     security_ssl_upload, server_cloudflare_redirect, server_dns_defaults, server_dns_defaults_save,
@@ -517,7 +517,9 @@ async fn set_listen_port(
         let result = if trimmed.is_empty() {
             clear_panel_public_url()
         } else {
-            save_panel_public_url(trimmed)
+            let normalized =
+                cpn_installer::panel_public_url::coerce_panel_public_url_input(trimmed);
+            save_panel_public_url(&normalized)
         };
         if let Err(error) = result {
             return listen_port_json_err(400, &error);
@@ -572,6 +574,68 @@ async fn set_listen_port(
         "redirect_url": redirect_url,
         "network": network,
         "port_migration": migration,
+    }))
+}
+
+#[post("/api/install/path")]
+async fn set_install_path(
+    http: HttpRequest,
+    state: web::Data<Arc<AppState>>,
+    query: web::Query<TokenQuery>,
+    request: web::Json<InstallPathRequest>,
+) -> HttpResponse {
+    if !authorized_request(&state, &query, &http) {
+        return HttpResponse::Unauthorized().finish();
+    }
+    if !remote_origin_ok(&http, state.allow_remote, &state.allowed_hosts) {
+        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Origin not allowed"}));
+    }
+    let panels = cpn_installer::foreign_panel::install_intent::foreign_panels_public();
+    if panels.is_empty() {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "No foreign panel is detected on this host"}));
+    }
+    let target =
+        if request.mode == cpn_installer::foreign_panel::install_intent::InstallPathMode::Migrate {
+            let trimmed = request
+                .target_panel_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            if let Some(id) = trimmed {
+                if !panels.iter().any(|row| row.id == id) {
+                    return HttpResponse::BadRequest().json(serde_json::json!({
+                        "error": format!("Unknown panel id `{id}`. Choose from the detected list."),
+                    }));
+                }
+                Some(id.to_string())
+            } else {
+                cpn_installer::foreign_panel::install_intent::default_migrate_target(
+                    &cpn_installer::foreign_panel::install_intent::detected_panels(),
+                )
+            }
+        } else {
+            None
+        };
+    let record = cpn_installer::foreign_panel::install_intent::InstallPathRecord {
+        mode: request.mode,
+        target_panel_id: target.clone(),
+        chosen_at_unix: cpn_installer::http_helpers::now_unix(),
+    };
+    if let Err(error) = cpn_installer::foreign_panel::install_intent::save_install_path(&record) {
+        return HttpResponse::InternalServerError().json(serde_json::json!({"error": error}));
+    }
+    let mut current = state.status.write().unwrap_or_else(|e| e.into_inner());
+    current.install_path = Some(record.mode);
+    current.install_path_target_id = record.target_panel_id.clone();
+    current.foreign_panels = panels;
+    let payload = enrich_status(current.clone(), &state.token);
+    drop(current);
+    HttpResponse::Ok().json(serde_json::json!({
+        "ok": true,
+        "status": payload,
+        "install_path": record.mode,
+        "target_panel_id": record.target_panel_id,
     }))
 }
 
@@ -966,6 +1030,9 @@ async fn main() -> std::io::Result<()> {
         }
     };
     apply_startup_network_flags(&args, listen_port);
+    if let Err(error) = cpn_installer::foreign_panel::install_intent::apply_cli_flags(&args) {
+        eprintln!("cpn-installer: install path flags: {error}");
+    }
     purge_expired_migration();
     match cpn_installer::panel_migrate::run_pending_migrations() {
         Ok(applied) if !applied.is_empty() => {
@@ -987,7 +1054,8 @@ async fn main() -> std::io::Result<()> {
         );
     }
 
-    println!("\nCPN Server Panel Â· Installer {VERSION}");
+    println!("\nCPN Server Panel · Installer {VERSION}");
+    cpn_installer::foreign_panel::install_notice::print_install_migration_notice();
     println!("Starting the web installer (language detected from browser/system)...\n");
     cpn_installer::motd::ensure_motd_installed();
     // Clear restarting / expired upgrade maintenance flags after a healthy boot.
@@ -1009,11 +1077,6 @@ async fn main() -> std::io::Result<()> {
     std::thread::spawn(|| {
         let _ = cpn_installer::panel_ops_firewall_heal::heal_firewalld("panel start");
     });
-    let token: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(28)
-        .map(char::from)
-        .collect();
     let session_id: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(28)
@@ -1043,11 +1106,19 @@ async fn main() -> std::io::Result<()> {
         "ready"
     };
     let has_bootstrap_account = bootstrap_account.is_some();
+    let token =
+        cpn_installer::paths::resume_or_new_installer_bootstrap_token(has_bootstrap_account, phase);
     let message = if maintenance.existing_install {
         format!(
             "CPN {} is already installed. Choose upgrade, repair, or continue config.",
             existing.package_version
         )
+    } else if let Some(banner) =
+        cpn_installer::foreign_panel::install_notice::format_detection_banner(
+            &cpn_installer::foreign_panel::install_notice::detect_foreign_panels(),
+        )
+    {
+        format!("The system is ready to continue.\n\n{banner}")
     } else {
         "The system is ready to continue".into()
     };
@@ -1079,6 +1150,9 @@ async fn main() -> std::io::Result<()> {
         smtp: Some(smtp_status_public()),
         maintenance: Some(maintenance),
         restart_scheduled: false,
+        foreign_panels: Vec::new(),
+        install_path: None,
+        install_path_target_id: None,
     };
     initial = enrich_status(initial, &token);
     cpn_installer::installer::persist_status_snapshot(&initial);
@@ -1554,6 +1628,7 @@ async fn main() -> std::io::Result<()> {
             .service(account_security_change_password_get)
             .service(account_security_change_password_post)
             .service(account_security_enroll_2fa_get)
+            .service(account_security_enroll_cli)
             .service(account_security_enroll_2fa_begin_get)
             .service(account_security_enroll_2fa_begin)
             .service(account_security_enroll_2fa_confirm)
@@ -1708,6 +1783,7 @@ async fn main() -> std::io::Result<()> {
             .service(reset_password_submit)
             .service(set_language)
             .service(set_listen_port)
+            .service(set_install_path)
             .service(bootstrap_session)
             .service(account_setup)
             .service(start_install)

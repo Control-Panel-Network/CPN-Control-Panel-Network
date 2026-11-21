@@ -5,8 +5,9 @@ use crate::install_webmail_runtime::webmail_health_url;
 /// Assert the UI is usable and data/temp/logs are not fetchable over HTTP.
 pub fn verify_webmail_http_surface(mail_label: &str) -> Result<(), String> {
     let url = webmail_health_url();
-    let expect_ui = if mail_label.to_ascii_lowercase().contains("snappy") {
-        "snappymail|rainloop|login|email|password|admin"
+    let label = mail_label.to_ascii_lowercase();
+    let expect_ui = if label.contains("snappy") || label.contains("tachyon") {
+        "snappymail|tachyon|rainloop|rl-started|login|email|password|admin|cpn webmail"
     } else {
         "roundcube|login|email|password|username"
     };

@@ -461,13 +461,18 @@ pub(crate) async fn install_php_runtime(
         Ok(Ok(record)) => {
             state.log(record.message.clone(), "info");
             if let Err(err) = crate::php_defaults::assert_stream_ok(&record.stream, &today) {
-                // apt path uses stream "apt"; skip lifecycle for that marker.
-                if record.stream != "apt" {
+                // apt path uses stream "apt"; lsphp uses `lsphp:lsphp85` (no Remi module).
+                if record.stream != "apt" && !record.stream.starts_with("lsphp:") {
                     return Err(err);
                 }
             }
         }
         Ok(Err(error)) => {
+            if crate::php_lsphp_host::should_skip_remi_php_packages() {
+                return Err(format!(
+                    "LiteSpeed PHP is present but could not be adopted: {error}"
+                ));
+            }
             // Fall back to legacy module enable when prepare fails on partial hosts.
             state.log(
                 format!("PHP prepare warning: {error}; trying legacy module enable"),
@@ -480,6 +485,36 @@ pub(crate) async fn install_php_runtime(
         Err(error) => {
             return Err(format!("PHP prepare join failed: {error}"));
         }
+    }
+    if crate::php_lsphp_host::should_skip_remi_php_packages() {
+        let ext = tokio::task::spawn_blocking(crate::php_lsphp_host::ensure_lsphp_panel_extensions)
+            .await
+            .map_err(|error| format!("lsphp extension join failed: {error}"))?;
+        match ext {
+            Ok(note) => state.log(note, "info"),
+            Err(error) => state.log(format!("lsphp extensions warning: {error}"), "error"),
+        }
+        let bin = crate::php_lsphp_host::best_lsphp_cli_binary()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "php".into());
+        let check = format!("{bin} -r 'exit(version_compare(PHP_VERSION,\"8.2.0\",\"<\")?1:0);'");
+        let status = Command::new("bash")
+            .args(["-c", &check])
+            .kill_on_drop(true)
+            .status()
+            .await
+            .map_err(|error| format!("LiteSpeed PHP version check failed: {error}"))?;
+        if !status.success() {
+            return Err(
+                "LiteSpeed PHP is older than 8.2 (EOL). Install a newer lsphp series from PHP Extensions."
+                    .into(),
+            );
+        }
+        state.log(
+            format!("Skipped Remi php-fpm install ({label}); using LiteSpeed lsphp runtime."),
+            "info",
+        );
+        return Ok(());
     }
     if guest.uses_apt() {
         run_command(state, apt_update_command()).await?;
@@ -638,17 +673,24 @@ pub async fn install_mail(state: std::sync::Arc<AppState>, mail: MailSystem) {
             state
                 .progress("testing", 92, format!("Checking {}", mail.label()))
                 .await;
-            run_command(
-                &state,
-                command(
-                    "systemctl",
-                    vec!["is-active", "--quiet", "php-fpm"],
-                    "Verifying PHP-FPM for webmail",
-                    "testing",
-                    94,
-                ),
-            )
-            .await?;
+            if crate::php_lsphp_host::should_skip_remi_php_packages() {
+                state.log(
+                    "Skipping php-fpm active check (LiteSpeed lsphp host runtime).".to_string(),
+                    "info",
+                );
+            } else {
+                run_command(
+                    &state,
+                    command(
+                        "systemctl",
+                        vec!["is-active", "--quiet", "php-fpm"],
+                        "Verifying PHP-FPM for webmail",
+                        "testing",
+                        94,
+                    ),
+                )
+                .await?;
+            }
             state
                 .progress(
                     "testing",

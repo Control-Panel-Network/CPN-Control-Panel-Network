@@ -12,6 +12,15 @@ const nb: LocaleMessages = {
   statusFetchError: "Kunne ikke spørre installasjonsprogrammet",
   startServerError: "Kunne ikke starte installasjonen",
   startMailError: "Kunne ikke starte e-postinstallasjonen",
+  installPathEyebrow: "PANEL OPPDAGET",
+  installPathTitle: "Ny installasjon eller migrering?",
+  installPathIntro:
+    "En annen panel er allerede på serveren. Velg migrering for å gjenbruke LiteSpeed, Postfix og Dovecot der det er trygt, deretter panel-migrate. CyberPanel har id classic.",
+  installPathFresh: "Ny installasjon",
+  installPathMigrate: "Migrer fra oppdaget panel",
+  installPathMigrateHint:
+    "Etter oppsett: Server → Panel migrate eller cpn panel-migrate apply.",
+  installPathTargetLabel: "Panel å migrere fra",
   selectServerTitle: "Velg webserver",
   selectServerIntro:
     "Velg motoren som passer prosjektet ditt. Stottede Linux-gjester inkluderer AlmaLinux, Rocky, Ubuntu og relaterte EL-mal. Windows Server og hypervisorer er verter for disse gjestene, ikke native panelinstallasjon. Du kan endre motoren senere fra panelet.",

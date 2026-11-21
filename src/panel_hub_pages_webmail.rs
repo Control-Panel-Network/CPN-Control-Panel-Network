@@ -193,7 +193,7 @@ pub fn email_webmail_page(notice: Option<&str>, error: Option<&str>) -> String {
             admin = html_escape(&admin),
             proton_link = proton_link,
             path = html_escape(&cfg.public_path),
-            health = html_escape(webmail_health_hint()),
+            health = html_escape(&webmail_health_hint()),
             auto = html_escape(&cfg.auto_login_account),
             embed = embed_checked,
             mbox_json = mailbox_json,

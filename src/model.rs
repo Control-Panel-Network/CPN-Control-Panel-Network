@@ -308,6 +308,14 @@ pub struct InstallerStatus {
     /// True when a detached panel reload was scheduled after upgrade/repair.
     #[serde(default)]
     pub restart_scheduled: bool,
+    /// Other hosting panels detected on this host (CyberPanel id=classic, etc.).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foreign_panels: Vec<crate::foreign_panel::install_intent::ForeignPanelPublic>,
+    /// Operator install path when a foreign panel is present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_path: Option<crate::foreign_panel::install_intent::InstallPathMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_path_target_id: Option<String>,
 }
 
 impl Default for InstallerStatus {
@@ -345,8 +353,18 @@ impl Default for InstallerStatus {
             smtp: None,
             maintenance: None,
             restart_scheduled: false,
+            foreign_panels: Vec::new(),
+            install_path: None,
+            install_path_target_id: None,
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InstallPathRequest {
+    pub mode: crate::foreign_panel::install_intent::InstallPathMode,
+    #[serde(default)]
+    pub target_panel_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

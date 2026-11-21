@@ -12,6 +12,15 @@ const es: LocaleMessages = {
   statusFetchError: "No se pudo consultar el instalador",
   startServerError: "No se pudo iniciar la instalación",
   startMailError: "No se pudo iniciar la instalación del correo",
+  installPathEyebrow: "PANEL DETECTADO",
+  installPathTitle: "¿Instalación nueva o migración?",
+  installPathIntro:
+    "Ya hay otro panel en este servidor. Elige migrar para reutilizar LiteSpeed, Postfix y Dovecot cuando sea seguro; luego ejecuta panel-migrate. CyberPanel usa el id classic.",
+  installPathFresh: "Instalación nueva",
+  installPathMigrate: "Migrar desde el panel detectado",
+  installPathMigrateHint:
+    "Después del setup, usa Servidor → Panel migrate o cpn panel-migrate apply.",
+  installPathTargetLabel: "Panel de origen",
   selectServerTitle: "Selecciona tu servidor web",
   selectServerIntro:
     "Elige el motor web que mejor se adapte a tu proyecto. Los invitados Linux admitidos incluyen AlmaLinux, Rocky, Ubuntu y EL relacionados. Windows Server e hipervisores alojan esos invitados; no son una instalacion nativa del panel. Podras cambiar el motor mas adelante desde el panel.",
