@@ -425,10 +425,7 @@ pub fn mail_ssl_page() -> String {
         ),
         ("Mail hostname", &mail_host),
         ("Provider", mail_cfg.provider.label()),
-        (
-            "Let's Encrypt live",
-            if le_present { "Yes" } else { "No" },
-        ),
+        ("Let's Encrypt live", if le_present { "Yes" } else { "No" }),
     ]);
     let checked = {
         let mut ul = String::from("<ul>");

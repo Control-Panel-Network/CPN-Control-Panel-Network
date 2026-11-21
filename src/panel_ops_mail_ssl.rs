@@ -1,6 +1,8 @@
 //! Mail hostname TLS: default Let's Encrypt for `mail.<apex>`, apply to Postfix/Dovecot.
 
-use crate::panel_https_front_config::{ACME_WEBROOT, HTTPD_CONF, OLS_VH_NAME, insert_map_before_catchall};
+use crate::panel_https_front_config::{
+    ACME_WEBROOT, HTTPD_CONF, OLS_VH_NAME, insert_map_before_catchall,
+};
 use crate::panel_ops_certbot_install::ensure_certbot_on_path;
 use crate::panel_ops_mail_onboarding::{
     load_mail_onboarding, preferred_mail_service_hostname, seed_mail_onboarding_hostname_if_empty,
@@ -153,7 +155,8 @@ pub fn ensure_ols_mail_hostname_acme_map(hostname: &str) -> Result<bool, String>
     if !path.is_file() {
         return Ok(false);
     }
-    let raw = fs::read_to_string(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
+    let raw =
+        fs::read_to_string(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
     let map_line = format!("    map                      {OLS_VH_NAME} {hostname}");
     if raw.contains(&format!("{OLS_VH_NAME} {hostname}")) {
         return Ok(false);
