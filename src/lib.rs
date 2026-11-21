@@ -170,6 +170,7 @@ pub mod panel_flash_guard;
 pub mod panel_footer_chrome;
 pub mod panel_host_aliases;
 pub mod panel_host_info;
+pub mod panel_https_acme;
 pub mod panel_https_front;
 pub mod panel_https_front_config;
 pub mod panel_hub_admin_gate;

@@ -6,9 +6,13 @@ pub const HTTPD_CONF: &str = "/usr/local/lsws/conf/httpd_config.conf";
 pub const NGINX_CONF: &str = "/etc/nginx/conf.d/cpn-panel-https.conf";
 pub const CADDY_SNIPPET: &str = "/etc/caddy/Caddyfile.d/cpn-panel-https.caddy";
 
-/// Pure OLS vhconf body for panel reverse proxy (+ ACME webroot).
-pub fn ols_panel_proxy_vhconf(listen_port: u16, acme_webroot: &str) -> String {
-    format!(
+/// Pure OLS vhconf body for panel reverse proxy (+ ACME webroot, optional vhssl).
+pub fn ols_panel_proxy_vhconf(
+    listen_port: u16,
+    acme_webroot: &str,
+    tls: Option<(&str, &str)>,
+) -> String {
+    let mut body = format!(
         "docRoot                   {acme_webroot}/\n\
          enableGzip                1\n\
          extprocessor cpnpanel {{\n\
@@ -41,7 +45,17 @@ pub fn ols_panel_proxy_vhconf(listen_port: u16, acme_webroot: &str) -> String {
            handler                 cpnpanel\n\
            addDefaultCharset       off\n\
          }}\n"
-    )
+    );
+    if let Some((fullchain, privkey)) = tls {
+        body.push_str(&format!(
+            "vhssl  {{\n\
+               keyFile                 {privkey}\n\
+               certFile                {fullchain}\n\
+               certChain               1\n\
+             }}\n"
+        ));
+    }
+    body
 }
 
 /// Pure nginx server blocks for panel hostname (HTTP ACME + optional HTTPS proxy).
@@ -63,12 +77,19 @@ pub fn nginx_panel_proxy_conf(
            }}\n"
     ));
     if let Some((fullchain, privkey)) = cert {
-        out.push_str(
-            "  location / {\n\
-               return 301 https://$host$request_uri;\n\
-             }\n\
-           }\n",
-        );
+        out.push_str(&format!(
+            "  location / {{\n\
+               proxy_http_version 1.1;\n\
+               proxy_set_header Host $host;\n\
+               proxy_set_header X-Real-IP $remote_addr;\n\
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
+               proxy_set_header X-Forwarded-Proto $scheme;\n\
+               proxy_set_header Upgrade $http_upgrade;\n\
+               proxy_set_header Connection \"upgrade\";\n\
+               proxy_pass http://127.0.0.1:{listen_port};\n\
+             }}\n\
+           }}\n"
+        ));
         out.push_str(&format!(
             "server {{\n\
                listen 443 ssl http2;\n\
@@ -368,12 +389,27 @@ mod tests {
 
     #[test]
     fn ols_vhconf_proxies_listen_port_and_acme() {
-        let body = ols_panel_proxy_vhconf(2087, "/var/lib/cpn/acme-webroot");
+        let body = ols_panel_proxy_vhconf(2087, "/var/lib/cpn/acme-webroot", None);
         assert!(body.contains("http://127.0.0.1:2087"));
         assert!(body.contains("type                    proxy"));
         assert!(body.contains("context /.well-known/acme-challenge/"));
         assert!(body.contains("context /.well-known/"));
         assert!(!body.contains("https://127.0.0.1:2087"));
+    }
+
+    #[test]
+    fn ols_vhconf_includes_vhssl_when_tls_paths_given() {
+        let body = ols_panel_proxy_vhconf(
+            2087,
+            "/var/lib/cpn/acme-webroot",
+            Some((
+                "/etc/letsencrypt/live/panel.example.com/fullchain.pem",
+                "/etc/letsencrypt/live/panel.example.com/privkey.pem",
+            )),
+        );
+        assert!(body.contains("vhssl  {"));
+        assert!(body.contains("fullchain.pem"));
+        assert!(body.contains("privkey.pem"));
     }
 
     #[test]
@@ -399,7 +435,9 @@ mod tests {
         );
         assert!(body.contains("listen 443 ssl"));
         assert!(body.contains("ssl_certificate "));
-        assert!(body.contains("return 301 https://$host$request_uri"));
+        assert!(body.contains("listen 80;"));
+        assert!(body.contains("proxy_pass http://127.0.0.1:2087"));
+        assert!(!body.contains("return 301"));
     }
 
     #[test]
@@ -412,7 +450,7 @@ mod tests {
 
     #[test]
     fn never_builds_https_on_listen_port_in_snippets() {
-        let ols = ols_panel_proxy_vhconf(2087, "/tmp/acme");
+        let ols = ols_panel_proxy_vhconf(2087, "/tmp/acme", None);
         let nginx = nginx_panel_proxy_conf("a.example.com", 2087, "/tmp/acme", None);
         let caddy = caddy_panel_proxy_snippet("a.example.com", 2087);
         for body in [ols, nginx, caddy] {

@@ -12,8 +12,7 @@ use crate::panel_https_front_config::{
     nginx_panel_proxy_conf, ols_panel_proxy_vhconf,
 };
 use crate::panel_network::{load_panel_hostname, save_panel_hostname, validate_panel_hostname};
-use crate::panel_ops_certbot_install::ensure_certbot_on_path;
-use crate::panel_ops_ssl_le::{certbot_available, run_certbot};
+use crate::panel_https_acme::issue_panel_le_certificate;
 use crate::panel_public_url::save_panel_public_url;
 use crate::website_preview::ssl_material_present;
 use std::fs;
@@ -35,6 +34,8 @@ pub struct PanelHttpsReport {
     pub engine: Option<PanelHttpsEngine>,
     pub proxy_configured: bool,
     pub certificate_present: bool,
+    /// DNS pointed here but Let's Encrypt did not complete (proxy may still work on HTTP).
+    pub le_issue_failed: bool,
     pub public_url: Option<String>,
     pub notes: Vec<String>,
 }
@@ -143,7 +144,17 @@ fn configure_ols(
     let vh_dir = PathBuf::from(format!("/usr/local/lsws/conf/vhosts/{OLS_VH_NAME}"));
     fs::create_dir_all(&vh_dir).map_err(|e| format!("OLS vhost dir: {e}"))?;
     let vhconf = vh_dir.join("vhconf.conf");
-    let body = ols_panel_proxy_vhconf(listen_port, ACME_WEBROOT);
+    let (fullchain_path, privkey_path) = panel_cert_paths(hostname);
+    let tls = if fullchain_path.is_file() && privkey_path.is_file() {
+        Some((
+            fullchain_path.display().to_string(),
+            privkey_path.display().to_string(),
+        ))
+    } else {
+        None
+    };
+    let tls_refs = tls.as_ref().map(|(c, k)| (c.as_str(), k.as_str()));
+    let body = ols_panel_proxy_vhconf(listen_port, ACME_WEBROOT, tls_refs);
     let mut changed = write_file(&vhconf, &body)?;
 
     let mut conf =
@@ -162,7 +173,7 @@ fn configure_ols(
         }
     }
 
-    let (fullchain, privkey) = panel_cert_paths(hostname);
+    let (fullchain, privkey) = (fullchain_path.clone(), privkey_path.clone());
     if fullchain.is_file() && privkey.is_file() {
         let next = ensure_ols_https_listener(
             &conf,
@@ -266,47 +277,6 @@ fn configure_caddy(
     Ok(true)
 }
 
-fn issue_panel_certificate(hostname: &str, notes: &mut Vec<String>) -> Result<bool, String> {
-    if ssl_material_present(hostname) {
-        notes.push("Certificate material already present for panel hostname".into());
-        return Ok(true);
-    }
-    if let Err(err) = ensure_certbot_on_path() {
-        notes.push(format!("certbot install skipped: {err}"));
-        return Ok(false);
-    }
-    if !certbot_available() {
-        notes.push("certbot not available; configure DNS and retry Enable HTTPS".into());
-        return Ok(false);
-    }
-    ensure_acme_webroot()?;
-    let args = [
-        "certonly",
-        "--non-interactive",
-        "--agree-tos",
-        "--register-unsafely-without-email",
-        "--webroot",
-        "-w",
-        ACME_WEBROOT,
-        "-d",
-        hostname,
-    ];
-    match run_certbot(&args) {
-        Ok(_) => {
-            notes.push(format!(
-                "Let's Encrypt certificate issued for {hostname} (HTTP-01 webroot)"
-            ));
-            Ok(true)
-        }
-        Err(err) => {
-            notes.push(format!(
-                "Let's Encrypt issue deferred: {err}. Point DNS A/AAAA for {hostname} at this server, open TCP 80, then run: cpn network enable-https"
-            ));
-            Ok(false)
-        }
-    }
-}
-
 fn persist_public_https_url(hostname: &str, has_cert: bool, notes: &mut Vec<String>) {
     let url = if has_cert {
         format!("https://{hostname}")
@@ -375,6 +345,7 @@ pub fn enable_panel_https_with(
     }
 
     let mut certificate_present = ssl_material_present(&hostname);
+    let mut le_issue_failed = false;
     if issue_certificate && !certificate_present {
         if matches!(engine, Some(PanelHttpsEngine::Caddy)) {
             notes.push(
@@ -382,8 +353,17 @@ pub fn enable_panel_https_with(
             );
             certificate_present = true;
         } else if proxy_configured {
-            let _ = issue_panel_certificate(&hostname, &mut notes)?;
-            certificate_present = ssl_material_present(&hostname);
+            match issue_panel_le_certificate(&hostname, &mut notes, true) {
+                Ok(true) => {
+                    certificate_present = ssl_material_present(&hostname);
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    le_issue_failed = true;
+                    notes.push(err);
+                    notes.push("HTTP panel URL still works; retry: cpn network enable-https".into());
+                }
+            }
             if certificate_present {
                 match engine {
                     Some(PanelHttpsEngine::Openlitespeed) => {
@@ -394,6 +374,10 @@ pub fn enable_panel_https_with(
                     }
                     _ => {}
                 }
+                notes.push(
+                    "HTTPS listener on 443 is active; HTTP on port 80 remains available for the same hostname"
+                        .into(),
+                );
             }
         }
     }
@@ -414,12 +398,13 @@ pub fn enable_panel_https_with(
         engine,
         proxy_configured,
         certificate_present,
+        le_issue_failed,
         public_url,
         notes,
     })
 }
 
-/// Best-effort hook for install finish / set-hostname.
+/// Install / web-finish hook: configure proxy and force Let's Encrypt when DNS is ready.
 pub fn enable_panel_https_best_effort(hostname: &str, listen_port: u16) -> PanelHttpsReport {
     match enable_panel_https_with(Some(hostname), Some(listen_port), true, false) {
         Ok(report) => report,
@@ -429,8 +414,9 @@ pub fn enable_panel_https_best_effort(hostname: &str, listen_port: u16) -> Panel
             engine: detect_panel_https_engine(),
             proxy_configured: false,
             certificate_present: false,
+            le_issue_failed: false,
             public_url: None,
-            notes: vec![format!("Panel HTTPS setup skipped: {err}")],
+            notes: vec![format!("Panel HTTPS setup failed before proxy: {err}")],
         },
     }
 }

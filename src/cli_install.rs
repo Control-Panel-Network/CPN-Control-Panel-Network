@@ -465,7 +465,7 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
             eprintln!("warning: could not save panel hostname: {error}");
         } else {
             println!("Saved panel hostname: {hostname}");
-            println!("HTTPS reverse proxy + Let's Encrypt will run after the web stack installs.");
+            println!("After install: reverse proxy on :80/:443 and Let's Encrypt when DNS points here.");
         }
     } else {
         println!("No hostname: panel stays HTTP on the listen port until you set one later.");
@@ -632,6 +632,11 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
         println!("{}", report.summary_line());
         for note in &report.notes {
             println!("  {note}");
+        }
+        if report.le_issue_failed {
+            eprintln!(
+                "warning: Let's Encrypt did not finish; HTTP proxy is active. Retry: cpn network enable-https"
+            );
         }
     } else {
         println!(
