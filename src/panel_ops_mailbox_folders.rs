@@ -445,10 +445,7 @@ namespace {
     inbox = yes
 }
 "#;
-        assert_eq!(
-            parse_inbox_namespace_prefix(raw).as_deref(),
-            Some("INBOX.")
-        );
+        assert_eq!(parse_inbox_namespace_prefix(raw).as_deref(), Some("INBOX."));
     }
 
     #[test]
