@@ -13,9 +13,6 @@ const OPENDKIM_DIR: &str = "/etc/opendkim";
 const KEY_TABLE: &str = "/etc/opendkim/KeyTable";
 const SIGNING_TABLE: &str = "/etc/opendkim/SigningTable";
 const TRUSTED_HOSTS: &str = "/etc/opendkim/TrustedHosts";
-const OPENDKIM_CONF: &str = "/etc/opendkim.conf";
-/// OpenDKIM `Socket` (libmilter form `inet:port@host`).
-const OPENDKIM_LISTEN: &str = "inet:8891@localhost";
 /// Postfix milter target (`inet:host:port`).
 const POSTFIX_MILTER: &str = crate::panel_ops_mail_milters::OPENDKIM_POSTFIX_MILTER;
 const CPN_BEGIN: &str = "# BEGIN CPN-managed OpenDKIM entries";
@@ -178,91 +175,6 @@ fn ensure_baseline_trusted_hosts(existing: &str) -> String {
     out
 }
 
-fn ensure_opendkim_conf() -> Result<bool, String> {
-    let path = Path::new(OPENDKIM_CONF);
-    let mut raw = if path.exists() {
-        fs::read_to_string(path).map_err(|e| format!("Cannot read {OPENDKIM_CONF}: {e}"))?
-    } else {
-        String::new()
-    };
-    let mut changed = false;
-    // AuthservID defaults to hostname; AlwaysAddARHeader so Tachyon never sees silent "none"
-    // when OpenDKIM ran verify (including unsigned mail).
-    let authserv = postconf_myhostname().unwrap_or_else(|| "localhost".into());
-    let required = [
-        ("Mode", "sv".to_string()),
-        ("Syslog", "yes".to_string()),
-        ("SyslogSuccess", "yes".to_string()),
-        ("LogWhy", "yes".to_string()),
-        ("UserID", "opendkim:opendkim".to_string()),
-        ("Socket", OPENDKIM_LISTEN.to_string()),
-        ("Umask", "002".to_string()),
-        ("Canonicalization", "relaxed/relaxed".to_string()),
-        ("OversignHeaders", "From".to_string()),
-        ("AlwaysAddARHeader", "yes".to_string()),
-        ("AuthservID", authserv),
-        ("KeyTable", format!("refile:{KEY_TABLE}")),
-        ("SigningTable", format!("refile:{SIGNING_TABLE}")),
-        ("ExternalIgnoreList", format!("refile:{TRUSTED_HOSTS}")),
-        ("InternalHosts", format!("refile:{TRUSTED_HOSTS}")),
-    ];
-    for (key, value) in &required {
-        let prefix = format!("{key}\t");
-        let prefix_sp = format!("{key} ");
-        let line = format!("{key}\t{value}");
-        if let Some(idx) = raw.lines().position(|l| {
-            let t = l.trim_start();
-            !t.starts_with('#') && (t.starts_with(&prefix) || t.starts_with(&prefix_sp))
-        }) {
-            let current = raw.lines().nth(idx).unwrap_or("").trim();
-            let want = line.as_str();
-            if current != want && !current.contains(value.as_str()) {
-                let mut rebuilt = String::new();
-                for (i, l) in raw.lines().enumerate() {
-                    if i == idx {
-                        rebuilt.push_str(&line);
-                    } else {
-                        rebuilt.push_str(l);
-                    }
-                    rebuilt.push('\n');
-                }
-                raw = rebuilt;
-                changed = true;
-            }
-        } else {
-            if !raw.is_empty() && !raw.ends_with('\n') {
-                raw.push('\n');
-            }
-            raw.push_str(&line);
-            raw.push('\n');
-            changed = true;
-        }
-    }
-    // Drop conflicting single-domain KeyFile when KeyTable is in use.
-    if raw.lines().any(|l| {
-        let t = l.trim_start();
-        !t.starts_with('#') && t.starts_with("KeyFile")
-    }) {
-        let mut rebuilt = String::new();
-        for l in raw.lines() {
-            let t = l.trim_start();
-            if !t.starts_with('#') && t.starts_with("KeyFile") {
-                rebuilt.push_str("# ");
-                rebuilt.push_str(l);
-                changed = true;
-            } else {
-                rebuilt.push_str(l);
-            }
-            rebuilt.push('\n');
-        }
-        raw = rebuilt;
-    }
-    if changed {
-        write_if_changed(OPENDKIM_CONF, &raw)?;
-    }
-    Ok(changed)
-}
-
 fn chown_opendkim_keys(entries: &[OpendkimDomainEntry]) {
     #[cfg(unix)]
     {
@@ -375,23 +287,6 @@ pub fn sync_opendkim_tables(entries: &[OpendkimDomainEntry]) -> Result<String, S
     Ok(notes.join("; "))
 }
 
-fn postconf_myhostname() -> Option<String> {
-    let out = Command::new("postconf")
-        .args(["-h", "myhostname"])
-        .stdin(Stdio::null())
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let host = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if host.is_empty() {
-        None
-    } else {
-        Some(host)
-    }
-}
-
 fn rspamd_milter_listening() -> bool {
     Path::new("/etc/rspamd").is_dir()
         && (systemd_unit_file_exists("rspamd")
@@ -486,7 +381,7 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
     let mut steps = Vec::new();
     steps.push(install_opendkim_package()?);
     ensure_opendkim_dirs()?;
-    if ensure_opendkim_conf()? {
+    if crate::panel_ops_opendkim_conf::ensure_opendkim_conf()? {
         steps.push("opendkim.conf updated".into());
     }
     // Touch table files so refile: paths exist before first sync.

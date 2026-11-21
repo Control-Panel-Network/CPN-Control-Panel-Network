@@ -1,4 +1,4 @@
-//! Shared library for cpn-installer and the cpn operator CLI.
+﻿//! Shared library for cpn-installer and the cpn operator CLI.
 
 pub mod account;
 pub mod account_lifecycle;
@@ -378,7 +378,9 @@ pub mod panel_ops_mailbox_provision;
 pub mod panel_ops_malware_nt;
 pub mod panel_ops_malware_scan;
 pub mod panel_ops_mariadb_local;
+pub mod panel_ops_mail_milters;
 pub mod panel_ops_opendkim;
+pub mod panel_ops_opendkim_conf;
 pub mod panel_ops_path;
 pub mod panel_ops_php;
 pub mod panel_ops_php_ext;
