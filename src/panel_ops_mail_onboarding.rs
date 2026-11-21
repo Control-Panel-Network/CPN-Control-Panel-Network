@@ -82,8 +82,12 @@ pub fn save_mail_onboarding(mut cfg: MailOnboarding) -> Result<(), String> {
     Ok(())
 }
 
-/// Placeholder when no hosted mailbox domain exists yet (never an operator apex).
+/// Placeholder when no hosted mailbox domain, site, or panel hostname exists yet.
 pub const MAIL_CLIENT_PLACEHOLDER_DOMAIN: &str = "your-domain.example";
+
+const PANEL_HOST_PREFIXES: &[&str] = &[
+    "panel.", "cpn.", "mail.", "webmail.", "smtp.", "imap.", "mx.",
+];
 
 fn host_matches_mailbox_domain(host: &str, domain: &str) -> bool {
     let host = host.trim().to_ascii_lowercase();
@@ -92,6 +96,93 @@ fn host_matches_mailbox_domain(host: &str, domain: &str) -> bool {
         return false;
     }
     host == domain || host.ends_with(&format!(".{domain}"))
+}
+
+fn valid_display_domain(domain: &str) -> bool {
+    let domain = domain.trim().to_ascii_lowercase();
+    !domain.is_empty()
+        && domain != MAIL_CLIENT_PLACEHOLDER_DOMAIN
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !domain.contains("..")
+        && domain.len() <= 253
+        && domain
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+}
+
+/// Strip common panel/mail service labels (`panel.`, `mail.`, …) to the site apex.
+pub fn apex_from_panel_hostname(hostname: &str) -> Option<String> {
+    let host = hostname.trim().to_ascii_lowercase();
+    if !valid_display_domain(&host) {
+        return None;
+    }
+    for prefix in PANEL_HOST_PREFIXES {
+        if let Some(rest) = host.strip_prefix(prefix)
+            && valid_display_domain(rest)
+        {
+            return Some(rest.to_string());
+        }
+    }
+    Some(host)
+}
+
+fn push_unique_domain(out: &mut Vec<String>, domain: &str) {
+    let domain = domain.trim().to_ascii_lowercase();
+    if !valid_display_domain(&domain) {
+        return;
+    }
+    if !out.iter().any(|d| d == &domain) {
+        out.push(domain);
+    }
+}
+
+/// Domains inferred from panel hostname, website inventory, and mail onboarding.
+pub fn mail_client_fallback_domains() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    if let Ok(sites) = crate::sites::list_sites() {
+        for site in sites {
+            if site.enabled {
+                push_unique_domain(&mut out, &site.domain);
+            }
+        }
+    }
+    if let Some(panel_host) = crate::panel_network::load_panel_hostname() {
+        if let Some(apex) = apex_from_panel_hostname(&panel_host) {
+            push_unique_domain(&mut out, &apex);
+        }
+        push_unique_domain(&mut out, &panel_host);
+    }
+    let cfg = load_mail_onboarding();
+    push_unique_domain(&mut out, &cfg.hostname);
+    out
+}
+
+/// Prefer mailbox domains; otherwise site/panel/onboarding defaults (never invent secrets).
+pub fn mail_client_display_domains(mailbox_addresses: &[String]) -> Vec<String> {
+    let from_mailboxes =
+        mail_client_domains_from_addresses(mailbox_addresses.iter().map(String::as_str));
+    if !from_mailboxes.is_empty() {
+        return from_mailboxes;
+    }
+    mail_client_fallback_domains()
+}
+
+/// Seed local mail onboarding hostname once from panel/site inventory (Host email install).
+pub fn seed_mail_onboarding_hostname_if_empty() -> Result<bool, String> {
+    let mut cfg = load_mail_onboarding();
+    if !cfg.hostname.trim().is_empty() {
+        return Ok(false);
+    }
+    let domains = mail_client_fallback_domains();
+    let Some(host) = domains.into_iter().next() else {
+        return Ok(false);
+    };
+    cfg.hostname = host;
+    cfg.mail_mode = MailMode::Local;
+    save_mail_onboarding(cfg)?;
+    Ok(true)
 }
 
 pub fn mail_client_server_host(domain: &str) -> String {
@@ -132,13 +223,7 @@ where
         let Some(domain) = addr.split('@').nth(1) else {
             continue;
         };
-        let domain = domain.trim().to_ascii_lowercase();
-        if domain.is_empty() {
-            continue;
-        }
-        if !out.iter().any(|d| d == &domain) {
-            out.push(domain);
-        }
+        push_unique_domain(&mut out, domain);
     }
     out
 }
@@ -147,6 +232,7 @@ where
 mod tests {
     use super::*;
     use crate::account::with_test_data_dir;
+    use crate::panel_network::{clear_panel_hostname, save_panel_hostname};
 
     #[test]
     fn mail_client_host_ignores_unrelated_onboarding_hostname() {
@@ -166,6 +252,51 @@ mod tests {
         let list =
             mail_client_domains_from_addresses(["a@example.com", "b@example.com", "c@other.test"]);
         assert_eq!(list, vec!["example.com", "other.test"]);
+    }
+
+    #[test]
+    fn apex_strips_panel_prefix() {
+        assert_eq!(
+            apex_from_panel_hostname("panel.threebrickstudio.com").as_deref(),
+            Some("threebrickstudio.com")
+        );
+        assert_eq!(
+            apex_from_panel_hostname("mail.example.com").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            apex_from_panel_hostname("shop.example.com").as_deref(),
+            Some("shop.example.com")
+        );
+    }
+
+    #[test]
+    fn display_domains_prefer_mailboxes_then_panel_apex() {
+        with_test_data_dir(|| {
+            clear_panel_hostname().unwrap();
+            save_panel_hostname("panel.example.com").unwrap();
+            let from_mail =
+                mail_client_display_domains(&["info@site.test".into(), "ops@site.test".into()]);
+            assert_eq!(from_mail, vec!["site.test".to_string()]);
+            let fallback = mail_client_display_domains(&[]);
+            assert!(
+                fallback.iter().any(|d| d == "example.com"),
+                "expected panel apex in {fallback:?}"
+            );
+            clear_panel_hostname().unwrap();
+        });
+    }
+
+    #[test]
+    fn seed_onboarding_fills_empty_hostname_once() {
+        with_test_data_dir(|| {
+            clear_panel_hostname().unwrap();
+            save_panel_hostname("panel.example.com").unwrap();
+            assert!(seed_mail_onboarding_hostname_if_empty().unwrap());
+            assert_eq!(load_mail_onboarding().hostname, "example.com");
+            assert!(!seed_mail_onboarding_hostname_if_empty().unwrap());
+            clear_panel_hostname().unwrap();
+        });
     }
 
     #[test]

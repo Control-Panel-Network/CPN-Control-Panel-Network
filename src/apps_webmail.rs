@@ -354,6 +354,8 @@ pub fn install_webmail_app(id: AppId) -> Result<String, String> {
             let mut cfg = load_webmail_config();
             cfg.public_path = public_path_for(mail).to_string();
             let _ = save_webmail_config(&cfg);
+            let _ = crate::panel_ops_mail_onboarding::seed_mail_onboarding_hostname_if_empty();
+            crate::panel_feature_gate::invalidate_feature_cache();
             Ok(format!(
                 "Installed {} under /opt/cpn-webmail and set it as the active panel webmail ({}).{}",
                 id.label(),

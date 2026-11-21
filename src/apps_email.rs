@@ -66,6 +66,8 @@ pub fn start_email_stack() -> Result<String, String> {
         install_packages_dnf_or_apt(DNF_MAIL_PKGS, APT_MAIL_PKGS)?;
     }
     apply_local_mail_configuration()?;
+    // Prefer real panel/site domains in Mail Client Configuration over your-domain.example.
+    let _ = crate::panel_ops_mail_onboarding::seed_mail_onboarding_hostname_if_empty();
     let _ = crate::install_mail_sieve::ensure_dovecot_sieve_sync();
     let _ = crate::panel_ops_mailbox_folders::ensure_dovecot_system_mailboxes_conf();
     crate::install_selinux_mail::ensure_httpd_mail_ports();
