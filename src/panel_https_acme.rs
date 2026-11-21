@@ -1,8 +1,8 @@
 //! DNS and ACME readiness checks for panel hostname Let's Encrypt (HTTP-01).
 
+use crate::panel_https_front_config::ACME_WEBROOT;
 use crate::panel_ops_certbot_install::ensure_certbot_on_path;
 use crate::panel_ops_ssl_le::{certbot_available, run_certbot};
-use crate::panel_https_front_config::ACME_WEBROOT;
 use crate::website_preview::ssl_material_present;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpStream, ToSocketAddrs};
@@ -148,7 +148,8 @@ pub fn issue_panel_le_certificate(
     if !certbot_available() {
         if force_when_dns_ready {
             return Err(
-                "certbot is not available. Install certbot, then run: cpn network enable-https".into(),
+                "certbot is not available. Install certbot, then run: cpn network enable-https"
+                    .into(),
             );
         }
         notes.push("certbot not available; configure DNS and run cpn network enable-https".into());

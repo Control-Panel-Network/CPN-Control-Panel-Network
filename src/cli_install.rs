@@ -465,7 +465,9 @@ pub async fn run_interactive_cli(_args: &[String]) -> i32 {
             eprintln!("warning: could not save panel hostname: {error}");
         } else {
             println!("Saved panel hostname: {hostname}");
-            println!("After install: reverse proxy on :80/:443 and Let's Encrypt when DNS points here.");
+            println!(
+                "After install: reverse proxy on :80/:443 and Let's Encrypt when DNS points here."
+            );
         }
     } else {
         println!("No hostname: panel stays HTTP on the listen port until you set one later.");

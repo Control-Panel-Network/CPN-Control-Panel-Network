@@ -6,13 +6,13 @@
 
 use crate::listen_port::{DEFAULT_PORT, load_preferred_listen_port};
 use crate::litespeed_stack::{any_litespeed_installed, restart_litespeed};
+use crate::panel_https_acme::issue_panel_le_certificate;
 use crate::panel_https_front_config::{
     ACME_WEBROOT, CADDY_SNIPPET, HTTPD_CONF, NGINX_CONF, OLS_VH_NAME, caddy_panel_proxy_snippet,
     ensure_ols_https_listener, ensure_ols_panel_virtual_host, insert_map_before_catchall,
     nginx_panel_proxy_conf, ols_panel_proxy_vhconf,
 };
 use crate::panel_network::{load_panel_hostname, save_panel_hostname, validate_panel_hostname};
-use crate::panel_https_acme::issue_panel_le_certificate;
 use crate::panel_public_url::save_panel_public_url;
 use crate::website_preview::ssl_material_present;
 use std::fs;
@@ -361,7 +361,8 @@ pub fn enable_panel_https_with(
                 Err(err) => {
                     le_issue_failed = true;
                     notes.push(err);
-                    notes.push("HTTP panel URL still works; retry: cpn network enable-https".into());
+                    notes
+                        .push("HTTP panel URL still works; retry: cpn network enable-https".into());
                 }
             }
             if certificate_present {
