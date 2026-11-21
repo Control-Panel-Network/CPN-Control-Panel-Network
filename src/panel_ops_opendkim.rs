@@ -17,7 +17,7 @@ const OPENDKIM_CONF: &str = "/etc/opendkim.conf";
 /// OpenDKIM `Socket` (libmilter form `inet:port@host`).
 const OPENDKIM_LISTEN: &str = "inet:8891@localhost";
 /// Postfix milter target (`inet:host:port`).
-const POSTFIX_MILTER: &str = "inet:127.0.0.1:8891";
+const POSTFIX_MILTER: &str = crate::panel_ops_mail_milters::OPENDKIM_POSTFIX_MILTER;
 const CPN_BEGIN: &str = "# BEGIN CPN-managed OpenDKIM entries";
 const CPN_END: &str = "# END CPN-managed OpenDKIM entries";
 
@@ -186,21 +186,27 @@ fn ensure_opendkim_conf() -> Result<bool, String> {
         String::new()
     };
     let mut changed = false;
+    // AuthservID defaults to hostname; AlwaysAddARHeader so Tachyon never sees silent "none"
+    // when OpenDKIM ran verify (including unsigned mail).
+    let authserv = postconf_myhostname().unwrap_or_else(|| "localhost".into());
     let required = [
-        ("Mode", "sv"),
-        ("Syslog", "yes"),
-        ("SyslogSuccess", "yes"),
-        ("UserID", "opendkim:opendkim"),
-        ("Socket", OPENDKIM_LISTEN),
-        ("Umask", "002"),
-        ("Canonicalization", "relaxed/relaxed"),
-        ("OversignHeaders", "From"),
-        ("KeyTable", &format!("refile:{KEY_TABLE}")),
-        ("SigningTable", &format!("refile:{SIGNING_TABLE}")),
-        ("ExternalIgnoreList", &format!("refile:{TRUSTED_HOSTS}")),
-        ("InternalHosts", &format!("refile:{TRUSTED_HOSTS}")),
+        ("Mode", "sv".to_string()),
+        ("Syslog", "yes".to_string()),
+        ("SyslogSuccess", "yes".to_string()),
+        ("LogWhy", "yes".to_string()),
+        ("UserID", "opendkim:opendkim".to_string()),
+        ("Socket", OPENDKIM_LISTEN.to_string()),
+        ("Umask", "002".to_string()),
+        ("Canonicalization", "relaxed/relaxed".to_string()),
+        ("OversignHeaders", "From".to_string()),
+        ("AlwaysAddARHeader", "yes".to_string()),
+        ("AuthservID", authserv),
+        ("KeyTable", format!("refile:{KEY_TABLE}")),
+        ("SigningTable", format!("refile:{SIGNING_TABLE}")),
+        ("ExternalIgnoreList", format!("refile:{TRUSTED_HOSTS}")),
+        ("InternalHosts", format!("refile:{TRUSTED_HOSTS}")),
     ];
-    for (key, value) in required {
+    for (key, value) in &required {
         let prefix = format!("{key}\t");
         let prefix_sp = format!("{key} ");
         let line = format!("{key}\t{value}");
@@ -210,7 +216,7 @@ fn ensure_opendkim_conf() -> Result<bool, String> {
         }) {
             let current = raw.lines().nth(idx).unwrap_or("").trim();
             let want = line.as_str();
-            if current != want && !current.contains(value) {
+            if current != want && !current.contains(value.as_str()) {
                 let mut rebuilt = String::new();
                 for (i, l) in raw.lines().enumerate() {
                     if i == idx {
@@ -369,11 +375,45 @@ pub fn sync_opendkim_tables(entries: &[OpendkimDomainEntry]) -> Result<String, S
     Ok(notes.join("; "))
 }
 
+fn postconf_myhostname() -> Option<String> {
+    let out = Command::new("postconf")
+        .args(["-h", "myhostname"])
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let host = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if host.is_empty() {
+        None
+    } else {
+        Some(host)
+    }
+}
+
+fn rspamd_milter_listening() -> bool {
+    Path::new("/etc/rspamd").is_dir()
+        && (systemd_unit_file_exists("rspamd")
+            && Command::new("systemctl")
+                .args(["is-active", "--quiet", "rspamd"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false))
+}
+
 pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
+    let smtpd = crate::panel_ops_mail_milters::compose_smtpd_milters(
+        POSTFIX_MILTER,
+        rspamd_milter_listening(),
+    );
     let status = Command::new("postconf")
         .args([
             "-e",
-            &format!("smtpd_milters={POSTFIX_MILTER}"),
+            &format!("smtpd_milters={smtpd}"),
             &format!("non_smtpd_milters={POSTFIX_MILTER}"),
             "milter_default_action=accept",
             "milter_protocol=6",
@@ -392,7 +432,7 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    Ok(format!("Postfix milters -> {POSTFIX_MILTER}"))
+    Ok(format!("Postfix milters -> smtpd={smtpd}; non_smtpd={POSTFIX_MILTER}"))
 }
 
 /// EPEL OpenDKIM needs `libmemcached.so.11` from CRB/PowerTools on EL9/10.
@@ -468,6 +508,10 @@ pub fn ensure_opendkim_stack() -> Result<String, String> {
     }
     enable_now(&["opendkim"])?;
     steps.push("opendkim enabled".into());
+    // Soft-heal rspamd so Auth-Results (SPF/DMARC) stay available for Tachyon.
+    if let Ok(msg) = crate::panel_ops_email_antispam::heal_rspamd_for_auth_results() {
+        steps.push(msg);
+    }
     steps.push(ensure_postfix_opendkim_milters()?);
     Ok(format!(
         "OpenDKIM ready ({} CPN domain key(s)): {}",

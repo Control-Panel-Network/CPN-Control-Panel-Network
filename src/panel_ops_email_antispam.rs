@@ -124,8 +124,122 @@ pub fn enable_rspamd() -> Result<String, String> {
     if !st.installed {
         install_packages_dnf_or_apt(&["rspamd"], &["rspamd"])?;
     }
+    let heal = heal_rspamd_for_auth_results().unwrap_or_default();
     enable_now(&["rspamd"])?;
-    Ok("Rspamd enable requested.".into())
+    // Re-wire Postfix milters so smtpd includes rspamd after start.
+    let milters = crate::panel_ops_opendkim::ensure_postfix_opendkim_milters()
+        .unwrap_or_else(|e| format!("milter wire skipped: {e}"));
+    Ok(format!("Rspamd enable requested. {heal} {milters}"))
+}
+
+/// Ensure rspamd can finish milter EOM and emit Authentication-Results (Tachyon Auth UI).
+/// Does not print Redis secrets. Safe to call on heal/enable.
+pub fn heal_rspamd_for_auth_results() -> Result<String, String> {
+    use std::fs;
+    use std::path::Path;
+    let local = Path::new("/etc/rspamd/local.d");
+    if !local.is_dir() {
+        return Ok("rspamd local.d missing (package not fully installed)".into());
+    }
+    let mut notes: Vec<String> = Vec::new();
+
+    // Authentication-Results for webmail; do not stall on local/auth skips.
+    let milter_headers = local.join("milter_headers.conf");
+    let want_headers = concat!(
+        "# CPN: emit Auth-Results for Tachyon/SnappyMail\n",
+        "use = [\"authentication-results\", \"x-spamd-result\", \"x-rspamd-action\"];\n",
+        "skip_local = false;\n",
+        "skip_authenticated = false;\n"
+    );
+    if fs::read_to_string(&milter_headers).unwrap_or_default() != want_headers {
+        fs::write(&milter_headers, want_headers)
+            .map_err(|e| format!("write milter_headers.conf: {e}"))?;
+        notes.push("milter_headers".into());
+    }
+
+    // Avoid milter timeout when clamav module is enabled but clamd is down.
+    let antivirus = local.join("antivirus.conf");
+    let clam_up = std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], 3310)),
+        std::time::Duration::from_millis(200),
+    )
+    .is_ok();
+    if !clam_up {
+        let disabled = "# CPN: clamd not on 127.0.0.1:3310; enabled scanners stall milter Auth-Results\nenabled = false;\n";
+        if fs::read_to_string(&antivirus).unwrap_or_default() != disabled {
+            fs::write(&antivirus, disabled).map_err(|e| format!("write antivirus.conf: {e}"))?;
+            notes.push("antivirus disabled (clamd down)".into());
+        }
+    }
+
+    // Wire Redis password from redis.conf without logging the secret.
+    if let Some(pw) = read_redis_requirepass() {
+        let redis_conf = local.join("redis.conf");
+        let body = format!(
+            "write_servers = \"127.0.0.1\";\nread_servers = \"127.0.0.1\";\npassword = \"{pw}\";\n"
+        );
+        let prev = fs::read_to_string(&redis_conf).unwrap_or_default();
+        if prev != body {
+            fs::write(&redis_conf, &body).map_err(|e| format!("write redis.conf: {e}"))?;
+            // rspamd drops privileges; config must be group-readable by _rspamd/rspamd.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&redis_conf, fs::Permissions::from_mode(0o640));
+            }
+            for group in ["_rspamd", "rspamd"] {
+                let _ = std::process::Command::new("chown")
+                    .args([&format!("root:{group}")])
+                    .arg(&redis_conf)
+                    .status();
+            }
+            notes.push("redis password synced".into());
+        }
+    }
+
+    let options = local.join("options.inc");
+    let want_opts = "# CPN: allow SPF/DKIM/DMARC symbols to finish before milter EOM\ntask_timeout = 12s;\n";
+    if fs::read_to_string(&options).unwrap_or_default() != want_opts {
+        fs::write(&options, want_opts).map_err(|e| format!("write options.inc: {e}"))?;
+        notes.push("task_timeout".into());
+    }
+
+    if notes.is_empty() {
+        Ok("rspamd auth heal unchanged".into())
+    } else {
+        Ok(format!("rspamd auth heal: {}", notes.join(", ")))
+    }
+}
+
+fn read_redis_requirepass() -> Option<String> {
+    for path in [
+        "/etc/redis/redis.conf",
+        "/etc/redis.conf",
+        "/etc/redis/redis.conf.d/cpn.conf",
+    ] {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        for line in text.lines() {
+            let t = line.trim();
+            if t.starts_with('#') {
+                continue;
+            }
+            let lower = t.to_ascii_lowercase();
+            if !lower.starts_with("requirepass") {
+                continue;
+            }
+            let mut parts = t.splitn(2, char::is_whitespace);
+            let _ = parts.next();
+            if let Some(rest) = parts.next() {
+                let pw = rest.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !pw.is_empty() {
+                    return Some(pw);
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn enable_mailscanner() -> Result<String, String> {
