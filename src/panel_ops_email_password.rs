@@ -1,4 +1,8 @@
-//! Mailbox password reset (panel registry + local system hash via chpasswd).
+//! Mailbox password reset (panel registry + Dovecot auth backends).
+//!
+//! Virtual-mail SQL (`e_users`, BLF-CRYPT, full address) and PAM `chpasswd` (short local part)
+//! are selected by `mail_legacy_sql::virtual_sql_mail_active()`. The registry in
+//! `mail-accounts.json` is always updated; on classic stacks SQL and registry are dual-written.
 //! Webmail admin password sync for SnappyMail-family clients.
 
 use crate::install_snappymail_lineage::{WEBMAIL_ADMIN_CHOICE, webmail_admin_option_label};
@@ -72,13 +76,21 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     }
     let key_lc = key.to_ascii_lowercase();
     let mut file = load_accounts_file();
+    let found = file
+        .accounts
+        .iter()
+        .any(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc));
+    if !found {
+        let _ = crate::mail_accounts_import::ensure_legacy_registry_row(&key_lc);
+        file = load_accounts_file();
+    }
     let Some(account) = file
         .accounts
         .iter_mut()
         .find(|a| a.id.eq_ignore_ascii_case(&key_lc) || a.address.eq_ignore_ascii_case(&key_lc))
     else {
         return Err(format!(
-            "Mailbox `{key_lc}` not found in the panel registry"
+            "Mailbox `{key_lc}` not found in the panel registry or classic mail inventory"
         ));
     };
     let address = account.address.clone();
@@ -90,16 +102,22 @@ pub fn reset_mailbox_password(address_or_id: &str, new_password: &str) -> Result
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mailbox password");
     // SOGo authenticates against the shadow hash mirrored in its SQL user source.
     crate::apps_sogo_config::sync_users_if_installed();
+    let virtual_sql = crate::mail_legacy_sql::virtual_sql_mail_active();
     match provisioned {
-        Ok(_provision) => Ok(format!(
-            "Password updated for `{address}`. Local mailbox ready."
-        )),
+        Ok(detail) => Ok(format!("Password updated for `{address}`. {detail}")),
         Err(err) => {
-            // Registry is authoritative for panel UI; local system provision may be
-            // unavailable in CI or when the panel lacks useradd privileges.
-            Ok(format!(
-                "Password updated for `{address}` in the panel registry. Local provision: {err}."
-            ))
+            if virtual_sql {
+                // Dovecot/IMAP on classic stacks reads SQL only; do not claim success.
+                Err(format!(
+                    "Password saved in the panel registry, but virtual-mail SQL auth was not updated: {err}"
+                ))
+            } else {
+                // Registry is authoritative for panel UI; local system provision may be
+                // unavailable in CI or when the panel lacks useradd privileges.
+                Ok(format!(
+                    "Password updated for `{address}` in the panel registry. Local provision: {err}."
+                ))
+            }
         }
     }
 }

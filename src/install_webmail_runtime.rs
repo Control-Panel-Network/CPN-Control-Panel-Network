@@ -197,7 +197,8 @@ pub(crate) fn configure_snappymail_external_data(docroot: &str) -> Result<(), St
     Ok(())
 }
 
-/// Point default + local host domain at 127.0.0.1 IMAP with shortLogin for PAM users.
+/// Point default + local host domain at 127.0.0.1 IMAP.
+/// `shortLogin` stays on for PAM/system mailboxes and off for classic virtual-mail SQL.
 pub fn ensure_snappymail_local_imap_defaults() -> Result<(), String> {
     for data_dir in crate::install_snappymail_lineage::lineage_data_dirs() {
         let _ = ensure_snappy_lineage_local_imap_defaults(&data_dir);
@@ -219,10 +220,11 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
     let Ok(mut data) = serde_json::from_str::<serde_json::Value>(&raw) else {
         return Ok(());
     };
+    let short_login = crate::mail_legacy_sql::prefer_webmail_short_login();
     for key in ["IMAP", "SMTP"] {
         if let Some(obj) = data.get_mut(key).and_then(|v| v.as_object_mut()) {
             obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
-            obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
+            obj.insert("shortLogin".into(), serde_json::Value::Bool(short_login));
             obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }
     }
@@ -242,7 +244,7 @@ fn ensure_snappy_lineage_local_imap_defaults(data_dir: &str) -> Result<(), Strin
             obj.insert("enabled".into(), serde_json::Value::Bool(true));
             obj.insert("host".into(), serde_json::Value::String("127.0.0.1".into()));
             obj.insert("port".into(), serde_json::json!(4190));
-            obj.insert("shortLogin".into(), serde_json::Value::Bool(true));
+            obj.insert("shortLogin".into(), serde_json::Value::Bool(short_login));
             obj.insert("lowerLogin".into(), serde_json::Value::Bool(true));
             obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }

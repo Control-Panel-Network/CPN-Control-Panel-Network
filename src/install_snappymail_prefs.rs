@@ -102,10 +102,11 @@ fn ensure_domain_sieve_enabled(data_dir: &str) -> Result<(), String> {
                 .or_insert_with(|| Value::Object(Default::default()))
         });
         if let Some(Value::Object(obj)) = sieve {
+            let short_login = crate::mail_legacy_sql::prefer_webmail_short_login();
             obj.insert("enabled".into(), Value::Bool(true));
             obj.insert("host".into(), Value::String("127.0.0.1".into()));
             obj.insert("port".into(), serde_json::json!(4190));
-            obj.insert("shortLogin".into(), Value::Bool(true));
+            obj.insert("shortLogin".into(), Value::Bool(short_login));
             obj.insert("lowerLogin".into(), Value::Bool(true));
             obj.insert("sasl".into(), serde_json::json!(["PLAIN", "LOGIN"]));
         }

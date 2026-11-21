@@ -118,6 +118,20 @@ pub fn apply_panel(
             }
         }
     }
+    // Register virtual mailboxes in CPN Email Accounts and align Tachyon shortLogin
+    // with Dovecot SQL vs PAM (classic cutovers often leave SQL auth live).
+    match crate::mail_accounts_import::import_legacy_mailboxes_into_registry() {
+        Ok(summary) => {
+            if summary.discovered > 0 || summary.imported > 0 || summary.short_login_files > 0 {
+                report
+                    .warnings
+                    .push(crate::mail_accounts_import::format_import_summary(&summary));
+            }
+        }
+        Err(error) => report
+            .warnings
+            .push(format!("Mail registry import: {error}")),
+    }
     for rel_path in spec.wipe_rel {
         let path = rel(root, rel_path);
         if path.exists() {

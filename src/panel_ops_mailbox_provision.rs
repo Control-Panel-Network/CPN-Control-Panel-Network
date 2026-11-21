@@ -92,6 +92,11 @@ pub fn provision_local_mailbox(address: &str, password: &str) -> Result<String, 
     }
     #[cfg(not(windows))]
     {
+        // Classic virtual-mail stacks authenticate in SQL (`e_users`), not PAM on a short
+        // Unix local part. Skip chpasswd/useradd so Change Password cannot fail before SQL.
+        if crate::mail_legacy_sql::virtual_sql_mail_active() {
+            return crate::mail_legacy_sql::sync_password_to_virtual_sql(address, password);
+        }
         if !user_exists(&user) {
             let status = Command::new("useradd")
                 .args(["-m", "-s", "/sbin/nologin", &user])

@@ -409,6 +409,7 @@ pub fn nt_migration_checklist() -> Vec<&'static str> {
         "Run: cpn panel-migrate detect  (CyberPanel maps as id=classic).",
         "Run: cpn panel-migrate plan --id classic && cpn panel-migrate apply --id classic --yes",
         "Verify sites, PHP per-site, SSL, mail, DNS, databases in CPN; re-apply LSWS serial/license.key if Enterprise.",
+        "After apply: confirm Email Accounts lists virtual mailboxes; if Tachyon auth fails, heal email.stack and reset mailbox password in CPN (SQL sync).",
         "Wipe CyberPanel only after verified apply: cpn panel-migrate wipe --id classic --yes",
         "On EL9 with CPN owning the box: Remi php:remi-8.6, matching el9 RPM, SOGo EL9 channel.",
         "Upgrade host EL9 → AlmaLinux 10 only after CPN owns services; install matching el10 RPM; SOGo uses EL9-compat libsodium path (docs/SOGO-HOST-PACKAGE.md).",
