@@ -327,7 +327,9 @@ pub fn ensure_postfix_opendkim_milters() -> Result<String, String> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
-    Ok(format!("Postfix milters -> smtpd={smtpd}; non_smtpd={POSTFIX_MILTER}"))
+    Ok(format!(
+        "Postfix milters -> smtpd={smtpd}; non_smtpd={POSTFIX_MILTER}"
+    ))
 }
 
 /// EPEL OpenDKIM needs `libmemcached.so.11` from CRB/PowerTools on EL9/10.

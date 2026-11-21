@@ -198,7 +198,8 @@ pub fn heal_rspamd_for_auth_results() -> Result<String, String> {
     }
 
     let options = local.join("options.inc");
-    let want_opts = "# CPN: allow SPF/DKIM/DMARC symbols to finish before milter EOM\ntask_timeout = 12s;\n";
+    let want_opts =
+        "# CPN: allow SPF/DKIM/DMARC symbols to finish before milter EOM\ntask_timeout = 12s;\n";
     if fs::read_to_string(&options).unwrap_or_default() != want_opts {
         fs::write(&options, want_opts).map_err(|e| format!("write options.inc: {e}"))?;
         notes.push("task_timeout".into());

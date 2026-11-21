@@ -20,11 +20,7 @@ fn postconf_myhostname() -> Option<String> {
         return None;
     }
     let host = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if host.is_empty() {
-        None
-    } else {
-        Some(host)
-    }
+    if host.is_empty() { None } else { Some(host) }
 }
 
 fn write_if_changed(path: &str, content: &str) -> Result<bool, String> {
