@@ -85,6 +85,7 @@ pub mod install_selinux_mail;
 pub mod install_server;
 pub mod install_snappymail_contacts;
 pub mod install_snappymail_folders;
+pub mod install_snappymail_i18n;
 pub mod install_snappymail_lineage;
 pub mod install_snappymail_migrate;
 pub mod install_snappymail_prefs;

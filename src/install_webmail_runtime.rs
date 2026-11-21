@@ -49,6 +49,7 @@ pub async fn configure_webmail_runtime(
     if is_snappy_lineage_docroot(docroot) {
         configure_snappymail_external_data(docroot)?;
         let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
+        let _ = crate::install_snappymail_i18n::ensure_notification_count_placeholders();
     } else if docroot.contains("roundcube") {
         let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
     }

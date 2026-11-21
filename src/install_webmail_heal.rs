@@ -86,6 +86,7 @@ pub fn heal_webmail_loopback_config() -> Result<(), String> {
         let _ = crate::install_mail_sieve::ensure_dovecot_sieve_sync();
         let _ = crate::install_snappymail_prefs::ensure_snappymail_operator_defaults();
         let _ = crate::install_snappymail_repo::ensure_snappymail_repo_fallback(docroot);
+        let _ = crate::install_snappymail_i18n::ensure_notification_count_placeholders();
         crate::install_selinux_mail::ensure_webmail_selinux();
     } else if docroot.contains("roundcube") {
         let _ = crate::install_webmail_openpgp::ensure_webmail_openpgp_defaults();
