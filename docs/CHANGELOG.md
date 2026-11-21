@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tachyon / SnappyMail system folders on CyberPanel namespaces**: detect Dovecot `prefix = INBOX.`, create/subscribe `INBOX.Sent` / `INBOX.Drafts` / `INBOX.Junk` / `INBOX.Trash` / `INBOX.Archive` via doveadm (including `/home/vmail`), and pre-fill Tachyon `settings_local` with those IMAP full names. Migrates empty or CPN bare defaults (`Sent` to `INBOX.Sent`) via `.cpn-system-folders-v2`; leaves custom mappings (for example `INBOX.Spam`) alone so compose is not stuck on "Select system folders".
 - **Classic virtual-mail SQL password sync**: `mail_legacy_sql` and registry import dual-write now run the MariaDB client with socket auth first, then CPN `mariadb-admin.secret`, classic `mysqlPassword`, optional `root` client defaults, and Dovecot SQL `connect` credentials. Fixes panel `/email/password` on migrated hosts where passwordless `root` was denied.
 
 ## [1.4.11] - 21/11/2026
