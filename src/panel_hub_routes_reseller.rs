@@ -6,8 +6,7 @@ use crate::installer::AppState;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html, decode_notice_code};
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_reseller::users_reseller_page;
 use crate::panel_hub_pages_reseller_tabs::normalize_reseller_tab;

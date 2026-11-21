@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html};
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_subusers::users_subusers_page;
 use crate::panel_site_tools_security::same_origin_ok;

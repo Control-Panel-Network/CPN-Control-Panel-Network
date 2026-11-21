@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_sidebar_acl::sidebar_acl_standalone_page;
 use crate::sidebar_visibility::{remove_grant_at, set_grant_for_member};

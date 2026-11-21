@@ -2,8 +2,8 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, flash_messages, html_ok, html_ok_pop_flash,
-    login_redirect, require_panel_user,
+    authenticated_panel_shell, flash_messages, html_ok, html_ok_pop_flash, login_redirect,
+    require_panel_user,
 };
 use crate::panel_hub_pages_email_deliver::{
     email_debugger_page, email_marketing_page, email_queue_page, mailscanner_page, rspamd_page,

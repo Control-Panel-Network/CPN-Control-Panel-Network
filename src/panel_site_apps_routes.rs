@@ -5,8 +5,8 @@ use crate::apps_site::{apply_site_scope, clear_site_scope};
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    captured_session_exp, html_blocking, login_redirect,
-    panel_shell_blocking, redirect_notice, require_panel_user, urlencoding_simple,
+    captured_session_exp, html_blocking, login_redirect, panel_shell_blocking, redirect_notice,
+    require_panel_user, urlencoding_simple,
 };
 use crate::panel_site_apps_cmsms::{install_cmsms, remove_cmsms_installer};
 use crate::panel_site_apps_joomla::install_joomla;

@@ -3,8 +3,7 @@
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
 use crate::panel_hub_http::{
-    authenticated_panel_shell, html_ok, login_redirect,
-    redirect_notice, require_panel_user,
+    authenticated_panel_shell, html_ok, login_redirect, redirect_notice, require_panel_user,
 };
 use crate::panel_hub_pages_cloudflare::{cloudflare_dns_page, preferred_manage_domain};
 use crate::panel_hub_pages_cloudflare_pager::manage_list_url;

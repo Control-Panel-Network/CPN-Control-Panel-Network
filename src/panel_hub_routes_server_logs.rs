@@ -2,8 +2,7 @@
 
 use crate::installer::AppState;
 use crate::panel_hub_http::{
-    captured_session_exp, html_blocking, login_redirect,
-    panel_shell_blocking, require_panel_user,
+    captured_session_exp, html_blocking, login_redirect, panel_shell_blocking, require_panel_user,
 };
 use crate::panel_hub_pages_server_log_view::host_log_page;
 use crate::panel_hub_pages_server_logs::server_logs_page;
