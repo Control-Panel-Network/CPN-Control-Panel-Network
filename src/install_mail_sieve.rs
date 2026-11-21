@@ -1,7 +1,7 @@
 //! Dovecot ManageSieve / Pigeonhole for SnappyMail filters (port 4190).
 
 use crate::install_journal::{self, JournalAction};
-use crate::install_recipes::{DnfProgress, command, pkg_install};
+use crate::install_recipes::command;
 use crate::installer::{AppState, run_command};
 use crate::os_support::require_installable_guest;
 use std::path::Path;
@@ -20,9 +20,52 @@ fn rpm_installed_any(names: &[&str]) -> bool {
     })
 }
 
+fn sieve_plugin_present() -> bool {
+    Path::new("/usr/lib64/dovecot/lib90_sieve_plugin.so").exists()
+        || Path::new("/usr/lib/dovecot/lib90_sieve_plugin.so").exists()
+        || rpm_installed_any(&[
+            "dovecot-pigeonhole",
+            "dovecot23-pigeonhole",
+            "dovecot24-pigeonhole",
+        ])
+}
+
+/// Try pigeonhole package names one at a time.
+///
+/// A single `dnf install a b c` fails the whole transaction when any name is unknown
+/// (EL9 BaseOS often has only `dovecot-pigeonhole`, not the 23/24 aliases).
+fn install_sieve_packages_best_effort() -> bool {
+    if sieve_plugin_present() {
+        return true;
+    }
+    let script = r#"
+set +e
+if command -v dnf >/dev/null 2>&1; then
+  for p in dovecot-pigeonhole dovecot23-pigeonhole dovecot24-pigeonhole; do
+    if dnf install -y "$p"; then
+      exit 0
+    fi
+  done
+  exit 1
+fi
+if command -v apt-get >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y dovecot-sieve dovecot-managesieve
+  exit $?
+fi
+exit 1
+"#;
+    std::process::Command::new("bash")
+        .args(["-c", script])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+        || sieve_plugin_present()
+}
+
 /// Install pigeonhole packages, enable ManageSieve on 4190, reload Dovecot.
 pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
-    let guest = require_installable_guest()?;
+    let _guest = require_installable_guest()?;
     install_journal::ensure_journal_dirs()?;
     state
         .progress(
@@ -32,34 +75,29 @@ pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
         )
         .await;
 
-    run_command(
-        state,
-        pkg_install(
-            &guest,
-            vec![
-                "dovecot23-pigeonhole",
-                "dovecot-pigeonhole",
-                "dovecot24-pigeonhole",
-            ],
-            vec!["dovecot-sieve", "dovecot-managesieve"],
-            "Installing Dovecot Sieve packages",
-            DnfProgress {
-                download_start: 72,
-                download_end: 74,
-                install_start: 74,
-                install_end: 75,
-                label: "Sieve / ManageSieve",
-            },
-        ),
-    )
-    .await?;
-    install_journal::record(
-        STAGE,
-        JournalAction::InstalledPackage,
-        "dovecot-pigeonhole",
-        None,
-        Some("ManageSieve for SnappyMail filters".into()),
-    )?;
+    let installed = install_sieve_packages_best_effort();
+    if installed {
+        let _ = install_journal::record(
+            STAGE,
+            JournalAction::InstalledPackage,
+            "dovecot-pigeonhole",
+            None,
+            Some("ManageSieve for SnappyMail filters".into()),
+        );
+    } else {
+        let _ = install_journal::record(
+            STAGE,
+            JournalAction::Note,
+            "dovecot-pigeonhole",
+            None,
+            Some(
+                "Sieve packages unavailable on this host; continuing without ManageSieve :4190"
+                    .into(),
+            ),
+        );
+        // IMAP/SMTP mail still works; SnappyMail filters stay unavailable until pigeonhole exists.
+        return Ok(());
+    }
 
     ensure_sieve_dovecot_config()?;
     ensure_sieve_selinux_port();
@@ -108,26 +146,7 @@ pub async fn ensure_dovecot_sieve(state: &AppState) -> Result<(), String> {
 /// Sync-only heal for upgrades / redeploys (no AppState progress UI).
 pub fn ensure_dovecot_sieve_sync() -> Result<(), String> {
     install_journal::ensure_journal_dirs()?;
-    // Best-effort package install when missing.
-    let has_pkg = Path::new("/usr/lib64/dovecot/lib90_sieve_plugin.so").exists()
-        || Path::new("/usr/lib/dovecot/lib90_sieve_plugin.so").exists()
-        || rpm_installed_any(&[
-            "dovecot-pigeonhole",
-            "dovecot23-pigeonhole",
-            "dovecot24-pigeonhole",
-        ]);
-    if !has_pkg {
-        let _ = std::process::Command::new("bash")
-            .args([
-                "-c",
-                "if command -v dnf >/dev/null 2>&1; then \
-                   dnf install -y dovecot-pigeonhole dovecot23-pigeonhole >/dev/null 2>&1 || true; \
-                 elif command -v apt-get >/dev/null 2>&1; then \
-                   apt-get install -y dovecot-sieve dovecot-managesieve >/dev/null 2>&1 || true; \
-                 fi",
-            ])
-            .status();
-    }
+    let _ = install_sieve_packages_best_effort();
     ensure_sieve_dovecot_config()?;
     ensure_sieve_selinux_port();
     crate::install_selinux_mail::ensure_httpd_mail_ports();

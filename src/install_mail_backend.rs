@@ -208,13 +208,13 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
     match crate::panel_ops_opendkim::ensure_opendkim_stack() {
         Ok(_) => {}
         Err(e) => {
-            install_journal::record(
+            let _ = install_journal::record(
                 STAGE,
                 JournalAction::Note,
                 "opendkim",
                 None,
                 Some(format!("deferred: {e}")),
-            )?;
+            );
         }
     }
 
