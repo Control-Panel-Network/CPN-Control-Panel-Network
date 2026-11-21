@@ -160,10 +160,10 @@ pub fn mail_client_fallback_domains() -> Vec<String> {
             }
         }
     }
-    if let Some(panel_host) = crate::panel_network::load_panel_hostname() {
-        if let Some(apex) = apex_from_panel_hostname(&panel_host) {
-            push_unique_domain(&mut out, &apex);
-        }
+    if let Some(panel_host) = crate::panel_network::load_panel_hostname()
+        && let Some(apex) = apex_from_panel_hostname(&panel_host)
+    {
+        push_unique_domain(&mut out, &apex);
     }
     let cfg = load_mail_onboarding();
     if let Some(apex) = apex_from_panel_hostname(&cfg.hostname) {
