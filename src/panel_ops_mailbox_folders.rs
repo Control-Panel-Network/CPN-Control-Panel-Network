@@ -73,15 +73,15 @@ fn ensure_maildir_system_folders(
             fs::create_dir_all(&p).map_err(|e| format!("Cannot create {p}: {e}"))?;
         }
     }
-    if let Some(owner) = chown_user {
-        if valid_local_user(owner) || owner == "vmail" {
-            let _ = Command::new("chown")
-                .args(["-R", &format!("{owner}:{owner}"), maildir])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+    if let Some(owner) = chown_user
+        && (valid_local_user(owner) || owner == "vmail")
+    {
+        let _ = Command::new("chown")
+            .args(["-R", &format!("{owner}:{owner}"), maildir])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
     doveadm_ensure_system_folders(doveadm_user)
 }
@@ -340,15 +340,15 @@ pub(crate) fn parse_inbox_namespace_prefix(raw: &str) -> Option<String> {
         depth += trimmed.matches('{').count() as i32;
         depth -= trimmed.matches('}').count() as i32;
         let lower = trimmed.to_ascii_lowercase();
-        if lower.starts_with("prefix") {
-            if let Some(v) = ini_value(trimmed) {
-                prefix = Some(v);
-            }
+        if lower.starts_with("prefix")
+            && let Some(v) = ini_value(trimmed)
+        {
+            prefix = Some(v);
         }
-        if lower.starts_with("inbox") {
-            if let Some(v) = ini_value(trimmed) {
-                inbox = v.eq_ignore_ascii_case("yes");
-            }
+        if lower.starts_with("inbox")
+            && let Some(v) = ini_value(trimmed)
+        {
+            inbox = v.eq_ignore_ascii_case("yes");
         }
         if depth <= 0 {
             in_namespace = false;
