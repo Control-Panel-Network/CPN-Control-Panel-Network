@@ -2,7 +2,10 @@
 
 use crate::installer::AppState;
 use crate::panel_admin::is_panel_admin;
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, panel_shell_blocking,
+    redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_cloudflare::{cloudflare_dns_page, preferred_manage_domain};
 use crate::panel_hub_pages_cloudflare_pager::manage_list_url;
 use crate::panel_hub_routes_cloudflare_forms::{
@@ -67,7 +70,8 @@ pub async fn cloudflare_dns_get(
         Ok(vec![])
     };
     let listen_port = state.bind_port;
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "server",
         "Cloudflare DNS",

@@ -312,13 +312,7 @@ pub fn panel_dashboard_html(username: &str, session_exp_unix: Option<u64>) -> St
         stack = stack,
         layout_js = crate::panel_dashboard_layout::dashboard_layout_script(),
     );
-    crate::panel_pages::panel_shell_exp(
-        username,
-        "dashboard",
-        "Dashboard",
-        &main,
-        session_exp_unix,
-    )
+    crate::panel_pages::panel_shell_exp(username, "dashboard", "Dashboard", &main, session_exp_unix)
 }
 
 /// Minimal dashboard when the blocking render exceeds the hub time budget (must stay fast:
@@ -388,13 +382,7 @@ pub fn panel_dashboard_html_fast(username: &str, session_exp_unix: Option<u64>) 
         ram_detail = html_escape(&ram_detail),
         disk_detail = html_escape(&disk_detail),
     );
-    crate::panel_pages::panel_shell_exp(
-        username,
-        "dashboard",
-        "Dashboard",
-        &main,
-        session_exp_unix,
-    )
+    crate::panel_pages::panel_shell_exp(username, "dashboard", "Dashboard", &main, session_exp_unix)
 }
 
 #[cfg(test)]

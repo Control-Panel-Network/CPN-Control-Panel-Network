@@ -5,7 +5,10 @@ use crate::account_mgmt::create_account;
 use crate::installer::AppState;
 use crate::packages::is_panel_admin;
 use crate::panel_hub_admin_gate::{ADMIN_ONLY_CODE, admin_only_html, decode_notice_code};
-use crate::panel_hub_http::{ authenticated_panel_shell, captured_session_exp, panel_shell_blocking,html_ok, login_redirect, redirect_notice, require_panel_user};
+use crate::panel_hub_http::{
+    authenticated_panel_shell, captured_session_exp, html_ok, login_redirect, panel_shell_blocking,
+    redirect_notice, require_panel_user,
+};
 use crate::panel_hub_pages_reseller::users_reseller_page;
 use crate::panel_hub_pages_reseller_tabs::normalize_reseller_tab;
 use crate::panel_hub_pages_reseller_users::reseller_users_opts;
@@ -131,7 +134,8 @@ pub async fn users_reseller_route(
         query.get("page").map(|s| s.as_str()),
         query.get("per_page").map(|s| s.as_str()),
     );
-    html_ok(authenticated_panel_shell(&http, 
+    html_ok(authenticated_panel_shell(
+        &http,
         &user,
         "users",
         "Reseller Center",
