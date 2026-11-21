@@ -101,6 +101,11 @@ pub fn start_email_stack() -> Result<String, String> {
     }
     // Open the mail ports on the host firewall when firewalld is present (no-op otherwise).
     let _ = crate::panel_ops_firewall_heal::heal_firewalld("email stack start");
+    // Sign outbound mail: OpenDKIM from /var/lib/cpn/dkim (+ SPF/DKIM/DMARC DNS on site ready).
+    let dkim_note = match crate::panel_ops_opendkim::ensure_opendkim_stack() {
+        Ok(msg) => msg,
+        Err(e) => format!("OpenDKIM deferred: {e}"),
+    };
     // Default first mailbox info@<apex> unless operator installed without a mail domain.
     let info_note =
         crate::panel_ops_mail_default_mailbox::ensure_default_info_mailboxes_for_known_domains()
@@ -111,7 +116,7 @@ pub fn start_email_stack() -> Result<String, String> {
     let smtp587 = port_open("127.0.0.1:587", 250);
     let smtp465 = port_open("127.0.0.1:465", 250);
     Ok(format!(
-        "Started Email stack (Postfix + Dovecot). IMAP :143 ready; submission :587 {}; SMTPS :465 {}. {info_note}",
+        "Started Email stack (Postfix + Dovecot). IMAP :143 ready; submission :587 {}; SMTPS :465 {}. {dkim_note} {info_note}",
         if smtp587 {
             "listening"
         } else {

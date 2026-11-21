@@ -2,9 +2,9 @@
 
 use crate::install_journal::{self, JournalAction};
 use crate::install_mail_listeners::{append_cpn_mail_listeners, ensure_postfix_tls_material};
-use crate::install_recipes::{DnfProgress, command, pkg_install};
-use crate::installer::{AppState, run_command};
-use crate::os_support::{GuestOs, require_installable_guest};
+use crate::install_recipes::{command, pkg_install, DnfProgress};
+use crate::installer::{run_command, AppState};
+use crate::os_support::{require_installable_guest, GuestOs};
 use std::path::Path;
 use std::process::{Command as StdCommand, Stdio};
 use tokio::process::Command;
@@ -203,6 +203,20 @@ pub fn apply_local_mail_configuration() -> Result<(), String> {
 
     // Accept mail for hosted domains and deliver it to the local mailbox users.
     crate::mail_hosted_domains::sync_hosted_mail_delivery_logged("mail configuration");
+
+    // Best-effort OpenDKIM (keys live under /var/lib/cpn/dkim; DNS via provision_mail_dns / site ready).
+    match crate::panel_ops_opendkim::ensure_opendkim_stack() {
+        Ok(_) => {}
+        Err(e) => {
+            install_journal::record(
+                STAGE,
+                JournalAction::Note,
+                "opendkim",
+                None,
+                Some(format!("deferred: {e}")),
+            )?;
+        }
+    }
 
     Ok(())
 }

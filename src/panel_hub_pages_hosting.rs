@@ -271,9 +271,13 @@ pub fn ensure_dkim() -> Result<String, String> {
     if !errors.is_empty() {
         return Err(errors.join("; "));
     }
+    let opendkim_note = match crate::panel_ops_opendkim::ensure_opendkim_stack() {
+        Ok(msg) => msg,
+        Err(e) => format!("OpenDKIM deferred: {e}"),
+    };
     let folder_count = crate::panel_ops_dkim_keys::list_dkim_domain_rows().len();
     Ok(format!(
-        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated.",
+        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated. {opendkim_note}",
         sites.len()
     ))
 }

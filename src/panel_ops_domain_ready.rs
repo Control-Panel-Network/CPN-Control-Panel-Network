@@ -6,11 +6,11 @@ use crate::panel_ops_certbot_install::ensure_certbot_on_path;
 use crate::panel_ops_cloudflare::cloudflare_configured;
 use crate::panel_ops_dkim_keys::ensure_dkim_for_domain;
 use crate::panel_ops_mail_dns::provision_mail_dns;
-use crate::panel_ops_mail_onboarding::{MailMode, load_mail_onboarding};
+use crate::panel_ops_mail_onboarding::{load_mail_onboarding, MailMode};
 use crate::panel_ops_site_dns::ensure_site_cloudflare_dns;
 use crate::panel_ops_ssl_issue::issue_or_renew;
 use crate::panel_ops_ssl_provider::{SslCoverageMode, SslProvider};
-use crate::sites::{SiteModify, load_site, modify_site, normalize_domain};
+use crate::sites::{load_site, modify_site, normalize_domain, SiteModify};
 
 #[derive(Debug, Clone, Default)]
 pub struct DomainReadyReport {
@@ -63,6 +63,10 @@ pub fn after_site_created(domain_raw: &str) -> DomainReadyReport {
             match provision_mail_dns(&domain) {
                 Ok(msg) => report.steps.push(msg),
                 Err(e) => report.warnings.push(format!("Mail DNS: {e}")),
+            }
+            match crate::panel_ops_opendkim::ensure_opendkim_for_domain(&domain) {
+                Ok(msg) => report.steps.push(msg),
+                Err(e) => report.warnings.push(format!("OpenDKIM: {e}")),
             }
             match crate::panel_ops_mail_default_mailbox::ensure_default_info_mailbox(&domain) {
                 Ok(r) => report.steps.push(r.summary()),
