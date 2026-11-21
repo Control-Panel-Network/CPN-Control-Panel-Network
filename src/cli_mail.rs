@@ -1,9 +1,10 @@
-//! `cpn mail`: classic mailbox import and password sync (same backends as `/email/password`).
+//! `cpn mail`: classic mailbox import, password sync, and mail-auth DNS publish.
 
 use crate::cli_common::read_password_confirmed;
 use crate::mail_accounts_import::{format_import_summary, import_legacy_mailboxes_into_registry};
 use crate::panel_audit_cli::record_cli;
 use crate::panel_ops_email_password::reset_mailbox_password;
+use crate::panel_ops_mail_dns::{provision_mail_dns, provision_mail_dns_for_known_domains};
 
 /// Subcommands for `cpn mail`.
 #[derive(Debug, clap::Subcommand)]
@@ -19,6 +20,16 @@ pub enum MailCommands {
         /// Read the new password from stdin (never put secrets in argv)
         #[arg(long)]
         password_stdin: bool,
+    },
+    /// Publish SPF / DKIM / DMARC (local zone + Cloudflare when configured)
+    #[command(name = "publish-dns")]
+    PublishDns {
+        /// Apex domain (omit with `--all` to publish every known local-mail apex)
+        #[arg(long)]
+        domain: Option<String>,
+        /// Publish for every known site/panel/onboarding apex
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -60,6 +71,31 @@ pub fn run(command: MailCommands, require_root: fn() -> Result<(), String>) -> R
             record_cli("cli.mail.passwd", address, true, "mailbox password updated");
             // Do not echo reset_mailbox_password return (CodeQL rust/cleartext-logging).
             println!("Mailbox password updated for `{address}`.");
+            Ok(())
+        }
+        MailCommands::PublishDns { domain, all } => {
+            require_root()?;
+            if all {
+                let text = provision_mail_dns_for_known_domains();
+                record_cli("cli.mail.publish-dns", "all", true, "mail auth DNS publish");
+                println!("{text}");
+                return Ok(());
+            }
+            let Some(domain) = domain else {
+                return Err("Provide --domain <apex> or --all".into());
+            };
+            let domain = domain.trim();
+            if domain.is_empty() {
+                return Err("Domain is required".into());
+            }
+            let text = provision_mail_dns(domain)?;
+            record_cli(
+                "cli.mail.publish-dns",
+                domain,
+                true,
+                "mail auth DNS publish",
+            );
+            println!("{text}");
             Ok(())
         }
     }

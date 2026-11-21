@@ -275,9 +275,11 @@ pub fn ensure_dkim() -> Result<String, String> {
         Ok(msg) => msg,
         Err(e) => format!("OpenDKIM deferred: {e}"),
     };
+    // After (re)issuing keys, upsert SPF/DKIM/DMARC to local DNS and Cloudflare when configured.
+    let dns_note = crate::panel_ops_mail_dns::provision_mail_dns_for_known_domains();
     let folder_count = crate::panel_ops_dkim_keys::list_dkim_domain_rows().len();
     Ok(format!(
-        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated. {opendkim_note}",
+        "DKIM store is ready under /var/lib/cpn/dkim. {folder_count} domain folder(s) on disk. Checked {} registered site(s): {existing} already had keys, {generated} newly generated. {opendkim_note} {dns_note}",
         sites.len()
     ))
 }

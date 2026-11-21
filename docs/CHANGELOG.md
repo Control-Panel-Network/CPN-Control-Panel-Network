@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mail auth Cloudflare DNS on Email Start / DKIM ensure**: SPF, DKIM (`default._domainkey`), and DMARC (`_dmarc`) now publish via `provision_mail_dns` not only on website create / `site ready`, but also on Host Email Start and DKIM Manager Ensure for every known local-mail apex. Soft-skips with a clear message when `/var/lib/cpn/cloudflare.json` has no token. CLI: `cpn mail publish-dns --domain <apex>` or `--all`. Upsert planner unit-tested (create vs update vs placeholder skip). Operator note: `to-do/MAIL-AUTH-CLOUDFLARE-DNS.md`.
 - **OpenDKIM by default for Host email**: `panel_ops_opendkim` installs OpenDKIM when missing, copies keys into `/etc/opendkim/keys` (SELinux-safe), syncs KeyTable/SigningTable from `/var/lib/cpn/dkim` (preserves classic CyberPanel rows), wires OpenDKIM listen as `inet:8891@localhost` and Postfix milters as `inet:127.0.0.1:8891`, and runs from Email stack start, mail backend heal, DKIM Manager ensure, and local-mail `site ready` / domain create. SPF plans include `ip4:` when the host public IP is known (still `a mx`, no invented includes). DMARC starter remains `p=none` with `rua=mailto:dmarc@<domain>`.
 
 ### Fixed
