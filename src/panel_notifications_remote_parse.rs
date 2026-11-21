@@ -142,7 +142,6 @@ impl<'a> Parser<'a> {
         let mut operator = String::new();
         let mut body_enc = String::new();
         let mut body_nonce = String::new();
-        let mut seen_any = false;
 
         self.skip_ws();
         if self.peek() == Some(b'}') {
@@ -169,7 +168,6 @@ impl<'a> Parser<'a> {
                 "body_nonce" => body_nonce = self.parse_string()?,
                 _ => return Err(Self::err()), // deny unknown fields
             }
-            seen_any = true;
             self.skip_ws();
             match self.bump()? {
                 b'}' => break,
@@ -184,9 +182,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if !seen_any {
-            return Err(Self::err());
-        }
         let title = title.ok_or_else(|| "title is required".to_string())?;
         Ok(RemoteBroadcastRequest {
             title,
