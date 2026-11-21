@@ -90,8 +90,7 @@ pub struct ConfigValidateResult {
 
 /// Run `postfix check` when Postfix is present on the host.
 pub fn validate_postfix_config() -> ConfigValidateResult {
-    if !Path::new(POSTFIX_MAIN_CF).is_file()
-        && !crate::panel_ops_security::which_exists("postfix")
+    if !Path::new(POSTFIX_MAIN_CF).is_file() && !crate::panel_ops_security::which_exists("postfix")
     {
         return ConfigValidateResult {
             ok: true,
@@ -107,13 +106,9 @@ pub fn validate_postfix_config() -> ConfigValidateResult {
         Ok(out) => {
             let err = String::from_utf8_lossy(&out.stderr);
             let out_s = String::from_utf8_lossy(&out.stdout);
-            let detail = format!(
-                "postfix check failed: {} {}",
-                err.trim(),
-                out_s.trim()
-            )
-            .trim()
-            .to_string();
+            let detail = format!("postfix check failed: {} {}", err.trim(), out_s.trim())
+                .trim()
+                .to_string();
             ConfigValidateResult {
                 ok: false,
                 detail: if detail.is_empty() {
@@ -132,9 +127,7 @@ pub fn validate_postfix_config() -> ConfigValidateResult {
 
 /// Run `doveconf -n` when Dovecot config/binary is present.
 pub fn validate_dovecot_config() -> ConfigValidateResult {
-    if !Path::new(DOVECOT_CONF).is_file()
-        && !crate::panel_ops_security::which_exists("doveconf")
-    {
+    if !Path::new(DOVECOT_CONF).is_file() && !crate::panel_ops_security::which_exists("doveconf") {
         return ConfigValidateResult {
             ok: true,
             detail: "dovecot not present; skipped doveconf -n".into(),
@@ -209,8 +202,7 @@ pub fn reload_mail_services_validated() -> MailReloadOutcome {
             .unwrap_or(false);
         postfix_reloaded = ok;
     }
-    if dovecot_validate.ok
-        && (Path::new(DOVECOT_CONF).is_file() || systemd_unit_active("dovecot"))
+    if dovecot_validate.ok && (Path::new(DOVECOT_CONF).is_file() || systemd_unit_active("dovecot"))
     {
         let ok = Command::new("timeout")
             .args(["8", "systemctl", "reload", "dovecot"])
@@ -285,9 +277,7 @@ pub fn run_light_email_heal(context: &str) -> LightHealReport {
         validate_ok: true,
         ..LightHealReport::default()
     };
-    report
-        .notes
-        .push(format!("light email heal ({context})"));
+    report.notes.push(format!("light email heal ({context})"));
 
     if gate.should_run_mail_heal() {
         report.ran_mail = true;
@@ -306,9 +296,7 @@ pub fn run_light_email_heal(context: &str) -> LightHealReport {
             Err(e) => {
                 // Fail-soft on upgrade/install heal: keep going with validate + maps.
                 report.ok = false;
-                report
-                    .notes
-                    .push(format!("email stack heal warning: {e}"));
+                report.notes.push(format!("email stack heal warning: {e}"));
                 // Attempt a validated reload only (may abort reload on hard failure).
                 let reload = reload_mail_services_validated();
                 report.validate_ok = reload.validate_ok();

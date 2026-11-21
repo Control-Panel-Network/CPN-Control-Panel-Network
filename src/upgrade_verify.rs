@@ -597,16 +597,13 @@ pub fn verify_after_upgrade(
     // Fail-soft for stack heal; config validate is required when mail heal ran.
     {
         use crate::mail_light_heal::{run_light_email_heal, should_run_light_email_heal};
-        if should_run_light_email_heal()
-            || crate::mail_light_heal::should_run_webmail_heal()
-        {
+        if should_run_light_email_heal() || crate::mail_light_heal::should_run_webmail_heal() {
             let heal = run_light_email_heal("post-upgrade verify");
             for line in heal.summary_lines() {
                 eprintln!("cpn-installer: upgrade verify: {line}");
             }
             let detail = if heal.skipped {
-                heal.skip_reason
-                    .unwrap_or_else(|| "skipped".into())
+                heal.skip_reason.unwrap_or_else(|| "skipped".into())
             } else {
                 heal.summary_lines().join(" | ").chars().take(500).collect()
             };
