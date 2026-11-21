@@ -36,7 +36,8 @@ use cpn_installer::panel_feedback::panel_feedback_submit;
 use cpn_installer::panel_hub_routes::{
     account_security_change_password_get, account_security_change_password_post,
     account_security_enroll_2fa_begin, account_security_enroll_2fa_begin_get,
-    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get, acl_create_get,
+    account_security_enroll_2fa_confirm, account_security_enroll_2fa_get,
+    account_security_enroll_cli, acl_create_get,
     acl_create_post, acl_delete_post, acl_modify_get, api_access_create_post,
     api_access_revoke_post, api_access_route, backups_create_route, backups_destinations_route,
     backups_destinations_save, backups_gdrive_route, backups_gdrive_save, backups_gdrive_test,
@@ -1628,6 +1629,7 @@ async fn main() -> std::io::Result<()> {
             .service(account_security_change_password_get)
             .service(account_security_change_password_post)
             .service(account_security_enroll_2fa_get)
+            .service(account_security_enroll_cli)
             .service(account_security_enroll_2fa_begin_get)
             .service(account_security_enroll_2fa_begin)
             .service(account_security_enroll_2fa_confirm)

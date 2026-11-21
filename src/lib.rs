@@ -3,6 +3,7 @@
 pub mod account;
 pub mod account_lifecycle;
 pub mod account_mfa;
+pub mod account_mfa_enroll_token;
 pub mod account_mgmt;
 pub mod account_passkeys;
 pub mod account_password_reset;
@@ -103,7 +104,9 @@ pub mod litespeed_webadmin_users;
 pub mod login_next;
 pub mod login_service_gate;
 pub mod mail_accounts;
+pub mod mail_accounts_import;
 pub mod mail_hosted_domains;
+pub mod mail_legacy_sql;
 pub mod mail_outbound;
 pub mod mail_postfix_detect;
 pub mod mail_postfix_maps;

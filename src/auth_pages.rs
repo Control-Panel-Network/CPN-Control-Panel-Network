@@ -764,6 +764,41 @@ pub fn reset_password_html(token: &str, error: Option<&str>) -> String {
     )
 }
 
+pub fn mfa_enroll_cli_invalid_html(message: &str) -> String {
+    let boot = load_bootstrap();
+    let initial_locale = boot
+        .as_ref()
+        .map(|value| normalize_panel_locale(&value.language))
+        .unwrap_or("en");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="{locale}" data-initial-locale="{locale}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MFA enroll link · CPN Panel</title>
+  {favicons}
+  <style>{styles}</style>
+</head>
+<body data-page="mfa-enroll-invalid">
+  <main>
+    <section class="card">
+      <p style="color:#0066cc;font-size:12px;font-weight:700;letter-spacing:.08em;margin:0 0 8px;">CPN PANEL</p>
+      <h1>MFA enroll link unavailable</h1>
+      <p class="error" role="alert">{msg}</p>
+      <p class="hint">Ask a server operator to run <code>sudo cpn mfa enroll-url --username YOURUSER</code> and open the new HTTPS link in a desktop browser.</p>
+      <p><a href="/login">Back to login</a></p>
+    </section>
+  </main>
+</body>
+</html>"#,
+        locale = initial_locale,
+        favicons = brand_favicon_links(),
+        styles = shared_auth_styles(),
+        msg = html_escape(message),
+    )
+}
+
 pub fn reset_password_invalid_html(message: &str) -> String {
     let boot = load_bootstrap();
     let initial_locale = boot
