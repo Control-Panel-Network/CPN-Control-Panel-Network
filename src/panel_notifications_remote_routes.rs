@@ -115,8 +115,8 @@ pub async fn panel_notifications_remote_broadcast(
         return deny_remote("nt-remote", err);
     }
 
-    // Size-bounded parse (CodeQL rust/unsafe-deserialization / alert #173): validate
-    // length before serde_json::from_slice; struct uses deny_unknown_fields + bounded usernames.
+    // Size-bounded closed-schema parse (CodeQL rust/unsafe-deserialization / #173):
+    // no serde_json::from_slice on HTTP bytes; unknown keys rejected; usernames capped.
     let parsed = match parse_remote_broadcast_json(&body) {
         Ok(v) => v,
         Err(err) => {

@@ -30,7 +30,7 @@ const NONCE_TTL_SECS: u64 = 900;
 const MAX_TITLE: usize = 200;
 const MAX_BODY: usize = 8_000;
 const MAX_CATEGORY: usize = 64;
-const MAX_USERNAMES: usize = 500;
+pub(crate) const MAX_USERNAMES: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemotePushConfig {
@@ -71,51 +71,31 @@ impl Default for RemotePushConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub struct RemoteBroadcastRequest {
     pub title: String,
-    #[serde(default)]
     pub body: String,
-    #[serde(default)]
     pub category: String,
     /// When true, deliver to every panel account.
-    #[serde(default)]
     pub all_users: bool,
     /// Optional username allowlist (case-insensitive match to panel accounts).
-    #[serde(default, deserialize_with = "deserialize_bounded_usernames")]
     pub usernames: Vec<String>,
     /// Operator identity from api (Discord username / id). Audited only.
-    #[serde(default)]
     pub operator: String,
     /// Optional AES-GCM ciphertext (Base64) for the body when `aes_key_b64` is configured.
-    #[serde(default)]
     pub body_enc: String,
-    #[serde(default)]
     pub body_nonce: String,
-}
-
-fn deserialize_bounded_usernames<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let values = Vec::<String>::deserialize(deserializer)?;
-    if values.len() > MAX_USERNAMES {
-        return Err(serde::de::Error::custom("too many usernames"));
-    }
-    Ok(values)
 }
 
 /// Max JSON body accepted for remote broadcast (CodeQL rust/unsafe-deserialization).
 pub const MAX_REMOTE_BROADCAST_JSON_BYTES: usize = 64 * 1024;
 
-/// Size-check then deserialize a remote broadcast body.
-pub fn parse_remote_broadcast_json(raw: &[u8]) -> Result<RemoteBroadcastRequest, String> {
-    if raw.len() > MAX_REMOTE_BROADCAST_JSON_BYTES {
-        return Err("payload too large".into());
-    }
-    serde_json::from_slice(raw).map_err(|_| "invalid JSON body".into())
-}
+// Child module (same folder file) avoids serde_json sinks on HTTP bodies.
+#[path = "panel_notifications_remote_parse.rs"]
+mod parse;
+
+/// Size-bounded, closed-schema parse (no `serde_json::from_slice` on request bytes).
+pub use parse::parse_remote_broadcast_json;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RemoteBroadcastResult {
